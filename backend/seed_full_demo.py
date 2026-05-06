@@ -2739,18 +2739,1315 @@ def seed_documents(conn, org_id, user_ids, loan_ids):
 
 
 def seed_calendar(conn, org_id, user_ids, lead_ids, loan_ids):
-    """Create demo calendar events and appointments."""
-    pass
+    """Create demo calendar events and appointments.
+
+    Creates:
+    - 1 SchedulerConfig (team-level)
+    - 4 SchedulerAppointmentTypes
+    - 2 BookingLinks (one per LO)
+    - 10 AvailabilitySlots (Mon-Fri for Sarah + Marcus)
+    - 3 BlockedTimes
+    - 20 Appointments
+    """
+    from datetime import time as _time
+
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+    manager_id = user_ids.get("manager")
+
+    # ------------------------------------------------------------------
+    # 1. SchedulerConfig
+    # ------------------------------------------------------------------
+    config_id = get_id(conn, "scheduler_configs", "organization_id", org_id)
+    if config_id:
+        print("⏭️  SchedulerConfig exists")
+    else:
+        result = conn.execute(
+            text("""
+                INSERT INTO scheduler_configs
+                    (organization_id, config_name, timezone,
+                     default_duration_minutes, min_duration_minutes, max_duration_minutes,
+                     min_notice_hours, max_advance_days, max_meetings_per_day,
+                     is_active, setup_completed, created_at, updated_at)
+                VALUES
+                    (:org_id, :config_name, :tz,
+                     :default_dur, :min_dur, :max_dur,
+                     :min_notice, :max_advance, :max_per_day,
+                     :is_active, :setup_completed, :now, :now)
+                RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "config_name": "Summit Home Loans — Default Schedule",
+                "tz": "America/New_York",
+                "default_dur": 30,
+                "min_dur": 15,
+                "max_dur": 120,
+                "min_notice": 2,
+                "max_advance": 60,
+                "max_per_day": 8,
+                "is_active": True,
+                "setup_completed": True,
+                "now": NOW,
+            },
+        )
+        config_id = result.fetchone()[0]
+        conn.commit()
+        print(f"✅ Created SchedulerConfig (id={config_id})")
+
+    # ------------------------------------------------------------------
+    # 2. SchedulerAppointmentType (table: appointment_types)
+    # ------------------------------------------------------------------
+    APPT_TYPES = [
+        {
+            "type_key": "consultation",
+            "type_name": "Initial Consultation",
+            "duration": 30,
+            "meeting_type": "discovery_call",
+            "color": "#3b82f6",
+            "public_slug": "consultation",
+        },
+        {
+            "type_key": "document_review",
+            "type_name": "Document Review",
+            "duration": 15,
+            "meeting_type": "document_review",
+            "color": "#f59e0b",
+            "public_slug": "document-review",
+        },
+        {
+            "type_key": "closing_prep",
+            "type_name": "Closing Prep Meeting",
+            "duration": 60,
+            "meeting_type": "closing_prep",
+            "color": "#10b981",
+            "public_slug": "closing-prep",
+        },
+        {
+            "type_key": "team_sync",
+            "type_name": "Team Meeting",
+            "duration": 30,
+            "meeting_type": "team_sync",
+            "color": "#8b5cf6",
+            "public_slug": "team-sync",
+        },
+    ]
+
+    appt_type_ids = {}
+    for at in APPT_TYPES:
+        existing_id = conn.execute(
+            text("""
+                SELECT id FROM appointment_types
+                WHERE organization_id = :org_id AND type_key = :type_key
+                LIMIT 1
+            """),
+            {"org_id": org_id, "type_key": at["type_key"]},
+        ).fetchone()
+        if existing_id:
+            appt_type_ids[at["type_key"]] = existing_id[0]
+            print(f"⏭️  AppointmentType exists: {at['type_key']}")
+            continue
+
+        result = conn.execute(
+            text("""
+                INSERT INTO appointment_types
+                    (organization_id, config_id, type_key, type_name,
+                     default_duration_minutes, meeting_type,
+                     is_active, is_public, color, public_slug, created_at, updated_at)
+                VALUES
+                    (:org_id, :config_id, :type_key, :type_name,
+                     :duration, :meeting_type,
+                     :is_active, :is_public, :color, :public_slug, :now, :now)
+                RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "config_id": config_id,
+                "type_key": at["type_key"],
+                "type_name": at["type_name"],
+                "duration": at["duration"],
+                "meeting_type": at["meeting_type"],
+                "is_active": True,
+                "is_public": True,
+                "color": at["color"],
+                "public_slug": at["public_slug"],
+                "now": NOW,
+            },
+        )
+        new_id = result.fetchone()[0]
+        appt_type_ids[at["type_key"]] = new_id
+        conn.commit()
+        print(f"✅ Created AppointmentType: {at['type_name']} (id={new_id})")
+
+    # ------------------------------------------------------------------
+    # 3. BookingLinks (table: scheduler_booking_links)
+    # ------------------------------------------------------------------
+    BOOKING_LINKS = [
+        {"slug": "sarah-chen-book", "name": "Book with Sarah Chen", "user_id": lo_sarah_id},
+        {"slug": "marcus-johnson-book", "name": "Book with Marcus Johnson", "user_id": lo_marcus_id},
+    ]
+    booking_link_ids = {}
+    for bl in BOOKING_LINKS:
+        existing_id = conn.execute(
+            text("""
+                SELECT id FROM scheduler_booking_links
+                WHERE organization_id = :org_id AND slug = :slug
+                LIMIT 1
+            """),
+            {"org_id": org_id, "slug": bl["slug"]},
+        ).fetchone()
+        if existing_id:
+            booking_link_ids[bl["slug"]] = existing_id[0]
+            print(f"⏭️  BookingLink exists: {bl['slug']}")
+            continue
+
+        result = conn.execute(
+            text("""
+                INSERT INTO scheduler_booking_links
+                    (organization_id, user_id, slug, link_name,
+                     is_public, is_active, created_at, updated_at)
+                VALUES
+                    (:org_id, :user_id, :slug, :link_name,
+                     :is_public, :is_active, :now, :now)
+                RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "user_id": bl["user_id"],
+                "slug": bl["slug"],
+                "link_name": bl["name"],
+                "is_public": True,
+                "is_active": True,
+                "now": NOW,
+            },
+        )
+        new_id = result.fetchone()[0]
+        booking_link_ids[bl["slug"]] = new_id
+        conn.commit()
+        print(f"✅ Created BookingLink: {bl['slug']} (id={new_id})")
+
+    # ------------------------------------------------------------------
+    # 4. AvailabilitySlots (Mon-Fri 9-17 for each LO)
+    # ------------------------------------------------------------------
+    DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    slot_count = 0
+    for user_id in [lo_sarah_id, lo_marcus_id]:
+        if not user_id:
+            continue
+        for day in DAYS:
+            existing = conn.execute(
+                text("""
+                    SELECT id FROM availability_slots
+                    WHERE organization_id = :org_id
+                      AND user_id = :user_id
+                      AND day_of_week = :day
+                    LIMIT 1
+                """),
+                {"org_id": org_id, "user_id": user_id, "day": day},
+            ).fetchone()
+            if existing:
+                continue
+
+            conn.execute(
+                text("""
+                    INSERT INTO availability_slots
+                        (organization_id, config_id, user_id, day_of_week,
+                         start_time, end_time, is_recurring, is_active,
+                         created_at, updated_at)
+                    VALUES
+                        (:org_id, :config_id, :user_id, :day,
+                         :start_time, :end_time, :is_recurring, :is_active,
+                         :now, :now)
+                """),
+                {
+                    "org_id": org_id,
+                    "config_id": config_id,
+                    "user_id": user_id,
+                    "day": day,
+                    "start_time": "09:00:00",
+                    "end_time": "17:00:00",
+                    "is_recurring": True,
+                    "is_active": True,
+                    "now": NOW,
+                },
+            )
+            slot_count += 1
+
+    conn.commit()
+    if slot_count:
+        print(f"✅ Created {slot_count} availability slots")
+    else:
+        print("⏭️  Availability slots already exist")
+
+    # ------------------------------------------------------------------
+    # 5. BlockedTimes (table: scheduler_blocked_times)
+    # ------------------------------------------------------------------
+    # Next Monday (days until Monday from today)
+    today_weekday = TODAY.weekday()  # 0=Mon, 6=Sun
+    days_until_monday = (7 - today_weekday) % 7 or 7
+    next_monday = days_from_now(days_until_monday)
+
+    BLOCKED = [
+        {
+            "title": "PTO — Sarah Chen",
+            "block_type": "pto",
+            "user_id": lo_sarah_id,
+            "start_datetime": next_monday.replace(hour=0, minute=0, second=0, microsecond=0),
+            "end_datetime": next_monday.replace(hour=23, minute=59, second=59, microsecond=0),
+        },
+        {
+            "title": "Team Lunch",
+            "block_type": "custom",
+            "user_id": None,  # company-wide
+            "start_datetime": NOW.replace(hour=12, minute=0, second=0, microsecond=0),
+            "end_datetime": NOW.replace(hour=13, minute=0, second=0, microsecond=0),
+        },
+        {
+            "title": "Branch All-Hands",
+            "block_type": "meeting",
+            "user_id": None,
+            "start_datetime": days_from_now(3).replace(hour=9, minute=0, second=0, microsecond=0),
+            "end_datetime": days_from_now(3).replace(hour=10, minute=0, second=0, microsecond=0),
+        },
+    ]
+
+    blocked_count = 0
+    for bt in BLOCKED:
+        existing = conn.execute(
+            text("""
+                SELECT id FROM scheduler_blocked_times
+                WHERE organization_id = :org_id AND title = :title
+                LIMIT 1
+            """),
+            {"org_id": org_id, "title": bt["title"]},
+        ).fetchone()
+        if existing:
+            print(f"⏭️  BlockedTime exists: {bt['title']}")
+            continue
+
+        conn.execute(
+            text("""
+                INSERT INTO scheduler_blocked_times
+                    (organization_id, user_id, title, block_type,
+                     start_datetime, end_datetime, is_active, created_at, updated_at)
+                VALUES
+                    (:org_id, :user_id, :title, :block_type,
+                     :start_dt, :end_dt, :is_active, :now, :now)
+            """),
+            {
+                "org_id": org_id,
+                "user_id": bt["user_id"],
+                "title": bt["title"],
+                "block_type": bt["block_type"],
+                "start_dt": bt["start_datetime"],
+                "end_dt": bt["end_datetime"],
+                "is_active": True,
+                "now": NOW,
+            },
+        )
+        blocked_count += 1
+
+    conn.commit()
+    if blocked_count:
+        print(f"✅ Created {blocked_count} blocked times")
+    else:
+        print("⏭️  Blocked times already exist")
+
+    # ------------------------------------------------------------------
+    # 6. Appointments (20 total)
+    # ------------------------------------------------------------------
+    # Build a lead lookup list for linking
+    # Spread: 5 past week completed, 5 this week confirmed, 10 next 2 weeks booked
+    consultation_type_id = appt_type_ids.get("consultation")
+    doc_review_type_id = appt_type_ids.get("document_review")
+    closing_prep_type_id = appt_type_ids.get("closing_prep")
+    team_sync_type_id = appt_type_ids.get("team_sync")
+
+    APPOINTMENTS = [
+        # --- Past week (completed) ---
+        {
+            "title": "Initial Consultation — Tyler Barnes",
+            "type_id": consultation_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "tyler.barnes@gmail.com",
+            "loan_number": None,
+            "meeting_type": "discovery_call",
+            "meeting_mode": "video",
+            "start_offset": -6,
+            "start_hour": 10,
+            "duration": 30,
+            "attendee_name": "Tyler Barnes",
+            "attendee_email": "tyler.barnes@gmail.com",
+            "attendee_phone": "+18432110101",
+            "status": "completed",
+        },
+        {
+            "title": "Document Review — Vanessa Hartley",
+            "type_id": doc_review_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "vanessa.hartley@gmail.com",
+            "loan_number": "SHL-2026-0003",
+            "meeting_type": "document_review",
+            "meeting_mode": "video",
+            "start_offset": -5,
+            "start_hour": 14,
+            "duration": 15,
+            "attendee_name": "Vanessa Hartley",
+            "attendee_email": "vanessa.hartley@gmail.com",
+            "attendee_phone": "+18432110112",
+            "status": "completed",
+        },
+        {
+            "title": "Closing Prep — Elijah Fontaine",
+            "type_id": closing_prep_type_id,
+            "user_id": lo_marcus_id,
+            "lead_email": "elijah.fontaine@gmail.com",
+            "loan_number": "SHL-2026-0009",
+            "meeting_type": "closing_prep",
+            "meeting_mode": "in_person",
+            "start_offset": -4,
+            "start_hour": 11,
+            "duration": 60,
+            "attendee_name": "Elijah Fontaine",
+            "attendee_email": "elijah.fontaine@gmail.com",
+            "attendee_phone": "+18432110111",
+            "status": "completed",
+        },
+        {
+            "title": "Initial Consultation — Priya Nair",
+            "type_id": consultation_type_id,
+            "user_id": lo_marcus_id,
+            "lead_email": "priya.nair@outlook.com",
+            "loan_number": None,
+            "meeting_type": "discovery_call",
+            "meeting_mode": "phone",
+            "start_offset": -3,
+            "start_hour": 9,
+            "duration": 30,
+            "attendee_name": "Priya Nair",
+            "attendee_email": "priya.nair@outlook.com",
+            "attendee_phone": "+18432110102",
+            "status": "completed",
+        },
+        {
+            "title": "Team Sync — Weekly Pipeline Review",
+            "type_id": team_sync_type_id,
+            "user_id": manager_id,
+            "lead_email": None,
+            "loan_number": None,
+            "meeting_type": "team_sync",
+            "meeting_mode": "video",
+            "start_offset": -2,
+            "start_hour": 8,
+            "duration": 30,
+            "attendee_name": "Summit Home Loans Team",
+            "attendee_email": "demo@perenniaai.com",
+            "attendee_phone": None,
+            "status": "completed",
+        },
+        # --- This week (confirmed) ---
+        {
+            "title": "Document Review — Tanya Morrison",
+            "type_id": doc_review_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "tanya.morrison@gmail.com",
+            "loan_number": "SHL-2026-0001",
+            "meeting_type": "document_review",
+            "meeting_mode": "video",
+            "start_offset": 1,
+            "start_hour": 10,
+            "duration": 15,
+            "attendee_name": "Tanya Morrison",
+            "attendee_email": "tanya.morrison@gmail.com",
+            "attendee_phone": "+18432110114",
+            "status": "confirmed",
+        },
+        {
+            "title": "Closing Prep — Simone Arceneaux",
+            "type_id": closing_prep_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "simone.arceneaux@gmail.com",
+            "loan_number": "SHL-2026-0010",
+            "meeting_type": "closing_prep",
+            "meeting_mode": "in_person",
+            "start_offset": 2,
+            "start_hour": 15,
+            "duration": 60,
+            "attendee_name": "Simone Arceneaux",
+            "attendee_email": "simone.arceneaux@gmail.com",
+            "attendee_phone": "+18432110108",
+            "status": "confirmed",
+        },
+        {
+            "title": "Initial Consultation — Derek Hollis",
+            "type_id": consultation_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "derek.hollis@yahoo.com",
+            "loan_number": None,
+            "meeting_type": "discovery_call",
+            "meeting_mode": "video",
+            "start_offset": 2,
+            "start_hour": 11,
+            "duration": 30,
+            "attendee_name": "Derek Hollis",
+            "attendee_email": "derek.hollis@yahoo.com",
+            "attendee_phone": "+18432110103",
+            "status": "confirmed",
+        },
+        {
+            "title": "Document Review — Roberto Sandoval",
+            "type_id": doc_review_type_id,
+            "user_id": lo_marcus_id,
+            "lead_email": "roberto.sandoval@hotmail.com",
+            "loan_number": "SHL-2026-0002",
+            "meeting_type": "document_review",
+            "meeting_mode": "video",
+            "start_offset": 3,
+            "start_hour": 13,
+            "duration": 15,
+            "attendee_name": "Roberto Sandoval",
+            "attendee_email": "roberto.sandoval@hotmail.com",
+            "attendee_phone": "+18432110115",
+            "status": "confirmed",
+        },
+        {
+            "title": "Pre-Approval Review — Marcus Delacroix",
+            "type_id": consultation_type_id,
+            "user_id": lo_marcus_id,
+            "lead_email": "marcus.delacroix@icloud.com",
+            "loan_number": "SHL-2026-0005",
+            "meeting_type": "pre_approval_review",
+            "meeting_mode": "video",
+            "start_offset": 4,
+            "start_hour": 10,
+            "duration": 30,
+            "attendee_name": "Marcus Delacroix",
+            "attendee_email": "marcus.delacroix@icloud.com",
+            "attendee_phone": "+18432110113",
+            "status": "confirmed",
+        },
+        # --- Next 2 weeks (booked) ---
+        {
+            "title": "Initial Consultation — Brianna Okafor",
+            "type_id": consultation_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "brianna.okafor@gmail.com",
+            "loan_number": "SHL-2026-0008",
+            "meeting_type": "discovery_call",
+            "meeting_mode": "video",
+            "start_offset": 6,
+            "start_hour": 9,
+            "duration": 30,
+            "attendee_name": "Brianna Okafor",
+            "attendee_email": "brianna.okafor@gmail.com",
+            "attendee_phone": "+18432110106",
+            "status": "booked",
+        },
+        {
+            "title": "Closing Prep — Kevin Albright",
+            "type_id": closing_prep_type_id,
+            "user_id": lo_marcus_id,
+            "lead_email": "kevin.albright@gmail.com",
+            "loan_number": "SHL-2026-0006",
+            "meeting_type": "closing_prep",
+            "meeting_mode": "in_person",
+            "start_offset": 7,
+            "start_hour": 14,
+            "duration": 60,
+            "attendee_name": "Kevin Albright",
+            "attendee_email": "kevin.albright@gmail.com",
+            "attendee_phone": "+18432110109",
+            "status": "booked",
+        },
+        {
+            "title": "Document Review — Aisha Coleman",
+            "type_id": doc_review_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "aisha.coleman@gmail.com",
+            "loan_number": "SHL-2026-0004",
+            "meeting_type": "document_review",
+            "meeting_mode": "video",
+            "start_offset": 8,
+            "start_hour": 11,
+            "duration": 15,
+            "attendee_name": "Aisha Coleman",
+            "attendee_email": "aisha.coleman@gmail.com",
+            "attendee_phone": "+18432110116",
+            "status": "booked",
+        },
+        {
+            "title": "Initial Consultation — Monique Duval",
+            "type_id": consultation_type_id,
+            "user_id": lo_marcus_id,
+            "lead_email": "monique.duval@gmail.com",
+            "loan_number": None,
+            "meeting_type": "discovery_call",
+            "meeting_mode": "phone",
+            "start_offset": 8,
+            "start_hour": 15,
+            "duration": 30,
+            "attendee_name": "Monique Duval",
+            "attendee_email": "monique.duval@gmail.com",
+            "attendee_phone": "+18432110104",
+            "status": "booked",
+        },
+        {
+            "title": "Pre-Approval Review — Jasmine Winters",
+            "type_id": consultation_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "jasmine.winters@yahoo.com",
+            "loan_number": "SHL-2026-0007",
+            "meeting_type": "pre_approval_review",
+            "meeting_mode": "video",
+            "start_offset": 9,
+            "start_hour": 10,
+            "duration": 30,
+            "attendee_name": "Jasmine Winters",
+            "attendee_email": "jasmine.winters@yahoo.com",
+            "attendee_phone": "+18432110110",
+            "status": "booked",
+        },
+        {
+            "title": "Team Sync — Weekly Pipeline Review",
+            "type_id": team_sync_type_id,
+            "user_id": manager_id,
+            "lead_email": None,
+            "loan_number": None,
+            "meeting_type": "team_sync",
+            "meeting_mode": "video",
+            "start_offset": 9,
+            "start_hour": 8,
+            "duration": 30,
+            "attendee_name": "Summit Home Loans Team",
+            "attendee_email": "demo@perenniaai.com",
+            "attendee_phone": None,
+            "status": "booked",
+        },
+        {
+            "title": "Closing Prep — Brianna Okafor",
+            "type_id": closing_prep_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "brianna.okafor@gmail.com",
+            "loan_number": "SHL-2026-0008",
+            "meeting_type": "closing_prep",
+            "meeting_mode": "in_person",
+            "start_offset": 11,
+            "start_hour": 14,
+            "duration": 60,
+            "attendee_name": "Brianna Okafor",
+            "attendee_email": "brianna.okafor@gmail.com",
+            "attendee_phone": "+18432110106",
+            "status": "booked",
+        },
+        {
+            "title": "Initial Consultation — Carter Webb",
+            "type_id": consultation_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "carter.webb@icloud.com",
+            "loan_number": None,
+            "meeting_type": "discovery_call",
+            "meeting_mode": "phone",
+            "start_offset": 12,
+            "start_hour": 9,
+            "duration": 30,
+            "attendee_name": "Carter Webb",
+            "attendee_email": "carter.webb@icloud.com",
+            "attendee_phone": "+18432110105",
+            "status": "booked",
+        },
+        {
+            "title": "Document Review — Vanessa Hartley",
+            "type_id": doc_review_type_id,
+            "user_id": lo_sarah_id,
+            "lead_email": "vanessa.hartley@gmail.com",
+            "loan_number": "SHL-2026-0003",
+            "meeting_type": "document_review",
+            "meeting_mode": "video",
+            "start_offset": 13,
+            "start_hour": 11,
+            "duration": 15,
+            "attendee_name": "Vanessa Hartley",
+            "attendee_email": "vanessa.hartley@gmail.com",
+            "attendee_phone": "+18432110112",
+            "status": "booked",
+        },
+        {
+            "title": "Rate Lock Discussion — Marcus Delacroix",
+            "type_id": consultation_type_id,
+            "user_id": lo_marcus_id,
+            "lead_email": "marcus.delacroix@icloud.com",
+            "loan_number": "SHL-2026-0005",
+            "meeting_type": "rate_lock_discussion",
+            "meeting_mode": "phone",
+            "start_offset": 14,
+            "start_hour": 13,
+            "duration": 30,
+            "attendee_name": "Marcus Delacroix",
+            "attendee_email": "marcus.delacroix@icloud.com",
+            "attendee_phone": "+18432110113",
+            "status": "booked",
+        },
+    ]
+
+    appt_inserted = 0
+    appt_skipped = 0
+    for appt in APPOINTMENTS:
+        # Check by title + approximate start day (avoid dupe on re-run)
+        start_dt = days_from_now(appt["start_offset"]).replace(
+            hour=appt["start_hour"], minute=0, second=0, microsecond=0
+        )
+        existing = conn.execute(
+            text("""
+                SELECT id FROM scheduler_appointments
+                WHERE organization_id = :org_id
+                  AND title = :title
+                  AND DATE(scheduled_start) = DATE(:start_dt)
+                LIMIT 1
+            """),
+            {"org_id": org_id, "title": appt["title"], "start_dt": start_dt},
+        ).fetchone()
+        if existing:
+            appt_skipped += 1
+            continue
+
+        lead_id = lead_ids.get(appt["lead_email"]) if appt["lead_email"] else None
+        loan_id = None
+        if appt["loan_number"]:
+            loan_id = get_id(conn, "loans", "loan_number", appt["loan_number"])
+
+        end_dt = start_dt + timedelta(minutes=appt["duration"])
+        completed_at = end_dt if appt["status"] == "completed" else None
+
+        conn.execute(
+            text("""
+                INSERT INTO scheduler_appointments
+                    (organization_id, appointment_type_id, assigned_user_id,
+                     lead_id, loan_id, title, meeting_type, meeting_mode,
+                     scheduled_start, scheduled_end, duration_minutes, timezone,
+                     attendee_name, attendee_email, attendee_phone,
+                     status, completed_at, created_at, updated_at)
+                VALUES
+                    (:org_id, :type_id, :user_id,
+                     :lead_id, :loan_id, :title, :meeting_type, :meeting_mode,
+                     :start_dt, :end_dt, :duration, :tz,
+                     :attendee_name, :attendee_email, :attendee_phone,
+                     :status, :completed_at, :now, :now)
+            """),
+            {
+                "org_id": org_id,
+                "type_id": appt["type_id"],
+                "user_id": appt["user_id"],
+                "lead_id": lead_id,
+                "loan_id": loan_id,
+                "title": appt["title"],
+                "meeting_type": appt["meeting_type"],
+                "meeting_mode": appt["meeting_mode"],
+                "start_dt": start_dt,
+                "end_dt": end_dt,
+                "duration": appt["duration"],
+                "tz": "America/New_York",
+                "attendee_name": appt["attendee_name"],
+                "attendee_email": appt["attendee_email"],
+                "attendee_phone": appt["attendee_phone"],
+                "status": appt["status"],
+                "completed_at": completed_at,
+                "now": NOW,
+            },
+        )
+        appt_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {appt_inserted} appointments ({appt_skipped} already existed)")
 
 
 def seed_sms_conversations(conn, org_id, user_ids, lead_ids):
-    """Create demo SMS conversation threads."""
-    pass
+    """Create demo SMS conversation threads (10 threads with 3-8 messages each)."""
+
+    TELNYX_NUMBER = "+18438838956"
+
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+
+    # Conversation definitions: each entry maps to one lead
+    # lead_email, assigned LO, category, messages (list of dicts)
+    CONVERSATIONS = [
+        # --- Scheduling (3 threads) ---
+        {
+            "lead_email": "derek.hollis@yahoo.com",
+            "lead_phone": "+18432110103",
+            "lead_name": "Derek Hollis",
+            "user_id": lo_sarah_id,
+            "days_ago_start": 2,
+            "messages": [
+                {"dir": "inbound",  "text": "Hi! This is Derek Hollis. I filled out a form on your website — I'm interested in getting pre-approved.",  "ai": False, "offset_hours": 0},
+                {"dir": "outbound", "text": "Hi Derek! Great to hear from you. I'm Sarah Chen, your loan officer at Summit Home Loans. I'd love to schedule a quick 30-minute discovery call. Are you available Thursday?", "ai": True, "offset_hours": 1},
+                {"dir": "inbound",  "text": "Thursday works for me. What time?", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "How about 11 AM Eastern? I can send a Zoom link.", "ai": True, "offset_hours": 2},
+                {"dir": "inbound",  "text": "Perfect. See you then!", "ai": False, "offset_hours": 3},
+                {"dir": "outbound", "text": "Appointment confirmed for Thursday at 11 AM. You'll receive a calendar invite shortly. Looking forward to it!", "ai": True, "offset_hours": 3},
+            ],
+        },
+        {
+            "lead_email": "carter.webb@icloud.com",
+            "lead_phone": "+18432110105",
+            "lead_name": "Carter Webb",
+            "user_id": lo_sarah_id,
+            "days_ago_start": 5,
+            "messages": [
+                {"dir": "inbound",  "text": "Hi Sarah, I saw your listing on Zillow. I'm curious about rates right now.", "ai": False, "offset_hours": 0},
+                {"dir": "outbound", "text": "Hi Carter! Happy to help. 30-year fixed is running around 6.875% today for well-qualified buyers. Would you like to hop on a quick call to see what you'd qualify for?", "ai": True, "offset_hours": 1},
+                {"dir": "inbound",  "text": "That sounds good. Can we do a call Friday morning?", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "Friday morning works great. I have 9 AM open. Shall I book that?", "ai": True, "offset_hours": 2},
+                {"dir": "inbound",  "text": "Yes please!", "ai": False, "offset_hours": 3},
+                {"dir": "outbound", "text": "Done! I've booked Friday at 9 AM. I'll send you a few questions to review beforehand so we can make the most of our time.", "ai": True, "offset_hours": 4},
+                {"dir": "inbound",  "text": "Sounds great, thanks!", "ai": False, "offset_hours": 5},
+            ],
+        },
+        {
+            "lead_email": "monique.duval@gmail.com",
+            "lead_phone": "+18432110104",
+            "lead_name": "Monique Duval",
+            "user_id": lo_marcus_id,
+            "days_ago_start": 3,
+            "messages": [
+                {"dir": "outbound", "text": "Hi Monique, this is Aria from Summit Home Loans following up on your Realtor.com inquiry. Are you available for a quick 15-minute call this week?", "ai": True, "offset_hours": 0},
+                {"dir": "inbound",  "text": "Sorry, been really busy. Can we do next week?", "ai": False, "offset_hours": 4},
+                {"dir": "outbound", "text": "No problem at all! I have Monday at 2 PM or Tuesday at 10 AM open. Which works better?", "ai": True, "offset_hours": 4},
+                {"dir": "inbound",  "text": "Monday at 2 works.", "ai": False, "offset_hours": 5},
+                {"dir": "outbound", "text": "Perfect! Booked for Monday at 2 PM. Marcus Johnson will be on the call — he specializes in FHA programs and can walk you through your options.", "ai": True, "offset_hours": 5},
+            ],
+        },
+        # --- Document requests (2 threads) ---
+        {
+            "lead_email": "tanya.morrison@gmail.com",
+            "lead_phone": "+18432110114",
+            "lead_name": "Tanya Morrison",
+            "user_id": lo_sarah_id,
+            "days_ago_start": 4,
+            "messages": [
+                {"dir": "outbound", "text": "Hi Tanya, Sarah here. Your loan application is looking great! I just need your 2022 tax returns to complete the file. Can you upload them to your borrower portal?", "ai": False, "offset_hours": 0},
+                {"dir": "inbound",  "text": "I don't have digital copies. Can I bring them in?", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "Of course! You can scan them with your phone camera in the portal app — it works really well. Or drop by the office any time. We're at 123 Meeting St.", "ai": True, "offset_hours": 2},
+                {"dir": "inbound",  "text": "Just uploaded them through the app. Did you get them?", "ai": False, "offset_hours": 6},
+                {"dir": "outbound", "text": "Got them! I can see both 2021 and 2022 returns uploaded successfully. I'll have Emily start processing right away. You're on track for your closing date!", "ai": True, "offset_hours": 6},
+            ],
+        },
+        {
+            "lead_email": "roberto.sandoval@hotmail.com",
+            "lead_phone": "+18432110115",
+            "lead_name": "Roberto Sandoval",
+            "user_id": lo_marcus_id,
+            "days_ago_start": 6,
+            "messages": [
+                {"dir": "outbound", "text": "Hi Roberto, Marcus here. We're moving along nicely on your FHA loan. The appraiser needs access to the property next Tuesday — can you confirm with the listing agent?", "ai": False, "offset_hours": 0},
+                {"dir": "inbound",  "text": "Done, agent says Tuesday between 10-12 works.", "ai": False, "offset_hours": 3},
+                {"dir": "outbound", "text": "Perfect, I'll get the appraiser scheduled. Also, can you send your latest pay stub? We need the most current one in the file.", "ai": True, "offset_hours": 3},
+                {"dir": "inbound",  "text": "Just sent it via email.", "ai": False, "offset_hours": 5},
+                {"dir": "outbound", "text": "Got it, thank you! Everything looks on track. I'll update you after the appraisal comes back.", "ai": True, "offset_hours": 6},
+                {"dir": "inbound",  "text": "Appreciate it. This is exciting!", "ai": False, "offset_hours": 7},
+            ],
+        },
+        # --- Status updates (2 threads) ---
+        {
+            "lead_email": "kevin.albright@gmail.com",
+            "lead_phone": "+18432110109",
+            "lead_name": "Kevin Albright",
+            "user_id": lo_marcus_id,
+            "days_ago_start": 7,
+            "messages": [
+                {"dir": "outbound", "text": "Hi Kevin! Great news — your loan has been submitted to underwriting. This stage typically takes 5-7 business days.", "ai": False, "offset_hours": 0},
+                {"dir": "inbound",  "text": "That's awesome! How long does underwriting usually take?", "ai": False, "offset_hours": 1},
+                {"dir": "outbound", "text": "For conventional loans like yours, usually 5-7 business days. Your file looks clean so we're optimistic. I'll text you as soon as we hear back.", "ai": True, "offset_hours": 1},
+                {"dir": "inbound",  "text": "Thanks! The seller is getting anxious about the timeline.", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "Totally understandable. You're on track — your closing date isn't at risk. If the seller needs a letter of assurance, I can provide that today.", "ai": True, "offset_hours": 2},
+                {"dir": "inbound",  "text": "Yes please, that would help a lot!", "ai": False, "offset_hours": 3},
+                {"dir": "outbound", "text": "Done! Just emailed you and the listing agent a status letter. You're in great shape, Kevin.", "ai": True, "offset_hours": 3},
+            ],
+        },
+        {
+            "lead_email": "brianna.okafor@gmail.com",
+            "lead_phone": "+18432110106",
+            "lead_name": "Brianna Okafor",
+            "user_id": lo_sarah_id,
+            "days_ago_start": 2,
+            "messages": [
+                {"dir": "outbound", "text": "Hi Brianna! Excellent news — you've received a Conditional Approval. We just need two items: letter of explanation for the gap in employment (2022) and one more month of bank statements.", "ai": False, "offset_hours": 0},
+                {"dir": "inbound",  "text": "Great news! What's a letter of explanation?", "ai": False, "offset_hours": 1},
+                {"dir": "outbound", "text": "It's just a brief note explaining what happened — for example, 'I was between jobs for 3 months while relocating from Atlanta.' A few sentences is all we need. Want me to send a template?", "ai": True, "offset_hours": 1},
+                {"dir": "inbound",  "text": "Yes please, that would be super helpful.", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "Template sent to your email! Once you upload both items to the portal, Emily will have them reviewed within 24 hours and you'll be Clear to Close.", "ai": True, "offset_hours": 2},
+            ],
+        },
+        # --- Rate inquiries (2 threads) ---
+        {
+            "lead_email": "simone.arceneaux@gmail.com",
+            "lead_phone": "+18432110108",
+            "lead_name": "Simone Arceneaux",
+            "user_id": lo_sarah_id,
+            "days_ago_start": 1,
+            "messages": [
+                {"dir": "inbound",  "text": "Hi, what are rates looking like today? My closing is in 2 days.", "ai": False, "offset_hours": 0},
+                {"dir": "outbound", "text": "Hi Simone! Great timing. 30-year conventional is at 6.500% today for your loan profile — that's an excellent rate. You're already locked, so you're good. Want to confirm your final numbers?", "ai": True, "offset_hours": 0},
+                {"dir": "inbound",  "text": "Yes! What's my final monthly payment?", "ai": False, "offset_hours": 1},
+                {"dir": "outbound", "text": "Your principal and interest is $3,003/month. Add taxes and insurance and your total PITI is approximately $3,580/month. The CD with exact figures will be sent 3 days before closing.", "ai": True, "offset_hours": 1},
+                {"dir": "inbound",  "text": "Perfect. I'm so excited! See you at closing.", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "We're excited for you too, Simone! See you Thursday. Don't forget to bring your photo ID and a cashier's check for $76,420 (closing costs + down payment).", "ai": False, "offset_hours": 2},
+            ],
+        },
+        {
+            "lead_email": "jasmine.winters@yahoo.com",
+            "lead_phone": "+18432110110",
+            "lead_name": "Jasmine Winters",
+            "user_id": lo_sarah_id,
+            "days_ago_start": 8,
+            "messages": [
+                {"dir": "inbound",  "text": "Hi Sarah, rates have been moving a lot. Should I lock in now?", "ai": False, "offset_hours": 0},
+                {"dir": "outbound", "text": "Hi Jasmine! Great question. Today's rate for your loan is 6.875%. The 30-day trend is flat-to-slightly-higher. Your float window closes in 18 days. I'd recommend locking now — want me to start the lock process?", "ai": True, "offset_hours": 1},
+                {"dir": "inbound",  "text": "Will rates drop before my closing?", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "Rates could move either direction — nobody knows for sure. What I can tell you is that 6.875% is a solid rate historically, and locking protects you from upside risk. Floating is a gamble. The peace of mind is worth it.", "ai": True, "offset_hours": 2},
+                {"dir": "inbound",  "text": "OK let's lock it in.", "ai": False, "offset_hours": 3},
+                {"dir": "outbound", "text": "Rate locked at 6.875% for 30 days! I'll send the lock confirmation email now. You're protected through your closing date.", "ai": True, "offset_hours": 3},
+            ],
+        },
+        # --- General (1 thread) ---
+        {
+            "lead_email": "michelle.osei@gmail.com",
+            "lead_phone": "+18432110122",
+            "lead_name": "Michelle Osei",
+            "user_id": lo_sarah_id,
+            "days_ago_start": 10,
+            "messages": [
+                {"dir": "inbound",  "text": "Hi Sarah, just wanted to say thank you for everything. The closing went so smoothly!", "ai": False, "offset_hours": 0},
+                {"dir": "outbound", "text": "Michelle, congratulations!! 🎉 It was such a pleasure working with you. Enjoy your new home — you deserve it!", "ai": False, "offset_hours": 1},
+                {"dir": "inbound",  "text": "We love it already. Do you happen to have any referrals for a good contractor?", "ai": False, "offset_hours": 2},
+                {"dir": "outbound", "text": "I know a few great ones in Charleston! I'll send you my preferred vendor list. Also, if you know anyone looking to buy, I'd love an introduction — referrals mean the world to us.", "ai": False, "offset_hours": 2},
+                {"dir": "inbound",  "text": "Of course! My neighbor is actually looking right now. I'll have them reach out.", "ai": False, "offset_hours": 3},
+                {"dir": "outbound", "text": "That's wonderful, thank you so much Michelle! I'll reach out to them right away. Have fun in the new home!", "ai": False, "offset_hours": 4},
+                {"dir": "inbound",  "text": "Thanks Sarah! Reach out anytime.", "ai": False, "offset_hours": 5},
+                {"dir": "outbound", "text": "Will do! Enjoy every minute. 🏠", "ai": False, "offset_hours": 6},
+            ],
+        },
+    ]
+
+    conv_inserted = 0
+    conv_skipped = 0
+    msg_inserted = 0
+
+    for convo in CONVERSATIONS:
+        lead_id = lead_ids.get(convo["lead_email"])
+
+        # Check if conversation already exists for this lead
+        existing_conv = conn.execute(
+            text("""
+                SELECT id FROM sms_conversations
+                WHERE organization_id = :org_id
+                  AND phone_number = :phone
+                LIMIT 1
+            """),
+            {"org_id": org_id, "phone": convo["lead_phone"]},
+        ).fetchone()
+
+        if existing_conv:
+            conv_skipped += 1
+            continue
+
+        # Timestamps for conversation
+        conv_start = days_ago(convo["days_ago_start"])
+        last_msg_offset = max(m["offset_hours"] for m in convo["messages"])
+        last_msg_at = conv_start + timedelta(hours=last_msg_offset)
+
+        # Insert conversation
+        result = conn.execute(
+            text("""
+                INSERT INTO sms_conversations
+                    (organization_id, phone_number, user_id, lead_id,
+                     contact_name, is_active, ai_enabled,
+                     last_message_at, message_count, created_at, updated_at)
+                VALUES
+                    (:org_id, :phone, :user_id, :lead_id,
+                     :contact_name, :is_active, :ai_enabled,
+                     :last_msg_at, :msg_count, :now, :now)
+                RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "phone": convo["lead_phone"],
+                "user_id": convo["user_id"],
+                "lead_id": lead_id,
+                "contact_name": convo["lead_name"],
+                "is_active": True,
+                "ai_enabled": True,
+                "last_msg_at": last_msg_at,
+                "msg_count": len(convo["messages"]),
+                "now": conv_start,
+            },
+        )
+        conv_id = result.fetchone()[0]
+        conv_inserted += 1
+
+        # Insert messages
+        for i, msg in enumerate(convo["messages"]):
+            msg_at = conv_start + timedelta(hours=msg["offset_hours"])
+            from_num = convo["lead_phone"] if msg["dir"] == "inbound" else TELNYX_NUMBER
+            to_num = TELNYX_NUMBER if msg["dir"] == "inbound" else convo["lead_phone"]
+            status = "read" if msg["dir"] == "inbound" else "delivered"
+
+            conn.execute(
+                text("""
+                    INSERT INTO sms_messages
+                        (organization_id, user_id, lead_id, conversation_id,
+                         to_number, from_number, message, direction, status,
+                         ai_generated, delivery_status, created_at)
+                    VALUES
+                        (:org_id, :user_id, :lead_id, :conv_id,
+                         :to_num, :from_num, :message, :direction, :status,
+                         :ai_gen, :delivery_status, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "user_id": convo["user_id"],
+                    "lead_id": lead_id,
+                    "conv_id": conv_id,
+                    "to_num": to_num,
+                    "from_num": from_num,
+                    "message": msg["text"],
+                    "direction": msg["dir"],
+                    "status": status,
+                    "ai_gen": msg["ai"],
+                    "delivery_status": "delivered" if msg["dir"] == "outbound" else "received",
+                    "created_at": msg_at,
+                },
+            )
+            msg_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {conv_inserted} SMS conversations, {msg_inserted} messages ({conv_skipped} conversations already existed)")
 
 
 def seed_call_intelligence(conn, org_id, user_ids, lead_ids):
-    """Create demo call records with AI analysis."""
-    pass
+    """Create demo VapiCall records with AI analysis (8 calls)."""
+
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+    manager_id = user_ids.get("manager")
+
+    CALLS = [
+        # --- Inbound (AI receptionist) ---
+        {
+            "vapi_call_id": "demo-call-001",
+            "phone_number": "+18432110103",
+            "caller_name": "Derek Hollis",
+            "direction": "inbound",
+            "days_ago": 6,
+            "hour": 10,
+            "duration": 247,
+            "lead_email": "derek.hollis@yahoo.com",
+            "sentiment": "positive",
+            "intent": "inquiry",
+            "ci_extractions_count": 4,
+            "ci_tasks_created": 2,
+            "transcript": (
+                "Aria: Thank you for calling Summit Home Loans! I'm Aria, your AI assistant. How can I help you today?\n"
+                "Caller: Hi, my name is Derek Hollis. I'm looking to get pre-approved for a home purchase.\n"
+                "Aria: Wonderful, Derek! Congratulations on taking that step. I'd love to help. Are you looking to buy in the Charleston area?\n"
+                "Caller: Yes, primarily around the historic district. We have our eye on a few properties in the $550,000 range.\n"
+                "Aria: That's a beautiful area! Just to get a general sense — do you have an idea of your credit score range and annual household income?\n"
+                "Caller: My score is around 760 and I make about $145,000 a year.\n"
+                "Aria: You sound like an excellent candidate for a conventional loan! I'd love to connect you with Sarah Chen, one of our senior loan officers. She has deep experience with high-end Charleston properties. Are you available for a 30-minute call later this week?\n"
+                "Caller: Thursday morning works for me.\n"
+                "Aria: Perfect! I'm booking you with Sarah on Thursday at 11 AM. You'll receive a confirmation text and calendar invite shortly.\n"
+                "Caller: Great, thanks!\n"
+                "Aria: My pleasure, Derek. Is there anything else I can help with today?\n"
+                "Caller: No, that's all. Thanks so much.\n"
+                "Aria: You're welcome! We look forward to helping you find your dream home. Have a wonderful day!"
+            ),
+            "summary": (
+                "Inbound inquiry from Derek Hollis, a high-credit (760) buyer with $145K income seeking pre-approval for a $550K purchase "
+                "in Charleston's historic district. AI receptionist Aria captured key qualification data and booked a consultation with "
+                "Sarah Chen for Thursday at 11 AM. Task created: follow up with pre-approval checklist and income doc request."
+            ),
+        },
+        {
+            "vapi_call_id": "demo-call-002",
+            "phone_number": "+18432110109",
+            "caller_name": "Kevin Albright",
+            "direction": "inbound",
+            "days_ago": 4,
+            "hour": 14,
+            "duration": 183,
+            "lead_email": "kevin.albright@gmail.com",
+            "sentiment": "positive",
+            "intent": "follow_up",
+            "ci_extractions_count": 3,
+            "ci_tasks_created": 1,
+            "transcript": (
+                "Aria: Thank you for calling Summit Home Loans! I'm Aria. How can I assist you?\n"
+                "Caller: Hi, I'm Kevin Albright. I wanted to check on the status of my loan — it's with Marcus Johnson.\n"
+                "Aria: Hi Kevin! Let me pull up your file. Your loan SHL-2026-0006 is currently in Underwriting. It was submitted 7 days ago.\n"
+                "Caller: How long does underwriting usually take?\n"
+                "Aria: For a conventional loan with a strong profile like yours, typically 5-7 business days. You're right on track.\n"
+                "Caller: Any conditions yet?\n"
+                "Aria: No conditions have been flagged as of today. Marcus will call you as soon as the underwriter's decision comes in.\n"
+                "Caller: OK great. I also wanted to ask about bringing my brother as a co-borrower. Is it too late?\n"
+                "Aria: That's a great question — it could affect the timeline. I'm going to flag this for Marcus and have him call you back today. Is your cell phone the best number?\n"
+                "Caller: Yes, same number I'm calling from.\n"
+                "Aria: Perfect. I've sent Marcus a priority message. Anything else I can help with?\n"
+                "Caller: No, that's it. Thanks!\n"
+                "Aria: My pleasure! Have a great afternoon, Kevin."
+            ),
+            "summary": (
+                "Kevin Albright called to check on his underwriting status for loan SHL-2026-0006. AI confirmed loan is in underwriting "
+                "with no conditions flagged at day 7. Kevin raised a potential co-borrower addition (his brother) — a time-sensitive "
+                "question that could affect the loan structure. AI created a priority task for Marcus Johnson to call back same day."
+            ),
+        },
+        {
+            "vapi_call_id": "demo-call-003",
+            "phone_number": "+18432110116",
+            "caller_name": "Aisha Coleman",
+            "direction": "inbound",
+            "days_ago": 2,
+            "hour": 11,
+            "duration": 312,
+            "lead_email": "aisha.coleman@gmail.com",
+            "sentiment": "positive",
+            "intent": "inquiry",
+            "ci_extractions_count": 5,
+            "ci_tasks_created": 3,
+            "transcript": (
+                "Aria: Thank you for calling Summit Home Loans! I'm Aria. How can I help?\n"
+                "Caller: Hi, I'm Aisha Coleman. I'm under contract on a new construction home and I wanted to know about rate lock options.\n"
+                "Aria: Hi Aisha! Congratulations on being under contract! New construction rate locks work a bit differently. How far out is your projected closing?\n"
+                "Caller: The builder says 60 days, but it could be 45.\n"
+                "Aria: Got it. For that window, you'd typically want a 60-day lock, which is available but carries a slight premium over a standard 30-day lock. Current rates for your loan type are around 6.875% on a 60-day lock.\n"
+                "Caller: What about a float-to-lock option? My builder mentioned that.\n"
+                "Aria: Great question! A float-down lock lets you start locked in and drop if rates fall by a certain threshold — usually 0.25%. I want to make sure Sarah gives you accurate numbers on that. Want me to schedule a call?\n"
+                "Caller: Yes, please.\n"
+                "Aria: I'll book Sarah for tomorrow at 2 PM to walk you through all rate lock options. I'll also send you a rate lock comparison document tonight.\n"
+                "Caller: Also, the builder is asking for a copy of my pre-approval letter. Can you resend it?\n"
+                "Aria: Absolutely. I'll have Sarah email the updated letter to you within the hour.\n"
+                "Caller: Perfect. You've been so helpful!\n"
+                "Aria: My pleasure, Aisha! Looking forward to getting you to the closing table."
+            ),
+            "summary": (
+                "Aisha Coleman called with questions about rate lock options for her new construction purchase (60-day projected close). "
+                "She asked about float-to-lock options and requested a pre-approval letter resend. AI scheduled a rate lock strategy call "
+                "with Sarah for tomorrow at 2 PM, created tasks for: rate lock comparison doc, pre-approval letter resend, and follow-up "
+                "after builder confirms closing window."
+            ),
+        },
+        # --- Outbound (LO follow-up) ---
+        {
+            "vapi_call_id": "demo-call-004",
+            "phone_number": "+18432110106",
+            "caller_name": "Brianna Okafor",
+            "direction": "outbound",
+            "days_ago": 3,
+            "hour": 10,
+            "duration": 268,
+            "lead_email": "brianna.okafor@gmail.com",
+            "sentiment": "positive",
+            "intent": "follow_up",
+            "ci_extractions_count": 3,
+            "ci_tasks_created": 2,
+            "transcript": (
+                "Sarah Chen: Hi Brianna, this is Sarah Chen from Summit Home Loans. Is now a good time?\n"
+                "Brianna: Yes! I was just going to call you.\n"
+                "Sarah Chen: Great minds! I'm calling because your loan received a Conditional Approval from underwriting — congratulations!\n"
+                "Brianna: Oh wow, that's amazing news!\n"
+                "Sarah Chen: It really is. We just need two items to get to Clear to Close: a letter of explanation for your 2022 employment gap, and one more month of bank statements.\n"
+                "Brianna: How long of a letter?\n"
+                "Sarah Chen: Just a few sentences. I'll send you a template that takes about 5 minutes to fill out.\n"
+                "Brianna: That's easy. And the bank statement — which account?\n"
+                "Sarah Chen: Your Chase checking account ending in 4821. Just the most recent statement.\n"
+                "Brianna: I can have both to you by tomorrow.\n"
+                "Sarah Chen: That would be perfect! With that turnaround, you'll likely have your CTC in 3-4 days and we can target your original closing date.\n"
+                "Brianna: You have no idea how relieved I am. I've been so nervous about this.\n"
+                "Sarah Chen: This is completely normal — you're in great shape. I'll send that template right now and text you a reminder tomorrow morning.\n"
+                "Brianna: Thank you so much, Sarah. You're the best!\n"
+                "Sarah Chen: You're going to be in your new home before you know it. Talk soon!"
+            ),
+            "summary": (
+                "Sarah Chen called Brianna Okafor to deliver Conditional Approval news. Conditions are: letter of explanation for 2022 "
+                "employment gap and one month of Chase checking statements (account ending 4821). Brianna committed to providing both "
+                "by tomorrow. Tasks created: send letter of explanation template to Brianna, set follow-up reminder for tomorrow morning. "
+                "Closing timeline remains on track."
+            ),
+        },
+        {
+            "vapi_call_id": "demo-call-005",
+            "phone_number": "+18432110107",
+            "caller_name": "Nathan Prescott",
+            "direction": "outbound",
+            "days_ago": 10,
+            "hour": 13,
+            "duration": 195,
+            "lead_email": "nathan.prescott@hotmail.com",
+            "sentiment": "neutral",
+            "intent": "follow_up",
+            "ci_extractions_count": 2,
+            "ci_tasks_created": 1,
+            "transcript": (
+                "Marcus Johnson: Hi Nathan, this is Marcus Johnson from Summit Home Loans. How are you doing?\n"
+                "Nathan: Good, thanks.\n"
+                "Marcus Johnson: I wanted to follow up on your pre-qualification — it's been about 3 weeks and I wanted to check in on your property search.\n"
+                "Nathan: Yeah, we've seen a few condos but nothing's clicked yet. The HOA fees are killing the DTI.\n"
+                "Marcus Johnson: That's a really common concern with FHA condo loans. The good news is HOA fees are actually factored into the debt-to-income calculation up front, so there are no surprises. Have you seen any that felt close?\n"
+                "Nathan: There's one on Rivers Ave at $279,000. HOA is $240 a month.\n"
+                "Marcus Johnson: Let me run those numbers real quick... At your income level with FHA, a $279K price and $240 HOA gets you to about 44% DTI — that's right at the FHA threshold. It's workable, especially if you can get seller concessions on closing costs.\n"
+                "Nathan: Interesting. How fast could you get a pre-approval letter if we wanted to make an offer?\n"
+                "Marcus Johnson: I can have a property-specific letter to you within 2 hours of you saying go. Want to schedule a quick call when you're ready to move forward?\n"
+                "Nathan: Yeah, I'll call you when we decide.\n"
+                "Marcus Johnson: Perfect. I'll send you a breakdown on that specific property by email today. Good talking to you, Nathan."
+            ),
+            "summary": (
+                "Marcus Johnson followed up with Nathan Prescott who has been actively touring FHA-eligible condos. Nathan identified a "
+                "specific property at $279K with $240/month HOA — Marcus calculated a 44% DTI which is at the FHA limit but workable "
+                "with seller concessions. Task created: send property-specific DTI analysis email for the Rivers Ave unit. Nathan will "
+                "call when ready to make an offer."
+            ),
+        },
+        {
+            "vapi_call_id": "demo-call-006",
+            "phone_number": "+18432110114",
+            "caller_name": "Tanya Morrison",
+            "direction": "outbound",
+            "days_ago": 5,
+            "hour": 15,
+            "duration": 221,
+            "lead_email": "tanya.morrison@gmail.com",
+            "sentiment": "positive",
+            "intent": "follow_up",
+            "ci_extractions_count": 3,
+            "ci_tasks_created": 2,
+            "transcript": (
+                "Sarah Chen: Hi Tanya! Sarah Chen here. Got a minute?\n"
+                "Tanya: Of course! I was hoping you'd call.\n"
+                "Sarah Chen: I wanted to let you know that Emily has started processing your file. Everything looks really solid. The one item we're still waiting on is your 2022 tax returns.\n"
+                "Tanya: I know, I know. I keep forgetting to pull them. Can I get them from the IRS directly?\n"
+                "Sarah Chen: Yes, the fastest way is the IRS Get Transcript portal — it takes about 10 minutes and you can download a PDF. I'll text you the link right now.\n"
+                "Tanya: Perfect. I'll do it tonight.\n"
+                "Sarah Chen: Wonderful! Once we have that, Emily can complete processing and submit to underwriting. That keeps you on track for your 55-day close.\n"
+                "Tanya: I'm actually getting nervous — this is my first house!\n"
+                "Sarah Chen: That's so exciting! First-time buyer nerves are totally normal. I'm with you every step of the way. The hard part is behind you.\n"
+                "Tanya: Thank you, Sarah. You've been so helpful.\n"
+                "Sarah Chen: My job is to make this easy for you! I'll text the IRS link now. Call me if you have any questions tonight.\n"
+                "Tanya: Will do. Talk soon!"
+            ),
+            "summary": (
+                "Sarah Chen followed up with first-time buyer Tanya Morrison regarding missing 2022 tax returns blocking processing. "
+                "Tanya agreed to retrieve them tonight via IRS Get Transcript portal. Sarah committed to texting the IRS portal link "
+                "immediately. Tasks created: send IRS transcript link via SMS, check-in tomorrow if returns not received. File on "
+                "track for 55-day close pending this single document."
+            ),
+        },
+        # --- Voicemail drops (outbound, short) ---
+        {
+            "vapi_call_id": "demo-call-007",
+            "phone_number": "+18432110117",
+            "caller_name": "Gregory Tatum",
+            "direction": "outbound",
+            "days_ago": 14,
+            "hour": 10,
+            "duration": 28,
+            "lead_email": "gregory.tatum@yahoo.com",
+            "sentiment": "neutral",
+            "intent": "follow_up",
+            "ci_extractions_count": 0,
+            "ci_tasks_created": 1,
+            "transcript": (
+                "[Voicemail Drop]\n"
+                "Hi Gregory, this is Marcus Johnson from Summit Home Loans. I wanted to check in and see how your savings plan is going. "
+                "Last time we spoke you were targeting spring for your purchase — that window is coming up fast! "
+                "Give me a call at your convenience and let's see if we can get a game plan together. "
+                "My number is 843-100-5003. Have a great day!"
+            ),
+            "summary": (
+                "Voicemail drop to Gregory Tatum, a long-term nurture lead who is saving for a down payment with a spring purchase target. "
+                "Call duration indicates message went to voicemail as intended. Task created: follow-up SMS in 3 days if no callback."
+            ),
+        },
+        {
+            "vapi_call_id": "demo-call-008",
+            "phone_number": "+18432110118",
+            "caller_name": "Courtney Langford",
+            "direction": "outbound",
+            "days_ago": 20,
+            "hour": 11,
+            "duration": 31,
+            "lead_email": "courtney.langford@gmail.com",
+            "sentiment": "neutral",
+            "intent": "follow_up",
+            "ci_extractions_count": 0,
+            "ci_tasks_created": 1,
+            "transcript": (
+                "[Voicemail Drop]\n"
+                "Hi Courtney, this is Sarah Chen from Summit Home Loans. I'm reaching out because your lease renewal is coming up and I wanted "
+                "to see where you are on the credit improvement plan we discussed. If your score has crossed 640, we may be able to get you "
+                "pre-qualified sooner than expected! Give me a call at 843-100-5002 and let's take a look. Looking forward to hearing from you!"
+            ),
+            "summary": (
+                "Voicemail drop to Courtney Langford, a credit repair lead with a lease ending in approximately 9 months. Sarah prompted "
+                "Courtney to check in on her credit score progress — a 640 threshold would enable pre-qualification. Short duration "
+                "confirms voicemail delivery. Task created: re-attempt call in 2 weeks if no response."
+            ),
+        },
+    ]
+
+    inserted = 0
+    skipped = 0
+
+    for call in CALLS:
+        if exists(conn, "vapi_calls", "vapi_call_id", call["vapi_call_id"]):
+            skipped += 1
+            continue
+
+        lead_id = lead_ids.get(call["lead_email"])
+        started_at = days_ago(call["days_ago"]).replace(
+            hour=call["hour"], minute=0, second=0, microsecond=0
+        )
+        ended_at = started_at + timedelta(seconds=call["duration"])
+
+        conn.execute(
+            text("""
+                INSERT INTO vapi_calls
+                    (organization_id, vapi_call_id, phone_number, caller_name,
+                     direction, status, started_at, ended_at, duration,
+                     transcript, summary, sentiment, intent,
+                     lead_id, ci_processed, ci_extractions_count, ci_tasks_created,
+                     created_at, updated_at)
+                VALUES
+                    (:org_id, :vapi_call_id, :phone, :caller_name,
+                     :direction, :status, :started_at, :ended_at, :duration,
+                     :transcript, :summary, :sentiment, :intent,
+                     :lead_id, :ci_processed, :ci_extractions, :ci_tasks,
+                     :now, :now)
+            """),
+            {
+                "org_id": org_id,
+                "vapi_call_id": call["vapi_call_id"],
+                "phone": call["phone_number"],
+                "caller_name": call["caller_name"],
+                "direction": call["direction"],
+                "status": "completed",
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "duration": call["duration"],
+                "transcript": call["transcript"],
+                "summary": call["summary"],
+                "sentiment": call["sentiment"],
+                "intent": call["intent"],
+                "lead_id": lead_id,
+                "ci_processed": True,
+                "ci_extractions": call["ci_extractions_count"],
+                "ci_tasks": call["ci_tasks_created"],
+                "now": NOW,
+            },
+        )
+        inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {inserted} call intelligence records ({skipped} already existed)")
 
 
 def seed_activities_and_history(conn, org_id, user_ids, lead_ids, loan_ids):
