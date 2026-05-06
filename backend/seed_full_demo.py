@@ -21,7 +21,9 @@ The script is idempotent: re-running skips rows that already exist.
 import json
 import os
 import random
+import secrets
 import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -5311,27 +5313,1240 @@ def seed_rate_monitor(conn, org_id, mum_ids, loan_ids):
 
 def seed_workflows_and_compliance(conn, org_id, user_ids, lead_ids, loan_ids):
     """Create workflow automation records and compliance checks."""
-    pass
+    manager_id = user_ids.get("manager")
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+
+    # -------------------------------------------------------------------------
+    # 1. Workflows
+    # -------------------------------------------------------------------------
+    WORKFLOWS = [
+        {
+            "name": "Lead Nurture",
+            "description": "Automated multi-touch nurture sequence for new leads",
+            "workflow_type": "lead_nurture",
+            "steps": [
+                {"step": 1, "action": "send_sms", "delay_hours": 0, "message": "Hi {first_name}, thanks for your interest! I'm {lo_name} — happy to answer any mortgage questions."},
+                {"step": 2, "action": "send_email", "delay_hours": 24, "template": "intro_email"},
+                {"step": 3, "action": "create_task", "delay_hours": 48, "task": "Follow-up call"},
+                {"step": 4, "action": "send_sms", "delay_hours": 120, "message": "Hi {first_name}, just checking in — did you have a chance to review the info I sent?"},
+                {"step": 5, "action": "create_task", "delay_hours": 168, "task": "7-day follow-up"},
+            ],
+        },
+        {
+            "name": "Underwriting Checklist",
+            "description": "Document collection and status checklist for underwriting stage",
+            "workflow_type": "underwriting",
+            "steps": [
+                {"step": 1, "action": "request_document", "doc_type": "w2", "message": "Please upload your W-2 for the past 2 years"},
+                {"step": 2, "action": "request_document", "doc_type": "paystub", "message": "Please upload your two most recent pay stubs"},
+                {"step": 3, "action": "request_document", "doc_type": "bank_statement", "message": "Please upload 2 months of bank statements"},
+                {"step": 4, "action": "notify_processor", "delay_hours": 0, "message": "All documents collected — ready for UW review"},
+            ],
+        },
+        {
+            "name": "Post-Closing Follow-Up",
+            "description": "Relationship maintenance sequence after loan closes",
+            "workflow_type": "post_closing",
+            "steps": [
+                {"step": 1, "action": "send_email", "delay_days": 1, "template": "congratulations_email"},
+                {"step": 2, "action": "create_task", "delay_days": 7, "task": "1-week check-in call"},
+                {"step": 3, "action": "send_email", "delay_days": 30, "template": "one_month_checkup"},
+                {"step": 4, "action": "create_task", "delay_days": 180, "task": "6-month rate review"},
+                {"step": 5, "action": "send_email", "delay_days": 365, "template": "annual_review"},
+            ],
+        },
+    ]
+
+    workflow_ids = []
+    for wf in WORKFLOWS:
+        existing = conn.execute(
+            text("SELECT id FROM workflows WHERE name = :name AND organization_id = :org_id LIMIT 1"),
+            {"name": wf["name"], "org_id": org_id},
+        ).fetchone()
+        if existing:
+            workflow_ids.append(existing[0])
+            continue
+        result = conn.execute(
+            text("""
+                INSERT INTO workflows
+                    (organization_id, user_id, name, description, workflow_type,
+                     steps, is_active, created_at)
+                VALUES
+                    (:org_id, :user_id, :name, :description, :workflow_type,
+                     :steps, :is_active, :created_at)
+                RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "user_id": manager_id,
+                "name": wf["name"],
+                "description": wf["description"],
+                "workflow_type": wf["workflow_type"],
+                "steps": json.dumps(wf["steps"]),
+                "is_active": True,
+                "created_at": days_ago(90),
+            },
+        )
+        wf_id = result.fetchone()[0]
+        workflow_ids.append(wf_id)
+    conn.commit()
+    print(f"✅ Seeded {len(WORKFLOWS)} workflows")
+
+    # -------------------------------------------------------------------------
+    # 2. Workflow executions — only if scheduled_workflows table exists
+    # -------------------------------------------------------------------------
+    has_scheduled = conn.execute(
+        text("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'scheduled_workflows')")
+    ).scalar()
+
+    if has_scheduled:
+        for i, wf_id in enumerate(workflow_ids[:2]):
+            already = conn.execute(
+                text("SELECT id FROM workflow_executions WHERE workflow_id = :wid LIMIT 1"),
+                {"wid": wf_id},
+            ).fetchone()
+            if already:
+                continue
+            started = days_ago(random.randint(5, 30))
+            completed = started + timedelta(hours=random.randint(1, 6))
+            conn.execute(
+                text("""
+                    INSERT INTO workflow_executions
+                        (organization_id, workflow_id, user_id, status,
+                         started_at, completed_at, targets_processed, targets_succeeded,
+                         trigger_type, created_at)
+                    VALUES
+                        (:org_id, :workflow_id, :user_id, :status,
+                         :started_at, :completed_at, :targets_processed, :targets_succeeded,
+                         :trigger_type, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "workflow_id": wf_id,
+                    "user_id": manager_id,
+                    "status": "completed",
+                    "started_at": started,
+                    "completed_at": completed,
+                    "targets_processed": random.randint(8, 20),
+                    "targets_succeeded": random.randint(6, 8),
+                    "trigger_type": "manual",
+                    "created_at": started,
+                },
+            )
+        conn.commit()
+        print("✅ Seeded workflow executions")
+    else:
+        print("⏭️  Skipping workflow_executions — scheduled_workflows table not found")
+
+    # -------------------------------------------------------------------------
+    # 3. Audit logs (50 entries over 90 days)
+    # -------------------------------------------------------------------------
+    audit_count = conn.execute(
+        text("SELECT COUNT(*) FROM audit_logs WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    ).scalar()
+
+    if audit_count and audit_count >= 50:
+        print("⏭️  Audit logs exist")
+    else:
+        all_user_ids = [manager_id, lo_sarah_id, lo_marcus_id]
+        all_lead_ids = list(lead_ids.values())[:10]
+        all_loan_ids = list(loan_ids.values())[:10]
+
+        change_types = ["login", "create", "update", "delete", "permission_grant", "export"]
+        entity_types = ["user", "lead", "loan", "task", "document"]
+
+        random.seed(42)
+        for i in range(50):
+            change_type = random.choice(change_types)
+            entity_type = random.choice(entity_types)
+            actor_id = random.choice(all_user_ids)
+
+            if entity_type == "lead" and all_lead_ids:
+                entity_id = str(random.choice(all_lead_ids))
+            elif entity_type == "loan" and all_loan_ids:
+                entity_id = str(random.choice(all_loan_ids))
+            else:
+                entity_id = str(random.choice(all_user_ids))
+
+            ts = days_ago(random.randint(0, 90))
+            conn.execute(
+                text("""
+                    INSERT INTO audit_logs
+                        (organization_id, user_id, change_type, entity_type, entity_id,
+                         ip_address, timestamp, reason)
+                    VALUES
+                        (:org_id, :user_id, :change_type, :entity_type, :entity_id,
+                         :ip_address, :timestamp, :reason)
+                """),
+                {
+                    "org_id": org_id,
+                    "user_id": actor_id,
+                    "change_type": change_type,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "ip_address": f"192.168.1.{random.randint(1, 254)}",
+                    "timestamp": ts,
+                    "reason": f"Demo: {change_type} on {entity_type}",
+                },
+            )
+        conn.commit()
+        print("✅ Seeded 50 audit log entries")
+
+    # -------------------------------------------------------------------------
+    # 4. Disclosure events (10 across active/funded loans)
+    # -------------------------------------------------------------------------
+    disc_count = conn.execute(
+        text("SELECT COUNT(*) FROM disclosure_events WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    ).scalar()
+
+    if disc_count and disc_count >= 10:
+        print("⏭️  Disclosure events exist")
+    else:
+        disclosure_loan_numbers = [
+            "SHL-2026-0001", "SHL-2026-0002", "SHL-2026-0003", "SHL-2026-0004",
+            "SHL-2026-0005", "SHL-2026-0006", "SHL-2026-0007", "SHL-2026-0011",
+            "SHL-2026-0012", "SHL-2026-0015",
+        ]
+        disc_types = [
+            ("loan_estimate", 3), ("loan_estimate", 8), ("revised_le", 2),
+            ("loan_estimate", 5), ("loan_estimate", 7),
+            ("closing_disclosure", 1), ("closing_disclosure", 3),
+            ("closing_disclosure", 10), ("closing_disclosure", 15), ("revised_cd", 2),
+        ]
+
+        for idx, loan_number in enumerate(disclosure_loan_numbers):
+            loan_id = loan_ids.get(loan_number)
+            if not loan_id:
+                continue
+            disc_type, days_before_close = disc_types[idx]
+            prepared_at = days_ago(days_before_close + 3)
+            sent_at = days_ago(days_before_close + 1)
+            received_at = days_ago(days_before_close)
+            deadline = date_from_now(3) if days_before_close <= 2 else date_ago(days_before_close - 3)
+            is_on_time = days_before_close >= 3
+
+            conn.execute(
+                text("""
+                    INSERT INTO disclosure_events
+                        (organization_id, loan_id, disclosure_type,
+                         prepared_at, sent_at, received_at, deadline_date,
+                         is_on_time, delivery_method, created_by_id, created_at)
+                    VALUES
+                        (:org_id, :loan_id, :disclosure_type,
+                         :prepared_at, :sent_at, :received_at, :deadline_date,
+                         :is_on_time, :delivery_method, :created_by_id, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "loan_id": loan_id,
+                    "disclosure_type": disc_type,
+                    "prepared_at": prepared_at,
+                    "sent_at": sent_at,
+                    "received_at": received_at,
+                    "deadline_date": deadline,
+                    "is_on_time": is_on_time,
+                    "delivery_method": "email",
+                    "created_by_id": manager_id,
+                    "created_at": prepared_at,
+                },
+            )
+        conn.commit()
+        print("✅ Seeded 10 disclosure events")
+
+    # -------------------------------------------------------------------------
+    # 5. Compliance alerts (5: 2 resolved, 3 pending)
+    # -------------------------------------------------------------------------
+    alert_count = conn.execute(
+        text("SELECT COUNT(*) FROM compliance_alerts WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    ).scalar()
+
+    if alert_count and alert_count >= 5:
+        print("⏭️  Compliance alerts exist")
+    else:
+        # Grab some loan/lead ids for linking
+        loan_id_0001 = loan_ids.get("SHL-2026-0001")
+        loan_id_0003 = loan_ids.get("SHL-2026-0003")
+        loan_id_0007 = loan_ids.get("SHL-2026-0007")
+        lead_id_chase = list(lead_ids.values())[0] if lead_ids else None
+
+        ALERTS = [
+            # Resolved
+            {
+                "loan_id": loan_id_0001, "lead_id": None,
+                "alert_type": "le_deadline", "severity": "high",
+                "title": "Loan Estimate deadline approaching",
+                "description": "LE must be delivered within 3 business days of application",
+                "deadline_date": date_ago(5), "days_remaining": 0,
+                "status": "resolved", "resolved_at": days_ago(6),
+                "resolution_notes": "LE delivered on time via email",
+            },
+            {
+                "loan_id": loan_id_0003, "lead_id": None,
+                "alert_type": "document_expiry", "severity": "medium",
+                "title": "Appraisal expiring in 30 days",
+                "description": "Appraisal report will expire before projected closing date",
+                "deadline_date": date_from_now(30), "days_remaining": 30,
+                "status": "resolved", "resolved_at": days_ago(2),
+                "resolution_notes": "Closing rescheduled to be within appraisal validity window",
+            },
+            # Pending
+            {
+                "loan_id": loan_id_0007, "lead_id": None,
+                "alert_type": "rate_lock_expiry", "severity": "critical",
+                "title": "Rate lock expiring in 3 days",
+                "description": "Rate lock on SHL-2026-0007 expires before closing",
+                "deadline_date": date_from_now(3), "days_remaining": 3,
+                "status": "open", "resolved_at": None,
+                "resolution_notes": None,
+            },
+            {
+                "loan_id": None, "lead_id": lead_id_chase,
+                "alert_type": "tcpa_violation", "severity": "high",
+                "title": "TCPA consent not on file",
+                "description": "Outbound call attempted without verified TCPA consent record",
+                "deadline_date": date_from_now(7), "days_remaining": 7,
+                "status": "open", "resolved_at": None,
+                "resolution_notes": None,
+            },
+            {
+                "loan_id": loan_id_0001, "lead_id": None,
+                "alert_type": "cd_deadline", "severity": "high",
+                "title": "Closing Disclosure 3-day waiting period",
+                "description": "CD must be received by borrower 3 business days before closing",
+                "deadline_date": date_from_now(2), "days_remaining": 2,
+                "status": "open", "resolved_at": None,
+                "resolution_notes": None,
+            },
+        ]
+
+        for alert in ALERTS:
+            conn.execute(
+                text("""
+                    INSERT INTO compliance_alerts
+                        (organization_id, loan_id, lead_id, alert_type, severity,
+                         title, description, deadline_date, days_remaining,
+                         status, resolved_at, resolved_by_id, resolution_notes, created_at)
+                    VALUES
+                        (:org_id, :loan_id, :lead_id, :alert_type, :severity,
+                         :title, :description, :deadline_date, :days_remaining,
+                         :status, :resolved_at, :resolved_by_id, :resolution_notes, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "loan_id": alert["loan_id"],
+                    "lead_id": alert["lead_id"],
+                    "alert_type": alert["alert_type"],
+                    "severity": alert["severity"],
+                    "title": alert["title"],
+                    "description": alert["description"],
+                    "deadline_date": alert["deadline_date"],
+                    "days_remaining": alert["days_remaining"],
+                    "status": alert["status"],
+                    "resolved_at": alert["resolved_at"],
+                    "resolved_by_id": manager_id if alert["resolved_at"] else None,
+                    "resolution_notes": alert["resolution_notes"],
+                    "created_at": days_ago(10),
+                },
+            )
+        conn.commit()
+        print("✅ Seeded 5 compliance alerts")
+
+    # -------------------------------------------------------------------------
+    # 6. Smart docs consent records (8)
+    # -------------------------------------------------------------------------
+    consent_count = conn.execute(
+        text("SELECT COUNT(*) FROM smart_docs_consent_records WHERE organization_id = :org_id"),
+        {"org_id": org_id},
+    ).scalar()
+
+    if consent_count and consent_count >= 8:
+        print("⏭️  Smart docs consent records exist")
+    else:
+        lead_phones = [
+            (lead_ids.get("tyler.barnes@gmail.com"), "+18432110101"),
+            (lead_ids.get("priya.nair@outlook.com"), "+18432110102"),
+            (lead_ids.get("derek.hollis@yahoo.com"), "+18432110103"),
+            (lead_ids.get("vanessa.hartley@gmail.com"), "+18432110112"),
+            (lead_ids.get("tanya.morrison@gmail.com"), "+18432110114"),
+            (lead_ids.get("roberto.sandoval@hotmail.com"), "+18432110115"),
+            (lead_ids.get("aisha.coleman@gmail.com"), "+18432110116"),
+            (lead_ids.get("michelle.osei@gmail.com"), "+18432110122"),
+        ]
+        channels = ["sms", "voice", "sms", "sms", "voice", "sms", "sms", "voice"]
+        sources = [
+            "sms_opt_in", "borrower_portal", "sms_opt_in", "borrower_portal",
+            "sms_opt_in", "borrower_portal", "sms_opt_in", "borrower_portal",
+        ]
+
+        for idx, (borrower_id, phone) in enumerate(lead_phones):
+            if not phone:
+                continue
+            conn.execute(
+                text("""
+                    INSERT INTO smart_docs_consent_records
+                        (organization_id, borrower_id, phone, channel,
+                         consent_given, consent_source, consented_at, created_at)
+                    VALUES
+                        (:org_id, :borrower_id, :phone, :channel,
+                         :consent_given, :consent_source, :consented_at, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "borrower_id": borrower_id,
+                    "phone": phone,
+                    "channel": channels[idx],
+                    "consent_given": True,
+                    "consent_source": sources[idx],
+                    "consented_at": days_ago(random.randint(1, 30)),
+                    "created_at": days_ago(random.randint(1, 30)),
+                },
+            )
+        conn.commit()
+        print("✅ Seeded 8 smart docs consent records")
 
 
 def seed_borrower_portal(conn, org_id, lead_ids, loan_ids):
     """Create borrower portal sessions and document requests."""
-    pass
+    # Gather some active loan leads for linking
+    active_lead_entries = [
+        ("tanya.morrison@gmail.com", "SHL-2026-0001", "Tanya", "Morrison"),
+        ("roberto.sandoval@hotmail.com", "SHL-2026-0002", "Roberto", "Sandoval"),
+        ("vanessa.hartley@gmail.com", "SHL-2026-0003", "Vanessa", "Hartley"),
+        ("aisha.coleman@gmail.com", "SHL-2026-0004", "Aisha", "Coleman"),
+        ("marcus.delacroix@icloud.com", "SHL-2026-0005", "Marcus", "Delacroix"),
+    ]
+    providers = ["email", "email", "google", "email", "apple"]
+
+    # -------------------------------------------------------------------------
+    # 1. Borrower profiles (5)
+    # -------------------------------------------------------------------------
+    profile_ids = {}
+    for idx, (email, loan_number, first, last) in enumerate(active_lead_entries):
+        existing = conn.execute(
+            text("SELECT id FROM borrower_profiles WHERE email = :email AND organization_id = :org_id LIMIT 1"),
+            {"email": email, "org_id": org_id},
+        ).fetchone()
+        if existing:
+            profile_ids[email] = existing[0]
+            continue
+
+        provider = providers[idx]
+        profile_uuid = str(uuid.uuid4())
+        conn.execute(
+            text("""
+                INSERT INTO borrower_profiles
+                    (id, organization_id, email, first_name, last_name,
+                     provider, provider_user_id,
+                     communication_consent, marketing_consent, consent_captured_at, created_at)
+                VALUES
+                    (:id, :org_id, :email, :first_name, :last_name,
+                     :provider, :provider_user_id,
+                     :comm_consent, :mkt_consent, :consent_captured_at, :created_at)
+            """),
+            {
+                "id": profile_uuid,
+                "org_id": org_id,
+                "email": email,
+                "first_name": first,
+                "last_name": last,
+                "provider": provider,
+                "provider_user_id": str(uuid.uuid4()),
+                "comm_consent": True,
+                "mkt_consent": idx % 2 == 0,
+                "consent_captured_at": days_ago(random.randint(5, 60)),
+                "created_at": days_ago(random.randint(5, 60)),
+            },
+        )
+        profile_ids[email] = profile_uuid
+
+    conn.commit()
+    print(f"✅ Seeded {len(active_lead_entries)} borrower profiles")
+
+    # -------------------------------------------------------------------------
+    # 2. Borrower applications (5)
+    # -------------------------------------------------------------------------
+    # status/step combos: 2 submitted, 1 in_progress, 1 draft, 1 approved
+    APP_SPECS = [
+        {"status": "submitted",  "step": "credit_auth",  "progress": 100, "email": "tanya.morrison@gmail.com",           "loan": "SHL-2026-0001"},
+        {"status": "submitted",  "step": "credit_auth",  "progress": 100, "email": "roberto.sandoval@hotmail.com",        "loan": "SHL-2026-0002"},
+        {"status": "in_progress","step": "income",       "progress": 60,  "email": "vanessa.hartley@gmail.com",           "loan": "SHL-2026-0003"},
+        {"status": "draft",      "step": "personal_info","progress": 20,  "email": "aisha.coleman@gmail.com",             "loan": "SHL-2026-0004"},
+        {"status": "approved",   "step": "credit_auth",  "progress": 100, "email": "marcus.delacroix@icloud.com",         "loan": "SHL-2026-0005"},
+    ]
+
+    app_ids = {}
+    for spec in APP_SPECS:
+        email = spec["email"]
+        lead_id = lead_ids.get(email)
+        loan_id = loan_ids.get(spec["loan"])
+        profile_id = profile_ids.get(email)
+
+        # Look up owner_id from lead
+        owner_row = conn.execute(
+            text("SELECT owner_id, first_name, last_name FROM leads WHERE id = :lid LIMIT 1"),
+            {"lid": lead_id},
+        ).fetchone() if lead_id else None
+        owner_id = owner_row[0] if owner_row else None
+        first_name = owner_row[1] if owner_row else ""
+        last_name = owner_row[2] if owner_row else ""
+
+        existing = conn.execute(
+            text("SELECT id FROM borrower_applications WHERE lead_id = :lid LIMIT 1"),
+            {"lid": lead_id},
+        ).fetchone() if lead_id else None
+        if existing:
+            app_ids[email] = existing[0]
+            continue
+
+        pub_token = secrets.token_hex(32)
+        started_at = days_ago(random.randint(5, 30))
+        submitted_at = started_at + timedelta(days=1) if spec["status"] in ("submitted", "approved") else None
+
+        result = conn.execute(
+            text("""
+                INSERT INTO borrower_applications
+                    (public_token, borrower_profile_id, lead_id, loan_id,
+                     owner_id, organization_id, status, current_step,
+                     progress_percentage, borrower_first_name, borrower_last_name, borrower_email,
+                     started_at, submitted_at, created_at)
+                VALUES
+                    (:public_token, :borrower_profile_id, :lead_id, :loan_id,
+                     :owner_id, :org_id, :status, :current_step,
+                     :progress_percentage, :borrower_first_name, :borrower_last_name, :borrower_email,
+                     :started_at, :submitted_at, :created_at)
+                RETURNING id
+            """),
+            {
+                "public_token": pub_token,
+                "borrower_profile_id": profile_id,
+                "lead_id": lead_id,
+                "loan_id": loan_id,
+                "owner_id": owner_id,
+                "org_id": org_id,
+                "status": spec["status"],
+                "current_step": spec["step"],
+                "progress_percentage": spec["progress"],
+                "borrower_first_name": first_name,
+                "borrower_last_name": last_name,
+                "borrower_email": email,
+                "started_at": started_at,
+                "submitted_at": submitted_at,
+                "created_at": started_at,
+            },
+        )
+        app_id = result.fetchone()[0]
+        app_ids[email] = app_id
+
+    conn.commit()
+    print(f"✅ Seeded {len(APP_SPECS)} borrower applications")
+
+    # -------------------------------------------------------------------------
+    # 3. Application events (3-5 per application)
+    # -------------------------------------------------------------------------
+    events_inserted = 0
+    for email, app_id in app_ids.items():
+        existing_count = conn.execute(
+            text("SELECT COUNT(*) FROM application_events WHERE application_id = :aid"),
+            {"aid": app_id},
+        ).scalar()
+        if existing_count and existing_count >= 3:
+            continue
+
+        event_chain = [
+            ("application_started", "application_started", None, days_ago(20)),
+            ("step_started", "step_completed", "personal_info", days_ago(19)),
+            ("step_completed", "step_completed", "property", days_ago(18)),
+            ("step_started", "step_completed", "income", days_ago(17)),
+            ("application_submitted", "application_submitted", None, days_ago(16)),
+        ]
+        for ev_type, _ev, step, ts in event_chain[:random.randint(3, 5)]:
+            conn.execute(
+                text("""
+                    INSERT INTO application_events
+                        (application_id, event_type, event_data, step, created_at)
+                    VALUES
+                        (:app_id, :event_type, :event_data, :step, :created_at)
+                """),
+                {
+                    "app_id": app_id,
+                    "event_type": ev_type,
+                    "event_data": json.dumps({"step": step, "email": email}),
+                    "step": step,
+                    "created_at": ts,
+                },
+            )
+            events_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {events_inserted} application events")
+
+    # -------------------------------------------------------------------------
+    # 4. Co-borrower invitations (2: 1 accepted, 1 pending)
+    # -------------------------------------------------------------------------
+    inv_count = conn.execute(
+        text("""
+            SELECT COUNT(*) FROM coborrower_invitations
+            WHERE application_id = ANY(:ids)
+        """),
+        {"ids": list(app_ids.values())[:2]},
+    ).scalar()
+
+    if inv_count and inv_count >= 2:
+        print("⏭️  Coborrower invitations exist")
+    else:
+        app_list = list(app_ids.values())
+        if len(app_list) >= 2:
+            invitations = [
+                {
+                    "application_id": app_list[0],
+                    "email": "coborrower1@gmail.com",
+                    "first_name": "Jordan",
+                    "relationship_type": "spouse",
+                    "status": "accepted",
+                    "sent_at": days_ago(10),
+                    "completed_at": days_ago(8),
+                },
+                {
+                    "application_id": app_list[1],
+                    "email": "coborrower2@gmail.com",
+                    "first_name": "Taylor",
+                    "relationship_type": "co_borrower",
+                    "status": "pending",
+                    "sent_at": days_ago(3),
+                    "completed_at": None,
+                },
+            ]
+            for inv in invitations:
+                conn.execute(
+                    text("""
+                        INSERT INTO coborrower_invitations
+                            (application_id, invitation_token, email, first_name,
+                             relationship_type, status, sent_at, completed_at, created_at)
+                        VALUES
+                            (:app_id, :invitation_token, :email, :first_name,
+                             :relationship_type, :status, :sent_at, :completed_at, :created_at)
+                    """),
+                    {
+                        "app_id": inv["application_id"],
+                        "invitation_token": secrets.token_hex(32),
+                        "email": inv["email"],
+                        "first_name": inv["first_name"],
+                        "relationship_type": inv["relationship_type"],
+                        "status": inv["status"],
+                        "sent_at": inv["sent_at"],
+                        "completed_at": inv["completed_at"],
+                        "created_at": inv["sent_at"],
+                    },
+                )
+            conn.commit()
+            print("✅ Seeded 2 coborrower invitations")
 
 
 def seed_content_and_campaigns(conn, org_id, user_ids, lead_ids):
     """Create content pieces and marketing campaign records."""
-    pass
+    manager_id = user_ids.get("manager")
+    lo_sarah_id = user_ids.get("lo_sarah")
+
+    # -------------------------------------------------------------------------
+    # 1. Aria campaigns (2)
+    # -------------------------------------------------------------------------
+    CAMPAIGNS = [
+        {
+            "name": "Rate Drop Alert — May 2026",
+            "description": "Notify eligible prospects of a 25bps rate improvement",
+            "filter_criteria": {"min_loan_amount": 250000, "stages": ["Pre-Qualified", "Prospect"], "loan_type": "Conventional"},
+            "message_template": "Hi {first_name}! Rates just dropped 0.25% — you could save ${monthly_savings}/mo on your {loan_amount} purchase. Want to lock in before rates move? Reply YES or call us.",
+            "status": "completed",
+            "recipient_count": 15,
+            "sent_count": 15,
+            "replied_count": 6,
+            "booked_count": 3,
+            "created_at": days_ago(14),
+            "completed_at": days_ago(13),
+        },
+        {
+            "name": "Spring Home Buying Season — Outreach",
+            "description": "Holiday greeting and market update for nurture list",
+            "filter_criteria": {"stages": ["Long-Term Nurture", "Credit Repair"], "min_days_since_contact": 30},
+            "message_template": "Hi {first_name}, spring buying season is here! Rates and inventory are moving fast. Let's connect before you miss your window — reply CALL to schedule time with {lo_name}.",
+            "status": "sending",
+            "recipient_count": 10,
+            "sent_count": 7,
+            "replied_count": 2,
+            "booked_count": 1,
+            "created_at": days_ago(1),
+            "completed_at": None,
+        },
+    ]
+
+    campaign_ids = []
+    for camp in CAMPAIGNS:
+        existing = conn.execute(
+            text("SELECT id FROM aria_campaigns WHERE name = :name AND organization_id = :org_id LIMIT 1"),
+            {"name": camp["name"], "org_id": org_id},
+        ).fetchone()
+        if existing:
+            campaign_ids.append(existing[0])
+            continue
+
+        result = conn.execute(
+            text("""
+                INSERT INTO aria_campaigns
+                    (organization_id, created_by_user_id, name, description,
+                     filter_criteria, message_template, status,
+                     recipient_count, sent_count, replied_count, booked_count,
+                     created_at, completed_at)
+                VALUES
+                    (:org_id, :created_by, :name, :description,
+                     :filter_criteria, :message_template, :status,
+                     :recipient_count, :sent_count, :replied_count, :booked_count,
+                     :created_at, :completed_at)
+                RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "created_by": manager_id,
+                "name": camp["name"],
+                "description": camp["description"],
+                "filter_criteria": json.dumps(camp["filter_criteria"]),
+                "message_template": camp["message_template"],
+                "status": camp["status"],
+                "recipient_count": camp["recipient_count"],
+                "sent_count": camp["sent_count"],
+                "replied_count": camp["replied_count"],
+                "booked_count": camp["booked_count"],
+                "created_at": camp["created_at"],
+                "completed_at": camp["completed_at"],
+            },
+        )
+        campaign_ids.append(result.fetchone()[0])
+
+    conn.commit()
+    print(f"✅ Seeded {len(CAMPAIGNS)} Aria campaigns")
+
+    # -------------------------------------------------------------------------
+    # 2. Campaign recipients
+    # -------------------------------------------------------------------------
+    RECIPIENT_LEADS = [
+        ("brianna.okafor@gmail.com", "+18432110106", "Brianna"),
+        ("kevin.albright@gmail.com", "+18432110109", "Kevin"),
+        ("jasmine.winters@yahoo.com", "+18432110110", "Jasmine"),
+        ("elijah.fontaine@gmail.com", "+18432110111", "Elijah"),
+        ("gregory.tatum@yahoo.com", "+18432110117", "Gregory"),
+        ("courtney.langford@gmail.com", "+18432110118", "Courtney"),
+        ("antoine.devereaux@gmail.com", "+18432110119", "Antoine"),
+        ("darnell.pace@gmail.com", "+18432110120", "Darnell"),
+    ]
+
+    recip_inserted = 0
+    for c_idx, camp_id in enumerate(campaign_ids):
+        existing_count = conn.execute(
+            text("SELECT COUNT(*) FROM aria_campaign_recipients WHERE campaign_id = :cid"),
+            {"cid": camp_id},
+        ).scalar()
+        if existing_count and existing_count > 0:
+            continue
+
+        for r_idx, (email, phone, first_name) in enumerate(RECIPIENT_LEADS):
+            lead_id = lead_ids.get(email)
+            if c_idx == 0:
+                status = "replied" if r_idx < 6 else "sent"
+                sent_at = days_ago(13)
+                replied_at = days_ago(12) if status == "replied" else None
+            else:
+                status = "sent" if r_idx < 7 else "pending"
+                sent_at = days_ago(1) if status == "sent" else None
+                replied_at = days_ago(1) if r_idx < 2 else None
+
+            conn.execute(
+                text("""
+                    INSERT INTO aria_campaign_recipients
+                        (campaign_id, lead_id, phone, email, first_name,
+                         status, sent_at, replied_at)
+                    VALUES
+                        (:camp_id, :lead_id, :phone, :email, :first_name,
+                         :status, :sent_at, :replied_at)
+                """),
+                {
+                    "camp_id": camp_id,
+                    "lead_id": lead_id,
+                    "phone": phone,
+                    "email": email,
+                    "first_name": first_name,
+                    "status": status,
+                    "sent_at": sent_at,
+                    "replied_at": replied_at,
+                },
+            )
+            recip_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {recip_inserted} campaign recipients")
+
+    # -------------------------------------------------------------------------
+    # 3. Drip sequences (2)
+    # -------------------------------------------------------------------------
+    DRIP_SEQUENCES = [
+        {
+            "name": "New Lead Nurture — 5 Touch",
+            "description": "Automated 5-step nurture for new leads over 14 days",
+            "trigger_event": "lead_created",
+            "steps": [
+                {"day": 0,  "action": "sms",   "message": "Hi {first_name}! I'm {lo_name} — just saw your inquiry. When's a good time to chat about your home purchase goals?"},
+                {"day": 1,  "action": "email",  "template": "intro_value_prop"},
+                {"day": 3,  "action": "sms",    "message": "Hi {first_name}, just following up — did you get my email? Happy to answer any questions!"},
+                {"day": 7,  "action": "email",  "template": "mortgage_guide"},
+                {"day": 14, "action": "task",   "task": "Manual follow-up call if no response"},
+            ],
+            "is_active": True,
+            "total_enrolled": 28,
+            "total_completed": 19,
+            "created_at": days_ago(60),
+        },
+        {
+            "name": "Post-Close Follow-Up — 3 Touch",
+            "description": "Relationship maintenance after loan funding",
+            "trigger_event": "loan_funded",
+            "steps": [
+                {"day": 1,   "action": "email",  "template": "congratulations"},
+                {"day": 30,  "action": "sms",    "message": "Hi {first_name}, hope you're settling in well! Let me know if you ever need anything — I'm always here. – {lo_name}"},
+                {"day": 365, "action": "email",  "template": "annual_review_offer"},
+            ],
+            "is_active": True,
+            "total_enrolled": 12,
+            "total_completed": 8,
+            "created_at": days_ago(90),
+        },
+    ]
+
+    drip_inserted = 0
+    for drip in DRIP_SEQUENCES:
+        existing = conn.execute(
+            text("SELECT id FROM drip_sequences WHERE name = :name AND organization_id = :org_id LIMIT 1"),
+            {"name": drip["name"], "org_id": org_id},
+        ).fetchone()
+        if existing:
+            continue
+        conn.execute(
+            text("""
+                INSERT INTO drip_sequences
+                    (organization_id, created_by_id, name, description, trigger_event,
+                     steps, is_active, total_enrolled, total_completed, created_at)
+                VALUES
+                    (:org_id, :created_by, :name, :description, :trigger_event,
+                     :steps, :is_active, :total_enrolled, :total_completed, :created_at)
+            """),
+            {
+                "org_id": org_id,
+                "created_by": lo_sarah_id,
+                "name": drip["name"],
+                "description": drip["description"],
+                "trigger_event": drip["trigger_event"],
+                "steps": json.dumps(drip["steps"]),
+                "is_active": drip["is_active"],
+                "total_enrolled": drip["total_enrolled"],
+                "total_completed": drip["total_completed"],
+                "created_at": drip["created_at"],
+            },
+        )
+        drip_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {drip_inserted} drip sequences")
 
 
 def seed_team_chat(conn, org_id, user_ids):
     """Create team chat channel messages."""
-    pass
+    # -------------------------------------------------------------------------
+    # Check if client_files table exists
+    # -------------------------------------------------------------------------
+    has_client_files = conn.execute(
+        text("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'client_files')")
+    ).scalar()
+
+    if not has_client_files:
+        print("⏭️  Skipping team chat — client_files table not found")
+        return
+
+    # Check if there are any client_files records
+    cf_row = conn.execute(
+        text("SELECT id FROM client_files WHERE organization_id = :org_id LIMIT 1"),
+        {"org_id": org_id},
+    ).fetchone()
+
+    if not cf_row:
+        print("⏭️  Skipping team chat — no client_files records found")
+        return
+
+    client_file_id = str(cf_row[0])
+    manager_id = user_ids.get("manager")
+    lo_sarah_id = user_ids.get("lo_sarah")
+    processor_id = user_ids.get("processor")
+
+    # -------------------------------------------------------------------------
+    # Create team chat channel
+    # -------------------------------------------------------------------------
+    channel_id_str = str(uuid.uuid4())
+    existing_channel = conn.execute(
+        text("SELECT id FROM team_chat_channels WHERE client_file_id = :cfid LIMIT 1"),
+        {"cfid": client_file_id},
+    ).fetchone()
+
+    if existing_channel:
+        channel_id_str = str(existing_channel[0])
+        print("⏭️  Team chat channel exists")
+    else:
+        conn.execute(
+            text("""
+                INSERT INTO team_chat_channels
+                    (id, organization_id, client_file_id, created_at)
+                VALUES
+                    (:id, :org_id, :client_file_id, :created_at)
+            """),
+            {
+                "id": channel_id_str,
+                "org_id": org_id,
+                "client_file_id": client_file_id,
+                "created_at": days_ago(10),
+            },
+        )
+        conn.commit()
+        print(f"✅ Created team chat channel (id={channel_id_str})")
+
+    # -------------------------------------------------------------------------
+    # Create team chat messages
+    # -------------------------------------------------------------------------
+    msg_count = conn.execute(
+        text("SELECT COUNT(*) FROM team_chat_messages WHERE channel_id = :cid"),
+        {"cid": channel_id_str},
+    ).scalar()
+
+    if msg_count and msg_count >= 3:
+        print("⏭️  Team chat messages exist")
+        return
+
+    MESSAGES = [
+        {
+            "author_user_id": lo_sarah_id,
+            "author_kind": "human",
+            "body": "Just got off the phone — borrower confirmed they're uploading W-2s today.",
+            "created_at": days_ago(9),
+        },
+        {
+            "author_user_id": processor_id,
+            "author_kind": "human",
+            "body": "Got it! I'll watch for the upload and move this to UW once I have all three docs.",
+            "created_at": days_ago(8),
+        },
+        {
+            "author_user_id": manager_id,
+            "author_kind": "human",
+            "body": "Great teamwork. @Emily let me know if the appraisal comes back below value — we may need to renegotiate.",
+            "created_at": days_ago(7),
+        },
+        {
+            "author_user_id": None,
+            "author_kind": "system",
+            "body": "Loan stage changed: PROCESSING → SUBMITTED",
+            "created_at": days_ago(6),
+        },
+        {
+            "author_user_id": lo_sarah_id,
+            "author_kind": "human",
+            "body": "Submitted to UW. Rachel has it — estimated 48-hour turnaround.",
+            "created_at": days_ago(5),
+        },
+    ]
+
+    for msg in MESSAGES:
+        msg_id = str(uuid.uuid4())
+        conn.execute(
+            text("""
+                INSERT INTO team_chat_messages
+                    (id, organization_id, channel_id, client_file_id,
+                     author_kind, author_user_id, body,
+                     mentioned_user_ids, attachments, created_at)
+                VALUES
+                    (:id, :org_id, :channel_id, :client_file_id,
+                     :author_kind, :author_user_id, :body,
+                     :mentioned_user_ids, :attachments, :created_at)
+            """),
+            {
+                "id": msg_id,
+                "org_id": org_id,
+                "channel_id": channel_id_str,
+                "client_file_id": client_file_id,
+                "author_kind": msg["author_kind"],
+                "author_user_id": msg["author_user_id"],
+                "body": msg["body"],
+                "mentioned_user_ids": "{}",
+                "attachments": "[]",
+                "created_at": msg["created_at"],
+            },
+        )
+
+    conn.commit()
+    print(f"✅ Seeded {len(MESSAGES)} team chat messages")
 
 
 def seed_notifications(conn, org_id, user_ids):
     """Create demo in-app notification records."""
-    pass
+    manager_id = user_ids.get("manager")
+    if not manager_id:
+        print("⚠️  No manager user — skipping notifications")
+        return
+
+    # -------------------------------------------------------------------------
+    # 1. In-app notifications (15 for manager, spread over last 24 hours)
+    # -------------------------------------------------------------------------
+    notif_count = conn.execute(
+        text("SELECT COUNT(*) FROM notifications WHERE user_id = :uid AND organization_id = :org_id"),
+        {"uid": manager_id, "org_id": org_id},
+    ).scalar()
+
+    if notif_count and notif_count >= 15:
+        print("⏭️  Notifications exist")
+    else:
+        NOTIFICATIONS = [
+            {
+                "type": "new_lead",
+                "title": "New Lead Assigned",
+                "message": "Derek Hollis submitted a rate inquiry via your website — high AI score (88).",
+                "link": "/leads",
+                "is_read": False,
+                "minutes_ago": 15,
+            },
+            {
+                "type": "document_uploaded",
+                "title": "Document Uploaded",
+                "message": "Tanya Morrison uploaded W-2 (2024) for loan SHL-2026-0001.",
+                "link": "/loans/SHL-2026-0001",
+                "is_read": False,
+                "minutes_ago": 45,
+            },
+            {
+                "type": "rate_lock_expiring",
+                "title": "Rate Lock Expiring Soon",
+                "message": "Rate lock on SHL-2026-0007 (Jasmine Winters) expires in 3 days.",
+                "link": "/loans/SHL-2026-0007",
+                "is_read": False,
+                "minutes_ago": 90,
+            },
+            {
+                "type": "task_overdue",
+                "title": "Task Overdue",
+                "message": "Follow-up call with Carter Webb is 2 days overdue.",
+                "link": "/tasks",
+                "is_read": True,
+                "minutes_ago": 120,
+            },
+            {
+                "type": "loan_stage_changed",
+                "title": "Loan Stage Updated",
+                "message": "SHL-2026-0005 (Marcus Delacroix) moved to SUBMITTED by Emily Park.",
+                "link": "/loans/SHL-2026-0005",
+                "is_read": False,
+                "minutes_ago": 180,
+            },
+            {
+                "type": "compliance_alert",
+                "title": "Compliance Alert",
+                "message": "CD 3-day waiting period applies to SHL-2026-0001 — closing in 2 days.",
+                "link": "/compliance",
+                "is_read": False,
+                "minutes_ago": 210,
+            },
+            {
+                "type": "appointment_reminder",
+                "title": "Appointment in 30 Minutes",
+                "message": "Discovery call with Brianna Okafor starts at 2:00 PM.",
+                "link": "/calendar",
+                "is_read": True,
+                "minutes_ago": 270,
+            },
+            {
+                "type": "team_activity",
+                "title": "Team Activity",
+                "message": "Sarah Chen closed 2 new applications this week — great work!",
+                "link": "/team",
+                "is_read": True,
+                "minutes_ago": 360,
+            },
+            {
+                "type": "new_lead",
+                "title": "New Lead Assigned",
+                "message": "Priya Nair responded to your Facebook ad — FHA inquiry.",
+                "link": "/leads",
+                "is_read": True,
+                "minutes_ago": 420,
+            },
+            {
+                "type": "document_uploaded",
+                "title": "Document Uploaded",
+                "message": "Roberto Sandoval uploaded Bank Statements (Jan–Feb) for SHL-2026-0002.",
+                "link": "/loans/SHL-2026-0002",
+                "is_read": True,
+                "minutes_ago": 480,
+            },
+            {
+                "type": "loan_stage_changed",
+                "title": "Loan Stage Updated",
+                "message": "SHL-2026-0008 (Brianna Okafor) reached CONDITIONAL_APPROVAL.",
+                "link": "/loans/SHL-2026-0008",
+                "is_read": True,
+                "minutes_ago": 540,
+            },
+            {
+                "type": "team_activity",
+                "title": "AI Campaign Complete",
+                "message": "Rate Drop Alert campaign finished — 6/15 replied, 3 appointments booked.",
+                "link": "/campaigns",
+                "is_read": True,
+                "minutes_ago": 600,
+            },
+            {
+                "type": "task_overdue",
+                "title": "Task Overdue",
+                "message": "Request tax transcripts for Elijah Fontaine is 1 day overdue.",
+                "link": "/tasks",
+                "is_read": True,
+                "minutes_ago": 720,
+            },
+            {
+                "type": "appointment_reminder",
+                "title": "Upcoming Appointment",
+                "message": "Rate review call with Kevin Albright is tomorrow at 10:00 AM.",
+                "link": "/calendar",
+                "is_read": True,
+                "minutes_ago": 900,
+            },
+            {
+                "type": "compliance_alert",
+                "title": "TCPA Consent Missing",
+                "message": "Outbound call blocked — TCPA consent not on file for Monique Duval.",
+                "link": "/compliance",
+                "is_read": True,
+                "minutes_ago": 1200,
+            },
+        ]
+
+        for notif in NOTIFICATIONS:
+            ts = NOW - timedelta(minutes=notif["minutes_ago"])
+            conn.execute(
+                text("""
+                    INSERT INTO notifications
+                        (organization_id, user_id, type, title, message,
+                         link, is_read, created_at)
+                    VALUES
+                        (:org_id, :user_id, :type, :title, :message,
+                         :link, :is_read, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "user_id": manager_id,
+                    "type": notif["type"],
+                    "title": notif["title"],
+                    "message": notif["message"],
+                    "link": notif["link"],
+                    "is_read": notif["is_read"],
+                    "created_at": ts,
+                },
+            )
+
+        conn.commit()
+        print("✅ Seeded 15 notifications")
+
+    # -------------------------------------------------------------------------
+    # 2. System alerts (5)
+    # -------------------------------------------------------------------------
+    sys_alert_count = conn.execute(
+        text("SELECT COUNT(*) FROM system_alerts"),
+    ).scalar()
+
+    if sys_alert_count and sys_alert_count >= 5:
+        print("⏭️  System alerts exist")
+    else:
+        SYSTEM_ALERTS = [
+            {
+                "alert_type": "integration_health",
+                "severity": "warning",
+                "title": "Microsoft Graph Token Expired",
+                "message": "Email integration for demo@perenniaai.com requires re-authentication.",
+                "suggested_action": "Navigate to Settings > Integrations and reconnect Microsoft 365.",
+                "is_resolved": True,
+                "resolved_at": days_ago(1),
+                "created_at": days_ago(2),
+            },
+            {
+                "alert_type": "rate_threshold",
+                "severity": "info",
+                "title": "Rate Threshold Breach — 30-Year Conventional",
+                "message": "30-year conventional rates crossed below 6.75% — 8 clients eligible for refi review.",
+                "suggested_action": "Run Aria rate-drop campaign for eligible MUM portfolio clients.",
+                "is_resolved": False,
+                "resolved_at": None,
+                "created_at": days_ago(1),
+            },
+            {
+                "alert_type": "sla_warning",
+                "severity": "warning",
+                "title": "SLA Warning — Underwriting Turnaround",
+                "message": "2 loans in UNDERWRITING have exceeded the 7-day SLA target.",
+                "suggested_action": "Escalate SHL-2026-0007 and SHL-2026-0006 with underwriting team.",
+                "is_resolved": False,
+                "resolved_at": None,
+                "created_at": days_ago(3),
+            },
+            {
+                "alert_type": "storage_usage",
+                "severity": "info",
+                "title": "Document Storage at 78% Capacity",
+                "message": "Organization document storage is approaching the plan limit.",
+                "suggested_action": "Archive closed loan documents or upgrade storage tier.",
+                "is_resolved": True,
+                "resolved_at": days_ago(5),
+                "created_at": days_ago(7),
+            },
+            {
+                "alert_type": "scheduled_maintenance",
+                "severity": "info",
+                "title": "Scheduled Maintenance — Completed",
+                "message": "Database maintenance window completed successfully. All services nominal.",
+                "suggested_action": None,
+                "is_resolved": True,
+                "resolved_at": days_ago(10),
+                "created_at": days_ago(10),
+            },
+        ]
+
+        for alert in SYSTEM_ALERTS:
+            conn.execute(
+                text("""
+                    INSERT INTO system_alerts
+                        (alert_type, severity, title, message,
+                         suggested_action, is_resolved, resolved_at, created_at)
+                    VALUES
+                        (:alert_type, :severity, :title, :message,
+                         :suggested_action, :is_resolved, :resolved_at, :created_at)
+                """),
+                {
+                    "alert_type": alert["alert_type"],
+                    "severity": alert["severity"],
+                    "title": alert["title"],
+                    "message": alert["message"],
+                    "suggested_action": alert["suggested_action"],
+                    "is_resolved": alert["is_resolved"],
+                    "resolved_at": alert["resolved_at"],
+                    "created_at": alert["created_at"],
+                },
+            )
+
+        conn.commit()
+        print("✅ Seeded 5 system alerts")
 
 
 # ---------------------------------------------------------------------------
