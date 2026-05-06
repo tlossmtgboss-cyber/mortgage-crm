@@ -4051,18 +4051,1262 @@ def seed_call_intelligence(conn, org_id, user_ids, lead_ids):
 
 
 def seed_activities_and_history(conn, org_id, user_ids, lead_ids, loan_ids):
-    """Create activity log entries for leads and loans."""
-    pass
+    """Create activity log entries and stage history for leads and loans."""
+
+    manager_id = user_ids.get("manager")
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+    processor_id = user_ids.get("processor")
+    uw_rachel_id = user_ids.get("uw_rachel")
+    uw_james_id = user_ids.get("uw_james")
+
+    # ------------------------------------------------------------------
+    # Lead activity specs
+    # (email, stage, days_ago, owner_id, activities list)
+    # activities: list of (type, content, offset_days_from_created, duration, sentiment)
+    # ------------------------------------------------------------------
+    LEAD_ACTIVITIES = [
+        # --- NEW leads (1-2 activities each) ---
+        {
+            "email": "tyler.barnes@gmail.com",
+            "stage": "New",
+            "days_ago": 2,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",  "Inbound inquiry from Zillow — discussed purchase timeline and rate expectations. Left message about pre-approval process.", 0, "12 min", "neutral"),
+                ("Note",  "First-time buyer previously pre-qualified with another lender. Wants rate comparison. AI score 72. Follow up with discovery call.", 0, None, "neutral"),
+            ],
+        },
+        {
+            "email": "priya.nair@outlook.com",
+            "stage": "New",
+            "days_ago": 5,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",  "Initial call — responded to Facebook FHA ad. Asking about minimum down payment requirements. Confirmed 3.5% FHA option.", 0, "8 min", "positive"),
+                ("Email", "Sent FHA program overview PDF with down payment breakdown and credit score requirements.", 1, None, "positive"),
+            ],
+        },
+        {
+            "email": "derek.hollis@yahoo.com",
+            "stage": "New",
+            "days_ago": 1,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Note",  "High-priority website lead (AI score 88). Relocating for work from Atlanta. Used rate calculator — strong purchase intent. Schedule discovery call today.", 0, None, "positive"),
+                ("SMS",   "Hi Derek — this is Sarah Chen at Summit Home Loans. I saw your inquiry on our website. I'd love to walk you through your options. When works for a quick call?", 0, None, "positive"),
+            ],
+        },
+        # --- ATTEMPTED CONTACT leads (2-3 activities) ---
+        {
+            "email": "monique.duval@gmail.com",
+            "stage": "Attempted Contact",
+            "days_ago": 8,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",  "Left voicemail #1 — introduced Summit Home Loans and FHA programs. No callback.", 0, "2 min", "neutral"),
+                ("Call",  "Left voicemail #2 — referenced Realtor.com listing inquiry. Offered free pre-qualification.", 2, "2 min", "neutral"),
+                ("SMS",   "Hi Monique — Marcus Johnson from Summit Home Loans. Reaching out re: the home on Ashley Ave. Happy to help with financing. Reply to connect!", 3, None, "neutral"),
+            ],
+        },
+        {
+            "email": "carter.webb@icloud.com",
+            "stage": "Attempted Contact",
+            "days_ago": 11,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",  "Cold outreach from expired listing database — Carter showed interest in rate info but hasn't scheduled a call yet.", 0, "5 min", "neutral"),
+                ("Call",  "Follow-up call — no answer. Left voicemail referencing our pre-approval process.", 3, "2 min", "neutral"),
+                ("Email", "Sent calendar link for 15-min discovery call. Subject: 'Get Your Rate — 5 Minutes, No Obligation'.", 4, None, "neutral"),
+            ],
+        },
+        # --- PROSPECT leads (3-5 activities) ---
+        {
+            "email": "brianna.okafor@gmail.com",
+            "stage": "Prospect",
+            "days_ago": 18,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Initial contact — referral from Jean Holloway at RE/MAX. Warm introduction. Discussed purchase goals and 60-day timeline.", 0, "18 min", "positive"),
+                ("Email",  "Sent pre-approval checklist with income document requirements and credit score guidance.", 2, None, "positive"),
+                ("Meeting","Discovery Zoom call — reviewed income ($112K), assets, and purchase target ($390K–$445K). Excellent profile for conventional 10% down.", 4, "28 min", "positive"),
+                ("Note",   "Referred by realtor partner Jean Holloway. High-quality lead — ready to move. Begin pre-qual process.", 4, None, "positive"),
+            ],
+        },
+        {
+            "email": "nathan.prescott@hotmail.com",
+            "stage": "Prospect",
+            "days_ago": 22,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Initial Zillow lead call — browsing condos in North Charleston. Concerned about HOA impact on DTI.", 0, "14 min", "neutral"),
+                ("Email",  "Sent FHA condo approval process guide and HOA add-back explanation.", 2, None, "neutral"),
+                ("Call",   "Follow-up call — discussed condo HOA dues and impact on qualifying payment. Nathan still researching communities.", 5, "11 min", "neutral"),
+            ],
+        },
+        {
+            "email": "simone.arceneaux@gmail.com",
+            "stage": "Prospect",
+            "days_ago": 27,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Website lead — executive relocating from Atlanta. Currently has credit union pre-approval at 7.1%. Wants rate comparison.", 0, "22 min", "positive"),
+                ("Email",  "Sent side-by-side rate comparison analysis vs credit union offer. Summit savings: ~$87/month at 6.500%.", 2, None, "positive"),
+                ("Meeting","Rate strategy call — walked through conventional 30yr fixed at 6.500% vs ARM options. Simone prefers fixed.", 4, "35 min", "positive"),
+                ("Note",   "High-value prospect — $475K loan target, relocating for senior exec role. Closing within 45 days. Rate lock ready.", 5, None, "positive"),
+            ],
+        },
+        # --- PRE-QUALIFIED leads (3-5 activities) ---
+        {
+            "email": "kevin.albright@gmail.com",
+            "stage": "Pre-Qualified",
+            "days_ago": 38,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Referral introduction from realtor partner. Kevin searching for single-family in Park Circle area.", 0, "16 min", "positive"),
+                ("Email",  "Sent income doc checklist — W-2, paystubs, bank statements requested.", 3, None, "positive"),
+                ("Document","Received 2024 W-2, two recent paystubs, and 90-day bank statements. All documents complete.", 7, None, "positive"),
+                ("Meeting","Pre-qualification review call — $335K pre-qual approved. DTI at 33%. Letter issued.", 10, "25 min", "positive"),
+                ("Call",   "Check-in call — Kevin actively touring Park Circle. No offer yet but expects to find property in 2-3 weeks.", 20, "9 min", "positive"),
+            ],
+        },
+        {
+            "email": "jasmine.winters@yahoo.com",
+            "stage": "Pre-Qualified",
+            "days_ago": 45,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Zillow inquiry — Jasmine looking at townhomes in Wescott area. First-time buyer.", 0, "13 min", "positive"),
+                ("Email",  "Sent pre-qual income doc checklist. Highlighted conventional loan with 10% down option.", 2, None, "positive"),
+                ("Document","Received all income docs — 2024 W-2, pay stubs, 60-day bank statements.", 8, None, "positive"),
+                ("Meeting","Pre-qualification call — $285K approved at 37% DTI. Pre-qual letter issued.", 12, "20 min", "positive"),
+                ("Note",   "Pre-qual letter expires in 30 days. Need to follow up on property search progress. Wescott townhomes selling quickly.", 20, None, "positive"),
+            ],
+        },
+        {
+            "email": "elijah.fontaine@gmail.com",
+            "stage": "Pre-Qualified",
+            "days_ago": 52,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Facebook lead — Elijah looking at FHA purchase in Summerville area. DTI concern with spouse income.", 0, "17 min", "neutral"),
+                ("Email",  "Sent FHA qualification requirements and request for spouse's income documentation.", 3, None, "neutral"),
+                ("Call",   "Follow-up — spouse W-2 not yet available. Elijah working on gathering docs.", 10, "8 min", "neutral"),
+                ("Note",   "Conditional pre-qual pending spouse income verification. W-2 and pay stubs needed. DTI at 42% — borderline.", 15, None, "neutral"),
+            ],
+        },
+        # --- PRE-APPROVED leads (5-7 activities) ---
+        {
+            "email": "vanessa.hartley@gmail.com",
+            "stage": "Pre-Approved",
+            "days_ago": 55,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Referral from Bob Walsh at Sullivan's Realty — Vanessa needs pre-approval letter fast. Under contract.", 0, "20 min", "positive"),
+                ("Email",  "Sent income doc checklist — priority request.", 1, None, "positive"),
+                ("Document","Received complete doc package: W-2, paystubs, bank statements, tax returns. Quick turnaround.", 3, None, "positive"),
+                ("Meeting","Pre-approval underwriting review — $450K approved, DTI 28%, credit 748. Full pre-approval issued.", 5, "30 min", "positive"),
+                ("Call",   "Confirmed pre-approval and reviewed rate lock strategy. Loan amount locked at 6.750% for 45 days.", 8, "12 min", "positive"),
+                ("Email",  "Pre-approval letter emailed to borrower and Bob Walsh at Sullivan's Realty. Appraisal ordered.", 10, None, "positive"),
+            ],
+        },
+        {
+            "email": "marcus.delacroix@icloud.com",
+            "stage": "Pre-Approved",
+            "days_ago": 68,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Website lead — Marcus actively touring homes, second offer pending on James Island property.", 0, "18 min", "positive"),
+                ("Email",  "Sent pre-approval income doc checklist. Marcus has strong financials.", 2, None, "positive"),
+                ("Document","Received full income package — W-2, pay stubs, bank statements, and 2023 tax returns.", 5, None, "positive"),
+                ("Meeting","Pre-approval review — $380K approved at 32% DTI. Rate quoted at 6.999%.", 8, "25 min", "positive"),
+                ("Call",   "Discussed rate lock timing with Marcus — waiting for offer acceptance before locking.", 12, "10 min", "positive"),
+                ("Note",   "Second offer outcome unknown. Marcus will call when offer is accepted. Pre-approval letter valid 60 days.", 15, None, "positive"),
+            ],
+        },
+        # --- APPLICATION leads (5-8 activities) ---
+        {
+            "email": "tanya.morrison@gmail.com",
+            "stage": "Application",
+            "days_ago": 65,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Realtor.com lead — Tanya found home on Wentworth St. Ready to apply. Under contract.", 0, "22 min", "positive"),
+                ("Email",  "Sent full application link and income doc checklist.", 1, None, "positive"),
+                ("Document","Received W-2, paystubs, bank statements. Missing 2022 tax return — follow up scheduled.", 5, None, "positive"),
+                ("Meeting","Initial application review — 80% complete. 2022 tax transcripts still needed.", 8, "30 min", "positive"),
+                ("Call",   "Follow-up on missing tax transcripts. Tanya ordered IRS transcript. Should arrive in 3 days.", 10, "9 min", "positive"),
+                ("SMS",    "Hi Tanya — just checking in on the IRS transcript. Any update? Happy to order directly if easier!", 14, None, "positive"),
+                ("Note",   "Application at 80%. Missing 2022 tax transcripts causing delay. Rate lock on SHL-2026-0001 expires soon.", 15, None, "neutral"),
+            ],
+        },
+        {
+            "email": "roberto.sandoval@hotmail.com",
+            "stage": "Application",
+            "days_ago": 75,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Referral lead — Roberto ready to buy townhome in North Charleston. FHA loan requested.", 0, "19 min", "positive"),
+                ("Email",  "Sent FHA application link and doc checklist.", 1, None, "positive"),
+                ("Document","Received most income docs. Still missing 2024 W-2 from employer.", 7, None, "positive"),
+                ("Meeting","Application review meeting — full app submitted except missing W-2. FHA case number requested.", 12, "28 min", "positive"),
+                ("Call",   "Followed up on missing W-2 — Roberto's employer needs 5 days to process. Appraisal scheduling initiated.", 15, "10 min", "positive"),
+                ("Email",  "Title search ordered. Appraisal scheduled for next week.", 18, None, "positive"),
+                ("Note",   "FHA case number requested. Appraisal scheduled. Waiting on W-2. Emily Park tracking doc status.", 20, None, "positive"),
+            ],
+        },
+        {
+            "email": "aisha.coleman@gmail.com",
+            "stage": "Application",
+            "days_ago": 82,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Zillow lead — Aisha under contract on new construction in Mount Pleasant. Builder close in 60 days.", 0, "24 min", "positive"),
+                ("Email",  "Sent full application package. Highlighted 60-day lock option for new construction.", 2, None, "positive"),
+                ("Document","Received complete doc package: W-2, tax returns, paystubs, bank statements, gift letter.", 6, None, "positive"),
+                ("Meeting","Application review — excellent profile (score 91, DTI 27%). Lock rate when builder gives 45-day window.", 10, "35 min", "positive"),
+                ("Call",   "Spoke with Aisha — builder confirmed 45-day close window. Initiating rate lock discussion.", 15, "12 min", "positive"),
+                ("Email",  "Rate lock options sent — 45-day at 6.875% vs 60-day at 7.000%. Recommend 45-day to save.", 18, None, "positive"),
+                ("Note",   "All docs received. File ready for UW submission. Builder close confirmed. Lock ASAP.", 20, None, "positive"),
+            ],
+        },
+        # --- LONG-TERM NURTURE leads (2-3 activities) ---
+        {
+            "email": "gregory.tatum@yahoo.com",
+            "stage": "Long-Term Nurture",
+            "days_ago": 210,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Cold outreach — Gregory interested in buying but saving for down payment. Target: spring next year.", 0, "11 min", "neutral"),
+                ("Email",  "Added to rate-watch drip campaign. Sent market update and savings goal worksheet.", 30, None, "neutral"),
+                ("Call",   "Monthly check-in call — Gregory saving steadily. Credit score holding at 635. Not ready yet.", 90, "8 min", "neutral"),
+            ],
+        },
+        {
+            "email": "courtney.langford@gmail.com",
+            "stage": "Long-Term Nurture",
+            "days_ago": 260,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Website inquiry — Courtney renting, lease ends in 9 months. Credit needs work first.", 0, "13 min", "neutral"),
+                ("Email",  "Sent credit improvement guide and 90-day credit review plan.", 5, None, "neutral"),
+                ("Call",   "90-day credit check-in — score improved from 668 to 682. Still needs more time.", 90, "10 min", "neutral"),
+            ],
+        },
+        {
+            "email": "antoine.devereaux@gmail.com",
+            "stage": "Long-Term Nurture",
+            "days_ago": 340,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Referral from family member (existing client) — Antoine interested in USDA loan. Needs 12-month payment history.", 0, "14 min", "neutral"),
+                ("Email",  "Sent USDA eligibility information and income limit guide for Summerville area.", 7, None, "neutral"),
+                ("Call",   "Annual review call — payment history improving. USDA income limit updated — Antoine now qualifies. Follow up in 6 months.", 180, "12 min", "neutral"),
+            ],
+        },
+        # --- CREDIT REPAIR leads (2-3 activities) ---
+        {
+            "email": "darnell.pace@gmail.com",
+            "stage": "Credit Repair",
+            "days_ago": 115,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Facebook lead — two medical collections dragging score below 580 FHA minimum. On 6-month repair plan.", 0, "16 min", "neutral"),
+                ("Email",  "Sent credit repair guide and referral to credit counseling partner.", 5, None, "neutral"),
+                ("Call",   "90-day check-in — one collection paid, one disputed. Score now 594. Two months from FHA eligibility.", 60, "10 min", "neutral"),
+            ],
+        },
+        {
+            "email": "shayla.dupree@yahoo.com",
+            "stage": "Credit Repair",
+            "days_ago": 155,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Realtor.com lead — recent late payment from job loss 8 months ago. Score improving from 595.", 0, "14 min", "positive"),
+                ("Email",  "Sent credit recovery roadmap — dispute process, rapid rescore timeline, FHA threshold targets.", 7, None, "positive"),
+                ("Note",   "Score trending up — check next month. If crosses 620, fast-track pre-qualification.", 60, None, "positive"),
+            ],
+        },
+        # --- FUNDED leads (8-10 activities) ---
+        {
+            "email": "michelle.osei@gmail.com",
+            "stage": "Funded",
+            "days_ago": 102,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Referral from Bob Walsh — Michelle ready to buy in Mt Pleasant. Strong financials.", 0, "20 min", "positive"),
+                ("Email",  "Sent pre-approval checklist. Priority file.", 1, None, "positive"),
+                ("Document","Received complete income package — all docs in order.", 5, None, "positive"),
+                ("Meeting","Pre-approval underwriting — $415K approved. DTI 30%, credit 752.", 8, "30 min", "positive"),
+                ("Call",   "Discussed rate lock — 7.125% for 30 days. Lock executed.", 15, "12 min", "positive"),
+                ("Document","Appraisal received — $478K, above purchase price. Clean report.", 25, None, "positive"),
+                ("Call",   "UW conditions cleared — CTC issued. Closing scheduled for 5 days out.", 40, "15 min", "positive"),
+                ("Meeting","Closing prep — reviewed closing disclosure, wire instructions, and what to bring.", 45, "45 min", "positive"),
+                ("Call",   "Post-closing call — Michelle closed on time. 5-star satisfaction. Introduced to two neighbors for referrals.", 50, "10 min", "positive"),
+                ("Note",   "Funded! Closed on time. Client satisfaction: 5 stars. Added to MUM portfolio. Referral pipeline active.", 52, None, "positive"),
+            ],
+        },
+        {
+            "email": "james.beaumont@icloud.com",
+            "stage": "Funded",
+            "days_ago": 160,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Website lead — James looking at single-family in Mt Pleasant. Had VA loan but switching to conventional.", 0, "18 min", "positive"),
+                ("Email",  "Sent conventional loan doc checklist and program comparison vs VA.", 2, None, "positive"),
+                ("Document","Full income package received.", 6, None, "positive"),
+                ("Meeting","Pre-approval review — $360K approved. James prefers conventional due to appraisal flexibility.", 10, "25 min", "positive"),
+                ("Call",   "Rate lock discussion — 7.250% for 30 days. Lock executed after offer accepted.", 18, "11 min", "positive"),
+                ("Document","Appraisal came in strong at $418K vs $415K purchase. No value issues.", 28, None, "positive"),
+                ("Call",   "All UW conditions cleared. CTC issued. Closing set for next week.", 45, "14 min", "positive"),
+                ("Meeting","Closing prep meeting — all docs signed and wire instructions confirmed.", 52, "40 min", "positive"),
+                ("Call",   "Post-closing congratulations call. James thrilled — VA loan conversion paid off.", 55, "9 min", "positive"),
+                ("Note",   "Funded! VA loan converted to conventional at last minute — appraisal came in strong. Scheduled 6-month rate review.", 58, None, "positive"),
+            ],
+        },
+        # --- DOES NOT QUALIFY / WITHDRAWN (1-2 activities each) ---
+        {
+            "email": "roderick.fulton@gmail.com",
+            "stage": "Does Not Qualify",
+            "days_ago": 120,
+            "owner_id": lo_marcus_id,
+            "activities": [
+                ("Call",   "Cold outreach — DTI too high (52%), credit below FHA minimum (558), self-employed 1099. Cannot qualify at this time.", 0, "15 min", "negative"),
+                ("Email",  "Sent detailed explanation of qualification gaps and 18-month action plan: credit improvement, debt paydown, stable income documentation.", 2, None, "neutral"),
+            ],
+        },
+        {
+            "email": "lydia.whitmore@outlook.com",
+            "stage": "Withdrawn",
+            "days_ago": 60,
+            "owner_id": lo_sarah_id,
+            "activities": [
+                ("Call",   "Zillow lead — Lydia qualified and pre-approved but spouse changed jobs. Decided to stay in current home.", 0, "16 min", "neutral"),
+                ("Note",   "Lead withdrawn — spouse job change made move impractical. Set 12-month re-engagement reminder.", 2, None, "neutral"),
+            ],
+        },
+    ]
+
+    act_inserted = 0
+    act_skipped = 0
+
+    for lead_spec in LEAD_ACTIVITIES:
+        lead_id = lead_ids.get(lead_spec["email"])
+        if not lead_id:
+            continue
+
+        created_base = days_ago(lead_spec["days_ago"])
+        owner_id = lead_spec["owner_id"]
+
+        for (act_type, content, offset_days, duration, sentiment) in lead_spec["activities"]:
+            act_ts = created_base + timedelta(days=offset_days)
+
+            # Idempotency: check by lead_id + type + truncated content prefix
+            content_prefix = content[:80]
+            existing = conn.execute(
+                text("""
+                    SELECT id FROM activities
+                    WHERE lead_id = :lead_id
+                      AND type = :type
+                      AND LEFT(content, 80) = :prefix
+                      AND organization_id = :org_id
+                    LIMIT 1
+                """),
+                {"lead_id": lead_id, "type": act_type, "prefix": content_prefix, "org_id": org_id},
+            ).fetchone()
+            if existing:
+                act_skipped += 1
+                continue
+
+            conn.execute(
+                text("""
+                    INSERT INTO activities
+                        (organization_id, type, content, lead_id, user_id,
+                         duration, sentiment, created_at)
+                    VALUES
+                        (:org_id, :type, :content, :lead_id, :user_id,
+                         :duration, :sentiment, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "type": act_type,
+                    "content": content,
+                    "lead_id": lead_id,
+                    "user_id": owner_id,
+                    "duration": duration,
+                    "sentiment": sentiment,
+                    "created_at": act_ts,
+                },
+            )
+            act_inserted += 1
+
+    conn.commit()
+
+    # ------------------------------------------------------------------
+    # Loan activities (2-5 per loan)
+    # ------------------------------------------------------------------
+    LOAN_ACTIVITY_SPECS = [
+        # loan_number, days_ago, lo_id, [(type, content, offset_days)]
+        ("SHL-2026-0001", 65, lo_sarah_id, [
+            ("Document", "Full application package received — W-2, paystubs, bank statements. Missing 2022 tax transcripts.", 0),
+            ("Call",     "Discussed loan structure and timeline with Tanya. Rate locked at 6.875% for 60 days.", 5),
+            ("Note",     "Application 80% complete. Emily Park following up on 2022 tax return IRS transcript.", 12),
+        ]),
+        ("SHL-2026-0002", 75, lo_marcus_id, [
+            ("Document", "FHA application submitted. W-2 still outstanding — employer processing delay noted.", 0),
+            ("Call",     "FHA case number requested. Appraisal scheduling initiated for next week.", 8),
+            ("Email",    "Title search ordered with Charleston Title Group. Confirmation #TL-4421.", 12),
+            ("Note",     "Full app submitted. Awaiting W-2 and appraisal. Emily Park on processor duty.", 20),
+        ]),
+        ("SHL-2026-0003", 55, lo_sarah_id, [
+            ("Document", "Rate locked at 6.750% — 45-day lock executed. Lock confirmation sent to borrower and agent.", 0),
+            ("Document", "Appraisal ordered via AMC. Confirmation #AP-8801. ETA 7-10 business days.", 5),
+            ("Call",     "Processing status update — all docs complete. File moved to UW queue.", 15),
+        ]),
+        ("SHL-2026-0004", 82, lo_sarah_id, [
+            ("Document", "Complete income package received. Excellent file — ready for UW submission.", 0),
+            ("Call",     "Rate lock strategy discussion — 45-day at 6.875%. Builder gave 45-day window.", 10),
+            ("Email",    "Rate lock executed. Builder confirmed construction timeline. File submitted to UW.", 18),
+            ("Note",     "Clean file. All docs in order. UW submission imminent.", 22),
+        ]),
+        ("SHL-2026-0005", 68, lo_marcus_id, [
+            ("Document", "File submitted to underwriting. All income docs and appraisal complete.", 0),
+            ("Call",     "Submission confirmation sent to Marcus Delacroix. UW turnaround expected 5-7 days.", 5),
+            ("Note",     "Submitted to UW. Waiting on UW review. Marcus Delacroix second offer pending on another property.", 10),
+        ]),
+        ("SHL-2026-0006", 38, lo_marcus_id, [
+            ("Document", "Appraisal returned — $390K vs $385K purchase price. LTV improves slightly.", 0),
+            ("Call",     "Rachel Kim reviewing appraisal and income analysis. Identified one condition: HOA cert needed.", 7),
+            ("Note",     "In UW review. Risk score 24. On track for CTC within 5 days pending HOA cert.", 12),
+        ]),
+        ("SHL-2026-0007", 45, lo_sarah_id, [
+            ("Document", "Appraisal came in at $323K — tight vs $320K purchase. LTV acceptable at 88%.", 0),
+            ("Call",     "James Mitchell (UW) flagged DTI concern. Requested updated pay stub for income verification.", 6),
+            ("Note",     "At-risk file (risk score 38). DTI borderline at 37%. James Mitchell reviewing — CTC delayed pending VOE update.", 14),
+        ]),
+        ("SHL-2026-0008", 18, lo_sarah_id, [
+            ("Call",     "Conditional approval issued by Rachel Kim. 3 conditions: HOI binder, title update, gift letter.", 0),
+            ("Email",    "Conditions list sent to Brianna Okafor. HOI binder needed from State Farm agent.", 2),
+            ("Document", "HOI binder received from State Farm. Two conditions remaining.", 4),
+        ]),
+        ("SHL-2026-0009", 52, lo_marcus_id, [
+            ("Document", "All UW conditions cleared by James Mitchell. CTC issued.", 0),
+            ("Call",     "Closing disclosure prepared and sent to Elijah Fontaine. 3-day waiting period started.", 2),
+            ("Email",    "Closing scheduled with Charleston Title Group for 5 days from now. Wire instructions sent.", 3),
+        ]),
+        ("SHL-2026-0010", 27, lo_sarah_id, [
+            ("Document", "Closing disclosure delivered — 3-day waiting period complete. Closing set for 2 days from now.", 0),
+            ("Call",     "Final walkthrough confirmed with Simone Arceneaux. All docs signed and wire instructions verified.", 2),
+            ("Note",     "Closing in 2 days. All conditions clear. Title confirmed. Funding imminent.", 3),
+        ]),
+        ("SHL-2026-0011", 102, lo_sarah_id, [
+            ("Document", "Funded — wire confirmed from title. Loan disbursed to seller.", 0),
+            ("Call",     "Post-close call with Michelle Osei. 5-star satisfaction. Sent referral request.", 5),
+            ("Note",     "Funded on time. Michelle Osei added to MUM portfolio. 2 referrals in pipeline.", 7),
+        ]),
+        ("SHL-2026-0012", 160, lo_marcus_id, [
+            ("Document", "Funded — conventional loan. VA conversion handled smoothly. Appraisal came in strong.", 0),
+            ("Call",     "Post-close congratulations to James Beaumont. Scheduled 6-month rate review.", 8),
+            ("Note",     "Funded. James Beaumont in MUM portfolio. 6-month rate check scheduled.", 10),
+        ]),
+        ("SHL-2026-0013", 210, lo_sarah_id, [
+            ("Document", "Funded — first-time buyer success. Tyler Barnes closed conventional 10% down.", 0),
+            ("Call",     "Post-close call — Tyler thrilled with his new home. Requested referral introduction email.", 5),
+        ]),
+        ("SHL-2026-0014", 265, lo_sarah_id, [
+            ("Document", "Funded — Carter Webb conventional loan. Clean file and on-time close.", 0),
+            ("Note",     "Carter Webb funded. Added to MUM portfolio. Monitoring for 1-year refi opportunity.", 5),
+        ]),
+        ("SHL-2026-0015", 330, lo_marcus_id, [
+            ("Document", "Funded — Nathan Prescott FHA condo loan. HOA condo certification obtained.", 0),
+            ("Call",     "Post-close call with Nathan. Happy with purchase. Condo community love it.", 5),
+        ]),
+    ]
+
+    for (loan_number, loan_days_ago, lo_id, acts) in LOAN_ACTIVITY_SPECS:
+        loan_id = loan_ids.get(loan_number)
+        if not loan_id:
+            continue
+
+        base_ts = days_ago(loan_days_ago)
+        for (act_type, content, offset_days) in acts:
+            act_ts = base_ts + timedelta(days=offset_days)
+            content_prefix = content[:80]
+
+            existing = conn.execute(
+                text("""
+                    SELECT id FROM activities
+                    WHERE loan_id = :loan_id
+                      AND type = :type
+                      AND LEFT(content, 80) = :prefix
+                      AND organization_id = :org_id
+                    LIMIT 1
+                """),
+                {"loan_id": loan_id, "type": act_type, "prefix": content_prefix, "org_id": org_id},
+            ).fetchone()
+            if existing:
+                act_skipped += 1
+                continue
+
+            conn.execute(
+                text("""
+                    INSERT INTO activities
+                        (organization_id, type, content, loan_id, user_id,
+                         duration, sentiment, created_at)
+                    VALUES
+                        (:org_id, :type, :content, :loan_id, :user_id,
+                         :duration, :sentiment, :created_at)
+                """),
+                {
+                    "org_id": org_id,
+                    "type": act_type,
+                    "content": content,
+                    "loan_id": loan_id,
+                    "user_id": lo_id,
+                    "duration": None,
+                    "sentiment": "positive",
+                    "created_at": act_ts,
+                },
+            )
+            act_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {act_inserted} activity records ({act_skipped} already existed)")
+
+    # ------------------------------------------------------------------
+    # Stage History
+    # ------------------------------------------------------------------
+
+    # Lead stage progression paths
+    LEAD_STAGE_PATHS = {
+        # email: (days_ago, owner_id, [stages in order])
+        "tyler.barnes@gmail.com":      (2,   lo_sarah_id,   ["New"]),
+        "priya.nair@outlook.com":      (5,   lo_marcus_id,  ["New"]),
+        "derek.hollis@yahoo.com":      (1,   lo_sarah_id,   ["New"]),
+        "monique.duval@gmail.com":     (8,   lo_marcus_id,  ["New", "Attempted Contact"]),
+        "carter.webb@icloud.com":      (11,  lo_sarah_id,   ["New", "Attempted Contact"]),
+        "brianna.okafor@gmail.com":    (18,  lo_sarah_id,   ["New", "Attempted Contact", "Prospect"]),
+        "nathan.prescott@hotmail.com": (22,  lo_marcus_id,  ["New", "Attempted Contact", "Prospect"]),
+        "simone.arceneaux@gmail.com":  (27,  lo_sarah_id,   ["New", "Attempted Contact", "Prospect"]),
+        "kevin.albright@gmail.com":    (38,  lo_marcus_id,  ["New", "Attempted Contact", "Prospect", "Pre-Qualified"]),
+        "jasmine.winters@yahoo.com":   (45,  lo_sarah_id,   ["New", "Attempted Contact", "Prospect", "Pre-Qualified"]),
+        "elijah.fontaine@gmail.com":   (52,  lo_marcus_id,  ["New", "Attempted Contact", "Prospect", "Pre-Qualified"]),
+        "vanessa.hartley@gmail.com":   (55,  lo_sarah_id,   ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved"]),
+        "marcus.delacroix@icloud.com": (68,  lo_marcus_id,  ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved"]),
+        "tanya.morrison@gmail.com":    (65,  lo_sarah_id,   ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved", "Application"]),
+        "roberto.sandoval@hotmail.com":(75,  lo_marcus_id,  ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved", "Application"]),
+        "aisha.coleman@gmail.com":     (82,  lo_sarah_id,   ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved", "Application"]),
+        "gregory.tatum@yahoo.com":     (210, lo_marcus_id,  ["New", "Long-Term Nurture"]),
+        "courtney.langford@gmail.com": (260, lo_sarah_id,   ["New", "Long-Term Nurture"]),
+        "antoine.devereaux@gmail.com": (340, lo_marcus_id,  ["New", "Long-Term Nurture"]),
+        "darnell.pace@gmail.com":      (115, lo_sarah_id,   ["New", "Credit Repair"]),
+        "shayla.dupree@yahoo.com":     (155, lo_marcus_id,  ["New", "Credit Repair"]),
+        "michelle.osei@gmail.com":     (102, lo_sarah_id,   ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved", "Application", "Funded"]),
+        "james.beaumont@icloud.com":   (160, lo_marcus_id,  ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved", "Application", "Funded"]),
+        "roderick.fulton@gmail.com":   (120, lo_marcus_id,  ["New", "Does Not Qualify"]),
+        "lydia.whitmore@outlook.com":  (60,  lo_sarah_id,   ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved", "Withdrawn"]),
+    }
+
+    sh_inserted = 0
+    sh_skipped = 0
+
+    for email, (total_days_ago, owner_id, stages) in LEAD_STAGE_PATHS.items():
+        lead_id = lead_ids.get(email)
+        if not lead_id:
+            continue
+
+        # Space stages evenly across the lead's age, 3-7 days apart
+        n_transitions = len(stages)
+        # Spread: allocate days across transitions
+        if n_transitions == 1:
+            # Only one stage: just the initial entry
+            offsets = [0]
+        else:
+            step = max(3, total_days_ago // (n_transitions + 1))
+            offsets = [total_days_ago - (i * step) for i in range(n_transitions)]
+            # Clamp so last one is at least 1 day ago
+            offsets = [max(1, o) for o in offsets]
+
+        prev_stage = None
+        prev_ts = None
+
+        for idx, stage in enumerate(stages):
+            changed_at = days_ago(offsets[idx])
+
+            # Duration in previous stage (days)
+            if prev_ts is not None:
+                dur = int((changed_at - prev_ts).days)
+            else:
+                dur = None
+
+            # Idempotency: check by lead_id + to_stage
+            existing = conn.execute(
+                text("""
+                    SELECT id FROM stage_history
+                    WHERE lead_id = :lead_id
+                      AND to_stage = :to_stage
+                      AND organization_id = :org_id
+                    LIMIT 1
+                """),
+                {"lead_id": lead_id, "to_stage": stage, "org_id": org_id},
+            ).fetchone()
+            if existing:
+                sh_skipped += 1
+            else:
+                conn.execute(
+                    text("""
+                        INSERT INTO stage_history
+                            (organization_id, entity_type, entity_id, lead_id,
+                             from_stage, to_stage, changed_at, changed_by_id,
+                             duration_in_previous_stage)
+                        VALUES
+                            (:org_id, 'lead', :entity_id, :lead_id,
+                             :from_stage, :to_stage, :changed_at, :changed_by_id,
+                             :duration)
+                    """),
+                    {
+                        "org_id": org_id,
+                        "entity_id": lead_id,
+                        "lead_id": lead_id,
+                        "from_stage": prev_stage,
+                        "to_stage": stage,
+                        "changed_at": changed_at,
+                        "changed_by_id": owner_id,
+                        "duration": dur,
+                    },
+                )
+                sh_inserted += 1
+
+            prev_stage = stage
+            prev_ts = changed_at
+
+    conn.commit()
+
+    # Loan stage history
+    LOAN_STAGE_PATHS = {
+        # loan_number: (days_ago, lo_id, [stages in order])
+        "SHL-2026-0001": (65,  lo_sarah_id,   ["APPLICATION"]),
+        "SHL-2026-0002": (75,  lo_marcus_id,  ["APPLICATION"]),
+        "SHL-2026-0003": (55,  lo_sarah_id,   ["APPLICATION", "PROCESSING"]),
+        "SHL-2026-0004": (82,  lo_sarah_id,   ["APPLICATION", "PROCESSING"]),
+        "SHL-2026-0005": (68,  lo_marcus_id,  ["APPLICATION", "PROCESSING", "SUBMITTED"]),
+        "SHL-2026-0006": (38,  lo_marcus_id,  ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING"]),
+        "SHL-2026-0007": (45,  lo_sarah_id,   ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING"]),
+        "SHL-2026-0008": (18,  lo_sarah_id,   ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL"]),
+        "SHL-2026-0009": (52,  lo_marcus_id,  ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE"]),
+        "SHL-2026-0010": (27,  lo_sarah_id,   ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE", "CLOSING"]),
+        "SHL-2026-0011": (102, lo_sarah_id,   ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE", "CLOSING", "FUNDED"]),
+        "SHL-2026-0012": (160, lo_marcus_id,  ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE", "CLOSING", "FUNDED"]),
+        "SHL-2026-0013": (210, lo_sarah_id,   ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE", "CLOSING", "FUNDED"]),
+        "SHL-2026-0014": (265, lo_sarah_id,   ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE", "CLOSING", "FUNDED"]),
+        "SHL-2026-0015": (330, lo_marcus_id,  ["APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING", "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE", "CLOSING", "FUNDED"]),
+    }
+
+    for loan_number, (total_days_ago, lo_id, stages) in LOAN_STAGE_PATHS.items():
+        loan_id = loan_ids.get(loan_number)
+        if not loan_id:
+            continue
+
+        n = len(stages)
+        step = max(4, total_days_ago // (n + 1))
+        offsets = [total_days_ago - (i * step) for i in range(n)]
+        offsets = [max(1, o) for o in offsets]
+
+        prev_stage = None
+        prev_ts = None
+
+        for idx, stage in enumerate(stages):
+            changed_at = days_ago(offsets[idx])
+            dur = int((changed_at - prev_ts).days) if prev_ts is not None else None
+
+            existing = conn.execute(
+                text("""
+                    SELECT id FROM stage_history
+                    WHERE loan_id = :loan_id
+                      AND to_stage = :to_stage
+                      AND organization_id = :org_id
+                    LIMIT 1
+                """),
+                {"loan_id": loan_id, "to_stage": stage, "org_id": org_id},
+            ).fetchone()
+            if existing:
+                sh_skipped += 1
+            else:
+                conn.execute(
+                    text("""
+                        INSERT INTO stage_history
+                            (organization_id, entity_type, entity_id, loan_id,
+                             from_stage, to_stage, changed_at, changed_by_id,
+                             duration_in_previous_stage)
+                        VALUES
+                            (:org_id, 'loan', :entity_id, :loan_id,
+                             :from_stage, :to_stage, :changed_at, :changed_by_id,
+                             :duration)
+                    """),
+                    {
+                        "org_id": org_id,
+                        "entity_id": loan_id,
+                        "loan_id": loan_id,
+                        "from_stage": prev_stage,
+                        "to_stage": stage,
+                        "changed_at": changed_at,
+                        "changed_by_id": lo_id,
+                        "duration": dur,
+                    },
+                )
+                sh_inserted += 1
+
+            prev_stage = stage
+            prev_ts = changed_at
+
+    conn.commit()
+    print(f"✅ Seeded {sh_inserted} stage history records ({sh_skipped} already existed)")
 
 
 def seed_ai_metrics(conn, org_id):
-    """Create demo AI usage metrics and performance data."""
-    pass
+    """Create demo AI usage metrics and performance data (30-day snapshots)."""
+
+    apd_inserted = 0
+    apd_skipped = 0
+    amd_inserted = 0
+    amd_skipped = 0
+
+    for day_idx in range(30):
+        # day_idx 0 = 30 days ago, day_idx 29 = yesterday
+        snap_date = date_ago(30 - day_idx)
+        t = day_idx / 29.0  # 0.0 → 1.0 (normalized trend position)
+
+        # --- AIPerformanceDaily ---
+        existing_apd = conn.execute(
+            text("""
+                SELECT id FROM ai_performance_daily
+                WHERE date = :snap_date AND agent_name = 'aria' AND organization_id = :org_id
+                LIMIT 1
+            """),
+            {"snap_date": snap_date, "org_id": org_id},
+        ).fetchone()
+        if existing_apd:
+            apd_skipped += 1
+        else:
+            total_actions = int(8 + t * 12 + random.uniform(-1.5, 1.5))
+            total_actions = max(8, total_actions)
+            autonomous = int(total_actions * random.uniform(0.55, 0.70))
+            approved = int((total_actions - autonomous) * random.uniform(0.70, 0.90))
+            rejected = (total_actions - autonomous) - approved
+            successful = int(total_actions * (0.82 + t * 0.13 + random.uniform(-0.02, 0.02)))
+            successful = min(successful, total_actions)
+            failed = total_actions - successful
+            success_rate = round(successful / total_actions, 4) if total_actions else 0
+            avg_confidence = round(0.78 + t * 0.14 + random.uniform(-0.02, 0.02), 4)
+            avg_confidence = min(0.97, max(0.75, avg_confidence))
+            avg_impact = round(0.65 + t * 0.20 + random.uniform(-0.03, 0.03), 4)
+            avg_impact = min(0.95, max(0.60, avg_impact))
+            biz_value = round(total_actions * successful * random.uniform(18.0, 35.0), 2)
+
+            conn.execute(
+                text("""
+                    INSERT INTO ai_performance_daily
+                        (date, organization_id, agent_name,
+                         total_actions, autonomous_actions, approved_actions,
+                         rejected_actions, successful_actions, failed_actions,
+                         success_rate, avg_confidence_score, avg_impact_score,
+                         total_business_value, created_at)
+                    VALUES
+                        (:snap_date, :org_id, 'aria',
+                         :total_actions, :autonomous_actions, :approved_actions,
+                         :rejected_actions, :successful_actions, :failed_actions,
+                         :success_rate, :avg_confidence_score, :avg_impact_score,
+                         :total_business_value, :now)
+                """),
+                {
+                    "snap_date": snap_date,
+                    "org_id": org_id,
+                    "total_actions": total_actions,
+                    "autonomous_actions": autonomous,
+                    "approved_actions": approved,
+                    "rejected_actions": rejected,
+                    "successful_actions": successful,
+                    "failed_actions": failed,
+                    "success_rate": success_rate,
+                    "avg_confidence_score": avg_confidence,
+                    "avg_impact_score": avg_impact,
+                    "total_business_value": biz_value,
+                    "now": NOW,
+                },
+            )
+            apd_inserted += 1
+
+        # --- AIMetricsDaily ---
+        existing_amd = conn.execute(
+            text("""
+                SELECT id FROM ai_metrics_daily
+                WHERE date = :snap_date AND organization_id = :org_id
+                LIMIT 1
+            """),
+            {"snap_date": snap_date, "org_id": org_id},
+        ).fetchone()
+        if existing_amd:
+            amd_skipped += 1
+        else:
+            tasks_total = int(10 + t * 15 + random.uniform(-2, 2))
+            tasks_total = max(10, tasks_total)
+            automation_rate = round(0.60 + t * 0.25 + random.uniform(-0.03, 0.03), 4)
+            automation_rate = min(0.90, max(0.55, automation_rate))
+            tasks_auto = int(tasks_total * automation_rate)
+            tasks_escalated = tasks_total - tasks_auto
+            escalation_rate = round(1.0 - automation_rate, 4)
+            avg_resolution = round(180.0 - t * 60.0 + random.uniform(-15, 15), 2)
+            avg_resolution = max(60.0, avg_resolution)
+            time_saved = round(tasks_auto * (300.0 - t * 60.0), 2)
+            ai_improvement = round(95.0 + t * 20.0 + random.uniform(-2, 2), 2)
+            ai_improvement = min(120.0, max(90.0, ai_improvement))
+
+            conn.execute(
+                text("""
+                    INSERT INTO ai_metrics_daily
+                        (date, organization_id,
+                         tasks_total, tasks_auto_completed, tasks_escalated_to_humans,
+                         automation_rate, escalation_rate,
+                         avg_ai_resolution_time_seconds, total_time_saved_seconds,
+                         ai_improvement_index, created_at)
+                    VALUES
+                        (:snap_date, :org_id,
+                         :tasks_total, :tasks_auto, :tasks_escalated,
+                         :automation_rate, :escalation_rate,
+                         :avg_resolution, :time_saved,
+                         :ai_improvement, :now)
+                """),
+                {
+                    "snap_date": snap_date,
+                    "org_id": org_id,
+                    "tasks_total": tasks_total,
+                    "tasks_auto": tasks_auto,
+                    "tasks_escalated": tasks_escalated,
+                    "automation_rate": automation_rate,
+                    "escalation_rate": escalation_rate,
+                    "avg_resolution": avg_resolution,
+                    "time_saved": time_saved,
+                    "ai_improvement": ai_improvement,
+                    "now": NOW,
+                },
+            )
+            amd_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {apd_inserted} AI performance daily rows ({apd_skipped} existed)")
+    print(f"✅ Seeded {amd_inserted} AI metrics daily rows ({amd_skipped} existed)")
 
 
 def seed_rate_monitor(conn, org_id, mum_ids, loan_ids):
-    """Create rate monitor alerts and rate watch records."""
-    pass
+    """Create rate market data, rate locks, and refi opportunities."""
+
+    # ------------------------------------------------------------------
+    # 1. RateMarketData — 30 days of snapshots
+    # ------------------------------------------------------------------
+    rmd_inserted = 0
+    rmd_skipped = 0
+
+    BASE_30YR   = Decimal("6.750")
+    BASE_15YR   = Decimal("6.125")
+    BASE_ARM51  = Decimal("6.000")
+    BASE_FHA30  = Decimal("6.375")
+    BASE_VA30   = Decimal("6.250")
+    BASE_T10    = Decimal("4.250")
+    SPREAD      = Decimal("2.500")
+
+    # Slight downward trend over 30 days (up to -0.125 total)
+    TREND_DOWN  = Decimal("0.125")
+
+    for day_idx in range(30):
+        snap_date = date_ago(30 - day_idx)
+        trend_frac = Decimal(str(day_idx / 29.0))
+
+        # Daily variance ±0.0625
+        def jitter():
+            return Decimal(str(round(random.uniform(-0.0625, 0.0625), 3)))
+
+        r30  = BASE_30YR  - (trend_frac * TREND_DOWN) + jitter()
+        r15  = BASE_15YR  - (trend_frac * TREND_DOWN) + jitter()
+        r51  = BASE_ARM51 - (trend_frac * TREND_DOWN) + jitter()
+        rfha = BASE_FHA30 - (trend_frac * TREND_DOWN) + jitter()
+        rva  = BASE_VA30  - (trend_frac * TREND_DOWN) + jitter()
+        t10  = BASE_T10   - (trend_frac * Decimal("0.050")) + jitter()
+        spread = (r30 - t10).quantize(Decimal("0.001"))
+
+        # Clamp to sane ranges (3 decimal places)
+        def clamp(val, lo, hi):
+            return max(Decimal(str(lo)), min(Decimal(str(hi)), val)).quantize(Decimal("0.001"))
+
+        r30  = clamp(r30,  5.500, 8.000)
+        r15  = clamp(r15,  5.000, 7.500)
+        r51  = clamp(r51,  4.750, 7.500)
+        rfha = clamp(rfha, 5.250, 7.750)
+        rva  = clamp(rva,  5.125, 7.625)
+        t10  = clamp(t10,  3.500, 5.500)
+        spread = clamp(spread, 1.500, 3.500)
+
+        # 7-day and 30-day trend labels
+        if day_idx < 7:
+            trend_7day = "stable"
+        elif day_idx < 15:
+            trend_7day = "declining"
+        else:
+            trend_7day = "declining"
+
+        trend_30day = "declining"
+        volatility_score = round(random.uniform(0.15, 0.45), 2)
+        change_30yr = clamp(r30 - BASE_30YR, -0.500, 0.500)
+
+        existing = conn.execute(
+            text("""
+                SELECT id FROM rate_market_data
+                WHERE organization_id = :org_id AND snapshot_date = :snap_date
+                LIMIT 1
+            """),
+            {"org_id": org_id, "snap_date": snap_date},
+        ).fetchone()
+        if existing:
+            rmd_skipped += 1
+            continue
+
+        conn.execute(
+            text("""
+                INSERT INTO rate_market_data
+                    (organization_id, snapshot_date, source,
+                     rate_30yr_fixed, rate_15yr_fixed, rate_arm_5_1,
+                     rate_fha_30yr, rate_va_30yr,
+                     treasury_10yr, spread_to_treasury,
+                     trend_7day, trend_30day, volatility_score,
+                     change_30yr, created_at)
+                VALUES
+                    (:org_id, :snap_date, 'fred',
+                     :r30, :r15, :r51,
+                     :rfha, :rva,
+                     :t10, :spread,
+                     :trend_7day, :trend_30day, :volatility_score,
+                     :change_30yr, :now)
+            """),
+            {
+                "org_id": org_id,
+                "snap_date": snap_date,
+                "r30": r30,
+                "r15": r15,
+                "r51": r51,
+                "rfha": rfha,
+                "rva": rva,
+                "t10": t10,
+                "spread": spread,
+                "trend_7day": trend_7day,
+                "trend_30day": trend_30day,
+                "volatility_score": volatility_score,
+                "change_30yr": change_30yr,
+                "now": NOW,
+            },
+        )
+        rmd_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {rmd_inserted} rate market data rows ({rmd_skipped} existed)")
+
+    # ------------------------------------------------------------------
+    # 2. RateLock — 5 rate locks on active loans
+    # ------------------------------------------------------------------
+    # Loans: SHL-2026-0003 (PROCESSING), SHL-2026-0005 (SUBMITTED),
+    #        SHL-2026-0006 (UNDERWRITING), SHL-2026-0008 (CONDITIONAL_APPROVAL),
+    #        SHL-2026-0009 (CLEAR_TO_CLOSE)
+    RATE_LOCKS = [
+        {
+            "loan_number": "SHL-2026-0003",
+            "lead_email": "vanessa.hartley@gmail.com",
+            "status": "locked",
+            "lock_type": "standard",
+            "lock_period_days": 45,
+            "rate_locked": Decimal("6.750"),
+            "lock_days_ago": 50,
+            "ai_recommendation": "lock",
+            "ai_lock_score": 82,
+            "ai_reasoning": "Rate trending upward — locking in 6.750% protects borrower from potential 25bp increase. 45-day window aligns with closing timeline.",
+            "market_rate_at_lock": Decimal("6.750"),
+        },
+        {
+            "loan_number": "SHL-2026-0005",
+            "lead_email": "marcus.delacroix@icloud.com",
+            "status": "locked",
+            "lock_type": "standard",
+            "lock_period_days": 45,
+            "rate_locked": Decimal("6.999"),
+            "lock_days_ago": 65,
+            "ai_recommendation": "strong_lock",
+            "ai_lock_score": 91,
+            "ai_reasoning": "Market volatility elevated. Borrower credit profile strong. Locking at 6.999% ahead of expected Fed commentary reduces risk.",
+            "market_rate_at_lock": Decimal("7.000"),
+        },
+        {
+            "loan_number": "SHL-2026-0006",
+            "lead_email": "kevin.albright@gmail.com",
+            "status": "expired",
+            "lock_type": "standard",
+            "lock_period_days": 30,
+            "rate_locked": Decimal("7.000"),
+            "lock_days_ago": 45,
+            "ai_recommendation": "lock",
+            "ai_lock_score": 75,
+            "ai_reasoning": "Short lock to match UW timeline. Monitor for extension if UW takes longer than 21 days.",
+            "market_rate_at_lock": Decimal("7.000"),
+        },
+        {
+            "loan_number": "SHL-2026-0008",
+            "lead_email": "brianna.okafor@gmail.com",
+            "status": "monitoring",
+            "lock_type": "float_down",
+            "lock_period_days": 21,
+            "rate_locked": Decimal("6.750"),
+            "lock_days_ago": 15,
+            "ai_recommendation": "hold",
+            "ai_lock_score": 68,
+            "ai_reasoning": "Rate declining slightly. Float-down option purchased — monitor for 25bp improvement before CTC to exercise float-down.",
+            "market_rate_at_lock": Decimal("6.750"),
+        },
+        {
+            "loan_number": "SHL-2026-0009",
+            "lead_email": "elijah.fontaine@gmail.com",
+            "status": "monitoring",
+            "lock_type": "standard",
+            "lock_period_days": 30,
+            "rate_locked": Decimal("6.625"),
+            "lock_days_ago": 48,
+            "ai_recommendation": "lock",
+            "ai_lock_score": 88,
+            "ai_reasoning": "CTC issued. Closing in 5 days. Rate at 6.625% is excellent for FHA. Lock secured — no action needed.",
+            "market_rate_at_lock": Decimal("6.625"),
+        },
+    ]
+
+    rl_inserted = 0
+    rl_skipped = 0
+
+    for rl in RATE_LOCKS:
+        loan_id = loan_ids.get(rl["loan_number"])
+        if not loan_id:
+            continue
+
+        lead_id = conn.execute(
+            text("SELECT id FROM leads WHERE email = :email AND organization_id = :org_id LIMIT 1"),
+            {"email": rl["lead_email"], "org_id": org_id},
+        ).fetchone()
+        lead_id = lead_id[0] if lead_id else None
+
+        existing = conn.execute(
+            text("""
+                SELECT id FROM rate_locks
+                WHERE loan_id = :loan_id AND organization_id = :org_id
+                LIMIT 1
+            """),
+            {"loan_id": loan_id, "org_id": org_id},
+        ).fetchone()
+        if existing:
+            rl_skipped += 1
+            continue
+
+        lock_date = days_ago(rl["lock_days_ago"])
+        lock_exp = lock_date + timedelta(days=rl["lock_period_days"])
+
+        conn.execute(
+            text("""
+                INSERT INTO rate_locks
+                    (organization_id, loan_id, lead_id,
+                     status, lock_type, lock_period_days,
+                     rate_locked, lock_date, lock_expiration_date,
+                     ai_recommendation, ai_lock_score, ai_reasoning,
+                     market_rate_at_lock, created_at)
+                VALUES
+                    (:org_id, :loan_id, :lead_id,
+                     :status, :lock_type, :lock_period_days,
+                     :rate_locked, :lock_date, :lock_expiration_date,
+                     :ai_recommendation, :ai_lock_score, :ai_reasoning,
+                     :market_rate_at_lock, :now)
+            """),
+            {
+                "org_id": org_id,
+                "loan_id": loan_id,
+                "lead_id": lead_id,
+                "status": rl["status"],
+                "lock_type": rl["lock_type"],
+                "lock_period_days": rl["lock_period_days"],
+                "rate_locked": rl["rate_locked"],
+                "lock_date": lock_date,
+                "lock_expiration_date": lock_exp,
+                "ai_recommendation": rl["ai_recommendation"],
+                "ai_lock_score": rl["ai_lock_score"],
+                "ai_reasoning": rl["ai_reasoning"],
+                "market_rate_at_lock": rl["market_rate_at_lock"],
+                "now": NOW,
+            },
+        )
+        rl_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {rl_inserted} rate locks ({rl_skipped} existed)")
+
+    # ------------------------------------------------------------------
+    # 3. RefiOpportunity — 5 opportunities linked to MUM clients
+    # ------------------------------------------------------------------
+    # Clients with high rates (>6%): Brian & Monica Tanner (6.750), Lauren Fitzgerald (6.875),
+    # Kenneth & Paula Osei (6.500), Nadia & Paul Bergeron (6.625), Terrence & Alicia Watkins (6.875)
+    REFI_OPPS = [
+        {
+            "mum_idx": 7,   # Brian Tanner — 6.750%, 3 years ago, $375K
+            "opportunity_type": "rate_reduction",
+            "refi_score": 78,
+            "original_rate": Decimal("6.750"),
+            "current_balance": Decimal("362000.00"),
+            "current_market_rate": Decimal("6.625"),
+            "rate_advantage": Decimal("0.125"),
+            "estimated_home_value": Decimal("434500.00"),
+            "estimated_monthly_savings": Decimal("32.00"),
+            "estimated_total_savings": Decimal("11520.00"),
+            "break_even_months": 96,
+            "status": "identified",
+            "identified_at": days_ago(15),
+            "contacted_at": None,
+            "outreach_count": 0,
+        },
+        {
+            "mum_idx": 8,   # Lauren Fitzgerald — 6.875%, 3 years ago, $270K
+            "opportunity_type": "rate_reduction",
+            "refi_score": 82,
+            "original_rate": Decimal("6.875"),
+            "current_balance": Decimal("259000.00"),
+            "current_market_rate": Decimal("6.625"),
+            "rate_advantage": Decimal("0.250"),
+            "estimated_home_value": Decimal("316100.00"),
+            "estimated_monthly_savings": Decimal("42.00"),
+            "estimated_total_savings": Decimal("15120.00"),
+            "break_even_months": 72,
+            "status": "contacted",
+            "identified_at": days_ago(30),
+            "contacted_at": days_ago(20),
+            "outreach_count": 2,
+        },
+        {
+            "mum_idx": 9,   # Kenneth Osei — 6.500%, 2 years ago, $480K
+            "opportunity_type": "rate_reduction",
+            "refi_score": 70,
+            "original_rate": Decimal("6.500"),
+            "current_balance": Decimal("464000.00"),
+            "current_market_rate": Decimal("6.625"),
+            "rate_advantage": Decimal("-0.125"),
+            "estimated_home_value": Decimal("577800.00"),
+            "estimated_monthly_savings": Decimal("-32.00"),
+            "estimated_total_savings": Decimal("-11520.00"),
+            "break_even_months": 999,
+            "status": "identified",
+            "identified_at": days_ago(10),
+            "contacted_at": None,
+            "outreach_count": 0,
+        },
+        {
+            "mum_idx": 10,  # Nadia Bergeron — 6.625%, 2 years ago, $325K
+            "opportunity_type": "cash_out",
+            "refi_score": 65,
+            "original_rate": Decimal("6.625"),
+            "current_balance": Decimal("313000.00"),
+            "current_market_rate": Decimal("6.700"),
+            "rate_advantage": Decimal("-0.075"),
+            "estimated_home_value": Decimal("390300.00"),
+            "estimated_monthly_savings": Decimal("0.00"),
+            "estimated_total_savings": Decimal("0.00"),
+            "break_even_months": 0,
+            "status": "interested",
+            "identified_at": days_ago(45),
+            "contacted_at": days_ago(35),
+            "outreach_count": 3,
+        },
+        {
+            "mum_idx": 11,  # Terrence Watkins — 6.875%, 1 year ago, $350K
+            "opportunity_type": "rate_reduction",
+            "refi_score": 86,
+            "original_rate": Decimal("6.875"),
+            "current_balance": Decimal("344000.00"),
+            "current_market_rate": Decimal("6.625"),
+            "rate_advantage": Decimal("0.250"),
+            "estimated_home_value": Decimal("405600.00"),
+            "estimated_monthly_savings": Decimal("57.00"),
+            "estimated_total_savings": Decimal("20520.00"),
+            "break_even_months": 60,
+            "status": "contacted",
+            "identified_at": days_ago(20),
+            "contacted_at": days_ago(10),
+            "outreach_count": 1,
+        },
+    ]
+
+    ro_inserted = 0
+    ro_skipped = 0
+
+    for opp in REFI_OPPS:
+        mum_idx = opp["mum_idx"]
+        if mum_idx >= len(mum_ids):
+            continue
+        mum_id = mum_ids[mum_idx]
+
+        existing = conn.execute(
+            text("""
+                SELECT id FROM refi_opportunities
+                WHERE mum_client_id = :mum_id AND organization_id = :org_id
+                LIMIT 1
+            """),
+            {"mum_id": mum_id, "org_id": org_id},
+        ).fetchone()
+        if existing:
+            ro_skipped += 1
+            continue
+
+        conn.execute(
+            text("""
+                INSERT INTO refi_opportunities
+                    (organization_id, mum_client_id,
+                     opportunity_type, refi_score,
+                     original_rate, current_balance,
+                     current_market_rate, rate_advantage,
+                     estimated_home_value, estimated_monthly_savings,
+                     estimated_total_savings, break_even_months,
+                     status, identified_at, contacted_at, outreach_count,
+                     created_at)
+                VALUES
+                    (:org_id, :mum_id,
+                     :opportunity_type, :refi_score,
+                     :original_rate, :current_balance,
+                     :current_market_rate, :rate_advantage,
+                     :estimated_home_value, :estimated_monthly_savings,
+                     :estimated_total_savings, :break_even_months,
+                     :status, :identified_at, :contacted_at, :outreach_count,
+                     :now)
+            """),
+            {
+                "org_id": org_id,
+                "mum_id": mum_id,
+                "opportunity_type": opp["opportunity_type"],
+                "refi_score": opp["refi_score"],
+                "original_rate": opp["original_rate"],
+                "current_balance": opp["current_balance"],
+                "current_market_rate": opp["current_market_rate"],
+                "rate_advantage": opp["rate_advantage"],
+                "estimated_home_value": opp["estimated_home_value"],
+                "estimated_monthly_savings": opp["estimated_monthly_savings"],
+                "estimated_total_savings": opp["estimated_total_savings"],
+                "break_even_months": opp["break_even_months"],
+                "status": opp["status"],
+                "identified_at": opp["identified_at"],
+                "contacted_at": opp["contacted_at"],
+                "outreach_count": opp["outreach_count"],
+                "now": NOW,
+            },
+        )
+        ro_inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {ro_inserted} refi opportunities ({ro_skipped} existed)")
 
 
 def seed_workflows_and_compliance(conn, org_id, user_ids, lead_ids, loan_ids):
