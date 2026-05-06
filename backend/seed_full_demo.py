@@ -1427,12 +1427,732 @@ def seed_loans(conn, org_id, user_ids, lead_ids):
 
 def seed_mum_clients(conn, org_id, user_ids):
     """Create MUM (Mortgage Under Management) clients. Returns list of mum_ids."""
-    pass
+
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+
+    # Helper: compute remaining balance after m payments using standard amortization
+    def amortized_balance(principal, annual_rate_pct, term_months, months_elapsed):
+        r = annual_rate_pct / 12 / 100
+        n = term_months
+        m = min(months_elapsed, n)
+        if r == 0:
+            return Decimal(str(round(principal * (1 - m / n), 2)))
+        monthly = principal * r * (1 + r) ** n / ((1 + r) ** n - 1)
+        remaining = principal * ((1 + r) ** n - (1 + r) ** m) / ((1 + r) ** n - 1)
+        return Decimal(str(round(remaining, 2)))
+
+    # Helper: property value after annualized appreciation
+    def appreciated_value(original, years, annual_pct):
+        val = original * (1 + annual_pct / 100) ** years
+        return Decimal(str(round(val, 2)))
+
+    # fmt: (client_name, email, phone, loan_number, close_year_ago, rate, original_amount,
+    #        appraisal, appreciation_pct, engagement_score, status, property_state, property_zip,
+    #        owner_key, loan_officer_name, loan_officer_email, notes)
+    MUM_CLIENTS = [
+        # 10 years ago — 2016, ~3.5%
+        {
+            "client_name": "Robert & Patricia Donovan",
+            "email": "robert.donovan@gmail.com",
+            "phone": "+18431110001",
+            "loan_number": "MUM-2016-0001",
+            "close_years_ago": 10,
+            "rate": 3.500,
+            "original_amount": 285000,
+            "appraisal": 320000,
+            "appreciation_pct": 4.5,
+            "engagement_score": 82,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29403",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "Long-term portfolio client. Equity-rich — potential cash-out refi candidate.",
+        },
+        # 9 years ago — 2017, ~4.0%
+        {
+            "client_name": "Marcus & Diane Ellison",
+            "email": "marcus.ellison@yahoo.com",
+            "phone": "+18431110002",
+            "loan_number": "MUM-2017-0001",
+            "close_years_ago": 9,
+            "rate": 4.000,
+            "original_amount": 340000,
+            "appraisal": 385000,
+            "appreciation_pct": 4.0,
+            "engagement_score": 74,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29464",
+            "owner_key": "lo_marcus",
+            "loan_officer_name": "Marcus Johnson",
+            "loan_officer_email": "marcus.johnson@summithomeloans.com",
+            "notes": "Annual rate review upcoming. Rate is competitive — low refi urgency.",
+        },
+        # 8 years ago — 2018, ~4.5%
+        {
+            "client_name": "Jennifer Castillo",
+            "email": "jennifer.castillo@outlook.com",
+            "phone": "+18431110003",
+            "loan_number": "MUM-2018-0001",
+            "close_years_ago": 8,
+            "rate": 4.500,
+            "original_amount": 215000,
+            "appraisal": 245000,
+            "appreciation_pct": 3.5,
+            "engagement_score": 68,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29412",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "Single borrower. Exploring investment property — referral opportunity.",
+        },
+        # 8 years ago — 2018, ~4.5%
+        {
+            "client_name": "Thomas & Keisha Whitfield",
+            "email": "thomas.whitfield@icloud.com",
+            "phone": "+18431110004",
+            "loan_number": "MUM-2018-0002",
+            "close_years_ago": 8,
+            "rate": 4.500,
+            "original_amount": 420000,
+            "appraisal": 475000,
+            "appreciation_pct": 5.0,
+            "engagement_score": 88,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29466",
+            "owner_key": "lo_marcus",
+            "loan_officer_name": "Marcus Johnson",
+            "loan_officer_email": "marcus.johnson@summithomeloans.com",
+            "notes": "High-value portfolio. Referred two neighbors this year.",
+        },
+        # 7 years ago — 2019, ~3.75%
+        {
+            "client_name": "Angela & Derek Pope",
+            "email": "angela.pope@gmail.com",
+            "phone": "+18431110005",
+            "loan_number": "MUM-2019-0001",
+            "close_years_ago": 7,
+            "rate": 3.750,
+            "original_amount": 310000,
+            "appraisal": 355000,
+            "appreciation_pct": 4.0,
+            "engagement_score": 77,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29485",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "Pre-pandemic rate. Very unlikely to refi. Focus on referral relationship.",
+        },
+        # 6 years ago — 2020, ~2.75%  (ultra-low rate era)
+        {
+            "client_name": "Daniel & Renee Huang",
+            "email": "daniel.huang@gmail.com",
+            "phone": "+18431110006",
+            "loan_number": "MUM-2020-0001",
+            "close_years_ago": 6,
+            "rate": 2.750,
+            "original_amount": 395000,
+            "appraisal": 440000,
+            "appreciation_pct": 5.5,
+            "engagement_score": 91,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29464",
+            "owner_key": "lo_marcus",
+            "loan_officer_name": "Marcus Johnson",
+            "loan_officer_email": "marcus.johnson@summithomeloans.com",
+            "notes": "Pandemic-era rate. Will never voluntarily refi — high equity. Strong referral source.",
+        },
+        # 5 years ago — 2021, ~3.0%
+        {
+            "client_name": "Stephanie & Carlos Moreno",
+            "email": "stephanie.moreno@hotmail.com",
+            "phone": "+18431110007",
+            "loan_number": "MUM-2021-0001",
+            "close_years_ago": 5,
+            "rate": 3.000,
+            "original_amount": 455000,
+            "appraisal": 510000,
+            "appreciation_pct": 5.0,
+            "engagement_score": 85,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29403",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "Excellent equity position. Exploring HELOC for home improvement project.",
+        },
+        # 3 years ago — 2023, ~6.75% (rate spike era)
+        {
+            "client_name": "Brian & Monica Tanner",
+            "email": "brian.tanner@gmail.com",
+            "phone": "+18431110008",
+            "loan_number": "MUM-2023-0001",
+            "close_years_ago": 3,
+            "rate": 6.750,
+            "original_amount": 375000,
+            "appraisal": 420000,
+            "appreciation_pct": 3.0,
+            "engagement_score": 62,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29401",
+            "owner_key": "lo_marcus",
+            "loan_officer_name": "Marcus Johnson",
+            "loan_officer_email": "marcus.johnson@summithomeloans.com",
+            "notes": "High rate — strong refi candidate when market dips below 6%. Set rate alert.",
+        },
+        # 3 years ago — 2023, ~6.75%
+        {
+            "client_name": "Lauren Fitzgerald",
+            "email": "lauren.fitzgerald@yahoo.com",
+            "phone": "+18431110009",
+            "loan_number": "MUM-2023-0002",
+            "close_years_ago": 3,
+            "rate": 6.875,
+            "original_amount": 270000,
+            "appraisal": 305000,
+            "appreciation_pct": 3.5,
+            "engagement_score": 58,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29407",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "First-time buyer who stretched at peak rates. Monitoring for refi window.",
+        },
+        # 2 years ago — 2024, ~6.5%
+        {
+            "client_name": "Kenneth & Paula Osei",
+            "email": "kenneth.osei@gmail.com",
+            "phone": "+18431110010",
+            "loan_number": "MUM-2024-0001",
+            "close_years_ago": 2,
+            "rate": 6.500,
+            "original_amount": 480000,
+            "appraisal": 535000,
+            "appreciation_pct": 4.0,
+            "engagement_score": 71,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29466",
+            "owner_key": "lo_marcus",
+            "loan_officer_name": "Marcus Johnson",
+            "loan_officer_email": "marcus.johnson@summithomeloans.com",
+            "notes": "Jumbo-adjacent loan. Would benefit from rate drop of 75+ bps. Track market.",
+        },
+        # 2 years ago — 2024, ~6.5%
+        {
+            "client_name": "Nadia & Paul Bergeron",
+            "email": "nadia.bergeron@icloud.com",
+            "phone": "+18431110011",
+            "loan_number": "MUM-2024-0002",
+            "close_years_ago": 2,
+            "rate": 6.625,
+            "original_amount": 325000,
+            "appraisal": 365000,
+            "appreciation_pct": 3.5,
+            "engagement_score": 65,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29414",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "Asked about rental property strategy. Potential investor referral pipeline.",
+        },
+        # 1 year ago — 2025, ~6.875%
+        {
+            "client_name": "Terrence & Alicia Watkins",
+            "email": "terrence.watkins@gmail.com",
+            "phone": "+18431110012",
+            "loan_number": "MUM-2025-0001",
+            "close_years_ago": 1,
+            "rate": 6.875,
+            "original_amount": 350000,
+            "appraisal": 390000,
+            "appreciation_pct": 4.0,
+            "engagement_score": 55,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29483",
+            "owner_key": "lo_marcus",
+            "loan_officer_name": "Marcus Johnson",
+            "loan_officer_email": "marcus.johnson@summithomeloans.com",
+            "notes": "Recent borrower. Monitoring rate market for 12-month refi opportunity.",
+        },
+        # 1 year ago — 2025, ~6.875%
+        {
+            "client_name": "Victoria & Sam Nguyen",
+            "email": "victoria.nguyen@outlook.com",
+            "phone": "+18431110013",
+            "loan_number": "MUM-2025-0002",
+            "close_years_ago": 1,
+            "rate": 6.750,
+            "original_amount": 415000,
+            "appraisal": 460000,
+            "appreciation_pct": 3.5,
+            "engagement_score": 60,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29464",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "Dual-income household. Good candidate for rate alert subscription.",
+        },
+        # 4 years ago — 2022, ~5.5% (rising rate era)
+        {
+            "client_name": "Harold & Christine Vance",
+            "email": "harold.vance@gmail.com",
+            "phone": "+18431110014",
+            "loan_number": "MUM-2022-0001",
+            "close_years_ago": 4,
+            "rate": 5.500,
+            "original_amount": 295000,
+            "appraisal": 330000,
+            "appreciation_pct": 4.0,
+            "engagement_score": 70,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29412",
+            "owner_key": "lo_marcus",
+            "loan_officer_name": "Marcus Johnson",
+            "loan_officer_email": "marcus.johnson@summithomeloans.com",
+            "notes": "Rate elevated vs 2020-2021 cohort. Refi if market hits 4.75%.",
+        },
+        # 4 years ago — 2022, ~5.5%
+        {
+            "client_name": "Crystal & James Bowman",
+            "email": "crystal.bowman@yahoo.com",
+            "phone": "+18431110015",
+            "loan_number": "MUM-2022-0002",
+            "close_years_ago": 4,
+            "rate": 5.625,
+            "original_amount": 260000,
+            "appraisal": 295000,
+            "appreciation_pct": 4.5,
+            "engagement_score": 67,
+            "status": "active",
+            "property_state": "SC",
+            "property_zip": "29405",
+            "owner_key": "lo_sarah",
+            "loan_officer_name": "Sarah Chen",
+            "loan_officer_email": "sarah.chen@summithomeloans.com",
+            "notes": "Exploring refinance as rates have dropped from peak. Watching closely.",
+        },
+    ]
+
+    mum_ids = []
+
+    for client in MUM_CLIENTS:
+        if exists(conn, "mum_clients", "email", client["email"]):
+            existing_id = get_id(conn, "mum_clients", "email", client["email"])
+            mum_ids.append(existing_id)
+            print(f"⏭️  MUM client exists: {client['email']}")
+            continue
+
+        years_ago = client["close_years_ago"]
+        close_date = NOW - timedelta(days=int(years_ago * 365.25))
+        first_payment_date = close_date + timedelta(days=45)
+        months_elapsed = int(years_ago * 12)
+
+        original_amount = client["original_amount"]
+        rate = client["rate"]
+        term = 360
+
+        current_balance = amortized_balance(original_amount, rate, term, months_elapsed)
+        current_property_value = appreciated_value(
+            client["appraisal"], years_ago, client["appreciation_pct"]
+        )
+        estimated_equity = current_property_value - current_balance
+        current_ltv = round(float(current_balance) / float(current_property_value), 4)
+
+        refi_opportunity = rate > 6.0
+        if refi_opportunity:
+            # Rough estimated savings: difference in monthly payment vs 5.5% market rate
+            market_rate = 5.5
+            r_curr = rate / 12 / 100
+            r_mkt = market_rate / 12 / 100
+            months_remaining = term - months_elapsed
+            balance_f = float(current_balance)
+            monthly_curr = balance_f * r_curr * (1 + r_curr) ** months_remaining / ((1 + r_curr) ** months_remaining - 1)
+            monthly_mkt = balance_f * r_mkt * (1 + r_mkt) ** months_remaining / ((1 + r_mkt) ** months_remaining - 1)
+            estimated_savings = Decimal(str(round((monthly_curr - monthly_mkt) * 12, 2)))  # annual savings
+        else:
+            estimated_savings = None
+
+        refi_score = max(0, min(100, int((rate - 3.0) * 15 + (years_ago * 2))))
+        owner_id = lo_sarah_id if client["owner_key"] == "lo_sarah" else lo_marcus_id
+        last_contact = NOW - timedelta(days=random.randint(15, 90))
+        next_touchpoint = NOW + timedelta(days=random.randint(14, 45))
+
+        result = conn.execute(
+            text("""
+                INSERT INTO mum_clients (
+                    organization_id, client_name, email, phone,
+                    loan_number, original_close_date, closing_date, first_payment_date,
+                    interest_rate, original_loan_amount, current_loan_amount,
+                    appraisal_value_at_closing, current_property_value,
+                    original_rate, current_rate, loan_balance,
+                    refinance_opportunity, estimated_savings,
+                    engagement_score, status, notes,
+                    last_contact, next_touchpoint,
+                    loan_officer, loan_officer_email,
+                    user_id, term,
+                    estimated_equity, current_ltv, refi_score,
+                    property_state, property_zip, created_at
+                ) VALUES (
+                    :org_id, :client_name, :email, :phone,
+                    :loan_number, :original_close_date, :closing_date, :first_payment_date,
+                    :interest_rate, :original_loan_amount, :current_loan_amount,
+                    :appraisal_value_at_closing, :current_property_value,
+                    :original_rate, :current_rate, :loan_balance,
+                    :refinance_opportunity, :estimated_savings,
+                    :engagement_score, :status, :notes,
+                    :last_contact, :next_touchpoint,
+                    :loan_officer, :loan_officer_email,
+                    :user_id, :term,
+                    :estimated_equity, :current_ltv, :refi_score,
+                    :property_state, :property_zip, :created_at
+                ) RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "client_name": client["client_name"],
+                "email": client["email"],
+                "phone": client["phone"],
+                "loan_number": client["loan_number"],
+                "original_close_date": close_date,
+                "closing_date": close_date,
+                "first_payment_date": first_payment_date,
+                "interest_rate": Decimal(str(rate)),
+                "original_loan_amount": Decimal(str(original_amount)),
+                "current_loan_amount": current_balance,
+                "appraisal_value_at_closing": Decimal(str(client["appraisal"])),
+                "current_property_value": current_property_value,
+                "original_rate": Decimal(str(rate)),
+                "current_rate": Decimal(str(rate)),
+                "loan_balance": current_balance,
+                "refinance_opportunity": refi_opportunity,
+                "estimated_savings": estimated_savings,
+                "engagement_score": client["engagement_score"],
+                "status": client["status"],
+                "notes": client["notes"],
+                "last_contact": last_contact,
+                "next_touchpoint": next_touchpoint,
+                "loan_officer": client["loan_officer_name"],
+                "loan_officer_email": client["loan_officer_email"],
+                "user_id": owner_id,
+                "term": term,
+                "estimated_equity": estimated_equity,
+                "current_ltv": Decimal(str(current_ltv)),
+                "refi_score": refi_score,
+                "property_state": client["property_state"],
+                "property_zip": client["property_zip"],
+                "created_at": close_date,
+            },
+        )
+        new_id = result.fetchone()[0]
+        mum_ids.append(new_id)
+        print(f"✅ Created MUM client: {client['client_name']} ({client['loan_number']}, rate={rate}%)")
+
+    conn.commit()
+    print(f"✅ Seeded {len(mum_ids)} MUM clients")
+    return mum_ids
 
 
 def seed_referral_partners(conn, org_id, user_ids, lead_ids):
-    """Create referral partners linked to leads. Returns list of partner_ids."""
-    pass
+    """Create referral partners linked to leads. Returns dict of partner name→ID."""
+
+    manager_id = user_ids.get("manager")
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+
+    PARTNERS = [
+        {
+            "name": "Jennifer Walsh",
+            "business_name": "RE/MAX Charleston",
+            "contact_name": "Jennifer Walsh",
+            "category": "realtor",
+            "company": "RE/MAX Charleston",
+            "type": "realtor",
+            "email": "jennifer.walsh@remax.com",
+            "phone": "+18431220001",
+            "referrals_in": 18,
+            "referrals_out": 5,
+            "closed_loans": 12,
+            "volume": Decimal("4200000.00"),
+            "loyalty_tier": "gold",
+            "title": "Realtor / Team Lead",
+            "street_address": "1122 East Bay St",
+            "city": "Charleston",
+            "state": "SC",
+            "zip_code": "29403",
+            "owner_id": lo_sarah_id,
+            "notes": "Top-producing gold partner. Refers luxury buyers regularly. Monthly lunch relationship.",
+        },
+        {
+            "name": "Amanda Foster",
+            "business_name": "Lowcountry Homes",
+            "contact_name": "Amanda Foster",
+            "category": "realtor",
+            "company": "Lowcountry Homes",
+            "type": "realtor",
+            "email": "amanda.foster@lowcountryhomes.com",
+            "phone": "+18431220002",
+            "referrals_in": 15,
+            "referrals_out": 4,
+            "closed_loans": 9,
+            "volume": Decimal("3100000.00"),
+            "loyalty_tier": "gold",
+            "title": "Senior Realtor",
+            "street_address": "850 Coleman Blvd",
+            "city": "Mount Pleasant",
+            "state": "SC",
+            "zip_code": "29464",
+            "owner_id": lo_sarah_id,
+            "notes": "Specializes in Mt Pleasant. Strong first-time buyer pipeline.",
+        },
+        {
+            "name": "Nicole Williams",
+            "business_name": "Keller Williams Mt Pleasant",
+            "contact_name": "Nicole Williams",
+            "category": "realtor",
+            "company": "Keller Williams Mt Pleasant",
+            "type": "realtor",
+            "email": "nicole.williams@kwmtp.com",
+            "phone": "+18431220003",
+            "referrals_in": 12,
+            "referrals_out": 3,
+            "closed_loans": 7,
+            "volume": Decimal("2500000.00"),
+            "loyalty_tier": "gold",
+            "title": "Realtor",
+            "street_address": "1050 Johnnie Dodds Blvd",
+            "city": "Mount Pleasant",
+            "state": "SC",
+            "zip_code": "29464",
+            "owner_id": lo_marcus_id,
+            "notes": "Rising star in the Mt Pleasant market. Strong social media presence.",
+        },
+        {
+            "name": "Robert Chen",
+            "business_name": "Edward Jones",
+            "contact_name": "Robert Chen",
+            "category": "financial_advisor",
+            "company": "Edward Jones",
+            "type": "financial_advisor",
+            "email": "robert.chen@edwardjones.com",
+            "phone": "+18431220004",
+            "referrals_in": 8,
+            "referrals_out": 6,
+            "closed_loans": 5,
+            "volume": Decimal("1800000.00"),
+            "loyalty_tier": "silver",
+            "title": "Financial Advisor",
+            "street_address": "470 King St",
+            "city": "Charleston",
+            "state": "SC",
+            "zip_code": "29403",
+            "owner_id": lo_sarah_id,
+            "notes": "Mutual referral relationship. Refers HNW clients who need large purchase loans.",
+        },
+        {
+            "name": "Maria Rodriguez",
+            "business_name": "Lowcountry Builders",
+            "contact_name": "Maria Rodriguez",
+            "category": "builder",
+            "company": "Lowcountry Builders",
+            "type": "builder",
+            "email": "maria.rodriguez@lowcountrybuilders.com",
+            "phone": "+18431220005",
+            "referrals_in": 6,
+            "referrals_out": 2,
+            "closed_loans": 3,
+            "volume": Decimal("1200000.00"),
+            "loyalty_tier": "silver",
+            "title": "Sales Director",
+            "street_address": "3000 Ashley River Rd",
+            "city": "Charleston",
+            "state": "SC",
+            "zip_code": "29414",
+            "owner_id": lo_marcus_id,
+            "notes": "New construction pipeline. Prefers lenders with 60-day lock programs.",
+        },
+        {
+            "name": "David Kim",
+            "business_name": "Kim & Associates",
+            "contact_name": "David Kim",
+            "category": "attorney",
+            "company": "Kim & Associates",
+            "type": "attorney",
+            "email": "david.kim@kimassociates.com",
+            "phone": "+18431220006",
+            "referrals_in": 4,
+            "referrals_out": 8,
+            "closed_loans": 2,
+            "volume": Decimal("700000.00"),
+            "loyalty_tier": "bronze",
+            "title": "Real Estate Attorney",
+            "street_address": "150 Meeting St",
+            "city": "Charleston",
+            "state": "SC",
+            "zip_code": "29401",
+            "owner_id": lo_sarah_id,
+            "notes": "Handles estate and probate sales. Low volume but high-quality referrals.",
+        },
+        {
+            "name": "Lisa Thompson",
+            "business_name": "Allstate Insurance",
+            "contact_name": "Lisa Thompson",
+            "category": "insurance_agent",
+            "company": "Allstate Insurance",
+            "type": "insurance_agent",
+            "email": "lisa.thompson@allstate.com",
+            "phone": "+18431220007",
+            "referrals_in": 3,
+            "referrals_out": 5,
+            "closed_loans": 1,
+            "volume": Decimal("350000.00"),
+            "loyalty_tier": "bronze",
+            "title": "Insurance Agent",
+            "street_address": "2200 Ashley Phosphate Rd",
+            "city": "North Charleston",
+            "state": "SC",
+            "zip_code": "29405",
+            "owner_id": lo_marcus_id,
+            "notes": "Bundling opportunity — refers clients who need home insurance plus mortgage.",
+        },
+        {
+            "name": "Michael Brown",
+            "business_name": "Brown CPA Group",
+            "contact_name": "Michael Brown",
+            "category": "cpa",
+            "company": "Brown CPA Group",
+            "type": "cpa",
+            "email": "michael.brown@browncpa.com",
+            "phone": "+18431220008",
+            "referrals_in": 2,
+            "referrals_out": 3,
+            "closed_loans": 1,
+            "volume": Decimal("280000.00"),
+            "loyalty_tier": "bronze",
+            "title": "CPA / Tax Advisor",
+            "street_address": "500 Wingo Way",
+            "city": "Mount Pleasant",
+            "state": "SC",
+            "zip_code": "29464",
+            "owner_id": lo_sarah_id,
+            "notes": "Self-employed client referrals. Educating on bank statement loan programs.",
+        },
+    ]
+
+    partner_ids = {}
+
+    for partner in PARTNERS:
+        if exists(conn, "referral_partners", "email", partner["email"]):
+            existing_id = get_id(conn, "referral_partners", "email", partner["email"])
+            partner_ids[partner["name"]] = existing_id
+            print(f"⏭️  Referral partner exists: {partner['name']}")
+            continue
+
+        last_interaction = NOW - timedelta(days=random.randint(7, 45))
+
+        result = conn.execute(
+            text("""
+                INSERT INTO referral_partners (
+                    organization_id, name, business_name, contact_name,
+                    category, company, type, phone, email,
+                    referrals_in, referrals_out, closed_loans, volume,
+                    status, loyalty_tier, last_interaction, notes,
+                    street_address, city, state, zip_code,
+                    title, created_at, owner_id
+                ) VALUES (
+                    :org_id, :name, :business_name, :contact_name,
+                    :category, :company, :type, :phone, :email,
+                    :referrals_in, :referrals_out, :closed_loans, :volume,
+                    :status, :loyalty_tier, :last_interaction, :notes,
+                    :street_address, :city, :state, :zip_code,
+                    :title, :created_at, :owner_id
+                ) RETURNING id
+            """),
+            {
+                "org_id": org_id,
+                "name": partner["name"],
+                "business_name": partner["business_name"],
+                "contact_name": partner["contact_name"],
+                "category": partner["category"],
+                "company": partner["company"],
+                "type": partner["type"],
+                "phone": partner["phone"],
+                "email": partner["email"],
+                "referrals_in": partner["referrals_in"],
+                "referrals_out": partner["referrals_out"],
+                "closed_loans": partner["closed_loans"],
+                "volume": partner["volume"],
+                "status": "active",
+                "loyalty_tier": partner["loyalty_tier"],
+                "last_interaction": last_interaction,
+                "notes": partner["notes"],
+                "street_address": partner["street_address"],
+                "city": partner["city"],
+                "state": partner["state"],
+                "zip_code": partner["zip_code"],
+                "title": partner["title"],
+                "created_at": NOW - timedelta(days=random.randint(90, 730)),
+                "owner_id": partner["owner_id"],
+            },
+        )
+        new_id = result.fetchone()[0]
+        partner_ids[partner["name"]] = new_id
+        print(f"✅ Created referral partner: {partner['name']} ({partner['loyalty_tier']}, {partner['category']})")
+
+    conn.commit()
+
+    # Link 3-5 leads to gold-tier partners (skip leads already sourced as Referral)
+    gold_partners = [
+        ("Jennifer Walsh", "brianna.okafor@gmail.com"),
+        ("Amanda Foster", "vanessa.hartley@gmail.com"),
+        ("Nicole Williams", "roberto.sandoval@hotmail.com"),
+        ("Jennifer Walsh", "michelle.osei@gmail.com"),
+        ("Amanda Foster", "kevin.albright@gmail.com"),
+    ]
+    linked = 0
+    for partner_name, lead_email in gold_partners:
+        partner_id = partner_ids.get(partner_name)
+        lead_id = lead_ids.get(lead_email) if lead_ids else None
+        if not partner_id or not lead_id:
+            continue
+
+        # Only update if the lead exists and source is not already 'Referral'
+        update_result = conn.execute(
+            text("""
+                UPDATE leads
+                SET referral_partner_id = :partner_id, source = 'Referral'
+                WHERE id = :lead_id
+                  AND organization_id = :org_id
+                  AND (source IS NULL OR source != 'Referral')
+            """),
+            {"partner_id": partner_id, "lead_id": lead_id, "org_id": org_id},
+        )
+        if update_result.rowcount:
+            linked += 1
+            print(f"✅ Linked lead {lead_email} → partner {partner_name}")
+
+    conn.commit()
+    print(f"✅ Seeded {len(partner_ids)} referral partners, linked {linked} leads")
+    return partner_ids
 
 
 def seed_tasks(conn, org_id, user_ids, lead_ids, loan_ids):
