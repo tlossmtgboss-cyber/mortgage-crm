@@ -3441,7 +3441,12 @@ async def seed_demo_account(request: Request):
     body = await request.json()
     auth = (body.get("key", "") or "").strip()
     expected = SECRET_KEY.strip()
-    if not auth or not _secrets_mod.compare_digest(auth, expected):
+    admin_key = os.getenv("ADMIN_API_KEY", "").strip()
+    key_ok = auth and (
+        _secrets_mod.compare_digest(auth, expected)
+        or (admin_key and _secrets_mod.compare_digest(auth, admin_key))
+    )
+    if not key_ok:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
