@@ -5,12 +5,14 @@ import { POSContainer } from '../../features/pos';
 
 const API_BASE = '';
 
-type FlowStep = 'start' | 'verify' | 'app';
+type FlowStep = 'checking' | 'auth' | 'verify' | 'app';
+type AuthTab = 'signup' | 'login';
 
 interface VerifySession {
   sessionId: string;
   phoneMasked: string;
   expiresAt: string;
+  flowType: AuthTab;
 }
 
 const SESSION_KEY = 'perennia_pos_verify';
@@ -22,8 +24,9 @@ const POSEntryPage: React.FC = () => {
   const loanIdParam = searchParams.get('loan_id');
   const loanId = loanIdParam ? parseInt(loanIdParam, 10) : undefined;
 
-  const [purlToken, setPurlToken] = useState<string | null>(
-    tokenParam || localStorage.getItem('perennia_purl_token'),
+  const [purlToken, setPurlToken] = useState<string | null>(null);
+  const [borrowerName, setBorrowerName] = useState(
+    searchParams.get('name') || 'there',
   );
 
   // Recover verify session if user refreshes mid-flow
@@ -34,21 +37,55 @@ const POSEntryPage: React.FC = () => {
   } catch {}
 
   const [flowStep, setFlowStep] = useState<FlowStep>(
-    purlToken ? 'app' : savedSession.current ? 'verify' : 'start',
+    savedSession.current ? 'verify' : 'checking',
   );
   const [verifySession, setVerifySession] = useState<VerifySession | null>(savedSession.current);
 
+  // On mount: validate existing token or handle URL token
   useEffect(() => {
+    if (savedSession.current) return; // mid-verify, don't interfere
+
+    const validateToken = async (token: string) => {
+      try {
+        const resp = await fetch(`${API_BASE}/api/v1/pos/check-token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await resp.json().catch(() => ({ valid: false }));
+        if (data.valid) {
+          localStorage.setItem('perennia_purl_token', token);
+          (window as any).__PURL_TOKEN__ = token;
+          setPurlToken(token);
+          if (data.borrower_name) setBorrowerName(data.borrower_name);
+          setFlowStep('app');
+        } else {
+          localStorage.removeItem('perennia_purl_token');
+          delete (window as any).__PURL_TOKEN__;
+          setFlowStep('auth');
+        }
+      } catch {
+        localStorage.removeItem('perennia_purl_token');
+        delete (window as any).__PURL_TOKEN__;
+        setFlowStep('auth');
+      }
+    };
+
     if (tokenParam) {
-      localStorage.setItem('perennia_purl_token', tokenParam);
-      (window as any).__PURL_TOKEN__ = tokenParam;
-      setPurlToken(tokenParam);
-      setFlowStep('app');
-      sessionStorage.removeItem(SESSION_KEY);
-      // Remove token from URL to prevent leakage via referrer/history
+      // Clean token from URL
       const url = new URL(window.location.href);
       url.searchParams.delete('token');
       window.history.replaceState({}, '', url.toString());
+      validateToken(tokenParam);
+    } else {
+      const stored = localStorage.getItem('perennia_purl_token');
+      if (stored) {
+        validateToken(stored);
+      } else {
+        setFlowStep('auth');
+      }
     }
   }, [tokenParam]);
 
@@ -56,7 +93,7 @@ const POSEntryPage: React.FC = () => {
     localStorage.removeItem('perennia_purl_token');
     delete (window as any).__PURL_TOKEN__;
     setPurlToken(null);
-    setFlowStep('start');
+    setFlowStep('auth');
   };
 
   const handleStarted = (session: VerifySession) => {
@@ -65,14 +102,11 @@ const POSEntryPage: React.FC = () => {
     setFlowStep('verify');
   };
 
-  const handleVerified = (token: string) => {
+  const handleVerified = (token: string, name?: string) => {
     localStorage.setItem('perennia_purl_token', token);
     (window as any).__PURL_TOKEN__ = token;
     setPurlToken(token);
-    // Remove token from URL to prevent leakage via referrer/history
-    const url = new URL(window.location.href);
-    url.searchParams.delete('token');
-    window.history.replaceState({}, '', url.toString());
+    if (name) setBorrowerName(name);
     setFlowStep('app');
     sessionStorage.removeItem(SESSION_KEY);
   };
@@ -80,8 +114,25 @@ const POSEntryPage: React.FC = () => {
   const handleBack = () => {
     sessionStorage.removeItem(SESSION_KEY);
     setVerifySession(null);
-    setFlowStep('start');
+    setFlowStep('auth');
   };
+
+  if (flowStep === 'checking') {
+    return (
+      <div className="pos-start">
+        <style>{styles}</style>
+        <div className="pos-start__card" style={{ textAlign: 'center' }}>
+          <div className="pos-start__logo">
+            <PeLogoIcon />
+          </div>
+          <p style={{ color: '#6B7B75', fontSize: 15 }}>
+            <span className="pos-start__spinner" style={{ marginRight: 8 }} />
+            Loading...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (flowStep === 'verify' && verifySession) {
     return (
@@ -101,15 +152,68 @@ const POSEntryPage: React.FC = () => {
     return (
       <POSContainer
         loanId={loanId}
-        borrowerName={searchParams.get('name') || 'there'}
-        userInitials={searchParams.get('initials') || ''}
+        borrowerName={borrowerName}
+        userInitials={searchParams.get('initials') || borrowerName.charAt(0).toUpperCase()}
         onAuthError={handleAuthError}
       />
     );
   }
 
-  return <StartForm onStarted={handleStarted} />;
+  return <AuthGate onStarted={handleStarted} onVerified={handleVerified} />;
 };
+
+
+/* ─── Auth Gate (Signup / Login tabs) ──────────────────────────────── */
+
+function AuthGate({
+  onStarted,
+  onVerified,
+}: {
+  onStarted: (session: VerifySession) => void;
+  onVerified: (token: string, name?: string) => void;
+}) {
+  const [tab, setTab] = useState<AuthTab>('signup');
+
+  return (
+    <div className="pos-start">
+      <style>{styles}</style>
+
+      <div className="pos-start__card">
+        <div className="pos-start__logo">
+          <PeLogoIcon />
+        </div>
+
+        <div className="pos-start__tabs">
+          <button
+            className={`pos-start__tab${tab === 'signup' ? ' active' : ''}`}
+            onClick={() => setTab('signup')}
+            type="button"
+          >
+            Create Account
+          </button>
+          <button
+            className={`pos-start__tab${tab === 'login' ? ' active' : ''}`}
+            onClick={() => setTab('login')}
+            type="button"
+          >
+            Sign In
+          </button>
+        </div>
+
+        {tab === 'signup' ? (
+          <SignupForm onStarted={onStarted} onSwitchToLogin={() => setTab('login')} />
+        ) : (
+          <LoginForm onStarted={onStarted} onVerified={onVerified} onSwitchToSignup={() => setTab('signup')} />
+        )}
+
+        <div className="pos-start__trust">
+          <TrustIcon />
+          <span>256-bit encryption · NMLS compliant · Equal Housing Lender</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 
 /* ─── Phone Formatting ───────────────────────────────────────────── */
@@ -149,9 +253,15 @@ function useCountdown(expiresAt: string | null): { minutes: number; seconds: num
 }
 
 
-/* ─── Start Form ─────────────────────────────────────────────────── */
+/* ─── Signup Form ──────────────────────────────────────────────────── */
 
-function StartForm({ onStarted }: { onStarted: (session: VerifySession) => void }) {
+function SignupForm({
+  onStarted,
+  onSwitchToLogin,
+}: {
+  onStarted: (session: VerifySession) => void;
+  onSwitchToLogin: () => void;
+}) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -191,6 +301,7 @@ function StartForm({ onStarted }: { onStarted: (session: VerifySession) => void 
         sessionId: data.session_id,
         phoneMasked: data.phone_masked,
         expiresAt: data.expires_at,
+        flowType: 'signup',
       });
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
@@ -200,119 +311,234 @@ function StartForm({ onStarted }: { onStarted: (session: VerifySession) => void 
   };
 
   return (
-    <div className="pos-start">
-      <style>{styles}</style>
+    <>
+      <h1 className="pos-start__title">Start Your Application</h1>
+      <p className="pos-start__subtitle">
+        Begin your mortgage application in minutes. Your progress saves
+        automatically — step away anytime.
+      </p>
 
-      <div className="pos-start__card">
-        <div className="pos-start__logo">
-          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-            <path d="M16 2 C 9 2 4 8 4 16 C 4 22 8 27 14 28 L 14 14 C 14 11 16 9 19 9 C 22 9 24 11 24 14 C 24 17 22 19 19 19 L 17 19 L 17 28 C 24 27 28 22 28 16 C 28 8 23 2 16 2 Z" fill="#F5F2E9" />
-            <circle cx="19" cy="14" r="2.5" fill="#B8924A" />
-          </svg>
+      {error && <div className="pos-start__error">{error}</div>}
+
+      <form onSubmit={handleSubmit}>
+        <div className="pos-start__row">
+          <div className="pos-start__field">
+            <label className="pos-start__label" htmlFor="pos-fname">First name</label>
+            <input
+              id="pos-fname"
+              className="pos-start__input"
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+              required
+              autoFocus
+              autoComplete="given-name"
+            />
+          </div>
+          <div className="pos-start__field">
+            <label className="pos-start__label" htmlFor="pos-lname">Last name</label>
+            <input
+              id="pos-lname"
+              className="pos-start__input"
+              value={lastName}
+              onChange={e => setLastName(e.target.value)}
+              required
+              autoComplete="family-name"
+            />
+          </div>
         </div>
 
-        <h1 className="pos-start__title">Start Your Application</h1>
-        <p className="pos-start__subtitle">
-          Begin your mortgage application in minutes. Your progress saves
-          automatically — step away anytime.
-        </p>
+        <div className="pos-start__field">
+          <label className="pos-start__label" htmlFor="pos-email">Email address</label>
+          <input
+            id="pos-email"
+            className="pos-start__input"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+        </div>
 
-        {error && <div className="pos-start__error">{error}</div>}
+        <div className="pos-start__field">
+          <label className="pos-start__label" htmlFor="pos-phone">Mobile phone number</label>
+          <input
+            id="pos-phone"
+            className="pos-start__input"
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(formatPhone(e.target.value))}
+            required
+            placeholder="(555) 123-4567"
+            autoComplete="tel"
+          />
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="pos-start__row">
-            <div className="pos-start__field">
-              <label className="pos-start__label" htmlFor="pos-fname">First name</label>
-              <input
-                id="pos-fname"
-                className="pos-start__input"
-                value={firstName}
-                onChange={e => setFirstName(e.target.value)}
-                required
-                autoFocus
-                autoComplete="given-name"
-              />
-            </div>
-            <div className="pos-start__field">
-              <label className="pos-start__label" htmlFor="pos-lname">Last name</label>
-              <input
-                id="pos-lname"
-                className="pos-start__input"
-                value={lastName}
-                onChange={e => setLastName(e.target.value)}
-                required
-                autoComplete="family-name"
-              />
-            </div>
-          </div>
+        <label className="pos-start__consent">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={e => setConsent(e.target.checked)}
+            className="pos-start__checkbox"
+          />
+          <span className="pos-start__consent-text">
+            I agree to receive a one-time SMS verification code at the number
+            provided. Message and data rates may apply.
+          </span>
+        </label>
 
-          <div className="pos-start__field">
-            <label className="pos-start__label" htmlFor="pos-email">Email address</label>
-            <input
-              id="pos-email"
-              className="pos-start__input"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="pos-start__field">
-            <label className="pos-start__label" htmlFor="pos-phone">Mobile phone number</label>
-            <input
-              id="pos-phone"
-              className="pos-start__input"
-              type="tel"
-              value={phone}
-              onChange={e => setPhone(formatPhone(e.target.value))}
-              required
-              placeholder="(555) 123-4567"
-              autoComplete="tel"
-            />
-          </div>
-
-          <label className="pos-start__consent">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={e => setConsent(e.target.checked)}
-              className="pos-start__checkbox"
-            />
-            <span className="pos-start__consent-text">
-              I agree to receive a one-time SMS verification code at the number
-              provided. Message and data rates may apply.
+        <button
+          className="pos-start__btn"
+          type="submit"
+          disabled={submitting || !isValid}
+        >
+          {submitting ? (
+            <span className="pos-start__btn-loading">
+              <span className="pos-start__spinner" /> Sending code...
             </span>
-          </label>
+          ) : (
+            'Send Verification Code'
+          )}
+        </button>
+      </form>
 
-          <button
-            className="pos-start__btn"
-            type="submit"
-            disabled={submitting || !isValid}
-          >
-            {submitting ? (
-              <span className="pos-start__btn-loading">
-                <span className="pos-start__spinner" /> Sending code...
-              </span>
-            ) : (
-              'Send Verification Code'
-            )}
+      <div className="pos-start__footer-links">
+        <p className="pos-start__footer">
+          Already have an account?{' '}
+          <button type="button" className="pos-start__link-btn" onClick={onSwitchToLogin}>
+            Sign in
           </button>
-        </form>
-
-        <div className="pos-start__footer-links">
-          <p className="pos-start__footer">
-            Already have a link? Check your email for your personalized access.
-          </p>
-        </div>
-
-        <div className="pos-start__trust">
-          <TrustIcon />
-          <span>256-bit encryption · NMLS compliant · Equal Housing Lender</span>
-        </div>
+        </p>
       </div>
-    </div>
+    </>
+  );
+}
+
+
+/* ─── Login Form ───────────────────────────────────────────────────── */
+
+function LoginForm({
+  onStarted,
+  onVerified,
+  onSwitchToSignup,
+}: {
+  onStarted: (session: VerifySession) => void;
+  onVerified: (token: string, name?: string) => void;
+  onSwitchToSignup: () => void;
+}) {
+  const [phone, setPhone] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const phoneDigits = unformatPhone(phone);
+  const isValid = phoneDigits.length === 10 && consent;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValid) return;
+    setError('');
+    setSubmitting(true);
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/v1/pos/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: phoneDigits,
+          sms_consent: true,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (resp.status === 404) {
+          throw new Error('No account found with this phone number. Please create a new account.');
+        }
+        throw new Error(data.detail || 'Failed to sign in');
+      }
+
+      if (data.trusted_device && data.token) {
+        onVerified(data.token, data.borrower_name);
+        return;
+      }
+
+      onStarted({
+        sessionId: data.session_id,
+        phoneMasked: data.phone_masked,
+        expiresAt: data.expires_at,
+        flowType: 'login',
+      });
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <h1 className="pos-start__title">Welcome Back</h1>
+      <p className="pos-start__subtitle">
+        Enter the phone number associated with your application. We'll send a
+        verification code to confirm your identity.
+      </p>
+
+      {error && <div className="pos-start__error">{error}</div>}
+
+      <form onSubmit={handleSubmit}>
+        <div className="pos-start__field">
+          <label className="pos-start__label" htmlFor="pos-login-phone">Mobile phone number</label>
+          <input
+            id="pos-login-phone"
+            className="pos-start__input"
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(formatPhone(e.target.value))}
+            required
+            autoFocus
+            placeholder="(555) 123-4567"
+            autoComplete="tel"
+          />
+        </div>
+
+        <label className="pos-start__consent">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={e => setConsent(e.target.checked)}
+            className="pos-start__checkbox"
+          />
+          <span className="pos-start__consent-text">
+            I agree to receive a one-time SMS verification code at the number
+            provided. Message and data rates may apply.
+          </span>
+        </label>
+
+        <button
+          className="pos-start__btn"
+          type="submit"
+          disabled={submitting || !isValid}
+        >
+          {submitting ? (
+            <span className="pos-start__btn-loading">
+              <span className="pos-start__spinner" /> Sending code...
+            </span>
+          ) : (
+            'Send Verification Code'
+          )}
+        </button>
+      </form>
+
+      <div className="pos-start__footer-links">
+        <p className="pos-start__footer">
+          Don't have an account?{' '}
+          <button type="button" className="pos-start__link-btn" onClick={onSwitchToSignup}>
+            Create one
+          </button>
+        </p>
+      </div>
+    </>
   );
 }
 
@@ -326,11 +552,12 @@ function VerifyCodeForm({
   onSessionUpdate,
 }: {
   session: VerifySession;
-  onVerified: (token: string) => void;
+  onVerified: (token: string, name?: string) => void;
   onBack: () => void;
   onSessionUpdate: (s: VerifySession) => void;
 }) {
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [resending, setResending] = useState(false);
@@ -398,7 +625,11 @@ function VerifyCodeForm({
       const resp = await fetch(`${API_BASE}/api/v1/pos/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session.sessionId, code: finalCode }),
+        body: JSON.stringify({
+          session_id: session.sessionId,
+          code: finalCode,
+          remember_device: rememberDevice,
+        }),
       });
 
       const data = await resp.json().catch(() => ({}));
@@ -406,7 +637,7 @@ function VerifyCodeForm({
         throw new Error(data.detail || 'Verification failed');
       }
 
-      onVerified(data.token);
+      onVerified(data.token, data.borrower_name);
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
       setDigits(['', '', '', '', '', '']);
@@ -450,10 +681,7 @@ function VerifyCodeForm({
 
       <div className="pos-start__card">
         <div className="pos-start__logo">
-          <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-            <path d="M16 2 C 9 2 4 8 4 16 C 4 22 8 27 14 28 L 14 14 C 14 11 16 9 19 9 C 22 9 24 11 24 14 C 24 17 22 19 19 19 L 17 19 L 17 28 C 24 27 28 22 28 16 C 28 8 23 2 16 2 Z" fill="#F5F2E9" />
-            <circle cx="19" cy="14" r="2.5" fill="#B8924A" />
-          </svg>
+          <PeLogoIcon />
         </div>
 
         <h1 className="pos-start__title">Verify Your Phone</h1>
@@ -519,12 +747,24 @@ function VerifyCodeForm({
           )}
         </div>
 
+        <label className="pos-start__remember">
+          <input
+            type="checkbox"
+            checked={rememberDevice}
+            onChange={e => setRememberDevice(e.target.checked)}
+            className="pos-start__checkbox"
+          />
+          <span className="pos-start__remember-text">
+            Remember this device — skip verification next time
+          </span>
+        </label>
+
         <button
           type="button"
           className="pos-start__back-btn"
           onClick={onBack}
         >
-          ← Use a different number
+          ← Back
         </button>
 
         <div className="pos-start__trust">
@@ -538,6 +778,13 @@ function VerifyCodeForm({
 
 
 /* ─── Icons ──────────────────────────────────────────────────────── */
+
+const PeLogoIcon: React.FC = () => (
+  <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+    <path d="M16 2 C 9 2 4 8 4 16 C 4 22 8 27 14 28 L 14 14 C 14 11 16 9 19 9 C 22 9 24 11 24 14 C 24 17 22 19 19 19 L 17 19 L 17 28 C 24 27 28 22 28 16 C 28 8 23 2 16 2 Z" fill="#F5F2E9" />
+    <circle cx="19" cy="14" r="2.5" fill="#B8924A" />
+  </svg>
+);
 
 const TrustIcon: React.FC = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -604,6 +851,24 @@ const styles = `
   .pos-start__row { display: flex; gap: 12px; }
   .pos-start__row .pos-start__field { flex: 1; }
 
+  /* Tabs */
+  .pos-start__tabs {
+    display: flex; gap: 0; margin-bottom: 24px;
+    border: 1px solid #d4d9d6; border-radius: 10px;
+    overflow: hidden;
+  }
+  .pos-start__tab {
+    flex: 1; padding: 11px 16px; border: none;
+    background: #f8f7f4; font-size: 14px; font-weight: 500;
+    color: #6B7B75; cursor: pointer; font-family: inherit;
+    transition: background 0.2s, color 0.2s;
+  }
+  .pos-start__tab:first-child { border-right: 1px solid #d4d9d6; }
+  .pos-start__tab.active {
+    background: #1F3D2E; color: #F5F2E9;
+  }
+  .pos-start__tab:hover:not(.active) { background: #eef0eb; }
+
   /* Consent checkbox */
   .pos-start__consent {
     display: flex; align-items: flex-start; gap: 10px;
@@ -664,6 +929,11 @@ const styles = `
   .pos-start__footer {
     text-align: center; font-size: 13px; color: #9CA8A2; margin: 0;
   }
+  .pos-start__link-btn {
+    background: none; border: none; color: #1F3D2E;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    text-decoration: underline; font-family: inherit; padding: 0;
+  }
   .pos-start__trust {
     display: flex; align-items: center; justify-content: center; gap: 6px;
     margin-top: 20px; padding-top: 16px;
@@ -712,6 +982,15 @@ const styles = `
     font-size: 13px; color: #9CA8A2; font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
+  /* Remember device */
+  .pos-start__remember {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 20px; cursor: pointer;
+  }
+  .pos-start__remember-text {
+    font-size: 13px; color: #6B7B75; line-height: 1.4;
+  }
+
   .pos-start__back-btn {
     display: block; width: 100%; margin-top: 16px;
     background: none; border: 1px solid #d4d9d6;

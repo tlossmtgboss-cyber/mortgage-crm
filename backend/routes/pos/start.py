@@ -97,16 +97,31 @@ class POSVerification(Base):
     phone = Column(String, nullable=False)
     phone_raw = Column(String, nullable=False, default="")
     code_hash = Column(String, nullable=False)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    email = Column(String, nullable=False)
+    first_name = Column(String, nullable=False, default="")
+    last_name = Column(String, nullable=False, default="")
+    email = Column(String, nullable=False, default="")
     organization_id = Column(Integer, nullable=True)
+    flow_type = Column(String, nullable=False, default="signup")
+    contact_id = Column(Integer, nullable=True)
     attempts = Column(Integer, default=0)
     ip_address = Column(String, nullable=True)
     consent_at = Column(DateTime(timezone=True), nullable=True)
     last_resend_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     verified_at = Column(DateTime(timezone=True), nullable=True)
+
+
+TRUSTED_DEVICE_DAYS = 30
+
+
+class POSTrustedDevice(Base):
+    __tablename__ = "pos_trusted_devices"
+    id = Column(Integer, primary_key=True)
+    contact_id = Column(Integer, nullable=False, index=True)
+    ip_address = Column(String, nullable=False)
+    organization_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime(timezone=True), nullable=False)
 
 
 _table_ensured = False
@@ -153,6 +168,28 @@ def _ensure_table(db: Session):
                 f"ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
                 f"{col} TIMESTAMPTZ"
             ))
+        db.execute(text(
+            "ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
+            "flow_type VARCHAR NOT NULL DEFAULT 'signup'"
+        ))
+        db.execute(text(
+            "ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
+            "contact_id INTEGER"
+        ))
+        db.execute(text(
+            "CREATE TABLE IF NOT EXISTS pos_trusted_devices ("
+            "id SERIAL PRIMARY KEY,"
+            "contact_id INTEGER NOT NULL,"
+            "ip_address VARCHAR NOT NULL,"
+            "organization_id INTEGER,"
+            "created_at TIMESTAMPTZ DEFAULT NOW(),"
+            "expires_at TIMESTAMPTZ NOT NULL"
+            ")"
+        ))
+        db.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_pos_trusted_devices_contact_ip "
+            "ON pos_trusted_devices (contact_id, ip_address)"
+        ))
         db.commit()
         _table_ensured = True
     except Exception as e:
@@ -161,19 +198,26 @@ def _ensure_table(db: Session):
 
 
 def _resolve_organization_id(db: Session, lo_slug: Optional[str]) -> int:
-    """Resolve organization_id from an LO slug. Raises 400 if slug invalid."""
-    if not lo_slug:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing loan officer identifier (lo_slug). Please use the link provided by your loan officer.",
-        )
-    lo_user = db.query(User).filter(User.slug == lo_slug).first()
-    if not lo_user or not lo_user.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid loan officer link. Please contact your loan officer for a new link.",
-        )
-    return lo_user.organization_id
+    """Resolve organization_id from an LO slug, falling back to default org."""
+    if lo_slug:
+        lo_user = db.query(User).filter(User.slug == lo_slug).first()
+        if lo_user and lo_user.organization_id:
+            return lo_user.organization_id
+
+    from database.models.core import Organization
+    default_org = (
+        db.query(Organization)
+        .filter(Organization.is_active == True)
+        .order_by(Organization.id)
+        .first()
+    )
+    if default_org:
+        return default_org.id
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="No active organization found. Please contact support.",
+    )
 
 
 def _hash_code(code: str) -> str:
@@ -224,6 +268,7 @@ class StartResponse(BaseModel):
 class VerifyRequest(BaseModel):
     session_id: str
     code: str = Field(..., min_length=6, max_length=6)
+    remember_device: bool = Field(False, description="Trust this IP for future logins")
 
     @field_validator("code")
     @classmethod
@@ -248,6 +293,42 @@ class ResendResponse(BaseModel):
     message: str
     expires_at: str
     cooldown_seconds: int
+
+
+class LoginRequest(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=20)
+    sms_consent: bool = Field(..., description="User consented to receive SMS")
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        normalized = normalize_phone(v.strip())
+        if not normalized:
+            raise ValueError("Please enter a valid 10-digit US phone number.")
+        return v.strip()
+
+    @field_validator("sms_consent")
+    @classmethod
+    def require_consent(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("SMS consent is required to proceed.")
+        return v
+
+
+class LoginResponse(BaseModel):
+    session_id: str = ""
+    phone_masked: str = ""
+    expires_at: str = ""
+    message: str = ""
+    trusted_device: bool = False
+    token: str = ""
+    workspace_slug: str = ""
+    borrower_name: str = ""
+
+
+class TokenCheckResponse(BaseModel):
+    valid: bool
+    borrower_name: str = ""
 
 
 # ── SMS helper ─────────────────────────────────────────────────────
@@ -359,7 +440,7 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
     status_code=status.HTTP_201_CREATED,
     summary="Verify SMS code and create application",
 )
-def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
+def verify_code(body: VerifyRequest, request: Request, db: Session = Depends(get_db)):
     _ensure_table(db)
 
     verification = (
@@ -396,8 +477,6 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
     verification.verified_at = datetime.now(timezone.utc)
     db.flush()
 
-    slug = f"{verification.first_name.lower()}-{verification.last_name.lower()}-{uuid.uuid4().hex[:8]}"
-    display_name = f"{verification.first_name} {verification.last_name}"
     org_id = verification.organization_id
     if not org_id:
         raise HTTPException(
@@ -405,28 +484,42 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
             detail="Session missing organization context. Please start over.",
         )
 
-    workspace = PURLWorkspace(
-        organization_id=org_id,
-        slug=slug,
-        status=WorkspaceStatus.APPLICATION.value,
-        display_name=display_name,
-        source="pos_public_start",
-        application_at=datetime.now(timezone.utc),
-    )
-    db.add(workspace)
-    db.flush()
+    if verification.flow_type == "login" and verification.contact_id:
+        contact = db.query(PURLContact).filter(PURLContact.id == verification.contact_id).first()
+        if not contact:
+            raise HTTPException(status_code=404, detail="Account not found. Please create a new account.")
+        workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == contact.workspace_id).first()
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Account not found. Please create a new account.")
+        slug = workspace.slug
+        borrower_name = contact.first_name or verification.first_name
+    else:
+        slug = f"{verification.first_name.lower()}-{verification.last_name.lower()}-{uuid.uuid4().hex[:8]}"
+        display_name = f"{verification.first_name} {verification.last_name}"
 
-    contact = PURLContact(
-        organization_id=org_id,
-        workspace_id=workspace.id,
-        contact_type=ContactType.BORROWER.value,
-        first_name=verification.first_name,
-        last_name=verification.last_name,
-        email=verification.email,
-        phone=verification.phone,
-    )
-    db.add(contact)
-    db.flush()
+        workspace = PURLWorkspace(
+            organization_id=org_id,
+            slug=slug,
+            status=WorkspaceStatus.APPLICATION.value,
+            display_name=display_name,
+            source="pos_public_start",
+            application_at=datetime.now(timezone.utc),
+        )
+        db.add(workspace)
+        db.flush()
+
+        contact = PURLContact(
+            organization_id=org_id,
+            workspace_id=workspace.id,
+            contact_type=ContactType.BORROWER.value,
+            first_name=verification.first_name,
+            last_name=verification.last_name,
+            email=verification.email,
+            phone=verification.phone,
+        )
+        db.add(contact)
+        db.flush()
+        borrower_name = verification.first_name
 
     token_service = PURLTokenService(db)
     _token_id, full_token = token_service.create_token(
@@ -437,6 +530,19 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
         expires_in_days=90,
     )
 
+    if body.remember_device:
+        ip = _client_ip(request)
+        db.query(POSTrustedDevice).filter(
+            POSTrustedDevice.contact_id == contact.id,
+            POSTrustedDevice.ip_address == ip,
+        ).delete()
+        db.add(POSTrustedDevice(
+            contact_id=contact.id,
+            ip_address=ip,
+            organization_id=org_id,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=TRUSTED_DEVICE_DAYS),
+        ))
+
     db.commit()
     redirect_url = f"https://app.perenniaai.com/pos?token={full_token}"
 
@@ -444,7 +550,7 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
         token=full_token,
         workspace_slug=slug,
         redirect_url=redirect_url,
-        borrower_name=verification.first_name,
+        borrower_name=borrower_name,
     )
 
 
@@ -497,3 +603,139 @@ def resend_code(body: ResendRequest, request: Request, db: Session = Depends(get
         expires_at=expires.isoformat(),
         cooldown_seconds=RESEND_COOLDOWN_SECONDS,
     )
+
+
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Sign in with phone — sends SMS verification code",
+)
+def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    _ensure_table(db)
+
+    ip = _client_ip(request)
+    _check_ip_rate_limit(ip)
+
+    phone_e164 = normalize_phone(body.phone)
+    if not phone_e164:
+        raise HTTPException(status_code=422, detail="Invalid phone number format.")
+
+    contact = (
+        db.query(PURLContact)
+        .filter(PURLContact.phone == phone_e164)
+        .order_by(PURLContact.id.desc())
+        .first()
+    )
+    if not contact:
+        raise HTTPException(
+            status_code=404,
+            detail="No account found with this phone number. Please create a new account.",
+        )
+
+    now = datetime.now(timezone.utc)
+    trusted = (
+        db.query(POSTrustedDevice)
+        .filter(
+            POSTrustedDevice.contact_id == contact.id,
+            POSTrustedDevice.ip_address == ip,
+            POSTrustedDevice.expires_at > now,
+        )
+        .first()
+    )
+    if trusted:
+        workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == contact.workspace_id).first()
+        if workspace:
+            token_service = PURLTokenService(db)
+            _token_id, full_token = token_service.create_token(
+                organization_id=contact.organization_id,
+                workspace_id=workspace.id,
+                scope=TokenScope.WRITE,
+                contact_id=contact.id,
+                expires_in_days=90,
+            )
+            trusted.created_at = now
+            trusted.expires_at = now + timedelta(days=TRUSTED_DEVICE_DAYS)
+            db.commit()
+            return LoginResponse(
+                trusted_device=True,
+                token=full_token,
+                workspace_slug=workspace.slug,
+                borrower_name=contact.first_name or "",
+                message="Welcome back! Device recognized.",
+            )
+
+    dedup_cutoff = now - timedelta(minutes=5)
+    existing = (
+        db.query(POSVerification)
+        .filter(
+            POSVerification.phone == phone_e164,
+            POSVerification.flow_type == "login",
+            POSVerification.verified_at == None,
+            POSVerification.created_at > dedup_cutoff,
+        )
+        .first()
+    )
+    if existing:
+        expires = existing.created_at.replace(tzinfo=timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)
+        return LoginResponse(
+            session_id=existing.session_id,
+            phone_masked=_mask_phone(phone_e164),
+            expires_at=expires.isoformat(),
+            message="Verification code already sent. Check your phone.",
+        )
+
+    session_id = f"pos_sess_{secrets.token_hex(16)}"
+    code = f"{secrets.randbelow(900000) + 100000}"
+
+    verification = POSVerification(
+        session_id=session_id,
+        phone=phone_e164,
+        phone_raw=body.phone.strip(),
+        code_hash=_hash_code(code),
+        first_name=contact.first_name or "",
+        last_name=contact.last_name or "",
+        email=contact.email or "",
+        organization_id=contact.organization_id,
+        flow_type="login",
+        contact_id=contact.id,
+        ip_address=ip,
+        consent_at=now,
+        created_at=now,
+    )
+    db.add(verification)
+    db.commit()
+
+    _send_verification_sms(phone_e164, code)
+
+    expires = now + timedelta(minutes=CODE_TTL_MINUTES)
+    return LoginResponse(
+        session_id=session_id,
+        phone_masked=_mask_phone(phone_e164),
+        expires_at=expires.isoformat(),
+        message="Verification code sent",
+    )
+
+
+@router.post(
+    "/check-token",
+    response_model=TokenCheckResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Validate an existing PURL token before entering the app",
+)
+def check_token(request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return TokenCheckResponse(valid=False)
+
+    token = auth_header[7:]
+    try:
+        token_service = PURLTokenService(db)
+        ctx = token_service.verify_token(token)
+        if not ctx:
+            return TokenCheckResponse(valid=False)
+        contact = db.query(PURLContact).filter(PURLContact.id == ctx.get("contact_id")).first()
+        name = contact.first_name if contact else ""
+        return TokenCheckResponse(valid=True, borrower_name=name or "")
+    except Exception:
+        return TokenCheckResponse(valid=False)

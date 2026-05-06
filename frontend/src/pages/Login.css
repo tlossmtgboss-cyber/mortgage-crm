@@ -73,6 +73,36 @@
   cursor: not-allowed;
 }
 
+/* Password show/hide toggle */
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.password-toggle:hover {
+  color: #333;
+}
+
 .forgot-password-link {
   text-align: right;
   margin-top: -8px;

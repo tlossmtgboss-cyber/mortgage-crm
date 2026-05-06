@@ -382,7 +382,8 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
 
-      return Promise.reject(_buildApiError(401, 'Session expired. Please log in again.', {
+      const detail401 = error.response?.data?.detail || error.response?.data?.error || 'Session expired. Please log in again.';
+      return Promise.reject(_buildApiError(401, detail401, {
         retryable: false,
         code: 'ERR_UNAUTHORIZED',
         _axiosError: error,
