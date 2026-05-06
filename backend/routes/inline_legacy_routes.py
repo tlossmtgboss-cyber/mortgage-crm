@@ -2572,14 +2572,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Calendar Settings routes not loaded: {e}")
 
-    # Morning Briefing routes
-    try:
-        from routes.briefing_routes import router as briefing_router, set_dependencies as set_briefing_deps
-        set_briefing_deps(get_db, get_current_user)
-        app.include_router(briefing_router, tags=["Morning Briefing"])
-        logger.info("Morning Briefing routes loaded")
-    except Exception as e:
-        logger.warning(f"Morning Briefing routes not loaded: {e}")
+    # Morning Briefing routes — registered in main.py (not here, to avoid duplicate router)
 
     # Email Integration Settings routes (Comprehensive error handling pattern)
     try:
