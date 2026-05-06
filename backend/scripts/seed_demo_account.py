@@ -115,13 +115,16 @@ def main(external_session=None):
         # ── 4. Subscription ──────────────────────────────────────────────
         # Give the demo user a long-lived active subscription
         plan_id = db.execute(text("SELECT id FROM subscription_plans WHERE is_active = TRUE LIMIT 1")).scalar()
-        for uid in user_ids.values():
-            db.execute(text("""
-                INSERT INTO subscriptions (user_id, plan_id, status, current_period_start, current_period_end, trial_end, created_at)
-                VALUES (:uid, :pid, :status, :start, :end, :trial, :now)
-            """), {"uid": uid, "pid": plan_id, "status": "active",
-                   "start": NOW, "end": NOW + timedelta(days=365), "trial": NOW + timedelta(days=365), "now": NOW})
-        print(f"  Created subscriptions for all users")
+        if plan_id:
+            for uid in user_ids.values():
+                db.execute(text("""
+                    INSERT INTO subscriptions (user_id, plan_id, status, current_period_start, current_period_end, trial_end, created_at)
+                    VALUES (:uid, :pid, :status, :start, :end, :trial, :now)
+                """), {"uid": uid, "pid": plan_id, "status": "active",
+                       "start": NOW, "end": NOW + timedelta(days=365), "trial": NOW + timedelta(days=365), "now": NOW})
+            print(f"  Created subscriptions for all users")
+        else:
+            print("  Skipped subscriptions (no active plans found)")
 
         # ── 5. Leads ─────────────────────────────────────────────────────
         leads_data = [
@@ -679,17 +682,21 @@ def _nuke_demo_org(db, org_id):
         if table not in _NUKE_SAFE_TABLES:
             raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
         try:
+            db.execute(text("SAVEPOINT nuke_sp"))
             db.execute(text(f"DELETE FROM {table} WHERE organization_id = :oid"), {"oid": org_id})
+            db.execute(text("RELEASE SAVEPOINT nuke_sp"))
         except Exception:
-            pass  # Table may not exist
+            db.execute(text("ROLLBACK TO SAVEPOINT nuke_sp"))
 
     # Users (delete subscriptions first via user_id)
-    user_ids = [r[0] for r in db.execute(text("SELECT id FROM users WHERE organization_id = :oid"), {"oid": org_id}).fetchall()]
-    for uid in user_ids:
-        try:
+    try:
+        db.execute(text("SAVEPOINT nuke_users_sp"))
+        user_ids = [r[0] for r in db.execute(text("SELECT id FROM users WHERE organization_id = :oid"), {"oid": org_id}).fetchall()]
+        for uid in user_ids:
             db.execute(text("DELETE FROM subscriptions WHERE user_id = :uid"), {"uid": uid})
-        except Exception:
-            pass
+        db.execute(text("RELEASE SAVEPOINT nuke_users_sp"))
+    except Exception:
+        db.execute(text("ROLLBACK TO SAVEPOINT nuke_users_sp"))
 
     db.execute(text("DELETE FROM users WHERE organization_id = :oid"), {"oid": org_id})
     db.execute(text("DELETE FROM organizations WHERE id = :oid"), {"oid": org_id})
