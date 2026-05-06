@@ -2128,7 +2128,7 @@ except Exception as e:
 # Morning Briefing routes
 try:
     from routes.briefing_routes import router as briefing_router, set_dependencies as set_briefing_deps
-    set_briefing_deps(get_db, get_current_user)
+    set_briefing_deps(get_db)
     app.include_router(briefing_router, tags=["Morning Briefing"])
     logger.info("✅ Morning Briefing routes loaded")
 except Exception as e:

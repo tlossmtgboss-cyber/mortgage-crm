@@ -44,6 +44,16 @@ def _install_route_stubs():
     svc_stub.MorningBriefingService = MockSvc
     sys.modules["services.morning_briefing_service"] = svc_stub
 
+    # auth.dependencies stub
+    auth_stub = sys.modules.get("auth", types.ModuleType("auth"))
+    auth_stub.__path__ = []
+    sys.modules.setdefault("auth", auth_stub)
+
+    auth_deps_stub = types.ModuleType("auth.dependencies")
+    _mock_auth = AsyncMock(name="get_current_user_auth")
+    auth_deps_stub.get_current_user = _mock_auth
+    sys.modules["auth.dependencies"] = auth_deps_stub
+
     # database.models.morning_briefing stub
     db_models_stub = sys.modules.get("database", types.ModuleType("database"))
     db_models_stub.__path__ = []
@@ -349,8 +359,8 @@ class TestGenerateNow:
 
         with patch("routes.briefing_routes._get_deps",
                    return_value=(MagicMock(), MagicMock())), \
-             patch("routes.briefing_routes.MorningBriefingService") as MockSvc, \
-             patch("routes.briefing_routes.generate_user_briefing", mock_gen):
+             patch("services.morning_briefing_service.MorningBriefingService") as MockSvc, \
+             patch("tasks.morning_briefing_tasks.generate_user_briefing", mock_gen):
             MockSvc.determine_level.return_value = "individual"
             response = await generate_now(force=False, db=db, current_user=user)
 
@@ -368,8 +378,8 @@ class TestGenerateNow:
 
         with patch("routes.briefing_routes._get_deps",
                    return_value=(MagicMock(), MagicMock())), \
-             patch("routes.briefing_routes.MorningBriefingService") as MockSvc, \
-             patch("routes.briefing_routes.generate_user_briefing", mock_gen):
+             patch("services.morning_briefing_service.MorningBriefingService") as MockSvc, \
+             patch("tasks.morning_briefing_tasks.generate_user_briefing", mock_gen):
             MockSvc.determine_level.return_value = "manager"
             await generate_now(force=False, db=db, current_user=user)
 
@@ -388,7 +398,7 @@ class TestGenerateNow:
 
         with patch("routes.briefing_routes._get_deps",
                    return_value=(MagicMock(), MagicMock())), \
-             patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+             patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.determine_level.return_value = "individual"
             with pytest.raises(HTTPException) as exc_info:
                 await generate_now(force=False, db=db, current_user=user)
@@ -406,8 +416,8 @@ class TestGenerateNow:
 
         with patch("routes.briefing_routes._get_deps",
                    return_value=(MagicMock(), MagicMock())), \
-             patch("routes.briefing_routes.MorningBriefingService") as MockSvc, \
-             patch("routes.briefing_routes.generate_user_briefing", mock_gen):
+             patch("services.morning_briefing_service.MorningBriefingService") as MockSvc, \
+             patch("tasks.morning_briefing_tasks.generate_user_briefing", mock_gen):
             MockSvc.determine_level.return_value = "individual"
             response = await generate_now(force=True, db=db, current_user=user)
 
@@ -485,7 +495,7 @@ class TestGetPreferences:
         prefs.thresholds = {"at_risk_days": 10}
         prefs.ai_tone = "concise"
 
-        with patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+        with patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.load_preferences.return_value = prefs
             result = await get_preferences(db=db, current_user=user)
 
@@ -503,7 +513,7 @@ class TestGetPreferences:
         prefs.thresholds = {}
         prefs.ai_tone = "balanced"
 
-        with patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+        with patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.load_preferences.return_value = prefs
             result = await get_preferences(db=db, current_user=user)
 
@@ -518,7 +528,7 @@ class TestGetPreferences:
         prefs.thresholds = {}
         prefs.ai_tone = "balanced"
 
-        with patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+        with patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.load_preferences.return_value = prefs
             result = await get_preferences(db=db, current_user=user)
 
@@ -552,7 +562,7 @@ class TestUpdatePreferences:
         loaded.thresholds = {}
         loaded.ai_tone = "balanced"
 
-        with patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+        with patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.load_preferences.return_value = loaded
             await update_preferences(prefs=payload, db=db, current_user=user)
 
@@ -571,7 +581,7 @@ class TestUpdatePreferences:
         loaded.thresholds = {}
         loaded.ai_tone = "concise"
 
-        with patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+        with patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.load_preferences.return_value = loaded
             await update_preferences(prefs=payload, db=db, current_user=user)
 
@@ -591,7 +601,7 @@ class TestUpdatePreferences:
         loaded.thresholds = {"at_risk_days": 10}
         loaded.ai_tone = "detailed"
 
-        with patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+        with patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.load_preferences.return_value = loaded
             result = await update_preferences(prefs=payload, db=db, current_user=user)
 
@@ -615,7 +625,7 @@ class TestUpdatePreferences:
         loaded.thresholds = {}
         loaded.ai_tone = "balanced"
 
-        with patch("routes.briefing_routes.MorningBriefingService") as MockSvc:
+        with patch("services.morning_briefing_service.MorningBriefingService") as MockSvc:
             MockSvc.load_preferences.return_value = loaded
             await update_preferences(prefs=payload, db=db, current_user=user)
 

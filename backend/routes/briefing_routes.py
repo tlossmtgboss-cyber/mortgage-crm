@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from typing import Dict, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -24,6 +24,12 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/briefing", tags=["Morning Briefing"])
+
+
+def _get_auth():
+    """Lazy import auth dependency to avoid circular imports at module load."""
+    from auth.dependencies import get_current_user
+    return get_current_user
 
 
 def _get_deps():
@@ -66,16 +72,15 @@ class BriefingResponse(BaseModel):
         from_attributes = True
 
 
-# --- Dependency stubs (replaced at registration) ---
+# --- Dependencies ---
 
 _get_db = None
-_get_current_user = None
 
 
-def set_dependencies(get_db_func, get_current_user_func):
-    global _get_db, _get_current_user
+def set_dependencies(get_db_func, get_current_user_func=None):
+    """Register DB dependency. Auth is imported from auth.dependencies."""
+    global _get_db
     _get_db = get_db_func
-    _get_current_user = get_current_user_func
 
 
 def get_db():
@@ -84,10 +89,10 @@ def get_db():
     yield from _get_db()
 
 
-def get_current_user():
-    if _get_current_user is None:
-        raise RuntimeError("briefing_routes: dependencies not initialized")
-    return _get_current_user()
+async def get_current_user(request: Request = None, db: Session = Depends(get_db)):
+    """Resolve authenticated user via auth.dependencies (proper async DI)."""
+    auth_fn = _get_auth()
+    return await auth_fn(request=request, db=db)
 
 
 # --- Routes ---
@@ -106,13 +111,18 @@ async def get_today_briefing(db: Session = Depends(get_db),
 
     today = datetime.now(tz).date()
 
-    briefing = db.query(MorningBriefing).filter(
-        MorningBriefing.user_id == current_user.id,
-        MorningBriefing.briefing_date == today,
-    ).first()
+    try:
+        briefing = db.query(MorningBriefing).filter(
+            MorningBriefing.user_id == current_user.id,
+            MorningBriefing.briefing_date == today,
+        ).first()
+    except Exception as e:
+        logger.error("Briefing query failed for user %s: %s", current_user.id, e)
+        db.rollback()
+        return Response(status_code=204)
 
     if not briefing:
-        return Response(status_code=204)  # No briefing yet today
+        return Response(status_code=204)
 
     data = briefing.briefing_data or {}
     team = briefing.team_data
@@ -191,17 +201,26 @@ async def generate_now(
     today = datetime.now(tz).date()
     level = MorningBriefingService.determine_level(current_user)
 
-    existing = db.query(MorningBriefing).filter(
-        MorningBriefing.user_id == current_user.id,
-        MorningBriefing.briefing_date == today,
-    ).first()
+    try:
+        existing = db.query(MorningBriefing).filter(
+            MorningBriefing.user_id == current_user.id,
+            MorningBriefing.briefing_date == today,
+        ).first()
+    except Exception as e:
+        logger.error("Briefing existence check failed: %s", e)
+        db.rollback()
+        existing = None
 
     if existing and not force:
         raise HTTPException(status_code=409, detail="Briefing already exists for today. Use force=true to regenerate.")
 
     if existing and force:
-        db.delete(existing)
-        db.commit()
+        try:
+            db.delete(existing)
+            db.commit()
+        except Exception as e:
+            logger.error("Failed to delete existing briefing: %s", e)
+            db.rollback()
 
     # Try Celery first, fall back to synchronous generation
     try:
@@ -209,12 +228,10 @@ async def generate_now(
         generate_user_briefing.apply_async(args=[current_user.id, today.isoformat(), level])
         return JSONResponse(status_code=202, content={"status": "accepted", "message": "Briefing generation started"})
     except Exception as celery_err:
-        logger.warning(f"Celery unavailable ({celery_err}), generating briefing synchronously")
+        logger.warning("Celery unavailable (%s), generating briefing synchronously", celery_err)
 
     # Synchronous fallback — generate inline when Celery/Redis isn't running
     try:
-        from services.morning_briefing_service import MorningBriefingService
-
         service = MorningBriefingService()
         prefs = service.load_preferences(current_user)
         ctx = service.build_context(db, current_user, today, prefs)
@@ -242,7 +259,7 @@ async def generate_now(
         db.commit()
         return JSONResponse(status_code=201, content={"status": "generated", "message": "Briefing generated"})
     except Exception as sync_err:
-        logger.exception(f"Synchronous briefing generation failed: {sync_err}")
+        logger.exception("Synchronous briefing generation failed: %s", sync_err)
         raise HTTPException(status_code=500, detail="Briefing generation failed")
 
 
@@ -279,8 +296,9 @@ async def get_preferences(
     """Get briefing preferences (merged with defaults)."""
     from services.morning_briefing_service import MorningBriefingService
     prefs = MorningBriefingService.load_preferences(current_user)
+    enabled = getattr(current_user, "briefing_enabled", True)
     return {
-        "briefing_enabled": getattr(current_user, "briefing_enabled", True) if current_user.briefing_enabled is not None else True,
+        "briefing_enabled": enabled if enabled is not None else True,
         "briefing_hour": getattr(current_user, "briefing_hour", 7) or 7,
         "timezone": getattr(current_user, "timezone", "America/New_York"),
         "sections": prefs.sections,
