@@ -29,20 +29,17 @@ from sqlalchemy.orm import sessionmaker
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    print("ERROR: DATABASE_URL not set")
-    sys.exit(1)
-
-engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
+if DATABASE_URL:
+    engine = create_engine(DATABASE_URL)
+    Session = sessionmaker(bind=engine)
+else:
+    engine = None
+    Session = None
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
 DEMO_EMAIL = "demo@perenniaai.com"
-DEMO_PASSWORD = os.environ.get("DEMO_USER_PASSWORD")
-if not DEMO_PASSWORD:
-    print("ERROR: DEMO_USER_PASSWORD environment variable not set")
-    sys.exit(1)
+DEMO_PASSWORD = os.environ.get("DEMO_USER_PASSWORD", "Password1!")
 ORG_NAME = "Summit Peak Mortgage"
 ORG_SLUG = "summit-peak-demo-appstore"
 
@@ -50,8 +47,8 @@ NOW = datetime.now(timezone.utc)
 TODAY = date.today()
 
 
-def main():
-    db = Session()
+def main(external_session=None):
+    db = external_session or Session()
     try:
         # Check if demo org already exists
         existing = db.execute(text("SELECT id FROM organizations WHERE slug = :s"), {"s": ORG_SLUG}).fetchone()
@@ -645,9 +642,12 @@ def main():
         print(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        if external_session is None:
+            sys.exit(1)
+        raise
     finally:
-        db.close()
+        if external_session is None:
+            db.close()
 
 
 _NUKE_SAFE_TABLES = frozenset({
