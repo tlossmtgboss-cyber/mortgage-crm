@@ -2157,12 +2157,585 @@ def seed_referral_partners(conn, org_id, user_ids, lead_ids):
 
 def seed_tasks(conn, org_id, user_ids, lead_ids, loan_ids):
     """Create demo tasks across users, leads, and loans."""
-    pass
+
+    # Convenience aliases
+    manager_id = user_ids.get("manager")
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+    processor_id = user_ids.get("processor")
+    uw_rachel_id = user_ids.get("uw_rachel")
+    uw_james_id = user_ids.get("uw_james")
+    ops_id = user_ids.get("ops")
+
+    # Lead/loan id helpers (safe get)
+    def lid(email):
+        return lead_ids.get(email)
+
+    def lnid(loan_number):
+        return loan_ids.get(loan_number)
+
+    # task spec:
+    # (title, description, priority, status, due_offset_days, owner_id,
+    #  lead_email_or_None, loan_number_or_None, related_contact_name, completed_days_ago)
+    # due_offset_days: negative = past (overdue), 0 = today, positive = future
+    # completed_days_ago: None unless status='completed'
+
+    TASKS = [
+        # ---- OVERDUE (5, due 1-5 days ago, status=pending) ----
+        {
+            "title": "Follow up with Tanya Morrison — rate lock expiring",
+            "description": "Rate lock on SHL-2026-0001 expires soon. Call to discuss extension options and current market.",
+            "priority": "high",
+            "status": "pending",
+            "due_days": -1,
+            "owner_id": lo_sarah_id,
+            "lead_email": "tanya.morrison@gmail.com",
+            "loan_number": "SHL-2026-0001",
+            "contact_name": "Tanya Morrison",
+        },
+        {
+            "title": "Request W-2 from Roberto Sandoval",
+            "description": "2024 W-2 still missing from file. FHA case number cannot be ordered without full income docs.",
+            "priority": "high",
+            "status": "pending",
+            "due_days": -2,
+            "owner_id": processor_id,
+            "lead_email": "roberto.sandoval@hotmail.com",
+            "loan_number": "SHL-2026-0002",
+            "contact_name": "Roberto Sandoval",
+        },
+        {
+            "title": "Call Carter Webb — 7 days no contact",
+            "description": "Lead from cold call on expired listing. No response to 3 voicemails and 1 SMS. Try email.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": -3,
+            "owner_id": lo_sarah_id,
+            "lead_email": "carter.webb@icloud.com",
+            "loan_number": None,
+            "contact_name": "Carter Webb",
+        },
+        {
+            "title": "Update Salesforce records for Q1 funded loans",
+            "description": "Q1 funded loans (SHL-2026-0011 through SHL-2026-0015) need Salesforce sync and closed-loan disposition.",
+            "priority": "low",
+            "status": "pending",
+            "due_days": -4,
+            "owner_id": ops_id,
+            "lead_email": None,
+            "loan_number": None,
+            "contact_name": None,
+        },
+        {
+            "title": "Review appraisal for Kevin Albright",
+            "description": "Appraisal returned at $390K vs $385K purchase price. Review for LTV impact and send summary to UW.",
+            "priority": "high",
+            "status": "pending",
+            "due_days": -5,
+            "owner_id": uw_rachel_id,
+            "lead_email": "kevin.albright@gmail.com",
+            "loan_number": "SHL-2026-0006",
+            "contact_name": "Kevin Albright",
+        },
+
+        # ---- DUE TODAY (8, due_days=0, status pending or in_progress) ----
+        {
+            "title": "Send pre-approval letter to Vanessa Hartley",
+            "description": "Updated pre-approval letter needed — original expired. Borrower's agent is waiting.",
+            "priority": "high",
+            "status": "in_progress",
+            "due_days": 0,
+            "owner_id": lo_sarah_id,
+            "lead_email": "vanessa.hartley@gmail.com",
+            "loan_number": "SHL-2026-0003",
+            "contact_name": "Vanessa Hartley",
+        },
+        {
+            "title": "Complete conditions review for Brianna Okafor",
+            "description": "Conditional approval issued. 3 remaining conditions: HOI binder, title commitment update, gift letter.",
+            "priority": "high",
+            "status": "in_progress",
+            "due_days": 0,
+            "owner_id": uw_rachel_id,
+            "lead_email": "brianna.okafor@gmail.com",
+            "loan_number": "SHL-2026-0008",
+            "contact_name": "Brianna Okafor",
+        },
+        {
+            "title": "Submit loan file to underwriting — Aisha Coleman",
+            "description": "All docs collected. File ready for UW submission. Processor to do final checklist and submit today.",
+            "priority": "high",
+            "status": "pending",
+            "due_days": 0,
+            "owner_id": processor_id,
+            "lead_email": "aisha.coleman@gmail.com",
+            "loan_number": "SHL-2026-0004",
+            "contact_name": "Aisha Coleman",
+        },
+        {
+            "title": "Schedule closing for Elijah Fontaine",
+            "description": "CTC issued. Coordinate closing date with title company and borrower. Target: 5 days from now.",
+            "priority": "high",
+            "status": "in_progress",
+            "due_days": 0,
+            "owner_id": lo_marcus_id,
+            "lead_email": "elijah.fontaine@gmail.com",
+            "loan_number": "SHL-2026-0009",
+            "contact_name": "Elijah Fontaine",
+        },
+        {
+            "title": "Follow up with Priya Nair — FHA program overview",
+            "description": "New Facebook lead asking about FHA minimum down payment. Send program overview and schedule discovery call.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 0,
+            "owner_id": lo_marcus_id,
+            "lead_email": "priya.nair@outlook.com",
+            "loan_number": None,
+            "contact_name": "Priya Nair",
+        },
+        {
+            "title": "Weekly team pipeline meeting",
+            "description": "Weekly pipeline review: discuss at-risk loans (SHL-2026-0007), rate lock expirations, and upcoming closings.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 0,
+            "owner_id": manager_id,
+            "lead_email": None,
+            "loan_number": None,
+            "contact_name": None,
+        },
+        {
+            "title": "Send rate comparison to Simone Arceneaux",
+            "description": "Borrower has existing pre-approval from a credit union at 7.1%. Prepare side-by-side rate comparison.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 0,
+            "owner_id": lo_sarah_id,
+            "lead_email": "simone.arceneaux@gmail.com",
+            "loan_number": "SHL-2026-0010",
+            "contact_name": "Simone Arceneaux",
+        },
+        {
+            "title": "Order title search for Roberto Sandoval",
+            "description": "Full app submitted for SHL-2026-0002. Title company needs to be engaged and order placed today.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 0,
+            "owner_id": processor_id,
+            "lead_email": "roberto.sandoval@hotmail.com",
+            "loan_number": "SHL-2026-0002",
+            "contact_name": "Roberto Sandoval",
+        },
+
+        # ---- UPCOMING (10, due 1-7 days from now, status=pending) ----
+        {
+            "title": "Confirm closing docs for Simone Arceneaux",
+            "description": "Closing on SHL-2026-0010 in 2 days. Confirm all closing docs are signed and title is clear.",
+            "priority": "high",
+            "status": "pending",
+            "due_days": 1,
+            "owner_id": lo_sarah_id,
+            "lead_email": "simone.arceneaux@gmail.com",
+            "loan_number": "SHL-2026-0010",
+            "contact_name": "Simone Arceneaux",
+        },
+        {
+            "title": "Priority outreach — Derek Hollis pre-approval",
+            "description": "High AI score (88). Relocating buyer — website lead. Complete pre-approval today before lead goes cold.",
+            "priority": "high",
+            "status": "pending",
+            "due_days": 1,
+            "owner_id": lo_sarah_id,
+            "lead_email": "derek.hollis@yahoo.com",
+            "loan_number": None,
+            "contact_name": "Derek Hollis",
+        },
+        {
+            "title": "Review appraisal for Jasmine Winters",
+            "description": "Appraisal at $323K vs $320K purchase price. File is at-risk (risk score 38). UW review before CTC.",
+            "priority": "high",
+            "status": "pending",
+            "due_days": 2,
+            "owner_id": uw_james_id,
+            "lead_email": "jasmine.winters@yahoo.com",
+            "loan_number": "SHL-2026-0007",
+            "contact_name": "Jasmine Winters",
+        },
+        {
+            "title": "Follow up with Marcus Delacroix — second offer outcome",
+            "description": "Second offer pending on James Island property. Call to find out offer decision and prepare to move fast.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 2,
+            "owner_id": lo_marcus_id,
+            "lead_email": "marcus.delacroix@icloud.com",
+            "loan_number": "SHL-2026-0005",
+            "contact_name": "Marcus Delacroix",
+        },
+        {
+            "title": "Send pre-approval checklist to Brianna Okafor",
+            "description": "Referred lead ready to buy in 60 days. Send income doc checklist and schedule application appointment.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 3,
+            "owner_id": lo_sarah_id,
+            "lead_email": "brianna.okafor@gmail.com",
+            "loan_number": None,
+            "contact_name": "Brianna Okafor",
+        },
+        {
+            "title": "Request spouse pay stubs — Elijah Fontaine",
+            "description": "DTI at edge case. Spouse W-2 and recent pay stubs needed to finalize qualification.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 3,
+            "owner_id": lo_marcus_id,
+            "lead_email": "elijah.fontaine@gmail.com",
+            "loan_number": None,
+            "contact_name": "Elijah Fontaine",
+        },
+        {
+            "title": "Collect 2022 tax transcripts — Tanya Morrison",
+            "description": "Application 80% complete. 2022 tax transcripts needed to push file to processing queue.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 4,
+            "owner_id": processor_id,
+            "lead_email": "tanya.morrison@gmail.com",
+            "loan_number": "SHL-2026-0001",
+            "contact_name": "Tanya Morrison",
+        },
+        {
+            "title": "Monthly check-in — Gregory Tatum (nurture)",
+            "description": "Long-term nurture lead saving for down payment. Monthly contact call to maintain relationship.",
+            "priority": "low",
+            "status": "pending",
+            "due_days": 5,
+            "owner_id": lo_marcus_id,
+            "lead_email": "gregory.tatum@yahoo.com",
+            "loan_number": None,
+            "contact_name": "Gregory Tatum",
+        },
+        {
+            "title": "Pipeline SLA audit — at-risk loans",
+            "description": "Review all loans with risk_score > 25. Identify stalled files and assign corrective actions.",
+            "priority": "medium",
+            "status": "pending",
+            "due_days": 5,
+            "owner_id": manager_id,
+            "lead_email": None,
+            "loan_number": None,
+            "contact_name": None,
+        },
+        {
+            "title": "Send credit improvement guide — Courtney Langford",
+            "description": "Currently renting, lease ends in 9 months. Send credit improvement guide and schedule 90-day review.",
+            "priority": "low",
+            "status": "pending",
+            "due_days": 7,
+            "owner_id": lo_sarah_id,
+            "lead_email": "courtney.langford@gmail.com",
+            "loan_number": None,
+            "contact_name": "Courtney Langford",
+        },
+
+        # ---- COMPLETED (7, completed within last 7 days) ----
+        {
+            "title": "Send FHA program overview to Priya Nair",
+            "description": "Sent FHA overview PDF with min down payment breakdown. Borrower confirmed receipt.",
+            "priority": "medium",
+            "status": "completed",
+            "due_days": -6,
+            "completed_days": 5,
+            "owner_id": lo_marcus_id,
+            "lead_email": "priya.nair@outlook.com",
+            "loan_number": None,
+            "contact_name": "Priya Nair",
+        },
+        {
+            "title": "Lock rate for Vanessa Hartley — SHL-2026-0003",
+            "description": "Rate locked at 6.750% for 45 days. Confirmation sent to borrower and agent.",
+            "priority": "high",
+            "status": "completed",
+            "due_days": -5,
+            "completed_days": 4,
+            "owner_id": lo_sarah_id,
+            "lead_email": "vanessa.hartley@gmail.com",
+            "loan_number": "SHL-2026-0003",
+            "contact_name": "Vanessa Hartley",
+        },
+        {
+            "title": "Order appraisal for Brianna Okafor",
+            "description": "Appraisal ordered through AMC. Estimated turnaround 7-10 business days. AMC confirmation #AP-8847.",
+            "priority": "high",
+            "status": "completed",
+            "due_days": -4,
+            "completed_days": 3,
+            "owner_id": processor_id,
+            "lead_email": "brianna.okafor@gmail.com",
+            "loan_number": "SHL-2026-0008",
+            "contact_name": "Brianna Okafor",
+        },
+        {
+            "title": "Verify employment — Jasmine Winters",
+            "description": "VOE completed via The Work Number. Employer confirmed at $82K/year base. Uploaded to file.",
+            "priority": "medium",
+            "status": "completed",
+            "due_days": -3,
+            "completed_days": 2,
+            "owner_id": processor_id,
+            "lead_email": "jasmine.winters@yahoo.com",
+            "loan_number": "SHL-2026-0007",
+            "contact_name": "Jasmine Winters",
+        },
+        {
+            "title": "Issue CTC — Elijah Fontaine SHL-2026-0009",
+            "description": "All conditions cleared. Clear-to-close issued by underwriting. Closing disclosure sent to borrower.",
+            "priority": "high",
+            "status": "completed",
+            "due_days": -2,
+            "completed_days": 1,
+            "owner_id": uw_james_id,
+            "lead_email": "elijah.fontaine@gmail.com",
+            "loan_number": "SHL-2026-0009",
+            "contact_name": "Elijah Fontaine",
+        },
+        {
+            "title": "Send 6-month rate review to Michelle Osei",
+            "description": "Post-close touchpoint sent. Congratulations follow-up with equity summary and refi market watch.",
+            "priority": "low",
+            "status": "completed",
+            "due_days": -1,
+            "completed_days": 1,
+            "owner_id": lo_sarah_id,
+            "lead_email": "michelle.osei@gmail.com",
+            "loan_number": "SHL-2026-0011",
+            "contact_name": "Michelle Osei",
+        },
+        {
+            "title": "Branch compliance review — Q1 HMDA data",
+            "description": "HMDA data for Q1 2026 reviewed and validated. No reportable anomalies. Submitted to compliance officer.",
+            "priority": "medium",
+            "status": "completed",
+            "due_days": -2,
+            "completed_days": 1,
+            "owner_id": ops_id,
+            "lead_email": None,
+            "loan_number": None,
+            "contact_name": None,
+        },
+    ]
+
+    inserted = 0
+    skipped = 0
+
+    for task in TASKS:
+        # Idempotency: check by title + owner_id
+        owner_id = task["owner_id"]
+        existing = conn.execute(
+            text("""
+                SELECT id FROM tasks
+                WHERE title = :title AND owner_id = :owner_id AND organization_id = :org_id
+                LIMIT 1
+            """),
+            {"title": task["title"], "owner_id": owner_id, "org_id": org_id},
+        ).fetchone()
+        if existing:
+            skipped += 1
+            continue
+
+        lead_id = lid(task.get("lead_email")) if task.get("lead_email") else None
+        loan_id = lnid(task.get("loan_number")) if task.get("loan_number") else None
+
+        due_date = days_from_now(task["due_days"]) if task["due_days"] >= 0 else days_ago(-task["due_days"])
+
+        completed_at = None
+        if task["status"] == "completed":
+            completed_at = days_ago(task.get("completed_days", 1))
+
+        created_at = days_ago(max(1, -task["due_days"] + 2)) if task["due_days"] < 0 else days_ago(7)
+
+        conn.execute(
+            text("""
+                INSERT INTO tasks (
+                    organization_id, title, description, status, priority,
+                    due_date, owner_id, lead_id, loan_id,
+                    related_contact_name, completed_at, created_at
+                ) VALUES (
+                    :org_id, :title, :description, :status, :priority,
+                    :due_date, :owner_id, :lead_id, :loan_id,
+                    :contact_name, :completed_at, :created_at
+                )
+            """),
+            {
+                "org_id": org_id,
+                "title": task["title"],
+                "description": task.get("description"),
+                "status": task["status"],
+                "priority": task["priority"],
+                "due_date": due_date,
+                "owner_id": owner_id,
+                "lead_id": lead_id,
+                "loan_id": loan_id,
+                "contact_name": task.get("contact_name"),
+                "completed_at": completed_at,
+                "created_at": created_at,
+            },
+        )
+        inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {inserted} tasks ({skipped} already existed)")
 
 
 def seed_documents(conn, org_id, user_ids, loan_ids):
     """Create demo document records for loans."""
-    pass
+
+    processor_id = user_ids.get("processor")
+    lo_sarah_id = user_ids.get("lo_sarah")
+    lo_marcus_id = user_ids.get("lo_marcus")
+
+    # Map loan_number → (lead_email, lo_id, stage, days_ago_created, is_purchase)
+    LOAN_META = {
+        "SHL-2026-0001": ("tanya.morrison@gmail.com",  lo_sarah_id,  "APPLICATION",          65,  True),
+        "SHL-2026-0002": ("roberto.sandoval@hotmail.com", lo_marcus_id, "APPLICATION",        75,  True),
+        "SHL-2026-0003": ("vanessa.hartley@gmail.com",  lo_sarah_id,  "PROCESSING",           55,  True),
+        "SHL-2026-0004": ("aisha.coleman@gmail.com",    lo_sarah_id,  "PROCESSING",           82,  True),
+        "SHL-2026-0005": ("marcus.delacroix@icloud.com", lo_marcus_id, "SUBMITTED",           68,  True),
+        "SHL-2026-0006": ("kevin.albright@gmail.com",   lo_marcus_id, "UNDERWRITING",         38,  True),
+        "SHL-2026-0007": ("jasmine.winters@yahoo.com",  lo_sarah_id,  "UNDERWRITING",         45,  True),
+        "SHL-2026-0008": ("brianna.okafor@gmail.com",   lo_sarah_id,  "CONDITIONAL_APPROVAL", 18,  True),
+        "SHL-2026-0009": ("elijah.fontaine@gmail.com",  lo_marcus_id, "CLEAR_TO_CLOSE",       52,  True),
+        "SHL-2026-0010": ("simone.arceneaux@gmail.com", lo_sarah_id,  "CLOSING",              27,  True),
+        "SHL-2026-0011": ("michelle.osei@gmail.com",    lo_sarah_id,  "FUNDED",               102, True),
+        "SHL-2026-0012": ("james.beaumont@icloud.com",  lo_marcus_id, "FUNDED",               160, True),
+        "SHL-2026-0013": ("tyler.barnes@gmail.com",     lo_sarah_id,  "FUNDED",               210, True),
+        "SHL-2026-0014": ("carter.webb@icloud.com",     lo_sarah_id,  "FUNDED",               265, True),
+        "SHL-2026-0015": ("nathan.prescott@hotmail.com", lo_marcus_id, "FUNDED",              330, True),
+    }
+
+    # Stage ordering for deciding which docs to include
+    STAGE_ORDER = [
+        "APPLICATION", "PROCESSING", "SUBMITTED", "UNDERWRITING",
+        "CONDITIONAL_APPROVAL", "CLEAR_TO_CLOSE", "CLOSING", "FUNDED",
+    ]
+
+    def stage_index(stage):
+        try:
+            return STAGE_ORDER.index(stage)
+        except ValueError:
+            return 0
+
+    # Document spec: (doc_type_value, filename_template, notes, min_stage_idx)
+    # min_stage_idx: stage must be >= this index to include this doc
+    DOC_SPECS = [
+        # Always present from APPLICATION onward
+        ("Driver's License",      "{ln}-drivers-license.pdf",      "Government-issued ID — front and back",                         0),
+        ("W2",                    "{ln}-w2-2024.pdf",              "2024 W-2 — primary borrower",                                   0),
+        ("Paystub",               "{ln}-paystub-current.pdf",      "Most recent 30-day pay stubs",                                  0),
+        ("Bank Statement",        "{ln}-bank-stmt-90day.pdf",      "90-day bank statements — checking and savings",                 0),
+        ("Purchase Contract",     "{ln}-purchase-contract.pdf",    "Executed purchase and sale agreement",                          0),
+        # Added during PROCESSING
+        ("Tax Return (1040)",     "{ln}-1040-2023.pdf",            "2023 federal tax return — IRS transcript",                      1),
+        ("Initial Disclosures",   "{ln}-initial-disclosures.pdf",  "TRID initial disclosure package — signed",                     1),
+        ("Loan Estimate",         "{ln}-loan-estimate.pdf",        "TRID Loan Estimate — borrower acknowledged",                   1),
+        # Added after UNDERWRITING submission
+        ("Appraisal",             "{ln}-appraisal-report.pdf",     "Full URAR appraisal report from licensed appraiser",           2),
+        ("Credit Report",         "{ln}-credit-report.pdf",        "Tri-merge credit report — all bureaus",                        2),
+        ("Title Commitment",      "{ln}-title-commitment.pdf",     "Preliminary title commitment — Schedule A & B",                 3),
+        ("Homeowners Insurance",  "{ln}-hoi-binder.pdf",           "Homeowners insurance binder — coverage confirmed",              3),
+        # Closing docs
+        ("Closing Disclosure",    "{ln}-closing-disclosure.pdf",   "TRID Closing Disclosure — borrower signed 3-day waiting period", 5),
+    ]
+
+    inserted = 0
+    skipped = 0
+
+    for loan_number, (lead_email, lo_id, stage, loan_days_ago, is_purchase) in LOAN_META.items():
+        loan_id = loan_ids.get(loan_number)
+        if not loan_id:
+            continue
+
+        # Fetch the lead_id for borrower_id linkage
+        lead_row = conn.execute(
+            text("SELECT id FROM leads WHERE email = :email AND organization_id = :org_id LIMIT 1"),
+            {"email": lead_email, "org_id": org_id},
+        ).fetchone()
+        borrower_id = lead_row[0] if lead_row else None
+
+        s_idx = stage_index(stage)
+        uploader_id = processor_id if processor_id else lo_id
+
+        for (doc_type_val, filename_tmpl, notes, min_stage_idx) in DOC_SPECS:
+            if s_idx < min_stage_idx:
+                continue
+
+            # Skip Purchase Contract for non-purchase (all are purchase here, but guard)
+            if doc_type_val == "Purchase Contract" and not is_purchase:
+                continue
+
+            filename = filename_tmpl.replace("{ln}", loan_number.lower())
+            type_slug = doc_type_val.lower().replace(" ", "-").replace("'", "").replace("(", "").replace(")", "")
+            file_location = f"https://docs.summithomeloans.com/demo/{loan_number}/{type_slug}.pdf"
+
+            # Idempotency: check by loan_id + doc_type
+            existing = conn.execute(
+                text("""
+                    SELECT id FROM documents
+                    WHERE loan_id = :loan_id AND doc_type = :doc_type
+                    LIMIT 1
+                """),
+                {"loan_id": loan_id, "doc_type": doc_type_val},
+            ).fetchone()
+            if existing:
+                skipped += 1
+                continue
+
+            # Realistic upload date: somewhere between loan creation and now
+            # Earlier docs uploaded closer to loan creation; later docs more recent
+            upload_offset = max(1, loan_days_ago - (min_stage_idx * 5) - random.randint(1, 5))
+            uploaded_at = days_ago(upload_offset)
+
+            file_size = random.randint(50000, 5000000)
+
+            conn.execute(
+                text("""
+                    INSERT INTO documents (
+                        organization_id, borrower_id, loan_id,
+                        doc_type, filename, original_filename,
+                        file_location, file_size, mime_type,
+                        source, status, notes,
+                        uploaded_at, uploaded_by_user_id
+                    ) VALUES (
+                        :org_id, :borrower_id, :loan_id,
+                        :doc_type, :filename, :original_filename,
+                        :file_location, :file_size, :mime_type,
+                        :source, :status, :notes,
+                        :uploaded_at, :uploaded_by_user_id
+                    )
+                """),
+                {
+                    "org_id": org_id,
+                    "borrower_id": borrower_id,
+                    "loan_id": loan_id,
+                    "doc_type": doc_type_val,
+                    "filename": filename,
+                    "original_filename": filename,
+                    "file_location": file_location,
+                    "file_size": file_size,
+                    "mime_type": "application/pdf",
+                    "source": "MANUAL_UPLOAD",
+                    "status": "active",
+                    "notes": notes,
+                    "uploaded_at": uploaded_at,
+                    "uploaded_by_user_id": uploader_id,
+                },
+            )
+            inserted += 1
+
+    conn.commit()
+    print(f"✅ Seeded {inserted} documents ({skipped} already existed)")
 
 
 def seed_calendar(conn, org_id, user_ids, lead_ids, loan_ids):
