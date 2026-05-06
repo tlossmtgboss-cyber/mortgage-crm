@@ -3450,13 +3450,42 @@ async def seed_demo_account(request: Request):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
-        import importlib
-        import scripts.seed_demo_account as seed_mod
-        importlib.reload(seed_mod)  # ensure fresh run
-        seed_mod.main()
-        return {"status": "success", "message": "Demo account seeded successfully"}
-    except SystemExit:
-        return JSONResponse(status_code=500, content={"status": "error", "message": "Seed script exited (DATABASE_URL missing?)"})
+        from passlib.context import CryptContext
+        from database import SessionLocal
+        from sqlalchemy import text as _text
+
+        _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        demo_email = "demo@perenniaai.com"
+        demo_pw = os.getenv("DEMO_USER_PASSWORD", "Password1!")
+        hashed = _pwd.hash(demo_pw)
+        db = SessionLocal()
+        try:
+            existing = db.execute(_text("SELECT id, organization_id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
+            if existing:
+                db.execute(_text("UPDATE users SET hashed_password = :h, is_active = TRUE WHERE email = :e"), {"h": hashed, "e": demo_email})
+                db.commit()
+                return {"status": "updated", "message": f"Demo user password updated", "user_id": existing[0], "org_id": existing[1]}
+
+            org_slug = "summit-peak-demo"
+            org_row = db.execute(_text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).fetchone()
+            if not org_row:
+                db.execute(_text(
+                    "INSERT INTO organizations (name, slug, subscription_tier, is_active, created_at) "
+                    "VALUES (:n, :s, 'professional', TRUE, NOW())"
+                ), {"n": "Summit Home Loans", "s": org_slug})
+                db.commit()
+                org_row = db.execute(_text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).fetchone()
+            org_id = org_row[0]
+
+            db.execute(_text(
+                "INSERT INTO users (email, hashed_password, full_name, role, permission_role, organization_id, is_active, created_at) "
+                "VALUES (:e, :h, :n, 'loan_officer', 'sales', :oid, TRUE, NOW())"
+            ), {"e": demo_email, "h": hashed, "n": "Demo User", "oid": org_id})
+            db.commit()
+            uid = db.execute(_text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).scalar()
+            return {"status": "created", "message": "Demo account created", "user_id": uid, "org_id": org_id}
+        finally:
+            db.close()
     except Exception as e:
         logger.exception("Demo seed failed")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
