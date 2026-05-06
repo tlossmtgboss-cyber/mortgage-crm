@@ -876,7 +876,7 @@ def seed_leads(conn, org_id, user_ids):
                     organization_id, owner_id, name, first_name, last_name,
                     email, phone, stage, source,
                     credit_score, annual_income, loan_amount, property_value, down_payment,
-                    loan_type, loan_purpose, loan_to_value, debt_to_income,
+                    loan_type, loan_purpose, ltv, dti,
                     property_type, address, city, state, zip_code,
                     ai_score, notes, sentiment, next_action,
                     created_at, lead_received_date, stage_changed_at,
