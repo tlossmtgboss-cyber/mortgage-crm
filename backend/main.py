@@ -3437,14 +3437,10 @@ except Exception as _cf_err:
 async def seed_demo_account(request: Request):
     """One-time endpoint to create App Store review demo account. Protected by SECRET_KEY."""
     import secrets as _secrets_mod
-    _env_name = os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower()
-    if _env_name == "production":
-        raise HTTPException(status_code=404, detail="Not found")
 
     body = await request.json()
     auth = (body.get("key", "") or "").strip()
     expected = SECRET_KEY.strip()
-    # Constant-time comparison to prevent timing attacks
     if not auth or not _secrets_mod.compare_digest(auth, expected):
         raise HTTPException(status_code=403, detail="Forbidden")
 
