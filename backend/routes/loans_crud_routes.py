@@ -1072,15 +1072,19 @@ async def update_loan(
 
                 # =============================================================
                 # ECOA Adverse Action Trigger (Finding SEC-ECOA-001)
-                # When a loan transitions to DENIED, auto-flag for adverse
-                # action notice per Regulation B (12 CFR 1002.9).
+                # When a loan transitions to a denial stage, auto-generate
+                # an adverse action notice per Regulation B (12 CFR 1002.9).
                 # The 30-day notice clock starts on the denial date.
+                # Covers: DENIED, DOES_NOT_QUALIFY
                 # =============================================================
-                if new_stage.upper() == "DENIED":
+                _ADVERSE_ACTION_STAGES = ("DENIED", "DOES_NOT_QUALIFY")
+                if new_stage.upper() in _ADVERSE_ACTION_STAGES:
                     try:
-                        _trigger_ecoa_adverse_action(
+                        from services.adverse_action_service import generate_adverse_action_notice
+                        generate_adverse_action_notice(
                             db=db,
                             loan=loan,
+                            denial_reason_codes=None,  # Will default to ["other"]; caller can enrich later
                             user_id=getattr(current_user, "id", None),
                             organization_id=getattr(loan, "organization_id", None),
                         )

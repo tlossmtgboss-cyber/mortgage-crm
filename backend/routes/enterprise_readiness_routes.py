@@ -109,6 +109,22 @@ def register_enterprise_readiness_routes(app, get_db, get_current_user):
             raise HTTPException(status_code=400, detail="Organization context required")
         return compute_onboarding_checklist(db, org_id)
 
+    @app.get("/api/v1/onboarding/verify", tags=["Onboarding"])
+    async def verify_onboarding(request: Request, db=Depends(get_db), user=Depends(get_current_user)):
+        """Verify onboarding readiness: SSO, admin MFA, users provisioned, integrations, branding.
+
+        Returns a structured report of all required onboarding steps and their
+        completion status.  The 'ready_for_production' flag is True when all
+        required steps are complete.
+
+        Enterprise Readiness Domain 5, Check 5.13.
+        """
+        from services.onboarding_checklist_service import verify_onboarding_readiness
+        org_id = getattr(request.state, "organization_id", None) or getattr(user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="Organization context required")
+        return verify_onboarding_readiness(db, org_id)
+
     @app.get("/api/v1/onboarding/training-materials", tags=["Onboarding"])
     async def get_training(user=Depends(get_current_user)):
         """Get role-specific training materials."""

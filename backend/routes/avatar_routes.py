@@ -202,7 +202,8 @@ async def get_upload_url(
         avatar_id=avatar_id,
         user_id=current_user["id"],
         file_name=file_name,
-        content_type=content_type
+        content_type=content_type,
+        organization_id=current_user.get("organization_id"),
     )
     if not result:
         raise HTTPException(status_code=404, detail="Avatar not found")

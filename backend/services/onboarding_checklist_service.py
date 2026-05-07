@@ -142,6 +142,23 @@ CHECKLIST_ITEMS = [
         "required": True,
         "check_fn": "_check_sla_targets",
     },
+    # Category: Provisioning (Domain 5 enterprise readiness)
+    {
+        "id": "scim_or_manual_provisioning",
+        "category": "Provisioning",
+        "title": "User provisioning method configured",
+        "description": "SCIM 2.0 or CSV bulk import has been used, or manual invites sent",
+        "required": False,
+        "check_fn": "_check_provisioning_method",
+    },
+    {
+        "id": "mfa_enforced",
+        "category": "Provisioning",
+        "title": "MFA enforced for organization",
+        "description": "Organization-level MFA requirement enabled, or all admins have MFA",
+        "required": False,
+        "check_fn": "_check_mfa_enforced",
+    },
 ]
 
 
@@ -247,15 +264,29 @@ def _check_branding(db, org_id: int) -> Dict:
 
 def _check_admin_user(db, org_id: int) -> Dict:
     from sqlalchemy import text
+    # Check for admin users with MFA enabled (enterprise requirement)
     row = db.execute(text("""
-        SELECT COUNT(*)
+        SELECT
+            COUNT(*) FILTER (
+                WHERE permission_role IN ('admin', 'site_admin') AND is_active = true
+            ) as admin_count,
+            COUNT(*) FILTER (
+                WHERE permission_role IN ('admin', 'site_admin') AND is_active = true AND mfa_enabled = true
+            ) as admin_mfa_count
         FROM users
         WHERE organization_id = :org_id
-            AND permission_role IN ('admin', 'site_admin')
-            AND is_active = true
     """), {"org_id": org_id}).fetchone()
-    count = row[0] if row else 0
-    return {"passed": count > 0, "detail": f"{count} admin user(s) found"}
+    admin_count = row[0] if row else 0
+    admin_mfa_count = row[1] if row else 0
+    has_admin_with_mfa = admin_mfa_count > 0
+    return {
+        "passed": has_admin_with_mfa,
+        "detail": (
+            f"{admin_count} admin(s), {admin_mfa_count} with MFA"
+            if admin_count > 0
+            else "No admin users found"
+        ),
+    }
 
 
 def _check_users_created(db, org_id: int) -> Dict:
@@ -396,6 +427,200 @@ def _check_sla_targets(db, org_id: int) -> Dict:
     """), {"org_id": org_id}).fetchone()
     count = row[0] if row else 0
     return {"passed": count > 0, "detail": f"{count} SLA configurations"}
+
+
+def _check_provisioning_method(db, org_id: int) -> Dict:
+    """Check if any user provisioning has been done (SCIM, CSV, or manual invites)."""
+    from sqlalchemy import text
+
+    # Check for SCIM-provisioned users
+    scim_row = db.execute(text("""
+        SELECT COUNT(*)
+        FROM users
+        WHERE organization_id = :org_id
+            AND sso_provider = 'scim'
+    """), {"org_id": org_id}).fetchone()
+    scim_count = scim_row[0] if scim_row else 0
+
+    # Check for pending/accepted invites
+    invite_count = 0
+    try:
+        invite_row = db.execute(text("""
+            SELECT COUNT(*)
+            FROM employee_invites
+            WHERE organization_id = :org_id
+        """), {"org_id": org_id}).fetchone()
+        invite_count = invite_row[0] if invite_row else 0
+    except Exception:
+        pass  # Table may not exist
+
+    # Check total active users beyond the initial admin
+    user_row = db.execute(text("""
+        SELECT COUNT(*)
+        FROM users
+        WHERE organization_id = :org_id AND is_active = true
+    """), {"org_id": org_id}).fetchone()
+    user_count = user_row[0] if user_row else 0
+
+    methods = []
+    if scim_count > 0:
+        methods.append(f"SCIM ({scim_count} users)")
+    if invite_count > 0:
+        methods.append(f"Invites ({invite_count})")
+    if user_count > 1 and not methods:
+        methods.append(f"Manual ({user_count} users)")
+
+    passed = user_count >= 2  # At least admin + 1 more user
+    return {
+        "passed": passed,
+        "detail": ", ".join(methods) if methods else "No provisioning detected",
+    }
+
+
+def _check_mfa_enforced(db, org_id: int) -> Dict:
+    """Check if MFA is enforced org-wide or all admins have MFA."""
+    from sqlalchemy import text
+
+    # Check org-level MFA requirement
+    org_row = db.execute(text("""
+        SELECT mfa_required
+        FROM organizations
+        WHERE id = :org_id
+    """), {"org_id": org_id}).fetchone()
+    org_requires_mfa = bool(org_row[0]) if org_row else False
+
+    if org_requires_mfa:
+        return {"passed": True, "detail": "Organization-level MFA requirement enabled"}
+
+    # Fall back: check if all admins have MFA enabled
+    admin_row = db.execute(text("""
+        SELECT
+            COUNT(*) as total_admins,
+            COUNT(*) FILTER (WHERE mfa_enabled = true) as mfa_admins
+        FROM users
+        WHERE organization_id = :org_id
+            AND permission_role IN ('admin', 'site_admin')
+            AND is_active = true
+    """), {"org_id": org_id}).fetchone()
+    total_admins = admin_row[0] if admin_row else 0
+    mfa_admins = admin_row[1] if admin_row else 0
+
+    if total_admins > 0 and total_admins == mfa_admins:
+        return {"passed": True, "detail": f"All {total_admins} admin(s) have MFA enabled"}
+
+    return {
+        "passed": False,
+        "detail": (
+            f"{mfa_admins}/{total_admins} admins have MFA; "
+            "enable org-level MFA requirement or enroll all admins"
+        ),
+    }
+
+
+# =============================================================================
+# ONBOARDING VERIFICATION (Domain 5, Check 5.13 — comprehensive)
+# =============================================================================
+
+def verify_onboarding_readiness(db, org_id: int) -> Dict:
+    """
+    Comprehensive onboarding readiness verification for an organization.
+
+    Returns a structured report covering all required onboarding steps:
+    - SSO configured
+    - Admin user designated with MFA
+    - Users provisioned
+    - Integrations connected
+    - Branding configured
+
+    This is the backing function for the /api/v1/onboarding/verify endpoint.
+    """
+    from sqlalchemy import text
+
+    steps = {}
+
+    # 1. SSO Configuration
+    sso_result = _check_sso_configured(db, org_id)
+    steps["sso_configured"] = {
+        "title": "SSO / SAML configured",
+        "status": "complete" if sso_result["passed"] else "incomplete",
+        "required": False,
+        "detail": sso_result["detail"],
+    }
+
+    # 2. Admin user with MFA
+    admin_result = _check_admin_user(db, org_id)
+    steps["admin_with_mfa"] = {
+        "title": "Admin user designated with MFA enabled",
+        "status": "complete" if admin_result["passed"] else "incomplete",
+        "required": True,
+        "detail": admin_result["detail"],
+    }
+
+    # 3. Users provisioned
+    prov_result = _check_provisioning_method(db, org_id)
+    steps["users_provisioned"] = {
+        "title": "Team members provisioned (SCIM, CSV, or invites)",
+        "status": "complete" if prov_result["passed"] else "incomplete",
+        "required": True,
+        "detail": prov_result["detail"],
+    }
+
+    # 4. Integrations connected
+    email_result = _check_email_integration(db, org_id)
+    crm_result = _check_crm_integration(db, org_id)
+    telephony_result = _check_telephony(db, org_id)
+    integrations_connected = email_result["passed"]  # Email is required
+    steps["integrations_connected"] = {
+        "title": "Core integrations connected",
+        "status": "complete" if integrations_connected else "incomplete",
+        "required": True,
+        "detail": f"Email: {email_result['detail']}, CRM: {crm_result['detail']}, Telephony: {telephony_result['detail']}",
+        "sub_checks": {
+            "email": {"passed": email_result["passed"], "detail": email_result["detail"]},
+            "crm": {"passed": crm_result["passed"], "detail": crm_result["detail"]},
+            "telephony": {"passed": telephony_result["passed"], "detail": telephony_result["detail"]},
+        },
+    }
+
+    # 5. Branding configured
+    branding_result = _check_branding(db, org_id)
+    steps["branding_configured"] = {
+        "title": "Brand configuration set (logo, colors)",
+        "status": "complete" if branding_result["passed"] else "incomplete",
+        "required": False,
+        "detail": branding_result["detail"],
+    }
+
+    # 6. MFA enforcement
+    mfa_result = _check_mfa_enforced(db, org_id)
+    steps["mfa_enforced"] = {
+        "title": "MFA enforced for organization",
+        "status": "complete" if mfa_result["passed"] else "incomplete",
+        "required": False,
+        "detail": mfa_result["detail"],
+    }
+
+    # Compute summary
+    required_steps = {k: v for k, v in steps.items() if v["required"]}
+    required_complete = sum(1 for v in required_steps.values() if v["status"] == "complete")
+    total_complete = sum(1 for v in steps.values() if v["status"] == "complete")
+
+    all_required_met = required_complete == len(required_steps)
+
+    return {
+        "organization_id": org_id,
+        "ready_for_production": all_required_met,
+        "total_steps": len(steps),
+        "completed_steps": total_complete,
+        "required_steps": len(required_steps),
+        "required_completed": required_complete,
+        "completion_percentage": round((total_complete / len(steps)) * 100, 1) if steps else 0,
+        "blocking_items": [
+            v["title"] for v in required_steps.values() if v["status"] == "incomplete"
+        ],
+        "steps": steps,
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # =============================================================================

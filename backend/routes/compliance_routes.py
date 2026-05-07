@@ -18,6 +18,8 @@ Enterprise Readiness:
 
 Endpoints:
     GET  /api/v1/compliance/fair-lending/report    - Fair lending analysis report
+    GET  /api/v1/compliance/fair-lending/disparity-check - Statistical disparity detection
+    GET  /api/v1/compliance/fair-lending/denial-rates - Denial rates by demographic dimension
     GET  /api/v1/compliance/licenses/{user_id}     - LO license summary
     POST /api/v1/compliance/licenses/check         - Check LO license for state
     POST /api/v1/compliance/licenses/validate-assignment - Validate loan assignment
@@ -33,6 +35,9 @@ Endpoints:
     POST /api/v1/compliance/ecoa/adverse-action      - Create adverse action notice (audited)
     PUT  /api/v1/compliance/ecoa/adverse-action/{notice_id} - Update adverse action notice (audited)
     GET  /api/v1/compliance/ecoa/adverse-action/{notice_id}/audit-trail - Get audit trail
+    GET  /api/v1/compliance/ecoa/reason-codes       - Standard ECOA reason codes
+    GET  /api/v1/compliance/ecoa/overdue-notices    - Overdue adverse action notices
+    GET  /api/v1/admin/audit/verify-integrity       - Verify audit log hash chain integrity
 
 Registration pattern: function-based
 """
@@ -1232,6 +1237,184 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
             "audit_trail": entries,
             "total_changes": len(entries),
         }
+
+    # -----------------------------------------------------------------
+    # ECOA Adverse Action Service Endpoints (Domain 2.7-2.8 Enhancement)
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/compliance/ecoa/reason-codes",
+        tags=["Compliance"],
+    )
+    async def get_ecoa_reason_codes_endpoint(
+        current_user=Depends(get_current_user),
+    ):
+        """Return standard ECOA/Regulation B adverse action reason codes.
+
+        Provides the full list of reason codes available for adverse
+        action notices, with descriptions and regulation references.
+        """
+        from services.adverse_action_service import get_ecoa_reason_codes
+        return {
+            "reason_codes": get_ecoa_reason_codes(),
+            "regulation": "Regulation B (12 CFR 1002.9)",
+            "max_reasons_per_notice": 4,
+            "note": "At least one specific reason must be provided. Maximum of 4 reasons per notice.",
+        }
+
+    @app.get(
+        "/api/v1/compliance/ecoa/overdue-notices",
+        tags=["Compliance"],
+    )
+    async def get_overdue_adverse_action_notices(
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Check for adverse action notices past their 30-day deadline.
+
+        Regulation B requires notice within 30 days of the credit
+        decision. Returns any notices that are overdue or were sent late.
+
+        Requires admin, leadership, or management role.
+        """
+        _require_compliance_access(current_user)
+        org_id = getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="User has no organization")
+
+        from services.adverse_action_service import check_overdue_notices
+        return check_overdue_notices(db, org_id)
+
+    # -----------------------------------------------------------------
+    # Fair Lending Disparity Check (ECOA Bias Monitoring)
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/compliance/fair-lending/disparity-check",
+        tags=["Compliance"],
+    )
+    async def check_fair_lending_disparity(
+        period_days: int = Query(90, ge=7, le=365),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Check for statistical disparities in lending decisions.
+
+        Compares denial rates between groups across available dimensions
+        (loan type, property state, loan purpose, and demographics if
+        available from BorrowerApplication).
+
+        Flags potential disparate impact when:
+        - Any group's denial rate exceeds 2x the lowest group's rate
+        - Any group's approval rate falls below 80% of the highest
+          group's rate (four-fifths rule)
+
+        Requires admin, leadership, or management role.
+        """
+        _require_compliance_access(current_user)
+        org_id = getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="User has no organization")
+
+        from services.fair_lending_service import check_statistical_disparity
+        return check_statistical_disparity(db, org_id, period_days=period_days)
+
+    @app.get(
+        "/api/v1/compliance/fair-lending/denial-rates",
+        tags=["Compliance"],
+    )
+    async def get_denial_rates_by_demographic(
+        period_days: int = Query(90, ge=7, le=365),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Get denial rates broken down by demographic dimensions.
+
+        Returns denial and approval rates grouped by loan type, property
+        state, loan purpose, and applicant demographics (if available).
+
+        Requires admin, leadership, or management role.
+        """
+        _require_compliance_access(current_user)
+        org_id = getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="User has no organization")
+
+        from services.fair_lending_service import calculate_denial_rates_by_demographic
+        return calculate_denial_rates_by_demographic(db, org_id, period_days=period_days)
+
+    # -----------------------------------------------------------------
+    # Audit Chain Integrity Verification (SOC 2 Type II)
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/admin/audit/verify-integrity",
+        tags=["Admin", "Compliance"],
+    )
+    async def verify_audit_integrity(
+        limit: int = Query(1000, ge=100, le=50000),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Verify the integrity of the audit log hash chain.
+
+        Walks the SHA-256 hash chain in the audit_logs table and verifies:
+        1. Each record's previous_hash matches the prior record's record_hash
+        2. Each record's record_hash matches the recomputed hash of its data
+        3. No gaps exist in the sequence_number progression
+
+        A broken chain indicates potential tampering or data corruption.
+
+        Scoped to the current user's organization. Platform admins can
+        verify the global chain by passing org_id=0.
+
+        Requires admin or site_admin role.
+        """
+        role = getattr(current_user, "permission_role", "sales")
+        if role not in ("admin", "site_admin"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Audit integrity verification requires admin or site_admin role",
+            )
+
+        org_id = getattr(current_user, "organization_id", None)
+
+        from services.audit_service import verify_audit_chain
+
+        result = verify_audit_chain(
+            db=db,
+            limit=limit,
+            organization_id=org_id,
+        )
+
+        result["organization_id"] = org_id
+        result["verified_at"] = datetime.now(timezone.utc).isoformat()
+        result["verified_by"] = getattr(current_user, "id", None)
+
+        # Log the verification attempt itself
+        try:
+            from services.audit_service import create_audit_entry
+            create_audit_entry(
+                db=db,
+                user_id=getattr(current_user, "id", 0),
+                changed_by_id=getattr(current_user, "id", 0),
+                change_type="compliance",
+                entity_type="audit_chain",
+                entity_id=None,
+                before_state=None,
+                after_state={
+                    "verified": result["verified"],
+                    "count": result["count"],
+                    "broken_links": len(result.get("broken_links", [])),
+                },
+                reason="Audit hash chain integrity verification",
+                organization_id=org_id,
+            )
+            db.commit()
+        except Exception as audit_err:
+            logger.warning(f"Could not log audit verification event: {audit_err}")
+
+        return result
 
     # -----------------------------------------------------------------
     # GDPR Data Export (COMP-003: Article 20 — Right to Data Portability)

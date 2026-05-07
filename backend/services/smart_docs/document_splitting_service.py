@@ -1472,7 +1472,7 @@ Return ONLY the JSON array, no other text.""",
             else f"p{segment.pages[0]}-{segment.pages[-1]}"
         )
         new_filename = f"{base_name}_{page_label}_{split_uuid}.pdf"
-        storage_key = f"smart-docs/splits/{org_id}/{source_doc['loan_id']}/{new_filename}"
+        storage_key = f"org-{org_id}/smart-docs/splits/{source_doc['loan_id']}/{new_filename}"
 
         # Upload to S3
         if self.s3_service and self.s3_service._s3_available:
@@ -1598,7 +1598,7 @@ Return ONLY the JSON array, no other text.""",
         merge_uuid = uuid.uuid4().hex[:12]
         if not target_name.endswith(".pdf"):
             target_name = f"{target_name}.pdf"
-        storage_key = f"smart-docs/merged/{org_id}/{resolved_loan_id}/{merge_uuid}_{target_name}"
+        storage_key = f"org-{org_id}/smart-docs/merged/{resolved_loan_id}/{merge_uuid}_{target_name}"
 
         # Upload
         if self.s3_service and self.s3_service._s3_available:

@@ -31,6 +31,17 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Retry Configuration
+# =============================================================================
+
+MAX_RETRY_COUNT: int = 3
+"""Maximum number of delivery retries before marking a schedule as failed."""
+
+RETRY_DELAY_MINUTES: list = [15, 60, 240]
+"""Backoff schedule: 15 min, 1 hour, 4 hours."""
+
+
+# =============================================================================
 # Public API
 # =============================================================================
 
@@ -59,6 +70,7 @@ def check_and_run_due_reports(db: Session) -> Dict[str, Any]:
     delivered = 0
     failed = 0
     skipped = 0
+    retried = 0
     details: List[Dict[str, Any]] = []
 
     for schedule in schedules:
@@ -67,7 +79,8 @@ def check_and_run_due_reports(db: Session) -> Dict[str, Any]:
             continue
 
         try:
-            result = _execute_schedule(db, schedule)
+            _execute_schedule(db, schedule)
+            _clear_retry_state(db, schedule["id"])
             delivered += 1
             details.append({
                 "schedule_id": schedule["id"],
@@ -84,6 +97,7 @@ def check_and_run_due_reports(db: Session) -> Dict[str, Any]:
             )
         except Exception as e:
             failed += 1
+            _record_failure(db, schedule["id"], str(e))
             details.append({
                 "schedule_id": schedule["id"],
                 "report_type": schedule["report_type"],
@@ -92,17 +106,47 @@ def check_and_run_due_reports(db: Session) -> Dict[str, Any]:
             })
             logger.error("Failed to deliver scheduled report %d: %s", schedule["id"], e)
 
+    # Process retry candidates (schedules that previously failed and are due for retry)
+    retry_candidates = _fetch_retry_candidates(db)
+    for schedule in retry_candidates:
+        try:
+            _execute_schedule(db, schedule)
+            _clear_retry_state(db, schedule["id"])
+            retried += 1
+            delivered += 1
+            details.append({
+                "schedule_id": schedule["id"],
+                "report_type": schedule["report_type"],
+                "status": "retried",
+                "recipients_count": len(schedule["recipients"]),
+            })
+            logger.info(
+                "Retry succeeded for scheduled report %d: %s",
+                schedule["id"],
+                schedule["report_type"],
+            )
+        except Exception as e:
+            _record_failure(db, schedule["id"], str(e))
+            details.append({
+                "schedule_id": schedule["id"],
+                "report_type": schedule["report_type"],
+                "status": "retry_failed",
+                "error": str(e),
+            })
+            logger.error("Retry failed for scheduled report %d: %s", schedule["id"], e)
+
     summary = {
         "delivered": delivered,
         "failed": failed,
         "skipped": skipped,
+        "retried": retried,
         "checked": len(schedules),
         "run_at": now.isoformat(),
         "details": details,
     }
     logger.info(
-        "Scheduled report sweep complete: %d delivered, %d failed, %d skipped out of %d active",
-        delivered, failed, skipped, len(schedules),
+        "Scheduled report sweep complete: %d delivered, %d failed, %d skipped, %d retried out of %d active",
+        delivered, failed, skipped, retried, len(schedules),
     )
     return summary
 
@@ -187,6 +231,80 @@ def get_due_reports(db: Session) -> List[Dict[str, Any]]:
             due.append(schedule)
 
     return due
+
+
+def get_execution_stats(db: Session) -> Dict[str, Any]:
+    """
+    Return execution monitoring statistics for scheduled reports.
+
+    Provides:
+      - total_scheduled: count of all active schedules
+      - due_now: count of schedules currently due
+      - failed: count of schedules with retry_count > 0
+      - avg_generation_ms: average last_generation_ms across all active schedules
+      - success_rate: percentage of active schedules with status='active' (no failures)
+      - overdue_reports: list of schedules that are due but have not been sent
+
+    Args:
+        db: SQLAlchemy session.
+
+    Returns:
+        Dict with the stats described above.
+    """
+    now = datetime.now(timezone.utc)
+
+    # Total active scheduled reports
+    total_row = db.execute(sa_text("""
+        SELECT COUNT(*) FROM scheduled_reports WHERE is_active = true
+    """)).fetchone()
+    total_scheduled = total_row[0] if total_row else 0
+
+    # Failed (retry_count > 0)
+    failed_row = db.execute(sa_text("""
+        SELECT COUNT(*) FROM scheduled_reports
+        WHERE is_active = true AND retry_count > 0
+    """)).fetchone()
+    failed_count = failed_row[0] if failed_row else 0
+
+    # Average generation time
+    avg_row = db.execute(sa_text("""
+        SELECT AVG(last_generation_ms) FROM scheduled_reports
+        WHERE is_active = true AND last_generation_ms IS NOT NULL
+    """)).fetchone()
+    avg_generation_ms = round(float(avg_row[0]), 1) if avg_row and avg_row[0] is not None else None
+
+    # Success rate: schedules with status='active' (never failed or cleared) / total
+    success_row = db.execute(sa_text("""
+        SELECT COUNT(*) FROM scheduled_reports
+        WHERE is_active = true AND status = 'active'
+    """)).fetchone()
+    success_count = success_row[0] if success_row else 0
+    success_rate = round((success_count / total_scheduled) * 100, 1) if total_scheduled > 0 else 100.0
+
+    # Due now (use the existing logic)
+    all_due = get_due_reports(db)
+
+    # Overdue: reports that are due but last_sent_at is stale
+    overdue_reports = []
+    for r in all_due:
+        overdue_reports.append({
+            "id": r["id"],
+            "organization_id": r["organization_id"],
+            "report_type": r["report_type"],
+            "frequency": r["frequency"],
+            "title": r.get("title"),
+            "due_reason": r.get("due_reason", ""),
+        })
+
+    return {
+        "total_scheduled": total_scheduled,
+        "due_now": len(all_due),
+        "failed": failed_count,
+        "avg_generation_ms": avg_generation_ms,
+        "success_rate": success_rate,
+        "overdue_reports": overdue_reports,
+        "checked_at": now.isoformat(),
+    }
 
 
 # =============================================================================
@@ -277,10 +395,15 @@ def _due_reason(schedule: Dict[str, Any], now: datetime) -> str:
 
 def _execute_schedule(db: Session, schedule: Dict[str, Any]) -> None:
     """
-    Generate the report and send it, then update last_sent_at.
+    Generate the report and send it, then update last_sent_at and
+    last_generation_ms.
 
     Raises on failure so the caller can log/report the error.
     """
+    import time
+
+    start_ms = time.monotonic()
+
     org_id = schedule["organization_id"]
     report_type = schedule["report_type"]
     export_format = schedule["export_format"]
@@ -299,7 +422,7 @@ def _execute_schedule(db: Session, schedule: Dict[str, Any]) -> None:
 
     report_title = title or f"{report_type.replace('_', ' ').title()} Report"
 
-    # Send email (stub — logs delivery, delegates to real transport if available)
+    # Send email via real transport (Graph/SMTP/SendGrid) with stub fallback
     _send_report_email(
         recipients=recipients,
         report_data=file_bytes,
@@ -308,12 +431,16 @@ def _execute_schedule(db: Session, schedule: Dict[str, Any]) -> None:
         filename=filename,
     )
 
-    # Update last_sent_at
+    elapsed_ms = int((time.monotonic() - start_ms) * 1000)
+
+    # Update last_sent_at and generation time
     db.execute(sa_text("""
         UPDATE scheduled_reports
-        SET last_sent_at = NOW(), updated_at = NOW()
+        SET last_sent_at = NOW(),
+            last_generation_ms = :gen_ms,
+            updated_at = NOW()
         WHERE id = :id
-    """), {"id": schedule["id"]})
+    """), {"id": schedule["id"], "gen_ms": elapsed_ms})
     db.commit()
 
 
@@ -398,7 +525,124 @@ def _export_report(
 
 
 # =============================================================================
-# Email Delivery (stub with fallback to real transport)
+# Retry Logic
+# =============================================================================
+
+
+def _record_failure(db: Session, schedule_id: int, error_message: str) -> None:
+    """
+    Record a delivery failure for a scheduled report.
+
+    Increments retry_count, computes next_retry_at using the backoff schedule,
+    and sets status to 'retrying' or 'failed' if max retries exceeded.
+    Truncates error_message to 2000 characters.
+
+    Args:
+        db: SQLAlchemy session.
+        schedule_id: The scheduled report ID.
+        error_message: Description of the failure.
+    """
+    # Truncate error message
+    if len(error_message) > 2000:
+        error_message = error_message[:2000]
+
+    # Get current retry_count
+    row = db.execute(sa_text("""
+        SELECT retry_count FROM scheduled_reports WHERE id = :id
+    """), {"id": schedule_id}).fetchone()
+
+    current_count = row[0] if row else 0
+    new_count = current_count + 1
+
+    if new_count >= MAX_RETRY_COUNT:
+        # Max retries exceeded — mark as failed
+        db.execute(sa_text("""
+            UPDATE scheduled_reports
+            SET retry_count = :retry_count,
+                last_error = :error,
+                status = 'failed',
+                next_retry_at = NULL,
+                updated_at = NOW()
+            WHERE id = :id
+        """), {"id": schedule_id, "retry_count": new_count, "error": error_message})
+    else:
+        # Schedule next retry using backoff
+        delay_idx = min(new_count - 1, len(RETRY_DELAY_MINUTES) - 1)
+        delay = RETRY_DELAY_MINUTES[delay_idx]
+        next_retry = datetime.now(timezone.utc) + timedelta(minutes=delay)
+
+        db.execute(sa_text("""
+            UPDATE scheduled_reports
+            SET retry_count = :retry_count,
+                last_error = :error,
+                status = 'retrying',
+                next_retry_at = :next_retry,
+                updated_at = NOW()
+            WHERE id = :id
+        """), {
+            "id": schedule_id,
+            "retry_count": new_count,
+            "error": error_message,
+            "next_retry": next_retry,
+        })
+
+    db.commit()
+
+
+def _clear_retry_state(db: Session, schedule_id: int) -> None:
+    """
+    Reset retry state after a successful delivery.
+
+    Clears retry_count, next_retry_at, last_error, and resets status to 'active'.
+
+    Args:
+        db: SQLAlchemy session.
+        schedule_id: The scheduled report ID.
+    """
+    db.execute(sa_text("""
+        UPDATE scheduled_reports
+        SET retry_count = 0,
+            next_retry_at = NULL,
+            last_error = NULL,
+            status = 'active',
+            updated_at = NOW()
+        WHERE id = :id
+    """), {"id": schedule_id})
+    db.commit()
+
+
+def _fetch_retry_candidates(db: Session) -> List[Dict[str, Any]]:
+    """
+    Find scheduled reports that are eligible for retry.
+
+    A schedule is a retry candidate when:
+      - status = 'retrying'
+      - retry_count < MAX_RETRY_COUNT
+      - next_retry_at <= now (the backoff delay has elapsed)
+
+    Args:
+        db: SQLAlchemy session.
+
+    Returns:
+        List of schedule dicts ready for retry.
+    """
+    now = datetime.now(timezone.utc)
+    rows = db.execute(sa_text("""
+        SELECT id, organization_id, created_by_id, report_type, export_format,
+               frequency, recipients, title, day_of_week, day_of_month,
+               hour_utc, is_active, last_sent_at
+        FROM scheduled_reports
+        WHERE status = 'retrying'
+            AND retry_count < :max_retry
+            AND next_retry_at <= :now
+        ORDER BY next_retry_at ASC
+    """), {"max_retry": MAX_RETRY_COUNT, "now": now}).fetchall()
+
+    return [_row_to_dict(row) for row in rows]
+
+
+# =============================================================================
+# Email Delivery (with fallback to stub logging)
 # =============================================================================
 
 
@@ -412,10 +656,12 @@ def _send_report_email(
     """
     Send a generated report to the specified recipients.
 
-    This is a stub that logs the delivery attempt. If the real email
-    infrastructure is available (Microsoft Graph token or SMTP config),
-    it delegates to the existing _send_report_email in report_tasks.py.
-    Otherwise it logs what would have been sent.
+    Delivery strategy (tried in order):
+      1. tasks/report_tasks._send_report_email — supports Microsoft Graph
+         and SMTP with attachments (the canonical email sender for reports).
+      2. email_service.EmailService.send_html_email — SendGrid primary
+         with SMTP fallback; supports attachments via dict-based API.
+      3. Stub: logs what would have been sent.
 
     Args:
         recipients: List of email addresses.
@@ -436,38 +682,73 @@ def _send_report_email(
     content_type = content_type_map.get(format, "application/octet-stream")
     file_size_kb = len(report_data) / 1024
 
-    # Try to use the real email transport from report_tasks
+    subject = f"Perennia AI — {report_name} ({datetime.now(timezone.utc).strftime('%B %d, %Y')})"
+    body = (
+        f"Your scheduled {report_name} is attached.\n\n"
+        f"Format: {format.upper()}\n"
+        f"Generated: {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}\n\n"
+        f"This is an automated report from Perennia AI."
+    )
+    attachment_name = filename or f"report.{format}"
+
+    # Strategy 1: report_tasks._send_report_email (Graph + SMTP with attachments)
     try:
-        import os
-        has_graph = bool(os.getenv("MS_GRAPH_ACCESS_TOKEN") or os.getenv("MICROSOFT_GRAPH_TOKEN"))
-        has_smtp = bool(os.getenv("SMTP_USER"))
-
-        if has_graph or has_smtp:
-            from tasks.report_tasks import _send_report_email as real_send
-            subject = f"Perennia AI — {report_name} ({datetime.now(timezone.utc).strftime('%B %d, %Y')})"
-            body = (
-                f"Your scheduled {report_name} is attached.\n\n"
-                f"Format: {format.upper()}\n"
-                f"Generated: {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}\n\n"
-                f"This is an automated report from Perennia AI."
-            )
-            real_send(
-                recipients=recipients,
-                subject=subject,
-                body=body,
-                attachment_bytes=report_data,
-                attachment_name=filename or f"report.{format}",
-                content_type=content_type,
-            )
-            logger.info(
-                "Report '%s' (%.1f KB %s) emailed to %d recipients via transport",
-                report_name, file_size_kb, format, len(recipients),
-            )
-            return
+        from tasks.report_tasks import _send_report_email as real_send
+        real_send(
+            recipients=recipients,
+            subject=subject,
+            body=body,
+            attachment_bytes=report_data,
+            attachment_name=attachment_name,
+            content_type=content_type,
+        )
+        logger.info(
+            "Report '%s' (%.1f KB %s) emailed to %d recipients via report_tasks transport",
+            report_name, file_size_kb, format, len(recipients),
+        )
+        return
+    except ImportError:
+        logger.debug("report_tasks transport not available, trying EmailService")
     except Exception as e:
-        logger.warning("Real email transport unavailable (%s), falling back to stub log", e)
+        logger.warning("report_tasks transport failed (%s), trying EmailService", e)
 
-    # Stub: log what would be sent
+    # Strategy 2: EmailService (SendGrid + SMTP fallback)
+    try:
+        from email_service import EmailService
+        import base64
+
+        svc = EmailService()
+        html_body = (
+            f"<p>Your scheduled <strong>{report_name}</strong> is attached.</p>"
+            f"<p>Format: {format.upper()}<br>"
+            f"Generated: {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}</p>"
+            f"<p>This is an automated report from Perennia AI.</p>"
+        )
+        attachment = {
+            "content": base64.b64encode(report_data).decode("utf-8"),
+            "filename": attachment_name,
+            "type": content_type,
+            "disposition": "attachment",
+        }
+        for recipient in recipients:
+            svc.send_html_email(
+                to_email=recipient,
+                subject=subject,
+                html_body=html_body,
+                plain_text_body=body,
+                attachments=[attachment],
+            )
+        logger.info(
+            "Report '%s' (%.1f KB %s) emailed to %d recipients via EmailService",
+            report_name, file_size_kb, format, len(recipients),
+        )
+        return
+    except ImportError:
+        logger.debug("EmailService not available, falling back to stub")
+    except Exception as e:
+        logger.warning("EmailService delivery failed (%s), falling back to stub", e)
+
+    # Strategy 3: Stub — log what would be sent
     logger.info(
         "STUB EMAIL: Report '%s' (%.1f KB %s) would be sent to: %s",
         report_name,

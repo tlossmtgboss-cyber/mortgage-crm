@@ -57,7 +57,12 @@ async def api_docs_v2(request: Request):
             ),
             "version_negotiation": {
                 "url_prefix": "Use /api/v2/ path prefix for all V2 endpoints.",
-                "accept_header": "Optionally send Accept: application/vnd.perennia.v2+json",
+                "accept_header": (
+                    "Send Accept: application/vnd.perennia.v2+json to request V2 semantics. "
+                    "When this header is set on a V1 endpoint with a known V2 successor "
+                    "(leads, loans, scheduler), the server responds with a 307 redirect to "
+                    "the V2 equivalent. V2 responses include Content-Type: application/vnd.perennia.v2+json."
+                ),
             },
             "migration_guide": {
                 "pagination": (
@@ -85,17 +90,19 @@ async def api_docs_v2(request: Request):
             ),
         },
         "rate_limits": {
-            "default": "100 requests per minute per user",
-            "burst": "20 requests per second",
+            "default": "300 requests per minute per authenticated user (30/min unauthenticated)",
+            "pipeline_endpoints": "120 requests per minute",
             "headers": {
                 "X-RateLimit-Limit": "Maximum requests per window",
                 "X-RateLimit-Remaining": "Remaining requests in current window",
-                "X-RateLimit-Reset": "UTC epoch seconds when the window resets",
+                "X-RateLimit-Reset": "Seconds until the rate limit window resets",
             },
             "exceeded_response": {
                 "status": 429,
                 "body": "RFC 7807 Problem Details with type 'rate-limit-exceeded'",
+                "headers": "Retry-After header with seconds to wait",
             },
+            "note": "Rate limit headers are included on every V2 response.",
         },
         "endpoints": {
             "leads": {
@@ -182,6 +189,22 @@ async def api_docs_v2(request: Request):
                     "total": "Total count when available",
                 },
                 "included": "Related resources when ?include= is used (optional)",
+            },
+            "sparse_fieldsets": {
+                "description": (
+                    "Use ?fields=id,name,stage to receive only the requested fields. "
+                    "Supports dot-notation for nested fields (e.g. ?fields=id,contact.email). "
+                    "The id field is always included."
+                ),
+                "example": "GET /api/v2/leads?fields=id,name,email,stage",
+            },
+            "link_headers": {
+                "description": (
+                    "Single-resource responses (GET by ID) include RFC 8288 Link headers "
+                    "pointing to related resources. For example, a lead response includes "
+                    "links to its associated loans and appointments."
+                ),
+                "example": '</api/v2/loans?lead_id=42>; rel="loans", </api/v2/scheduler/appointments?lead_id=42>; rel="appointments"',
             },
             "error_format": {
                 "standard": "RFC 7807 Problem Details",

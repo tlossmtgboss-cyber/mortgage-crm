@@ -342,7 +342,10 @@ async def start_chime_recording(
     chime_service = _get_chime_service()
 
     try:
-        pipeline_id = chime_service.start_recording(meeting_id=room.chime_meeting_id)
+        pipeline_id = chime_service.start_recording(
+            meeting_id=room.chime_meeting_id,
+            organization_id=current_user.organization_id,
+        )
     except Exception as e:
         logger.error(f"Failed to start Chime recording for meeting {room_id}: {e}")
         raise HTTPException(

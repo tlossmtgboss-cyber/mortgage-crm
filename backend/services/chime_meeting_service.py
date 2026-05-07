@@ -188,6 +188,7 @@ class ChimeMeetingService:
         self,
         meeting_id: str,
         s3_prefix: Optional[str] = None,
+        organization_id: int = None,
     ) -> str:
         """
         Start server-side recording via a Chime media capture pipeline.
@@ -197,12 +198,18 @@ class ChimeMeetingService:
 
         Args:
             meeting_id: Chime MeetingId
-            s3_prefix: Optional S3 key prefix (defaults to meetings/{meeting_id})
+            s3_prefix: Optional S3 key prefix (defaults to org-{org_id}/meetings/{meeting_id})
+            organization_id: Organization ID for tenant-isolated storage (REQUIRED)
 
         Returns:
             MediaPipelineId for the capture pipeline
+
+        Raises:
+            ValueError: If organization_id is not provided
         """
-        prefix = s3_prefix or f"meetings/{meeting_id}"
+        if not organization_id:
+            raise ValueError("organization_id is required for tenant-isolated recording storage")
+        prefix = s3_prefix or f"org-{organization_id}/meetings/{meeting_id}"
         try:
             response = self._pipelines_client.create_media_capture_pipeline(
                 SourceType="ChimeSdkMeeting",
@@ -338,8 +345,30 @@ class ChimeMeetingService:
         self,
         s3_key: str,
         expiration: int = 3600,
+        organization_id: int = None,
     ) -> str:
-        """Generate a presigned download URL for an S3 object."""
+        """Generate a presigned download URL for an S3 object.
+
+        Args:
+            s3_key: S3 object key
+            expiration: URL expiry in seconds
+            organization_id: Organization ID for tenant validation (REQUIRED)
+
+        Returns:
+            Presigned URL string
+
+        Raises:
+            ValueError: If organization_id is not provided or key doesn't match org
+        """
+        if not organization_id:
+            raise ValueError("organization_id is required for presigned URL generation")
+
+        expected_prefix = f"org-{organization_id}/"
+        if not s3_key.startswith(expected_prefix):
+            raise ValueError(
+                f"Access denied: recording key does not belong to org {organization_id}"
+            )
+
         try:
             url = self._s3_client.generate_presigned_url(
                 "get_object",

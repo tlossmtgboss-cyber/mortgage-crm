@@ -127,6 +127,9 @@ EXEMPT_PREFIXES = (
 # Prefix-specific rate limits.  Evaluated in order; first match wins.
 # Uses env-var values so operators can tune without code changes.
 PREFIX_LIMITS: List[Tuple[str, int]] = [
+    # V2 endpoints — same rate tiers as their V1 equivalents
+    ("/api/v2/pipeline/", PIPELINE_RPM),
+    # V1 endpoints
     ("/api/v1/ai/", AI_RPM),
     ("/api/v1/chat/", AI_RPM),
     ("/api/v1/agents/", AI_RPM),

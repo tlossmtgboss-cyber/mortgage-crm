@@ -1003,7 +1003,7 @@ class BatchOperationsService:
             from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
             s3 = get_smart_docs_s3_service()
 
-            storage_key = f"smart-docs/exports/org_{org_id}/loan_{loan_id}/batch_{job_id}.zip"
+            storage_key = f"org-{org_id}/smart-docs/exports/loan_{loan_id}/batch_{job_id}.zip"
             s3.upload_file(
                 file_content=zip_bytes,
                 storage_key=storage_key,
@@ -1451,7 +1451,7 @@ class BatchOperationsService:
             s3 = get_smart_docs_s3_service()
 
             storage_key = (
-                f"smart-docs/stacking-orders/org_{org_id}/"
+                f"org-{org_id}/smart-docs/stacking-orders/"
                 f"loan_{loan_id}/batch_{job_id}_stacked.pdf"
             )
             s3.upload_file(

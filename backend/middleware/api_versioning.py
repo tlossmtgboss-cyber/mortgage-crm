@@ -6,6 +6,17 @@ Adds versioning headers to all API responses:
 - Deprecation: (RFC 8594) Date when endpoint was deprecated
 - Sunset: (RFC 8594) Date when endpoint will be removed
 
+Content Negotiation:
+- Clients may send ``Accept: application/vnd.perennia.v2+json`` to signal
+  they expect V2 semantics.  When this header is present on a request
+  targeting a ``/api/v1/`` path, the middleware sets
+  ``request.state.api_version = "2.0"`` so downstream route handlers can
+  branch.  For paths with a known V2 successor (see V1_SUCCESSOR_MAP),
+  the middleware rewrites the URL to the V2 equivalent via an HTTP 307
+  redirect.
+- All ``/api/v2/`` responses include the
+  ``Content-Type: application/vnd.perennia.v2+json`` media type header.
+
 This middleware works in conjunction with:
 - api/versioning.py: VersionedAPIRouter for new versioned routes
 - Existing routes: Adds headers to legacy routes for forward compatibility
@@ -31,10 +42,13 @@ from datetime import date, datetime
 from typing import Dict, Any, Optional, Set
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response, JSONResponse
+from starlette.responses import Response, JSONResponse, RedirectResponse
 
 logger = logging.getLogger(__name__)
 
+
+# Vendor media type for V2 content negotiation
+V2_MEDIA_TYPE = "application/vnd.perennia.v2+json"
 
 # Default API version for unversioned endpoints
 CURRENT_API_VERSION = "1.0"
@@ -98,6 +112,30 @@ class APIVersioningMiddleware(BaseHTTPMiddleware):
         if self._is_sunset_endpoint(path):
             return self._create_gone_response(path)
 
+        # ---------------------------------------------------------------
+        # Accept-header content negotiation
+        # ---------------------------------------------------------------
+        accept = request.headers.get("accept", "")
+        wants_v2 = V2_MEDIA_TYPE in accept
+
+        if wants_v2:
+            # Tag the request so downstream handlers can inspect it
+            request.state.api_version = "2.0"
+
+            # If the client is hitting a V1 path that has a known V2
+            # successor, redirect with 307 (preserves method + body).
+            if "/api/v1" in path:
+                for v1_prefix, v2_replacement in V1_SUCCESSOR_MAP.items():
+                    if path.startswith(v1_prefix):
+                        new_path = path.replace(v1_prefix, v2_replacement, 1)
+                        query = str(request.url.query)
+                        redirect_url = new_path + ("?" + query if query else "")
+                        return RedirectResponse(
+                            url=redirect_url,
+                            status_code=307,
+                            headers={"API-Version": "2.0"},
+                        )
+
         # Process the request
         response = await call_next(request)
 
@@ -106,6 +144,10 @@ class APIVersioningMiddleware(BaseHTTPMiddleware):
 
         # Add deprecation headers if applicable
         self._add_deprecation_headers(response, path)
+
+        # Set vendor media type on V2 responses
+        if "/api/v2" in path:
+            response.headers["Content-Type"] = V2_MEDIA_TYPE
 
         return response
 

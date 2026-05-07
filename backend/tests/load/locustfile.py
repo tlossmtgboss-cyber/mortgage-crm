@@ -41,9 +41,15 @@ _EMAIL: Optional[str] = os.getenv("LOCUST_EMAIL")
 _PASSWORD: Optional[str] = os.getenv("LOCUST_PASSWORD")
 _AUTH_AVAILABLE: bool = bool(_EMAIL and _PASSWORD)
 
-# Thresholds (ms) — enforced in CI via the quitting hook
-P95_THRESHOLD_MS = 800
-ERROR_RATE_THRESHOLD = 0.005  # 0.5%
+# Thresholds — imported from centralized config when available, with fallbacks
+try:
+    from tests.load_test_config import SLA_TARGETS
+    P95_THRESHOLD_MS = SLA_TARGETS["read_p95_ms"]
+    ERROR_RATE_THRESHOLD = SLA_TARGETS["error_rate_max"]
+except ImportError:
+    # Fallback when running locust standalone without the project on sys.path
+    P95_THRESHOLD_MS = 500
+    ERROR_RATE_THRESHOLD = 0.001  # 0.1%
 
 
 # ---------------------------------------------------------------------------

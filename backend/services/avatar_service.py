@@ -259,16 +259,21 @@ class AvatarService:
         avatar_id: int,
         user_id: int,
         file_name: str,
-        content_type: str
+        content_type: str,
+        organization_id: int = None,
     ) -> Optional[Dict[str, Any]]:
         """Generate pre-signed URL for training video upload."""
+        if not organization_id:
+            logger.error("generate_upload_url called without organization_id")
+            return None
+
         profile = self.get_profile_by_user(db, avatar_id, user_id)
         if not profile:
             return None
 
-        # Generate S3 key
+        # Generate S3 key with tenant prefix
         file_ext = file_name.split('.')[-1] if '.' in file_name else 'mp4'
-        s3_key = f"avatars/{avatar_id}/training/video.{file_ext}"
+        s3_key = f"org-{organization_id}/avatars/{avatar_id}/training/video.{file_ext}"
 
         try:
             import boto3

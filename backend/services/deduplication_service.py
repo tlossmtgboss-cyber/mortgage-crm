@@ -6,12 +6,17 @@ Leads function as the primary contact entity; this service finds
 duplicates by normalized email and phone within an organization,
 and provides merge capability that reassigns child records.
 
+Includes confidence scoring and automatic merging for high-confidence
+duplicate pairs (e.g., exact email + phone match = 1.0 confidence).
+
 Usage:
     from services.deduplication_service import (
         find_duplicate_contacts,
         find_duplicate_leads,
         merge_contacts,
         get_dedup_report,
+        confidence_score,
+        auto_merge_high_confidence,
     )
 """
 
@@ -411,4 +416,183 @@ def get_dedup_report(db: Session, org_id: int) -> dict:
         "duplicates_count": duplicates_count,
         "duplicate_rate": duplicate_rate,
         "groups": groups,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Confidence scoring
+# ---------------------------------------------------------------------------
+
+def confidence_score(lead_a, lead_b) -> float:
+    """Score the likelihood that two leads are duplicates (0.0 to 1.0).
+
+    Scoring matrix:
+      - Exact email + exact phone match:        1.0
+      - Exact email + exact name match:          0.95
+      - Exact email only:                        0.8
+      - Exact phone + exact name match:          0.75
+      - Exact phone only:                        0.6
+      - Exact first_name + last_name match only: 0.3
+
+    All comparisons are normalized (lowercased/stripped email, digits-only phone).
+    Returns 0.0 if no meaningful match is found.
+    """
+    email_a = normalize_email(getattr(lead_a, "email", None) or "")
+    email_b = normalize_email(getattr(lead_b, "email", None) or "")
+    phone_a = normalize_phone(getattr(lead_a, "phone", None) or "")
+    phone_b = normalize_phone(getattr(lead_b, "phone", None) or "")
+
+    first_a = (getattr(lead_a, "first_name", None) or "").strip().lower()
+    first_b = (getattr(lead_b, "first_name", None) or "").strip().lower()
+    last_a = (getattr(lead_a, "last_name", None) or "").strip().lower()
+    last_b = (getattr(lead_b, "last_name", None) or "").strip().lower()
+
+    email_match = bool(email_a and email_b and email_a == email_b)
+    phone_match = bool(phone_a and phone_b and phone_a == phone_b)
+    name_match = bool(first_a and first_b and last_a and last_b
+                      and first_a == first_b and last_a == last_b)
+
+    if email_match and phone_match:
+        return 1.0
+    if email_match and name_match:
+        return 0.95
+    if email_match:
+        return 0.8
+    if phone_match and name_match:
+        return 0.75
+    if phone_match:
+        return 0.6
+    if name_match:
+        return 0.3
+    return 0.0
+
+
+# ---------------------------------------------------------------------------
+# Auto-merge high-confidence duplicates
+# ---------------------------------------------------------------------------
+
+def auto_merge_high_confidence(
+    db: Session,
+    org_id: int,
+    threshold: float = 0.95,
+    dry_run: bool = False,
+) -> dict:
+    """Automatically merge duplicate pairs whose confidence_score >= threshold.
+
+    For each duplicate group detected by find_duplicate_contacts():
+      1. Score every pair within the group.
+      2. If any pair scores >= threshold, merge the newer record (by created_at)
+         INTO the older one.
+      3. Continue until no more high-confidence pairs remain in the group.
+
+    Args:
+        db: SQLAlchemy session (caller must commit/rollback).
+        org_id: Organization ID for tenant isolation.
+        threshold: Minimum confidence to auto-merge (default 0.95).
+        dry_run: If True, return what would be merged without actually merging.
+
+    Returns:
+        {
+            "merged_pairs": [
+                {"primary_id": int, "duplicate_id": int, "confidence": float}
+            ],
+            "total_merged": int,
+            "threshold": float,
+            "dry_run": bool,
+        }
+    """
+    Lead = _get_lead_model()
+
+    if threshold < 0.8:
+        raise ValueError("Auto-merge threshold must be >= 0.8 to prevent false positives")
+
+    groups = find_duplicate_contacts(db, org_id)
+    merged_pairs: List[dict] = []
+    already_merged: set = set()  # Track IDs already consumed as duplicates
+
+    for group in groups:
+        record_ids = [rec["id"] for rec in group["records"]]
+        if len(record_ids) < 2:
+            continue
+
+        # Load actual ORM objects for scoring
+        leads = (
+            db.query(Lead)
+            .filter(
+                Lead.id.in_(record_ids),
+                Lead.organization_id == org_id,
+                Lead.deleted_at.is_(None),
+            )
+            .order_by(Lead.created_at.asc())
+            .all()
+        )
+
+        # Compare all pairs within the group
+        for i in range(len(leads)):
+            if leads[i].id in already_merged:
+                continue
+            for j in range(i + 1, len(leads)):
+                if leads[j].id in already_merged:
+                    continue
+
+                score = confidence_score(leads[i], leads[j])
+                if score < threshold:
+                    continue
+
+                # Older record (leads[i]) is primary, newer (leads[j]) is duplicate
+                primary = leads[i]
+                duplicate = leads[j]
+
+                pair_info = {
+                    "primary_id": primary.id,
+                    "duplicate_id": duplicate.id,
+                    "confidence": score,
+                }
+
+                if not dry_run:
+                    try:
+                        merge_contacts(
+                            db=db,
+                            org_id=org_id,
+                            primary_id=primary.id,
+                            duplicate_ids=[duplicate.id],
+                        )
+                        already_merged.add(duplicate.id)
+                        pair_info["status"] = "merged"
+                    except Exception as e:
+                        logger.error(
+                            "Auto-merge failed for %d <- %d: %s",
+                            primary.id, duplicate.id, e,
+                        )
+                        pair_info["status"] = "error"
+                        pair_info["error"] = str(e)
+                else:
+                    already_merged.add(duplicate.id)
+                    pair_info["status"] = "would_merge"
+
+                merged_pairs.append(pair_info)
+
+    # Audit trail for auto-merge batch
+    if merged_pairs and not dry_run:
+        try:
+            audit_event(
+                db,
+                event_type="AUTO_MERGE_BATCH",
+                resource_type="lead",
+                resource_id=str(org_id),
+                org_id=org_id,
+                metadata={
+                    "threshold": threshold,
+                    "pairs_merged": len([p for p in merged_pairs if p.get("status") == "merged"]),
+                    "pairs_failed": len([p for p in merged_pairs if p.get("status") == "error"]),
+                },
+            )
+        except Exception as e:
+            logger.warning("Failed to write auto-merge audit event: %s", e)
+
+    return {
+        "merged_pairs": merged_pairs,
+        "total_merged": len([p for p in merged_pairs if p.get("status") in ("merged", "would_merge")]),
+        "threshold": threshold,
+        "dry_run": dry_run,
     }

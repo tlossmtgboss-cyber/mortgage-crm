@@ -361,7 +361,7 @@ class PerenniaS3Service:
                 "error": "Internal server error"
             }
 
-    def make_public_and_get_url(self, storage_key: str) -> Dict[str, Any]:
+    def make_public_and_get_url(self, storage_key: str, organization_id: int = None) -> Dict[str, Any]:
         """
         Make an S3 object public and return its public URL.
 
@@ -369,6 +369,7 @@ class PerenniaS3Service:
 
         Args:
             storage_key: S3 object key
+            organization_id: Organization ID for tenant validation (REQUIRED for fallback presigned URL)
 
         Returns:
             Dict with public URL or error
@@ -396,7 +397,9 @@ class PerenniaS3Service:
             # Fall back to long-lived presigned URL if public access fails
             # This handles AccessDenied, AccessControlListNotSupported, etc.
             logger.info(f"Falling back to presigned URL for {storage_key}")
-            return self.get_presigned_download_url(storage_key, expires_in=86400 * 7)
+            return self.get_presigned_download_url(
+                storage_key, expires_in=86400 * 7, organization_id=organization_id
+            )
 
     def delete_document(self, storage_key: str) -> Dict[str, Any]:
         """

@@ -41,6 +41,7 @@ from schemas.api_v2 import (
     V2MeetingInfo,
     V2Meta,
     apply_sparse_fields,
+    build_link_header,
     decode_cursor,
     encode_cursor,
     validate_sparse_fields,
@@ -391,15 +392,22 @@ async def get_appointment_v2(
             ))
 
         item_dict = _appointment_to_dict(appt)
+        # Build Link header before sparse filtering removes FK fields
+        link_header = build_link_header("appointment", item_dict)
         item_dict = apply_sparse_fields(item_dict, field_set)
 
         included = _build_included(appt, include_set)
 
-        return V2Envelope(
+        envelope = V2Envelope(
             data=item_dict,
             meta=V2Meta(api_version="2.0"),
             included=included,
         ).model_dump(exclude_none=True)
+
+        headers = {}
+        if link_header:
+            headers["Link"] = link_header
+        return JSONResponse(content=envelope, headers=headers)
 
     except Exception as exc:
         logger.exception("V2 get_appointment failed")

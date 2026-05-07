@@ -1802,7 +1802,8 @@ async def confirm_image_upload(
         raise HTTPException(status_code=404, detail="Image not found. Upload may have failed.")
 
     # Make the image publicly accessible and get URL
-    url_result = s3_service.make_public_and_get_url(storage_key)
+    carousel_org_id = getattr(user, 'organization_id', None)
+    url_result = s3_service.make_public_and_get_url(storage_key, organization_id=carousel_org_id)
 
     if not url_result.get("success"):
         raise HTTPException(status_code=500, detail="Failed to get image URL")

@@ -945,3 +945,69 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
             "action_items_count": len(action_items),
             "checked_at": _dt.now(_tz.utc).isoformat(),
         }
+
+    # ================================================================== #
+    # SSL Expiry Alerts (Domain 12, Check 12.10)                           #
+    # ================================================================== #
+
+    # ------------------------------------------------------------------ #
+    # GET /api/v1/white-label/ssl-alerts                                   #
+    # ------------------------------------------------------------------ #
+
+    @app.get("/api/v1/white-label/ssl-alerts", tags=["White-Label Domain"])
+    async def get_ssl_expiry_alerts(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Return proactive SSL expiry alerts for all custom domains.
+
+        Queries all organizations with custom domains and checks for SSL
+        certificates expiring within 30 days. Returns alerts sorted by
+        urgency (fewest days remaining first).
+
+        Severity levels:
+          - critical: expired or expiring within 7 days
+          - warning: expiring within 14-30 days
+          - ok: more than 30 days remaining (not included in alerts)
+
+        Requires admin role.
+        """
+        _require_admin(current_user)
+
+        from services.white_label_service import check_ssl_expiry_alerts
+
+        return check_ssl_expiry_alerts(db)
+
+    # ================================================================== #
+    # Branding Completeness Check (Domain 12, Check 12.7b)                 #
+    # ================================================================== #
+
+    # ------------------------------------------------------------------ #
+    # GET /api/v1/white-label/branding-completeness                        #
+    # ------------------------------------------------------------------ #
+
+    @app.get("/api/v1/white-label/branding-completeness", tags=["White-Label Domain"])
+    async def get_branding_completeness(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Check branding configuration completeness for the caller's org.
+
+        Verifies that all required branding fields are set (company_name,
+        logo_url, primary_color at minimum) and returns a completeness
+        percentage along with a list of missing fields.
+
+        Requires admin role.
+        """
+        _require_admin(current_user)
+
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
+            )
+
+        from services.white_label_service import check_branding_completeness
+
+        return check_branding_completeness(db, organization_id)

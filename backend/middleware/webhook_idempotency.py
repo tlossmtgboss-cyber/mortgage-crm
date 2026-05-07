@@ -17,11 +17,14 @@ Two layers are provided:
 3. **Dead-letter queue** (``record_webhook_failure``, ``get_failed_webhooks``,
    ``retry_webhook``): Stores failed webhook events for later inspection and
    reprocessing.  Uses Redis list with in-memory deque fallback.  Capped at
-   1000 entries per provider (FIFO eviction).
+   10,000 entries per provider (FIFO eviction).
 
-4. **Circuit breaker**: Redis operations are protected by a circuit breaker.
-   After N failures (default 5) within a window (default 60s), Redis is
-   bypassed and only in-memory storage is used until the window expires.
+4. **Circuit breaker**: Redis operations are protected by a circuit breaker
+   with three states (closed / open / half-open).
+   After N failures (default 5) within a window (default 60s), the breaker
+   opens and Redis is bypassed.  After a cooldown (default 30s) the breaker
+   enters half-open state and allows a single probe request through.  If the
+   probe succeeds the breaker closes; if it fails the breaker re-opens.
 
 5. **Latency monitoring** (``get_webhook_stats``): Returns counters for
    total webhooks processed, duplicates caught, average check latency,
@@ -92,18 +95,31 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _CB_FAILURE_THRESHOLD = 5   # failures before opening
-_CB_WINDOW_SECONDS = 60.0   # window for both failure counting and recovery
+_CB_WINDOW_SECONDS = 60.0   # window for failure counting
+_CB_HALFOPEN_SECONDS = 30.0  # cooldown before allowing a probe request
 
 _cb_lock = threading.Lock()
 _cb_failures: list[float] = []      # timestamps of recent failures
 _cb_open_since: Optional[float] = None  # monotonic time when breaker opened
+_cb_half_open: bool = False  # True when a single probe is in flight
 
 
 def _cb_record_failure() -> None:
     """Record a Redis failure and possibly open the circuit breaker."""
-    global _cb_open_since
+    global _cb_open_since, _cb_half_open
     now = time.monotonic()
     with _cb_lock:
+        if _cb_half_open:
+            # Probe failed — reopen the breaker for another cooldown period
+            _cb_half_open = False
+            _cb_open_since = now
+            logger.warning(
+                "Webhook circuit breaker re-OPENED: half-open probe failed. "
+                "Will retry in %.0fs.",
+                _CB_HALFOPEN_SECONDS,
+            )
+            return
+
         _cb_failures.append(now)
         # Prune failures outside the window
         cutoff = now - _CB_WINDOW_SECONDS
@@ -114,34 +130,56 @@ def _cb_record_failure() -> None:
             logger.warning(
                 "Webhook circuit breaker OPEN: %d Redis failures in %.0fs window. "
                 "Falling back to in-memory for %.0fs.",
-                len(_cb_failures), _CB_WINDOW_SECONDS, _CB_WINDOW_SECONDS,
+                len(_cb_failures), _CB_WINDOW_SECONDS, _CB_HALFOPEN_SECONDS,
             )
 
 
 def _cb_record_success() -> None:
     """Record a successful Redis operation (resets failure history)."""
-    global _cb_open_since
+    global _cb_open_since, _cb_half_open
     with _cb_lock:
+        if _cb_half_open:
+            # Probe succeeded — close the breaker
+            logger.info(
+                "Webhook circuit breaker CLOSED: half-open probe succeeded.",
+            )
+        _cb_half_open = False
         _cb_failures.clear()
         _cb_open_since = None
 
 
 def _cb_is_open() -> bool:
-    """Check if the circuit breaker is currently open (Redis bypassed)."""
-    global _cb_open_since
+    """
+    Check if the circuit breaker is currently blocking Redis.
+
+    States:
+      - closed: Redis available, all requests go through.
+      - open: Redis bypassed entirely. After ``_CB_HALFOPEN_SECONDS``
+        transitions to half-open.
+      - half-open: A single probe request is allowed through. If it
+        succeeds the breaker closes; if it fails the breaker re-opens.
+
+    Returns True when Redis should be bypassed (open state).
+    Returns False when Redis should be used (closed or half-open probe).
+    """
+    global _cb_open_since, _cb_half_open
     with _cb_lock:
         if _cb_open_since is None:
-            return False
+            return False  # closed
+        if _cb_half_open:
+            # A probe is already in flight — block other callers
+            return True
         elapsed = time.monotonic() - _cb_open_since
-        if elapsed >= _CB_WINDOW_SECONDS:
-            # Window expired — close breaker and allow retry
-            _cb_open_since = None
-            _cb_failures.clear()
+        if elapsed >= _CB_HALFOPEN_SECONDS:
+            # Cooldown expired — allow exactly one probe request
+            _cb_half_open = True
             logger.info(
-                "Webhook circuit breaker CLOSED: recovery window expired, retrying Redis.",
+                "Webhook circuit breaker HALF-OPEN: allowing single probe "
+                "request after %.0fs cooldown.",
+                elapsed,
             )
-            return False
-        return True
+            return False  # let the probe through
+        return True  # still in open cooldown
 
 
 def _cb_state() -> str:
@@ -149,9 +187,11 @@ def _cb_state() -> str:
     with _cb_lock:
         if _cb_open_since is None:
             return "closed"
+        if _cb_half_open:
+            return "half-open"
         elapsed = time.monotonic() - _cb_open_since
-        if elapsed >= _CB_WINDOW_SECONDS:
-            return "closed"
+        if elapsed >= _CB_HALFOPEN_SECONDS:
+            return "half-open"
         return "open"
 
 
@@ -337,7 +377,7 @@ def is_duplicate_webhook(provider: str, event_key: str) -> bool:
 # Dead-letter queue (DLQ) for failed webhook events
 # ---------------------------------------------------------------------------
 
-_DLQ_MAX_PER_PROVIDER = 1000
+_DLQ_MAX_PER_PROVIDER = 10_000
 _DLQ_REDIS_PREFIX = "webhook:dlq:"
 
 # In-memory fallback: provider -> deque of serialized JSON entries

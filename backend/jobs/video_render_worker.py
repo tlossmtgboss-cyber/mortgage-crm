@@ -101,6 +101,7 @@ class RenderContext:
     voice_profile: Dict[str, Any]
     scenes: List[Dict[str, Any]]
     artifacts: Dict[str, Path] = None
+    organization_id: int = None
 
     def __post_init__(self):
         self.artifacts = {}
@@ -908,7 +909,8 @@ class VideoRenderWorker:
             file_path=str(video_path),
             job_id=ctx.job_id,
             artifact_type="final",
-            content_type="video/mp4"
+            content_type="video/mp4",
+            organization_id=ctx.organization_id,
         )
 
         if result.get("success"):

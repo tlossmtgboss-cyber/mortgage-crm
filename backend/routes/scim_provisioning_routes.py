@@ -33,6 +33,8 @@ import logging
 import os
 import re
 import secrets
+import hashlib
+import threading
 from datetime import datetime, timezone
 from typing import Optional, List
 
@@ -42,6 +44,102 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# SCIM-Specific Rate Limiting (Enterprise Readiness 5.x)
+# ============================================================================
+# Separate from the global API rate limiter. SCIM endpoints get their own
+# budget to prevent bulk provisioning abuse from IdP sync storms.
+
+try:
+    from middleware.rate_limiter import rate_limit, ip_key, RateLimiter
+
+    def _scim_token_key(request: Request) -> str:
+        """Rate-limit key based on SCIM bearer token hash.
+
+        Groups all requests from the same IdP token together, regardless
+        of IP address.  Falls back to IP if no bearer token is present.
+        """
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+            return f"scim_token:{token_hash}"
+        return ip_key(request)
+
+    # SCIM rate limit profiles
+    # Individual SCIM operations: 100/minute per token
+    SCIM_OP_LIMIT = rate_limit(limit=100, window=60, key_func=_scim_token_key)
+    # SCIM list/search (heavier queries): 30/minute per token
+    SCIM_LIST_LIMIT = rate_limit(limit=30, window=60, key_func=_scim_token_key)
+    # CSV bulk import: 5/hour per user (very expensive)
+    SCIM_BULK_LIMIT = rate_limit(limit=5, window=3600)
+    _SCIM_RL_AVAILABLE = True
+
+except ImportError:
+    logger.warning("Rate limiter unavailable for SCIM routes — running without SCIM rate limits")
+
+    def _noop_decorator(func):
+        return func
+
+    SCIM_OP_LIMIT = _noop_decorator
+    SCIM_LIST_LIMIT = _noop_decorator
+    SCIM_BULK_LIMIT = _noop_decorator
+    _SCIM_RL_AVAILABLE = False
+
+
+# ============================================================================
+# Per-Tenant SCIM Connection Guard
+# ============================================================================
+# SCIM bulk operations can exhaust DB connections for a single tenant.
+# This guard checks the per-tenant connection tracking from db.py before
+# allowing SCIM operations to proceed.
+
+_scim_tenant_conn_counts: dict = {}
+_scim_tenant_conn_lock = threading.Lock()
+# SCIM gets a lower per-tenant limit than general API (default: 3 out of 5)
+MAX_SCIM_CONNECTIONS_PER_TENANT = int(os.getenv("MAX_SCIM_CONNECTIONS_PER_TENANT", "3"))
+
+
+def _check_scim_tenant_connection_limit(org_id: Optional[int]) -> None:
+    """Check if the tenant has capacity for another SCIM DB operation.
+
+    Raises HTTPException 503 if the tenant's SCIM connection budget is
+    exhausted.  This is separate from (and stricter than) the general
+    per-tenant limit in db.py — SCIM should not consume the org's entire
+    connection budget.
+    """
+    if not org_id or MAX_SCIM_CONNECTIONS_PER_TENANT <= 0:
+        return
+    with _scim_tenant_conn_lock:
+        current = _scim_tenant_conn_counts.get(org_id, 0)
+        if current >= MAX_SCIM_CONNECTIONS_PER_TENANT:
+            logger.warning(
+                f"SCIM tenant connection limit reached for org_id={org_id} "
+                f"(current={current}, max={MAX_SCIM_CONNECTIONS_PER_TENANT})"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=_scim_error(
+                    503,
+                    "Too many concurrent SCIM operations for this tenant. Please retry shortly.",
+                ),
+                headers={"Retry-After": "5"},
+            )
+        _scim_tenant_conn_counts[org_id] = current + 1
+
+
+def _release_scim_tenant_connection(org_id: Optional[int]) -> None:
+    """Release a SCIM tenant connection slot."""
+    if not org_id:
+        return
+    with _scim_tenant_conn_lock:
+        current = _scim_tenant_conn_counts.get(org_id, 1)
+        if current <= 1:
+            _scim_tenant_conn_counts.pop(org_id, None)
+        else:
+            _scim_tenant_conn_counts[org_id] = current - 1
 
 
 # ============================================================================
@@ -59,14 +157,25 @@ def _write_audit_log(
     after_state: dict = None,
     ip_address: str = None,
     reason: str = None,
+    scim_token_hash: str = None,
 ):
     """
     Write a hash-chained audit log entry for SCIM/CSV provisioning operations.
 
     Uses the enterprise audit service (services/audit_service.py) which provides
     SHA-256 hash-chained append-only audit entries with tamper detection.
+
+    When scim_token_hash is provided, it is included in after_state so auditors
+    can trace which API token was used for the operation.
     """
     try:
+        # Inject SCIM token identity into the audit trail
+        if scim_token_hash:
+            after_state = dict(after_state) if after_state else {}
+            after_state["_scim_token_hash"] = scim_token_hash
+            after_state["_scim_operation"] = change_type
+            after_state["_scim_timestamp"] = datetime.now(timezone.utc).isoformat()
+
         from services.audit_service import create_audit_entry
 
         create_audit_entry(
@@ -247,10 +356,14 @@ def _user_to_scim(row, base_url: str = "") -> dict:
     return resource
 
 
-def _validate_scim_token(request: Request) -> str:
+def _validate_scim_token(request: Request) -> tuple:
     """
     Validate the SCIM Bearer token from the Authorization header.
-    Returns the token string if valid, raises HTTPException otherwise.
+    Returns (token_str, token_hash_prefix) if valid.
+    The token_hash_prefix is a truncated SHA-256 for audit logging (never
+    stores the raw token in logs).
+
+    Raises HTTPException otherwise.
 
     The SCIM token is a separate credential from user JWT tokens, stored
     in the SCIM_API_TOKEN environment variable. Identity providers (Okta,
@@ -258,6 +371,10 @@ def _validate_scim_token(request: Request) -> str:
     """
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
+        logger.warning(
+            "SCIM auth failed: missing/invalid Authorization header from %s",
+            request.client.host if request.client else "unknown",
+        )
         raise HTTPException(
             status_code=401,
             detail=_scim_error(401, "Missing or invalid Authorization header"),
@@ -274,12 +391,28 @@ def _validate_scim_token(request: Request) -> str:
         )
 
     if not secrets.compare_digest(token, expected_token):
+        # Log failed auth attempt with IP for security monitoring
+        logger.warning(
+            "SCIM auth failed: invalid bearer token from %s",
+            request.client.host if request.client else "unknown",
+        )
         raise HTTPException(
             status_code=401,
             detail=_scim_error(401, "Invalid SCIM bearer token"),
         )
 
-    return token
+    # Compute a truncated hash for audit logging — enough to identify the
+    # token without exposing the full credential
+    token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+
+    logger.debug(
+        "SCIM token validated: hash_prefix=%s ip=%s path=%s",
+        token_hash,
+        request.client.host if request.client else "unknown",
+        request.url.path,
+    )
+
+    return token, token_hash
 
 
 def _parse_scim_filter(filter_str: str) -> Optional[tuple]:
@@ -537,6 +670,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     # ========================================================================
 
     @app.get("/scim/v2/Users", tags=["SCIM"])
+    @SCIM_LIST_LIMIT
     async def scim_list_users(
         request: Request,
         startIndex: int = Query(1, ge=1, alias="startIndex"),
@@ -551,10 +685,12 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         Supports filter on userName eq "...", active eq true/false.
         Pagination via startIndex and count.
+        Rate limited: 30 requests/minute per SCIM token.
         """
-        _validate_scim_token(request)
+        _token, token_hash = _validate_scim_token(request)
 
         org_id = _get_scim_org_id(db, request)
+        _check_scim_tenant_connection_limit(org_id)
         params: dict = {"limit": count, "offset": startIndex - 1}
         where_clauses = []
 
@@ -636,6 +772,27 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         base_url = str(request.base_url).rstrip("/")
         resources = [_user_to_scim(r, base_url) for r in rows]
 
+        _release_scim_tenant_connection(org_id)
+
+        # Audit: SCIM list/search operation
+        _write_audit_log(
+            db=db,
+            user_id=0,
+            changed_by_id=0,
+            change_type="scim_list_users",
+            entity_type="scim_provisioning",
+            after_state={
+                "filter": filter,
+                "startIndex": startIndex,
+                "count": count,
+                "totalResults": total_count,
+            },
+            ip_address=request.client.host if request.client else None,
+            reason="SCIM 2.0 user list/search (IdP-initiated)",
+            scim_token_hash=token_hash,
+        )
+        db.commit()
+
         return {
             "schemas": [SCIM_LIST_SCHEMA],
             "totalResults": total_count,
@@ -645,6 +802,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         }
 
     @app.post("/scim/v2/Users", tags=["SCIM"], status_code=201)
+    @SCIM_OP_LIMIT
     async def scim_create_user(
         request: Request,
         db: Session = Depends(get_db),
@@ -654,8 +812,9 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         Expects SCIM User JSON with userName, name, active, emails.
         Creates a deactivated-password user (IdP-managed).
+        Rate limited: 100 requests/minute per SCIM token.
         """
-        _validate_scim_token(request)
+        _token, token_hash = _validate_scim_token(request)
 
         try:
             body = await request.json()
@@ -691,6 +850,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             )
 
         org_id = _get_scim_org_id(db, request)
+        _check_scim_tenant_connection_limit(org_id)
 
         # Enterprise extension (RFC 7643 Section 4.3)
         enterprise = body.get(SCIM_ENTERPRISE_SCHEMA, {})
@@ -782,7 +942,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             db=db,
             user_id=new_user.id,
             changed_by_id=new_user.id,  # SCIM-provisioned (no human actor)
-            change_type="user_created",
+            change_type="scim_create_user",
             entity_type="scim_provisioning",
             entity_id=new_user.id,
             after_state={
@@ -796,8 +956,11 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             },
             ip_address=request.client.host if request.client else None,
             reason="SCIM 2.0 user provisioning (IdP-initiated)",
+            scim_token_hash=token_hash,
         )
         db.commit()
+
+        _release_scim_tenant_connection(org_id)
 
         base_url = str(request.base_url).rstrip("/")
         scim_resource = _user_to_scim(new_user, base_url)
@@ -806,13 +969,15 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         return scim_resource
 
     @app.get("/scim/v2/Users/{user_id}", tags=["SCIM"])
+    @SCIM_OP_LIMIT
     async def scim_get_user(
         user_id: int,
         request: Request,
         db: Session = Depends(get_db),
     ):
-        """SCIM 2.0 - Get user by ID (RFC 7644 Section 3.4.1)."""
-        _validate_scim_token(request)
+        """SCIM 2.0 - Get user by ID (RFC 7644 Section 3.4.1).
+        Rate limited: 100 requests/minute per SCIM token."""
+        _token, token_hash = _validate_scim_token(request)
 
         row = db.execute(
             text("""
@@ -840,13 +1005,15 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         return _user_to_scim(row, base_url)
 
     @app.put("/scim/v2/Users/{user_id}", tags=["SCIM"])
+    @SCIM_OP_LIMIT
     async def scim_replace_user(
         user_id: int,
         request: Request,
         db: Session = Depends(get_db),
     ):
-        """SCIM 2.0 - Replace user (RFC 7644 Section 3.5.1)."""
-        _validate_scim_token(request)
+        """SCIM 2.0 - Replace user (RFC 7644 Section 3.5.1).
+        Rate limited: 100 requests/minute per SCIM token."""
+        _token, token_hash = _validate_scim_token(request)
 
         try:
             body = await request.json()
@@ -1014,13 +1181,14 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             db=db,
             user_id=user_id,
             changed_by_id=user_id,  # SCIM-provisioned (no human actor)
-            change_type="user_updated",
+            change_type="scim_replace_user",
             entity_type="scim_provisioning",
             entity_id=user_id,
             before_state=before_state,
             after_state=after_state,
             ip_address=request.client.host if request.client else None,
             reason="SCIM 2.0 user replacement (PUT, IdP-initiated)",
+            scim_token_hash=token_hash,
         )
         db.commit()
 
@@ -1028,6 +1196,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         return _user_to_scim(row, base_url)
 
     @app.patch("/scim/v2/Users/{user_id}", tags=["SCIM"])
+    @SCIM_OP_LIMIT
     async def scim_patch_user(
         user_id: int,
         request: Request,
@@ -1040,8 +1209,9 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
           - replace: Update specific attributes
           - add: Same as replace for single-valued attrs
           - remove: Set attribute to NULL / deactivate
+        Rate limited: 100 requests/minute per SCIM token.
         """
-        _validate_scim_token(request)
+        _token, token_hash = _validate_scim_token(request)
 
         try:
             body = await request.json()
@@ -1301,13 +1471,14 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             db=db,
             user_id=user_id,
             changed_by_id=user_id,  # SCIM-provisioned (no human actor)
-            change_type="user_updated",
+            change_type="scim_patch_user",
             entity_type="scim_provisioning",
             entity_id=user_id,
             before_state=patch_before_state,
             after_state={"changed_fields": update_fields},
             ip_address=request.client.host if request.client else None,
             reason="SCIM 2.0 user partial update (PATCH, IdP-initiated)",
+            scim_token_hash=token_hash,
         )
         db.commit()
 
@@ -1315,6 +1486,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         return _user_to_scim(row, base_url)
 
     @app.delete("/scim/v2/Users/{user_id}", tags=["SCIM"], status_code=204)
+    @SCIM_OP_LIMIT
     async def scim_delete_user(
         user_id: int,
         request: Request,
@@ -1325,8 +1497,9 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         Per enterprise policy, users are soft-deleted (is_active = false)
         rather than hard-deleted, preserving audit history.
+        Rate limited: 100 requests/minute per SCIM token.
         """
-        _validate_scim_token(request)
+        _token, token_hash = _validate_scim_token(request)
 
         existing = db.execute(
             text("""
@@ -1353,7 +1526,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             db=db,
             user_id=user_id,
             changed_by_id=user_id,  # SCIM-provisioned (no human actor)
-            change_type="user_deactivated",
+            change_type="scim_delete_user",
             entity_type="scim_provisioning",
             entity_id=user_id,
             before_state={
@@ -1367,6 +1540,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             after_state={"is_active": False},
             ip_address=request.client.host if request.client else None,
             reason="SCIM 2.0 user deactivation (DELETE, IdP-initiated)",
+            scim_token_hash=token_hash,
         )
         db.commit()
 
@@ -1379,6 +1553,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     # ========================================================================
 
     @app.post("/api/v1/admin/users/import-csv", tags=["Admin"])
+    @SCIM_BULK_LIMIT
     async def import_users_csv(
         request: Request,
         file: UploadFile = File(...),

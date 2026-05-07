@@ -521,6 +521,225 @@ def check_domain_health(db, org_id: int) -> Dict:
     return result
 
 
+# =============================================================================
+# SSL EXPIRY ALERTS (Domain 12, Check 12.10)
+# =============================================================================
+
+def check_ssl_expiry_alerts(db) -> Dict:
+    """
+    Proactively check all custom domains for upcoming SSL certificate expiry.
+
+    Queries all WhiteLabelConfig rows that have a custom domain with an
+    ssl_expires_at value within the next 30 days. Logs warnings at escalating
+    severity levels:
+      - 14-30 days: WARNING
+      - 7-14 days: WARNING (elevated)
+      - 0-7 days: CRITICAL
+      - expired: CRITICAL
+
+    Returns:
+        Dict with:
+          - domains_checked: total domains with ssl_expires_at set
+          - alerts: list of domain alert dicts with severity, days_remaining, etc.
+          - summary: counts by severity level
+    """
+    from database.models.white_label_config import WhiteLabelConfig
+
+    now = datetime.now(timezone.utc)
+
+    # Query all configs with custom domains that have SSL expiry data
+    configs = (
+        db.query(WhiteLabelConfig)
+        .filter(
+            WhiteLabelConfig.custom_domain.isnot(None),
+            WhiteLabelConfig.ssl_expires_at.isnot(None),
+            WhiteLabelConfig.setting_type.is_(None),
+        )
+        .all()
+    )
+
+    alerts: List[Dict] = []
+    summary = {"critical": 0, "warning": 0, "ok": 0}
+
+    for config in configs:
+        days_remaining = (config.ssl_expires_at - now).days
+        domain = config.custom_domain
+        org_id = config.organization_id
+
+        if days_remaining <= 0:
+            severity = "critical"
+            message = (
+                f"SSL certificate for '{domain}' (org {org_id}) has EXPIRED. "
+                "Visitors will see security warnings."
+            )
+            logger.critical(
+                "SSL EXPIRED for domain '%s' (org_id=%s, expired %d days ago)",
+                domain, org_id, abs(days_remaining),
+            )
+            summary["critical"] += 1
+        elif days_remaining <= 7:
+            severity = "critical"
+            message = (
+                f"SSL certificate for '{domain}' (org {org_id}) expires in "
+                f"{days_remaining} days ({config.ssl_expires_at.strftime('%Y-%m-%d')}). "
+                "Immediate attention required."
+            )
+            logger.critical(
+                "SSL expiring in %d days for domain '%s' (org_id=%s)",
+                days_remaining, domain, org_id,
+            )
+            summary["critical"] += 1
+        elif days_remaining <= 14:
+            severity = "warning"
+            message = (
+                f"SSL certificate for '{domain}' (org {org_id}) expires in "
+                f"{days_remaining} days ({config.ssl_expires_at.strftime('%Y-%m-%d')}). "
+                "Verify auto-renewal is not blocked."
+            )
+            logger.warning(
+                "SSL expiring in %d days for domain '%s' (org_id=%s)",
+                days_remaining, domain, org_id,
+            )
+            summary["warning"] += 1
+        elif days_remaining <= 30:
+            severity = "warning"
+            message = (
+                f"SSL certificate for '{domain}' (org {org_id}) expires in "
+                f"{days_remaining} days ({config.ssl_expires_at.strftime('%Y-%m-%d')}). "
+                "Monitor renewal status."
+            )
+            logger.warning(
+                "SSL expiring in %d days for domain '%s' (org_id=%s)",
+                days_remaining, domain, org_id,
+            )
+            summary["warning"] += 1
+        else:
+            # More than 30 days out — healthy, not included in alerts
+            summary["ok"] += 1
+            continue
+
+        alerts.append({
+            "domain": domain,
+            "organization_id": org_id,
+            "ssl_expires_at": config.ssl_expires_at.isoformat(),
+            "days_remaining": days_remaining,
+            "severity": severity,
+            "message": message,
+        })
+
+    # Sort alerts by urgency (fewest days remaining first)
+    alerts.sort(key=lambda a: a["days_remaining"])
+
+    return {
+        "domains_checked": len(configs),
+        "alerts_count": len(alerts),
+        "alerts": alerts,
+        "summary": summary,
+        "checked_at": now.isoformat(),
+    }
+
+
+# =============================================================================
+# BRANDING COMPLETENESS CHECK (Domain 12, Check 12.7b)
+# =============================================================================
+
+# Required fields — must be present for a minimally complete brand config
+_REQUIRED_BRANDING_FIELDS = [
+    ("company_name", "Company name"),
+    ("logo_url", "Logo URL"),
+    ("primary_color", "Primary color"),
+]
+
+# Recommended fields — improve completeness score but not strictly required
+_RECOMMENDED_BRANDING_FIELDS = [
+    ("secondary_color", "Secondary color"),
+    ("accent_color", "Accent color"),
+    ("favicon_url", "Favicon URL"),
+    ("font_family", "Font family"),
+    ("portal_logo_url", "Portal logo URL"),
+    ("portal_title", "Portal title"),
+    ("portal_footer_text", "Portal footer text"),
+    ("email_footer", "Email footer"),
+    ("custom_domain", "Custom domain"),
+]
+
+
+def check_branding_completeness(db, org_id: int) -> Dict:
+    """
+    Verify all required branding fields are set and compute a completeness
+    percentage for the organization's white-label configuration.
+
+    Required fields (must be set):
+      - company_name
+      - logo_url
+      - primary_color
+
+    Recommended fields (improve completeness):
+      - secondary_color, accent_color, favicon_url, font_family
+      - portal_logo_url, portal_title, portal_footer_text
+      - email_footer, custom_domain
+
+    Returns:
+        Dict with:
+          - completeness_pct: 0-100 score
+          - required_fields: list of required fields with status
+          - recommended_fields: list of recommended fields with status
+          - missing_required: list of missing required field names
+          - missing_recommended: list of missing recommended field names
+          - is_minimally_complete: True if all required fields are set
+    """
+    config = _get_config(db, org_id)
+
+    required_results = []
+    missing_required = []
+    for field_attr, field_label in _REQUIRED_BRANDING_FIELDS:
+        value = getattr(config, field_attr, None) if config else None
+        is_set = bool(value)
+        required_results.append({
+            "field": field_attr,
+            "label": field_label,
+            "is_set": is_set,
+        })
+        if not is_set:
+            missing_required.append(field_label)
+
+    recommended_results = []
+    missing_recommended = []
+    for field_attr, field_label in _RECOMMENDED_BRANDING_FIELDS:
+        value = getattr(config, field_attr, None) if config else None
+        is_set = bool(value)
+        recommended_results.append({
+            "field": field_attr,
+            "label": field_label,
+            "is_set": is_set,
+        })
+        if not is_set:
+            missing_recommended.append(field_label)
+
+    total_fields = len(_REQUIRED_BRANDING_FIELDS) + len(_RECOMMENDED_BRANDING_FIELDS)
+    set_count = (
+        sum(1 for r in required_results if r["is_set"])
+        + sum(1 for r in recommended_results if r["is_set"])
+    )
+    completeness_pct = round((set_count / total_fields) * 100, 1) if total_fields > 0 else 0
+
+    return {
+        "org_id": org_id,
+        "completeness_pct": completeness_pct,
+        "is_minimally_complete": len(missing_required) == 0,
+        "required_fields": required_results,
+        "recommended_fields": recommended_results,
+        "missing_required": missing_required,
+        "missing_recommended": missing_recommended,
+        "total_fields": total_fields,
+        "fields_set": set_count,
+    }
+
+
+# =============================================================================
+# PDF/REPORT BRANDING (Domain 12, Check 12.8)
+# =============================================================================
+
 def get_report_branding(db, org_id: int) -> Dict:
     """
     Get branding configuration for PDF/Excel report generation.

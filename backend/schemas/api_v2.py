@@ -229,27 +229,45 @@ APPOINTMENT_FIELDS = {
 }
 
 
+def _parse_field_name(field: str) -> str:
+    """Extract the top-level field name from a possibly dot-notated field.
+
+    Examples:
+        ``"name"``           -> ``"name"``
+        ``"contact.email"``  -> ``"contact"``
+        ``"address.city"``   -> ``"address"``
+    """
+    return field.split(".")[0]
+
+
 def validate_sparse_fields(
     fields_param: Optional[str],
     allowed: set[str] = APPOINTMENT_FIELDS,
 ) -> Optional[set[str]]:
     """Parse and validate the ``fields`` query parameter.
 
+    Supports dot-notation for nested fields (e.g. ``contact.email``).
+    Validation checks that the **top-level** field name is in the
+    allowed set.  The full dot-notated path is preserved in the returned
+    set so callers can apply nested filtering downstream.
+
     Args:
-        fields_param: Comma-separated field names (e.g. ``"id,title,start_time"``).
-        allowed: The full set of permitted field names.
+        fields_param: Comma-separated field names (e.g. ``"id,title,contact.email"``).
+        allowed: The full set of permitted top-level field names.
 
     Returns:
         A set of validated field names, or None if no filtering requested.
 
     Raises:
-        ValueError: If any requested field is not in the allowed set.
+        ValueError: If any requested top-level field is not in the allowed set.
     """
     if not fields_param:
         return None
 
     requested = {f.strip() for f in fields_param.split(",") if f.strip()}
-    invalid = requested - allowed
+    # Validate top-level names only
+    top_level = {_parse_field_name(f) for f in requested}
+    invalid = top_level - allowed
     if invalid:
         raise ValueError(
             f"Unknown fields: {', '.join(sorted(invalid))}. "
@@ -263,11 +281,86 @@ def apply_sparse_fields(item: Dict[str, Any], fields: Optional[set[str]]) -> Dic
 
     If ``fields`` is None, returns the full dict unchanged.
     The ``id`` field is always included regardless of the filter set.
+
+    Supports dot-notation for nested field filtering: if the item
+    contains a dict value and the field set includes dot-notated paths
+    (e.g. ``contact.email``), only the specified nested keys are kept.
     """
     if fields is None:
         return item
-    keep = fields | {"id"}
-    return {k: v for k, v in item.items() if k in keep}
+
+    # Separate top-level fields from dot-notated nested paths
+    top_level_fields: set[str] = set()
+    nested_fields: Dict[str, set[str]] = {}
+    for f in fields:
+        if "." in f:
+            parent, child = f.split(".", 1)
+            top_level_fields.add(parent)
+            nested_fields.setdefault(parent, set()).add(child)
+        else:
+            top_level_fields.add(f)
+
+    keep = top_level_fields | {"id"}
+    result = {}
+    for k, v in item.items():
+        if k not in keep:
+            continue
+        # Apply nested field filtering when the value is a dict
+        if k in nested_fields and isinstance(v, dict):
+            nested_keep = nested_fields[k] | {"id"} if "id" in v else nested_fields[k]
+            result[k] = {nk: nv for nk, nv in v.items() if nk in nested_keep}
+        else:
+            result[k] = v
+    return result
+
+
+# =============================================================================
+# RELATED RESOURCE LINK HEADERS
+# =============================================================================
+
+# Maps resource type -> list of (foreign_key_field, related_path_template, rel_name)
+# The template uses {value} as a placeholder for the FK value.
+RESOURCE_LINK_MAP: Dict[str, list] = {
+    "lead": [
+        ("id", "/api/v2/loans?lead_id={value}", "loans"),
+        ("id", "/api/v2/scheduler/appointments?lead_id={value}", "appointments"),
+        ("owner_id", "/api/v2/leads?owner_id={value}", "owner-leads"),
+    ],
+    "loan": [
+        ("id", "/api/v2/scheduler/appointments?loan_id={value}", "appointments"),
+        ("loan_officer_id", "/api/v2/loans?loan_officer_id={value}", "officer-loans"),
+    ],
+    "appointment": [
+        ("lead_id", "/api/v2/leads/{value}", "lead"),
+        ("loan_id", "/api/v2/loans/{value}", "loan"),
+    ],
+}
+
+
+def build_link_header(resource_type: str, data: Dict[str, Any]) -> Optional[str]:
+    """Build an RFC 8288 Link header string for related resources.
+
+    Args:
+        resource_type: One of ``"lead"``, ``"loan"``, ``"appointment"``.
+        data: The resource dict (must contain the FK fields to resolve links).
+
+    Returns:
+        A Link header value like
+        ``</api/v2/loans?lead_id=42>; rel="loans", ...``
+        or None if no links can be generated.
+    """
+    link_defs = RESOURCE_LINK_MAP.get(resource_type)
+    if not link_defs:
+        return None
+
+    parts = []
+    for fk_field, template, rel in link_defs:
+        value = data.get(fk_field)
+        if value is not None:
+            uri = template.replace("{value}", str(value))
+            parts.append(f'<{uri}>; rel="{rel}"')
+
+    return ", ".join(parts) if parts else None
 
 
 # =============================================================================

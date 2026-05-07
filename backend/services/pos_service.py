@@ -215,7 +215,7 @@ class POSService:
             mime_type=mime_type,
             category=category_label,
             description=description,
-            storage_key=storage_key or f"pos/{application.id}/{filename}",
+            storage_key=storage_key or f"org-{application.organization_id}/pos/{application.id}/{filename}",
             uploaded_by=f"borrower:{ctx.actor_id}" if ctx.actor_id else "borrower",
         )
         session.add(doc)

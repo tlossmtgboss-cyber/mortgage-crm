@@ -1295,6 +1295,36 @@ def register_health_routes(app, get_db, **kwargs):
             return {"error": "Internal server error", "status": "unknown"}
 
     # ========================================================================
+    # Token blacklist status (dedicated endpoint for security monitoring)
+    # ========================================================================
+
+    @app.get("/health/token-blacklist", tags=["Health"])
+    async def token_blacklist_status():
+        """
+        Token blacklist health status.
+
+        Reports the active backend (redis vs in-memory), count of blacklisted
+        tokens, and whether the blacklist is shared across Railway replicas.
+
+        No auth required -- exposes operational status only, no sensitive data.
+        Use this endpoint to monitor whether token revocation is functioning
+        correctly across all replicas.
+        """
+        try:
+            from auth.tokens import token_blacklist
+            status = token_blacklist.get_status()
+            status["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return status
+        except Exception as e:
+            logger.error(f"Token blacklist status check failed: {e}")
+            return {
+                "status": "error",
+                "mode": "unknown",
+                "error": str(e)[:200],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+    # ========================================================================
     # Health cache (lines ~16979-16992 in inline_legacy_routes.py)
     # ========================================================================
 
@@ -1711,6 +1741,97 @@ def register_health_routes(app, get_db, **kwargs):
         return JSONResponse(status_code=status_code, content=response_data)
 
     # ========================================================================
+    # Admin-only: Pool Stats (PERF-006)
+    # ========================================================================
+
+    @app.get("/health/pool-stats", tags=["Health"])
+    async def pool_stats_admin(request: Request):
+        """
+        Detailed connection pool statistics for admin monitoring.
+
+        Protected by authentication: admin API key (X-API-Key header) or
+        valid Bearer token. Returns comprehensive pool metrics including
+        utilization percentage, overflow high-water mark, per-tenant
+        connection counts, and health assessment.
+        """
+        if not _authenticate_admin(request):
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "status": "unauthorized",
+                    "message": "Authentication required. Provide Authorization: Bearer <token> or X-API-Key header.",
+                },
+            )
+
+        try:
+            from db import get_pool_stats as _db_pool_stats
+            stats = _db_pool_stats()
+
+            # Enrich with health assessment from db_monitor if available
+            try:
+                from services.db_monitor import check_pool_health
+                health = check_pool_health()
+                stats["health"] = health["status"]
+                stats["health_message"] = health["message"]
+                if health.get("recommendation"):
+                    stats["recommendation"] = health["recommendation"]
+            except ImportError:
+                pass
+
+            stats["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return stats
+        except Exception as e:
+            logger.exception(f"Pool stats endpoint failed: {e}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Failed to collect pool stats", "status": "unknown"},
+            )
+
+    # ========================================================================
+    # Admin-only: Query Stats (PERF-006)
+    # ========================================================================
+
+    @app.get("/health/query-stats", tags=["Health"])
+    async def query_stats_admin(request: Request):
+        """
+        Aggregate SQL query timing statistics for admin monitoring.
+
+        Protected by authentication: admin API key (X-API-Key header) or
+        valid Bearer token. Returns total queries, slow query count,
+        average query time, and p95 query time.
+
+        Requires middleware.query_timing to be initialized at startup.
+        """
+        if not _authenticate_admin(request):
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "status": "unauthorized",
+                    "message": "Authentication required. Provide Authorization: Bearer <token> or X-API-Key header.",
+                },
+            )
+
+        try:
+            from middleware.query_timing import get_query_stats
+            stats = get_query_stats()
+            stats["timestamp"] = datetime.now(timezone.utc).isoformat()
+            return stats
+        except ImportError:
+            return JSONResponse(
+                status_code=501,
+                content={
+                    "error": "Query timing middleware not available",
+                    "message": "middleware.query_timing module not found",
+                },
+            )
+        except Exception as e:
+            logger.exception(f"Query stats endpoint failed: {e}")
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Failed to collect query stats"},
+            )
+
+    # ========================================================================
     # Graceful Degradation Status — public endpoint (no admin required)
     # ========================================================================
 
@@ -1774,11 +1895,17 @@ def register_health_routes(app, get_db, **kwargs):
                 # --- Backup verification freshness check ---
                 backup_status = _check_backup_freshness()
 
+                # --- RPO / RTO compliance ---
+                rpo_rto = _compute_rpo_rto_compliance(
+                    backup_status, _APP_START_TIME
+                )
+
                 return {
                     "service_level": capabilities["level"],
                     "capabilities": capabilities["capabilities"],
                     "health": capabilities["health"],
                     "last_backup_verified": backup_status,
+                    "disaster_recovery": rpo_rto,
                     "message": capabilities.get("message"),
                     "actions": capabilities.get("actions", []),
                     "timestamp": capabilities.get("timestamp"),
@@ -1792,15 +1919,63 @@ def register_health_routes(app, get_db, **kwargs):
 
         except Exception as e:
             logger.error(f"Degradation health check failed: {e}")
+            _fallback_backup = _check_backup_freshness()
             return JSONResponse(
                 status_code=503,
                 content={
                     "service_level": "unknown",
                     "error": "Could not determine degradation status",
-                    "last_backup_verified": _check_backup_freshness(),
+                    "last_backup_verified": _fallback_backup,
+                    "disaster_recovery": _compute_rpo_rto_compliance(
+                        _fallback_backup, _APP_START_TIME
+                    ),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
+
+
+# ==========================================================================
+# Admin authentication helper (module-level, reused by multiple endpoints)
+# ==========================================================================
+
+def _authenticate_admin(request: Request) -> bool:
+    """Check whether the request carries valid admin credentials.
+
+    Accepts either:
+    - X-API-Key header matching ADMIN_API_KEY env var
+    - Authorization: Bearer <token> with a valid RS256 or HS256 JWT
+
+    Returns True if authenticated, False otherwise.
+    """
+    # Check admin API key first (simpler, bypasses CSRF)
+    api_key_header = request.headers.get("X-API-Key", "")
+    admin_key = os.getenv("ADMIN_API_KEY", "")
+    if admin_key and api_key_header and secrets.compare_digest(api_key_header, admin_key):
+        return True
+
+    # Check Bearer token
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer ") and len(auth_header) > 10:
+        token = auth_header[7:]
+        try:
+            from auth.tokens import _verify_secure_token
+            payload = _verify_secure_token(token)
+            if payload:
+                return True
+        except (ImportError, Exception):
+            pass
+        try:
+            import jwt as jose_jwt
+            secret_key = os.getenv("SECRET_KEY", "")
+            algorithm = os.getenv("JWT_ALGORITHM", "HS256")
+            if secret_key:
+                payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
+                if payload.get("sub"):
+                    return True
+        except Exception:
+            pass
+
+    return False
 
 
 # ==========================================================================
@@ -1982,6 +2157,12 @@ def _deep_check_disk():
 # Warning threshold: flag if no verified backup in more than 8 days
 _BACKUP_STALE_DAYS = 8
 
+# --- RPO / RTO compliance targets ---
+# RPO: max acceptable data loss window (7 days — Railway PITR daily snapshots)
+RPO_TARGET_SECONDS = 7 * 24 * 60 * 60  # 604800 seconds (7 days)
+# RTO: max acceptable downtime before full service is restored (30 minutes)
+RTO_TARGET_SECONDS = 30 * 60  # 1800 seconds (30 min)
+
 
 def _check_backup_freshness():
     """Check when the last backup verification succeeded.
@@ -2039,4 +2220,63 @@ def _check_backup_freshness():
             "note": f"Could not parse LAST_BACKUP_VERIFIED value: {raw!r}",
             "error": str(e),
         }
+
+
+def _compute_rpo_rto_compliance(backup_status: dict, app_start_monotonic: float) -> dict:
+    """Compute RPO and RTO compliance from backup status and app uptime.
+
+    Returns a dict with RPO/RTO targets, current measurements, and
+    compliance booleans so monitoring dashboards can alert on violations.
+    """
+    from datetime import timedelta
+
+    result = {
+        "rpo_target_seconds": RPO_TARGET_SECONDS,
+        "rpo_target_human": "7 days",
+        "rto_target_seconds": RTO_TARGET_SECONDS,
+        "rto_target_human": "30 minutes",
+    }
+
+    # --- RPO compliance: is the last verified backup within the RPO window? ---
+    backup_age_days = backup_status.get("age_days")
+    if backup_age_days is not None:
+        backup_age_seconds = backup_age_days * 86400
+        result["rpo_current_seconds"] = round(backup_age_seconds)
+        result["rpo_compliant"] = backup_age_seconds <= RPO_TARGET_SECONDS
+    else:
+        # No backup timestamp available -- cannot confirm compliance
+        result["rpo_current_seconds"] = None
+        result["rpo_compliant"] = None  # indeterminate
+
+    # --- RTO measurement: how long did the last cold-start take? ---
+    # Use current uptime as a proxy: if the app just started, the elapsed
+    # time since module load approximates the startup portion of RTO.
+    # A full RTO also includes Railway PITR restore (~10-15 min) which
+    # we cannot measure live, so we report the app-start component and
+    # an estimated total.
+    uptime_seconds = round(time.monotonic() - app_start_monotonic, 1)
+
+    # Estimated PITR restore time (Railway documentation: ~10-15 min)
+    ESTIMATED_PITR_RESTORE_SECONDS = 900  # 15 min conservative estimate
+
+    # If the app has been up for < 5 minutes, the startup latency is
+    # a reasonable RTO component measurement. After that we just report
+    # the estimate.
+    if uptime_seconds < 300:
+        app_start_seconds = round(uptime_seconds, 1)
+    else:
+        # App has been up a while; we don't know the actual startup time.
+        # Report None for the measured component.
+        app_start_seconds = None
+
+    result["rto_estimated_total_seconds"] = (
+        ESTIMATED_PITR_RESTORE_SECONDS + (app_start_seconds or 120)
+    )
+    result["rto_app_start_seconds"] = app_start_seconds
+    result["rto_pitr_estimate_seconds"] = ESTIMATED_PITR_RESTORE_SECONDS
+    result["rto_compliant"] = (
+        result["rto_estimated_total_seconds"] <= RTO_TARGET_SECONDS
+    )
+
+    return result
 

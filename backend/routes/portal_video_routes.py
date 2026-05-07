@@ -56,7 +56,7 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid token")
 
         result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            text("SELECT id, email, full_name, organization_id FROM users WHERE email = :email"),
             {"email": email}
         )
         user_row = result.fetchone()
@@ -64,7 +64,7 @@ async def get_current_user(
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return {"user_id": user_row[0], "email": user_row[1], "name": user_row[2]}
+        return {"user_id": user_row[0], "email": user_row[1], "name": user_row[2], "organization_id": user_row[3]}
 
     except HTTPException:
         raise
@@ -106,8 +106,11 @@ class CompleteUploadRequest(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def generate_video_key(portal_type: str, recipient_id: int, filename: str = None) -> str:
-    """Generate a unique S3 key for the video."""
+def generate_video_key(portal_type: str, recipient_id: int, filename: str = None, organization_id: int = None) -> str:
+    """Generate a unique S3 key for the video with tenant prefix."""
+    if not organization_id:
+        raise ValueError("organization_id is required for tenant-isolated video storage")
+
     ext = "webm"
     if filename and "." in filename:
         ext = filename.rsplit(".", 1)[-1].lower()
@@ -115,7 +118,7 @@ def generate_video_key(portal_type: str, recipient_id: int, filename: str = None
     unique_id = uuid.uuid4().hex
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
-    return f"portal-videos/{portal_type}/{recipient_id}/{timestamp}_{unique_id}.{ext}"
+    return f"org-{organization_id}/portal-videos/{portal_type}/{recipient_id}/{timestamp}_{unique_id}.{ext}"
 
 
 # =============================================================================
@@ -130,7 +133,8 @@ async def get_upload_url(
     """Get a presigned URL for uploading a video."""
     s3_service = get_s3_service()
 
-    video_key = generate_video_key(request.portal_type, request.recipient_id, request.filename)
+    org_id = current_user.get("organization_id")
+    video_key = generate_video_key(request.portal_type, request.recipient_id, request.filename, organization_id=org_id)
 
     allowed_video_types = ["video/webm", "video/mp4", "video/quicktime", "video/x-msvideo"]
 
@@ -178,9 +182,12 @@ async def complete_upload(
         raise HTTPException(status_code=400, detail="Video not found in storage")
 
     # Get video URL (try public first, fall back to presigned)
-    public_result = s3_service.make_public_and_get_url(request.video_key)
+    org_id = current_user.get("organization_id")
+    public_result = s3_service.make_public_and_get_url(request.video_key, organization_id=org_id)
     if not public_result.get("success"):
-        download_result = s3_service.get_presigned_download_url(request.video_key, expires_in=86400 * 7)
+        download_result = s3_service.get_presigned_download_url(
+            request.video_key, expires_in=86400 * 7, organization_id=org_id,
+        )
         if not download_result.get("success"):
             raise HTTPException(status_code=500, detail="Failed to generate video URL")
         video_url = download_result["presigned_url"]

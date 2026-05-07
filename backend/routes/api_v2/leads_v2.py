@@ -29,8 +29,10 @@ from schemas.api_v2 import (
     V2Envelope,
     V2Meta,
     apply_sparse_fields,
+    build_link_header,
     decode_cursor,
     encode_cursor,
+    _parse_field_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,11 +55,16 @@ LEAD_FIELDS = {
 
 
 def _validate_lead_fields(fields_param: Optional[str]) -> Optional[set]:
-    """Validate sparse fieldset against LEAD_FIELDS."""
+    """Validate sparse fieldset against LEAD_FIELDS.
+
+    Supports dot-notation for nested fields (e.g. ``contact.email``).
+    Only the top-level portion is validated against LEAD_FIELDS.
+    """
     if not fields_param:
         return None
     requested = {f.strip() for f in fields_param.split(",") if f.strip()}
-    invalid = requested - LEAD_FIELDS
+    top_level = {_parse_field_name(f) for f in requested}
+    invalid = top_level - LEAD_FIELDS
     if invalid:
         raise ValueError(
             f"Unknown fields: {', '.join(sorted(invalid))}. "
@@ -297,12 +304,19 @@ async def get_lead_v2(
             ))
 
         item_dict = _lead_to_dict(lead)
+        # Build Link header before sparse filtering removes FK fields
+        link_header = build_link_header("lead", item_dict)
         item_dict = apply_sparse_fields(item_dict, field_set)
 
-        return V2Envelope(
+        envelope = V2Envelope(
             data=item_dict,
             meta=V2Meta(api_version="2.0"),
         ).model_dump(exclude_none=True)
+
+        headers = {}
+        if link_header:
+            headers["Link"] = link_header
+        return JSONResponse(content=envelope, headers=headers)
 
     except Exception as exc:
         logger.exception("V2 get_lead failed")

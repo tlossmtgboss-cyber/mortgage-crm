@@ -960,7 +960,7 @@ class BorrowerPortalV2Service:
                 logger.warning(f"AI classification failed during upload, continuing: {e}")
 
         # Store document via upload pipeline
-        storage_key = f"smart-docs/{org_id}/{loan_id}/{file_hash[:16]}_{filename}"
+        storage_key = f"org-{org_id}/smart-docs/{loan_id}/{file_hash[:16]}_{filename}"
 
         try:
             from services.smart_docs.s3_storage_service import get_smart_docs_s3_service

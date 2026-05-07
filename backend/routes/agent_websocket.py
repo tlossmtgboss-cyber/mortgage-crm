@@ -29,6 +29,9 @@ class ConnectionManager:
 
     async def connect_agent(self, websocket: WebSocket, agent_id: int, org_id: int = 0):
         """Track agent-specific connection scoped by organization"""
+        if not org_id or org_id <= 0:
+            logger.warning(f"WebSocket connection rejected for agent {agent_id}: invalid org_id={org_id}")
+            raise ValueError(f"Valid org_id is required for WebSocket connection (got {org_id})")
         key = (org_id, agent_id)
         if key not in self.agent_connections:
             self.agent_connections[key] = []
@@ -37,6 +40,9 @@ class ConnectionManager:
 
     async def connect_system(self, websocket: WebSocket, org_id: int = 0):
         """Track system-wide connection scoped by organization"""
+        if not org_id or org_id <= 0:
+            logger.warning(f"WebSocket system connection rejected: invalid org_id={org_id}")
+            raise ValueError(f"Valid org_id is required for WebSocket connection (got {org_id})")
         if org_id not in self.system_connections:
             self.system_connections[org_id] = []
         self.system_connections[org_id].append(websocket)
@@ -215,6 +221,11 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
         auth_db.close()
 
     org_id = user.organization_id or 0
+    if not org_id or org_id <= 0:
+        await websocket.send_json({"type": "error", "message": "Valid organization_id required"})
+        await websocket.close(code=4003, reason="Missing organization_id")
+        return
+
     await manager.connect_agent(websocket, agent_id, org_id)
 
     try:
@@ -264,6 +275,11 @@ async def system_health_websocket(websocket: WebSocket):
         auth_db.close()
 
     org_id = user.organization_id or 0
+    if not org_id or org_id <= 0:
+        await websocket.send_json({"type": "error", "message": "Valid organization_id required"})
+        await websocket.close(code=4003, reason="Missing organization_id")
+        return
+
     await manager.connect_system(websocket, org_id)
 
     try:
@@ -311,6 +327,11 @@ async def alerts_websocket(websocket: WebSocket):
         auth_db.close()
 
     org_id = user.organization_id or 0
+    if not org_id or org_id <= 0:
+        await websocket.send_json({"type": "error", "message": "Valid organization_id required"})
+        await websocket.close(code=4003, reason="Missing organization_id")
+        return
+
     last_check = datetime.now(timezone.utc)
 
     try:

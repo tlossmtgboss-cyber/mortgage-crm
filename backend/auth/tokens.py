@@ -532,7 +532,10 @@ class TokenBlacklist:
         if not self._using_fallback:
             logger.warning(
                 f"Redis unavailable during {operation}: {error}. "
-                "Falling back to in-memory token blacklist (degraded mode)."
+                "Falling back to in-memory token blacklist (degraded mode). "
+                "WARNING: In-memory blacklist is NOT shared across Railway replicas — "
+                "tokens blacklisted on this instance will NOT be seen by other replicas. "
+                "Restore Redis connectivity to ensure consistent token revocation."
             )
             self._using_fallback = True
 
@@ -545,7 +548,11 @@ class TokenBlacklist:
             self._using_fallback = False
             logger.info("Token blacklist initialized with Redis")
         except Exception as e:
-            logger.warning(f"Redis connection failed: {e}. Using in-memory token blacklist.")
+            logger.warning(
+                f"Redis connection failed: {e}. Using in-memory token blacklist. "
+                "WARNING: In-memory blacklist is NOT shared across Railway replicas — "
+                "tokens blacklisted on this instance will NOT be seen by other replicas."
+            )
             self._enabled = True  # Enable with fallback
             self._using_fallback = True
 
@@ -715,6 +722,68 @@ class TokenBlacklist:
         self._fallback.delete(key)
         logger.info(f"Revocation cleared for user {user_id} (in-memory)")
         return True
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return the current status of the token blacklist for health checks.
+
+        Reports which backend is active (redis vs in-memory), the number of
+        blacklisted tokens currently tracked, and whether the blacklist is
+        operating in degraded mode (in-memory fallback).
+
+        Returns:
+            Dict with: mode, status, blacklisted_count, and cross_replica_safe.
+        """
+        if not self._enabled:
+            return {
+                "status": "disabled",
+                "mode": "none",
+                "blacklisted_count": 0,
+                "cross_replica_safe": False,
+            }
+
+        if self._redis and not self._using_fallback:
+            # Redis mode — shared across replicas
+            try:
+                # Count blacklisted tokens (keys matching blacklist:*)
+                blacklisted_count = 0
+                try:
+                    # Use SCAN to count keys without blocking
+                    cursor = 0
+                    while True:
+                        cursor, keys = self._redis.scan(cursor, match="blacklist:*", count=100)
+                        blacklisted_count += len(keys)
+                        if cursor == 0:
+                            break
+                except Exception:
+                    blacklisted_count = -1  # Unknown
+
+                return {
+                    "status": "healthy",
+                    "mode": "redis",
+                    "blacklisted_count": blacklisted_count,
+                    "cross_replica_safe": True,
+                }
+            except Exception as e:
+                self._activate_fallback("get_status", e)
+
+        # In-memory fallback mode — NOT shared across replicas
+        with self._fallback._lock:
+            self._fallback._evict_expired()
+            blacklisted_count = sum(
+                1 for k in self._fallback._store if k.startswith("blacklist:")
+            )
+
+        return {
+            "status": "degraded",
+            "mode": "in_memory",
+            "blacklisted_count": blacklisted_count,
+            "cross_replica_safe": False,
+            "warning": (
+                "Token blacklist is using in-memory fallback. Blacklisted tokens "
+                "are NOT shared across Railway replicas. Tokens revoked on one "
+                "replica may still be accepted by another. Restore Redis to fix."
+            ),
+        }
 
 
 # Global blacklist instance

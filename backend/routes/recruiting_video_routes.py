@@ -70,8 +70,11 @@ class VideoMessage(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def generate_video_key(candidate_id: int, filename: str = None) -> str:
-    """Generate a unique S3 key for the video."""
+def generate_video_key(candidate_id: int, filename: str = None, organization_id: int = None) -> str:
+    """Generate a unique S3 key for the video with tenant prefix."""
+    if not organization_id:
+        raise ValueError("organization_id is required for tenant-isolated video storage")
+
     ext = "webm"
     if filename and "." in filename:
         ext = filename.rsplit(".", 1)[-1].lower()
@@ -79,7 +82,7 @@ def generate_video_key(candidate_id: int, filename: str = None) -> str:
     unique_id = uuid.uuid4().hex
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
-    return f"recruit-videos/{candidate_id}/{timestamp}_{unique_id}.{ext}"
+    return f"org-{organization_id}/recruit-videos/{candidate_id}/{timestamp}_{unique_id}.{ext}"
 
 
 async def send_candidate_notification(
@@ -158,8 +161,8 @@ async def get_upload_url(
 
     s3_service = get_s3_service()
 
-    # Generate unique video key
-    video_key = generate_video_key(request.candidate_id, request.filename)
+    # Generate unique video key with tenant prefix
+    video_key = generate_video_key(request.candidate_id, request.filename, organization_id=current_user.organization_id)
 
     # Allow video content types
     allowed_video_types = [
@@ -225,13 +228,15 @@ async def complete_upload(
         raise HTTPException(status_code=400, detail="Video not found in storage")
 
     # Make video public and get permanent URL
-    public_result = s3_service.make_public_and_get_url(request.video_key)
+    org_id = current_user.organization_id
+    public_result = s3_service.make_public_and_get_url(request.video_key, organization_id=org_id)
 
     if not public_result.get("success"):
         # Fall back to presigned URL if public fails
         download_result = s3_service.get_presigned_download_url(
             request.video_key,
-            expires_in=86400 * 7  # 7 days
+            expires_in=86400 * 7,  # 7 days
+            organization_id=org_id,
         )
         if not download_result.get("success"):
             raise HTTPException(status_code=500, detail="Failed to generate video URL")

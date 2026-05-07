@@ -87,38 +87,50 @@ class VideoS3Service:
         self,
         job_id: str,
         artifact_type: str = "final",
-        extension: str = "mp4"
+        extension: str = "mp4",
+        organization_id: int = None,
     ) -> str:
         """
         Generate a storage key for a video file.
 
-        Format: videos/{job_id}/{artifact_type}.{extension}
+        Format: org-{org_id}/videos/{job_id}/{artifact_type}.{extension}
 
         Args:
             job_id: The render job ID
             artifact_type: Type of artifact (final, preview, thumbnail, audio)
             extension: File extension
+            organization_id: Organization ID for tenant isolation (REQUIRED)
 
         Returns:
             S3 storage key
+
+        Raises:
+            ValueError: If organization_id is not provided
         """
-        return f"videos/{job_id}/{artifact_type}.{extension}"
+        if not organization_id:
+            raise ValueError("organization_id is required for tenant-isolated video storage")
+        return f"org-{organization_id}/videos/{job_id}/{artifact_type}.{extension}"
 
-    def generate_thumbnail_key(self, job_id: str, index: int = 0) -> str:
+    def generate_thumbnail_key(self, job_id: str, index: int = 0, organization_id: int = None) -> str:
         """Generate storage key for a video thumbnail."""
-        return f"videos/{job_id}/thumbnails/thumb_{index:03d}.jpg"
+        if not organization_id:
+            raise ValueError("organization_id is required for tenant-isolated video storage")
+        return f"org-{organization_id}/videos/{job_id}/thumbnails/thumb_{index:03d}.jpg"
 
-    def generate_scene_key(self, job_id: str, scene_index: int, asset_type: str = "visual") -> str:
+    def generate_scene_key(self, job_id: str, scene_index: int, asset_type: str = "visual", organization_id: int = None) -> str:
         """Generate storage key for a scene asset."""
+        if not organization_id:
+            raise ValueError("organization_id is required for tenant-isolated video storage")
         ext = "png" if asset_type == "visual" else "wav"
-        return f"videos/{job_id}/scenes/{scene_index:03d}_{asset_type}.{ext}"
+        return f"org-{organization_id}/videos/{job_id}/scenes/{scene_index:03d}_{asset_type}.{ext}"
 
     def upload_video(
         self,
         file_path: str,
         job_id: str,
         artifact_type: str = "final",
-        content_type: str = "video/mp4"
+        content_type: str = "video/mp4",
+        organization_id: int = None,
     ) -> Dict[str, Any]:
         """
         Upload a video file to S3.
@@ -128,11 +140,15 @@ class VideoS3Service:
             job_id: Render job ID
             artifact_type: Type of artifact
             content_type: MIME type
+            organization_id: Organization ID for tenant isolation (REQUIRED)
 
         Returns:
             Dict with upload result and URLs
         """
         from botocore.exceptions import ClientError
+
+        if not organization_id:
+            return {"success": False, "error": "organization_id is required for video upload"}
 
         path = Path(file_path)
         if not path.exists():
@@ -146,7 +162,7 @@ class VideoS3Service:
             }
 
         extension = path.suffix.lstrip('.') or 'mp4'
-        storage_key = self.generate_video_key(job_id, artifact_type, extension)
+        storage_key = self.generate_video_key(job_id, artifact_type, extension, organization_id=organization_id)
 
         try:
             self.client.upload_file(
@@ -232,7 +248,8 @@ class VideoS3Service:
     def get_presigned_url(
         self,
         storage_key: str,
-        expires_in: int = 3600
+        expires_in: int = 3600,
+        organization_id: int = None,
     ) -> Dict[str, Any]:
         """
         Generate a presigned download URL.
@@ -240,11 +257,23 @@ class VideoS3Service:
         Args:
             storage_key: S3 key
             expires_in: URL expiry in seconds
+            organization_id: Organization ID for tenant validation (REQUIRED)
 
         Returns:
             Dict with presigned URL
         """
         from botocore.exceptions import ClientError
+
+        if not organization_id:
+            return {"success": False, "error": "organization_id is required for presigned URL generation"}
+
+        # Validate the storage key belongs to this organization
+        expected_prefix = f"org-{organization_id}/"
+        if not storage_key.startswith(expected_prefix):
+            logger.warning(
+                f"Presigned URL denied: org {organization_id} cannot access key {storage_key}"
+            )
+            return {"success": False, "error": "Access denied: video belongs to another organization"}
 
         try:
             url = self.client.generate_presigned_url(

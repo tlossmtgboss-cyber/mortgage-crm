@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 _VERCEL_API_BASE = "https://api.vercel.com"
 
-# Retry configuration for transient errors
-_RETRY_DELAY_SECONDS = 5
-_MAX_RETRIES = 1
+# Retry configuration for transient errors (exponential backoff: 2s, 4s, 8s)
+_BASE_RETRY_DELAY_SECONDS = 2
+_MAX_RETRIES = 3
 
 
 class VercelDomainError(Exception):
@@ -160,8 +160,22 @@ def _classify_vercel_error(resp: httpx.Response, domain: str) -> VercelDomainErr
     )
 
 
+def _retry_delay(attempt: int) -> float:
+    """Return the exponential backoff delay in seconds for the given attempt.
+
+    attempt 0 -> 2s, attempt 1 -> 4s, attempt 2 -> 8s, etc.
+    """
+    return _BASE_RETRY_DELAY_SECONDS * (2 ** attempt)
+
+
 def _is_retryable(exc: Exception) -> bool:
-    """Return True if the error warrants a retry."""
+    """Return True if the error warrants a retry.
+
+    Only retries on:
+    - 429 Too Many Requests (VercelRateLimitError)
+    - 5xx Server Errors (VercelTransientError)
+    - Network/connection errors (httpx.RequestError)
+    """
     if isinstance(exc, (VercelTransientError, VercelRateLimitError)):
         return True
     if isinstance(exc, httpx.RequestError):
@@ -177,8 +191,8 @@ def add_domain(domain: str) -> dict:
     Returns the Vercel API response dict on success, or a dict with
     ``{"error": "..."}`` on failure / missing credentials.
 
-    Retries once with a 5-second delay for transient errors (5xx, network,
-    rate limit).
+    Retries up to 3 times with exponential backoff (2s, 4s, 8s) for
+    transient errors (429 rate limit, 5xx server errors, network errors).
 
     Raises VercelDomainError subclasses for non-retryable failures, which
     callers can catch for user-friendly error messages.
@@ -201,11 +215,12 @@ def add_domain(domain: str) -> dict:
 
             exc = _classify_vercel_error(resp, domain)
             if _is_retryable(exc) and attempt < _MAX_RETRIES:
+                delay = _retry_delay(attempt)
                 logger.info(
-                    "Retrying Vercel add_domain for '%s' after %ss (attempt %d): %s",
-                    domain, _RETRY_DELAY_SECONDS, attempt + 1, exc.message,
+                    "Retrying Vercel add_domain for '%s' after %ss (attempt %d/%d): %s",
+                    domain, delay, attempt + 1, _MAX_RETRIES, exc.message,
                 )
-                time.sleep(_RETRY_DELAY_SECONDS)
+                time.sleep(delay)
                 last_exc = exc
                 continue
 
@@ -214,8 +229,9 @@ def add_domain(domain: str) -> dict:
         except httpx.RequestError as exc:
             logger.exception("Vercel add_domain network error for %s (attempt %d)", domain, attempt + 1)
             if attempt < _MAX_RETRIES:
-                logger.info("Retrying after network error in %ss", _RETRY_DELAY_SECONDS)
-                time.sleep(_RETRY_DELAY_SECONDS)
+                delay = _retry_delay(attempt)
+                logger.info("Retrying after network error in %ss", delay)
+                time.sleep(delay)
                 last_exc = exc
                 continue
             return {"error": f"Network error connecting to Vercel: {exc}", "error_type": "VercelTransientError"}
@@ -230,7 +246,7 @@ def remove_domain(domain: str) -> bool:
     DELETE /v10/projects/{project_id}/domains/{domain}
 
     Returns True on success (including 404 — already gone), False on error.
-    Retries once for transient errors.
+    Retries up to 3 times with exponential backoff for transient errors.
     """
     token, project_id = _get_credentials()
     if not token:
@@ -248,11 +264,12 @@ def remove_domain(domain: str) -> bool:
 
             exc = _classify_vercel_error(resp, domain)
             if _is_retryable(exc) and attempt < _MAX_RETRIES:
+                delay = _retry_delay(attempt)
                 logger.info(
-                    "Retrying Vercel remove_domain for '%s' in %ss: %s",
-                    domain, _RETRY_DELAY_SECONDS, exc.message,
+                    "Retrying Vercel remove_domain for '%s' in %ss (attempt %d/%d): %s",
+                    domain, delay, attempt + 1, _MAX_RETRIES, exc.message,
                 )
-                time.sleep(_RETRY_DELAY_SECONDS)
+                time.sleep(delay)
                 continue
 
             return False
@@ -260,7 +277,7 @@ def remove_domain(domain: str) -> bool:
         except httpx.RequestError:
             logger.exception("Vercel remove_domain network error for %s (attempt %d)", domain, attempt + 1)
             if attempt < _MAX_RETRIES:
-                time.sleep(_RETRY_DELAY_SECONDS)
+                time.sleep(_retry_delay(attempt))
                 continue
             return False
 
@@ -273,7 +290,7 @@ def get_domain_config(domain: str) -> dict:
     GET /v6/domains/{domain}/config
 
     Returns the Vercel config dict, or ``{"error": "..."}`` on failure.
-    Retries once for transient errors.
+    Retries up to 3 times with exponential backoff for transient errors.
     """
     token, _ = _get_credentials()
     if not token:
@@ -290,11 +307,12 @@ def get_domain_config(domain: str) -> dict:
 
             exc = _classify_vercel_error(resp, domain)
             if _is_retryable(exc) and attempt < _MAX_RETRIES:
+                delay = _retry_delay(attempt)
                 logger.info(
-                    "Retrying Vercel get_domain_config for '%s' in %ss: %s",
-                    domain, _RETRY_DELAY_SECONDS, exc.message,
+                    "Retrying Vercel get_domain_config for '%s' in %ss (attempt %d/%d): %s",
+                    domain, delay, attempt + 1, _MAX_RETRIES, exc.message,
                 )
-                time.sleep(_RETRY_DELAY_SECONDS)
+                time.sleep(delay)
                 continue
 
             return {"error": exc.message, "error_type": type(exc).__name__}
@@ -302,7 +320,7 @@ def get_domain_config(domain: str) -> dict:
         except httpx.RequestError:
             logger.exception("Vercel get_domain_config network error for %s (attempt %d)", domain, attempt + 1)
             if attempt < _MAX_RETRIES:
-                time.sleep(_RETRY_DELAY_SECONDS)
+                time.sleep(_retry_delay(attempt))
                 continue
             return {"error": f"Network error checking domain config for {domain}"}
 
@@ -331,36 +349,71 @@ def check_ssl_status(domain: str) -> str:
     return "pending"
 
 
+def _get_ssl_expiry_via_socket(domain: str) -> Optional[datetime]:
+    """Fallback: fetch SSL certificate expiry by connecting to the domain directly.
+
+    Uses ssl.get_server_certificate() to retrieve the PEM cert and parses the
+    notAfter date. This works even when the Vercel API doesn't return cert data.
+
+    Returns a UTC datetime or None if the check fails.
+    """
+    import ssl
+    import socket
+    from datetime import datetime as _dt
+
+    try:
+        # Connect via TLS and read the peer certificate
+        ctx = ssl.create_default_context()
+
+        with socket.create_connection((domain, 443), timeout=10) as sock:
+            with ctx.wrap_socket(sock, server_hostname=domain) as ssock:
+                cert_info = ssock.getpeercert()
+
+        if cert_info and "notAfter" in cert_info:
+            # Format: 'Mon DD HH:MM:SS YYYY GMT'
+            expiry = _dt.strptime(cert_info["notAfter"], "%b %d %H:%M:%S %Y %Z")
+            return expiry.replace(tzinfo=timezone.utc)
+
+    except Exception as e:
+        logger.warning(
+            "DNS fallback SSL expiry check failed for '%s': %s", domain, e,
+        )
+
+    return None
+
+
 def get_ssl_expiry(domain: str) -> Optional[datetime]:
-    """Retrieve the SSL certificate expiry date from Vercel for a domain.
+    """Retrieve the SSL certificate expiry date for a domain.
+
+    Primary: queries the Vercel domain config API for cert expiry data.
+    Fallback: if Vercel doesn't return cert info, connects directly to the
+    domain via TLS and reads the certificate's notAfter date.
 
     Returns the earliest cert expiry as a UTC datetime, or None if unavailable.
-    Vercel's domain config response includes a ``certs`` array with
-    ``expiresAt`` (epoch ms) on each certificate.
     """
     config = get_domain_config(domain)
 
-    if config.get("skipped") or config.get("error"):
-        return None
+    # Try Vercel API first
+    if not config.get("skipped") and not config.get("error"):
+        certs = config.get("certs", [])
+        expires_list = []
+        for cert in certs:
+            expires_at = cert.get("expiresAt")
+            if expires_at:
+                try:
+                    # Vercel returns epoch milliseconds
+                    expires_list.append(
+                        datetime.fromtimestamp(expires_at / 1000, tz=timezone.utc)
+                    )
+                except (TypeError, ValueError, OSError) as e:
+                    logger.warning("Could not parse cert expiresAt=%s for %s: %s", expires_at, domain, e)
 
-    certs = config.get("certs", [])
-    if not certs:
-        return None
+        if expires_list:
+            return min(expires_list)
 
-    expires_list = []
-    for cert in certs:
-        expires_at = cert.get("expiresAt")
-        if expires_at:
-            try:
-                # Vercel returns epoch milliseconds
-                expires_list.append(
-                    datetime.fromtimestamp(expires_at / 1000, tz=timezone.utc)
-                )
-            except (TypeError, ValueError, OSError) as e:
-                logger.warning("Could not parse cert expiresAt=%s for %s: %s", expires_at, domain, e)
-
-    if not expires_list:
-        return None
-
-    # Return the earliest expiry (most urgent)
-    return min(expires_list)
+    # Fallback: direct TLS connection to read the certificate
+    logger.info(
+        "Vercel API did not return cert expiry for '%s' — attempting DNS/TLS fallback.",
+        domain,
+    )
+    return _get_ssl_expiry_via_socket(domain)

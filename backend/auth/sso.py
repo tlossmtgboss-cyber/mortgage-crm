@@ -426,15 +426,14 @@ def process_saml_response(
     except Exception as e:
         raise ValueError(f"Failed to decode SAML Response: {e}")
 
-    # ── XML Signature Verification ──
-    if config.x509_cert:
-        _verify_saml_xml_signature(xml_bytes, config.x509_cert)
-    else:
-        logger.warning(
-            "SAML response processed WITHOUT signature verification — "
-            f"no IdP X.509 certificate configured for org {config.organization_id}. "
-            "This is insecure and should be fixed by uploading the IdP certificate."
+    # ── XML Signature Verification (MANDATORY) ──
+    if not config.x509_cert:
+        raise ValueError(
+            "SAML signature verification is mandatory but no IdP X.509 certificate "
+            f"is configured for org {config.organization_id}. Upload the IdP "
+            "certificate before processing SAML responses."
         )
+    _verify_saml_xml_signature(xml_bytes, config.x509_cert)
 
     # Parse XML
     try:

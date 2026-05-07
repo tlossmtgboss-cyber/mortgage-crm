@@ -3238,6 +3238,14 @@ async def startup_event():
     from startup_migrations import run_all_startup_migrations
     run_all_startup_migrations(engine)
 
+    # Initialize query timing middleware (PERF-006)
+    try:
+        from middleware.query_timing import setup_query_timing
+        setup_query_timing(engine)
+        logger.info("Query timing middleware initialized")
+    except Exception as e:
+        logger.warning(f"Query timing middleware skipped: {e}")
+
     try:
         from services.scheduler_service import init_scheduler
         init_scheduler()

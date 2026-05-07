@@ -228,18 +228,25 @@ def parse_saml_response(
         xml_bytes = base64.b64decode(saml_response_b64)
         xml_str = xml_bytes.decode("utf-8")
 
-        # ── XML Signature Verification ──
-        if idp_certificate:
-            try:
-                _verify_xml_signature(xml_bytes, idp_certificate)
-            except ValueError as e:
-                logger.error(f"SAML signature verification failed: {e}")
-                return False, {"error": str(e)}
-        else:
-            logger.warning(
-                "SAML response processed WITHOUT signature verification — "
-                "no IdP certificate configured. This is insecure."
+        # ── XML Signature Verification (MANDATORY) ──
+        if not idp_certificate:
+            logger.error(
+                "SAML response REJECTED — no IdP X.509 certificate configured. "
+                "Signature verification is mandatory. Configure the IdP certificate "
+                "before processing SAML responses."
             )
+            return False, {
+                "error": (
+                    "SAML signature verification is mandatory but no IdP certificate "
+                    "is configured. Upload the IdP X.509 certificate to enable SSO."
+                )
+            }
+
+        try:
+            _verify_xml_signature(xml_bytes, idp_certificate)
+        except ValueError as e:
+            logger.error(f"SAML signature verification failed: {e}")
+            return False, {"error": str(e)}
 
         # Parse XML
         root = ET.fromstring(xml_str)
