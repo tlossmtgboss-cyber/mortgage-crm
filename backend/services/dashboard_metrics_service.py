@@ -30,14 +30,14 @@ TERMINAL_STAGES = [
 ]
 
 _DEFAULT_PRODUCTION = {
-    "annualGoal": 222, "annualActual": 0, "annualProgress": 0,
-    "monthlyGoal": 18.5, "monthlyActual": 0, "monthlyProgress": 0,
-    "weeklyGoal": 5, "weeklyActual": 0, "weeklyProgress": 0,
-    "dailyGoal": 1, "dailyActual": 0, "dailyProgress": 0,
+    "annualGoal": 0, "annualActual": 0, "annualProgress": 0,
+    "monthlyGoal": 0, "monthlyActual": 0, "monthlyProgress": 0,
+    "weeklyGoal": 0, "weeklyActual": 0, "weeklyProgress": 0,
+    "dailyGoal": 0, "dailyActual": 0, "dailyProgress": 0,
 }
 
 _DEFAULT_LEAD_METRICS = {
-    "new_today": 0, "avg_contact_time": 1.2, "conversion_rate": 0,
+    "new_today": 0, "avg_contact_time": 0, "conversion_rate": 0,
     "hot_leads": 0, "alerts": [],
 }
 
@@ -53,10 +53,10 @@ _DEFAULT_EFFICIENCY = {
 
 _DEFAULT_PROFITABILITY = {
     "funded_ytd": 0, "total_volume": 0, "avg_loan_size": 0,
-    "gain_on_sale": 0, "gain_on_sale_display": "--",
-    "revenue_per_loan": 0, "revenue_per_loan_display": "--",
-    "avg_points": 0, "cost_per_loan": "--", "net_margin": "--",
-    "insights": ["Fund loans to see profitability metrics"],
+    "gain_on_sale": 0, "gain_on_sale_display": None,
+    "revenue_per_loan": 0, "revenue_per_loan_display": None,
+    "avg_points": 0, "cost_per_loan": None, "net_margin": None,
+    "insights": [],
 }
 
 
@@ -101,10 +101,10 @@ def calculate_production_metrics(
         daily_actual = funded_counts.daily or 0
 
         goals = (user_metadata or {}).get('goals', {})
-        annual_goal = goals.get('annualGoal', 222)
-        monthly_goal = goals.get('monthlyGoal', 18.5)
-        weekly_goal = goals.get('weeklyGoal', 5)
-        daily_goal = goals.get('dailyGoal', 1)
+        annual_goal = goals.get('annualGoal', 0)
+        monthly_goal = goals.get('monthlyGoal', 0)
+        weekly_goal = goals.get('weeklyGoal', 0)
+        daily_goal = goals.get('dailyGoal', 0)
 
         return {
             "annualGoal": annual_goal,
@@ -238,7 +238,7 @@ def calculate_lead_metrics(
         avg_contact = db.query(
             func.avg(func.extract('epoch', Lead.first_contact_attempt_date - Lead.created_at) / 3600)
         ).filter(*contact_filters).scalar()
-        avg_contact_time = round(float(avg_contact), 1) if avg_contact else 1.2
+        avg_contact_time = round(float(avg_contact), 1) if avg_contact else 0
 
         uncontacted_filters = [Lead.stage == LeadStage.NEW, Lead.created_at < datetime.now(timezone.utc) - timedelta(hours=24)]
         _apply_scope(uncontacted_filters, Lead.owner_id, user_id, org_id, branch_user_ids, Lead.organization_id)
@@ -299,12 +299,12 @@ def calculate_profitability(
             "total_volume": volume,
             "avg_loan_size": avg_size,
             "gain_on_sale": gain_bps,
-            "gain_on_sale_display": f"{gain_bps} bps" if gain_bps > 0 else "--",
+            "gain_on_sale_display": f"{gain_bps} bps" if gain_bps > 0 else None,
             "revenue_per_loan": round(avg_orig, 2) if avg_orig > 0 else 0,
-            "revenue_per_loan_display": f"${avg_orig:,.0f}" if avg_orig > 0 else "--",
+            "revenue_per_loan_display": f"${avg_orig:,.0f}" if avg_orig > 0 else None,
             "avg_points": round(avg_points, 3),
-            "cost_per_loan": "--",
-            "net_margin": f"{gain_bps} bps" if gain_bps > 0 else "--",
+            "cost_per_loan": None,
+            "net_margin": f"{gain_bps} bps" if gain_bps > 0 else None,
             "insights": [],
         }
         if funded > 0:
@@ -567,21 +567,21 @@ def calculate_team_performance(
         proc_filters = [Loan.stage == LoanStage.PROCESSING]
         _apply_scope(proc_filters, Loan.loan_officer_id, user_id, org_id, branch_user_ids, Loan.organization_id)
         proc = db.query(func.count(Loan.id).label('cnt'), func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_days')).filter(*proc_filters).first()
-        proc_perf = max(0, min(100, int(100 - max(0, (float(proc.avg_days or 0) - 10) * 5)))) if (proc.cnt or 0) > 0 else 85
+        proc_perf = max(0, min(100, int(100 - max(0, (float(proc.avg_days or 0) - 10) * 5)))) if (proc.cnt or 0) > 0 else 0
         results.append({"role": "Processors", "performance": proc_perf})
 
         # UW performance
         uw_filters = [Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING])]
         _apply_scope(uw_filters, Loan.loan_officer_id, user_id, org_id, branch_user_ids, Loan.organization_id)
         uw = db.query(func.count(Loan.id).label('cnt'), func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_days')).filter(*uw_filters).first()
-        uw_perf = max(0, min(100, int(100 - max(0, (float(uw.avg_days or 0) - 7) * 5)))) if (uw.cnt or 0) > 0 else 80
+        uw_perf = max(0, min(100, int(100 - max(0, (float(uw.avg_days or 0) - 7) * 5)))) if (uw.cnt or 0) > 0 else 0
         results.append({"role": "Underwriters", "performance": uw_perf})
 
         # Closer performance
         close_filters = [Loan.stage == LoanStage.FUNDED, Loan.funded_date >= cutoff.date()]
         _apply_scope(close_filters, Loan.loan_officer_id, user_id, org_id, branch_user_ids, Loan.organization_id)
         funded = db.query(func.count(Loan.id)).filter(*close_filters).scalar() or 0
-        results.append({"role": "Closers", "performance": min(100, max(0, 75 + funded * 2)) if funded > 0 else 85})
+        results.append({"role": "Closers", "performance": min(100, max(0, 75 + funded * 2)) if funded > 0 else 0})
 
         return results
     except Exception as e:
