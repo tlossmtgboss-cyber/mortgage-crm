@@ -13,6 +13,7 @@ import json
 import asyncio
 import base64
 import os
+import re
 import time
 import httpx
 from typing import Optional, Dict, Any, AsyncGenerator, List, TYPE_CHECKING
@@ -1082,9 +1083,13 @@ async def synthesize_text(request: Request, db: Session = Depends(get_db)):
             logger.error(f"[TTS] Provider returned empty audio (provider={type(tts).__name__})")
             raise HTTPException(502, "TTS provider returned empty audio")
 
+        # Sanitize user-supplied values before logging to avoid log injection
+        # (CodeQL: log entries should not contain unescaped user input).
+        safe_provider = re.sub(r"[^A-Za-z0-9_\-]", "", str(provider))[:32] if provider else "auto"
+        safe_voice_id = re.sub(r"[^A-Za-z0-9_\-]", "", str(voice_id))[:64] if voice_id else "default"
         logger.info(
-            f"[TTS] Synthesized {len(audio)} bytes "
-            f"(client={type(tts).__name__}, provider_param={provider}, voice_id={voice_id})"
+            "[TTS] Synthesized %d bytes (client=%s, provider_param=%s, voice_id=%s)",
+            len(audio), type(tts).__name__, safe_provider, safe_voice_id,
         )
 
         return {
