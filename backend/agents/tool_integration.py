@@ -62,7 +62,7 @@ AGENT_CONFIGS = {
     "pipeline_analyst": AgentToolConfig(
         role="pipeline_analyst",
         name="Pipeline Analyst",
-        description="Analyzes loan pipeline metrics and performance",
+        description="Analyzes loan pipeline metrics, trends, and performance",
         tool_names=[
             "get_pipeline_metrics",
             "get_loans_by_status",
@@ -76,6 +76,8 @@ AGENT_CONFIGS = {
             "get_performance_by_period",
             "compare_periods",
             "get_data_availability",
+            # Trend analysis
+            "analyze_trends",
         ],
         max_concurrent_tools=5,
         recommended_model="sonnet",  # Complex analytical reasoning
@@ -349,7 +351,7 @@ AGENT_CONFIGS = {
     "reporting_engine": AgentToolConfig(
         role="reporting_engine",
         name="Reporting Engine",
-        description="Generates reports, analytics, and data exports",
+        description="Generates reports, analytics, trend analysis, and data exports",
         tool_names=[
             "generate_pipeline_report",
             "generate_production_report",
@@ -363,6 +365,8 @@ AGENT_CONFIGS = {
             "get_performance_by_period",
             "compare_periods",
             "get_data_availability",
+            # Trend analysis & business intelligence
+            "analyze_trends",
         ],
         recommended_model="sonnet",  # Complex analytical reasoning, anomaly detection, narrative generation
     ),

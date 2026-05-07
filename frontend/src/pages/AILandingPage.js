@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI, outreachAPI, API_BASE_URL } from '../services/api';
 import { getCurrentUser } from '../utils/auth';
 import ActionSidebar from '../components/ActionSidebar';
@@ -1249,11 +1250,14 @@ function AILandingPage() {
           // For all other questions (daily briefing, pipeline audit, bottlenecks, etc.), just show the answer without sidebar
 
           // Update conversation history
-          setConversationHistory(prev => [
-            ...prev,
-            { role: 'user', content: message },
-            { role: 'assistant', content: fullResponse }
-          ]);
+          setConversationHistory(prev => {
+            const updated = [
+              ...prev,
+              { role: 'user', content: message },
+              { role: 'assistant', content: fullResponse }
+            ];
+            return updated.length > 20 ? updated.slice(-20) : updated;
+          });
         },
         // onError - called if there's an error
         (error) => {
@@ -1269,7 +1273,9 @@ function AILandingPage() {
           ));
         },
         // documentContext - text from uploaded document (6th param)
-        docContext
+        docContext,
+        // sessionId - for conversation memory continuity (7th param)
+        sessionId
       );
     } catch (error) {
       console.error('AI processing error:', error);
@@ -2361,9 +2367,13 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                               <div className="ai-status-text">{msg.statusText}</div>
                             )}
                             <div className="ai-conv-text">
-                              {msg.content?.split('\n').map((line, i) => (
-                                <p key={i}>{line || '\u00A0'}</p>
-                              ))}
+                              {msg.type === 'assistant' && !msg.isStreaming ? (
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{msg.content || ''}</ReactMarkdown>
+                              ) : (
+                                msg.content?.split('\n').map((line, i) => (
+                                  <p key={i}>{line || '\u00A0'}</p>
+                                ))
+                              )}
                             </div>
                             {/* Feedback buttons for assistant messages */}
                             {msg.type === 'assistant' && !msg.isStreaming && msg.content && (
@@ -2428,6 +2438,34 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                 <button onClick={() => handleExamplePrompt('What trends do you see across my leads, loans, pipeline, and referral partners? Email me a full trend report.')}>
                   <strong>Trend Report</strong>
                   <span>Analyze KPI trends and email a report</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Show me my top 10 leads sorted by AI score that I should call today')}>
+                  <strong>Top Leads</strong>
+                  <span>Your highest-priority leads to call</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Check TRID compliance across my active pipeline and flag any issues')}>
+                  <strong>Compliance Check</strong>
+                  <span>TRID, RESPA and disclosure audit</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Should I lock or float on my loans closing in the next 30 days?')}>
+                  <strong>Rate Advisory</strong>
+                  <span>Lock vs float recommendation</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('What documents are missing or expired across my active loans?')}>
+                  <strong>Missing Docs</strong>
+                  <span>Track outstanding document requests</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Show me my referral partner performance and who I should reach out to')}>
+                  <strong>Referral Partners</strong>
+                  <span>Partner volume and engagement</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Give me a profitability breakdown of my funded loans this month')}>
+                  <strong>Profitability</strong>
+                  <span>Revenue, margins, and cost per loan</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Show me my SLA status - any deadlines at risk of breach?')}>
+                  <strong>SLA Tracker</strong>
+                  <span>Deadline and service level monitoring</span>
                 </button>
               </div>
             </div>
@@ -3596,7 +3634,7 @@ function ChatResponseComponent({ content, responseData }) {
     <div className="ai-message-content-new ai-special-content">
       <div className="ai-action-preview chat-response">
         <div className="ai-chat-response-content">
-          <ReactMarkdown>{content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{content}</ReactMarkdown>
         </div>
       </div>
     </div>
@@ -3760,7 +3798,7 @@ function TaskPrioritiesComponent({ content, tasks, onCompleteTask, onViewDetails
     <div className="ai-message-content-new ai-special-content" style={styles.container}>
       {/* AI Response Text */}
       <div className="ai-chat-response-content">
-        <ReactMarkdown>{content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{content}</ReactMarkdown>
       </div>
 
       {tasks && tasks.length > 0 && (

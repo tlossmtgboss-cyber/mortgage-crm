@@ -903,7 +903,7 @@ export const aiAPI = {
   // Attempts true SSE streaming via /orchestrator-chat-stream first
   // (tokens appear as they are generated), then falls back to the
   // non-streaming /langgraph-chat endpoint with simulated chunking.
-  processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null) => {
+  processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null, sessionId = null) => {
     let token = getToken();
 
     try {
@@ -914,8 +914,13 @@ export const aiAPI = {
       if (documentContext) {
         body.document_context = documentContext;
       }
+      if (sessionId) {
+        body.session_id = sessionId;
+      }
 
       // --- Attempt true SSE streaming first ---
+      const controller = new AbortController();
+      const streamTimeout = setTimeout(() => controller.abort(), 120000);
       try {
         let sseResponse = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
           method: 'POST',
@@ -923,7 +928,8 @@ export const aiAPI = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify(body),
+          signal: controller.signal
         });
 
         // On 401, attempt a silent token refresh and retry once
@@ -937,7 +943,8 @@ export const aiAPI = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
               },
-              body: JSON.stringify(body)
+              body: JSON.stringify(body),
+              signal: controller.signal
             });
           }
         }
@@ -985,6 +992,8 @@ export const aiAPI = {
             }
           }
 
+          clearTimeout(streamTimeout);
+
           // Signal completion
           if (onDone) {
             onDone(fullResponse, {
@@ -995,8 +1004,14 @@ export const aiAPI = {
           }
           return; // SSE path succeeded — skip fallback
         }
+        clearTimeout(streamTimeout);
         // If response is not SSE (e.g. 404 or wrong content-type), fall through to non-streaming
       } catch (sseErr) {
+        clearTimeout(streamTimeout);
+        if (sseErr.name === 'AbortError') {
+          if (onError) onError('Request timed out after 2 minutes. Please try again.');
+          return;
+        }
         console.warn('SSE streaming unavailable, falling back to non-streaming:', sseErr.message);
       }
 
@@ -1058,6 +1073,7 @@ export const aiAPI = {
       if (onDone) {
         onDone(fullResponse, {
           full_response: fullResponse,
+          session_id: data.session_id,
           intent: data.intent,
           confidence: data.confidence,
           follow_up_suggestions: data.follow_up_suggestions,

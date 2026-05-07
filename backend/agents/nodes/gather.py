@@ -384,9 +384,20 @@ def determine_tool_arguments(
         elif state.get("extracted_entities", {}).get("phone_number"):
             phone = state["extracted_entities"]["phone_number"]
 
+        # Fall back to active entity phone when user says "call them"
+        if not phone and active_entity_data:
+            phone = active_entity_data.get("lead_phone") or active_entity_data.get("loan_borrower_phone")
+            if phone:
+                logger.info(f"[GATHER] {tool_name} resolved phone from active entity context")
+
         if phone:
             args["phone_number"] = phone
-            args["contact_name"] = entities.get("borrower_names", ["Contact"])[0] if entities.get("borrower_names") else "Contact"
+            contact_name = "Contact"
+            if entities.get("borrower_names"):
+                contact_name = entities["borrower_names"][0]
+            elif active_entity_data:
+                contact_name = active_entity_data.get("lead_name") or active_entity_data.get("loan_borrower_name") or "Contact"
+            args["contact_name"] = contact_name
 
     elif tool_name in ["send_sms", "send_text", "text_contact"]:
         # Get phone number from entities or extracted_entities
@@ -395,6 +406,12 @@ def determine_tool_arguments(
             phone = entities["phone_numbers"][0]
         elif state.get("extracted_entities", {}).get("phone_number"):
             phone = state["extracted_entities"]["phone_number"]
+
+        # Fall back to active entity phone when user says "text them"
+        if not phone and active_entity_data:
+            phone = active_entity_data.get("lead_phone") or active_entity_data.get("loan_borrower_phone")
+            if phone:
+                logger.info(f"[GATHER] {tool_name} resolved phone from active entity context")
 
         if phone:
             args["phone_number"] = phone

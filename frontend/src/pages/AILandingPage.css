@@ -412,14 +412,27 @@
 /* Example Prompts - Claude.ai style cards */
 .ai-example-prompts-new {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  max-width: 600px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-width: 780px;
   margin: 0 auto;
 }
 
+@media (max-width: 768px) {
+  .ai-example-prompts-new {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .ai-example-prompts-new {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
 .ai-example-prompts-new button {
-  padding: 16px;
+  padding: 12px 14px;
   background: #fff;
   border: 1px solid #e5e5e5;
   border-radius: 12px;
@@ -1769,6 +1782,74 @@
 
 .ai-conv-text p:last-child {
   margin-bottom: 0;
+}
+
+.ai-conv-text h1, .ai-conv-text h2, .ai-conv-text h3, .ai-conv-text h4 {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ai-conv-text h1 { font-size: 18px; }
+.ai-conv-text h2 { font-size: 16px; }
+.ai-conv-text h3 { font-size: 15px; }
+
+.ai-conv-text ul, .ai-conv-text ol {
+  margin: 4px 0 8px 0;
+  padding-left: 20px;
+}
+
+.ai-conv-text li {
+  margin-bottom: 4px;
+}
+
+.ai-conv-text strong {
+  font-weight: 600;
+}
+
+.ai-conv-text code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.ai-conv-text pre {
+  background: #f5f5f5;
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.ai-conv-text pre code {
+  background: none;
+  padding: 0;
+}
+
+.ai-conv-text table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+.ai-conv-text th, .ai-conv-text td {
+  border: 1px solid #e0e0e0;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.ai-conv-text th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.ai-conv-text blockquote {
+  border-left: 3px solid #217F8D;
+  margin: 8px 0;
+  padding: 4px 12px;
+  color: #555;
 }
 
 .ai-status-text {

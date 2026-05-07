@@ -33,13 +33,25 @@ RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AI_RATE_LIMIT_WINDOW", "60"))  # per 
 RATE_LIMIT_ORG_MAX = int(os.getenv("AI_RATE_LIMIT_ORG_MAX", "100"))  # per-org requests
 
 
+_rate_limit_last_cleanup = time.time()
+_RATE_LIMIT_CLEANUP_INTERVAL = 300  # purge stale keys every 5 minutes
+
+
 def _check_rate_limit(user_id: str, org_id: str = None) -> None:
     """
     Check per-user and per-organization rate limit using a sliding window.
     Raises HTTPException 429 if limit exceeded.
     """
+    global _rate_limit_last_cleanup
     now = time.time()
     window_start = now - RATE_LIMIT_WINDOW_SECONDS
+
+    # Periodic cleanup of stale keys to prevent memory leak
+    if now - _rate_limit_last_cleanup > _RATE_LIMIT_CLEANUP_INTERVAL:
+        stale_keys = [k for k, v in _rate_limit_store.items() if not v or v[-1] < window_start]
+        for k in stale_keys:
+            del _rate_limit_store[k]
+        _rate_limit_last_cleanup = now
 
     # Per-user check
     timestamps = _rate_limit_store[user_id]
@@ -271,9 +283,14 @@ async def orchestrator_chat(
 
         request_start_time = time.time()
 
+        # Validate org context — RLS depends on it
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required for AI chat")
+
         # Rate limit check (per-user and per-org)
         user_id_str = str(getattr(current_user, 'id', 'unknown'))
-        org_id_str = str(getattr(current_user, 'organization_id', '')) or None
+        org_id_str = str(org_id)
         _check_rate_limit(user_id_str, org_id_str)
 
         data = await request.json()
@@ -331,8 +348,8 @@ async def orchestrator_chat(
 
         # Save to conversation memory (non-fatal on failure)
         try:
-            ConvMemory.save_message(db, session_id, current_user.id, "user", message)
-            ConvMemory.save_message(db, session_id, current_user.id, "assistant", result.get("response", ""))
+            ConvMemory.save_message(db, current_user.id, session_id, "user", message)
+            ConvMemory.save_message(db, current_user.id, session_id, "assistant", result.get("response", ""))
         except Exception as save_err:
             logger.warning(f"Failed to save conversation: {save_err}")
 
@@ -369,15 +386,35 @@ async def orchestrator_chat_stream(
     Streaming AI Chat - sends response tokens as they're generated.
     Uses Server-Sent Events (SSE) for real-time streaming via the LangGraph agent.
     """
+    # Validate org context — RLS depends on it
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required for AI chat")
+
     # Rate limit check (per-user and per-org)
     user_id_str = str(getattr(current_user, 'id', 'unknown'))
-    org_id_str = str(getattr(current_user, 'organization_id', '')) or None
+    org_id_str = str(org_id)
     _check_rate_limit(user_id_str, org_id_str)
 
     data = await request.json()
     message = _sanitize_message(data.get("message", ""))
     session_id = data.get("session_id") or str(uuid.uuid4())
     voice_mode = data.get("voice_mode", False)
+    document_context = _sanitize_document_context(data.get("document_context"))
+
+    # Extract active entity context from CRM UI (lead/loan the user is viewing)
+    active_lead_id = data.get("lead_id")
+    active_loan_id = data.get("loan_id")
+    if active_lead_id is not None:
+        try:
+            active_lead_id = int(active_lead_id)
+        except (ValueError, TypeError):
+            active_lead_id = None
+    if active_loan_id is not None:
+        try:
+            active_loan_id = int(active_loan_id)
+        except (ValueError, TypeError):
+            active_loan_id = None
 
     if not message:
         raise HTTPException(status_code=400, detail="Message is required")
@@ -400,9 +437,19 @@ async def orchestrator_chat_stream(
             # Create the full agent service with all 215 tools
             service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
 
+            # Build data_context from document + active entity info
+            data_context = document_context
+            if active_lead_id or active_loan_id:
+                entity_hint = f"\n[ACTIVE CONTEXT] User is viewing: "
+                if active_lead_id:
+                    entity_hint += f"lead_id={active_lead_id} "
+                if active_loan_id:
+                    entity_hint += f"loan_id={active_loan_id}"
+                data_context = (data_context or "") + entity_hint
+
             # Stream response through the agent
             full_response = ""
-            async for chunk in service.process_message_stream(message, conversation_history, voice_mode=voice_mode):
+            async for chunk in service.process_message_stream(message, conversation_history, data_context=data_context, voice_mode=voice_mode):
                 chunk_type = chunk.get("type")
 
                 if chunk_type == "content":
@@ -427,8 +474,8 @@ async def orchestrator_chat_stream(
 
             # Save conversation (non-fatal on failure)
             try:
-                ConvMemory.save_message(db, session_id, current_user.id, "user", message)
-                ConvMemory.save_message(db, session_id, current_user.id, "assistant", full_response)
+                ConvMemory.save_message(db, current_user.id, session_id, "user", message)
+                ConvMemory.save_message(db, current_user.id, session_id, "assistant", full_response)
             except Exception as e:
                 logger.warning(f"Failed to save conversation in stream: {e}")
 

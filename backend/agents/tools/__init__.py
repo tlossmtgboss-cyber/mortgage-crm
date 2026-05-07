@@ -338,6 +338,7 @@ REPORTING_TOOLS = [
     "export_report",
     "get_dashboard_metrics",
     "create_custom_report",
+    "analyze_trends",
 ]
 
 NOTIFICATION_TOOLS = [
