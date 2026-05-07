@@ -515,6 +515,47 @@ def determine_tool_arguments(
             args["status"] = entities["stages"][0]
         args["limit"] = 25
 
+    elif tool_name in ["get_lead_details", "get_engagement_history", "score_lead",
+                       "suggest_followup", "get_similar_converted_leads",
+                       "get_optimal_contact_time"]:
+        lead_id = None
+        if state.get("active_lead_id"):
+            lead_id = state["active_lead_id"]
+        elif entities.get("lead_ids"):
+            lead_id = entities["lead_ids"][0]
+        if lead_id:
+            args["lead_id"] = lead_id
+
+    elif tool_name in ["check_trid_compliance", "check_respa_compliance",
+                       "check_tolerance_violations", "audit_loan_file",
+                       "get_disclosure_timeline", "get_missing_documents",
+                       "get_loan_conditions", "track_document_request",
+                       "send_document_reminder", "get_document_timeline",
+                       "get_third_party_status", "sync_los_data",
+                       "calculate_loan_profitability", "recommend_lock_strategy",
+                       "get_extension_pricing", "escalate_sla_breach"]:
+        loan_id = None
+        if state.get("active_loan_id"):
+            loan_id = state["active_loan_id"]
+        elif entities.get("loan_ids"):
+            loan_id = entities["loan_ids"][0]
+        if loan_id:
+            args["loan_id"] = loan_id
+
+    elif tool_name in ["draft_message", "schedule_outreach"]:
+        if state.get("active_lead_id"):
+            args["lead_id"] = state["active_lead_id"]
+        elif entities.get("lead_ids"):
+            args["lead_id"] = entities["lead_ids"][0]
+        if state.get("active_loan_id"):
+            args["loan_id"] = state["active_loan_id"]
+        elif entities.get("loan_ids"):
+            args["loan_id"] = entities["loan_ids"][0]
+        if entities.get("borrower_names"):
+            args["contact_name"] = entities["borrower_names"][0]
+        elif state.get("active_entity_data", {}).get("lead_name"):
+            args["contact_name"] = state["active_entity_data"]["lead_name"]
+
     return args
 
 

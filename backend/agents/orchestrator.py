@@ -193,7 +193,7 @@ INTENT_TO_SCOPED_TOOLS = {
     "notifications": ["send_notification", "get_pending_notifications", "get_notification_templates", "schedule_notification", "get_delivery_status", "update_preferences", "get_preferences", "batch_send"],
     "profit": ["calculate_loan_profitability", "analyze_margins_by_segment", "forecast_revenue", "compare_lo_profitability", "optimize_pricing", "get_cost_breakdown", "calculate_pull_through_impact", "get_profitability_trends"],
     "operations": ["get_pipeline_metrics", "get_loan_aging_report", "get_bottleneck_analysis", "check_sla_status", "get_sla_dashboard", "escalate_sla_breach", "get_lo_pipeline_breakdown", "get_compliance_history"],
-    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "bulk_create_tasks", "send_email", "schedule_followup"],
+    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "bulk_create_tasks", "send_email", "suggest_followup"],
     "content_marketing": ["get_pipeline_metrics", "search_leads", "draft_message"],
     "general": ["get_daily_priorities", "get_pipeline", "get_tasks"],
 }

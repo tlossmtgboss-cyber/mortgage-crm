@@ -103,6 +103,9 @@ class TCPAConsent(Base):
     # Timestamp when revocation was processed into this system.
     # FCC requires opt-outs to be honoured within 10 business days.
     revocation_processed_at = Column(DateTime)
+    # 10-business-day deadline by which revocation MUST be fully processed.
+    # Calculated at revocation time using TRID business-day arithmetic.
+    processing_deadline = Column(DateTime)
 
     # ------------------------------------------------------------------
     # Audit trail

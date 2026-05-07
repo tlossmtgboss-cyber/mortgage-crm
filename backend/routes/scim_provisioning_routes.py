@@ -284,7 +284,7 @@ def _validate_scim_token(request: Request) -> str:
 
 def _parse_scim_filter(filter_str: str) -> Optional[tuple]:
     """
-    Parse a SCIM filter expression into (attribute, operator, value).
+    Parse a single SCIM filter clause into (attribute, operator, value).
 
     Supports RFC 7644 Section 3.4.2.2 filter operators:
         eq  — equals (exact match, case-insensitive for strings)
@@ -303,7 +303,7 @@ def _parse_scim_filter(filter_str: str) -> Optional[tuple]:
     # Value is either "quoted string" or true/false (boolean)
     match = re.match(
         r'(\S+)\s+(eq|co|sw)\s+(?:"([^"]*)"|(\S+))',
-        filter_str,
+        filter_str.strip(),
         re.IGNORECASE,
     )
     if not match:
@@ -314,6 +314,52 @@ def _parse_scim_filter(filter_str: str) -> Optional[tuple]:
     # Quoted string value or bare value (for booleans)
     value = match.group(3) if match.group(3) is not None else match.group(4)
     return (attr, op, value)
+
+
+def _parse_compound_scim_filter(filter_str: str) -> list:
+    """
+    Parse a compound SCIM filter expression (RFC 7644 Section 3.4.2.2).
+
+    Supports:
+        - Single filters: userName eq "john@example.com"
+        - Compound AND: userName eq "john@example.com" and active eq true
+        - Compound OR: userName sw "john" or userName sw "jane"
+
+    AND takes precedence over OR per the RFC. For simplicity, this
+    implementation handles:
+        - Multiple clauses joined by "and" -> all must match (SQL AND)
+        - Multiple clauses joined by "or"  -> any must match (SQL OR)
+        - Mixed and/or: splits on "or" first, then "and" within each group
+
+    Returns a list of dicts, each with:
+        - "clauses": list of (attr, op, value) tuples
+        - "conjunction": "and" or "or" (how clauses relate to each other)
+
+    For simple cases (no "or"), returns a single group with conjunction="and".
+    The caller joins groups with OR and clauses within each group with AND.
+    """
+    if not filter_str or not filter_str.strip():
+        return []
+
+    filter_str = filter_str.strip()
+
+    # Check for "or" at the top level (case-insensitive, word boundary)
+    # Split on " or " (space-delimited to avoid matching inside quoted values)
+    or_groups = re.split(r'\s+or\s+', filter_str, flags=re.IGNORECASE)
+
+    result = []
+    for group_str in or_groups:
+        # Split each OR group on " and "
+        and_clauses_raw = re.split(r'\s+and\s+', group_str.strip(), flags=re.IGNORECASE)
+        clauses = []
+        for clause_str in and_clauses_raw:
+            parsed = _parse_scim_filter(clause_str)
+            if parsed:
+                clauses.append(parsed)
+        if clauses:
+            result.append(clauses)
+
+    return result
 
 
 # Map SCIM attribute names to SQL column references (using 'u.' alias)
@@ -333,9 +379,15 @@ _SCIM_ATTR_TO_COLUMN = {
 }
 
 
-def _build_filter_clause(attr: str, op: str, value: str) -> tuple:
+def _build_filter_clause(attr: str, op: str, value: str, param_suffix: str = "") -> tuple:
     """
     Build a SQL WHERE clause fragment from a parsed SCIM filter.
+
+    Args:
+        attr: SCIM attribute name.
+        op: Filter operator (eq, co, sw).
+        value: Filter value.
+        param_suffix: Optional suffix to make param keys unique in compound filters.
 
     Returns (clause_sql, param_key, param_value).
     Returns (None, None, None) if the attribute is not supported.
@@ -344,7 +396,7 @@ def _build_filter_clause(attr: str, op: str, value: str) -> tuple:
     if not column:
         return (None, None, None)
 
-    param_key = "scim_filter_val"
+    param_key = f"scim_filter_val{param_suffix}"
 
     # Boolean attribute (active)
     if attr == "active":
@@ -396,17 +448,58 @@ def _apply_enterprise_ext(ext: dict, update_fields: dict):
                 pass
 
 
-def _get_scim_org_id(db: Session) -> Optional[int]:
+def _get_scim_org_id(db: Session, request: Request = None) -> Optional[int]:
     """
     Determine the organization_id to scope SCIM operations.
 
-    Currently uses the first active organization. In a multi-IdP deployment
-    you would derive this from the bearer token or a tenant header.
+    Multi-IdP tenant isolation strategy (checked in order):
+    1. X-Scim-Tenant-Id header — explicit org ID from IdP/proxy config
+    2. SCIM_ORG_ID environment variable — single-tenant deployments
+    3. Lookup via sso_configurations where the SCIM token is associated
+       with an org that has active SSO (first active org as last resort)
+
+    In production multi-tenant deployments, configure IdP to send
+    X-Scim-Tenant-Id or use per-org SCIM tokens.
     """
+    # 1. Explicit tenant header
+    if request:
+        tenant_header = request.headers.get("X-Scim-Tenant-Id")
+        if tenant_header:
+            try:
+                org_id = int(tenant_header)
+                # Verify org exists and is active
+                row = db.execute(text(
+                    "SELECT id FROM organizations WHERE id = :org_id AND is_active = true"
+                ), {"org_id": org_id}).fetchone()
+                if row:
+                    return row.id
+                logger.warning(
+                    f"X-Scim-Tenant-Id header value {tenant_header} does not match "
+                    f"an active organization"
+                )
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid X-Scim-Tenant-Id header value: {tenant_header}")
+
+    # 2. Environment variable for single-tenant deployments
+    env_org_id = os.getenv("SCIM_ORG_ID")
+    if env_org_id:
+        try:
+            return int(env_org_id)
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid SCIM_ORG_ID env var: {env_org_id}")
+
+    # 3. Fallback: first active org (logs warning for visibility)
     row = db.execute(text(
         "SELECT id FROM organizations WHERE is_active = true ORDER BY id LIMIT 1"
     )).fetchone()
-    return row.id if row else None
+    if row:
+        logger.warning(
+            f"SCIM request using fallback org_id={row.id} (first active org). "
+            f"Configure X-Scim-Tenant-Id header or SCIM_ORG_ID env var for "
+            f"proper multi-tenant isolation."
+        )
+        return row.id
+    return None
 
 
 def _hash_password(password: str) -> str:
@@ -461,7 +554,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         """
         _validate_scim_token(request)
 
-        org_id = _get_scim_org_id(db)
+        org_id = _get_scim_org_id(db, request)
         params: dict = {"limit": count, "offset": startIndex - 1}
         where_clauses = []
 
@@ -471,16 +564,32 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         # Parse SCIM filter (RFC 7644 Section 3.4.2.2)
         # Supports operators: eq (equals), co (contains), sw (starts with)
+        # Supports compound filters: "and" / "or" connectors
         # Supports attributes: userName, active, displayName, name.familyName,
         #   name.givenName, emails.value, title, phoneNumbers.value
         if filter:
-            parsed = _parse_scim_filter(filter.strip())
-            if parsed:
-                attr, op, value = parsed
-                clause, param_key, param_val = _build_filter_clause(attr, op, value)
-                if clause:
-                    where_clauses.append(clause)
-                    params[param_key] = param_val
+            or_groups = _parse_compound_scim_filter(filter)
+            if or_groups:
+                # Build SQL: (clause1 AND clause2) OR (clause3 AND clause4)
+                or_sql_parts = []
+                clause_idx = 0
+                for and_clauses in or_groups:
+                    and_sql_parts = []
+                    for attr, op, value in and_clauses:
+                        clause, param_key, param_val = _build_filter_clause(
+                            attr, op, value, param_suffix=f"_{clause_idx}"
+                        )
+                        if clause:
+                            and_sql_parts.append(clause)
+                            params[param_key] = param_val
+                        clause_idx += 1
+                    if and_sql_parts:
+                        or_sql_parts.append("(" + " AND ".join(and_sql_parts) + ")")
+                if or_sql_parts:
+                    if len(or_sql_parts) == 1:
+                        where_clauses.append(or_sql_parts[0])
+                    else:
+                        where_clauses.append("(" + " OR ".join(or_sql_parts) + ")")
 
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
@@ -581,7 +690,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 detail=_scim_error(409, f"User with userName '{user_name}' already exists", "uniqueness"),
             )
 
-        org_id = _get_scim_org_id(db)
+        org_id = _get_scim_org_id(db, request)
 
         # Enterprise extension (RFC 7643 Section 4.3)
         enterprise = body.get(SCIM_ENTERPRISE_SCHEMA, {})

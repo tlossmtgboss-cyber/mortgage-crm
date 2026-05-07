@@ -39,6 +39,18 @@ logger = logging.getLogger(__name__)
 # Default API version for unversioned endpoints
 CURRENT_API_VERSION = "1.0"
 
+# V1 blanket deprecation — all /api/v1/ endpoints are deprecated
+# in favor of /api/v2/ equivalents.
+V1_DEPRECATION_DATE = "2026-05-01"
+V1_SUNSET_DATE = "2027-01-01T00:00:00Z"
+
+# V1 -> V2 successor mappings for Link header
+V1_SUCCESSOR_MAP: Dict[str, str] = {
+    "/api/v1/leads": "/api/v2/leads",
+    "/api/v1/loans": "/api/v2/loans",
+    "/api/v1/scheduler": "/api/v2/scheduler",
+}
+
 # Deprecated endpoints configuration
 # Format: path -> {deprecation_date, sunset_date, replacement}
 DEPRECATED_ENDPOINTS: Dict[str, Dict[str, Any]] = {
@@ -143,8 +155,28 @@ class APIVersioningMiddleware(BaseHTTPMiddleware):
                 response.headers["API-Version"] = self.current_version
 
     def _add_deprecation_headers(self, response: Response, path: str) -> None:
-        """Add Deprecation and Sunset headers for deprecated endpoints."""
+        """Add Deprecation and Sunset headers for deprecated endpoints.
+
+        All /api/v1/ endpoints automatically receive deprecation headers
+        pointing to their /api/v2/ successors (if mapped).  Individually
+        registered deprecations take priority.
+        """
         deprecation_info = self._get_deprecation_info(path)
+
+        # Blanket V1 deprecation: any /api/v1/ path gets headers
+        if not deprecation_info and "/api/v1" in path:
+            response.headers["Deprecation"] = "true"
+            response.headers["Sunset"] = V1_SUNSET_DATE
+
+            # Find the best successor-version link
+            successor = None
+            for v1_prefix, v2_replacement in V1_SUCCESSOR_MAP.items():
+                if path.startswith(v1_prefix):
+                    successor = v2_replacement
+                    break
+            if successor:
+                response.headers["Link"] = f'<{successor}>; rel="successor-version"'
+            return
 
         if not deprecation_info:
             return

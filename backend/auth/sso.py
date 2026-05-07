@@ -160,6 +160,68 @@ def get_org_sso_config(org_id: int, db: Session) -> Optional[SSOConfig]:
     )
 
 
+def get_sso_config_by_idp_entity_id(entity_id: str, db: Session) -> Tuple[Optional[SSOConfig], Optional[int]]:
+    """Retrieve SSO configuration by IdP entity_id.
+
+    Used for multi-IdP tenant isolation: given an IdP's entity_id (Issuer)
+    from a SAML response, find the correct organization's SSO config.
+
+    Args:
+        entity_id: The IdP entity ID (Issuer URI) from the SAML response.
+        db: SQLAlchemy database session.
+
+    Returns:
+        Tuple of (SSOConfig, org_id) if exactly one match found,
+        (None, None) if no match or ambiguous.
+    """
+    from database.models.sso_config import SSOConfiguration
+
+    configs = db.query(SSOConfiguration).filter(
+        SSOConfiguration.entity_id == entity_id,
+        SSOConfiguration.is_active == True,
+    ).all()
+
+    if not configs:
+        logger.warning(f"No SSO config found for IdP entity_id: {entity_id}")
+        return None, None
+
+    if len(configs) > 1:
+        org_ids = [c.organization_id for c in configs]
+        logger.warning(
+            f"Multiple orgs ({org_ids}) share IdP entity_id '{entity_id}'. "
+            f"This is a misconfiguration — each org should have a unique IdP entity_id. "
+            f"Refusing to authenticate to avoid cross-tenant access."
+        )
+        return None, None
+
+    config = configs[0]
+    if not config.is_saml_configured:
+        logger.debug(f"SSO config for IdP entity_id '{entity_id}' exists but SAML is not fully configured")
+        return None, None
+
+    # Resolve attribute mapping
+    attr_mapping = config.attribute_mapping or {}
+    if not attr_mapping:
+        attr_mapping = _DEFAULT_ATTRIBUTE_MAPS.get(config.provider, _DEFAULT_ATTRIBUTE_MAPS["custom"])
+
+    sso_config = SSOConfig(
+        entity_id=config.entity_id,
+        sso_url=config.sso_url,
+        slo_url=config.slo_url,
+        x509_cert=config.x509_cert,
+        attribute_mapping=attr_mapping,
+        default_role=config.default_role or "loan_officer",
+        default_permission_role=config.default_permission_role or "sales",
+        sp_entity_id=config.sp_entity_id or _SP_ENTITY_ID,
+        auto_provision=config.auto_provision,
+        enforce_sso=config.enforce_sso,
+        organization_id=config.organization_id,
+        provider=config.provider or "custom",
+    )
+
+    return sso_config, config.organization_id
+
+
 def get_org_sso_config_by_slug(org_slug: str, db: Session) -> Tuple[Optional[SSOConfig], Optional[int]]:
     """Retrieve SSO configuration by organization slug.
 
@@ -391,6 +453,21 @@ def process_saml_response(
         status_value = status_elem.get("Value", "")
         if "Success" not in status_value:
             raise ValueError(f"SAML Response status: {status_value}")
+
+    # Verify Issuer matches the configured IdP entity_id (multi-IdP tenant isolation)
+    issuer_elem = root.find("saml:Issuer", ns)
+    response_issuer = issuer_elem.text.strip() if issuer_elem is not None and issuer_elem.text else None
+    if response_issuer and config.entity_id:
+        if response_issuer != config.entity_id:
+            raise ValueError(
+                f"SAML Issuer mismatch: response Issuer '{response_issuer}' "
+                f"does not match configured IdP entity_id '{config.entity_id}'"
+            )
+    elif not response_issuer:
+        logger.warning(
+            "SAML Response missing Issuer element — cannot verify IdP identity. "
+            f"org={config.organization_id}"
+        )
 
     # Find assertion
     assertion = root.find(".//saml:Assertion", ns)
@@ -806,6 +883,7 @@ __all__ = [
     "SSOConfig",
     "get_org_sso_config",
     "get_org_sso_config_by_slug",
+    "get_sso_config_by_idp_entity_id",
     "create_saml_auth_request",
     "process_saml_response",
     "provision_or_update_user",

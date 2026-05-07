@@ -28,6 +28,7 @@ import os
 import time
 import logging
 import contextlib
+import threading
 from datetime import datetime, timezone
 from typing import Dict
 from sqlalchemy import create_engine, event, text
@@ -57,6 +58,14 @@ if DATABASE_URL.startswith("postgres://"):
 # Configuration
 SLOW_QUERY_THRESHOLD_MS = float(os.getenv("SLOW_QUERY_THRESHOLD_MS", "500"))
 STATEMENT_TIMEOUT_MS = int(os.getenv("STATEMENT_TIMEOUT_MS", "30000"))  # 30 seconds
+
+# RLS_STRICT_MODE: When True, raise an exception if tenant context cannot be set
+# instead of silently proceeding without RLS isolation. Defaults to True in
+# development so tenant isolation bugs are caught early.
+_env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+RLS_STRICT_MODE = os.getenv("RLS_STRICT_MODE", "true" if _env == "development" else "false").lower() == "true"
+if RLS_STRICT_MODE:
+    logger.info("RLS_STRICT_MODE enabled — missing tenant context will raise exceptions")
 
 # Create Base using modern DeclarativeBase (replaces deprecated declarative_base())
 class Base(DeclarativeBase):
@@ -153,6 +162,33 @@ def on_connect(dbapi_conn, connection_record):
 def on_invalidate(dbapi_conn, connection_record, exception):
     """Log when a connection is invalidated (detected as stale)."""
     logger.warning(f"Database connection invalidated: {exception}")
+
+
+# Overflow tracking — logs when SQLAlchemy creates connections beyond pool_size
+_overflow_high_water = 0
+_overflow_lock = threading.Lock()
+
+
+@event.listens_for(engine, "checkout")
+def on_checkout_overflow_track(dbapi_conn, connection_record, connection_proxy):
+    """Track overflow high-water mark for capacity planning."""
+    global _overflow_high_water
+    if USE_PGBOUNCER:
+        return
+    try:
+        pool = engine.pool
+        current_overflow = pool.overflow()
+        if current_overflow > 0:
+            with _overflow_lock:
+                if current_overflow > _overflow_high_water:
+                    _overflow_high_water = current_overflow
+                    logger.info(
+                        f"DB pool overflow high-water mark: {current_overflow} "
+                        f"(pool_size={pool.size()}, checked_out={pool.checkedout()}, "
+                        f"max_overflow={getattr(pool, '_max_overflow', '?')})"
+                    )
+    except Exception:
+        pass  # Never let monitoring break request flow
 
 # Slow query logging
 @event.listens_for(engine, "before_cursor_execute")
@@ -254,7 +290,6 @@ if DATABASE_URL.startswith("postgresql") and not os.getenv("WORKER_MODE"):
 
 # Per-tenant connection tracking (PERF-008)
 # Prevents one org from exhausting all DB connections
-import threading
 
 _tenant_connection_counts: Dict[int, int] = {}
 _tenant_conn_lock = threading.Lock()
@@ -322,6 +357,10 @@ def get_db(request: Request = None):
                 if env in ("production", "staging"):
                     logger.error(f"CRITICAL: RLS tenant context failed: {e}")
                     raise
+                # RLS_STRICT_MODE: also raise in dev when flag is set
+                if RLS_STRICT_MODE:
+                    logger.error(f"RLS_STRICT_MODE: tenant context failed in dev: {e}")
+                    raise
                 logger.warning(f"RLS context failed (dev mode): {e}")
         yield db
     finally:
@@ -377,6 +416,11 @@ def get_db_with_tenant(org_id: int):
                     logger.error(
                         f"CRITICAL: Background worker RLS tenant context failed for org_id={org_id}: {e}. "
                         "Refusing to yield unscoped session in production/staging."
+                    )
+                    raise
+                if RLS_STRICT_MODE:
+                    logger.error(
+                        f"RLS_STRICT_MODE: Background worker tenant context failed for org_id={org_id}: {e}"
                     )
                     raise
                 logger.warning(
@@ -637,6 +681,75 @@ def get_pool_status():
         }
     except Exception as e:
         return {"error": "Internal server error", "status": "unknown"}
+
+
+def get_pool_stats() -> dict:
+    """Get detailed connection pool statistics including utilization metrics.
+
+    Provides a superset of get_pool_status() with utilization percentage,
+    overflow high-water mark, and per-tenant connection counts.
+
+    Returns:
+        dict with keys: pool_type, pool_size, checked_in, checked_out,
+        overflow, max_overflow, max_connections, total_connections,
+        utilization_pct, overflow_high_water, tenant_connections, status.
+    """
+    try:
+        pool = engine.pool
+
+        if isinstance(pool, NullPool):
+            return {
+                "pool_type": "NullPool (PgBouncer)",
+                "pool_size": 0,
+                "checked_in": 0,
+                "checked_out": 0,
+                "overflow": 0,
+                "max_overflow": 0,
+                "max_connections": 0,
+                "total_connections": 0,
+                "utilization_pct": 0.0,
+                "overflow_high_water": 0,
+                "tenant_connections": {},
+                "status": "healthy",
+                "note": "Connection pooling handled by PgBouncer",
+            }
+
+        pool_size = pool.size()
+        checked_in = pool.checkedin()
+        checked_out = pool.checkedout()
+        overflow = pool.overflow()
+        max_overflow = getattr(pool, '_max_overflow', -1)
+        max_conn = pool_size + max_overflow if max_overflow >= 0 else -1
+        total = checked_out + checked_in
+        utilization = (checked_out / max_conn * 100) if max_conn > 0 else 0.0
+
+        if max_conn > 0 and total >= max_conn:
+            status = "saturated"
+        elif utilization >= 70:
+            status = "elevated"
+        else:
+            status = "healthy"
+
+        with _tenant_conn_lock:
+            tenant_snapshot = dict(_tenant_connection_counts)
+
+        return {
+            "pool_type": "QueuePool (SQLAlchemy)",
+            "pool_size": pool_size,
+            "checked_in": checked_in,
+            "checked_out": checked_out,
+            "overflow": overflow,
+            "max_overflow": max_overflow,
+            "max_connections": max_conn,
+            "total_connections": total,
+            "utilization_pct": round(utilization, 1),
+            "overflow_high_water": _overflow_high_water,
+            "tenant_connections": tenant_snapshot,
+            "status": status,
+        }
+    except Exception as e:
+        logger.exception(f"Failed to collect pool stats: {e}")
+        return {"error": str(e), "status": "unknown"}
 
 
 _POOL_HEAL_THRESHOLD = int(os.getenv("POOL_HEAL_THRESHOLD", "8"))

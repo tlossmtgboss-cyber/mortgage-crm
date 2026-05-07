@@ -807,6 +807,13 @@ def register_health_routes(app, get_db, **kwargs):
             "status": "healthy" if telnyx_key else "not_configured",
         }
 
+        # --- Token blacklist mode (redis vs in-memory fallback) ---
+        try:
+            from auth.tokens import token_blacklist
+            services["token_blacklist"] = token_blacklist.get_status()
+        except Exception as e:
+            services["token_blacklist"] = {"status": "unknown", "error": str(e)[:200]}
+
         # --- Build response ---
         uptime_seconds = round(time.monotonic() - _APP_START_TIME, 1)
         overall_status = "healthy" if is_healthy else "unhealthy"
@@ -1121,6 +1128,13 @@ def register_health_routes(app, get_db, **kwargs):
             checks["memory"] = _deep_check_memory()
         except Exception as e:
             checks["memory"] = {"status": "error", "error": str(e)}
+
+        # 5. Token blacklist mode (redis vs in-memory fallback)
+        try:
+            from auth.tokens import token_blacklist
+            checks["token_blacklist"] = token_blacklist.get_status()
+        except Exception as e:
+            checks["token_blacklist"] = {"status": "error", "error": str(e)[:200]}
 
         # ---- Determine overall status ----
         db_status = checks.get("database", {}).get("status", "error")
@@ -1709,6 +1723,10 @@ def register_health_routes(app, get_db, **kwargs):
         per-service health (database, Redis, AI API, Telnyx, Vapi), available
         capabilities, and user-facing message. No authentication required so
         the frontend can poll this to show banners when services are down.
+
+        Also includes `last_backup_verified` reflecting the most recent
+        successful backup-verify workflow run. If no verification in >8 days
+        the status is flagged as a warning.
         """
         import os as _os
 
@@ -1753,10 +1771,14 @@ def register_health_routes(app, get_db, **kwargs):
                 )
                 capabilities = await degradation.get_capabilities()
 
+                # --- Backup verification freshness check ---
+                backup_status = _check_backup_freshness()
+
                 return {
                     "service_level": capabilities["level"],
                     "capabilities": capabilities["capabilities"],
                     "health": capabilities["health"],
+                    "last_backup_verified": backup_status,
                     "message": capabilities.get("message"),
                     "actions": capabilities.get("actions", []),
                     "timestamp": capabilities.get("timestamp"),
@@ -1775,6 +1797,7 @@ def register_health_routes(app, get_db, **kwargs):
                 content={
                     "service_level": "unknown",
                     "error": "Could not determine degradation status",
+                    "last_backup_verified": _check_backup_freshness(),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
@@ -1950,4 +1973,70 @@ def _deep_check_disk():
         }
     except Exception as e:
         return {"status": "unknown", "error": str(e)}
+
+
+# ==========================================================================
+# Backup verification freshness check
+# ==========================================================================
+
+# Warning threshold: flag if no verified backup in more than 8 days
+_BACKUP_STALE_DAYS = 8
+
+
+def _check_backup_freshness():
+    """Check when the last backup verification succeeded.
+
+    Reads the LAST_BACKUP_VERIFIED environment variable (ISO-8601 timestamp)
+    which should be set by the deployment pipeline after a successful
+    backup-verify workflow run.  If the variable is not set, returns
+    status "unknown" (not an error -- the env var may simply not be
+    configured yet).  If the timestamp is older than 8 days, returns
+    status "warning" so monitoring dashboards can alert.
+    """
+    from datetime import timedelta
+
+    raw = os.getenv("LAST_BACKUP_VERIFIED", "").strip()
+    if not raw:
+        return {
+            "status": "unknown",
+            "note": (
+                "LAST_BACKUP_VERIFIED env var not set. Configure the "
+                "backup-verify workflow to update this value after each "
+                "successful run."
+            ),
+        }
+
+    try:
+        # Accept ISO-8601 with or without trailing Z
+        ts_str = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw
+        last_verified = datetime.fromisoformat(ts_str)
+        # Ensure timezone-aware
+        if last_verified.tzinfo is None:
+            last_verified = last_verified.replace(tzinfo=timezone.utc)
+
+        age = datetime.now(timezone.utc) - last_verified
+        age_days = round(age.total_seconds() / 86400, 1)
+
+        if age > timedelta(days=_BACKUP_STALE_DAYS):
+            return {
+                "status": "warning",
+                "last_verified": last_verified.isoformat(),
+                "age_days": age_days,
+                "message": (
+                    f"No backup verification in {age_days} days "
+                    f"(threshold: {_BACKUP_STALE_DAYS} days)."
+                ),
+            }
+
+        return {
+            "status": "ok",
+            "last_verified": last_verified.isoformat(),
+            "age_days": age_days,
+        }
+    except (ValueError, TypeError) as e:
+        return {
+            "status": "error",
+            "note": f"Could not parse LAST_BACKUP_VERIFIED value: {raw!r}",
+            "error": str(e),
+        }
 

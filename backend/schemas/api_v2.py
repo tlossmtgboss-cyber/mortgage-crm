@@ -192,6 +192,10 @@ class V2Meta(BaseModel):
     )
     deprecated: bool = False
     sunset: Optional[str] = None
+    # Pagination metadata (populated on list endpoints)
+    cursor: Optional[str] = Field(default=None, description="Opaque cursor for next page")
+    has_more: Optional[bool] = Field(default=None, description="True if more pages exist")
+    total: Optional[int] = Field(default=None, description="Total count when available")
 
 
 class V2Envelope(BaseModel, Generic[T]):

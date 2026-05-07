@@ -13,6 +13,32 @@
 # an additional copy of production data. The verification report (counts
 # and pass/fail) is uploaded as a GitHub Actions artifact retained for
 # 90 days as SOC 2 evidence.
+#
+# LONG-TERM ARCHIVE:
+# If AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and BACKUP_S3_BUCKET
+# secrets are configured, verified dumps are compressed and uploaded to
+# S3 for off-site long-term retention. Path convention:
+#   s3://$BACKUP_S3_BUCKET/backups/YYYY/MM/perennia-backup-YYYY-MM-DD.sql.gz
+# If the S3 secrets are absent the archive step is skipped with a
+# warning — it never fails the workflow.
+#
+# POINT-IN-TIME RECOVERY (PITR):
+# Railway PostgreSQL provides automated daily snapshots with 7-day
+# retention. For true PITR (recover to any second), WAL archiving must
+# be enabled on the Railway PostgreSQL instance:
+#   1. Enable WAL archiving in Railway Postgres settings (or via
+#      railway CLI: `railway service update --wal-archiving=true`).
+#   2. WAL segments are streamed to Railway's object store continuously.
+#   3. To restore to a specific point:
+#        railway db restore --point-in-time "2026-05-07T14:30:00Z"
+#   4. This creates a new database instance restored to that timestamp.
+#
+# Current RPO / RTO targets:
+#   RPO (Recovery Point Objective): 7 days with weekly pg_dump
+#        verification. With WAL archiving enabled, RPO drops to seconds.
+#   RTO (Recovery Time Objective): ~30 minutes for a full restore from
+#        the weekly dump (pg_restore into a fresh instance). Railway
+#        snapshot restore is typically under 10 minutes.
 
 name: Backup verification
 
@@ -141,6 +167,41 @@ jobs:
           name: backup-verification-report-${{ github.run_id }}
           path: /tmp/backup-report/verification-report.txt
           retention-days: 90
+
+      - name: Archive verified dump to S3
+        if: success()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+        run: |
+          if [ -z "${AWS_ACCESS_KEY_ID}" ] || [ -z "${AWS_SECRET_ACCESS_KEY}" ] || [ -z "${BACKUP_S3_BUCKET}" ]; then
+            echo "::warning::S3 archive secrets not configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BACKUP_S3_BUCKET). Skipping long-term backup archive."
+            exit 0
+          fi
+          YEAR=$(date -u '+%Y')
+          MONTH=$(date -u '+%m')
+          DAY=$(date -u '+%Y-%m-%d')
+          ARCHIVE_PATH="s3://${BACKUP_S3_BUCKET}/backups/${YEAR}/${MONTH}/perennia-backup-${DAY}.sql.gz"
+          echo "Compressing dump..."
+          gzip -c /tmp/backup.dump > /tmp/backup.dump.gz
+          ls -lh /tmp/backup.dump.gz
+          echo "Uploading to ${ARCHIVE_PATH}..."
+          aws s3 cp /tmp/backup.dump.gz "${ARCHIVE_PATH}" --no-progress --storage-class STANDARD_IA
+          echo "Archive uploaded successfully: ${ARCHIVE_PATH}"
+
+      - name: Write backup timestamp to S3
+        if: success()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+        run: |
+          if [ -z "${AWS_ACCESS_KEY_ID}" ] || [ -z "${AWS_SECRET_ACCESS_KEY}" ] || [ -z "${BACKUP_S3_BUCKET}" ]; then
+            exit 0
+          fi
+          echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > /tmp/latest-backup-verified.txt
+          aws s3 cp /tmp/latest-backup-verified.txt "s3://${BACKUP_S3_BUCKET}/backups/latest-backup-verified.txt" --no-progress
 
       - name: Notify Slack on success
         if: success()

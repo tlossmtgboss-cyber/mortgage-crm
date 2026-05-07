@@ -27,6 +27,7 @@ Original purpose (no longer active):
 """
 
 import logging
+import warnings
 import hashlib
 import time
 import threading
@@ -38,6 +39,25 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import redis
 
 logger = logging.getLogger(__name__)
+
+# ---- Runtime deprecation warning on import ----------------------------------
+# This module is dead code retained only for chat_system_bootstrap.py compat.
+# chat_system_bootstrap.py is itself unused (never imported by main.py or any
+# route). Both files are safe to delete.
+warnings.warn(
+    "middleware.rate_limiting is deprecated and will be removed. "
+    "Active rate limiting is handled by middleware/api_rate_limit.py, "
+    "middleware/tenant_rate_limiter.py, and middleware/mobile_rate_limit.py. "
+    "The only importer is chat_system_bootstrap.py which is also unused.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+logger.warning(
+    "DEPRECATED: middleware.rate_limiting imported — this module is dead code. "
+    "Only importer is chat_system_bootstrap.py (also unused). "
+    "Both files are candidates for removal."
+)
+# -----------------------------------------------------------------------------
 
 
 class InMemoryRateLimiter:

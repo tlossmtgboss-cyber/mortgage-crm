@@ -16,7 +16,9 @@ import csv
 import io
 import json
 import logging
+import os
 import re
+import tempfile
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -58,6 +60,26 @@ def _normalize_phone(raw: Optional[str]) -> Optional[str]:
     if len(digits) == 11 and digits.startswith("1"):
         return f"+{digits}"
     return digits if digits else None
+
+
+# ---------------------------------------------------------------------------
+# Email validation for field-mapping stage
+# ---------------------------------------------------------------------------
+
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+
+# Fields that must contain a valid email when non-empty
+EMAIL_FIELDS = frozenset({"email", "co_applicant_email"})
+
+
+def validate_email_format(value: str) -> bool:
+    """Return True if value matches a basic email format.
+
+    Empty/whitespace-only values are considered valid (email is optional).
+    """
+    if not value or not str(value).strip():
+        return True  # Empty is OK (not required)
+    return bool(_EMAIL_RE.match(str(value).strip()))
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +154,12 @@ class ImportResult:
     imported_ids: List[int]
     field_mapping: Dict[str, str]
     message: str = ""
+
+
+# Module-level registry so background-thread progress survives across
+# ImportService instances (the status endpoint creates a fresh instance).
+_background_imports: Dict[str, ImportProgress] = {}
+_background_imports_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -655,8 +683,9 @@ class ImportService:
         Checks in-memory progress first (for active imports), then falls
         back to the database record.
         """
-        # Check in-flight progress
-        progress = self._active_imports.get(import_id)
+        # Check in-flight progress (instance-level first, then module-level
+        # background registry so status polls from a fresh ImportService work)
+        progress = self._active_imports.get(import_id) or _background_imports.get(import_id)
         if progress is not None:
             return {
                 "import_id": import_id,
@@ -1005,6 +1034,21 @@ class ImportService:
                     clean = {k: v for k, v in mapped_row.items() if v is not None}
                     row_errors = []
 
+                # --------------------------------------------------
+                # Email format validation (runs even without
+                # validate_row_fn so the service always catches
+                # malformed emails during field-mapping imports)
+                # --------------------------------------------------
+                email_errors: List[str] = []
+                for ef in EMAIL_FIELDS:
+                    raw_val = clean.get(ef) if not row_errors else mapped_row.get(ef)
+                    if raw_val and str(raw_val).strip() and not validate_email_format(raw_val):
+                        email_errors.append(
+                            f"Row {row_num}: Invalid email format in '{ef}': '{raw_val}'"
+                        )
+                if email_errors:
+                    row_errors = list(row_errors) + email_errors
+
                 if row_errors:
                     progress.add_error(row_num, row_errors)
                     if not skip_invalid_rows:
@@ -1166,3 +1210,194 @@ class ImportService:
             ON import_jobs (organization_id, created_at DESC)
         """))
         self.db.flush()
+
+
+# ---------------------------------------------------------------------------
+# Async background import runner
+# ---------------------------------------------------------------------------
+
+# Thresholds that trigger background processing instead of synchronous
+ASYNC_FILE_SIZE_THRESHOLD = 5 * 1024 * 1024  # 5 MB
+ASYNC_ROW_COUNT_THRESHOLD = 5000
+
+
+def estimate_row_count(file_stream: BinaryIO, filename: str) -> int:
+    """Estimate row count without reading the whole file.
+
+    For CSV: count newlines in first 64KB, extrapolate.
+    For Excel: returns 0 (caller should use file size as heuristic).
+    """
+    if filename.lower().endswith((".xlsx", ".xls")):
+        return 0  # Cannot cheaply estimate Excel rows
+
+    pos = file_stream.tell()
+    sample = file_stream.read(65536)
+    file_stream.seek(0, 2)
+    total_size = file_stream.tell()
+    file_stream.seek(pos)
+
+    if not sample:
+        return 0
+
+    newlines_in_sample = sample.count(b"\n")
+    sample_size = len(sample)
+    if sample_size == 0:
+        return 0
+
+    estimated = int((newlines_in_sample / sample_size) * total_size)
+    # Subtract 1 for header row
+    return max(estimated - 1, 0)
+
+
+def should_run_async(file_size: int, estimated_rows: int) -> bool:
+    """Return True if the import should be handled as a background job."""
+    return file_size > ASYNC_FILE_SIZE_THRESHOLD or estimated_rows > ASYNC_ROW_COUNT_THRESHOLD
+
+
+def save_upload_to_temp(file_stream: BinaryIO, filename: str) -> str:
+    """Save uploaded file bytes to a temp file and return the path.
+
+    The caller is responsible for cleanup after the background job
+    completes.
+    """
+    suffix = os.path.splitext(filename)[1] or ".csv"
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="import_")
+    try:
+        file_stream.seek(0)
+        with os.fdopen(fd, "wb") as f:
+            while True:
+                chunk = file_stream.read(1024 * 256)
+                if not chunk:
+                    break
+                f.write(chunk)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
+    return tmp_path
+
+
+def run_background_import(
+    import_id: str,
+    tmp_path: str,
+    filename: str,
+    user_id: int,
+    organization_id: int,
+    field_mapping: Dict[str, str],
+    duplicate_strategy: str = "skip",
+    default_stage: str = "New",
+    default_source: Optional[str] = None,
+    skip_invalid_rows: bool = True,
+    validate_row_fn: Optional[Callable] = None,
+    transform_value_fn: Optional[Callable] = None,
+) -> None:
+    """Execute an import in a background thread with its own DB session.
+
+    This function is designed to be submitted to a ThreadPoolExecutor.
+    It creates its own DB session via get_db_with_tenant, processes the
+    file, updates the import_jobs record, and cleans up the temp file.
+
+    Progress is tracked via the module-level _background_imports dict so
+    that status polling from a different request (and ImportService
+    instance) can read it.
+    """
+    progress = ImportProgress(status="processing")
+    with _background_imports_lock:
+        _background_imports[import_id] = progress
+
+    try:
+        # Import here to avoid circular import at module load
+        from db import get_db_with_tenant
+
+        with get_db_with_tenant(organization_id) as db:
+            # Write the queued -> processing transition
+            db.execute(text("""
+                UPDATE import_jobs
+                SET status = 'processing', started_at = :now
+                WHERE id = :id
+            """), {"id": import_id, "now": datetime.now(timezone.utc)})
+            db.commit()
+
+            svc = ImportService(db=db, user_id=user_id, organization_id=organization_id)
+            is_excel = filename.lower().endswith((".xlsx", ".xls"))
+
+            with open(tmp_path, "rb") as fh:
+                if is_excel:
+                    result = svc.import_excel(
+                        file_stream=fh,
+                        entity_type="leads",
+                        field_mapping=field_mapping,
+                        filename=filename,
+                        duplicate_strategy=duplicate_strategy,
+                        default_stage=default_stage,
+                        default_source=default_source,
+                        skip_invalid_rows=skip_invalid_rows,
+                        validate_row_fn=validate_row_fn,
+                        transform_value_fn=transform_value_fn,
+                    )
+                else:
+                    result = svc.import_csv(
+                        file_stream=fh,
+                        entity_type="leads",
+                        field_mapping=field_mapping,
+                        filename=filename,
+                        duplicate_strategy=duplicate_strategy,
+                        default_stage=default_stage,
+                        default_source=default_source,
+                        skip_invalid_rows=skip_invalid_rows,
+                        validate_row_fn=validate_row_fn,
+                        transform_value_fn=transform_value_fn,
+                    )
+
+            progress.status = result.status
+            progress.imported_rows = result.imported
+            progress.updated_rows = result.updated
+            progress.skipped_rows = result.skipped
+            progress.error_rows = result.errors
+            progress.total_rows = result.total_rows
+            progress.processed_rows = result.total_rows
+            progress.imported_ids = result.imported_ids
+
+            logger.info(
+                "Background import completed: import_id=%s, status=%s, "
+                "imported=%d, errors=%d",
+                import_id, result.status, result.imported, result.errors,
+            )
+
+    except Exception as e:
+        logger.exception("Background import failed: import_id=%s, error=%s", import_id, e)
+        progress.status = "failed"
+
+        # Best-effort: mark the job as failed in the DB
+        try:
+            from db import get_db_with_tenant
+            with get_db_with_tenant(organization_id) as db:
+                db.execute(text("""
+                    UPDATE import_jobs
+                    SET status = 'failed',
+                        completed_at = :now,
+                        errors = :errors
+                    WHERE id = :id
+                """), {
+                    "id": import_id,
+                    "now": datetime.now(timezone.utc),
+                    "errors": json.dumps([{"row": 0, "errors": [str(e)]}]),
+                })
+                db.commit()
+        except Exception as db_err:
+            logger.error("Failed to update import_jobs after background error: %s", db_err)
+
+    finally:
+        # Clean up temp file
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        # Remove from in-flight registry after a delay to allow final
+        # status polls.  We keep it for 5 minutes then let GC clean up.
+        def _cleanup():
+            import time
+            time.sleep(300)
+            with _background_imports_lock:
+                _background_imports.pop(import_id, None)
+        cleanup_thread = threading.Thread(target=_cleanup, daemon=True)
+        cleanup_thread.start()

@@ -24,6 +24,8 @@ from typing import List
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+from services.audit_events import audit_event
+
 logger = logging.getLogger(__name__)
 
 
@@ -336,6 +338,28 @@ def merge_contacts(
             dup.notes = merge_note
 
     db.flush()
+
+    # 5. Audit trail — log merge details for compliance / undo support
+    total_reassigned = sum(reassigned_counts.values())
+    try:
+        audit_event(
+            db,
+            event_type="CONTACT_MERGE",
+            resource_type="lead",
+            resource_id=str(primary_id),
+            org_id=org_id,
+            metadata={
+                "primary_id": primary_id,
+                "duplicate_ids": list(duplicate_ids),
+                "fields_updated": fields_filled,
+                "child_records_reassigned": total_reassigned,
+                "reassigned_by_table": reassigned_counts,
+                "duplicates_soft_deleted": len(duplicates),
+            },
+        )
+    except Exception as e:
+        # Audit failure must never break the merge itself
+        logger.warning("Failed to write merge audit event: %s", e)
 
     return {
         "primary_id": primary_id,

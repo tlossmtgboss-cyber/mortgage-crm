@@ -449,25 +449,26 @@ from middleware.tenant_context_middleware import TenantContextMiddleware
 #  1. RequestContextMiddleware      — correlation IDs (X-Request-ID), structured logging
 #  2. PIIResponseFilterMiddleware   — masks SSN/account-number leaks in responses
 #  3. DynamicCORSMiddleware         — CORS headers on all responses incl. errors
-#  4. CacheControlMiddleware        — Cache-Control headers for mobile API
-#  5. AuditMiddleware (SOC2)        — soc2_audit_log table (compliance)
-#  6. BreadcrumbAuditMiddleware     — audit_events table (defense-in-depth, mutations only)
-#  7. TenantContextMiddleware       — sets request.state.user/tenant from JWT
-#  8. RBACEnforcementMiddleware     — defense-in-depth role checks on admin routes
-#  8b. CentralizedRBACMiddleware    — granular route-to-permission mapping
-#  9. TenantRateLimitMiddleware     — per-org rate limits
-# 10. MobileRateLimitMiddleware     — mobile-specific rate limits
-# 11. APIRateLimitMiddleware        — per-user/per-IP sliding window (primary rate limiter)
-# 12. PerformanceMiddleware         — response time tracking
-# 13. CSRFProtectionMiddleware      — CSRF token validation on state-changing requests
-# 14. ImpersonationEnforcementMiddleware — blocks writes in read-only impersonation
-# 15. SecurityLoggingMiddleware     — logs security events
-# 16. IPAccessControlMiddleware     — environment-aware IP access control
-# 17. IPBlockingMiddleware          — blocks malicious IPs
-# 18. RequestValidatorMiddleware    — Content-Type, size, injection checks
-# 19. RequestValidationMiddleware   — (security_middleware) request validation
-# 20. SecurityHeadersMiddleware     — security response headers
-# 21. RequestTrackingMiddleware     — tracks in-flight requests for graceful shutdown
+#  4. BackpressureMiddleware         — load shedding when in-flight > threshold (503)
+#  5. CacheControlMiddleware        — Cache-Control headers for mobile API
+#  6. AuditMiddleware (SOC2)        — soc2_audit_log table (compliance)
+#  7. BreadcrumbAuditMiddleware     — audit_events table (defense-in-depth, mutations only)
+#  8. TenantContextMiddleware       — sets request.state.user/tenant from JWT
+#  9. RBACEnforcementMiddleware     — defense-in-depth role checks on admin routes
+#  9b. CentralizedRBACMiddleware    — granular route-to-permission mapping
+# 10. TenantRateLimitMiddleware     — per-org rate limits
+# 11. MobileRateLimitMiddleware     — mobile-specific rate limits
+# 12. APIRateLimitMiddleware        — per-user/per-IP sliding window (primary rate limiter)
+# 13. PerformanceMiddleware         — response time tracking
+# 14. CSRFProtectionMiddleware      — CSRF token validation on state-changing requests
+# 15. ImpersonationEnforcementMiddleware — blocks writes in read-only impersonation
+# 16. SecurityLoggingMiddleware     — logs security events
+# 17. IPAccessControlMiddleware     — environment-aware IP access control
+# 18. IPBlockingMiddleware          — blocks malicious IPs
+# 19. RequestValidatorMiddleware    — Content-Type, size, injection checks
+# 20. RequestValidationMiddleware   — (security_middleware) request validation
+# 21. SecurityHeadersMiddleware     — security response headers
+# 22. RequestTrackingMiddleware     — tracks in-flight requests for graceful shutdown
 #
 # NOT registered (available as utilities):
 #   - middleware/request_logging.py (RequestLoggingMiddleware) — superseded by #1
@@ -503,6 +504,15 @@ app.add_middleware(IPBlockingMiddleware)
 # See also: TenantRateLimitMiddleware, MobileRateLimitMiddleware, rate_limiter.py (decorator).
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
+
+# API Versioning — adds API-Version header, Deprecation/Sunset headers on V1 endpoints,
+# and Link: rel="successor-version" pointing to V2 equivalents.
+try:
+    from middleware.api_versioning import APIVersioningMiddleware
+    app.add_middleware(APIVersioningMiddleware, current_version="2.0")
+    logger.info("API versioning middleware enabled (V1 deprecation headers active)")
+except Exception as e:
+    logger.warning(f"API versioning middleware not loaded: {e}")
 
 # PHASE 3: Impersonation read-only enforcement
 # Blocks POST/PUT/PATCH/DELETE when impersonation mode is 'read_only'
@@ -768,6 +778,20 @@ try:
 except Exception as e:
     logger.warning(f"Graceful degradation service not loaded: {e}")
     _startup_degradation_check = None
+
+# ============================================================================
+# BACKPRESSURE / LOAD SHEDDING — Returns 503 when concurrent requests exceed threshold
+# Outermost load-bearing middleware: sheds traffic before auth, rate limiting, RBAC.
+# Exempt: /health, /api/health, /api/v1/health (always respond for LB probes).
+# Configurable via MAX_CONCURRENT_REQUESTS env var (default 100).
+# ============================================================================
+try:
+    from middleware.backpressure import BackpressureMiddleware
+    app.add_middleware(BackpressureMiddleware)
+    from middleware.backpressure import MAX_CONCURRENT_REQUESTS as _bp_max
+    logger.info(f"Backpressure middleware enabled (max_concurrent={_bp_max})")
+except Exception as e:
+    logger.warning(f"Backpressure middleware not loaded: {e}")
 
 # ============================================================================
 # CACHE-CONTROL MIDDLEWARE — Sets Cache-Control headers for mobile API responses
@@ -2147,9 +2171,41 @@ except Exception as e:
 try:
     from routes.api_v2 import v2_router
     app.include_router(v2_router, tags=["API V2"])
-    logger.info("API V2 routes loaded")
+    logger.info("API V2 routes loaded (leads, loans, pipeline, scheduler, docs)")
 except Exception as e:
     logger.warning(f"API V2 routes skipped: {e}")
+
+# V2 OpenAPI schema — separate schema containing only V2 routes
+try:
+    from fastapi.openapi.utils import get_openapi
+
+    @app.get("/api/v2/openapi.json", tags=["API V2"], include_in_schema=False)
+    async def v2_openapi():
+        """Serve an OpenAPI 3.1 schema containing only V2 routes."""
+        all_routes = app.routes
+        v2_routes = [r for r in all_routes if hasattr(r, "path") and r.path.startswith("/api/v2")]
+        openapi_schema = get_openapi(
+            title="Perennia AI API V2",
+            version="2.0.0",
+            description=(
+                "V2 API for Perennia AI. Cursor-based pagination, "
+                "RFC 7807 error responses, consistent envelope format."
+            ),
+            routes=v2_routes,
+        )
+        return openapi_schema
+
+    logger.info("V2 OpenAPI schema endpoint registered at /api/v2/openapi.json")
+except Exception as e:
+    logger.warning(f"V2 OpenAPI schema endpoint skipped: {e}")
+
+# Deprecation notices endpoint (lists all deprecated V1 endpoints)
+try:
+    from services.api_deprecation import deprecation_router
+    app.include_router(deprecation_router)
+    logger.info("API deprecation notices endpoint loaded")
+except Exception as e:
+    logger.warning(f"API deprecation notices endpoint skipped: {e}")
 
 # ============================================================================
 # APP BRANDING ROUTES (per-org white-label config for the main React app)
@@ -2962,6 +3018,14 @@ try:
     logger.info("Security audit routes loaded")
 except Exception as e:
     logger.warning(f"Security audit routes skipped: {e}")
+
+# --- Audit Management (retention cleanup admin endpoints) ---
+try:
+    from routes.audit_management_routes import router as audit_management_router
+    app.include_router(audit_management_router, tags=["Audit Management"])
+    logger.info("Audit management routes loaded")
+except Exception as e:
+    logger.warning(f"Audit management routes skipped: {e}")
 
 # --- Security Certificate Pinning (SPKI hash serving, pin failure reporting) ---
 try:

@@ -366,8 +366,6 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"(urgent|priority) (email|message)",
         r"search (my )?(email|inbox|mail)",
         r"find (email|message|correspondence)",
-        r"(referral|partner)",  # Referral partners often involves email lookup
-        r"reschedule",  # Often involves sending email
     ],
     "schedule": [
         r"\bschedul(e|ing)\b",
@@ -945,6 +943,9 @@ Categories:
 - profit: Profitability analysis, margins, revenue, cost per loan, pricing optimization
 - notifications: Notification management, alert preferences, quiet hours, delivery status
 - onboarding: Setup wizard, getting started, guided tour, training resources, checklists
+- top_leads: Questions about top/best/highest-scoring leads, lead rankings, priority leads
+- operations: Operations management, office logistics, team capacity, operational metrics
+- content_marketing: Content creation, marketing campaigns, social media, blog posts, marketing materials
 - compound: Multiple actions in one request (e.g., "text John and schedule a call")
 - general: Unclear or single ambiguous category
 

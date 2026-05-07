@@ -34,6 +34,7 @@ from db import (
     get_db_with_tenant,
     get_db_url,
     get_pool_status,
+    get_pool_stats,
 )
 
 # Export tenant utilities
@@ -81,6 +82,7 @@ __all__ = [
     "get_db_with_tenant",
     "get_db_url",
     "get_pool_status",
+    "get_pool_stats",
     # Tenant isolation
     "TenantMixin",
     "TenantSession",

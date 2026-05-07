@@ -449,6 +449,7 @@ async def orchestrator_chat_stream(
 
             # Stream response through the agent
             full_response = ""
+            follow_up_suggestions = []
             async for chunk in service.process_message_stream(message, conversation_history, data_context=data_context, voice_mode=voice_mode):
                 chunk_type = chunk.get("type")
 
@@ -465,12 +466,13 @@ async def orchestrator_chat_stream(
 
                 elif chunk_type == "done":
                     full_response = chunk.get("full_response", full_response)
+                    follow_up_suggestions = chunk.get("follow_up_suggestions", [])
 
                 elif chunk_type == "error":
                     yield f"data: {json.dumps({'error': chunk.get('error', 'Unknown error')})}\n\n"
 
             # Send completion
-            yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'engine': 'langgraph'})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'engine': 'langgraph', 'follow_up_suggestions': follow_up_suggestions})}\n\n"
 
             # Save conversation (non-fatal on failure)
             try:

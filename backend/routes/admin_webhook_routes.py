@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from middleware.webhook_idempotency import (
     get_failed_webhooks,
+    get_webhook_stats,
     retry_webhook,
 )
 
@@ -68,6 +69,17 @@ def _verify_admin(
             logger.debug("Admin JWT check failed: %s", e)
 
     raise HTTPException(status_code=403, detail="Admin access required")
+
+
+@router.get("/stats")
+async def webhook_stats(
+    _admin: bool = Depends(_verify_admin),
+):
+    """
+    Return webhook health metrics: total processed, duplicates caught,
+    average check latency, DLQ sizes per provider, and circuit breaker state.
+    """
+    return get_webhook_stats()
 
 
 @router.get("/failed")

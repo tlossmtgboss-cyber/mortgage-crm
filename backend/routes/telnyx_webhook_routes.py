@@ -761,6 +761,268 @@ def _normalize_phone(phone: str) -> str:
     return phone
 
 
+# =============================================================================
+# SMS Opt-Out / Opt-In Keyword Automation (TCPA + CTIA)
+# =============================================================================
+
+# CTIA Short Code Monitoring Handbook & TCPA both require immediate processing
+# of these standard keywords.  Carriers may also enforce at the network level,
+# but we process on our side to guarantee ChannelPreference + ConsentAuditLog
+# stay in sync.
+_OPT_OUT_KEYWORDS = frozenset({"stop", "unsubscribe", "quit", "cancel", "end"})
+_OPT_IN_KEYWORDS = frozenset({"start", "yes", "unstop", "subscribe", "optin"})
+
+_OPT_OUT_REPLY = (
+    "You have been unsubscribed and will no longer receive text messages "
+    "from us. Reply START to re-subscribe."
+)
+_OPT_IN_REPLY = (
+    "You have been re-subscribed to text messages. Reply STOP at any time "
+    "to opt out."
+)
+
+
+async def _handle_sms_opt_keyword(
+    from_phone: str,
+    to_phone: str,
+    message_body: str | None,
+    message_id: str | None,
+    db: Session,
+) -> dict | None:
+    """Process STOP/START keywords.  Returns a result dict if handled, else None.
+
+    When a keyword is detected:
+      1. Update ChannelPreference (do_not_sms / sms_consent)
+      2. Update any active TCPAConsent records
+      3. Log to ConsentAuditLog
+      4. Send auto-reply confirmation via Telnyx
+      5. Store inbound message in sms_messages for audit trail
+    """
+    if not message_body:
+        return None
+
+    stripped = message_body.strip().lower()
+    is_opt_out = stripped in _OPT_OUT_KEYWORDS
+    is_opt_in = stripped in _OPT_IN_KEYWORDS
+
+    if not is_opt_out and not is_opt_in:
+        return None
+
+    action_label = "opt_out" if is_opt_out else "opt_in"
+    logger.warning(
+        "sms_opt_keyword: %s detected from ...%s, keyword='%s'",
+        action_label, from_phone[-4:] if from_phone else "?", stripped,
+    )
+
+    # Resolve org_id from the receiving Telnyx number
+    org_id = None
+    try:
+        org_row = db.execute(sa_text("""
+            SELECT organization_id FROM verified_caller_ids
+            WHERE phone_number = :to_phone AND organization_id IS NOT NULL
+            LIMIT 1
+        """), {"to_phone": to_phone}).fetchone()
+        if org_row:
+            org_id = org_row[0]
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning("sms_opt_keyword: org lookup failed: %s", e)
+
+    # --- 1. Update ChannelPreference ---
+    channel_prefs_updated = 0
+    lead_ids = []
+    try:
+        from database.models.communication import ChannelPreference
+        from database.models.lead_loan import Lead
+
+        lead_query = db.query(Lead.id).filter(Lead.phone == from_phone)
+        if org_id is not None:
+            lead_query = lead_query.filter(Lead.organization_id == int(org_id))
+        lead_ids = [lid for (lid,) in lead_query.all()]
+
+        if lead_ids:
+            prefs = (
+                db.query(ChannelPreference)
+                .filter(ChannelPreference.lead_id.in_(lead_ids))
+                .all()
+            )
+            now_ts = datetime.now(timezone.utc).replace(tzinfo=None)
+            for pref in prefs:
+                if is_opt_out:
+                    pref.sms_consent = False
+                    pref.do_not_sms = True
+                else:
+                    pref.sms_consent = True
+                    pref.sms_consent_date = now_ts
+                    pref.do_not_sms = False
+                pref.updated_at = now_ts
+                channel_prefs_updated += 1
+    except Exception as e:
+        logger.warning("sms_opt_keyword: ChannelPreference update failed: %s", e)
+
+    # --- 2. Update TCPAConsent records ---
+    tcpa_updated = 0
+    try:
+        from database.models.tcpa_consent import TCPAConsent
+        import uuid as _uuid_mod
+
+        now_ts = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        if is_opt_out:
+            # Revoke active SMS-related consents
+            tcpa_query = db.query(TCPAConsent).filter(
+                TCPAConsent.phone_number == from_phone,
+                TCPAConsent.is_active == True,  # noqa: E712
+                TCPAConsent.consent_channel.in_(["sms", "both"]),
+            )
+            if org_id is not None:
+                tcpa_query = tcpa_query.filter(
+                    TCPAConsent.organization_id == _uuid_mod.UUID(str(org_id))
+                )
+            tcpa_records = tcpa_query.all()
+            for rec in tcpa_records:
+                rec.is_active = False
+                rec.revoked_at = now_ts
+                rec.revocation_method = "text_reply"
+                rec.updated_at = now_ts
+                tcpa_updated += 1
+        # For opt-in we do NOT auto-create a new TCPAConsent -- the FCC 1:1
+        # rule requires explicit consent capture with disclosure text.  We
+        # only re-enable ChannelPreference which unblocks future consent
+        # capture and non-automated messaging.
+    except Exception as e:
+        logger.warning("sms_opt_keyword: TCPAConsent update failed: %s", e)
+
+    # --- 3. ConsentAuditLog ---
+    try:
+        from telephony.consent_audit import log_consent_revoked, log_consent_granted
+
+        for lid in lead_ids:
+            if is_opt_out:
+                log_consent_revoked(
+                    db,
+                    organization_id=int(org_id) if org_id else None,
+                    contact_id=lid,
+                    consent_type="sms",
+                    method="text_reply",
+                    source_table="channel_preferences",
+                    phone=from_phone,
+                    reason=f"Auto-processed SMS keyword: {stripped}",
+                    details={"keyword": stripped, "channel_prefs_updated": channel_prefs_updated},
+                )
+            else:
+                log_consent_granted(
+                    db,
+                    organization_id=int(org_id) if org_id else None,
+                    contact_id=lid,
+                    consent_type="sms",
+                    method="text_reply",
+                    source_table="channel_preferences",
+                    phone=from_phone,
+                    details={"keyword": stripped, "channel_prefs_updated": channel_prefs_updated},
+                )
+        # If no lead_ids found, still log with phone only
+        if not lead_ids:
+            if is_opt_out:
+                log_consent_revoked(
+                    db,
+                    organization_id=int(org_id) if org_id else None,
+                    consent_type="sms",
+                    method="text_reply",
+                    phone=from_phone,
+                    reason=f"Auto-processed SMS keyword: {stripped} (no matching lead)",
+                    details={"keyword": stripped, "tcpa_updated": tcpa_updated},
+                )
+            else:
+                log_consent_granted(
+                    db,
+                    organization_id=int(org_id) if org_id else None,
+                    consent_type="sms",
+                    method="text_reply",
+                    phone=from_phone,
+                    details={"keyword": stripped},
+                )
+    except Exception as e:
+        logger.warning("sms_opt_keyword: audit log failed: %s", e)
+
+    # --- 4. Store inbound SMS for audit trail ---
+    try:
+        db.execute(sa_text("""
+            INSERT INTO sms_messages (
+                direction, from_number, to_number, message,
+                provider_message_id, status, created_at
+            ) VALUES (
+                'inbound', :from_number, :to_number, :body,
+                :message_id, 'received', NOW()
+            )
+        """), {
+            "from_number": from_phone,
+            "to_number": to_phone,
+            "body": message_body,
+            "message_id": message_id,
+        })
+    except Exception as e:
+        logger.warning("sms_opt_keyword: sms_messages insert failed: %s", e)
+
+    # Commit all DB changes in one transaction
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("sms_opt_keyword: commit failed: %s", e)
+
+    # --- 5. Send auto-reply ---
+    reply_text = _OPT_OUT_REPLY if is_opt_out else _OPT_IN_REPLY
+    try:
+        import requests as _http
+        _telnyx_key = os.environ.get("TELNYX_API_KEY", "")
+        _telnyx_from = os.environ.get(
+            "TELNYX_FROM_NUMBER",
+            os.environ.get("TELNYX_PHONE_NUMBER", ""),
+        )
+        _telnyx_profile = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "")
+        if _telnyx_key and _telnyx_from:
+            _resp = _http.post(
+                "https://api.telnyx.com/v2/messages",
+                headers={
+                    "Authorization": f"Bearer {_telnyx_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": _telnyx_from,
+                    "to": from_phone,
+                    "text": reply_text,
+                    "messaging_profile_id": _telnyx_profile,
+                },
+                timeout=10,
+            )
+            logger.info(
+                "sms_opt_keyword: auto-reply sent, status=%d, to=...%s, action=%s",
+                _resp.status_code, from_phone[-4:] if from_phone else "?", action_label,
+            )
+        else:
+            logger.error("sms_opt_keyword: TELNYX_API_KEY or FROM_NUMBER not set, skipped reply")
+    except Exception as e:
+        logger.error("sms_opt_keyword: auto-reply send failed: %s", e)
+
+    logger.info(
+        "sms_opt_keyword: %s processed, phone=...%s, channel_prefs=%d, tcpa=%d, leads=%s",
+        action_label, from_phone[-4:] if from_phone else "?",
+        channel_prefs_updated, tcpa_updated, lead_ids,
+    )
+
+    return {
+        "status": "received",
+        "handler": f"sms_{action_label}",
+        "keyword": stripped,
+        "channel_prefs_updated": channel_prefs_updated,
+        "tcpa_records_updated": tcpa_updated,
+    }
+
+
 async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     """Handle inbound SMS message with full workflow triggers."""
     from_number = event.from_number
@@ -775,6 +1037,19 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         to_number[-4:] if to_number else "?",
         (message_body or "")[:50],
     )
+
+    # ======================================================================
+    # SMS Opt-Out / Opt-In Keyword Handler (TCPA / CTIA compliance)
+    # STOP, UNSUBSCRIBE, QUIT -> revoke SMS consent immediately
+    # START, YES, UNSTOP -> re-grant SMS consent
+    # This MUST run before any other intercept so opt-outs are honoured
+    # even if the number is in an active AI conversation or workflow.
+    # ======================================================================
+    _opt_keyword_result = await _handle_sms_opt_keyword(
+        normalized_from, normalized_to, message_body, event.message_id, db,
+    )
+    if _opt_keyword_result is not None:
+        return _opt_keyword_result
 
     # ======================================================================
     # Voice Workflow Scheduling Intercept

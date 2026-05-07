@@ -394,6 +394,133 @@ def check_portal_branding(db, org_id: int) -> Dict:
 # PDF/REPORT BRANDING (Domain 12, Check 12.8)
 # =============================================================================
 
+def check_domain_health(db, org_id: int) -> Dict:
+    """
+    Check custom domain health for an organization.
+
+    Inspects SSL certificate expiry, domain verification status, and SSL
+    provisioning state. Returns a dict with warnings for any issues found:
+      - SSL expiring within 30 days
+      - Domain not verified
+      - SSL provisioning failed or still pending
+
+    Also updates the ssl_expires_at column on the WhiteLabelConfig row if
+    Vercel provides cert expiry data.
+    """
+    config = _get_config(db, org_id)
+
+    result: Dict = {
+        "org_id": org_id,
+        "domain": None,
+        "domain_verified": False,
+        "ssl_status": "pending",
+        "ssl_expires_at": None,
+        "ssl_expires_in_days": None,
+        "warnings": [],
+        "healthy": True,
+    }
+
+    if not config or not config.custom_domain:
+        result["warnings"].append({
+            "code": "NO_CUSTOM_DOMAIN",
+            "severity": "info",
+            "message": "No custom domain configured for this organization.",
+        })
+        return result
+
+    result["domain"] = config.custom_domain
+    result["domain_verified"] = bool(config.domain_verified)
+    result["ssl_status"] = config.ssl_status or "pending"
+
+    # Warning: domain not verified
+    if not config.domain_verified:
+        result["healthy"] = False
+        result["warnings"].append({
+            "code": "DOMAIN_NOT_VERIFIED",
+            "severity": "high",
+            "message": (
+                f"Domain '{config.custom_domain}' has not been verified. "
+                "Complete DNS verification to enable SSL."
+            ),
+        })
+
+    # Warning: SSL provisioning failed
+    if config.ssl_status == "failed":
+        result["healthy"] = False
+        result["warnings"].append({
+            "code": "SSL_PROVISIONING_FAILED",
+            "severity": "high",
+            "message": (
+                f"SSL provisioning failed for '{config.custom_domain}'. "
+                "Check DNS records and retry domain verification."
+            ),
+        })
+    elif config.ssl_status in ("pending", "provisioning") and config.domain_verified:
+        result["warnings"].append({
+            "code": "SSL_NOT_ACTIVE",
+            "severity": "medium",
+            "message": (
+                f"SSL is '{config.ssl_status}' for '{config.custom_domain}'. "
+                "Provisioning may still be in progress — check back shortly."
+            ),
+        })
+
+    # Check SSL expiry from Vercel if domain is active
+    ssl_expires_at = getattr(config, "ssl_expires_at", None)
+
+    if config.domain_verified and config.ssl_status == "active":
+        try:
+            from services import vercel_domain_service
+
+            vercel_expiry = vercel_domain_service.get_ssl_expiry(config.custom_domain)
+            if vercel_expiry:
+                ssl_expires_at = vercel_expiry
+                # Persist the expiry date
+                config.ssl_expires_at = vercel_expiry
+                db.commit()
+        except Exception as e:
+            logger.warning(
+                "Could not check Vercel SSL expiry for org %s domain %s: %s",
+                org_id, config.custom_domain, e,
+            )
+
+    if ssl_expires_at:
+        result["ssl_expires_at"] = ssl_expires_at.isoformat()
+        now = datetime.now(timezone.utc)
+        days_remaining = (ssl_expires_at - now).days
+        result["ssl_expires_in_days"] = days_remaining
+
+        if days_remaining <= 0:
+            result["healthy"] = False
+            result["warnings"].append({
+                "code": "SSL_EXPIRED",
+                "severity": "critical",
+                "message": (
+                    f"SSL certificate for '{config.custom_domain}' has expired. "
+                    "Visitors will see security warnings."
+                ),
+            })
+        elif days_remaining <= 30:
+            result["warnings"].append({
+                "code": "SSL_EXPIRING_SOON",
+                "severity": "high",
+                "message": (
+                    f"SSL certificate for '{config.custom_domain}' expires in "
+                    f"{days_remaining} days ({ssl_expires_at.strftime('%Y-%m-%d')}). "
+                    "Vercel auto-renews, but verify renewal is not blocked by DNS issues."
+                ),
+            })
+
+    if not result["warnings"]:
+        result["warnings"].append({
+            "code": "ALL_CLEAR",
+            "severity": "info",
+            "message": "Domain and SSL are healthy.",
+        })
+
+    return result
+
+
 def get_report_branding(db, org_id: int) -> Dict:
     """
     Get branding configuration for PDF/Excel report generation.

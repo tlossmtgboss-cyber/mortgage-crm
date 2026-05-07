@@ -120,6 +120,7 @@ class WhiteLabelConfig(Base):
     # --- Custom domain ---
     custom_domain = Column(String(255))  # Custom portal domain
     ssl_status = Column(String(20), default="pending")  # pending, provisioning, active, failed
+    ssl_expires_at = Column(DateTime)  # Vercel-provisioned SSL cert expiry date
     domain_verified = Column(Boolean, default=False)
     domain_verification_token = Column(String(100))  # DNS TXT record value for verification
     vercel_domain_id = Column(String(100))  # Vercel API domain ID for management

@@ -649,6 +649,11 @@ def _create_enterprise_tables(engine):
                     hour_utc INTEGER NOT NULL DEFAULT 8,
                     is_active BOOLEAN DEFAULT TRUE,
                     last_sent_at TIMESTAMPTZ,
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    next_retry_at TIMESTAMPTZ,
+                    last_error TEXT,
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    last_generation_ms INTEGER,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
                 )
@@ -656,6 +661,11 @@ def _create_enterprise_tables(engine):
             conn.execute(text("""
                 CREATE INDEX IF NOT EXISTS idx_scheduled_reports_org
                     ON scheduled_reports (organization_id, is_active)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_scheduled_reports_retry
+                    ON scheduled_reports (status, next_retry_at)
+                    WHERE status = 'retrying'
             """))
             conn.commit()
             logger.info("scheduled_reports table created/verified (ER-9.11)")

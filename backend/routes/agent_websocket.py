@@ -310,16 +310,29 @@ async def alerts_websocket(websocket: WebSocket):
     finally:
         auth_db.close()
 
+    org_id = user.organization_id or 0
     last_check = datetime.now(timezone.utc)
 
     try:
         while True:
             db = next(get_db())
             try:
-                # Check for new alerts since last check
-                new_alerts = db.query(AgentAlert).filter(
+                # Check for new alerts since last check, scoped to org
+                alerts_query = db.query(AgentAlert).filter(
                     AgentAlert.created_at > last_check
-                ).all()
+                )
+                if org_id:
+                    # Scope alerts to agents belonging to this org
+                    org_agent_ids = [
+                        a.id for a in db.query(AgentProfile).filter(
+                            AgentProfile.organization_id == org_id
+                        ).with_entities(AgentProfile.id).all()
+                    ]
+                    if org_agent_ids:
+                        alerts_query = alerts_query.filter(AgentAlert.agent_id.in_(org_agent_ids))
+                    else:
+                        alerts_query = alerts_query.filter(False)  # No agents for org
+                new_alerts = alerts_query.all()
 
                 if new_alerts:
                     for alert in new_alerts:

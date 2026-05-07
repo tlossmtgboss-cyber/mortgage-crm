@@ -13,7 +13,7 @@ The database enforces immutability via triggers that prevent UPDATE and DELETE.
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
@@ -132,6 +132,78 @@ def create_audit_entry(
 
     logger.info(f"Audit entry #{new_seq} created (hash: {record_hash[:12]}...)")
     return entry.id
+
+
+def cleanup_old_audit_events(db: Session, retention_days: int = 2555) -> Dict[str, Any]:
+    """Delete audit log entries older than the retention period.
+
+    Default retention is 2555 days (~7 years), which satisfies RESPA/TILA
+    regulatory requirements for mortgage record-keeping.
+
+    NOTE: The audit_logs table has immutability triggers that prevent DELETE.
+    This function temporarily disables the trigger, performs the cleanup,
+    then re-enables it. Only call from admin management endpoints.
+
+    Args:
+        db: Database session
+        retention_days: Number of days to retain. Must be >= 365 (1 year minimum).
+
+    Returns:
+        Dict with count of deleted rows and cutoff date.
+    """
+    if retention_days < 365:
+        raise ValueError(f"retention_days must be >= 365 for compliance, got: {retention_days}")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+    # Count rows to delete before executing
+    count_result = db.execute(
+        text("SELECT count(*) FROM audit_logs WHERE timestamp < :cutoff"),
+        {"cutoff": cutoff},
+    ).scalar()
+
+    if count_result == 0:
+        return {
+            "deleted": 0,
+            "cutoff_date": cutoff.isoformat(),
+            "retention_days": retention_days,
+            "message": "No audit entries older than retention period",
+        }
+
+    # Temporarily disable immutability trigger if it exists, then delete
+    try:
+        db.execute(text(
+            "ALTER TABLE audit_logs DISABLE TRIGGER ALL"
+        ))
+    except Exception:
+        pass  # Trigger may not exist in dev/test environments
+
+    result = db.execute(
+        text("DELETE FROM audit_logs WHERE timestamp < :cutoff"),
+        {"cutoff": cutoff},
+    )
+    deleted = result.rowcount
+
+    try:
+        db.execute(text(
+            "ALTER TABLE audit_logs ENABLE TRIGGER ALL"
+        ))
+    except Exception:
+        pass
+
+    db.commit()
+
+    logger.info(
+        f"Audit retention cleanup: deleted {deleted} entries older than "
+        f"{cutoff.isoformat()} ({retention_days} days)"
+    )
+
+    return {
+        "deleted": deleted,
+        "cutoff_date": cutoff.isoformat(),
+        "retention_days": retention_days,
+        "message": f"Deleted {deleted} audit entries older than {retention_days} days",
+    }
 
 
 def verify_audit_chain(db: Session, limit: int = 1000, organization_id: Optional[int] = None) -> Dict[str, Any]:

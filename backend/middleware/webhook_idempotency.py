@@ -19,6 +19,14 @@ Two layers are provided:
    reprocessing.  Uses Redis list with in-memory deque fallback.  Capped at
    1000 entries per provider (FIFO eviction).
 
+4. **Circuit breaker**: Redis operations are protected by a circuit breaker.
+   After N failures (default 5) within a window (default 60s), Redis is
+   bypassed and only in-memory storage is used until the window expires.
+
+5. **Latency monitoring** (``get_webhook_stats``): Returns counters for
+   total webhooks processed, duplicates caught, average check latency,
+   DLQ sizes per provider, and circuit breaker state.
+
 Usage — lightweight:
     from middleware.webhook_idempotency import is_duplicate_webhook
 
@@ -80,6 +88,141 @@ from database.models.webhook_idempotency import WebhookIdempotencyRecord
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Circuit breaker for Redis operations
+# ---------------------------------------------------------------------------
+
+_CB_FAILURE_THRESHOLD = 5   # failures before opening
+_CB_WINDOW_SECONDS = 60.0   # window for both failure counting and recovery
+
+_cb_lock = threading.Lock()
+_cb_failures: list[float] = []      # timestamps of recent failures
+_cb_open_since: Optional[float] = None  # monotonic time when breaker opened
+
+
+def _cb_record_failure() -> None:
+    """Record a Redis failure and possibly open the circuit breaker."""
+    global _cb_open_since
+    now = time.monotonic()
+    with _cb_lock:
+        _cb_failures.append(now)
+        # Prune failures outside the window
+        cutoff = now - _CB_WINDOW_SECONDS
+        while _cb_failures and _cb_failures[0] < cutoff:
+            _cb_failures.pop(0)
+        if len(_cb_failures) >= _CB_FAILURE_THRESHOLD and _cb_open_since is None:
+            _cb_open_since = now
+            logger.warning(
+                "Webhook circuit breaker OPEN: %d Redis failures in %.0fs window. "
+                "Falling back to in-memory for %.0fs.",
+                len(_cb_failures), _CB_WINDOW_SECONDS, _CB_WINDOW_SECONDS,
+            )
+
+
+def _cb_record_success() -> None:
+    """Record a successful Redis operation (resets failure history)."""
+    global _cb_open_since
+    with _cb_lock:
+        _cb_failures.clear()
+        _cb_open_since = None
+
+
+def _cb_is_open() -> bool:
+    """Check if the circuit breaker is currently open (Redis bypassed)."""
+    global _cb_open_since
+    with _cb_lock:
+        if _cb_open_since is None:
+            return False
+        elapsed = time.monotonic() - _cb_open_since
+        if elapsed >= _CB_WINDOW_SECONDS:
+            # Window expired — close breaker and allow retry
+            _cb_open_since = None
+            _cb_failures.clear()
+            logger.info(
+                "Webhook circuit breaker CLOSED: recovery window expired, retrying Redis.",
+            )
+            return False
+        return True
+
+
+def _cb_state() -> str:
+    """Return current circuit breaker state as a string."""
+    with _cb_lock:
+        if _cb_open_since is None:
+            return "closed"
+        elapsed = time.monotonic() - _cb_open_since
+        if elapsed >= _CB_WINDOW_SECONDS:
+            return "closed"
+        return "open"
+
+
+# ---------------------------------------------------------------------------
+# Webhook stats / latency monitoring
+# ---------------------------------------------------------------------------
+
+_stats_lock = threading.Lock()
+_stats = {
+    "total_processed": 0,
+    "duplicates_caught": 0,
+    "latency_sum_ms": 0.0,
+    "latency_count": 0,
+}
+
+
+def _stats_record_check(is_duplicate: bool, latency_ms: float) -> None:
+    """Record a webhook dedup check in stats."""
+    with _stats_lock:
+        _stats["total_processed"] += 1
+        if is_duplicate:
+            _stats["duplicates_caught"] += 1
+        _stats["latency_sum_ms"] += latency_ms
+        _stats["latency_count"] += 1
+
+
+def get_webhook_stats() -> dict:
+    """
+    Return webhook health metrics.
+
+    Returns dict with keys:
+        total_processed, duplicates_caught, avg_check_latency_ms,
+        dlq_sizes (dict of provider -> count), circuit_breaker_state.
+    """
+    with _stats_lock:
+        total = _stats["total_processed"]
+        duplicates = _stats["duplicates_caught"]
+        avg_latency = (
+            round(_stats["latency_sum_ms"] / _stats["latency_count"], 2)
+            if _stats["latency_count"] > 0 else 0.0
+        )
+
+    # DLQ sizes per provider
+    dlq_sizes: dict[str, int] = {}
+    redis = _get_redis()
+    if redis is not None:
+        try:
+            cursor_keys = redis.keys(f"{_DLQ_REDIS_PREFIX}*")
+            for rkey in cursor_keys:
+                rkey_str = rkey.decode() if isinstance(rkey, bytes) else rkey
+                prov = rkey_str.replace(_DLQ_REDIS_PREFIX, "")
+                dlq_sizes[prov] = redis.llen(rkey_str)
+        except Exception:
+            pass
+
+    # Also merge in-memory DLQ counts
+    with _dlq_lock:
+        for prov, dq in _dlq_store.items():
+            if prov not in dlq_sizes:
+                dlq_sizes[prov] = len(dq)
+
+    return {
+        "total_processed": total,
+        "duplicates_caught": duplicates,
+        "avg_check_latency_ms": avg_latency,
+        "dlq_sizes": dlq_sizes,
+        "circuit_breaker_state": _cb_state(),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Lightweight Redis + in-memory dedup (fast-path, no DB needed)
 # ---------------------------------------------------------------------------
 
@@ -94,7 +237,12 @@ _MAX_IN_MEMORY = 50_000
 
 
 def _get_redis():
-    """Get Redis client from the centralized service, or None."""
+    """Get Redis client from the centralized service, or None.
+
+    Returns None when the circuit breaker is open (Redis bypassed).
+    """
+    if _cb_is_open():
+        return None
     try:
         from services.redis_service import get_redis_client
         return get_redis_client()
@@ -125,7 +273,9 @@ def is_duplicate_webhook(provider: str, event_key: str) -> bool:
         True if the event was already seen (duplicate) — caller should skip.
         False if the event is new — caller should process it.
     """
+    t_start = time.monotonic()
     full_key = f"webhook:idem:{provider}:{event_key}"
+    is_dup = False
 
     # Try Redis first
     redis = _get_redis()
@@ -133,13 +283,23 @@ def is_duplicate_webhook(provider: str, event_key: str) -> bool:
         try:
             # SET NX returns True if the key was set (new), False if it existed
             was_set = redis.set(full_key, "1", nx=True, ex=_WEBHOOK_TTL_SECONDS)
+            _cb_record_success()
             if was_set:
                 logger.debug("Webhook dedup [redis]: new event %s", full_key[:80])
-                return False
+                is_dup = False
             else:
                 logger.info("Webhook dedup [redis]: duplicate event %s", full_key[:80])
-                return True
+                is_dup = True
+            latency_ms = (time.monotonic() - t_start) * 1000
+            if latency_ms > 100:
+                logger.warning(
+                    "Webhook dedup: check took %.1fms (threshold 100ms) for %s",
+                    latency_ms, full_key[:80],
+                )
+            _stats_record_check(is_dup, latency_ms)
+            return is_dup
         except Exception as e:
+            _cb_record_failure()
             logger.warning("Webhook dedup: Redis error, falling back to memory: %s", e)
 
     # In-memory fallback
@@ -152,13 +312,25 @@ def is_duplicate_webhook(provider: str, event_key: str) -> bool:
         if full_key in _seen_events:
             if _seen_events[full_key] > now:
                 logger.info("Webhook dedup [memory]: duplicate event %s", full_key[:80])
-                return True
-            # Expired — treat as new
-            del _seen_events[full_key]
+                is_dup = True
+            else:
+                # Expired — treat as new
+                del _seen_events[full_key]
+                _seen_events[full_key] = now + _WEBHOOK_TTL_SECONDS
+                is_dup = False
+        else:
+            _seen_events[full_key] = now + _WEBHOOK_TTL_SECONDS
+            logger.debug("Webhook dedup [memory]: new event %s", full_key[:80])
+            is_dup = False
 
-        _seen_events[full_key] = now + _WEBHOOK_TTL_SECONDS
-        logger.debug("Webhook dedup [memory]: new event %s", full_key[:80])
-        return False
+    latency_ms = (time.monotonic() - t_start) * 1000
+    if latency_ms > 100:
+        logger.warning(
+            "Webhook dedup: check took %.1fms (threshold 100ms) for %s",
+            latency_ms, full_key[:80],
+        )
+    _stats_record_check(is_dup, latency_ms)
+    return is_dup
 
 
 # ---------------------------------------------------------------------------
@@ -207,12 +379,14 @@ def record_webhook_failure(
             redis.lpush(redis_key, entry_json)
             # Trim to cap — keep the newest _DLQ_MAX_PER_PROVIDER entries
             redis.ltrim(redis_key, 0, _DLQ_MAX_PER_PROVIDER - 1)
+            _cb_record_success()
             logger.info(
                 "Webhook DLQ [redis]: recorded failure for %s (provider=%s)",
                 event_key[:80], provider,
             )
             return
         except Exception as e:
+            _cb_record_failure()
             logger.warning("Webhook DLQ: Redis error, falling back to memory: %s", e)
 
     # In-memory fallback
@@ -271,10 +445,12 @@ def get_failed_webhooks(
                 if len(results) >= limit:
                     break
 
+            _cb_record_success()
             # Sort by failed_at descending and cap
             results.sort(key=lambda x: x.get("failed_at", ""), reverse=True)
             return results[:limit]
         except Exception as e:
+            _cb_record_failure()
             logger.warning("Webhook DLQ: Redis read error, falling back to memory: %s", e)
 
     # In-memory fallback
@@ -338,10 +514,13 @@ def retry_webhook(event_key: str) -> bool:
                 # but event_key here is already the full composite key.
                 # Try removing both possible Redis key formats.
                 redis.delete(f"webhook:idem:{event_key}")
+                _cb_record_success()
                 logger.info("Webhook DLQ [redis]: removed %s for retry", event_key[:80])
                 return True
 
+            _cb_record_success()
         except Exception as e:
+            _cb_record_failure()
             logger.warning("Webhook DLQ: Redis retry error, falling back to memory: %s", e)
 
     # In-memory fallback

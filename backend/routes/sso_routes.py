@@ -482,6 +482,27 @@ async def saml_acs(
             detail=f"SAML assertion validation failed: {error_msg}",
         )
 
+    # Multi-IdP tenant isolation: verify the SAML response Issuer matches
+    # the configured IdP entity_id for this org. Prevents a response from
+    # IdP-A being accepted for Org-B if RelayState is tampered with.
+    response_issuer = attributes.get("issuer")
+    if response_issuer and sso_config.idp_entity_id:
+        if response_issuer != sso_config.idp_entity_id:
+            logger.warning(
+                f"SAML Issuer mismatch for org {org_id}: "
+                f"response Issuer='{response_issuer}', "
+                f"configured IdP entity_id='{sso_config.idp_entity_id}'"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="SAML Issuer does not match the configured IdP for this organization.",
+            )
+    elif not response_issuer:
+        logger.warning(
+            f"SAML response for org {org_id} missing Issuer element — "
+            "cannot verify IdP identity for tenant isolation"
+        )
+
     email = attributes.get("email")
     if not email:
         raise HTTPException(

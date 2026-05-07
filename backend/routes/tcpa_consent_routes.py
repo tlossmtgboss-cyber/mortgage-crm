@@ -202,6 +202,7 @@ class ConsentRevokeResponse(BaseModel):
     phone_number: str
     revocation_method: str
     revoked_at: datetime
+    processing_deadline: Optional[datetime] = None
     message: str
 
 
@@ -478,6 +479,47 @@ async def get_consent_status(
         logger.debug("TCPAConsent lookup skipped: %s", e)
         db.rollback()
 
+    # Check for recently revoked consent within the FCC 10-business-day
+    # processing window — warn even if no active consent remains.
+    _processing_warning = None
+    try:
+        recent_revocation = (
+            db.query(TCPAConsent)
+            .filter(
+                TCPAConsent.phone_number == phone_number,
+                TCPAConsent.is_active == False,  # noqa: E712
+                TCPAConsent.revoked_at.isnot(None),
+                TCPAConsent.processing_deadline.isnot(None),
+                TCPAConsent.processing_deadline >= now,
+            )
+            .order_by(TCPAConsent.revoked_at.desc())
+            .first()
+        )
+        if recent_revocation:
+            deadline_str = recent_revocation.processing_deadline.strftime('%Y-%m-%d')
+            _processing_warning = (
+                f" WARNING: Consent was revoked on "
+                f"{recent_revocation.revoked_at.strftime('%Y-%m-%d')}, "
+                f"FCC processing deadline: {deadline_str}. "
+                "All automated contact is blocked during the processing window."
+            )
+    except Exception as e:
+        logger.debug("Revocation processing window check failed: %s", e)
+
+    if _processing_warning and record is None:
+        return ConsentStatusResponse(
+            phone_number=phone_number,
+            has_active_consent=False,
+            consent_id=None,
+            consent_type=None,
+            consent_channel=None,
+            granted_at=None,
+            expires_at=None,
+            call_permitted=False,
+            sms_permitted=False,
+            message=_processing_warning.strip(),
+        )
+
     if record is None:
         # No explicit certificate — check ChannelPreference for opt-outs.
         # Default: permitted unless contact explicitly opted out.
@@ -602,11 +644,26 @@ async def revoke_consent(
             detail="No active consent records found for this phone number.",
         )
 
+    # Compute the 10-business-day processing deadline per FCC rules.
+    # We block outbound immediately, but this deadline tracks the
+    # regulatory requirement to complete ALL processing within 10 bdays.
+    try:
+        from services.trid_deadline_service import add_business_days
+        _deadline_date = add_business_days(now.date() if hasattr(now, 'date') else now, 10)
+        # Convert date back to naive datetime for storage
+        processing_deadline_dt = datetime.combine(
+            _deadline_date, datetime.min.time()
+        )
+    except Exception as e:
+        logger.warning("Failed to calculate processing deadline, using 14-calendar-day fallback: %s", e)
+        processing_deadline_dt = now + timedelta(days=14)
+
     try:
         for record in records:
             record.is_active = False
             record.revoked_at = now
             record.revocation_method = payload.revocation_method
+            record.processing_deadline = processing_deadline_dt
             record.updated_at = now
 
         # IMMEDIATE OPT-OUT: Update ChannelPreference in the same transaction
@@ -676,6 +733,7 @@ async def revoke_consent(
                         "original_consent_type": record.consent_type,
                         "original_granted_at": record.granted_at.isoformat() if record.granted_at else None,
                         "channel_prefs_updated": channel_prefs_updated,
+                        "processing_deadline": processing_deadline_dt.isoformat(),
                     },
                 )
         except Exception as audit_err:
@@ -706,10 +764,11 @@ async def revoke_consent(
         phone_number=payload.phone_number,
         revocation_method=payload.revocation_method,
         revoked_at=now,
+        processing_deadline=processing_deadline_dt,
         message=(
             f"{len(records)} consent record(s) revoked. "
             f"Outbound contact blocked immediately ({channel_prefs_updated} channel preference(s) updated). "
-            "FCC opt-out honoured within this request."
+            f"FCC 10-business-day processing deadline: {processing_deadline_dt.strftime('%Y-%m-%d')}."
         ),
     )
 
@@ -878,6 +937,47 @@ async def verify_before_call(
             )
 
     record = base_query.order_by(TCPAConsent.granted_at.desc()).first()
+
+    # --- Check for recently revoked consent still within processing window ---
+    # Per FCC rules, revocation must be honoured within 10 business days.
+    # If any consent for this phone was revoked and the processing_deadline
+    # has not yet passed, warn the caller and block the contact.
+    try:
+        revocation_query = db.query(TCPAConsent).filter(
+            TCPAConsent.organization_id == uuid.UUID(str(org_id)),
+            TCPAConsent.phone_number == payload.phone_number,
+            TCPAConsent.is_active == False,  # noqa: E712
+            TCPAConsent.revoked_at.isnot(None),
+            TCPAConsent.processing_deadline.isnot(None),
+            TCPAConsent.processing_deadline >= now,
+        )
+        if payload.contact_id:
+            try:
+                revocation_query = revocation_query.filter(
+                    TCPAConsent.contact_id == uuid.UUID(payload.contact_id)
+                )
+            except ValueError:
+                pass
+        recent_revocation = revocation_query.order_by(TCPAConsent.revoked_at.desc()).first()
+        if recent_revocation:
+            deadline_str = recent_revocation.processing_deadline.strftime('%Y-%m-%d')
+            return VerifyBeforeCallResponse(
+                permitted=False,
+                phone_number=payload.phone_number,
+                channel=payload.channel,
+                consent_id=str(recent_revocation.id),
+                consent_type=recent_revocation.consent_type,
+                granted_at=recent_revocation.granted_at,
+                expires_at=recent_revocation.expires_at,
+                reason=(
+                    f"WARNING: Consent was revoked on "
+                    f"{recent_revocation.revoked_at.strftime('%Y-%m-%d')} and is within "
+                    f"the FCC 10-business-day processing window (deadline: {deadline_str}). "
+                    "All outbound contact is blocked until revocation processing is complete."
+                ),
+            )
+    except Exception as e:
+        logger.debug("Revocation processing window check failed (non-blocking): %s", e)
 
     # --- No consent on file ---
     if record is None:

@@ -735,6 +735,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         default_stage: str = Form("New"),
         default_source: Optional[str] = Form(None),
         skip_invalid_rows: bool = Form(True),
+        async_mode: Optional[str] = Form(None),
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
@@ -745,6 +746,12 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         all changes are rolled back. Records are processed in streaming
         chunks of 100 rows, never loading the entire file into memory.
 
+        **Async background mode**: When the file exceeds 5 MB or an
+        estimated 5,000 rows (or when ``async_mode=force`` is passed),
+        the import is saved to a temp file and processed in a background
+        thread. The endpoint returns immediately with a job_id and a
+        polling URL (``GET /api/v1/imports/{import_id}/status``).
+
         Parameters:
           - file: CSV or Excel file (max 50MB)
           - field_mapping: JSON mapping of source_column -> lead_field
@@ -752,10 +759,20 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
           - default_stage: Default stage for new leads (default: 'New')
           - default_source: Default source value
           - skip_invalid_rows: If true, skip rows with errors instead of aborting
+          - async_mode: 'auto' (default) | 'force' | 'sync'
 
         Returns import_id for tracking progress.
         """
-        from services.import_service import ImportService, check_file_size
+        from concurrent.futures import ThreadPoolExecutor
+
+        from services.import_service import (
+            ImportService,
+            check_file_size,
+            estimate_row_count,
+            run_background_import,
+            save_upload_to_temp,
+            should_run_async,
+        )
 
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
@@ -779,13 +796,94 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
 
         # Check file size without reading entire file into memory
         try:
-            check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
+            file_size = check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
-
         filename = file.filename or "upload.csv"
+
+        # ---------------------------------------------------------------
+        # Decide sync vs. async
+        # ---------------------------------------------------------------
+        effective_async = async_mode or "auto"
+        if effective_async == "force":
+            use_async = True
+        elif effective_async == "sync":
+            use_async = False
+        else:
+            # Auto: check file size and estimated row count
+            estimated_rows = estimate_row_count(file.file, filename)
+            use_async = should_run_async(file_size, estimated_rows)
+
+        # ---------------------------------------------------------------
+        # ASYNC PATH: save file, create queued job, dispatch to thread
+        # ---------------------------------------------------------------
+        if use_async:
+            import_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc)
+
+            try:
+                tmp_path = save_upload_to_temp(file.file, filename)
+            except Exception as e:
+                logger.exception("Failed to save upload to temp file: %s", e)
+                raise HTTPException(status_code=500, detail="Failed to stage file for background import")
+
+            # Create a queued import_jobs record so status polling works
+            # immediately.
+            db.execute(text("""
+                INSERT INTO import_jobs
+                    (id, organization_id, created_by, status, filename,
+                     total_rows, duplicate_strategy, field_mapping, created_at)
+                VALUES
+                    (:id, :org_id, :user_id, 'queued', :filename,
+                     0, :dup, :mapping, :created)
+            """), {
+                "id": import_id,
+                "org_id": org_id,
+                "user_id": user_id,
+                "filename": filename,
+                "dup": duplicate_strategy,
+                "mapping": json.dumps(mapping),
+                "created": now,
+            })
+            db.commit()
+
+            # Dispatch to a daemon thread via ThreadPoolExecutor
+            executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="import")
+            executor.submit(
+                run_background_import,
+                import_id=import_id,
+                tmp_path=tmp_path,
+                filename=filename,
+                user_id=user_id,
+                organization_id=org_id,
+                field_mapping=mapping,
+                duplicate_strategy=duplicate_strategy,
+                default_stage=default_stage,
+                default_source=default_source,
+                skip_invalid_rows=skip_invalid_rows,
+                validate_row_fn=validate_row,
+                transform_value_fn=transform_value,
+            )
+            # Allow the executor to shut down when the thread finishes
+            executor.shutdown(wait=False)
+
+            return {
+                "import_id": import_id,
+                "status": "queued",
+                "async": True,
+                "filename": filename,
+                "message": (
+                    "Import is too large for synchronous processing. "
+                    "It has been queued for background processing."
+                ),
+                "poll_url": f"/api/v1/imports/{import_id}/status",
+            }
+
+        # ---------------------------------------------------------------
+        # SYNC PATH: original behavior
+        # ---------------------------------------------------------------
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
         is_excel = filename.lower().endswith((".xlsx", ".xls"))
 
         try:
@@ -821,6 +919,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         return {
             "import_id": result.import_id,
             "status": result.status,
+            "async": False,
             "filename": result.filename,
             "total_rows": result.total_rows,
             "imported": result.imported,

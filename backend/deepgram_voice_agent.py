@@ -68,10 +68,11 @@ class DeepgramVoiceAgentSession:
     Acts as a proxy between the mobile client and Deepgram.
     """
 
-    def __init__(self, client_ws: WebSocket, user_id: str, db: Session):
+    def __init__(self, client_ws: WebSocket, user_id: str, db: Session, organization_id: Optional[int] = None):
         self.client_ws = client_ws
         self.user_id = user_id
         self.db = db
+        self.organization_id = organization_id
         self.session_id = str(uuid.uuid4())
         self.is_active = True
         self.deepgram_ws = None
@@ -327,14 +328,23 @@ async def voice_agent_websocket(
 
         if auth_user:
             user_id = auth_user.email
-            logger.info(f"[VoiceAgent] Authenticated user ID: {auth_user.id}")
+            org_id = auth_user.organization_id
+            logger.info(f"[VoiceAgent] Authenticated user ID: {auth_user.id}, org_id: {org_id}")
         else:
             logger.warning(f"[VoiceAgent] Auth failed: {auth_error}")
             await websocket.close(code=4001, reason="Authentication required")
             return
 
+        # Set tenant context on the DB session for RLS isolation
+        if org_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, org_id)
+            except Exception as e:
+                logger.warning(f"[VoiceAgent] Failed to set tenant context: {e}")
+
         # Create and start session
-        session = DeepgramVoiceAgentSession(websocket, user_id, db)
+        session = DeepgramVoiceAgentSession(websocket, user_id, db, organization_id=org_id)
         await session.start()
 
         # Main message loop

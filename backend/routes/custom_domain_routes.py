@@ -57,6 +57,7 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
         db = next(db_gen)
         for col, col_type, default in [
             ("ssl_status", "VARCHAR(20)", "'pending'"),
+            ("ssl_expires_at", "TIMESTAMP", "NULL"),
             ("domain_verified", "BOOLEAN", "FALSE"),
             ("domain_verification_token", "VARCHAR(100)", "NULL"),
             ("vercel_domain_id", "VARCHAR(100)", "NULL"),
@@ -281,22 +282,30 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
 
         # ---- Vercel integration (best-effort) ------------------------- #
         vercel_domain_id = None
+        vercel_warning = None
         try:
             from services import vercel_domain_service
 
             result = vercel_domain_service.add_domain(domain)
-            # Vercel returns {"name": domain, "apexName": ..., ...} on success
             if result and not result.get("error") and not result.get("skipped"):
                 vercel_domain_id = result.get("name") or result.get("id") or domain
                 config.ssl_status = "provisioning"
                 logger.info("Vercel domain added: %s -> %s", domain, vercel_domain_id)
+            elif result and result.get("error"):
+                error_type = result.get("error_type", "VercelDomainError")
+                vercel_warning = result["error"]
+                logger.warning(
+                    "Vercel add_domain returned error for %s: [%s] %s",
+                    domain, error_type, result["error"],
+                )
         except Exception as exc:
+            vercel_warning = f"Vercel integration unavailable: {exc}"
             logger.warning("Vercel add_domain failed for %s: %s", domain, exc)
 
         config.vercel_domain_id = vercel_domain_id
         db.commit()
 
-        return {
+        response = {
             "verified": True,
             "ssl_status": config.ssl_status,
             "vercel_domain_id": vercel_domain_id,
@@ -305,6 +314,9 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
                 "check /status in a few minutes."
             ),
         }
+        if vercel_warning:
+            response["vercel_warning"] = vercel_warning
+        return response
 
     # ------------------------------------------------------------------ #
     # GET /api/v1/admin/custom-domain/status                               #
@@ -674,6 +686,7 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
 
         # ---- Vercel integration (best-effort) ------------------------- #
         vercel_domain_id = None
+        vercel_warning = None
         try:
             from services import vercel_domain_service
 
@@ -681,13 +694,21 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
             if result and not result.get("error") and not result.get("skipped"):
                 vercel_domain_id = result.get("name") or result.get("id") or domain
                 logger.info("Vercel domain added: %s -> %s", domain, vercel_domain_id)
+            elif result and result.get("error"):
+                error_type = result.get("error_type", "VercelDomainError")
+                vercel_warning = result["error"]
+                logger.warning(
+                    "Vercel add_domain returned error for %s: [%s] %s",
+                    domain, error_type, result["error"],
+                )
         except Exception as exc:
+            vercel_warning = f"Vercel integration unavailable: {exc}"
             logger.warning("Vercel add_domain failed for %s: %s", domain, exc)
 
         config.vercel_domain_id = vercel_domain_id
         db.commit()
 
-        return {
+        response = {
             "verified": True,
             "ssl_status": config.ssl_status,
             "checks": checks,
@@ -697,6 +718,9 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
                 "check /status in a few minutes."
             ),
         }
+        if vercel_warning:
+            response["vercel_warning"] = vercel_warning
+        return response
 
     # ------------------------------------------------------------------ #
     # GET /api/v1/white-label/domain/status                                #
@@ -738,23 +762,53 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
                 "message": "No custom domain configured yet.",
             }
 
-        # Refresh SSL status from Vercel if domain is verified
+        # Refresh SSL status and expiry from Vercel if domain is verified
+        ssl_expires_at = getattr(config, "ssl_expires_at", None)
+        ssl_expires_in_days = None
+        ssl_renewal_warning = None
+
         if config.domain_verified and config.vercel_domain_id:
             try:
                 from services import vercel_domain_service
+                from datetime import datetime as _dt, timezone as _tz
 
                 live_ssl = vercel_domain_service.check_ssl_status(config.custom_domain)
                 if live_ssl not in ("unknown", config.ssl_status):
                     config.ssl_status = live_ssl
-                    db.commit()
-            except Exception as exc:
-                logger.warning("Vercel SSL status check failed: %s", exc)
 
-        return {
+                # Fetch SSL expiry from Vercel
+                vercel_expiry = vercel_domain_service.get_ssl_expiry(config.custom_domain)
+                if vercel_expiry:
+                    ssl_expires_at = vercel_expiry
+                    config.ssl_expires_at = vercel_expiry
+
+                db.commit()
+            except Exception as exc:
+                logger.warning("Vercel SSL status/expiry check failed: %s", exc)
+
+        if ssl_expires_at:
+            from datetime import datetime as _dt, timezone as _tz
+            now = _dt.now(_tz.utc)
+            ssl_expires_in_days = (ssl_expires_at - now).days
+            if ssl_expires_in_days <= 0:
+                ssl_renewal_warning = (
+                    "SSL certificate has EXPIRED. Visitors will see security warnings."
+                )
+            elif ssl_expires_in_days <= 30:
+                ssl_renewal_warning = (
+                    f"SSL certificate expires in {ssl_expires_in_days} days "
+                    f"({ssl_expires_at.strftime('%Y-%m-%d')}). "
+                    "Verify auto-renewal is not blocked by DNS issues."
+                )
+
+        response = {
             "configured": True,
             "domain": config.custom_domain,
             "domain_verified": bool(config.domain_verified),
             "ssl_status": config.ssl_status or "pending",
+            "ssl_expires_at": ssl_expires_at.isoformat() if ssl_expires_at else None,
+            "ssl_expires_in_days": ssl_expires_in_days,
+            "ssl_renewal_warning": ssl_renewal_warning,
             "vercel_domain_id": config.vercel_domain_id,
             "verification_token": config.domain_verification_token,
             "dns_instructions": {
@@ -769,4 +823,125 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
                     "value": _CNAME_TARGET,
                 },
             } if not config.domain_verified else None,
+        }
+        return response
+
+    # ================================================================== #
+    # White-Label Compliance Check (Domain 12)                             #
+    # ================================================================== #
+
+    # ------------------------------------------------------------------ #
+    # GET /api/v1/white-label/compliance-check                             #
+    # ------------------------------------------------------------------ #
+
+    @app.get("/api/v1/white-label/compliance-check", tags=["White-Label Domain"])
+    async def white_label_compliance_check(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Run a unified white-label compliance check for the caller's org.
+
+        Combines portal branding completeness, branding leak scan, and custom
+        domain health into a single compliance report with action items.
+
+        Returns:
+          - portal_branding: completeness checks (logo, colors, fonts, etc.)
+          - branding_leaks: platform-name references in tenant output
+          - domain_health: SSL expiry, domain verification, provisioning status
+          - action_items: prioritized list of things to fix
+          - overall_score: 0-100 compliance score
+        """
+        _require_admin(current_user)
+
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
+            )
+
+        from services.white_label_service import (
+            check_portal_branding,
+            scan_for_branding_leaks,
+            check_domain_health,
+        )
+
+        portal_result = check_portal_branding(db, organization_id)
+        leak_result = scan_for_branding_leaks(db, organization_id)
+        domain_result = check_domain_health(db, organization_id)
+
+        # Build prioritized action items
+        action_items = []
+
+        # Portal branding actions
+        for check_name, passed in portal_result.get("checks", {}).items():
+            if not passed:
+                action_items.append({
+                    "category": "portal_branding",
+                    "priority": "high" if check_name in ("logo", "company_name") else "medium",
+                    "action": f"Configure {check_name.replace('_', ' ')} in White-Label settings.",
+                })
+
+        # Branding leak actions
+        for leak in leak_result.get("leaks", []):
+            action_items.append({
+                "category": "branding_leak",
+                "priority": leak.get("severity", "medium"),
+                "action": leak.get("fix", f"Fix branding leak in {leak.get('location', 'unknown')}"),
+            })
+
+        # Domain health actions
+        for warning in domain_result.get("warnings", []):
+            code = warning.get("code", "")
+            if code in ("ALL_CLEAR", "NO_CUSTOM_DOMAIN"):
+                continue
+            action_items.append({
+                "category": "domain_health",
+                "priority": warning.get("severity", "medium"),
+                "action": warning.get("message", "Address domain issue"),
+            })
+
+        # Sort: critical > high > medium > low > info
+        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        action_items.sort(key=lambda x: priority_order.get(x.get("priority", "info"), 4))
+
+        # Compute overall score (0-100)
+        # Portal branding: 50 points (proportional to completion %)
+        portal_score = (portal_result.get("completion_pct", 0) / 100) * 50
+
+        # Branding leaks: 25 points (0 leaks = 25, each leak deducts points)
+        leak_count = leak_result.get("leaks_found", 0)
+        leak_score = max(0, 25 - (leak_count * 5))
+
+        # Domain health: 25 points
+        domain_score = 25
+        if not domain_result.get("healthy", True):
+            domain_score = 5
+        elif any(
+            w.get("severity") in ("high", "critical")
+            for w in domain_result.get("warnings", [])
+            if w.get("code") not in ("ALL_CLEAR", "NO_CUSTOM_DOMAIN")
+        ):
+            domain_score = 15
+
+        overall_score = round(portal_score + leak_score + domain_score)
+
+        from datetime import datetime as _dt, timezone as _tz
+
+        return {
+            "org_id": organization_id,
+            "overall_score": overall_score,
+            "grade": (
+                "A+" if overall_score >= 95 else
+                "A" if overall_score >= 90 else
+                "B" if overall_score >= 75 else
+                "C" if overall_score >= 60 else
+                "D" if overall_score >= 40 else "F"
+            ),
+            "portal_branding": portal_result,
+            "branding_leaks": leak_result,
+            "domain_health": domain_result,
+            "action_items": action_items,
+            "action_items_count": len(action_items),
+            "checked_at": _dt.now(_tz.utc).isoformat(),
         }

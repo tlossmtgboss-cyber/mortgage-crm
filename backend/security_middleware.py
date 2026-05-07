@@ -30,6 +30,37 @@ logger = logging.getLogger(__name__)
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 TEST_API_KEY = os.getenv("TEST_API_KEY", "")
 
+# Admin IP whitelist enforcement toggle — set to "true" in production
+# once admin IPs are configured via ADMIN_IP_1/2/3 env vars.
+ADMIN_IP_WHITELIST_ENABLED = os.getenv(
+    "ADMIN_IP_WHITELIST_ENABLED", "false"
+).strip().lower() in ("1", "true", "yes", "on")
+
+# CORS allowed origins for rate-limit 429 responses.
+# Loaded from env var RATE_LIMIT_ALLOWED_ORIGINS (comma-separated) with
+# a sensible default.  Externalising makes audit and rotation easier.
+_DEFAULT_RATE_LIMIT_ORIGINS = (
+    "https://perenniaai.com,"
+    "https://www.perenniaai.com,"
+    "https://app.perenniaai.com,"
+    "https://api.perenniaai.com,"
+    "capacitor://localhost,"
+    "ionic://localhost"
+)
+_RATE_LIMIT_ALLOWED_ORIGINS: set = set(
+    origin.strip()
+    for origin in os.getenv(
+        "RATE_LIMIT_ALLOWED_ORIGINS", _DEFAULT_RATE_LIMIT_ORIGINS
+    ).split(",")
+    if origin.strip()
+)
+if ENVIRONMENT != "production":
+    _RATE_LIMIT_ALLOWED_ORIGINS.update({
+        "http://localhost",
+        "http://localhost:3000",
+        "http://localhost:5173",
+    })
+
 # ============================================================================
 # SHARED SECURITY STATE (Module-level for dashboard access)
 # ============================================================================
@@ -104,6 +135,7 @@ class SecurityStats:
             },
             "configuration": {
                 "environment": ENVIRONMENT,
+                "admin_ip_whitelist_enabled": ADMIN_IP_WHITELIST_ENABLED,
                 "whitelisted_ips_configured": bool(WHITELISTED_IPS - {"127.0.0.1", "localhost"}),
                 "test_api_key_configured": bool(TEST_API_KEY),
                 "max_request_size_mb": 10,
@@ -312,8 +344,9 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
             logger.info(f"Staging access from non-whitelisted IP: {client_ip}")
             return await call_next(request)
 
-        # Production mode: IP whitelist enforcement only for admin paths
-        # Note: Full enforcement disabled until admin IPs are properly configured
+        # Production mode: IP whitelist enforcement for admin paths.
+        # Controlled by ADMIN_IP_WHITELIST_ENABLED env var (default: false).
+        # Set to "true" once ADMIN_IP_1/2/3 are configured in Railway.
         if ENVIRONMENT == "production":
             # Public paths that should NOT require admin auth (even under /admin/)
             public_paths = [
@@ -329,14 +362,14 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
             admin_paths = ["/api/v1/admin/", "/api/v1/migrations/"]
             is_admin_path = any(path.startswith(p) for p in admin_paths)
 
-            if is_admin_path:
+            if is_admin_path and ADMIN_IP_WHITELIST_ENABLED:
                 if is_ip_whitelisted(client_ip):
                     return await call_next(request)
                 # Also allow Railway internal IPs (100.64.x.x range)
                 if client_ip.startswith("100.64."):
                     return await call_next(request)
 
-                # Allow authenticated requests from our frontend (Vercel/pipeline360.io)
+                # Allow authenticated requests from our frontend
                 origin = request.headers.get("origin", "")
                 referer = request.headers.get("referer", "")
                 auth_header = request.headers.get("authorization", "")
@@ -344,7 +377,6 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                 allowed_origins = [
                     "https://www.perenniaai.com",
                     "https://perenniaai.com",
-                    "https://app.perenniaai.com",
                     "https://app.perenniaai.com",
                     "http://localhost:3000",
                 ]
@@ -363,6 +395,11 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(
                     status_code=403,
                     content={"detail": "Access denied - admin access requires whitelisted IP"}
+                )
+            elif is_admin_path and not ADMIN_IP_WHITELIST_ENABLED:
+                logger.debug(
+                    "Admin IP whitelist not enforced (ADMIN_IP_WHITELIST_ENABLED=false): "
+                    f"{client_ip} -> {request.method} {path}"
                 )
 
             # Allow all other paths in production (normal API traffic)
@@ -581,25 +618,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         current_time = time.time()
 
-        # CORS headers for 429 responses — validated against allowlist to prevent
-        # origin reflection attacks.  DynamicCORSMiddleware wraps us and will add
-        # its own CORS headers, but 429 responses short-circuit before reaching it,
+        # CORS headers for 429 responses — validated against the module-level
+        # _RATE_LIMIT_ALLOWED_ORIGINS set (loaded from RATE_LIMIT_ALLOWED_ORIGINS
+        # env var at startup).  DynamicCORSMiddleware wraps us and will add its
+        # own CORS headers, but 429 responses short-circuit before reaching it,
         # so we must set headers here for the browser to read the error body.
         origin = request.headers.get("origin", "")
-        _RATE_LIMIT_ALLOWED_ORIGINS = {
-            "https://perenniaai.com",
-            "https://www.perenniaai.com",
-            "https://app.perenniaai.com",
-            "https://api.perenniaai.com",
-            "capacitor://localhost",
-            "ionic://localhost",
-        }
-        if ENVIRONMENT != "production":
-            _RATE_LIMIT_ALLOWED_ORIGINS.update({
-                "http://localhost",
-                "http://localhost:3000",
-                "http://localhost:5173",
-            })
         cors_origin = origin if origin in _RATE_LIMIT_ALLOWED_ORIGINS else ""
         cors_headers = {}
         if cors_origin:

@@ -381,9 +381,28 @@ async def sms_webhook(
 
         logger.info(f"Received SMS from {from_number}: {body}")
 
+        # Resolve org_id from the phone number to scope tenant context
+        org_id = None
+        if to_number:
+            org_row = db.execute(
+                text("""
+                    SELECT u.organization_id
+                    FROM users u
+                    WHERE u.phone = :phone OR u.business_phone = :phone
+                    LIMIT 1
+                """),
+                {"phone": to_number},
+            ).fetchone()
+            if org_row:
+                org_id = org_row[0]
+                logger.info(f"SMS webhook resolved org_id={org_id} from to_number={to_number}")
+            else:
+                logger.warning(f"TENANT-ISOLATION: Could not resolve org_id from SMS to_number={to_number}")
+
         # Store incoming SMS
         from database.models import SMSMessage
         sms_record = SMSMessage(
+            organization_id=org_id,
             to_number=to_number,
             from_number=from_number,
             message=body,
@@ -530,9 +549,28 @@ async def email_webhook(
     try:
         logger.info(f"Received email from {payload.from_email}: {payload.subject}")
 
+        # Resolve org_id from recipient email to scope tenant context
+        org_id = None
+        if payload.to_email:
+            org_row = db.execute(
+                text("""
+                    SELECT organization_id
+                    FROM users
+                    WHERE email = :email
+                    LIMIT 1
+                """),
+                {"email": payload.to_email},
+            ).fetchone()
+            if org_row:
+                org_id = org_row[0]
+                logger.info(f"Email webhook resolved org_id={org_id} from to_email={payload.to_email}")
+            else:
+                logger.warning(f"TENANT-ISOLATION: Could not resolve org_id from email to_email={payload.to_email}")
+
         # Store email
         from database.models import EmailMessage
         email_record = EmailMessage(
+            organization_id=org_id,
             from_email=payload.from_email,
             to_email=payload.to_email,
             subject=payload.subject,
