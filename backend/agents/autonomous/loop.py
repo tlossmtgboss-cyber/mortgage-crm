@@ -314,9 +314,8 @@ def register_all_autonomous_agents(scheduler):
     from apscheduler.triggers.cron import CronTrigger
 
     # Import all agent modules to trigger @autonomous_agent registration
-    # Original 5 agents
+    # Original 5 agents (morning_briefing deleted as dead code — now uses MorningBriefingService)
     try:
-        from agents.autonomous import morning_briefing  # noqa: F401
         from agents.autonomous import pipeline_monitor  # noqa: F401
         from agents.autonomous import compliance_watchdog  # noqa: F401
         from agents.autonomous import lead_reengagement  # noqa: F401
