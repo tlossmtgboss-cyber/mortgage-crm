@@ -2,13 +2,12 @@
 SAML SSO Service
 
 Provides the core SSO authentication bridge for enterprise customers.
-Handles SAML AuthnRequest generation, response validation, JIT user
-provisioning, and JWT token generation that integrates with the existing
-Perennia auth system.
+Handles SAML AuthnRequest generation, response validation (including XML
+signature verification via signxml), JIT user provisioning, and JWT token
+generation that integrates with the existing Perennia auth system.
 
-This module uses stdlib xml.etree.ElementTree for XML parsing and is
-structured so a full SAML library (python3-saml, pysaml2) can be
-plugged in later by replacing the XML parsing functions.
+Uses defusedxml for safe XML parsing and signxml for cryptographic
+verification of SAML response signatures against the IdP's X.509 certificate.
 
 Usage:
     from auth.sso import (
@@ -264,6 +263,56 @@ def create_saml_auth_request(
 # SAML Response Processing
 # =============================================================================
 
+def _verify_saml_xml_signature(xml_bytes: bytes, x509_cert: str) -> None:
+    """Verify XML digital signature on a SAML Response using the IdP's X.509 certificate.
+
+    Args:
+        xml_bytes: Raw XML bytes of the SAML Response.
+        x509_cert: IdP X.509 certificate (PEM-encoded or raw base64 body).
+
+    Raises:
+        ValueError: If the signature is missing, invalid, or verification fails.
+    """
+    try:
+        from signxml import XMLVerifier
+        from signxml.exceptions import (
+            InvalidCertificate,
+            InvalidDigest,
+            InvalidInput,
+            InvalidSignature,
+        )
+    except ImportError:
+        raise ValueError(
+            "signxml library is required for SAML signature verification. "
+            "Install it with: pip install signxml>=3.0.0"
+        )
+
+    # Normalize certificate to PEM format
+    cert = x509_cert.strip()
+    if not cert.startswith("-----BEGIN CERTIFICATE-----"):
+        cert_body = cert.replace("\n", "").replace("\r", "").replace(" ", "")
+        cert = f"-----BEGIN CERTIFICATE-----\n{cert_body}\n-----END CERTIFICATE-----"
+
+    try:
+        XMLVerifier().verify(xml_bytes, x509_cert=cert)
+        logger.info("SAML XML signature verification succeeded")
+    except InvalidDigest as e:
+        logger.error(f"SAML signature digest mismatch (possible tampering): {e}")
+        raise ValueError(f"SAML signature digest verification failed: {e}")
+    except InvalidCertificate as e:
+        logger.error(f"SAML IdP certificate validation failed: {e}")
+        raise ValueError(f"SAML certificate verification failed: {e}")
+    except InvalidSignature as e:
+        logger.error(f"SAML signature verification failed: {e}")
+        raise ValueError(f"SAML signature verification failed: {e}")
+    except InvalidInput as e:
+        logger.error(f"SAML signature invalid input: {e}")
+        raise ValueError(f"SAML signature verification error: {e}")
+    except Exception as e:
+        logger.error(f"SAML signature verification unexpected error: {e}")
+        raise ValueError(f"SAML signature verification failed: {e}")
+
+
 def process_saml_response(
     saml_response: str,
     config: SSOConfig,
@@ -272,6 +321,7 @@ def process_saml_response(
 
     Performs the following validations:
     - Base64 decode
+    - XML signature verification using IdP X.509 certificate
     - XML parsing (using defusedxml if available, stdlib fallback)
     - Status code check (must be Success)
     - Assertion presence
@@ -279,9 +329,6 @@ def process_saml_response(
     - Audience restriction check
     - NameID extraction
     - Attribute extraction using the configured attribute mapping
-
-    For production cryptographic signature verification, plug in python3-saml
-    or pysaml2 by replacing this function's XML validation logic.
 
     Args:
         saml_response: Base64-encoded SAML Response from the IdP.
@@ -316,6 +363,16 @@ def process_saml_response(
         xml_str = xml_bytes.decode("utf-8")
     except Exception as e:
         raise ValueError(f"Failed to decode SAML Response: {e}")
+
+    # ── XML Signature Verification ──
+    if config.x509_cert:
+        _verify_saml_xml_signature(xml_bytes, config.x509_cert)
+    else:
+        logger.warning(
+            "SAML response processed WITHOUT signature verification — "
+            f"no IdP X.509 certificate configured for org {config.organization_id}. "
+            "This is insecure and should be fixed by uploading the IdP certificate."
+        )
 
     # Parse XML
     try:

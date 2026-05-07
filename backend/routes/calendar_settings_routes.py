@@ -163,32 +163,10 @@ class BookingPageSettings(BaseModel):
 
     @validator('custom_css', pre=True, always=True)
     def sanitize_custom_css(cls, v):
-        if v is None:
+        if v is None or not isinstance(v, str):
             return None
-        if not isinstance(v, str):
-            return None
-        # Limit length to 10,000 characters
-        v = v[:10000]
-        # Strip HTML tags
-        css = re.sub(r'<[^>]*>', '', v)
-        # Strip CSS comments BEFORE checking for dangerous patterns.
-        # This prevents bypass via comment-wrapping, e.g. "u/**/rl(" or
-        # "/* url( */". Without this step, an attacker can split dangerous
-        # tokens across comment boundaries to evade pattern matching.
-        css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
-        # Remove dangerous CSS constructs that enable XSS (case-insensitive)
-        dangerous_patterns = [
-            r'url\s*\(',               # url() can load external resources / exfiltrate data
-            r'@import',                # @import can load external stylesheets
-            r'expression\s*\(',        # IE CSS expression() - legacy but still a vector
-            r'javascript\s*:',         # javascript: protocol in CSS values
-            r'behavior\s*:',           # IE behavior: directive
-            r'-moz-binding\s*:',       # Firefox XBL binding
-        ]
-        for pattern in dangerous_patterns:
-            css = re.sub(pattern, '/* sanitized */', css, flags=re.IGNORECASE)
-        # Return None if empty after cleaning
-        cleaned = css.strip()
+        from input_validation import sanitize_custom_css as _sanitize_css
+        cleaned = _sanitize_css(v, max_length=10000)
         return cleaned if cleaned else None
 
 

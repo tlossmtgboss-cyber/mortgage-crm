@@ -143,6 +143,52 @@ def sanitize_chat_input(user_message: str, max_length: int = MAX_CHAT_MESSAGE_LE
     return sanitized
 
 
+def sanitize_custom_css(css: str, max_length: int = 50000) -> str:
+    """
+    Sanitize user-provided custom CSS to prevent XSS and data exfiltration.
+
+    Strips:
+    - HTML tags (<script>, <style>, etc.)
+    - CSS comments (prevents bypass via comment-splitting tokens)
+    - expression() (IE CSS expression)
+    - javascript: protocol
+    - url(javascript:...) and bare url() (can exfiltrate data / load external resources)
+    - @import rules (external stylesheet loading)
+    - -moz-binding (Firefox XBL binding)
+    - behavior: (IE behavior directive)
+
+    Returns sanitized CSS string, or empty string for None/empty input.
+    """
+    if not css:
+        return ""
+
+    # Truncate first to bound processing time
+    css = css[:max_length]
+
+    # Strip HTML tags (no <script>, <style>, etc. wrapping)
+    css = re.sub(r'<[^>]*>', '', css)
+
+    # Strip CSS comments BEFORE checking dangerous patterns.
+    # Prevents bypass via comment-splitting, e.g. "u/**/rl(" or "expres/**/sion("
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
+
+    # Dangerous CSS patterns (case-insensitive)
+    dangerous_patterns = [
+        r'expression\s*\(',        # IE CSS expression()
+        r'javascript\s*:',         # javascript: protocol in CSS values
+        r'vbscript\s*:',           # vbscript: protocol
+        r'url\s*\(',               # url() — can load external resources / exfiltrate data
+        r'@import',                # @import loads external stylesheets
+        r'-moz-binding\s*:',       # Firefox XBL binding
+        r'behavior\s*:',           # IE behavior: directive
+    ]
+    for pattern in dangerous_patterns:
+        css = re.sub(pattern, '/* sanitized */', css, flags=re.IGNORECASE)
+
+    cleaned = css.strip()
+    return cleaned
+
+
 def sanitize_html(html: str, max_length: int = 50000) -> str:
     """
     Allow basic HTML formatting but remove dangerous tags/attributes.

@@ -504,41 +504,33 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     # 7. MORNING BRIEFING (1 for today)
     # ------------------------------------------------------------------
     try:
-        savepoint = db.begin_nested()
-        briefing_data = {
-            "pipeline_snapshot": {
-                "active_loans": len(loan_ids),
-                "total_volume": 4_250_000,
-                "closing_this_week": 2,
-                "avg_days_in_stage": 4.2,
-            },
-            "urgent_items": [
-                {"type": "lock_expiring", "loan": "DEMO-2026-0012", "days_remaining": 2},
-                {"type": "condition_due", "loan": "DEMO-2026-0005", "description": "Bank statements needed"},
-            ],
-            "todays_appointments": [
-                {"time": "10:00 AM", "type": "Discovery Call", "contact": "Avery Demoworth"},
-                {"time": "2:00 PM", "type": "Pre-Approval Review", "contact": "Jordan Sampleson"},
-            ],
-            "compliance_alerts": {
-                "open": 2,
-                "critical": 1,
-            },
-            "lead_activity": {
-                "new_leads_24h": 3,
-                "follow_ups_due": 5,
-                "hot_leads": 2,
-            },
-        }
         from sqlalchemy import text as _text
         existing = db.execute(_text(
             "SELECT id FROM morning_briefings WHERE user_id = :uid AND briefing_date = :d"
         ), {"uid": user_id, "d": date.today()}).fetchone()
         if existing:
-            savepoint.commit()
             counts["morning_briefings"] = 1
             logger.info("Morning briefing already exists for today — reusing")
         else:
+            savepoint = db.begin_nested()
+            briefing_data = {
+                "pipeline_snapshot": {
+                    "active_loans": len(loan_ids),
+                    "total_volume": 4_250_000,
+                    "closing_this_week": 2,
+                    "avg_days_in_stage": 4.2,
+                },
+                "urgent_items": [
+                    {"type": "lock_expiring", "loan": "DEMO-2026-0012", "days_remaining": 2},
+                    {"type": "condition_due", "loan": "DEMO-2026-0005", "description": "Bank statements needed"},
+                ],
+                "todays_appointments": [
+                    {"time": "10:00 AM", "type": "Discovery Call", "contact": "Avery Demoworth"},
+                    {"time": "2:00 PM", "type": "Pre-Approval Review", "contact": "Jordan Sampleson"},
+                ],
+                "compliance_alerts": {"open": 2, "critical": 1},
+                "lead_activity": {"new_leads_24h": 3, "follow_ups_due": 5, "hot_leads": 2},
+            }
             briefing = MorningBriefing(
                 organization_id=organization_id,
                 user_id=user_id,
@@ -565,7 +557,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed morning briefing")
         errors["morning_briefings"] = str(e)
-        savepoint.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
         counts["morning_briefings"] = 0
 
     # ------------------------------------------------------------------

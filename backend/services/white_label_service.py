@@ -4,6 +4,9 @@ White-Label & Theming Service
 
 Enterprise Readiness Domain 12: White-Label & Theming.
 
+Uses the WhiteLabelConfig ORM model (organization_branding table) as
+the single source of truth for per-tenant branding.
+
 Provides:
 - SMS sender ID per tenant (Check 12.6)
 - Favicon customization (Check 12.4)
@@ -14,8 +17,8 @@ Provides:
 """
 
 import logging
-import re
-from datetime import timezone
+import os
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -29,6 +32,37 @@ PLATFORM_VARIANTS = [
 ]
 
 
+def _get_config(db, org_id: int):
+    """Load the flat-column WhiteLabelConfig row for an org, or None.
+
+    The organization_branding table may also contain JSONB key-value rows
+    (setting_type IS NOT NULL) created by BrandingStore in
+    company_branding_routes.py. We filter for the canonical flat row
+    (setting_type IS NULL) to avoid picking up those rows.
+    """
+    from database.models.white_label_config import WhiteLabelConfig
+
+    return (
+        db.query(WhiteLabelConfig)
+        .filter(
+            WhiteLabelConfig.organization_id == org_id,
+            WhiteLabelConfig.setting_type.is_(None),
+        )
+        .first()
+    )
+
+
+def _get_org_name(db, org_id: int) -> str:
+    """Fallback: get the org name from the organizations table."""
+    from sqlalchemy import text
+
+    row = db.execute(
+        text("SELECT name FROM organizations WHERE id = :org_id"),
+        {"org_id": org_id},
+    ).fetchone()
+    return row[0] if row else "Company"
+
+
 # =============================================================================
 # TENANT BRANDING CONFIG (Domain 12)
 # =============================================================================
@@ -38,29 +72,13 @@ def get_tenant_branding(db, org_id: int) -> Dict:
     Get complete branding configuration for a tenant.
     Includes colors, logo, fonts, favicon, SMS sender, and portal settings.
     """
-    from sqlalchemy import text
+    config = _get_config(db, org_id)
 
-    row = db.execute(text("""
-        SELECT
-            logo_url, primary_color, secondary_color, accent_color,
-            email_footer, email_signature_template,
-            company_name, company_phone, company_address,
-            favicon_url, font_family, sms_sender_id, sms_sender_name,
-            portal_logo_url, portal_title, portal_footer_text,
-            custom_domain, custom_css
-        FROM organization_branding
-        WHERE organization_id = :org_id
-    """), {"org_id": org_id}).fetchone()
-
-    if not row:
+    if not config:
         # Return defaults
-        org = db.execute(text(
-            "SELECT name FROM organizations WHERE id = :org_id"
-        ), {"org_id": org_id}).fetchone()
-
         return {
             "org_id": org_id,
-            "company_name": org[0] if org else "Company",
+            "company_name": _get_org_name(db, org_id),
             "logo_url": None,
             "primary_color": "#1a73e8",
             "secondary_color": "#4285f4",
@@ -76,25 +94,25 @@ def get_tenant_branding(db, org_id: int) -> Dict:
 
     return {
         "org_id": org_id,
-        "company_name": row[6],
-        "logo_url": row[0],
-        "primary_color": row[1] or "#1a73e8",
-        "secondary_color": row[2] or "#4285f4",
-        "accent_color": row[3] or "#fbbc04",
-        "font_family": row[11] or "Inter, system-ui, sans-serif",
-        "favicon_url": row[9],
-        "sms_sender_id": row[11],
-        "sms_sender_name": row[12],
+        "company_name": config.company_name,
+        "logo_url": config.logo_url,
+        "primary_color": config.primary_color or "#1a73e8",
+        "secondary_color": config.secondary_color or "#4285f4",
+        "accent_color": config.accent_color or "#fbbc04",
+        "font_family": config.font_family or "Inter, system-ui, sans-serif",
+        "favicon_url": config.favicon_url,
+        "sms_sender_id": config.sms_sender_id,
+        "sms_sender_name": config.sms_sender_name,
         "portal": {
-            "logo_url": row[13],
-            "title": row[14],
-            "footer_text": row[15],
+            "logo_url": config.portal_logo_url,
+            "title": config.portal_title,
+            "footer_text": config.portal_footer_text,
         },
-        "custom_domain": row[16],
-        "custom_css": row[17],
-        "email_footer": row[4],
-        "email_signature": row[5],
-        "is_white_labeled": bool(row[0]),  # Has logo = white-labeled
+        "custom_domain": config.custom_domain,
+        "custom_css": config.custom_css,
+        "email_footer": config.email_footer,
+        "email_signature": config.email_signature_template,
+        "is_white_labeled": bool(config.logo_url),  # Has logo = white-labeled
     }
 
 
@@ -103,7 +121,7 @@ def update_tenant_branding(db, org_id: int, updates: Dict) -> Dict:
     Update branding configuration for a tenant.
     Supports partial updates (only specified fields are changed).
     """
-    from sqlalchemy import text
+    from database.models.white_label_config import WhiteLabelConfig
 
     # Fields that can be updated
     allowed_fields = {
@@ -119,33 +137,19 @@ def update_tenant_branding(db, org_id: int, updates: Dict) -> Dict:
     if not valid_updates:
         return {"updated": False, "reason": "No valid fields to update"}
 
-    # Upsert
-    set_clauses = ", ".join(f"{k} = :{k}" for k in valid_updates)
-    valid_updates["org_id"] = org_id
+    config = _get_config(db, org_id)
 
-    # Check if row exists
-    existing = db.execute(text(
-        "SELECT 1 FROM organization_branding WHERE organization_id = :org_id"
-    ), {"org_id": org_id}).fetchone()
+    if config is None:
+        config = WhiteLabelConfig(organization_id=org_id)
+        db.add(config)
 
-    if existing:
-        update_q = (
-            "UPDATE organization_branding"
-            " SET " + set_clauses + ", updated_at = NOW()"
-            " WHERE organization_id = :org_id"
-        )
-        db.execute(text(update_q), valid_updates)
-    else:
-        cols = ", ".join(["organization_id"] + list(valid_updates.keys() - {"org_id"}))
-        vals = ", ".join([":org_id"] + [f":{k}" for k in valid_updates if k != "org_id"])
-        insert_q = (
-            "INSERT INTO organization_branding (" + cols + ")"
-            " VALUES (" + vals + ")"
-        )
-        db.execute(text(insert_q), valid_updates)
+    for key, value in valid_updates.items():
+        setattr(config, key, value)
 
+    config.updated_at = datetime.now(timezone.utc)
     db.commit()
-    return {"updated": True, "fields": list(valid_updates.keys() - {"org_id"})}
+
+    return {"updated": True, "fields": list(valid_updates.keys())}
 
 
 # =============================================================================
@@ -157,21 +161,14 @@ def get_sms_sender_config(db, org_id: int) -> Dict:
     Get SMS sender configuration for a tenant.
     Supports custom sender ID/name per organization.
     """
-    from sqlalchemy import text
-    import os
-
-    row = db.execute(text("""
-        SELECT sms_sender_id, sms_sender_name, company_name
-        FROM organization_branding
-        WHERE organization_id = :org_id
-    """), {"org_id": org_id}).fetchone()
+    config = _get_config(db, org_id)
 
     default_sender = os.getenv("TELNYX_FROM_NUMBER", "")
 
-    if row and row[0]:
+    if config and config.sms_sender_id:
         return {
-            "sender_id": row[0],
-            "sender_name": row[1] or row[2],
+            "sender_id": config.sms_sender_id,
+            "sender_name": config.sms_sender_name or config.company_name,
             "is_custom": True,
         }
 
@@ -196,22 +193,15 @@ def scan_for_branding_leaks(db, org_id: int) -> Dict:
     3. SMS templates for platform references
     4. Report headers/footers
     """
-    from sqlalchemy import text
-
     leaks = []
 
-    # Check email footer/signature
-    row = db.execute(text("""
-        SELECT email_footer, email_signature_template, portal_footer_text
-        FROM organization_branding
-        WHERE organization_id = :org_id
-    """), {"org_id": org_id}).fetchone()
+    config = _get_config(db, org_id)
 
-    if row:
+    if config:
         fields = [
-            ("email_footer", row[0]),
-            ("email_signature_template", row[1]),
-            ("portal_footer_text", row[2]),
+            ("email_footer", config.email_footer),
+            ("email_signature_template", config.email_signature_template),
+            ("portal_footer_text", config.portal_footer_text),
         ]
         for field_name, value in fields:
             if value:
@@ -246,7 +236,7 @@ def scan_for_branding_leaks(db, org_id: int) -> Dict:
         "leaks_found": len(leaks),
         "leaks": leaks,
         "is_clean": len(leaks) == 0,
-        "scanned_at": __import__("datetime").datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

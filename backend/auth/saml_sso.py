@@ -5,16 +5,11 @@ Enterprise Readiness Checks 4.5, 5.9
 Provides SAML 2.0 Service Provider (SP) functionality:
 - SP metadata generation
 - AuthnRequest creation (login initiation)
-- SAML Response/Assertion parsing and validation
+- SAML Response/Assertion parsing and validation (with XML signature verification)
 - Single Logout (SLO) support
 
-This is a lightweight implementation that does not depend on python3-saml
-(which has complex C library dependencies). Instead it uses standard-library
-XML parsing with defusedxml for security, and cryptography for signature
-verification.
-
-In production, you may swap this for python3-saml or pysaml2 if the
-dependency chain is acceptable.
+Uses defusedxml for safe XML parsing and signxml for cryptographic signature
+verification of SAML responses/assertions.
 """
 
 import base64
@@ -129,6 +124,76 @@ def create_authn_request(
     return redirect_url
 
 
+def _verify_xml_signature(xml_bytes: bytes, idp_certificate: str) -> bytes:
+    """Verify the XML digital signature on a SAML Response or Assertion.
+
+    Uses the signxml library to perform W3C XML Signature verification
+    against the IdP's X.509 certificate.
+
+    Args:
+        xml_bytes: Raw XML bytes of the SAML Response.
+        idp_certificate: IdP X.509 certificate — either PEM-encoded string
+            or raw base64 certificate body (without PEM headers).
+
+    Returns:
+        The verified XML bytes (signed content).
+
+    Raises:
+        ValueError: If signature verification fails for any reason.
+    """
+    try:
+        from signxml import XMLVerifier
+        from signxml.exceptions import (
+            InvalidCertificate,
+            InvalidDigest,
+            InvalidInput,
+            InvalidSignature,
+        )
+    except ImportError:
+        raise ValueError(
+            "signxml library is required for SAML signature verification. "
+            "Install it with: pip install signxml>=3.0.0"
+        )
+
+    # Normalize certificate to PEM format if needed
+    cert_pem = _normalize_cert_pem(idp_certificate)
+
+    try:
+        result = XMLVerifier().verify(xml_bytes, x509_cert=cert_pem)
+        logger.info("SAML XML signature verification succeeded")
+        return result.signed_xml
+    except InvalidDigest as e:
+        logger.error(f"SAML signature digest mismatch (possible tampering): {e}")
+        raise ValueError(f"SAML signature digest verification failed: {e}")
+    except InvalidCertificate as e:
+        logger.error(f"SAML IdP certificate validation failed: {e}")
+        raise ValueError(f"SAML certificate verification failed: {e}")
+    except InvalidSignature as e:
+        logger.error(f"SAML signature verification failed: {e}")
+        raise ValueError(f"SAML signature verification failed: {e}")
+    except InvalidInput as e:
+        logger.error(f"SAML signature invalid input: {e}")
+        raise ValueError(f"SAML signature verification error: {e}")
+    except Exception as e:
+        logger.error(f"SAML signature verification unexpected error: {e}")
+        raise ValueError(f"SAML signature verification failed: {e}")
+
+
+def _normalize_cert_pem(cert: str) -> str:
+    """Normalize an X.509 certificate to PEM format.
+
+    Accepts PEM-encoded strings or raw base64 certificate bodies
+    (without headers) and returns a properly formatted PEM string.
+    """
+    cert = cert.strip()
+    if cert.startswith("-----BEGIN CERTIFICATE-----"):
+        return cert
+
+    # Raw base64 body — strip whitespace and wrap in PEM headers
+    cert_body = cert.replace("\n", "").replace("\r", "").replace(" ", "")
+    return f"-----BEGIN CERTIFICATE-----\n{cert_body}\n-----END CERTIFICATE-----"
+
+
 def parse_saml_response(
     saml_response_b64: str,
     idp_certificate: Optional[str] = None,
@@ -137,19 +202,19 @@ def parse_saml_response(
     """
     Parse and validate a SAML Response from the IdP.
 
-    This performs basic validation:
+    Performs the following validations:
     - Decodes the base64 response
+    - Verifies XML signature using IdP X.509 certificate (if provided)
     - Extracts NameID (email), attributes, and session index
     - Checks status code
     - Checks audience restriction (if provided)
     - Checks NotOnOrAfter timestamp
 
-    For production use with cryptographic signature verification,
-    consider using python3-saml or pysaml2.
-
     Args:
         saml_response_b64: Base64-encoded SAML Response XML.
-        idp_certificate: PEM-encoded IdP certificate (for future signature verification).
+        idp_certificate: PEM-encoded IdP certificate for signature verification.
+            If provided, the XML signature MUST be valid or the response is rejected.
+            If not provided, a warning is logged (no signature verification).
         expected_audience: Expected SP entity ID for audience validation.
 
     Returns:
@@ -162,6 +227,19 @@ def parse_saml_response(
         # Decode base64
         xml_bytes = base64.b64decode(saml_response_b64)
         xml_str = xml_bytes.decode("utf-8")
+
+        # ── XML Signature Verification ──
+        if idp_certificate:
+            try:
+                _verify_xml_signature(xml_bytes, idp_certificate)
+            except ValueError as e:
+                logger.error(f"SAML signature verification failed: {e}")
+                return False, {"error": str(e)}
+        else:
+            logger.warning(
+                "SAML response processed WITHOUT signature verification — "
+                "no IdP certificate configured. This is insecure."
+            )
 
         # Parse XML
         root = ET.fromstring(xml_str)

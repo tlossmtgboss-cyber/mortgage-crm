@@ -244,7 +244,8 @@ VERSION_TABLES: Dict[str, List[str]] = {
     "v2.5": [
         "smart_docs_field_mappings",
         "smart_docs_custom_fields",
-        "smart_docs_white_label_configs",
+        # smart_docs_white_label_configs removed — branding consolidated into
+        # organization_branding (May 2026). Do not drop the shared table.
         "smart_docs_email_templates",
     ],
     "v3.0": [

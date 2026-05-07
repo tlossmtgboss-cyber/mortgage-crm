@@ -115,6 +115,7 @@ datadog>=0.49.0
 # Input Validation & Security
 nh3>=0.2.14  # Replaces deprecated bleach library
 defusedxml>=0.7.1  # Safe XML parsing — prevents XXE attacks
+signxml>=3.0.0  # XML Signature verification for SAML SSO assertions
 
 # Google Auth
 google-auth>=2.23.0

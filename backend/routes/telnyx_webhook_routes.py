@@ -379,6 +379,14 @@ async def handle_amd_callback(
         logger.error(f"Failed to parse AMD callback: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
+    # Idempotency check — deduplicate retried Telnyx AMD callbacks
+    _amd_event_id = payload.get("data", {}).get("id")
+    if _amd_event_id:
+        from middleware.webhook_idempotency import is_duplicate_webhook
+        if is_duplicate_webhook("telnyx", f"amd:{_amd_event_id}"):
+            logger.info("Telnyx AMD callback duplicate: tracking=%s event=%s", tracking_id, _amd_event_id)
+            return {"status": "duplicate"}
+
     event = parse_telnyx_webhook(payload)
 
     if not isinstance(event, TelnyxAMDEvent):

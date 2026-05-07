@@ -524,6 +524,12 @@ async def webhook_call_completed(
     if not vapi_call_id:
         raise HTTPException(status_code=400, detail="Missing call_id")
 
+    # Idempotency check — deduplicate retried Vapi call-completed webhooks
+    from middleware.webhook_idempotency import is_duplicate_webhook
+    if is_duplicate_webhook("vapi", f"call-completed:{vapi_call_id}"):
+        logger.info("Vapi call-completed webhook duplicate: call_id=%s", vapi_call_id)
+        return {'success': True, 'status': 'duplicate'}
+
     outreach = RefinanceOutreachService(db)
     await outreach.handle_call_completed(vapi_call_id, call_data)
 

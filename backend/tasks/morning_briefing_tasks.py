@@ -254,6 +254,7 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
                 wl_config = db.query(WhiteLabelConfig).filter(
                     WhiteLabelConfig.organization_id == user.organization_id,
                     WhiteLabelConfig.is_active == True,
+                    WhiteLabelConfig.setting_type.is_(None),
                 ).first()
                 if wl_config:
                     branding = {

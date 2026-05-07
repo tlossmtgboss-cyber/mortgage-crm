@@ -2,7 +2,7 @@
 Custom Domain SSL Routes — White-Label Portal Domains
 
 API endpoints for enterprise custom-domain provisioning. Stores domain state
-in WhiteLabelConfig (smart_docs_white_label_configs table) and optionally
+in WhiteLabelConfig (organization_branding table) and optionally
 integrates with Vercel for automatic SSL cert issuance.
 
 Flow:
@@ -33,7 +33,7 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
     as arguments — no module-level imports from main.py.
 
     Startup side-effect: runs ADD COLUMN IF NOT EXISTS migrations for the four
-    new SSL columns on smart_docs_white_label_configs.
+    new SSL columns on organization_branding (canonical branding table).
     """
     from fastapi import Depends, HTTPException, status
     from pydantic import BaseModel
@@ -54,12 +54,12 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
         ]:
             db.execute(
                 text(
-                    f"ALTER TABLE smart_docs_white_label_configs "
+                    f"ALTER TABLE organization_branding "
                     f"ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default}"
                 )
             )
         db.commit()
-        logger.info("Custom domain columns migrated on smart_docs_white_label_configs")
+        logger.info("Custom domain columns migrated on organization_branding")
     except Exception as exc:
         logger.warning("Custom domain column migration skipped: %s", exc)
 
@@ -91,6 +91,7 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
             .filter(
                 WhiteLabelConfig.organization_id == organization_id,
                 WhiteLabelConfig.is_active == True,
+                WhiteLabelConfig.setting_type.is_(None),
             )
             .first()
         )

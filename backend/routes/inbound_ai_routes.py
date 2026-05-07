@@ -728,6 +728,14 @@ async def inbound_call_webhook(
     event_type = event_data.get("event_type", "")
     event_payload = event_data.get("payload", {})
 
+    # Idempotency check — deduplicate retried Telnyx webhooks via event ID
+    _telnyx_event_id = event_data.get("id")
+    if _telnyx_event_id:
+        from middleware.webhook_idempotency import is_duplicate_webhook
+        if is_duplicate_webhook("telnyx", _telnyx_event_id):
+            logger.info("Telnyx inbound-call webhook duplicate: event_id=%s", _telnyx_event_id)
+            return JSONResponse(status_code=200, content={"status": "duplicate"})
+
     call_control_id = event_payload.get("call_control_id", "")
     from_number = event_payload.get("from", "")
     to_number = event_payload.get("to", "")
@@ -1075,6 +1083,19 @@ async def vapi_inbound_webhook(
     message_type = message.get("type", "")
 
     logger.info("Vapi inbound webhook: type=%s", message_type)
+
+    # Idempotency check — deduplicate retried Vapi webhooks.
+    # Skip for function-call and assistant-request (synchronous, need fresh response).
+    if message_type not in ("function-call", "assistant-request"):
+        _inbound_call_id = (
+            message.get("call", {}).get("id")
+            or payload.get("call", {}).get("id")
+        )
+        if _inbound_call_id:
+            from middleware.webhook_idempotency import is_duplicate_webhook
+            if is_duplicate_webhook("vapi", f"inbound:{message_type}:{_inbound_call_id}"):
+                logger.info("Vapi inbound webhook duplicate: type=%s call=%s", message_type, _inbound_call_id)
+                return JSONResponse(status_code=200, content={"status": "duplicate"})
 
     # -----------------------------------------------------------------------
     # function-call

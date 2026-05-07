@@ -4,13 +4,30 @@ Webhook Idempotency Dependency
 FastAPI dependency that prevents duplicate processing of webhook callbacks
 from Vapi, Telnyx, Stripe, and other providers that retry on timeout/failure.
 
-Uses the ``webhook_idempotency`` database table as the durable store (no
-Redis required).  Works alongside the existing Redis-based
-``IdempotencyMiddleware`` — this layer provides database-backed protection
-for cases where Redis is unavailable or the provider doesn't send an
-``X-Idempotency-Key`` header.
+Two layers are provided:
 
-Usage:
+1. **Lightweight fast-path** (``is_duplicate_webhook``): Uses Redis SET with
+   TTL and an in-memory dict fallback.  No database dependency.  Suitable for
+   any webhook handler that just needs "have I seen this event ID before?"
+
+2. **Database-backed** (``check_webhook_idempotency``): Uses the
+   ``webhook_idempotency`` database table as the durable store.  Provides
+   richer tracking (status, response_code) at the cost of a DB round-trip.
+
+Usage — lightweight:
+    from middleware.webhook_idempotency import is_duplicate_webhook
+
+    @router.post("/webhook/vapi")
+    async def handle_vapi(request: Request):
+        payload = await request.json()
+        call_id = payload.get("message", {}).get("call", {}).get("id")
+        event_type = payload.get("message", {}).get("type", "")
+        event_key = f"{event_type}:{call_id}" if call_id else None
+        if event_key and is_duplicate_webhook("vapi", event_key):
+            return {"status": "duplicate"}
+        # ... process ...
+
+Usage — database-backed:
     from middleware.webhook_idempotency import check_webhook_idempotency
 
     @router.post("/webhook/vapi")
@@ -32,6 +49,8 @@ Usage:
 import hashlib
 import json
 import logging
+import threading
+import time
 from typing import Optional
 
 from fastapi import Request
@@ -41,6 +60,87 @@ from sqlalchemy.exc import IntegrityError
 from database.models.webhook_idempotency import WebhookIdempotencyRecord
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Lightweight Redis + in-memory dedup (fast-path, no DB needed)
+# ---------------------------------------------------------------------------
+
+_WEBHOOK_TTL_SECONDS = 86400  # 24 hours
+
+# In-memory fallback: {key: expiry_timestamp}
+_seen_events: dict[str, float] = {}
+_seen_lock = threading.Lock()
+
+# Cap in-memory store to prevent unbounded growth
+_MAX_IN_MEMORY = 50_000
+
+
+def _get_redis():
+    """Get Redis client from the centralized service, or None."""
+    try:
+        from services.redis_service import get_redis_client
+        return get_redis_client()
+    except Exception:
+        return None
+
+
+def _cleanup_expired_memory():
+    """Remove expired entries from the in-memory dict (call under lock)."""
+    now = time.monotonic()
+    expired = [k for k, exp in _seen_events.items() if exp <= now]
+    for k in expired:
+        del _seen_events[k]
+
+
+def is_duplicate_webhook(provider: str, event_key: str) -> bool:
+    """
+    Check if a webhook event has already been seen.  Records it with a 24-hour
+    TTL if new.
+
+    Args:
+        provider: Provider name (e.g. "vapi", "telnyx").
+        event_key: A unique key for this event.  For Vapi this is typically
+            ``f"{message_type}:{call_id}"``.  For Telnyx it is the
+            ``data.id`` field from the webhook payload.
+
+    Returns:
+        True if the event was already seen (duplicate) — caller should skip.
+        False if the event is new — caller should process it.
+    """
+    full_key = f"webhook:idem:{provider}:{event_key}"
+
+    # Try Redis first
+    redis = _get_redis()
+    if redis is not None:
+        try:
+            # SET NX returns True if the key was set (new), False if it existed
+            was_set = redis.set(full_key, "1", nx=True, ex=_WEBHOOK_TTL_SECONDS)
+            if was_set:
+                logger.debug("Webhook dedup [redis]: new event %s", full_key[:80])
+                return False
+            else:
+                logger.info("Webhook dedup [redis]: duplicate event %s", full_key[:80])
+                return True
+        except Exception as e:
+            logger.warning("Webhook dedup: Redis error, falling back to memory: %s", e)
+
+    # In-memory fallback
+    now = time.monotonic()
+    with _seen_lock:
+        # Periodic cleanup
+        if len(_seen_events) > _MAX_IN_MEMORY:
+            _cleanup_expired_memory()
+
+        if full_key in _seen_events:
+            if _seen_events[full_key] > now:
+                logger.info("Webhook dedup [memory]: duplicate event %s", full_key[:80])
+                return True
+            # Expired — treat as new
+            del _seen_events[full_key]
+
+        _seen_events[full_key] = now + _WEBHOOK_TTL_SECONDS
+        logger.debug("Webhook dedup [memory]: new event %s", full_key[:80])
+        return False
 
 
 # ---------------------------------------------------------------------------

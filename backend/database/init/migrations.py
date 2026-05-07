@@ -35,6 +35,7 @@ def run_column_migrations(engine, database_url: str):
     _migrate_audit_log_columns(engine)
     _migrate_subscription_columns(engine)
     _migrate_branding_columns(engine)
+    _migrate_branding_consolidation(engine)
     _migrate_loan_state_columns(engine)
     _migrate_workflow_engine_columns(engine)
     _migrate_production_assistant_columns(engine)
@@ -1047,6 +1048,50 @@ def _migrate_branding_columns(engine):
             logger.info("White-label branding columns added (ER-12)")
     except Exception as e:
         logger.warning(f"Branding columns note: {e}")
+
+
+def _migrate_branding_consolidation(engine):
+    """Add columns from WhiteLabelConfig model to organization_branding (ER-12 unified).
+
+    Previously branding data lived in two tables: organization_branding (flat
+    columns for service layer) and smart_docs_white_label_configs (ORM model).
+    Consolidated May 2026 into organization_branding as single source of truth.
+    """
+    try:
+        with engine.connect() as conn:
+            consolidation_columns = [
+                ("organization_branding", "header_bg_color", "VARCHAR(7) DEFAULT '#ffffff'"),
+                ("organization_branding", "email_from_name", "VARCHAR(200)"),
+                ("organization_branding", "email_from_address", "VARCHAR(255)"),
+                ("organization_branding", "email_reply_to", "VARCHAR(255)"),
+                ("organization_branding", "email_footer_html", "TEXT"),
+                ("organization_branding", "email_footer", "TEXT"),
+                ("organization_branding", "email_signature_template", "TEXT"),
+                ("organization_branding", "company_phone", "VARCHAR(50)"),
+                ("organization_branding", "company_address", "TEXT"),
+                ("organization_branding", "portal_welcome_message", "TEXT"),
+                ("organization_branding", "portal_custom_css", "TEXT"),
+                ("organization_branding", "support_email", "VARCHAR(255)"),
+                ("organization_branding", "support_phone", "VARCHAR(20)"),
+                ("organization_branding", "privacy_policy_url", "VARCHAR(500)"),
+                ("organization_branding", "terms_of_service_url", "VARCHAR(500)"),
+                ("organization_branding", "nmls_number", "VARCHAR(20)"),
+                ("organization_branding", "equal_housing_logo", "BOOLEAN DEFAULT TRUE"),
+                ("organization_branding", "disclaimer_text", "TEXT"),
+                ("organization_branding", "ssl_status", "VARCHAR(20) DEFAULT 'pending'"),
+                ("organization_branding", "domain_verified", "BOOLEAN DEFAULT FALSE"),
+                ("organization_branding", "domain_verification_token", "VARCHAR(100)"),
+                ("organization_branding", "vercel_domain_id", "VARCHAR(100)"),
+                ("organization_branding", "is_active", "BOOLEAN DEFAULT TRUE"),
+            ]
+            for table, col, col_type in consolidation_columns:
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                ))
+            conn.commit()
+            logger.info("Branding consolidation columns added (ER-12 unified)")
+    except Exception as e:
+        logger.warning(f"Branding consolidation note: {e}")
 
 
 def _migrate_loan_state_columns(engine):

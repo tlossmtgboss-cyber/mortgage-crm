@@ -108,7 +108,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
             return {"success": True, "report": report_data}
 
         elif format == "pdf":
-            pdf_bytes = report_exporter.generate_pdf(report_data, "sla_compliance")
+            from services.white_label_service import get_report_branding
+            branding = get_report_branding(db, org_id)
+            pdf_bytes = report_exporter.generate_pdf(report_data, "sla_compliance", branding=branding)
             filename = f"sla_compliance_report_{datetime.now().strftime('%Y%m%d')}.pdf"
             try:
                 from utils.export_audit import log_export_event, _get_client_ip
@@ -341,7 +343,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         elif not report_data:
             raise HTTPException(400, "report data required for this report type")
 
-        pdf_bytes = report_exporter.generate_pdf(report_data, body.report_type, body.title)
+        from services.white_label_service import get_report_branding
+        branding = get_report_branding(db, org_id)
+        pdf_bytes = report_exporter.generate_pdf(report_data, body.report_type, body.title, branding=branding)
         filename = f"{body.report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
 
         try:

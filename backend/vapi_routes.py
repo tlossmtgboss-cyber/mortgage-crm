@@ -177,6 +177,17 @@ async def vapi_webhook(
         if message_type == "assistant-request":
             return _build_assistant_response(db, message)
 
+        # Idempotency check — deduplicate retried webhooks
+        call_id = (
+            message.get("call", {}).get("id")
+            or payload.get("call", {}).get("id")
+        )
+        if call_id:
+            from middleware.webhook_idempotency import is_duplicate_webhook
+            if is_duplicate_webhook("vapi", f"{message_type}:{call_id}"):
+                logger.info("Vapi webhook duplicate: type=%s call=%s", message_type, call_id)
+                return JSONResponse(status_code=200, content={"status": "duplicate"})
+
         background_tasks.add_task(process_webhook_background, payload)
 
         return JSONResponse(
@@ -2664,6 +2675,13 @@ async def ai_receptionist_sms_webhook(
         message_sid = form_data.get("MessageSid", "")
 
         logger.info(f"AI Receptionist SMS webhook: {from_number} -> {to_number}: {message_body[:50]}...")
+
+        # Idempotency check — deduplicate retried SMS webhooks via MessageSid
+        if message_sid:
+            from middleware.webhook_idempotency import is_duplicate_webhook
+            if is_duplicate_webhook("vapi-sms", message_sid):
+                logger.info("AI Receptionist SMS duplicate: sid=%s", message_sid)
+                return JSONResponse(status_code=200, content={"status": "duplicate"})
 
         # Process in background for fast response to provider
         background_tasks.add_task(

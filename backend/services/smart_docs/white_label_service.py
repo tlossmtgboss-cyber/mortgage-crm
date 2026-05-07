@@ -656,6 +656,7 @@ class WhiteLabelService:
             .filter(
                 WhiteLabelConfig.organization_id == org_id,
                 WhiteLabelConfig.is_active.is_(True),
+                WhiteLabelConfig.setting_type.is_(None),
             )
             .first()
         )
@@ -679,7 +680,10 @@ class WhiteLabelService:
 
         config = (
             self.db.query(WhiteLabelConfig)
-            .filter(WhiteLabelConfig.organization_id == org_id)
+            .filter(
+                WhiteLabelConfig.organization_id == org_id,
+                WhiteLabelConfig.setting_type.is_(None),
+            )
             .first()
         )
 
@@ -704,6 +708,10 @@ class WhiteLabelService:
 
         for key, value in data.items():
             if key in allowed_fields:
+                # Sanitize CSS fields to prevent XSS
+                if key == "portal_custom_css" and value:
+                    from input_validation import sanitize_custom_css
+                    value = sanitize_custom_css(value)
                 setattr(config, key, value)
 
         config.updated_at = datetime.now(timezone.utc)
@@ -717,7 +725,10 @@ class WhiteLabelService:
 
         config = (
             self.db.query(WhiteLabelConfig)
-            .filter(WhiteLabelConfig.organization_id == org_id)
+            .filter(
+                WhiteLabelConfig.organization_id == org_id,
+                WhiteLabelConfig.setting_type.is_(None),
+            )
             .first()
         )
         if config is None:

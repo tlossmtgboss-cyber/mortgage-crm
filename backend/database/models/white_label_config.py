@@ -1,12 +1,17 @@
 """
-White-Label Configuration Models for Smart Docs V2
+White-Label Configuration Models
 
 Per-organization branding, email template customization, and portal theming.
 Supports custom logos, color schemes, fonts, email templates, compliance
 footers, and custom portal domains.
 
+Canonical table: organization_branding
+    Unified branding store — previously split between organization_branding
+    (raw SQL in white_label_service.py) and smart_docs_white_label_configs
+    (ORM model). Consolidated May 2026 to eliminate dual source of truth.
+
 Tables:
-    smart_docs_white_label_configs  -- One row per org (brand, colors, compliance)
+    organization_branding           -- One row per org (brand, colors, compliance, portal)
     smart_docs_email_templates      -- Per-org email templates with versioning
 
 Usage:
@@ -36,24 +41,34 @@ def utcnow():
 class WhiteLabelConfig(Base):
     """Per-organization white-label branding configuration.
 
+    Canonical table: organization_branding.
+
     Stores visual identity (logo, colors, fonts), email sender settings,
     portal customization, compliance disclaimers, and custom domain config.
-    Each organization can have at most one active configuration (enforced by
-    the unique constraint on organization_id).
+    Each organization can have at most one active configuration.
+
+    Previously two tables existed:
+      - organization_branding: used by white_label_service.py (raw SQL),
+        company_name_resolver.py, onboarding_checklist_service.py, etc.
+      - smart_docs_white_label_configs: used via this ORM model by
+        branding_routes.py, custom_domain_routes.py, smart_docs service.
+
+    Consolidated into organization_branding (May 2026). The superset of
+    columns from both tables is represented here.
     """
 
-    __tablename__ = "smart_docs_white_label_configs"
+    __tablename__ = "organization_branding"
 
     id = Column(Integer, primary_key=True)
     organization_id = Column(
         Integer,
         ForeignKey("organizations.id"),
         nullable=False,
-        unique=True,
+        index=True,
     )
 
     # --- Brand identity ---
-    company_name = Column(String(200), nullable=False)
+    company_name = Column(String(200))
     logo_url = Column(String(500))
     favicon_url = Column(String(500))
 
@@ -64,20 +79,32 @@ class WhiteLabelConfig(Base):
     header_bg_color = Column(String(7), default="#ffffff")
 
     # --- Typography ---
-    font_family = Column(String(100), default="Inter, sans-serif")
+    font_family = Column(String(200), default="Inter, system-ui, sans-serif")
 
     # --- Email sender settings ---
     email_from_name = Column(String(200))
     email_from_address = Column(String(255))
     email_reply_to = Column(String(255))
     email_footer_html = Column(Text)
+    # Legacy column names used by white_label_service.py callers
+    email_footer = Column(Text)
+    email_signature_template = Column(Text)
+
+    # --- Company contact (used by white_label_service.py callers) ---
+    company_phone = Column(String(50))
+    company_address = Column(Text)
 
     # --- Portal customization ---
     portal_welcome_message = Column(Text)
     portal_custom_css = Column(Text)  # Additional CSS overrides
+    portal_logo_url = Column(String(500))
+    portal_title = Column(String(200))
+    portal_footer_text = Column(Text)
+    custom_css = Column(Text)  # Global CSS overrides (distinct from portal_custom_css)
 
     # --- SMS ---
-    sms_sender_name = Column(String(50))
+    sms_sender_id = Column(String(50))
+    sms_sender_name = Column(String(100))
 
     # --- Support ---
     support_email = Column(String(255))
@@ -96,6 +123,10 @@ class WhiteLabelConfig(Base):
     domain_verified = Column(Boolean, default=False)
     domain_verification_token = Column(String(100))  # DNS TXT record value for verification
     vercel_domain_id = Column(String(100))  # Vercel API domain ID for management
+
+    # --- BrandingStore JSONB columns (used by company_branding_routes.py) ---
+    setting_type = Column(String(50))
+    settings = Column(JSON)
 
     # --- Status ---
     is_active = Column(Boolean, default=True)

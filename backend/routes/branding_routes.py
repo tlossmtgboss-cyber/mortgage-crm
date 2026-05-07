@@ -66,6 +66,7 @@ def register_branding_routes(app, get_db_func, get_current_user_flexible):
                 .filter(
                     WhiteLabelConfig.organization_id == organization_id,
                     WhiteLabelConfig.is_active == True,
+                    WhiteLabelConfig.setting_type.is_(None),
                 )
                 .first()
             )

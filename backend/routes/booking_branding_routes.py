@@ -81,21 +81,13 @@ def _require_admin(user) -> None:
 
 def _sanitize_css(raw_css: Optional[str]) -> Optional[str]:
     """
-    Basic CSS sanitisation: strip <script>, @import, url() with non-https,
-    javascript: protocol, and expression().
+    Sanitize custom CSS — delegates to the canonical sanitize_custom_css().
     """
     if not raw_css:
         return raw_css
-    # Remove script tags
-    cleaned = re.sub(r'<\s*script[^>]*>.*?<\s*/\s*script\s*>', '', raw_css, flags=re.I | re.S)
-    # Remove @import
-    cleaned = re.sub(r'@import\s+[^;]+;', '', cleaned, flags=re.I)
-    # Remove javascript: in url()
-    cleaned = re.sub(r'url\s*\(\s*["\']?\s*javascript:', 'url(blocked:', cleaned, flags=re.I)
-    # Remove expression()
-    cleaned = re.sub(r'expression\s*\(', 'blocked(', cleaned, flags=re.I)
-    # Cap length
-    return cleaned[:10000]
+    from input_validation import sanitize_custom_css
+    cleaned = sanitize_custom_css(raw_css, max_length=10000)
+    return cleaned if cleaned else None
 
 
 # ---------------------------------------------------------------------------

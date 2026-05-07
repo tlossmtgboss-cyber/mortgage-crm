@@ -92,6 +92,14 @@ class BrandingSettings(BaseModel):
     footer_text: Optional[str] = Field(None, max_length=500)
     custom_css: Optional[str] = Field(None, max_length=10000)
 
+    @validator('custom_css', pre=True, always=True)
+    def sanitize_custom_css(cls, v):
+        if v is None or not isinstance(v, str):
+            return None
+        from input_validation import sanitize_custom_css as _sanitize_css
+        cleaned = _sanitize_css(v, max_length=10000)
+        return cleaned if cleaned else None
+
     @validator('logo_url', 'favicon_url')
     def validate_urls(cls, v):
         if v and not (v.startswith('http://') or v.startswith('https://') or v.startswith('/')):

@@ -726,6 +726,19 @@ async def vapi_voicemail_status_webhook(
         payload = json.loads(raw_body)
         logger.info(f"Vapi voicemail webhook received for voicemail_id={voicemail_id}: {payload}")
 
+        # Idempotency check — deduplicate retried Vapi webhooks
+        message = payload.get("message", {})
+        _vm_call_id = (
+            message.get("call", {}).get("id")
+            or payload.get("call", {}).get("id")
+        )
+        _vm_msg_type = message.get("type", "")
+        if _vm_call_id:
+            from middleware.webhook_idempotency import is_duplicate_webhook
+            if is_duplicate_webhook("vapi", f"voicemail:{voicemail_id}:{_vm_msg_type}:{_vm_call_id}"):
+                logger.info("Vapi voicemail webhook duplicate: voicemail_id=%s call=%s", voicemail_id, _vm_call_id)
+                return {"status": "duplicate"}
+
         # Find the voicemail drop record
         voicemail_drop = db.query(VoicemailDrop).filter(VoicemailDrop.id == voicemail_id).first()
         if not voicemail_drop:
@@ -814,6 +827,19 @@ async def telephony_sms_webhook(
     - Set webhook URL: https://your-domain.com/api/v1/webhooks/telnyx/sms
     """
     logger.info("SMS_WEBHOOK: Request received")
+
+    # Idempotency check — try extracting event ID from JSON body (Telnyx format)
+    try:
+        _sms_payload = json.loads(raw_body) if raw_body else {}
+        _sms_event_id = _sms_payload.get("data", {}).get("id")
+        if _sms_event_id:
+            from middleware.webhook_idempotency import is_duplicate_webhook
+            if is_duplicate_webhook("telnyx-sms", _sms_event_id):
+                logger.info("Telnyx SMS webhook duplicate: event_id=%s", _sms_event_id)
+                return {"status": "duplicate"}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        pass  # Not JSON — continue with form parsing
+
     try:
         main = get_models()
         User = main.User
@@ -829,6 +855,13 @@ async def telephony_sms_webhook(
         message_body = form_data.get("Body", "")
         message_sid = form_data.get("MessageSid", "")
         num_media = int(form_data.get("NumMedia", 0))
+
+        # Fallback idempotency check for form-encoded payloads (TwiML style)
+        if message_sid:
+            from middleware.webhook_idempotency import is_duplicate_webhook
+            if is_duplicate_webhook("telnyx-sms", message_sid):
+                logger.info("Telnyx SMS webhook duplicate: sid=%s", message_sid)
+                return {"status": "duplicate"}
 
         logger.info(f"SMS_WEBHOOK: From={from_number}, Body={message_body[:50]}...")
 

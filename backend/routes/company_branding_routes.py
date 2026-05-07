@@ -280,6 +280,14 @@ class WhiteLabelSettings(BaseModel):
     custom_js: Optional[str] = Field(None, max_length=50000)
     browser_tab_title: Optional[str] = Field(None, max_length=100)
 
+    @validator('custom_css', pre=True, always=True)
+    def sanitize_custom_css(cls, v):
+        if v is None or not isinstance(v, str):
+            return None
+        from input_validation import sanitize_custom_css as _sanitize_css
+        cleaned = _sanitize_css(v, max_length=50000)
+        return cleaned if cleaned else None
+
 
 class SocialMedia(BaseModel):
     """Social media links"""
