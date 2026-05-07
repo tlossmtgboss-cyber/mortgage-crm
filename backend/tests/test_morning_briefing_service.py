@@ -73,3 +73,45 @@ class TestHealthIndicator:
     def test_red_many_at_risk(self):
         Svc = _real_service()
         assert Svc.compute_health(at_risk=3, stale_leads=0, sla_breach=False) == "red"
+
+
+class TestDashboardSnapshot:
+    """Test _query_dashboard_snapshot integration."""
+
+    def test_individual_level_returns_snapshot(self):
+        Svc = _real_service()
+        svc = Svc()
+        db = MagicMock()
+        with patch("services.morning_briefing_service.dms") as mock_dms:
+            mock_dms.calculate_production_metrics.return_value = {"monthlyActual": 5}
+            mock_dms.calculate_pipeline_stats.return_value = []
+            mock_dms.calculate_lead_metrics.return_value = {"new_today": 0}
+            mock_dms.calculate_efficiency_summary.return_value = {"overallScore": 50}
+            mock_dms.calculate_profitability.return_value = {"funded_ytd": 0}
+            mock_dms.calculate_loan_issues.return_value = []
+            mock_dms.calculate_bottlenecks.return_value = []
+            mock_dms.calculate_stage_performance.return_value = []
+            result = svc._query_dashboard_snapshot(db, user_id=1, org_id=1, level="individual")
+        assert "production" in result
+        assert "efficiency" in result
+        assert "team_stats" not in result  # individual level
+
+    def test_manager_level_includes_team_stats(self):
+        Svc = _real_service()
+        svc = Svc()
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = []  # no direct reports
+        with patch("services.morning_briefing_service.dms") as mock_dms:
+            mock_dms.calculate_production_metrics.return_value = {}
+            mock_dms.calculate_pipeline_stats.return_value = []
+            mock_dms.calculate_lead_metrics.return_value = {}
+            mock_dms.calculate_efficiency_summary.return_value = {}
+            mock_dms.calculate_profitability.return_value = {}
+            mock_dms.calculate_loan_issues.return_value = []
+            mock_dms.calculate_bottlenecks.return_value = []
+            mock_dms.calculate_stage_performance.return_value = []
+            mock_dms.calculate_team_stats.return_value = {"has_team": True}
+            mock_dms.calculate_team_performance.return_value = []
+            result = svc._query_dashboard_snapshot(db, user_id=1, org_id=1, level="manager")
+        assert "team_stats" in result
+        assert "team_performance" in result

@@ -15,6 +15,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
+import services.dashboard_metrics_service as dms
+from database.models import User
+
 logger = logging.getLogger(__name__)
 
 from services.workflow_constants import (
@@ -107,6 +110,9 @@ class BriefingContext:
 
     # Team/org data (manager and leadership only)
     team: Optional[Dict[str, Any]] = None
+
+    # Dashboard snapshot (all levels)
+    dashboard_snapshot: Optional[Dict[str, Any]] = None
 
 
 class MorningBriefingService:
@@ -423,6 +429,38 @@ class MorningBriefingService:
             logger.error("Yesterday activity query failed: %s", e)
             db.rollback()
             return {"funded": 0, "new_loans": 0, "conversions": 0}
+
+    def _query_dashboard_snapshot(
+        self, db: Session, user_id: int, org_id: int, level: str,
+        user_metadata: Optional[Dict] = None,
+    ) -> Dict[str, Any]:
+        """Gather full dashboard snapshot scoped by briefing level."""
+        if level == "individual":
+            branch_user_ids = [user_id]
+        elif level == "manager":
+            report_rows = db.query(User.id).filter(
+                User.manager_id == user_id, User.is_active == True, User.organization_id == org_id
+            ).all()
+            branch_user_ids = [user_id] + [r[0] for r in report_rows]
+        else:
+            branch_user_ids = None
+
+        snapshot = {
+            "production": dms.calculate_production_metrics(db, user_id, org_id, branch_user_ids, user_metadata),
+            "pipeline_stats": dms.calculate_pipeline_stats(db, user_id, org_id, branch_user_ids),
+            "lead_metrics": dms.calculate_lead_metrics(db, user_id, org_id, branch_user_ids),
+            "efficiency": dms.calculate_efficiency_summary(db, user_id, org_id, branch_user_ids),
+            "profitability": dms.calculate_profitability(db, user_id, org_id, branch_user_ids),
+            "loan_issues": dms.calculate_loan_issues(db, user_id, org_id, branch_user_ids),
+            "bottlenecks": dms.calculate_bottlenecks(db, user_id, org_id, branch_user_ids),
+            "stage_performance": dms.calculate_stage_performance(db, user_id, org_id, branch_user_ids),
+        }
+
+        if level in ("manager", "leadership"):
+            snapshot["team_stats"] = dms.calculate_team_stats(db, user_id, org_id, branch_user_ids)
+            snapshot["team_performance"] = dms.calculate_team_performance(db, user_id, org_id, branch_user_ids)
+
+        return snapshot
 
     # ------------------------------------------------------------------
     # Manager data gathering (Level 2)
@@ -749,6 +787,10 @@ class MorningBriefingService:
         if level == "leadership":
             ctx.team = self.gather_leadership_data(db, org_id, briefing_date, prefs)
 
+        # Dashboard snapshot (all levels)
+        user_metadata = getattr(user, "user_metadata", None) or {}
+        ctx.dashboard_snapshot = self._query_dashboard_snapshot(db, user_id, org_id, level, user_metadata)
+
         return ctx
 
     # ------------------------------------------------------------------
@@ -931,5 +973,26 @@ class MorningBriefingService:
                 lines.append("TOP ORG RISKS:")
                 for r in ctx.team["top_risks"]:
                     lines.append(f"  - {r['borrower']} ({r['branch']}, LO: {r['lo_name']}): {r['issue']}")
+
+        # Dashboard snapshot
+        ds = ctx.dashboard_snapshot
+        if ds:
+            lines.append("")
+            lines.append("DASHBOARD SNAPSHOT:")
+            prod = ds.get("production", {})
+            if prod:
+                lines.append(f"  Production: {prod.get('monthlyActual', 0)}/{prod.get('monthlyGoal', 0)} funded this month ({prod.get('monthlyProgress', 0)}%)")
+            eff = ds.get("efficiency", {})
+            if eff:
+                lines.append(f"  Efficiency score: {eff.get('overallScore', 0)}/100")
+                lines.append(f"  Pull-through rate: {eff.get('pullThroughRate', 0)}%")
+                lines.append(f"  Avg time to close: {eff.get('avgTimeToClose', 0)} days")
+                lines.append(f"  Loans falling behind: {eff.get('loansFallingBehind', 0)}")
+            bn = ds.get("bottlenecks", [])
+            if bn:
+                lines.append(f"  Bottlenecks: {len(bn)} active")
+            prof = ds.get("profitability", {})
+            if prof and prof.get("funded_ytd", 0) > 0:
+                lines.append(f"  Profitability: {prof['funded_ytd']} funded YTD, ${prof.get('total_volume', 0):,.0f} volume")
 
         return "\n".join(lines)
