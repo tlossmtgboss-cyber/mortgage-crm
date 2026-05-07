@@ -105,6 +105,8 @@ function Dashboard() {
     return getDashboardContainersForRole(effectiveRole || 'loan_officer');
   });
   const workflowScores = dashboardData?.workflow_scores || { statuses: [], overallScore: 0 };
+  const profitability = dashboardData?.profitability || {};
+  const loanIssuesList = dashboardData?.loan_issues || [];
 
   // Reload container order when role changes
   useEffect(() => {
@@ -471,38 +473,58 @@ function Dashboard() {
                 onClick={() => navigate('/profitability?metric=gain_on_sale')}
               >
                 <div className="metric-label">Gain on Sale</div>
-                <div className="metric-value">--</div>
-                <div className="metric-change neutral">No data yet</div>
+                <div className="metric-value">{profitability.gain_on_sale_display || '--'}</div>
+                <div className={`metric-change ${profitability.gain_on_sale > 0 ? 'positive' : 'neutral'}`}>
+                  {profitability.gain_on_sale > 0 ? `${profitability.funded_ytd} loans YTD` : 'No data yet'}
+                </div>
               </div>
               <div
                 className="profitability-metric clickable"
                 onClick={() => navigate('/profitability?metric=cost_per_loan')}
               >
-                <div className="metric-label">Cost per Loan</div>
-                <div className="metric-value">--</div>
-                <div className="metric-change neutral">No data yet</div>
+                <div className="metric-label">Revenue / Loan</div>
+                <div className="metric-value">{profitability.revenue_per_loan_display || '--'}</div>
+                <div className={`metric-change ${profitability.revenue_per_loan > 0 ? 'positive' : 'neutral'}`}>
+                  {profitability.avg_loan_size > 0 ? `Avg size: $${(profitability.avg_loan_size / 1000).toFixed(0)}K` : 'No data yet'}
+                </div>
               </div>
               <div
                 className="profitability-metric clickable"
                 onClick={() => navigate('/profitability?metric=net_margin')}
               >
                 <div className="metric-label">Net Margin</div>
-                <div className="metric-value">--</div>
-                <div className="metric-change neutral">No data yet</div>
+                <div className="metric-value">{profitability.net_margin || '--'}</div>
+                <div className={`metric-change ${profitability.avg_points > 0 ? 'positive' : 'neutral'}`}>
+                  {profitability.avg_points > 0 ? `Avg points: ${profitability.avg_points}` : 'No data yet'}
+                </div>
               </div>
               <div
                 className="profitability-metric clickable"
-                onClick={() => navigate('/profitability?metric=cash_runway')}
+                onClick={() => navigate('/profitability?metric=volume')}
               >
-                <div className="metric-label">Cash Runway</div>
-                <div className="metric-value">--</div>
-                <div className="metric-change neutral">No data yet</div>
+                <div className="metric-label">Total Volume</div>
+                <div className="metric-value">
+                  {profitability.total_volume > 0
+                    ? `$${(profitability.total_volume / 1000000).toFixed(1)}M`
+                    : '--'}
+                </div>
+                <div className={`metric-change ${profitability.funded_ytd > 0 ? 'positive' : 'neutral'}`}>
+                  {profitability.funded_ytd > 0 ? `${profitability.funded_ytd} funded YTD` : 'No data yet'}
+                </div>
               </div>
             </div>
             <div className="profitability-insights">
-              <div className="insight-item">
-                <span>Add loans to see profitability insights</span>
-              </div>
+              {(profitability.insights || []).length > 0 ? (
+                profitability.insights.map((insight, idx) => (
+                  <div key={idx} className="insight-item">
+                    <span>{insight}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="insight-item">
+                  <span>Fund loans to see profitability insights</span>
+                </div>
+              )}
             </div>
             <button
               className="btn-view-profitability"
@@ -722,6 +744,9 @@ function Dashboard() {
     }
 
     if (containerId === 'ai-tasks') {
+      const taskCount = getAggregatedTasksCount();
+      const hasTaskDetails = prioritizedTasks.length > 0 || loanIssuesList.length > 0;
+
       return (
         <div
           key={containerId}
@@ -737,17 +762,62 @@ function Dashboard() {
           >⋮⋮</div>
           <div className="block-header clickable-block" onClick={() => navigate('/tasks')}>
             <h2>AI Prioritized Tasks (Today)</h2>
-            <span className="task-count">{getAggregatedTasksCount()} tasks</span>
+            <span className="task-count">{taskCount} tasks</span>
           </div>
-          <div className="task-summary-view clickable-container" onClick={() => navigate('/tasks')}>
-            <div className="task-count-display">
-              <div className="count-number">{getAggregatedTasksCount()}</div>
-              <div className="count-label">Outstanding Tasks</div>
+
+          {hasTaskDetails ? (
+            <div className="task-detail-list">
+              {prioritizedTasks.slice(0, 8).map((task, idx) => (
+                <div
+                  key={idx}
+                  className={`task-detail-row priority-${(task.urgency || 'medium').toLowerCase()}`}
+                  onClick={() => navigate('/tasks')}
+                >
+                  <div className="task-priority-indicator"></div>
+                  <div className="task-detail-content">
+                    <div className="task-detail-title">{task.title}</div>
+                    <div className="task-detail-meta">
+                      {task.borrower && <span className="task-borrower">{task.borrower}</span>}
+                      {task.stage && <span className="task-stage">{task.stage}</span>}
+                      {task.urgency && <span className={`task-urgency ${task.urgency.toLowerCase()}`}>{task.urgency}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {loanIssuesList.slice(0, 4).map((issue, idx) => (
+                <div
+                  key={`issue-${idx}`}
+                  className="task-detail-row priority-high"
+                  onClick={() => navigate(`/loans/${issue.id}`)}
+                >
+                  <div className="task-priority-indicator"></div>
+                  <div className="task-detail-content">
+                    <div className="task-detail-title">{issue.issue}</div>
+                    <div className="task-detail-meta">
+                      <span className="task-borrower">{issue.borrower_name}</span>
+                      <span className="task-stage">{issue.stage}</span>
+                      <span className="task-urgency high">{issue.days_in_stage}d in stage</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {taskCount > 8 && (
+                <div className="task-view-more" onClick={() => navigate('/tasks')}>
+                  View all {taskCount} tasks →
+                </div>
+              )}
             </div>
-            <div className="click-to-view">
-              <p>Click to view all tasks →</p>
+          ) : (
+            <div className="task-summary-view clickable-container" onClick={() => navigate('/tasks')}>
+              <div className="task-count-display">
+                <div className="count-number">{taskCount}</div>
+                <div className="count-label">Outstanding Tasks</div>
+              </div>
+              <div className="click-to-view">
+                <p>Click to view all tasks →</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       );
     }

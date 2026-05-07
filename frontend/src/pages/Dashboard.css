@@ -266,6 +266,99 @@
   margin: 0;
 }
 
+/* Task Detail List (expanded view) */
+.task-detail-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 12px 12px;
+}
+
+.task-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-radius: 6px;
+}
+
+.task-detail-row:hover {
+  background: #f5fafa;
+}
+
+.task-detail-row:last-child {
+  border-bottom: none;
+}
+
+.task-priority-indicator {
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.task-detail-row.priority-high .task-priority-indicator { background: #ef4444; }
+.task-detail-row.priority-medium .task-priority-indicator { background: #f59e0b; }
+.task-detail-row.priority-low .task-priority-indicator { background: #10b981; }
+
+.task-detail-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-detail-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-detail-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #888;
+}
+
+.task-detail-meta .task-borrower {
+  font-weight: 500;
+  color: #555;
+}
+
+.task-detail-meta .task-stage {
+  color: #218D8D;
+}
+
+.task-detail-meta .task-urgency {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.task-detail-meta .task-urgency.high { color: #ef4444; }
+.task-detail-meta .task-urgency.medium { color: #f59e0b; }
+.task-detail-meta .task-urgency.low { color: #10b981; }
+
+.task-view-more {
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  color: #218D8D;
+  font-weight: 600;
+  cursor: pointer;
+  border-top: 1px solid #eee;
+  margin-top: 4px;
+  transition: color 0.15s ease;
+}
+
+.task-view-more:hover {
+  color: #1a7070;
+}
+
 .task-list {
   display: flex;
   flex-direction: column;
@@ -2692,8 +2785,26 @@
 }
 
 [data-theme="dark"] .clickable-row:hover,
-[data-theme="dark"] .task-summary-view.clickable-container:hover {
+[data-theme="dark"] .task-summary-view.clickable-container:hover,
+[data-theme="dark"] .task-detail-row:hover {
   background: var(--color-bg-hover);
+}
+
+[data-theme="dark"] .task-detail-row {
+  border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .task-detail-title {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .task-detail-meta .task-borrower {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .task-view-more {
+  border-top-color: var(--color-border);
+  color: var(--brand-primary);
 }
 
 [data-theme="dark"] .clickable-block:hover {

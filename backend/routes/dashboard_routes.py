@@ -1034,16 +1034,293 @@ async def get_dashboard(
         referral_stats = {"top_partners": [], "engagement": []}
 
     # ============================================================================
-    # TEAM STATS (if applicable)
+    # TEAM STATS (real computation from org users)
     # ============================================================================
 
-    team_stats = {
-        "has_team": False,
-        "avg_workload": 0,
-        "backlog": 0,
-        "sla_missed": 0,
-        "insights": []
-    }
+    try:
+        team_members = db.query(User).filter(
+            User.organization_id == org_id,
+            User.is_active == True
+        ).all()
+        has_team = len(team_members) > 1
+
+        if has_team:
+            team_member_ids = [u.id for u in team_members]
+
+            workload_result = db.query(
+                func.count(Loan.id).label('total'),
+                func.count(func.distinct(Loan.loan_officer_id)).label('lo_count')
+            ).filter(
+                Loan.organization_id == org_id,
+                Loan.loan_officer_id.in_(team_member_ids),
+                Loan.stage.notin_(TERMINAL_STAGES)
+            ).first()
+
+            total_active = workload_result.total or 0
+            lo_count = workload_result.lo_count or 1
+            avg_workload = round(total_active / lo_count, 1)
+
+            backlog = db.query(func.count(Task.id)).filter(
+                Task.organization_id == org_id,
+                Task.status == "pending",
+                Task.due_date < today
+            ).scalar() or 0
+
+            sla_missed = db.query(func.count(Loan.id)).filter(
+                Loan.organization_id == org_id,
+                Loan.sla_status == "behind",
+                Loan.stage.notin_(TERMINAL_STAGES)
+            ).scalar() or 0
+
+            insights = []
+            if backlog > 5:
+                insights.append(f"{backlog} overdue tasks need attention — consider redistributing workload.")
+            if sla_missed > 0:
+                insights.append(f"{sla_missed} loans are behind SLA targets. Review processing bottlenecks.")
+            if avg_workload > 15:
+                insights.append(f"Average workload is {avg_workload} files/person — capacity may be stretched.")
+            if not insights:
+                insights.append("Team is operating within normal parameters.")
+
+            team_stats = {
+                "has_team": True,
+                "avg_workload": avg_workload,
+                "backlog": backlog,
+                "sla_missed": sla_missed,
+                "insights": insights
+            }
+        else:
+            team_stats = {"has_team": False, "avg_workload": 0, "backlog": 0, "sla_missed": 0, "insights": []}
+    except Exception as team_err:
+        logger.warning(f"Dashboard: Error getting team stats: {team_err}")
+        team_stats = {"has_team": False, "avg_workload": 0, "backlog": 0, "sla_missed": 0, "insights": []}
+
+    # ============================================================================
+    # WORKFLOW SCORES (real loan stage health)
+    # ============================================================================
+
+    try:
+        workflow_stage_configs = [
+            {"id": "application", "name": "Application", "stages": [LoanStage.APPLICATION, LoanStage.DISCLOSED], "target_days": 7},
+            {"id": "processing", "name": "Processing", "stages": [LoanStage.PROCESSING], "target_days": 10},
+            {"id": "submitted", "name": "Submitted to UW", "stages": [LoanStage.SUBMITTED], "target_days": 3},
+            {"id": "underwriting", "name": "Underwriting", "stages": [LoanStage.UNDERWRITING, LoanStage.UW_RECEIVED], "target_days": 7},
+            {"id": "conditional", "name": "Conditional Approval", "stages": [LoanStage.CONDITIONAL_APPROVAL], "target_days": 5},
+            {"id": "ctc", "name": "Clear to Close", "stages": [LoanStage.CTC, LoanStage.CLEAR_TO_CLOSE, LoanStage.APPROVED], "target_days": 3},
+            {"id": "closing", "name": "Closing & Docs", "stages": [LoanStage.CLOSING, LoanStage.DOCS, LoanStage.DOCS_OUT], "target_days": 5},
+        ]
+
+        workflow_statuses = []
+        total_workflow_score = 0
+
+        for wf_config in workflow_stage_configs:
+            wf_filters = [Loan.stage.in_(wf_config["stages"])]
+            if org_id:
+                wf_filters.append(Loan.organization_id == org_id)
+            if branch_user_ids is not None:
+                wf_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+            else:
+                wf_filters.append(Loan.loan_officer_id == current_user.id)
+
+            wf_result = db.query(
+                func.count(Loan.id).label('active_loans'),
+                func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_days')
+            ).filter(*wf_filters).first()
+
+            active_loans = wf_result.active_loans or 0
+            avg_days = float(wf_result.avg_days or 0)
+
+            stage_score = max(0, min(100, int(100 - max(0, (avg_days - wf_config["target_days"]) * 10))))
+
+            task_filters = [
+                Task.status.in_(["pending", "in_progress"]),
+                Task.organization_id == org_id
+            ]
+            if branch_user_ids is not None:
+                task_filters.append(Task.owner_id.in_(branch_user_ids))
+            else:
+                task_filters.append(Task.owner_id == current_user.id)
+
+            tasks_due = db.query(func.count(Task.id)).filter(*task_filters).scalar() or 0
+            tasks_completed = db.query(func.count(Task.id)).filter(
+                Task.organization_id == org_id,
+                Task.status == "completed",
+                Task.completed_at >= thirty_days_ago
+            ).scalar() or 0
+
+            health = "good" if stage_score >= 80 else ("warning" if stage_score >= 60 else "critical")
+
+            workflow_statuses.append({
+                "id": wf_config["id"],
+                "name": wf_config["name"],
+                "score": stage_score,
+                "health": health,
+                "activeLoans": active_loans,
+                "tasksDue": tasks_due,
+                "tasksCompleted": tasks_completed
+            })
+            total_workflow_score += stage_score
+
+        overall_workflow_score = int(total_workflow_score / len(workflow_stage_configs)) if workflow_stage_configs else 0
+
+        workflow_scores = {
+            "statuses": workflow_statuses,
+            "overallScore": overall_workflow_score
+        }
+    except Exception as wf_err:
+        logger.warning(f"Dashboard: Error getting workflow scores: {wf_err}")
+        workflow_scores = {"statuses": [], "overallScore": 0}
+
+    # ============================================================================
+    # AI TASKS (real AIColleagueAction data)
+    # ============================================================================
+
+    try:
+        ai_action_filters = [AIColleagueAction.status == "pending"]
+        if org_id:
+            ai_action_filters.append(AIColleagueAction.organization_id == org_id)
+        if branch_user_ids is not None:
+            ai_action_filters.append(AIColleagueAction.user_id.in_(branch_user_ids))
+        else:
+            ai_action_filters.append(AIColleagueAction.user_id == current_user.id)
+
+        pending_actions = db.query(AIColleagueAction).filter(
+            *ai_action_filters,
+            AIColleagueAction.executed_at.is_(None)
+        ).order_by(AIColleagueAction.created_at.desc()).limit(10).all()
+
+        waiting_actions = db.query(AIColleagueAction).filter(
+            *ai_action_filters,
+            AIColleagueAction.required_approval == True,
+            AIColleagueAction.approved_at.is_(None)
+        ).order_by(AIColleagueAction.created_at.desc()).limit(10).all()
+
+        waiting_ids = {a.id for a in waiting_actions}
+        pending_only = [a for a in pending_actions if a.id not in waiting_ids]
+
+        ai_tasks_data = {
+            "pending": [{
+                "id": a.id,
+                "action_type": a.action_type,
+                "agent_name": a.agent_name,
+                "reasoning": (a.reasoning or "")[:120],
+                "confidence": a.confidence_score,
+                "created_at": a.created_at.isoformat() if a.created_at else None
+            } for a in pending_only[:5]],
+            "waiting": [{
+                "id": a.id,
+                "action_type": a.action_type,
+                "agent_name": a.agent_name,
+                "reasoning": (a.reasoning or "")[:120],
+                "confidence": a.confidence_score,
+                "created_at": a.created_at.isoformat() if a.created_at else None
+            } for a in waiting_actions[:5]]
+        }
+    except Exception as ai_err:
+        logger.warning(f"Dashboard: Error getting AI tasks: {ai_err}")
+        ai_tasks_data = {"pending": [], "waiting": []}
+
+    # ============================================================================
+    # LOAN ISSUES (problematic loans needing attention)
+    # ============================================================================
+
+    try:
+        loan_issue_filters = [Loan.stage.notin_(TERMINAL_STAGES)]
+        if org_id:
+            loan_issue_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            loan_issue_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            loan_issue_filters.append(Loan.loan_officer_id == current_user.id)
+
+        problem_loans = db.query(Loan).filter(
+            *loan_issue_filters,
+            (Loan.days_in_stage > 14) | (Loan.sla_status == "behind") |
+            ((Loan.lock_expiration_date.isnot(None)) & (Loan.lock_expiration_date <= datetime.now(timezone.utc) + timedelta(days=7)))
+        ).order_by(Loan.days_in_stage.desc().nullslast()).limit(10).all()
+
+        loan_issues = [{
+            "id": l.id,
+            "borrower_name": l.borrower_name if hasattr(l, 'borrower_name') else f"Loan #{l.id}",
+            "stage": l.stage,
+            "days_in_stage": l.days_in_stage or 0,
+            "sla_status": l.sla_status or "unknown",
+            "issue": "Rate lock expiring" if (l.lock_expiration_date and l.lock_expiration_date <= datetime.now(timezone.utc) + timedelta(days=7))
+                     else ("SLA behind" if l.sla_status == "behind"
+                     else f"In stage {l.days_in_stage or 0} days"),
+            "amount": float(l.amount) if l.amount else 0
+        } for l in problem_loans]
+    except Exception as issue_err:
+        logger.warning(f"Dashboard: Error getting loan issues: {issue_err}")
+        loan_issues = []
+
+    # ============================================================================
+    # PROFITABILITY SUMMARY (computed from funded loans)
+    # ============================================================================
+
+    try:
+        prof_filters = [
+            Loan.stage == LoanStage.FUNDED,
+            Loan.funded_date >= start_of_year
+        ]
+        if org_id:
+            prof_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            prof_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            prof_filters.append(Loan.loan_officer_id == current_user.id)
+
+        prof_result = db.query(
+            func.count(Loan.id).label('funded_count'),
+            func.sum(Loan.amount).label('total_volume'),
+            func.avg(Loan.amount).label('avg_loan_size'),
+            func.sum(Loan.origination_fee).label('total_origination'),
+            func.avg(Loan.origination_fee).label('avg_origination'),
+            func.avg(Loan.rate).label('avg_rate'),
+            func.avg(Loan.points).label('avg_points')
+        ).filter(*prof_filters).first()
+
+        prof_funded = prof_result.funded_count or 0
+        prof_volume = float(prof_result.total_volume or 0)
+        prof_avg_size = float(prof_result.avg_loan_size or 0)
+        prof_total_orig = float(prof_result.total_origination or 0)
+        prof_avg_orig = float(prof_result.avg_origination or 0)
+        prof_avg_points = float(prof_result.avg_points or 0)
+
+        gain_on_sale_bps = int((prof_avg_orig / prof_avg_size * 10000)) if prof_avg_size > 0 and prof_avg_orig > 0 else 0
+        revenue_per_loan = prof_avg_orig if prof_avg_orig > 0 else 0
+
+        profitability = {
+            "funded_ytd": prof_funded,
+            "total_volume": prof_volume,
+            "avg_loan_size": round(prof_avg_size, 2),
+            "gain_on_sale": gain_on_sale_bps,
+            "gain_on_sale_display": f"{gain_on_sale_bps} bps" if gain_on_sale_bps > 0 else "--",
+            "revenue_per_loan": round(revenue_per_loan, 2),
+            "revenue_per_loan_display": f"${revenue_per_loan:,.0f}" if revenue_per_loan > 0 else "--",
+            "avg_points": round(prof_avg_points, 3),
+            "cost_per_loan": "--",
+            "net_margin": f"{gain_on_sale_bps} bps" if gain_on_sale_bps > 0 else "--",
+            "insights": []
+        }
+
+        if prof_funded > 0:
+            profitability["insights"].append(f"{prof_funded} loans funded YTD totaling ${prof_volume:,.0f}")
+        if prof_avg_size > 0:
+            profitability["insights"].append(f"Average loan size: ${prof_avg_size:,.0f}")
+        if gain_on_sale_bps > 0:
+            profitability["insights"].append(f"Avg origination revenue: ${prof_avg_orig:,.0f} per loan ({gain_on_sale_bps} bps)")
+        if not profitability["insights"]:
+            profitability["insights"].append("Fund loans to see profitability metrics")
+    except Exception as prof_err:
+        logger.warning(f"Dashboard: Error getting profitability: {prof_err}")
+        profitability = {
+            "funded_ytd": 0, "total_volume": 0, "avg_loan_size": 0,
+            "gain_on_sale": 0, "gain_on_sale_display": "--",
+            "revenue_per_loan": 0, "revenue_per_loan_display": "--",
+            "avg_points": 0, "cost_per_loan": "--", "net_margin": "--",
+            "insights": ["Fund loans to see profitability metrics"]
+        }
 
     # ============================================================================
     # MESSAGES (placeholder for now)
@@ -1248,12 +1525,14 @@ async def get_dashboard(
         "pipeline_stats": pipeline_stats,
         "production": production,
         "lead_metrics": lead_metrics,
-        "loan_issues": [],
-        "ai_tasks": {"pending": [], "waiting": []},
+        "loan_issues": loan_issues,
+        "ai_tasks": ai_tasks_data,
         "referral_stats": referral_stats,
         "team_stats": team_stats,
         "messages": messages,
-        "efficiency": efficiency
+        "efficiency": efficiency,
+        "workflow_scores": workflow_scores,
+        "profitability": profitability
     }
 
     # Cache for blazing fast retrieval on subsequent requests
