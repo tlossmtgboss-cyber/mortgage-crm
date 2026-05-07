@@ -12,6 +12,7 @@ import {
   AppointmentsSection,
   YesterdaySection,
   TeamSection,
+  DashboardSnapshotSection,
 } from '../components/briefing/shared';
 import './BriefingPage.css';
 
@@ -24,6 +25,7 @@ function TodayTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [openSections, setOpenSections] = useState({
+    dashboard: true,
     pipeline: true,
     at_risk: true,
     conditions: true,
@@ -124,7 +126,7 @@ function TodayTab() {
   const {
     ai_narrative, pipeline, at_risk, stale_leads,
     appointments, conditions, yesterday, team,
-    briefing_level, briefing_date,
+    briefing_level, briefing_date, dashboard_snapshot,
   } = briefing;
 
   const health = computeHealth();
@@ -149,6 +151,18 @@ function TodayTab() {
       {ai_narrative && (
         <div className="briefing-narrative">
           <div className="narrative-text">{ai_narrative}</div>
+        </div>
+      )}
+
+      {dashboard_snapshot && (
+        <div className="briefing-section">
+          <SectionHeader
+            title="Dashboard Snapshot"
+            icon=""
+            isOpen={openSections.dashboard}
+            onToggle={() => toggleSection('dashboard')}
+          />
+          {openSections.dashboard && <DashboardSnapshotSection snapshot={dashboard_snapshot} maxIssues={10} />}
         </div>
       )}
 

@@ -11,6 +11,7 @@ import {
   AppointmentsSection,
   YesterdaySection,
   TeamSection,
+  DashboardSnapshotSection,
 } from '../briefing/shared';
 import './MorningBriefingCard.css';
 
@@ -53,6 +54,7 @@ export default function MorningBriefingCard() {
   });
   const [narrativeExpanded, setNarrativeExpanded] = useState(false);
   const [openSections, setOpenSections] = useState({
+    dashboard: true,
     pipeline: true,
     at_risk: true,
     conditions: true,
@@ -155,6 +157,7 @@ export default function MorningBriefingCard() {
     team,
     briefing_level,
     briefing_date,
+    dashboard_snapshot,
   } = briefing;
 
   const health = computeHealth();
@@ -210,6 +213,19 @@ export default function MorningBriefingCard() {
                   {narrativeExpanded ? 'Show less' : 'Read more'}
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Dashboard Snapshot */}
+          {dashboard_snapshot && (
+            <div className="briefing-section">
+              <SectionHeader
+                title="Dashboard Snapshot"
+                icon="&#x1F4CA;"
+                isOpen={openSections.dashboard}
+                onToggle={() => toggleSection('dashboard')}
+              />
+              {openSections.dashboard && <DashboardSnapshotSection snapshot={dashboard_snapshot} maxIssues={5} />}
             </div>
           )}
 
