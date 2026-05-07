@@ -200,12 +200,65 @@ function extractSentences(buffer) {
   return { sentences, leftover: leftover.replace(/\x00/g, '.') };
 }
 
+// Shared <audio> element kept hot from the user gesture so iOS Safari /
+// mobile Chrome don't reject playback later when the TTS response arrives.
+// A single element reused across plays keeps the autoplay grant alive.
+let _sharedAudioEl = null;
+
+function _getSharedAudio() {
+  if (_sharedAudioEl) return _sharedAudioEl;
+  const a = new Audio();
+  a.preload = 'auto';
+  a.playsInline = true;
+  a.setAttribute('playsinline', 'true');
+  a.setAttribute('webkit-playsinline', 'true');
+  _sharedAudioEl = a;
+  return a;
+}
+
+// Call from inside a user gesture (mic tap). Plays a silent data URI to
+// satisfy mobile autoplay policy so subsequent .play() calls succeed.
+function unlockAudioPlayback() {
+  try {
+    const a = _getSharedAudio();
+    // Tiny silent MP3 (44 bytes) — enough to mark the element as user-activated.
+    a.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7097LFr89j9xC0fXmHkxpe/2T29c8w1+t4Hgv/0M3l+B+f/r8eHQEoBgAEoCwAAQ8AAAAA//tQxAQAB+wTKsCEYDDfA+ToEMwIA8AAAAA';
+    a.muted = true;
+    const p = a.play();
+    if (p && typeof p.then === 'function') {
+      p.then(() => {
+        a.pause();
+        a.muted = false;
+        try { a.currentTime = 0; } catch { /* noop */ }
+      }).catch(() => {
+        a.muted = false;
+      });
+    }
+  } catch { /* best effort */ }
+}
+
+function _speakViaBrowser(text, abortedRef) {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) { resolve(); return; }
+    try {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.onend = resolve;
+      utterance.onerror = resolve;
+      if (abortedRef?.()) { resolve(); return; }
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      resolve();
+    }
+  });
+}
+
 class TTSQueue {
   constructor() {
     this._queue = [];
     this._playing = false;
     this._aborted = false;
-    this._currentAudio = null;
     this._currentBlobUrl = null;
     this._onAllDone = null;
   }
@@ -225,6 +278,7 @@ class TTSQueue {
     this._playing = true;
     const batch = this._queue.splice(0, Math.min(2, this._queue.length));
     const text = batch.join(' ');
+    let playedViaApi = false;
     try {
       const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
         text,
@@ -239,28 +293,38 @@ class TTSQueue {
       const blob = new Blob([bytes], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(blob);
       this._currentBlobUrl = url;
-      await new Promise((resolve) => {
-        const audio = new Audio(url);
-        this._currentAudio = audio;
-        const cleanup = () => { URL.revokeObjectURL(url); this._currentAudio = null; this._currentBlobUrl = null; };
-        audio.onended = () => { cleanup(); resolve(); };
-        audio.onerror = () => { cleanup(); resolve(); };
-        audio.play().catch(() => { cleanup(); resolve(); });
+      const audio = _getSharedAudio();
+      audio.muted = false;
+      audio.volume = 1.0;
+      audio.src = url;
+      try { audio.load(); } catch { /* noop */ }
+      const playOk = await new Promise((resolve) => {
+        const cleanup = () => {
+          URL.revokeObjectURL(url);
+          if (this._currentBlobUrl === url) this._currentBlobUrl = null;
+          audio.onended = null;
+          audio.onerror = null;
+        };
+        audio.onended = () => { cleanup(); resolve(true); };
+        audio.onerror = () => { cleanup(); resolve(false); };
+        const p = audio.play();
+        if (p && typeof p.then === 'function') {
+          p.catch((err) => {
+            console.warn('[TTSQueue] audio.play() rejected:', err?.name || err);
+            cleanup();
+            resolve(false);
+          });
+        }
       });
+      playedViaApi = playOk;
     } catch (err) {
       if (this._aborted) return;
-      console.warn('[TTSQueue] TTS API failed, falling back to browser speech:', err.message);
-      // Fallback: use browser's built-in speech synthesis
-      if (window.speechSynthesis) {
-        await new Promise((resolve) => {
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.rate = 1.0;
-          utterance.pitch = 1.0;
-          utterance.onend = resolve;
-          utterance.onerror = resolve;
-          window.speechSynthesis.speak(utterance);
-        });
-      }
+      console.warn('[TTSQueue] TTS API failed:', err.message);
+    }
+    if (!this._aborted && !playedViaApi) {
+      // Fall through to browser speechSynthesis when API failed OR audio
+      // playback was blocked (mobile autoplay policy).
+      await _speakViaBrowser(text, () => this._aborted);
     }
     if (!this._aborted) this._playNext();
   }
@@ -268,14 +332,18 @@ class TTSQueue {
   stop() {
     this._aborted = true;
     this._queue = [];
-    if (this._currentAudio) {
-      this._currentAudio.pause();
-      this._currentAudio.currentTime = 0;
-      this._currentAudio = null;
+    if (_sharedAudioEl) {
+      try {
+        _sharedAudioEl.pause();
+        _sharedAudioEl.currentTime = 0;
+      } catch { /* noop */ }
     }
     if (this._currentBlobUrl) {
       URL.revokeObjectURL(this._currentBlobUrl);
       this._currentBlobUrl = null;
+    }
+    if (window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch { /* noop */ }
     }
   }
 
@@ -513,6 +581,10 @@ export default function AriaVoiceHome() {
 
   // ---- Mic tap handler ----
   const handleMicTap = useCallback(() => {
+    // Unlock audio inside the user gesture so iOS Safari / mobile Chrome
+    // permit the deferred TTS playback that arrives later via SSE.
+    unlockAudioPlayback();
+
     // LiveKit mode
     if (lkAvailable) {
       if (lkConnected) {
