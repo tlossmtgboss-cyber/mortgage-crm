@@ -3072,3 +3072,28 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             return JSONResponse(status_code=500, content={
                 "status": "error", "error": str(e), "traceback": traceback.format_exc(),
             })
+
+    @app.get("/api/v1/admin/debug-demo-leads")
+    async def debug_demo_leads(admin_key: str = Query(None), db: Session = Depends(get_db)):
+        _verify_admin_key(admin_key)
+        user = db.execute(text(
+            "SELECT id, organization_id, permission_role, email FROM users WHERE email = 'demo@perenniaai.com'"
+        )).fetchone()
+        if not user:
+            return {"error": "demo user not found"}
+        uid, oid, role, email = user
+        leads_count = db.execute(text(
+            "SELECT COUNT(*) FROM leads WHERE organization_id = :oid AND owner_id = :uid AND deleted_at IS NULL",
+        ), {"oid": oid, "uid": uid}).scalar()
+        leads_sample = db.execute(text(
+            "SELECT id, name, stage, owner_id, organization_id, deleted_at FROM leads "
+            "WHERE organization_id = :oid LIMIT 5"
+        ), {"oid": oid}).fetchall()
+        return {
+            "user": {"id": uid, "org_id": oid, "role": role, "email": email},
+            "leads_owned_not_deleted": leads_count,
+            "sample_leads": [
+                {"id": r[0], "name": r[1], "stage": r[2], "owner_id": r[3], "org_id": r[4], "deleted_at": str(r[5])}
+                for r in leads_sample
+            ],
+        }
