@@ -464,6 +464,33 @@ def determine_tool_arguments(
         # No arguments needed
         pass
 
+    elif tool_name == "analyze_trends":
+        args["user_id"] = state.get("user_id")
+        args["user_email"] = state.get("user_email")
+        args["user_role"] = state.get("user_role", "sales")
+        user_message = state.get("user_message", "").lower()
+        # Parse domain from message
+        domain_keywords = {
+            "lead": "leads", "loan": "loans", "pipeline": "pipeline",
+            "compliance": "compliance", "communication": "communication",
+            "call": "dialer", "dialer": "dialer", "referral": "referrals",
+            "partner": "referrals", "mum": "mum", "mortgage under": "mum",
+            "team": "team", "ai ": "ai_ops", "document": "documents",
+            "application": "applications", "system": "system", "security": "system",
+        }
+        args["domain"] = "all"
+        for kw, dom in domain_keywords.items():
+            if kw in user_message:
+                args["domain"] = dom
+                break
+        # Parse time window
+        if "week" in user_message:
+            args["time_window"] = "week"
+        elif "quarter" in user_message:
+            args["time_window"] = "quarter"
+        else:
+            args["time_window"] = "month"
+
     elif tool_name == "get_leads_by_status":
         # Extract status from entities if available
         entities = state.get("query_entities", {})

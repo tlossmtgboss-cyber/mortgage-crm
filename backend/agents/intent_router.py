@@ -414,6 +414,9 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"analytics",
         r"metrics",
         r"production (report|numbers)",
+        r"\btrend",
+        r"\bkpi\b",
+        r"business intelligence",
     ],
     "billing": [
         r"subscript",

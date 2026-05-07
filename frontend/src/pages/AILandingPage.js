@@ -2425,6 +2425,10 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                   <strong>Complete Tasks</strong>
                   <span>View and manage your pending tasks</span>
                 </button>
+                <button onClick={() => handleExamplePrompt('What trends do you see across my leads, loans, pipeline, and referral partners? Email me a full trend report.')}>
+                  <strong>Trend Report</strong>
+                  <span>Analyze KPI trends and email a report</span>
+                </button>
               </div>
             </div>
           )}
