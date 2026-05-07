@@ -66,8 +66,17 @@ class UnifiedCalendarService:
         if appointment_warning:
             warnings.append(appointment_warning)
         else:
-            sources_queried.append("scheduler")
+            sources_queried.append("scheduler_v1")
         events.extend(appointment_events)
+
+        v2_events, v2_warning = self._fetch_v2_appointments(
+            start_date, end_date, include_cancelled
+        )
+        if v2_warning:
+            warnings.append(v2_warning)
+        else:
+            sources_queried.append("scheduler_v2")
+        events.extend(v2_events)
 
         crm_events, crm_warning = self._fetch_crm_events(
             start_date, end_date, include_cancelled
@@ -108,27 +117,35 @@ class UnifiedCalendarService:
     ) -> tuple[List[Dict], Optional[str]]:
         """Fetch events from CalendarEvent table."""
         try:
-            # Import here to avoid circular imports
             import main
             CalendarEvent = main.CalendarEvent
 
-            query = self.db.query(CalendarEvent).filter(
+            base_filters = [
                 CalendarEvent.user_id == self.user_id,
                 CalendarEvent.start_time >= start_date,
                 CalendarEvent.start_time <= end_date,
-            )
-
-            query = query.filter(CalendarEvent.organization_id == self.organization_id)
-
+            ]
             if not include_cancelled:
-                query = query.filter(CalendarEvent.status != "cancelled")
+                base_filters.append(CalendarEvent.status != "cancelled")
 
-            events = query.order_by(CalendarEvent.start_time).all()
+            # Try with org filter first; fall back without it if column missing
+            try:
+                query = self.db.query(CalendarEvent).filter(
+                    *base_filters,
+                    CalendarEvent.organization_id == self.organization_id,
+                ).order_by(CalendarEvent.start_time)
+                events = query.all()
+            except Exception:
+                self.db.rollback()
+                query = self.db.query(CalendarEvent).filter(
+                    *base_filters,
+                ).order_by(CalendarEvent.start_time)
+                events = query.all()
 
             return [self._transform_calendar_event(e) for e in events], None
 
         except Exception as e:
-            logger.error(f"Failed to fetch calendar events: {e}", exc_info=True)
+            logger.warning(f"Failed to fetch calendar events: {e}")
             return [], f"calendar: {str(e)}"
 
     def _fetch_appointments(
@@ -159,6 +176,62 @@ class UnifiedCalendarService:
         except Exception as e:
             logger.error(f"Failed to fetch appointments: {e}", exc_info=True)
             return [], f"scheduler: {str(e)}"
+
+    def _fetch_v2_appointments(
+        self, start_date: datetime, end_date: datetime, include_cancelled: bool
+    ) -> tuple[List[Dict], Optional[str]]:
+        """Fetch events from scheduler_appointments (v2) table."""
+        try:
+            from database.models.scheduler import Appointment, AppointmentStatus
+            from sqlalchemy import or_
+
+            query = self.db.query(Appointment).filter(
+                Appointment.organization_id == self.organization_id,
+                Appointment.scheduled_start >= start_date,
+                Appointment.scheduled_start <= end_date,
+                or_(
+                    Appointment.assigned_user_id == self.user_id,
+                    Appointment.created_by_user_id == self.user_id,
+                ),
+            )
+
+            if not include_cancelled:
+                query = query.filter(Appointment.status != AppointmentStatus.CANCELLED)
+
+            appointments = query.order_by(Appointment.scheduled_start).all()
+
+            return [self._transform_v2_appointment(a) for a in appointments], None
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch v2 appointments: {e}")
+            return [], f"scheduler_v2: {str(e)}"
+
+    def _transform_v2_appointment(self, appt) -> Dict[str, Any]:
+        """Transform v2 Appointment (scheduler_appointments) to unified format."""
+        meeting_mode = appt.meeting_mode.value if appt.meeting_mode else "video"
+        return {
+            "id": f"appt-{appt.id}",
+            "title": appt.title or f"Appointment with {appt.attendee_name or 'Client'}",
+            "description": appt.description or "",
+            "start_time": appt.scheduled_start.isoformat() if appt.scheduled_start else None,
+            "end_time": appt.scheduled_end.isoformat() if appt.scheduled_end else None,
+            "event_type": appt.meeting_type.value if appt.meeting_type else "meeting",
+            "location": appt.location or "",
+            "source": "scheduler",
+            "related_lead_id": appt.lead_id,
+            "related_loan_id": appt.loan_id,
+            "attendee_name": appt.attendee_name,
+            "attendee_email": appt.attendee_email,
+            "status": appt.status.value if appt.status else "scheduled",
+            "is_appointment": True,
+            "is_crm_event": False,
+            "appointment_id": appt.id,
+            "meeting_link": appt.video_link,
+            "duration_minutes": appt.duration_minutes,
+            "attendee_phone": appt.attendee_phone,
+            "assigned_user_id": appt.assigned_user_id,
+            "meeting_mode": meeting_mode.upper(),
+        }
 
     def _fetch_crm_events(
         self, start_date: datetime, end_date: datetime, include_cancelled: bool
