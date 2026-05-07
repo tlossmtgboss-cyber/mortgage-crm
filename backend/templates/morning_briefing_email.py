@@ -5,8 +5,14 @@ Renders BriefingContext into responsive HTML email with inline CSS.
 Level-aware: individual, manager, and leadership sections.
 """
 from __future__ import annotations
+import html
 from datetime import date
 from typing import Any, Dict, List, Optional
+
+
+def _esc(value) -> str:
+    """HTML-escape a database value for safe insertion into email HTML."""
+    return html.escape(str(value)) if value is not None else ""
 
 
 def _darken_hex(hex_color: str, factor: float = 0.15) -> str:
@@ -114,8 +120,8 @@ def render_briefing_email(
 
 <!-- Header -->
 <tr><td style="background:linear-gradient(135deg,{primary_color},{gradient_end});padding:28px 32px;">
-  {logo_html}<h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">Good morning, {user_name}</h1>
-  <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">{date_str}</p>
+  {logo_html}<h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">Good morning, {_esc(user_name)}</h1>
+  <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">{_esc(date_str)}</p>
 </td></tr>
 
 <!-- Content -->
@@ -125,7 +131,7 @@ def render_briefing_email(
 
 <!-- CTA -->
 <tr><td style="padding:0 32px 32px;" align="center">
-  <a href="{app_url}/dashboard" style="display:inline-block;background:{primary_color};color:#ffffff;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Open {company_name}</a>
+  <a href="{app_url}/dashboard" style="display:inline-block;background:{primary_color};color:#ffffff;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Open {_esc(company_name)}</a>
 </td></tr>
 
 <!-- Footer -->
@@ -149,7 +155,7 @@ def _section_priorities(narrative: str, brand_color: str = "#218d8d") -> str:
     for line in lines:
         line = line.strip()
         if line:
-            items_html += f'<p style="margin:8px 0;color:#1a1a2a;font-size:14px;line-height:1.6;">{line}</p>\n'
+            items_html += f'<p style="margin:8px 0;color:#1a1a2a;font-size:14px;line-height:1.6;">{_esc(line)}</p>\n'
 
     return f"""
 <h2 style="margin:0 0 12px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Top 3 Priorities</h2>
@@ -174,7 +180,7 @@ def _section_pipeline(pipeline: Dict, brand_color: str = "#218d8d") -> str:
 
     stage_rows = ""
     for stage, cnt in by_stage.items():
-        stage_rows += f'<tr><td style="padding:6px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;color:#4a4a5a;">{stage}</td><td style="padding:6px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;color:#1a1a2a;font-weight:600;text-align:right;">{cnt}</td></tr>\n'
+        stage_rows += f'<tr><td style="padding:6px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;color:#4a4a5a;">{_esc(stage)}</td><td style="padding:6px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;color:#1a1a2a;font-weight:600;text-align:right;">{_esc(cnt)}</td></tr>\n'
 
     return f"""
 <h2 style="margin:0 0 8px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Pipeline Snapshot</h2>
@@ -187,7 +193,7 @@ def _section_pipeline(pipeline: Dict, brand_color: str = "#218d8d") -> str:
 def _section_at_risk(items: List[Dict]) -> str:
     rows = ""
     for item in items:
-        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{item["borrower"]}</strong> ({item.get("loan_number", "")}) — {item["reason"]}</li>\n'
+        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{_esc(item["borrower"])}</strong> ({_esc(item.get("loan_number", ""))}) — {_esc(item["reason"])}</li>\n'
     return f"""
 <h2 style="margin:20px 0 8px;color:#e74c3c;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">&#9888; At-Risk ({len(items)} loans)</h2>
 <ul style="margin:0;padding-left:20px;">{rows}</ul>"""
@@ -196,7 +202,7 @@ def _section_at_risk(items: List[Dict]) -> str:
 def _section_stale_leads(items: List[Dict]) -> str:
     rows = ""
     for item in items:
-        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{item["name"]}</strong> (score {item.get("score", "?")}) — {item["days_silent"]:.0f} days quiet</li>\n'
+        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{_esc(item["name"])}</strong> (score {_esc(item.get("score", "?"))}) — {item["days_silent"]:.0f} days quiet</li>\n'
     return f"""
 <h2 style="margin:20px 0 8px;color:#f39c12;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">&#128293; Leads Going Cold ({len(items)})</h2>
 <ul style="margin:0;padding-left:20px;">{rows}</ul>"""
@@ -205,7 +211,7 @@ def _section_stale_leads(items: List[Dict]) -> str:
 def _section_appointments(items: List[Dict], brand_color: str = "#218d8d") -> str:
     rows = ""
     for item in items:
-        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{item["time"]}</strong> — {item["attendee"]}, {item["type"]}</li>\n'
+        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{_esc(item["time"])}</strong> — {_esc(item["attendee"])}, {_esc(item["type"])}</li>\n'
     return f"""
 <h2 style="margin:20px 0 8px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">&#128197; Today's Appointments ({len(items)})</h2>
 <ul style="margin:0;padding-left:20px;">{rows}</ul>"""
@@ -215,7 +221,7 @@ def _section_conditions(items: List[Dict]) -> str:
     rows = ""
     for item in items:
         pd = ' <span style="color:#e74c3c;font-weight:700;">PAST DUE</span>' if item.get("past_due") else ""
-        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;">{item["title"]} on {item.get("loan_number", "")}{pd}</li>\n'
+        rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;">{_esc(item["title"])} on {_esc(item.get("loan_number", ""))}{pd}</li>\n'
     return f"""
 <h2 style="margin:20px 0 8px;color:#8e44ad;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Pending Conditions ({len(items)})</h2>
 <ul style="margin:0;padding-left:20px;">{rows}</ul>"""
@@ -237,17 +243,17 @@ def _section_team(team: Dict, brand_color: str = "#218d8d") -> str:
         if m.get("at_risk_count", 0) > 0:
             detail = f' &middot; {m["at_risk_count"]} at-risk'
         member_rows += f'''<tr>
-<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;">{health} {m["name"]}</td>
-<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;">{m.get("loan_count", 0)}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;">{health} {_esc(m["name"])}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;">{_esc(m.get("loan_count", 0))}</td>
 <td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;">${m.get("volume", 0):,.0f}</td>
-<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;color:#8888a0;">{m.get("health", "green")}{detail}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;color:#8888a0;">{_esc(m.get("health", "green"))}{detail}</td>
 </tr>\n'''
 
     attention_html = ""
     if attention:
         items = ""
         for a in attention:
-            items += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{a["user_name"]}</strong> — {a["issue"]}</li>\n'
+            items += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{_esc(a["user_name"])}</strong> — {_esc(a["issue"])}</li>\n'
         attention_html = f"""
 <h3 style="margin:16px 0 8px;color:#e74c3c;font-size:13px;font-weight:700;text-transform:uppercase;">Team Attention Needed</h3>
 <ul style="margin:0;padding-left:20px;">{items}</ul>"""
@@ -276,16 +282,16 @@ def _section_org(team: Dict, brand_color: str = "#218d8d") -> str:
     for b in branches:
         health = _health_dot(b.get("health", "green"))
         branch_rows += f'''<tr>
-<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;">{health} {b["name"]}</td>
-<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;">{b.get("loan_count", 0)}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;">{health} {_esc(b["name"])}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;">{_esc(b.get("loan_count", 0))}</td>
 <td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;">${b.get("volume", 0):,.0f}</td>
-<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;color:#8888a0;">{b.get("health", "green")}</td>
+<td style="padding:8px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;text-align:right;color:#8888a0;">{_esc(b.get("health", "green"))}</td>
 </tr>\n'''
 
     risk_items = ""
     if risks:
         for r in risks:
-            risk_items += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{r["borrower"]}</strong> ({r["branch"]}, LO: {r["lo_name"]}) — {r["issue"]}</li>\n'
+            risk_items += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{_esc(r["borrower"])}</strong> ({_esc(r["branch"])}, LO: {_esc(r["lo_name"])}) — {_esc(r["issue"])}</li>\n'
 
     risk_section = ""
     if risk_items:
