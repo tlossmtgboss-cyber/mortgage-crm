@@ -501,7 +501,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         logger.info(f"Activity created: {db_activity.type.value}")
         return db_activity
 
-    @app.get("/api/v1/activities/", response_model=List[ActivityResponse])
+    @app.get("/api/v1/activities/")
     async def get_activities(
         skip: int = 0,
         limit: int = 100,
@@ -511,17 +511,33 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
     ):
-        query = db.query(Activity).filter(Activity.user_id == current_user.id)
-
+        from sqlalchemy import text
+        filters = ["user_id = :uid"]
+        params: dict = {"uid": current_user.id, "lim": limit, "off": skip}
         if lead_id:
-            query = query.filter(Activity.lead_id == lead_id)
+            filters.append("lead_id = :lead_id")
+            params["lead_id"] = lead_id
         if loan_id:
-            query = query.filter(Activity.loan_id == loan_id)
+            filters.append("loan_id = :loan_id")
+            params["loan_id"] = loan_id
         if mum_client_id:
-            query = query.filter(Activity.mum_client_id == mum_client_id)
+            filters.append("mum_client_id = :mum_id")
+            params["mum_id"] = mum_client_id
 
-        activities = query.order_by(Activity.created_at.desc()).offset(skip).limit(limit).all()
-        return activities
+        where = " AND ".join(filters)
+        rows = db.execute(text(
+            f"SELECT id, type, content, lead_id, loan_id, mum_client_id, "
+            f"sentiment, created_at FROM activities WHERE {where} "
+            f"ORDER BY created_at DESC LIMIT :lim OFFSET :off"
+        ), params).fetchall()
+        return [
+            {
+                "id": r[0], "type": r[1], "content": r[2],
+                "lead_id": r[3], "loan_id": r[4], "mum_client_id": r[5],
+                "sentiment": r[6], "created_at": r[7],
+            }
+            for r in rows
+        ]
 
     @app.delete("/api/v1/activities/{activity_id}", status_code=204)
     async def delete_activity(activity_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

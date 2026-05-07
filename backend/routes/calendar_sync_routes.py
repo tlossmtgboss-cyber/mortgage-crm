@@ -961,7 +961,7 @@ async def create_calendar_event(
     return db_event
 
 
-@calendar_v1_router.get("/api/v1/calendar/events", response_model=List[CalendarEventResponse])
+@calendar_v1_router.get("/api/v1/calendar/events")
 async def get_calendar_events(
     skip: int = 0,
     limit: int = 100,
@@ -971,17 +971,31 @@ async def get_calendar_events(
     current_user=Depends(_get_current_user_dep())
 ):
     """Get calendar events with optional date filtering"""
-    models = _get_models()
-    CalendarEvent = models['CalendarEvent']
-
-    query = db.query(CalendarEvent).filter(CalendarEvent.user_id == current_user.id)
+    filters = ["user_id = :uid"]
+    params: dict = {"uid": current_user.id, "lim": limit, "off": skip}
     if start_date:
-        query = query.filter(CalendarEvent.start_time >= start_date)
+        filters.append("start_time >= :sd")
+        params["sd"] = start_date
     if end_date:
-        query = query.filter(CalendarEvent.start_time <= end_date)
+        filters.append("start_time <= :ed")
+        params["ed"] = end_date
 
-    events = query.order_by(CalendarEvent.start_time).offset(skip).limit(limit).all()
-    return events
+    where = " AND ".join(filters)
+    rows = db.execute(text(
+        f"SELECT id, title, description, start_time, end_time, all_day, "
+        f"location, event_type, status, lead_id, loan_id, created_at "
+        f"FROM calendar_events WHERE {where} "
+        f"ORDER BY start_time LIMIT :lim OFFSET :off"
+    ), params).fetchall()
+    return [
+        {
+            "id": r[0], "title": r[1], "description": r[2],
+            "start_time": r[3], "end_time": r[4], "all_day": r[5] or False,
+            "location": r[6], "event_type": r[7], "status": r[8] or "scheduled",
+            "lead_id": r[9], "loan_id": r[10], "created_at": r[11],
+        }
+        for r in rows
+    ]
 
 
 @calendar_v1_router.get("/api/v1/calendar/events/{event_id}", response_model=CalendarEventResponse)
