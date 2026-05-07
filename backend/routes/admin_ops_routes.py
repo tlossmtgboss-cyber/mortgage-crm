@@ -3105,4 +3105,26 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 counts[name] = db.execute(text(sql)).scalar()
             except Exception as e:
                 counts[name] = f"ERROR: {e}"
-        return {"org_id": oid, "user_id": uid, "counts": counts}
+        samples = {}
+        try:
+            rows = db.execute(text(
+                f"SELECT id, type, content FROM activities WHERE user_id = {uid} LIMIT 2"
+            )).fetchall()
+            samples["activities"] = [{"id": r[0], "type": r[1], "content": r[2][:60]} for r in rows]
+        except Exception as e:
+            samples["activities"] = f"ERROR: {e}"
+        try:
+            rows = db.execute(text(
+                f"SELECT id, title, event_type, start_time FROM calendar_events WHERE user_id = {uid} LIMIT 2"
+            )).fetchall()
+            samples["calendar_events"] = [{"id": r[0], "title": r[1], "type": r[2], "start": str(r[3])} for r in rows]
+        except Exception as e:
+            samples["calendar_events"] = f"ERROR: {e}"
+        try:
+            rows = db.execute(text(
+                f"SELECT id, borrower_name, stage FROM loans WHERE organization_id = {oid} LIMIT 2"
+            )).fetchall()
+            samples["loans"] = [{"id": r[0], "borrower": r[1], "stage": r[2]} for r in rows]
+        except Exception as e:
+            samples["loans"] = f"ERROR: {e}"
+        return {"org_id": oid, "user_id": uid, "counts": counts, "samples": samples}
