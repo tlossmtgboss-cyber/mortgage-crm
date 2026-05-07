@@ -233,7 +233,7 @@ class ElevenLabsTTSClient:
                 if response.status_code != 200:
                     error_text = await response.aread()
                     logger.error(f"[ElevenLabsTTS] Error: {response.status_code} - {error_text}")
-                    return
+                    raise RuntimeError(f"ElevenLabs returned {response.status_code}")
 
                 async for chunk in response.aiter_bytes(chunk_size=4096):
                     yield chunk
@@ -274,8 +274,8 @@ class OpenAITTSClient:
             response = await client.post(url, json=payload, headers=headers, timeout=30.0)
 
             if response.status_code != 200:
-                logger.error(f"[OpenAITTS] Error: {response.status_code}")
-                return b""
+                logger.error(f"[OpenAITTS] Error: {response.status_code} - {response.text[:200]}")
+                raise RuntimeError(f"OpenAI TTS returned {response.status_code}")
 
             return response.content
 
@@ -1078,16 +1078,25 @@ async def synthesize_text(request: Request, db: Session = Depends(get_db)):
     try:
         audio = await tts.synthesize(text)
 
-        logger.info(f"[TTS] Synthesized with provider={provider}, voice_id={voice_id}")
+        if not audio:
+            logger.error(f"[TTS] Provider returned empty audio (provider={type(tts).__name__})")
+            raise HTTPException(502, "TTS provider returned empty audio")
+
+        logger.info(
+            f"[TTS] Synthesized {len(audio)} bytes "
+            f"(client={type(tts).__name__}, provider_param={provider}, voice_id={voice_id})"
+        )
 
         return {
             "audio": base64.b64encode(audio).decode("utf-8"),
             "format": "mp3"
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"[TTS] Error: {e}")
-        raise HTTPException(500, "TTS synthesis failed")
+        logger.error(f"[TTS] Error: {e}", exc_info=True)
+        raise HTTPException(502, f"TTS synthesis failed: {type(e).__name__}")
 
 
 @router.get("/voices")

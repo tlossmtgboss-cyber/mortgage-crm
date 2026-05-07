@@ -95,12 +95,26 @@ function DisconnectIcon() {
 // LiveKit Voice Agent UI — renders inside LiveKitRoom context
 // ---------------------------------------------------------------------------
 
-function LiveKitVoiceUI({ onDisconnect, ciPanelOpen, setCiPanelOpen }) {
+function LiveKitVoiceUI({ onDisconnect, onAgentMissing, ciPanelOpen, setCiPanelOpen }) {
   const voiceAssistant = useVoiceAssistant();
   const room = useRoomContext();
 
   // Map LiveKit agent state to our UI states
   const agentState = voiceAssistant?.state || 'idle';
+
+  // Watchdog: if no agent audio track shows up within 8s of connecting,
+  // assume the aria-voice worker isn't running (or Cartesia is misconfigured)
+  // and fall back to SSE mode so the user gets a working assistant.
+  useEffect(() => {
+    if (voiceAssistant?.audioTrack) return;
+    const t = setTimeout(() => {
+      if (!voiceAssistant?.audioTrack) {
+        console.warn('[LiveKit] No agent audio track after 8s — falling back to SSE');
+        onAgentMissing?.();
+      }
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [voiceAssistant?.audioTrack, onAgentMissing]);
 
   // voiceAssistant.state can be: 'idle' | 'listening' | 'thinking' | 'speaking'
   const voiceState = (() => {
@@ -239,28 +253,35 @@ function unlockAudioPlayback() {
 
 function _speakViaBrowser(text, abortedRef) {
   return new Promise((resolve) => {
-    if (!window.speechSynthesis) { resolve(); return; }
+    if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+      resolve(false);
+      return;
+    }
     try {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
-      utterance.onend = resolve;
-      utterance.onerror = resolve;
-      if (abortedRef?.()) { resolve(); return; }
+      let settled = false;
+      const finish = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+      utterance.onend = () => finish(true);
+      utterance.onerror = () => finish(false);
+      if (abortedRef?.()) { finish(false); return; }
       window.speechSynthesis.speak(utterance);
     } catch {
-      resolve();
+      resolve(false);
     }
   });
 }
 
 class TTSQueue {
-  constructor() {
+  constructor({ onFailure } = {}) {
     this._queue = [];
     this._playing = false;
     this._aborted = false;
     this._currentBlobUrl = null;
     this._onAllDone = null;
+    this._onFailure = onFailure;
+    this._failureNotified = false;
   }
 
   enqueue(text) {
@@ -319,12 +340,22 @@ class TTSQueue {
       playedViaApi = playOk;
     } catch (err) {
       if (this._aborted) return;
-      console.warn('[TTSQueue] TTS API failed:', err.message);
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail || err?.message || 'unknown';
+      console.warn(`[TTSQueue] TTS API failed (status=${status}):`, detail);
+      if (!this._failureNotified && this._onFailure) {
+        this._failureNotified = true;
+        this._onFailure({ status, detail });
+      }
     }
     if (!this._aborted && !playedViaApi) {
       // Fall through to browser speechSynthesis when API failed OR audio
       // playback was blocked (mobile autoplay policy).
-      await _speakViaBrowser(text, () => this._aborted);
+      const spokeOk = await _speakViaBrowser(text, () => this._aborted);
+      if (!spokeOk && !this._failureNotified && this._onFailure) {
+        this._failureNotified = true;
+        this._onFailure({ status: 0, detail: 'Audio playback blocked and no speech synthesis available' });
+      }
     }
     if (!this._aborted) this._playNext();
   }
@@ -488,7 +519,18 @@ export default function AriaVoiceHome() {
     streamRef.current?.abort();
     ttsQueueRef.current?.stop();
 
-    const queue = new TTSQueue();
+    const queue = new TTSQueue({
+      onFailure: ({ status, detail }) => {
+        const msg = status === 502
+          ? 'Voice service is down — showing text response.'
+          : status === 401
+            ? 'Voice service auth error — showing text response.'
+            : `Audio failed (${detail || 'unknown'}) — showing text response.`;
+        clearTimeout(actionToastTimerRef.current);
+        setActionToast(msg);
+        actionToastTimerRef.current = setTimeout(() => setActionToast(null), 8000);
+      },
+    });
     ttsQueueRef.current = queue;
     queue.onAllDone(() => {
       setVoiceState('idle');
@@ -663,6 +705,11 @@ export default function AriaVoiceHome() {
       {lkConnected && LiveKitRoom && lkToken && lkUrl ? (
         <LiveKitVoiceUI
           onDisconnect={disconnectLiveKit}
+          onAgentMissing={() => {
+            disconnectLiveKit();
+            setLkAvailable(false);
+            setLkError('Voice agent unavailable — using text-to-speech mode');
+          }}
           ciPanelOpen={ciPanelOpen}
           setCiPanelOpen={setCiPanelOpen}
         />
