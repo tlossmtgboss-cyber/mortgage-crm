@@ -206,33 +206,41 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 # ============================================================================
 # IN-MEMORY CACHE FOR BLAZING FAST RETRIEVAL
 # ============================================================================
-# Simple TTL cache for expensive endpoints
+# Thread-safe TTL cache for expensive endpoints
+import asyncio as _asyncio
 _cache: Dict[str, Dict[str, Any]] = {}
+_cache_lock = _asyncio.Lock()
 CACHE_TTL_SECONDS = 30  # 30-second cache for dashboard data
 MAX_CACHE_SIZE = 1000
 
 def get_cached(key: str) -> Optional[Any]:
-    """Get cached value if not expired"""
-    if key in _cache:
-        entry = _cache[key]
+    """Get cached value if not expired (read path is lock-free for performance)"""
+    entry = _cache.get(key)
+    if entry is not None:
         if time.time() - entry['timestamp'] < CACHE_TTL_SECONDS:
             return entry['data']
-        del _cache[key]
     return None
 
-def set_cached(key: str, data: Any) -> None:
-    """Set cache entry with timestamp"""
-    # Evict oldest entries if cache is full
-    if len(_cache) >= MAX_CACHE_SIZE:
-        # Remove expired entries first
-        now = time.time()
-        expired = [k for k, v in _cache.items() if now - v['timestamp'] > CACHE_TTL_SECONDS]
-        for k in expired:
-            del _cache[k]
-        # If still full, remove oldest
+async def set_cached(key: str, data: Any) -> None:
+    """Set cache entry with timestamp (async-safe)"""
+    async with _cache_lock:
         if len(_cache) >= MAX_CACHE_SIZE:
-            oldest_key = min(_cache, key=lambda k: _cache[k]['timestamp'])
-            del _cache[oldest_key]
+            now = time.time()
+            expired = [k for k, v in _cache.items() if now - v['timestamp'] > CACHE_TTL_SECONDS]
+            for k in expired:
+                del _cache[k]
+            if len(_cache) >= MAX_CACHE_SIZE:
+                oldest_key = min(_cache, key=lambda k: _cache[k]['timestamp'])
+                del _cache[oldest_key]
+        _cache[key] = {'data': data, 'timestamp': time.time()}
+
+def set_cached_sync(key: str, data: Any) -> None:
+    """Sync version for non-async callers"""
+    if len(_cache) >= MAX_CACHE_SIZE:
+        now = time.time()
+        keys_to_delete = [k for k, v in _cache.items() if now - v['timestamp'] > CACHE_TTL_SECONDS]
+        for k in keys_to_delete:
+            _cache.pop(k, None)
     _cache[key] = {'data': data, 'timestamp': time.time()}
 
 def clear_cache(prefix: str = None) -> None:
@@ -887,11 +895,15 @@ async def get_current_user(
                 ApiKey.is_active == True
             ).first()
             if api_key:
-                # Auto-migrate: hash the key and clear plaintext
-                api_key.key_hash = token_hash
-                api_key.key_prefix = token[:8]
-                api_key.key = None
-                db.commit()
+                # Auto-migrate with row lock to prevent race condition
+                api_key = db.query(ApiKey).filter(
+                    ApiKey.id == api_key.id
+                ).with_for_update().first()
+                if api_key and api_key.key is not None:
+                    api_key.key_hash = token_hash
+                    api_key.key_prefix = token[:8]
+                    api_key.key = None
+                    db.commit()
 
         if api_key is None:
             raise credentials_exception
@@ -1057,11 +1069,15 @@ async def get_current_user_flexible(
                 ApiKey.is_active == True
             ).first()
             if api_key:
-                # Auto-migrate: hash the key and clear plaintext
-                api_key.key_hash = header_hash
-                api_key.key_prefix = api_key_header[:8]
-                api_key.key = None
-                db.commit()
+                # Auto-migrate with row lock to prevent race condition
+                api_key = db.query(ApiKey).filter(
+                    ApiKey.id == api_key.id
+                ).with_for_update().first()
+                if api_key and api_key.key is not None:
+                    api_key.key_hash = header_hash
+                    api_key.key_prefix = api_key_header[:8]
+                    api_key.key = None
+                    db.commit()
 
         if api_key:
             # Check API key expiration
@@ -1155,11 +1171,15 @@ async def get_current_user_flexible(
                 ApiKey.is_active == True
             ).first()
             if api_key:
-                # Auto-migrate: hash the key and clear plaintext
-                api_key.key_hash = token_hash
-                api_key.key_prefix = token[:8]
-                api_key.key = None
-                db.commit()
+                # Auto-migrate with row lock to prevent race condition
+                api_key = db.query(ApiKey).filter(
+                    ApiKey.id == api_key.id
+                ).with_for_update().first()
+                if api_key and api_key.key is not None:
+                    api_key.key_hash = token_hash
+                    api_key.key_prefix = token[:8]
+                    api_key.key = None
+                    db.commit()
 
         if api_key is None:
             raise credentials_exception
@@ -3367,6 +3387,8 @@ try:
             ("created_by_user_id", "INTEGER REFERENCES users(id)"),
             ("last_contact_at", "TIMESTAMPTZ"),
         ]
+        # SAFETY: _col_name and _col_type come from the hardcoded _cf_columns list
+        # above (never from user input). Table name "client_files" is a literal.
         with engine.connect() as _cf_col_conn:
             for _col_name, _col_type in _cf_columns:
                 _cf_col_conn.execute(_sa_cf_text(
@@ -3377,26 +3399,25 @@ try:
     except Exception as _cf_col_err:
         logger.warning("Could not add client_file columns: %s", _cf_col_err)
 
-    # Enable RLS on the 6 new tables
-    try:
-        _rls_expr = "organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER"
-        from sqlalchemy import text as _sa_text
-        with engine.connect() as _rls_conn:
-            for _tbl in ["client_files", "client_file_collaborators",
-                         "team_chat_channels", "team_chat_messages",
-                         "team_chat_reactions", "team_chat_reads"]:
-                _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} ENABLE ROW LEVEL SECURITY"))
-                _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} FORCE ROW LEVEL SECURITY"))
-                _rls_conn.execute(_sa_text(
-                    f"DO $$ BEGIN "
-                    f"CREATE POLICY {_tbl}_org_isolation ON {_tbl} "
-                    f"USING ({_rls_expr}) WITH CHECK ({_rls_expr}); "
-                    f"EXCEPTION WHEN duplicate_object THEN NULL; END $$"
-                ))
-            _rls_conn.commit()
-        logger.info("Client File + Team Chat RLS policies verified/created")
-    except Exception as _rls_err:
-        logger.warning(f"Could not set RLS on client_file/team_chat tables: {_rls_err}")
+    # Enable RLS on the 6 new tables — failure here is CRITICAL (tenant data leak)
+    # SAFETY: _tbl values are hardcoded string literals in the list below (never
+    # from user input). _rls_expr is a hardcoded SQL fragment.
+    _rls_expr = "organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER"
+    from sqlalchemy import text as _sa_text
+    with engine.connect() as _rls_conn:
+        for _tbl in ["client_files", "client_file_collaborators",
+                     "team_chat_channels", "team_chat_messages",
+                     "team_chat_reactions", "team_chat_reads"]:
+            _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} ENABLE ROW LEVEL SECURITY"))
+            _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} FORCE ROW LEVEL SECURITY"))
+            _rls_conn.execute(_sa_text(
+                f"DO $$ BEGIN "
+                f"CREATE POLICY {_tbl}_org_isolation ON {_tbl} "
+                f"USING ({_rls_expr}) WITH CHECK ({_rls_expr}); "
+                f"EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            ))
+        _rls_conn.commit()
+    logger.info("Client File + Team Chat RLS policies verified/created")
 
     # Create enum types if they don't exist
     try:
@@ -3428,6 +3449,16 @@ except Exception as _cf_err:
     logger.warning(f"Client File + Team Chat table setup: {_cf_err}")
 
 # ============================================================================
+# GDPR ERASURE REQUEST TABLE
+# ============================================================================
+try:
+    from database.models.gdpr import ErasureRequest
+    ErasureRequest.__table__.create(engine, checkfirst=True)
+    logger.info("GDPR erasure_requests table verified/created")
+except Exception as _gdpr_err:
+    logger.warning(f"GDPR erasure_requests table setup: {_gdpr_err}")
+
+# ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account
 # Remove after demo account is created
 # Gated to non-production environments only.
@@ -3437,6 +3468,11 @@ except Exception as _cf_err:
 async def seed_demo_account(request: Request):
     """One-time endpoint to create App Store review demo account. Protected by SECRET_KEY."""
     import secrets as _secrets_mod
+
+    # Block in production
+    _env = os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower()
+    if _env == "production":
+        raise HTTPException(status_code=403, detail="Seed endpoint disabled in production")
 
     body = await request.json()
     auth = (body.get("key", "") or "").strip()

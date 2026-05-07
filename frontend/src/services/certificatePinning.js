@@ -43,8 +43,8 @@ import { getToken } from '../utils/tokenStore';
  * Set REACT_APP_DISABLE_CERT_PINNING=true in .env.local to bypass.
  */
 const PINNING_DISABLED =
-  process.env.REACT_APP_DISABLE_CERT_PINNING === 'true' ||
-  process.env.NODE_ENV === 'development';
+  import.meta.env.VITE_DISABLE_CERT_PINNING === 'true' ||
+  import.meta.env.DEV;
 
 /**
  * Pinned domains and their expected SPKI SHA-256 hashes.
@@ -328,7 +328,7 @@ async function flushFailureReports() {
 function getAppVersion() {
   try {
     // Capacitor config appVersion or fallback
-    return process.env.REACT_APP_VERSION || '1.0.0';
+    return import.meta.env.VITE_APP_VERSION || '1.0.0';
   } catch {
     return 'unknown';
   }

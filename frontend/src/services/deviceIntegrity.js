@@ -327,7 +327,7 @@ async function reportIntegrityResult(result) {
         riskLevel: result.riskLevel,
         platform: result.platform,
         timestamp: result.timestamp,
-        appVersion: process.env.REACT_APP_VERSION || 'unknown',
+        appVersion: import.meta.env.VITE_APP_VERSION || 'unknown',
       }),
     });
   } catch (error) {

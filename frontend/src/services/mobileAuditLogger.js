@@ -132,7 +132,7 @@ async function resolveAppVersion() {
     }
   }
   // Fallback to REACT_APP env or hardcoded from package.json
-  return process.env.REACT_APP_VERSION || '1.0.2';
+  return import.meta.env.VITE_APP_VERSION || '1.0.2';
 }
 
 // ---------------------------------------------------------------------------

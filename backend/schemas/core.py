@@ -6,6 +6,7 @@ Contains all request/response schemas used by API endpoints.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 import enum
@@ -69,20 +70,18 @@ def _validate_credit_score_optional(score: Optional[int]) -> Optional[int]:
     return _canonical_validate_credit_score(score)
 
 
-def _validate_loan_amount_optional(amount: Optional[float]) -> Optional[float]:
-    """Validate loan amount ($1K-$50M) or return None."""
+def _validate_loan_amount_optional(amount) -> Optional[Decimal]:
+    """Validate loan amount ($1K-$50M) or return None. Returns Decimal."""
     if amount is None:
         return None
-    validated = _canonical_validate_loan_amount(amount)
-    return float(validated)
+    return _canonical_validate_loan_amount(amount)
 
 
-def _validate_interest_rate_optional(rate: Optional[float]) -> Optional[float]:
-    """Validate interest rate (0.1%-30%) or return None."""
+def _validate_interest_rate_optional(rate) -> Optional[Decimal]:
+    """Validate interest rate (0.1%-30%) or return None. Returns Decimal."""
     if rate is None:
         return None
-    validated = _canonical_validate_interest_rate(rate)
-    return float(validated)
+    return _canonical_validate_interest_rate(rate)
 
 
 def _sanitize_text_optional(text: Optional[str], max_length: int = 5000) -> Optional[str]:
@@ -156,7 +155,7 @@ class LeadCreate(BaseModel):
     phone: Optional[str] = None
     source: Optional[str] = None
     loan_type: Optional[str] = None
-    preapproval_amount: Optional[float] = None
+    preapproval_amount: Optional[Decimal] = None
     credit_score: Optional[int] = None
     # Property Information
     address: Optional[str] = None
@@ -164,22 +163,22 @@ class LeadCreate(BaseModel):
     state: Optional[str] = None
     zip_code: Optional[str] = None
     property_type: Optional[str] = None
-    property_value: Optional[float] = None
-    down_payment: Optional[float] = None
+    property_value: Optional[Decimal] = None
+    down_payment: Optional[Decimal] = None
     # Financial Information
     employment_status: Optional[str] = None
     employer_name: Optional[str] = None
-    annual_income: Optional[float] = None
-    monthly_debts: Optional[float] = None
+    annual_income: Optional[Decimal] = None
+    monthly_debts: Optional[Decimal] = None
     first_time_buyer: Optional[bool] = False
     # Loan Information
     loan_number: Optional[str] = None
     # Loan Details
-    loan_amount: Optional[float] = None
-    interest_rate: Optional[float] = None
+    loan_amount: Optional[Decimal] = None
+    interest_rate: Optional[Decimal] = None
     loan_term: Optional[int] = None
-    apr: Optional[float] = None
-    points: Optional[float] = None
+    apr: Optional[Decimal] = None
+    points: Optional[Decimal] = None
     lock_date: Optional[datetime] = None
     lock_expiration: Optional[datetime] = None
     closing_date: Optional[datetime] = None
@@ -187,9 +186,9 @@ class LeadCreate(BaseModel):
     loan_officer: Optional[str] = None
     processor: Optional[str] = None
     underwriter: Optional[str] = None
-    appraisal_value: Optional[float] = None
-    ltv: Optional[float] = None
-    dti: Optional[float] = None
+    appraisal_value: Optional[Decimal] = None
+    ltv: Optional[Decimal] = None
+    dti: Optional[Decimal] = None
     # Notes
     notes: Optional[str] = None
     # Metadata (for assets, etc.)
@@ -283,24 +282,24 @@ class LeadUpdate(BaseModel):
     state: Optional[str] = None
     zip_code: Optional[str] = None
     property_type: Optional[str] = None
-    property_value: Optional[float] = None
-    down_payment: Optional[float] = None
+    property_value: Optional[Decimal] = None
+    down_payment: Optional[Decimal] = None
     # Financial Information
     credit_score: Optional[int] = None
     employment_status: Optional[str] = None
     employer_name: Optional[str] = None
-    annual_income: Optional[float] = None
-    monthly_debts: Optional[float] = None
+    annual_income: Optional[Decimal] = None
+    monthly_debts: Optional[Decimal] = None
     first_time_buyer: Optional[bool] = None
     loan_type: Optional[str] = None
-    preapproval_amount: Optional[float] = None
+    preapproval_amount: Optional[Decimal] = None
     source: Optional[str] = None
     # Loan Details
-    loan_amount: Optional[float] = None
-    interest_rate: Optional[float] = None
+    loan_amount: Optional[Decimal] = None
+    interest_rate: Optional[Decimal] = None
     loan_term: Optional[int] = None
-    apr: Optional[float] = None
-    points: Optional[float] = None
+    apr: Optional[Decimal] = None
+    points: Optional[Decimal] = None
     lock_date: Optional[datetime] = None
     lock_expiration: Optional[datetime] = None
     closing_date: Optional[datetime] = None
@@ -308,35 +307,35 @@ class LeadUpdate(BaseModel):
     loan_officer: Optional[str] = None
     processor: Optional[str] = None
     underwriter: Optional[str] = None
-    appraisal_value: Optional[float] = None
-    ltv: Optional[float] = None
-    dti: Optional[float] = None
-    purchase_price: Optional[float] = None
+    appraisal_value: Optional[Decimal] = None
+    ltv: Optional[Decimal] = None
+    dti: Optional[Decimal] = None
+    purchase_price: Optional[Decimal] = None
     # Salesforce Sync Fields
-    cltv: Optional[float] = None
+    cltv: Optional[Decimal] = None
     occupancy_type: Optional[str] = None
     property_county: Optional[str] = None
     property_ownership_type: Optional[str] = None
     property_units: Optional[int] = None
     rate_type: Optional[str] = None
-    monthly_payment: Optional[float] = None
-    property_tax: Optional[float] = None
-    hazard_insurance: Optional[float] = None
-    mortgage_insurance: Optional[float] = None
-    hoa_amount: Optional[float] = None
-    origination_fee: Optional[float] = None
-    estimated_prepaid_interest: Optional[float] = None
-    index_rate: Optional[float] = None
-    margin: Optional[float] = None
+    monthly_payment: Optional[Decimal] = None
+    property_tax: Optional[Decimal] = None
+    hazard_insurance: Optional[Decimal] = None
+    mortgage_insurance: Optional[Decimal] = None
+    hoa_amount: Optional[Decimal] = None
+    origination_fee: Optional[Decimal] = None
+    estimated_prepaid_interest: Optional[Decimal] = None
+    index_rate: Optional[Decimal] = None
+    margin: Optional[Decimal] = None
     loan_purpose: Optional[str] = None
     file_state: Optional[str] = None
-    second_loan_amount: Optional[float] = None
-    second_loan_rate: Optional[float] = None
-    second_loan_payment: Optional[float] = None
-    present_housing_expense: Optional[float] = None
-    proposed_housing_expense: Optional[float] = None
-    present_monthly_payment: Optional[float] = None
-    proposed_monthly_payment: Optional[float] = None
+    second_loan_amount: Optional[Decimal] = None
+    second_loan_rate: Optional[Decimal] = None
+    second_loan_payment: Optional[Decimal] = None
+    present_housing_expense: Optional[Decimal] = None
+    proposed_housing_expense: Optional[Decimal] = None
+    present_monthly_payment: Optional[Decimal] = None
+    proposed_monthly_payment: Optional[Decimal] = None
     # SLA Milestone Dates
     lead_received_date: Optional[datetime] = None
     first_contact_attempt_date: Optional[datetime] = None
@@ -370,30 +369,30 @@ class LeadResponse(BaseModel):
     ai_score: int
     sentiment: Optional[str]
     next_action: Optional[str]
-    preapproval_amount: Optional[float]
+    preapproval_amount: Optional[Decimal]
     # Property Information
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     zip_code: Optional[str] = None
     property_type: Optional[str] = None
-    property_value: Optional[float] = None
-    down_payment: Optional[float] = None
+    property_value: Optional[Decimal] = None
+    down_payment: Optional[Decimal] = None
     # Financial Information
     credit_score: Optional[int] = None
     employment_status: Optional[str] = None
-    annual_income: Optional[float] = None
-    monthly_debts: Optional[float] = None
+    annual_income: Optional[Decimal] = None
+    monthly_debts: Optional[Decimal] = None
     first_time_buyer: Optional[bool] = False
     # Loan Information
     loan_number: Optional[str] = None
     loan_type: Optional[str] = None
     # Loan Details
-    loan_amount: Optional[float] = None
-    interest_rate: Optional[float] = None
+    loan_amount: Optional[Decimal] = None
+    interest_rate: Optional[Decimal] = None
     loan_term: Optional[int] = None
-    apr: Optional[float] = None
-    points: Optional[float] = None
+    apr: Optional[Decimal] = None
+    points: Optional[Decimal] = None
     lock_date: Optional[datetime] = None
     lock_expiration: Optional[datetime] = None
     closing_date: Optional[datetime] = None
@@ -401,9 +400,9 @@ class LeadResponse(BaseModel):
     loan_officer: Optional[str] = None
     processor: Optional[str] = None
     underwriter: Optional[str] = None
-    appraisal_value: Optional[float] = None
-    ltv: Optional[float] = None
-    dti: Optional[float] = None
+    appraisal_value: Optional[Decimal] = None
+    ltv: Optional[Decimal] = None
+    dti: Optional[Decimal] = None
     notes: Optional[str] = None
     # SLA Milestone Dates
     lead_received_date: Optional[datetime] = None
@@ -431,31 +430,31 @@ class LeadResponse(BaseModel):
 
     # Salesforce Sync Fields - 1st Loan Financial Details
     rate_type: Optional[str] = None
-    monthly_payment: Optional[float] = None
-    property_tax: Optional[float] = None
-    hazard_insurance: Optional[float] = None
-    mortgage_insurance: Optional[float] = None
-    hoa_amount: Optional[float] = None
-    origination_fee: Optional[float] = None
-    estimated_prepaid_interest: Optional[float] = None
-    index_rate: Optional[float] = None
-    margin: Optional[float] = None
+    monthly_payment: Optional[Decimal] = None
+    property_tax: Optional[Decimal] = None
+    hazard_insurance: Optional[Decimal] = None
+    mortgage_insurance: Optional[Decimal] = None
+    hoa_amount: Optional[Decimal] = None
+    origination_fee: Optional[Decimal] = None
+    estimated_prepaid_interest: Optional[Decimal] = None
+    index_rate: Optional[Decimal] = None
+    margin: Optional[Decimal] = None
 
     # Salesforce Sync Fields - Additional LTV/CLTV
-    cltv: Optional[float] = None
+    cltv: Optional[Decimal] = None
     loan_purpose: Optional[str] = None
     file_state: Optional[str] = None
 
     # Salesforce Sync Fields - 2nd Loan Details
-    second_loan_amount: Optional[float] = None
-    second_loan_rate: Optional[float] = None
-    second_loan_payment: Optional[float] = None
+    second_loan_amount: Optional[Decimal] = None
+    second_loan_rate: Optional[Decimal] = None
+    second_loan_payment: Optional[Decimal] = None
 
     # Salesforce Sync Fields - Present vs Proposed Housing
-    present_housing_expense: Optional[float] = None
-    proposed_housing_expense: Optional[float] = None
-    present_monthly_payment: Optional[float] = None
-    proposed_monthly_payment: Optional[float] = None
+    present_housing_expense: Optional[Decimal] = None
+    proposed_housing_expense: Optional[Decimal] = None
+    present_monthly_payment: Optional[Decimal] = None
+    proposed_monthly_payment: Optional[Decimal] = None
 
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -470,9 +469,9 @@ class LoanCreate(BaseModel):
     preferred_communication: Optional[str] = None
     coborrower_name: Optional[str] = None
     co_borrower_email: Optional[str] = None
-    amount: float
+    amount: Decimal
     program: Optional[str] = None
-    rate: Optional[float] = None
+    rate: Optional[Decimal] = None
     closing_date: Optional[datetime] = None
     property_address: Optional[str] = None
     property_city: Optional[str] = None
@@ -482,7 +481,7 @@ class LoanCreate(BaseModel):
 
 class LoanUpdate(BaseModel):
     stage: Optional[LoanStage] = None
-    rate: Optional[float] = None
+    rate: Optional[Decimal] = None
 
     @field_validator('stage', mode='before')
     @classmethod
@@ -540,11 +539,11 @@ class LoanUpdate(BaseModel):
     property_zip: Optional[str] = None
     loan_number: Optional[str] = None
     program: Optional[str] = None
-    amount: Optional[float] = None
+    amount: Optional[Decimal] = None
     loan_type: Optional[str] = None
     term: Optional[int] = None
-    purchase_price: Optional[float] = None
-    down_payment: Optional[float] = None
+    purchase_price: Optional[Decimal] = None
+    down_payment: Optional[Decimal] = None
     underwriter: Optional[str] = None
     realtor_agent: Optional[str] = None
     title_company: Optional[str] = None
@@ -620,8 +619,8 @@ class LoanResponse(BaseModel):
     co_borrower_email: Optional[str] = None
     stage: Optional[str] = None
     program: Optional[str] = None
-    amount: float
-    rate: Optional[float] = None
+    amount: Decimal
+    rate: Optional[Decimal] = None
     closing_date: Optional[datetime] = None
     days_in_stage: Optional[int] = 0
     sla_status: Optional[str] = "on-track"
@@ -706,40 +705,40 @@ class LoanResponse(BaseModel):
     property_county: Optional[str] = None
     property_ownership_type: Optional[str] = None
     property_units: Optional[int] = None
-    appraisal_value: Optional[float] = None
-    purchase_price: Optional[float] = None
+    appraisal_value: Optional[Decimal] = None
+    purchase_price: Optional[Decimal] = None
 
     # 1st Loan Details
-    interest_rate: Optional[float] = None
+    interest_rate: Optional[Decimal] = None
     rate_type: Optional[str] = None
     loan_type: Optional[str] = None
-    property_tax: Optional[float] = None
-    hazard_insurance: Optional[float] = None
-    mortgage_insurance: Optional[float] = None
-    hoa_amount: Optional[float] = None
-    origination_fee: Optional[float] = None
-    estimated_prepaid_interest: Optional[float] = None
-    points: Optional[float] = None
-    monthly_payment: Optional[float] = None
-    index_rate: Optional[float] = None
-    margin: Optional[float] = None
+    property_tax: Optional[Decimal] = None
+    hazard_insurance: Optional[Decimal] = None
+    mortgage_insurance: Optional[Decimal] = None
+    hoa_amount: Optional[Decimal] = None
+    origination_fee: Optional[Decimal] = None
+    estimated_prepaid_interest: Optional[Decimal] = None
+    points: Optional[Decimal] = None
+    monthly_payment: Optional[Decimal] = None
+    index_rate: Optional[Decimal] = None
+    margin: Optional[Decimal] = None
 
     # LTV/CLTV
-    ltv: Optional[float] = None
-    cltv: Optional[float] = None
+    ltv: Optional[Decimal] = None
+    cltv: Optional[Decimal] = None
     loan_purpose: Optional[str] = None
     file_state: Optional[str] = None
 
     # 2nd Loan
-    second_loan_amount: Optional[float] = None
-    second_loan_rate: Optional[float] = None
-    second_loan_payment: Optional[float] = None
+    second_loan_amount: Optional[Decimal] = None
+    second_loan_rate: Optional[Decimal] = None
+    second_loan_payment: Optional[Decimal] = None
 
     # Present vs Proposed
-    present_housing_expense: Optional[float] = None
-    proposed_housing_expense: Optional[float] = None
-    present_monthly_payment: Optional[float] = None
-    proposed_monthly_payment: Optional[float] = None
+    present_housing_expense: Optional[Decimal] = None
+    proposed_housing_expense: Optional[Decimal] = None
+    present_monthly_payment: Optional[Decimal] = None
+    proposed_monthly_payment: Optional[Decimal] = None
 
     class Config:
         from_attributes = True
@@ -826,7 +825,7 @@ class ReferralPartnerResponse(BaseModel):
     type: Optional[str] = None
     referrals_in: int = 0
     closed_loans: int = 0
-    volume: float = 0.0
+    volume: Decimal = Decimal("0.00")
     loyalty_tier: str = "bronze"
     partner_category: str = "individual"  # 'individual' or 'team'
     email: Optional[str] = None
@@ -897,8 +896,8 @@ class MUMClientCreate(BaseModel):
     name: str
     loan_number: str
     original_close_date: datetime
-    original_rate: float
-    loan_balance: float
+    original_rate: Decimal
+    loan_balance: Decimal
     email: Optional[str] = None
     phone: Optional[str] = None
     original_loan_number: Optional[str] = None
@@ -913,11 +912,11 @@ class MUMClientUpdate(BaseModel):
     original_close_date: Optional[datetime] = None
     close_date: Optional[datetime] = None
     days_since_funding: Optional[int] = None
-    original_rate: Optional[float] = None
-    current_rate: Optional[float] = None
-    loan_balance: Optional[float] = None
+    original_rate: Optional[Decimal] = None
+    current_rate: Optional[Decimal] = None
+    loan_balance: Optional[Decimal] = None
     refinance_opportunity: Optional[bool] = None
-    estimated_savings: Optional[float] = None
+    estimated_savings: Optional[Decimal] = None
     engagement_score: Optional[int] = None
     status: Optional[str] = None
     notes: Optional[str] = None
@@ -943,11 +942,11 @@ class MUMClientResponse(BaseModel):
     original_close_date: datetime
     close_date: Optional[datetime] = None
     days_since_funding: Optional[int] = None
-    original_rate: Optional[float] = None
-    current_rate: Optional[float] = None
-    loan_balance: Optional[float] = None
+    original_rate: Optional[Decimal] = None
+    current_rate: Optional[Decimal] = None
+    loan_balance: Optional[Decimal] = None
     refinance_opportunity: bool = False
-    estimated_savings: Optional[float] = None
+    estimated_savings: Optional[Decimal] = None
     engagement_score: Optional[int] = None
     status: Optional[str] = None
     notes: Optional[str] = None
@@ -1015,24 +1014,24 @@ class CreditAuthCapture(BaseModel):
 
 class PrequalificationRequest(BaseModel):
     """Schema for pre-qualification calculation"""
-    annual_income: float
-    monthly_debts: float
+    annual_income: Decimal
+    monthly_debts: Decimal
     credit_score_range: str  # "760+", "740-759", "700-739", etc.
-    down_payment: float
+    down_payment: Decimal
     down_payment_type: str = "percentage"  # "percentage" or "amount"
-    property_value: Optional[float] = None
+    property_value: Optional[Decimal] = None
     loan_type: str = "conventional"  # conventional, fha, va, usda
     property_type: str = "single_family"
     occupancy: str = "primary"  # primary, secondary, investment
 
 class PrequalificationResponse(BaseModel):
     """Schema for pre-qualification results"""
-    max_loan_amount: float
-    estimated_rate: float
-    estimated_monthly_payment: float
-    front_end_dti: float
-    back_end_dti: float
-    max_home_price: float
+    max_loan_amount: Decimal
+    estimated_rate: Decimal
+    estimated_monthly_payment: Decimal
+    front_end_dti: Decimal
+    back_end_dti: Decimal
+    max_home_price: Decimal
     loan_type: str
     rate_assumptions: Dict[str, Any]
     warnings: List[str] = []
@@ -1099,9 +1098,9 @@ class BorrowerApplicationResponse(BaseModel):
     has_coborrower: bool
     coborrower_email: Optional[str] = None
     coborrower_completed: bool
-    prequalification_amount: Optional[float] = None
-    prequalification_rate: Optional[float] = None
-    prequalification_monthly_payment: Optional[float] = None
+    prequalification_amount: Optional[Decimal] = None
+    prequalification_rate: Optional[Decimal] = None
+    prequalification_monthly_payment: Optional[Decimal] = None
     credit_auth_captured: bool
     # Masked SSN display: ***-**-1234 (derived from credit_auth_ssn_last4, never raw SSN)
     ssn_display: Optional[str] = None

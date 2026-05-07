@@ -2974,7 +2974,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
     async def execute_get_emails_needing_response(args):
         """Get emails from inbox that need a response."""
         # Pass the current user's ID for email lookup
-        user_id = args.get("user_id") or (current_user.id if hasattr(current_user, 'id') else None)
+        user_id = current_user.id if hasattr(current_user, 'id') else None
         days = args.get("days", 7)
         unread_only = args.get("unread_only", True)
         limit = args.get("limit", 20)
@@ -3000,7 +3000,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     async def execute_search_email_inbox(args):
         """Search user's Microsoft 365 email inbox for messages."""
-        user_id = args.get("user_id") or (current_user.id if hasattr(current_user, 'id') else None)
+        user_id = current_user.id if hasattr(current_user, 'id') else None
         search_query = args.get("search_query", "")
         limit = args.get("limit", 10)
         folder = args.get("folder", "all")
@@ -3026,7 +3026,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     async def execute_create_referral_partner(args):
         """Create or add a referral partner to the CRM."""
-        user_id = args.get("user_id") or (current_user.id if hasattr(current_user, 'id') else None)
+        user_id = current_user.id if hasattr(current_user, 'id') else None
         name = args.get("name", "")
         email = args.get("email", "")
         phone = args.get("phone")

@@ -12,6 +12,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { urlaCallIntelligenceApi } from '../../services/urlaCallIntelligenceApi';
 import { toast } from '../../utils/toast';
+import { sanitizeHTML } from '../../utils/sanitize';
 
 // ── Score color helper ──────────────────────────────────────
 const getScoreColor = (score) => {
@@ -1399,7 +1400,7 @@ const InlineBriefing = ({ loanId }) => {
           lineHeight: '1.6',
           color: '#374151',
         }}
-        dangerouslySetInnerHTML={{ __html: briefing }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHTML(briefing) }}
       />
     );
   }

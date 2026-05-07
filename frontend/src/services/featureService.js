@@ -7,7 +7,7 @@ import { getToken } from '../utils/tokenStore';
  * Handles feature flag checks, caching, and API interactions.
  */
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.perenniaai.com';
 
 // Cache for user's visible features
 let featureCache = null;

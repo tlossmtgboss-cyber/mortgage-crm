@@ -5,7 +5,7 @@
 
 import { getAuthHeaders } from '../utils/auth';
 
-const API_BASE = 'https://api.perenniaai.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.perenniaai.com';
 
 // ============== SESSION MANAGEMENT ==============
 

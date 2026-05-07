@@ -210,7 +210,6 @@ def _inject_tenant_filter(query: str, org_id: int) -> str:
                     query = query.rstrip() + f"\n        WHERE {filter_clause}"
 
             logger.debug(f"[TENANT] Auto-injected org_id filter on {table}.{alias}")
-            break  # Only inject on the primary table (first FROM match)
 
     return query
 

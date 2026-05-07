@@ -26,7 +26,7 @@ import { initDeepLinkRouter, consumePendingDeepLink } from './services/deepLinkR
 import { API_BASE_URL } from './services/api';
 import { getToken } from './utils/tokenStore';
 import InboundCallLightbox from './components/InboundCallLightbox';
-import { getRoutes } from './routes/index';
+import { getRoutes, PageLoader } from './routes/index';
 import './App.css';
 
 // Redirect to an external URL (outside React Router)
@@ -78,33 +78,7 @@ function PushNotificationInitializer() {
   return null;
 }
 
-// Loading fallback component with spinner for Suspense boundaries
-function PageLoadingFallback() {
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      height: '100vh',
-      gap: '12px',
-    }}>
-      <div style={{
-        width: '32px',
-        height: '32px',
-        border: '3px solid #e5e7eb',
-        borderTopColor: '#3b82f6',
-        borderRadius: '50%',
-        animation: 'page-loader-spin 0.7s linear infinite',
-      }} />
-      <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>Loading...</p>
-      <style>{`@keyframes page-loader-spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
-
-// Keep backward-compatible alias
-const PageLoader = PageLoadingFallback;
+// PageLoader imported from routes/index.jsx (single source of truth)
 
 // Create a client with optimized defaults for instant navigation
 const queryClient = new QueryClient({

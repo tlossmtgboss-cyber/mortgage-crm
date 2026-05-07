@@ -10,7 +10,7 @@ import { getToken } from '../utils/tokenStore';
  * and bookAppointment/getAvailability are used by ScheduleInterviewModal.
  */
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.perenniaai.com';
 
 /**
  * Get available time slots for scheduling

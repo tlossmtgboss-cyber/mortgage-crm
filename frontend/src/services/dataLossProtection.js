@@ -619,7 +619,7 @@ function _getDeviceId() {
 function _getApiBaseUrl() {
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   return isLocalhost
-    ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
+    ? (import.meta.env.VITE_API_URL || 'http://localhost:8000')
     : 'https://api.perenniaai.com';
 }
 

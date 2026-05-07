@@ -5,7 +5,7 @@ import { getToken } from '../utils/tokenStore';
  * API wrapper for LO candidate assessment and grading operations.
  */
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.perenniaai.com';
 
 /**
  * Get auth headers for API requests
