@@ -251,7 +251,7 @@ async def revoke_ai_authorization(
         )
     """), {
         "user_id": user_id,
-        "company_id": get_current_company_id(),
+        "company_id": get_company_id_for_user(current_user),
         "auth_id": authorization_id,
         "details": json.dumps({"action": "revoke", "retain_data": revoke_data.retain_training_data})
     })

@@ -248,7 +248,7 @@ If any registration issues occur:
 1. Check Railway logs for backend errors
 2. Check browser console for frontend errors
 3. Verify network connectivity
-4. Verify API_URL is correct in .env.production
+4. Verify API_URL is correct in .env (see .env.example for production values)
 5. Check database connection status
 
 **Last Updated:** 2025-01-08

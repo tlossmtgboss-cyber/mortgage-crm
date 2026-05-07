@@ -30,7 +30,7 @@ def get_uuid_type():
     bind = op.get_bind()
     if bind.dialect.name == 'postgresql':
         from sqlalchemy.dialects.postgresql import UUID
-        return uuid_type
+        return UUID(as_uuid=True)
     else:
         # Use String(36) for SQLite and other databases
         return sa.String(36)

@@ -173,6 +173,50 @@ _ALLOWED_LOAN_COLUMNS = frozenset({
 })
 
 
+_ALLOWED_MUM_COLUMNS = frozenset({
+    # Identity
+    'client_name', 'name', 'email', 'phone',
+    # Loan details
+    'loan_number', 'original_close_date', 'close_date', 'closing_date',
+    'first_payment_date', 'days_since_funding',
+    'original_rate', 'current_rate', 'interest_rate',
+    'original_loan_amount', 'current_loan_amount',
+    'appraisal_value_at_closing', 'current_property_value',
+    'loan_balance', 'loan_type',
+    # Refinance opportunity
+    'refinance_opportunity', 'estimated_savings', 'engagement_score',
+    # Status & notes
+    'status', 'notes', 'last_contact', 'next_touchpoint',
+    'referrals_sent', 'opportunity_notes',
+    # Team
+    'loan_officer', 'loan_officer_email', 'processor', 'processor_email',
+    'underwriter', 'underwriter_email', 'closer', 'closer_email',
+    # Valuation
+    'term', 'maturity_date', 'estimated_equity', 'current_ltv',
+    'refi_score', 'property_state', 'property_zip', 'property_type',
+    'lender', 'servicer', 'address', 'city', 'state', 'zip_code',
+    # Integration
+    'salesforce_id',
+    # System-managed (allowed for import logic, protected set takes precedence)
+    'user_id', 'created_at', 'updated_at',
+})
+
+_ALLOWED_PORTFOLIO_COLUMNS = frozenset({
+    # Core loan fields applicable to portfolio loans
+    'loan_number', 'borrower_name', 'borrower_email', 'borrower_phone',
+    'coborrower_name', 'co_borrower_email',
+    'property_address', 'property_city', 'property_state', 'property_zip',
+    'property_type', 'occupancy_type',
+    'amount', 'purchase_price', 'rate', 'term', 'stage', 'program',
+    'loan_type', 'loan_purpose', 'lender',
+    'appraisal_value', 'ltv', 'cltv',
+    'closing_date', 'funded_date', 'lock_date',
+    'loan_officer_name', 'processor', 'underwriter',
+    'loan_officer_id', 'status', 'notes',
+    # System-managed (allowed for import logic, protected set takes precedence)
+    'created_at', 'updated_at',
+})
+
 # Columns that must never be set via CSV import (security-sensitive or system-managed)
 _IMPORT_PROTECTED_COLUMNS = frozenset({
     "id", "owner_id", "organization_id", "permission_role", "role",
@@ -833,6 +877,10 @@ def ensure_import_columns_exist(conn, destination: str):
 
     for col_name, col_type in columns_to_add:
         try:
+            # SAFETY: table_name, col_name, col_type all come from the hardcoded
+            # columns_to_add list above (never from user input). Additionally
+            # validated through _validate_sql_identifier (alphanumeric regex) and
+            # _validate_sql_type (frozenset allowlist).
             safe_table = _validate_sql_identifier(table_name)
             safe_col = _validate_sql_identifier(col_name)
             safe_type = _validate_sql_type(col_type)
@@ -970,6 +1018,10 @@ async def execute_import(
                                 continue
                             elif duplicate_handling == 'update':
                                 # Update existing record
+                                # SAFETY: safe_col is validated against _ALLOWED_LEAD_COLUMNS
+                                # (hardcoded frozenset) AND passes ^[a-zA-Z_][a-zA-Z0-9_]*$
+                                # regex via _safe_column_name(). Values use %s placeholders
+                                # (parameterized by psycopg2) — never interpolated into SQL.
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
@@ -1005,7 +1057,8 @@ async def execute_import(
                             columns.append('owner_id')
                             values.append(user_id)
 
-                        # Create placeholders — sanitize column names against allowlist
+                        # SAFETY: Column names validated against _ALLOWED_LEAD_COLUMNS
+                        # (hardcoded frozenset) + regex. Values use %s (parameterized).
                         safe_cols = [c for c in columns if _safe_column_name(c, _ALLOWED_LEAD_COLUMNS)]
                         safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c, _ALLOWED_LEAD_COLUMNS)]
                         placeholders = ', '.join(['%s'] * len(safe_cols))
@@ -1059,6 +1112,8 @@ async def execute_import(
                                 continue
                             elif duplicate_handling == 'update':
                                 # Update existing record
+                                # SAFETY: safe_col validated against _ALLOWED_LOAN_COLUMNS
+                                # (hardcoded frozenset) + regex. Values use %s (parameterized).
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
@@ -1096,6 +1151,8 @@ async def execute_import(
                             columns.append('loan_officer_id')
                             values.append(user_id)
 
+                        # SAFETY: Column names validated against _ALLOWED_LOAN_COLUMNS
+                        # (hardcoded frozenset) + regex. Values use %s (parameterized).
                         safe_cols = [c for c in columns if _safe_column_name(c, _ALLOWED_LOAN_COLUMNS)]
                         safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c, _ALLOWED_LOAN_COLUMNS)]
                         placeholders = ', '.join(['%s'] * len(safe_cols))
@@ -1116,8 +1173,10 @@ async def execute_import(
                             columns.append('created_at')
                             values.append(datetime.now(timezone.utc))
 
-                        safe_cols = [c for c in columns if _safe_column_name(c)]
-                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        # SAFETY: Column names validated against _ALLOWED_PORTFOLIO_COLUMNS
+                        # (hardcoded frozenset) + regex. Values use %s (parameterized).
+                        safe_cols = [c for c in columns if _safe_column_name(c, _ALLOWED_PORTFOLIO_COLUMNS)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c, _ALLOWED_PORTFOLIO_COLUMNS)]
                         placeholders = ', '.join(['%s'] * len(safe_cols))
                         columns_str = ', '.join(safe_cols)
 
@@ -1184,10 +1243,12 @@ async def execute_import(
                             if duplicate_handling == 'skip':
                                 continue
                             elif duplicate_handling == 'update':
+                                # SAFETY: safe_col validated against _ALLOWED_MUM_COLUMNS
+                                # (hardcoded frozenset) + regex. Values use %s (parameterized).
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
-                                    safe_col = _safe_column_name(col)
+                                    safe_col = _safe_column_name(col, _ALLOWED_MUM_COLUMNS)
                                     if safe_col and safe_col not in _IMPORT_PROTECTED_COLUMNS and safe_col != 'loan_number' and val is not None:
                                         update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
@@ -1263,8 +1324,10 @@ async def execute_import(
                             columns.append('user_id')
                             values.append(user_id)
 
-                        safe_cols = [c for c in columns if _safe_column_name(c)]
-                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        # SAFETY: Column names validated against _ALLOWED_MUM_COLUMNS
+                        # (hardcoded frozenset) + regex. Values use %s (parameterized).
+                        safe_cols = [c for c in columns if _safe_column_name(c, _ALLOWED_MUM_COLUMNS)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c, _ALLOWED_MUM_COLUMNS)]
                         placeholders = ', '.join(['%s'] * len(safe_cols))
                         columns_str = ', '.join(safe_cols)
 

@@ -9,11 +9,13 @@ Provides endpoints for:
 - Agent conversation context
 """
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import Optional, List, Dict, Any, AsyncGenerator
+from typing import TYPE_CHECKING, Optional, List, Dict, Any, AsyncGenerator
 from datetime import datetime, timedelta, timezone
 import logging
 import uuid
@@ -25,6 +27,9 @@ from database import get_db
 from services.agent_governance_service import AgentGovernanceService
 from models.agent_governance import AgentProfile, AgentExecution, AgentChatSession, AgentChatMessage
 from sqlalchemy.exc import SQLAlchemyError
+
+if TYPE_CHECKING:
+    from services.conversation_ai_learning_service import ConversationOutcome
 
 logger = logging.getLogger(__name__)
 

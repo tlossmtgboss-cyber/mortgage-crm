@@ -89,8 +89,50 @@ def get_engine():
     return create_engine(url, echo=False)
 
 
+import re as _re
+
+# Hardcoded allowlist of tables/columns this seed script is permitted to query.
+# All callers pass string literals — this is defense-in-depth, not user-input
+# sanitization.
+_SEED_ALLOWED_TABLES = frozenset({
+    "organizations", "users", "leads", "loans", "mum_clients",
+    "referral_partners", "tasks", "documents", "activities",
+    "scheduler_appointments", "availability_slots", "appointment_types",
+    "scheduler_configs", "stage_history", "disclosure_events", "loan_fees",
+    "compliance_alerts", "loan_team_members", "morning_briefings",
+    "ai_tasks", "email_intakes", "attachment_intakes",
+    "sms_conversations", "sms_messages", "call_records",
+    "call_intelligence_records", "rate_monitor_alerts",
+    "content_items", "content_campaigns", "notifications",
+    "borrower_profiles", "borrower_applications",
+})
+
+_SEED_ALLOWED_COLUMNS = frozenset({
+    "id", "slug", "email", "name", "loan_number", "client_name",
+    "organization_id", "user_id", "owner_id",
+})
+
+
+def _validate_seed_identifier(name: str) -> str:
+    """Validate that a SQL identifier is alphanumeric+underscore only."""
+    if not _re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+        raise ValueError(f"Invalid SQL identifier in seed script: {name!r}")
+    return name
+
+
 def exists(conn, table: str, column: str, value) -> bool:
-    """Return True if a row matching column=value exists in table."""
+    """Return True if a row matching column=value exists in table.
+
+    SAFETY: table and column come from hardcoded string literals at each call
+    site within this seed script. Validated against allowlists and regex for
+    defense-in-depth. The value uses :val bind parameter.
+    """
+    _validate_seed_identifier(table)
+    _validate_seed_identifier(column)
+    if table not in _SEED_ALLOWED_TABLES:
+        raise ValueError(f"Seed script: table {table!r} not in allowlist")
+    if column not in _SEED_ALLOWED_COLUMNS:
+        raise ValueError(f"Seed script: column {column!r} not in allowlist")
     result = conn.execute(
         text(f"SELECT 1 FROM {table} WHERE {column} = :val LIMIT 1"),
         {"val": value},
@@ -99,7 +141,18 @@ def exists(conn, table: str, column: str, value) -> bool:
 
 
 def get_id(conn, table: str, column: str, value):
-    """Return the id of the first row matching column=value, or None."""
+    """Return the id of the first row matching column=value, or None.
+
+    SAFETY: table and column come from hardcoded string literals at each call
+    site within this seed script. Validated against allowlists and regex for
+    defense-in-depth. The value uses :val bind parameter.
+    """
+    _validate_seed_identifier(table)
+    _validate_seed_identifier(column)
+    if table not in _SEED_ALLOWED_TABLES:
+        raise ValueError(f"Seed script: table {table!r} not in allowlist")
+    if column not in _SEED_ALLOWED_COLUMNS:
+        raise ValueError(f"Seed script: column {column!r} not in allowlist")
     result = conn.execute(
         text(f"SELECT id FROM {table} WHERE {column} = :val LIMIT 1"),
         {"val": value},

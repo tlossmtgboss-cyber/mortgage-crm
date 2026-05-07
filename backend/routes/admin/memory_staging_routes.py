@@ -65,7 +65,7 @@ async def list_staging(
 
     from database.models.memory_staging import MemoryStaging
 
-    query = db.query(MemoryStaging).filter(MemoryStaging.tenant_id == tenant_id)
+    query = db.query(MemoryStaging).filter(MemoryStaging.organization_id == tenant_id)
 
     if tab == "shadow":
         query = query.filter(MemoryStaging.status.in_(["shadow_pending", "confirmed_correct"]))
@@ -76,7 +76,7 @@ async def list_staging(
             .filter(
                 MemoryAuditEvent.event_type == "staging_review",
                 MemoryAuditEvent.details["audit_sample"].astext == "true",
-                MemoryAuditEvent.tenant_id == tenant_id,
+                MemoryAuditEvent.organization_id == tenant_id,
             )
             .subquery()
         )
@@ -129,7 +129,7 @@ async def approve_item(
     from database.models.memory_staging import MemoryStaging
     item = db.query(MemoryStaging).filter(
         MemoryStaging.id == item_id,
-        MemoryStaging.tenant_id == tenant_id,
+        MemoryStaging.organization_id == tenant_id,
     ).first()
 
     if not item:
@@ -172,7 +172,7 @@ async def approve_item(
             existing.last_verified_at = datetime.now(timezone.utc)
             from database.models.memory_audit import MemoryAuditEvent as AuditEvent
             confirm_audit = AuditEvent(
-                tenant_id=tenant_id, borrower_id=item.borrower_id,
+                organization_id=tenant_id, borrower_id=item.borrower_id,
                 event_type="confirmation", memory_id=existing.id,
                 source_call_id=item.source_call_id,
                 details={"transcript_span": item.transcript_span},
@@ -211,7 +211,7 @@ async def approve_item(
             old_mem.superseded_by = memory.id
         from database.models.memory_audit import MemoryAuditEvent
         supersession_audit = MemoryAuditEvent(
-            tenant_id=tenant_id, borrower_id=item.borrower_id,
+            organization_id=tenant_id, borrower_id=item.borrower_id,
             event_type="supersession", memory_id=memory.id,
             source_call_id=item.source_call_id,
             details={"old_memory_id": superseded_id, "fact_key": item.fact_key},
@@ -226,7 +226,7 @@ async def approve_item(
 
     from database.models.memory_audit import MemoryAuditEvent
     audit = MemoryAuditEvent(
-        tenant_id=tenant_id,
+        organization_id=tenant_id,
         borrower_id=item.borrower_id,
         event_type="staging_review",
         source_call_id=item.source_call_id,
@@ -253,7 +253,7 @@ async def reject_item(
     from database.models.memory_staging import MemoryStaging
     item = db.query(MemoryStaging).filter(
         MemoryStaging.id == item_id,
-        MemoryStaging.tenant_id == tenant_id,
+        MemoryStaging.organization_id == tenant_id,
     ).first()
 
     if not item:
@@ -268,7 +268,7 @@ async def reject_item(
 
     from database.models.memory_audit import MemoryAuditEvent
     audit = MemoryAuditEvent(
-        tenant_id=tenant_id,
+        organization_id=tenant_id,
         borrower_id=item.borrower_id,
         event_type="staging_review",
         source_call_id=item.source_call_id,
@@ -298,7 +298,7 @@ async def edit_item(
     from database.models.memory_staging import MemoryStaging
     item = db.query(MemoryStaging).filter(
         MemoryStaging.id == item_id,
-        MemoryStaging.tenant_id == tenant_id,
+        MemoryStaging.organization_id == tenant_id,
     ).first()
 
     if not item:
@@ -316,7 +316,7 @@ async def edit_item(
 
     from database.models.memory_audit import MemoryAuditEvent
     audit = MemoryAuditEvent(
-        tenant_id=tenant_id,
+        organization_id=tenant_id,
         borrower_id=item.borrower_id,
         event_type="staging_review",
         source_call_id=item.source_call_id,
@@ -343,7 +343,7 @@ async def queue_depth(
 
     from database.models.memory_staging import MemoryStaging
     count = db.query(func.count(MemoryStaging.id)).filter(
-        MemoryStaging.tenant_id == tenant_id,
+        MemoryStaging.organization_id == tenant_id,
         MemoryStaging.status == "pending_review",
     ).scalar()
 

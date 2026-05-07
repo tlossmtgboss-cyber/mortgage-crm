@@ -1300,14 +1300,19 @@ async def update_day_role_responsibility(
 async def process_weekly_tasks(
     workflow_key: str = Query(default='under_contract', description="Workflow key to process"),
     dry_run: bool = Query(default=False, description="If true, only simulate without creating tasks"),
+    all_orgs: bool = Query(default=False, description="If true (admin only), process all organizations"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     """
     Process weekly recurring tasks for a workflow.
 
-    This endpoint should be called by an external scheduler (cron job, Railway scheduled task, etc.)
-    to trigger weekly tasks like Monday Updates.
+    When called with all_orgs=False (default), processes only the authenticated user's
+    organization using the request-scoped tenant session.
+
+    When called with all_orgs=True (platform admin only), iterates over ALL active
+    organizations with per-org tenant-scoped sessions for proper RLS isolation.
+    This mode is intended for cron/scheduled task triggers.
 
     Business Rules:
     - Monday Weekly Update: First update goes out on the Monday FOLLOWING the Disclosed date entry
@@ -1317,21 +1322,42 @@ async def process_weekly_tasks(
     Args:
         workflow_key: Which workflow to process (default: under_contract)
         dry_run: If true, only simulate and report what would be done
+        all_orgs: If true, process all organizations (platform admin only)
 
     Returns:
         Summary of tasks processed, created, and any errors
     """
     try:
-        from weekly_task_scheduler import get_weekly_task_scheduler
+        if all_orgs:
+            # Platform admin only: process all organizations with tenant isolation
+            is_platform_admin = getattr(current_user, 'is_platform_admin', False)
+            if not is_platform_admin:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only platform admins can process weekly tasks for all organizations"
+                )
 
-        scheduler = get_weekly_task_scheduler(db, _models)
-        results = scheduler.process_weekly_tasks(workflow_key=workflow_key, dry_run=dry_run)
+            from weekly_task_scheduler import process_weekly_tasks_all_orgs
+            results = process_weekly_tasks_all_orgs(
+                models=_models,
+                workflow_key=workflow_key,
+                dry_run=dry_run
+            )
+        else:
+            # Single-org mode: use the request-scoped session (already tenant-scoped)
+            from weekly_task_scheduler import get_weekly_task_scheduler
+
+            org_id = getattr(current_user, 'organization_id', None)
+            scheduler = get_weekly_task_scheduler(db, _models, organization_id=org_id)
+            results = scheduler.process_weekly_tasks(workflow_key=workflow_key, dry_run=dry_run)
 
         return results
 
     except ImportError as e:
         logger.error(f"Failed to import weekly_task_scheduler: {e}")
         raise HTTPException(status_code=500, detail="Weekly task scheduler not available")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing weekly tasks: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1441,7 +1467,8 @@ async def test_weekly_task_for_loan(
         if not day_config:
             raise HTTPException(status_code=404, detail=f"Day config {day_config_id} not found")
 
-        scheduler = get_weekly_task_scheduler(db, _models)
+        org_id = getattr(current_user, 'organization_id', None)
+        scheduler = get_weekly_task_scheduler(db, _models, organization_id=org_id)
 
         # Check if task should be sent today
         should_send = scheduler.should_send_weekly_task(loan, day_config)

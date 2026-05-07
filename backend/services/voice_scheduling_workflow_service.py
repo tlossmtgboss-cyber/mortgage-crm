@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Voice Scheduling Workflow Service — manages async multi-step voice command workflows.
 
 Handles the lifecycle: voice command -> contact lookup -> SMS -> conversation -> booking.
@@ -8,12 +9,15 @@ pre-approval letter workflows.
 
 import logging
 from datetime import datetime, timedelta, date, timezone
-from typing import Optional, Dict, Any, List
+from typing import TYPE_CHECKING, Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from database.models.communication import Activity
 from database.enums import ActivityType
+
+if TYPE_CHECKING:
+    from database.models.voice_workflow import VoiceWorkflow
 
 logger = logging.getLogger(__name__)
 

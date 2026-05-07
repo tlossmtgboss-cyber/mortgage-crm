@@ -201,7 +201,7 @@ async def test_supersession_audit_trail():
     old_memory.superseded_by = new_memory.id
 
     audit_event = MemoryAuditEvent(
-        tenant_id=1,
+        organization_id=1,
         borrower_id=42,
         event_type="supersession",
         memory_id=new_memory.id,

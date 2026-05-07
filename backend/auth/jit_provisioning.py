@@ -6,12 +6,17 @@ Auto-creates user accounts when users authenticate via SSO for the first time.
 Maps IdP groups/claims to CRM roles.
 """
 
+from __future__ import annotations
+
 import logging
 import secrets
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from database.models.core import User
 
 logger = logging.getLogger(__name__)
 

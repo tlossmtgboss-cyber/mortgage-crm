@@ -1,0 +1,98 @@
+# 08-infrastructure/backup-verify.yml
+# Drop-in: .github/workflows/backup-verify.yml
+#
+# Weekly: pulls a fresh dump from production, restores into a scratch DB,
+# asserts counts, posts result to Slack. SOC 2 evidence that backups are
+# actually restorable — not just that snapshots exist.
+
+name: Backup verification
+
+on:
+  schedule:
+    # Every Sunday at 08:00 UTC
+    - cron: "0 8 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: scratch
+          POSTGRES_DB: scratch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install postgres client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+
+      - name: Dump production
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL_READONLY }}
+        run: |
+          pg_dump --format=custom --no-owner --no-acl \
+            --file=/tmp/backup.dump \
+            "${PROD_DATABASE_URL}"
+          ls -lh /tmp/backup.dump
+
+      - name: Restore into scratch
+        env:
+          SCRATCH_URL: postgresql://postgres:scratch@localhost:5432/scratch
+        run: |
+          pg_restore --no-owner --no-acl --dbname="${SCRATCH_URL}" /tmp/backup.dump
+
+      - name: Sanity queries
+        env:
+          SCRATCH_URL: postgresql://postgres:scratch@localhost:5432/scratch
+        run: |
+          USERS=$(psql "${SCRATCH_URL}" -t -c "SELECT count(*) FROM users;" | xargs)
+          LOANS=$(psql "${SCRATCH_URL}" -t -c "SELECT count(*) FROM loans;" | xargs)
+          AUDIT=$(psql "${SCRATCH_URL}" -t -c "SELECT count(*) FROM audit_events WHERE occurred_at > NOW() - INTERVAL '7 days';" | xargs)
+
+          echo "users: ${USERS}"
+          echo "loans: ${LOANS}"
+          echo "recent_audit_events: ${AUDIT}"
+
+          if [ "${USERS}" -lt 1 ]; then echo "!! users count is 0"; exit 1; fi
+          if [ "${LOANS}" -lt 1 ]; then echo "!! loans count is 0"; exit 1; fi
+          # No assertion on audit count — new install might legitimately have 0
+
+          {
+            echo "users=${USERS}"
+            echo "loans=${LOANS}"
+            echo "recent_audit=${AUDIT}"
+          } >> "$GITHUB_OUTPUT"
+        id: counts
+
+      - name: Notify Slack on success
+        if: success()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_OPS }}
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\"✅ Weekly backup verification passed. users=${{ steps.counts.outputs.users }}, loans=${{ steps.counts.outputs.loans }}\"}" \
+            "${SLACK_WEBHOOK}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_OPS }}
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\"🚨 Weekly backup verification FAILED. Check GitHub Actions: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "${SLACK_WEBHOOK}"

@@ -13,13 +13,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _derive_key_pbkdf2(secret_key: str) -> bytes:
+_LEGACY_HARDCODED_SALT = b"perennia-encryption-salt-v1"
+_LEGACY_ITERATIONS = 100_000
+_NEW_ITERATIONS = 600_000
+
+
+def _get_pbkdf2_salt() -> bytes:
+    """Return PBKDF2 salt from env or fall back to legacy hardcoded value."""
+    env_salt = os.getenv("DATA_ENCRYPTION_SALT")
+    if env_salt:
+        return bytes.fromhex(env_salt)
+    return _LEGACY_HARDCODED_SALT
+
+
+def _derive_key_pbkdf2(secret_key: str, salt: Optional[bytes] = None, iterations: Optional[int] = None) -> bytes:
     """Derive a Fernet-compatible key from SECRET_KEY using PBKDF2."""
     key_material = hashlib.pbkdf2_hmac(
         "sha256",
         secret_key.encode(),
-        b"perennia-encryption-salt-v1",
-        iterations=100_000,
+        salt or _get_pbkdf2_salt(),
+        iterations=iterations or _NEW_ITERATIONS,
         dklen=32,
     )
     return base64.urlsafe_b64encode(key_material)
@@ -38,6 +51,7 @@ class EncryptionManager:
         encryption_key = os.getenv("DATA_ENCRYPTION_KEY", "")
         is_production = os.getenv("ENVIRONMENT") == "production" or bool(os.getenv("RAILWAY_ENVIRONMENT"))
         self._legacy_fernet: Optional[Fernet] = None
+        self._legacy_pbkdf2_fernet: Optional[Fernet] = None
 
         initialized = False
         if encryption_key and not encryption_key.startswith("CHANGE_ME"):
@@ -65,7 +79,18 @@ class EncryptionManager:
                 logger.error(f"Failed to initialize encryption: {e}")
                 raise ValueError(f"Invalid encryption key: {e}")
 
-            # Keep legacy derivation as fallback for decrypting old data
+            # Legacy PBKDF2 fallback (old salt/iterations) for decrypting pre-migration data
+            current_salt = _get_pbkdf2_salt()
+            if current_salt != _LEGACY_HARDCODED_SALT or _NEW_ITERATIONS != _LEGACY_ITERATIONS:
+                try:
+                    legacy_pbkdf2_key = _derive_key_pbkdf2(secret_key, salt=_LEGACY_HARDCODED_SALT, iterations=_LEGACY_ITERATIONS)
+                    self._legacy_pbkdf2_fernet = Fernet(legacy_pbkdf2_key)
+                except Exception:
+                    self._legacy_pbkdf2_fernet = None
+            else:
+                self._legacy_pbkdf2_fernet = None
+
+            # Keep pre-PBKDF2 legacy derivation as final fallback
             try:
                 legacy_key = _derive_key_legacy(secret_key)
                 self._legacy_fernet = Fernet(legacy_key)
@@ -98,7 +123,15 @@ class EncryptionManager:
             pass
         except Exception:
             pass
-        # Try legacy-derived key for data encrypted before PBKDF2 migration
+        # Try legacy PBKDF2 key (old salt/iterations)
+        if self._legacy_pbkdf2_fernet:
+            try:
+                result = self._legacy_pbkdf2_fernet.decrypt(encrypted_value.encode()).decode()
+                logger.info("Decrypted with legacy PBKDF2 params — re-encrypt to migrate")
+                return result
+            except Exception:
+                pass
+        # Try pre-PBKDF2 legacy key
         if self._legacy_fernet:
             try:
                 return self._legacy_fernet.decrypt(encrypted_value.encode()).decode()

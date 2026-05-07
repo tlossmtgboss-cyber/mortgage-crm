@@ -22,11 +22,16 @@ Usage:
     )
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from database.models.decision_audit import AuditRetentionConfig, DecisionAuditLog
 
 logger = logging.getLogger(__name__)
 

@@ -15,7 +15,7 @@
   ```
 
 - [ ] **Review Environment Variables**
-  - [ ] Copy `.env.multi-tenant.example` to your `.env` file
+  - [ ] Copy `.env.multi-tenant.example` to `.env` and fill in your values
   - [ ] Update `MASTER_DATABASE_URL` with your production database URL
   - [ ] Configure `TENANT_DB_PREFIX` (default: `tenant_`)
   - [ ] Set `MAX_TENANT_CONNECTIONS`, `TENANT_POOL_SIZE`, `TENANT_MAX_OVERFLOW`

@@ -3,10 +3,18 @@ MFA Routes - Multi-Factor Authentication Endpoints
 Enterprise Readiness Check 4.6
 
 Provides endpoints for TOTP-based MFA setup, verification, and management.
+
+Endpoints:
+    POST   /api/v1/auth/mfa/setup        - Generate secret + QR code
+    POST   /api/v1/auth/mfa/verify-setup  - Confirm setup with first TOTP code
+    POST   /api/v1/auth/mfa/verify        - Verify TOTP during login flow
+    POST   /api/v1/auth/mfa/backup-codes  - Regenerate backup codes
+    DELETE /api/v1/auth/mfa               - Disable MFA (requires TOTP or backup code)
+    GET    /api/v1/auth/mfa/status        - Check MFA status
 """
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
@@ -31,21 +39,21 @@ class MFASetupResponse(BaseModel):
     message: str = "Scan the QR code with your authenticator app, then verify with a token."
 
 
-class MFAVerifyRequest(BaseModel):
-    """Request to verify and enable MFA."""
+class MFAVerifySetupRequest(BaseModel):
+    """Request to verify and enable MFA after scanning QR code."""
     token: str  # 6-digit TOTP token
 
 
-class MFAVerifyResponse(BaseModel):
+class MFAVerifySetupResponse(BaseModel):
     """Response after MFA verification/enablement."""
     enabled: bool
-    backup_codes: Optional[list] = None
+    backup_codes: Optional[List[str]] = None
     message: str
 
 
 class MFADisableRequest(BaseModel):
-    """Request to disable MFA (requires current token for security)."""
-    token: str  # 6-digit TOTP token to confirm identity
+    """Request to disable MFA (requires current token or backup code for security)."""
+    token: str  # 6-digit TOTP token or backup code to confirm identity
 
 
 class MFAStatusResponse(BaseModel):
@@ -53,6 +61,15 @@ class MFAStatusResponse(BaseModel):
     enabled: bool
     enabled_at: Optional[str] = None
     has_backup_codes: bool = False
+    backup_codes_remaining: int = 0
+    org_mfa_required: bool = False
+
+
+class MFABackupCodesResponse(BaseModel):
+    """Response containing newly generated backup codes."""
+    backup_codes: List[str]
+    count: int
+    message: str = "Save these backup codes in a secure location. They will not be shown again."
 
 
 # =============================================================================
@@ -78,7 +95,8 @@ async def setup_mfa(
     Generate MFA secret and QR code for initial setup.
 
     The user should scan the QR code with their authenticator app (Google Authenticator,
-    Authy, 1Password, etc.) and then call /verify with the generated token to enable MFA.
+    Authy, 1Password, etc.) and then call /verify-setup with the generated token to
+    enable MFA.
     """
     from auth.mfa import generate_mfa_secret
 
@@ -101,9 +119,9 @@ async def setup_mfa(
     )
 
 
-@router.post("/verify", response_model=MFAVerifyResponse)
+@router.post("/verify-setup", response_model=MFAVerifySetupResponse)
 async def verify_and_enable_mfa(
-    request: MFAVerifyRequest,
+    request: MFAVerifySetupRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
@@ -112,6 +130,7 @@ async def verify_and_enable_mfa(
 
     This should be called after /setup with a valid token from the authenticator app.
     On success, MFA is permanently enabled and backup codes are returned.
+    The backup codes are shown only once and must be saved by the user.
     """
     from auth.mfa import verify_mfa_token, generate_backup_codes
 
@@ -145,26 +164,58 @@ async def verify_and_enable_mfa(
 
     logger.info(f"MFA enabled for user {current_user.email}")
 
-    return MFAVerifyResponse(
+    return MFAVerifySetupResponse(
         enabled=True,
         backup_codes=plain_codes,
         message="MFA enabled successfully. Save your backup codes in a secure location. They will not be shown again.",
     )
 
 
-@router.post("/disable")
-async def disable_mfa(
+# Keep /verify as an alias for /verify-setup for backward compatibility
+@router.post("/verify", response_model=MFAVerifySetupResponse, include_in_schema=False)
+async def verify_and_enable_mfa_compat(
+    request: MFAVerifySetupRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Backward-compatible alias for /verify-setup."""
+    return await verify_and_enable_mfa(request, db, current_user)
+
+
+@router.delete("", status_code=status.HTTP_200_OK)
+async def disable_mfa_delete(
     request: MFADisableRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """
-    Disable MFA for the user.
+    Disable MFA for the user via DELETE method.
 
-    Requires a valid current TOTP token to confirm identity before disabling.
-    Admin and site_admin users cannot disable MFA (it is mandatory for them).
+    Requires a valid current TOTP token or backup code to confirm identity before
+    disabling. Admin and site_admin users cannot disable MFA (it is mandatory for them).
+    Org-enforced MFA also cannot be disabled by individual users.
     """
-    from auth.mfa import verify_mfa_token
+    return await _disable_mfa_impl(request, db, current_user)
+
+
+@router.post("/disable")
+async def disable_mfa_post(
+    request: MFADisableRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """
+    Disable MFA for the user (POST endpoint, kept for backward compatibility).
+
+    Requires a valid current TOTP token or backup code to confirm identity before
+    disabling. Admin and site_admin users cannot disable MFA (it is mandatory for them).
+    """
+    return await _disable_mfa_impl(request, db, current_user)
+
+
+async def _disable_mfa_impl(request: MFADisableRequest, db: Session, current_user):
+    """Shared implementation for MFA disable (DELETE and POST /disable)."""
+    from auth.mfa import verify_mfa_token, verify_backup_code
 
     if not current_user.mfa_enabled:
         raise HTTPException(
@@ -183,11 +234,42 @@ async def disable_mfa(
                    "is mandatory for all administrator accounts.",
         )
 
-    # Verify current token before disabling
-    if not verify_mfa_token(current_user.mfa_secret, request.token):
+    # Check org-level MFA enforcement
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        try:
+            import main
+            Organization = main.Organization
+            org = db.query(Organization).filter(Organization.id == org_id).first()
+            if org and getattr(org, 'mfa_required', False):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Your organization requires MFA for all users. "
+                           "Contact your administrator to change this policy.",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.debug(f"Org MFA enforcement check skipped during disable: {e}")
+
+    # Verify identity with TOTP token or backup code
+    token_str = request.token.strip()
+    verified = False
+
+    # Try TOTP verification first
+    if len(token_str) == 6 and token_str.isdigit():
+        verified = verify_mfa_token(current_user.mfa_secret, token_str)
+
+    if not verified and current_user.mfa_backup_codes:
+        # Try backup code
+        code_index = verify_backup_code(token_str, current_user.mfa_backup_codes)
+        if code_index is not None:
+            verified = True
+
+    if not verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid MFA token. Cannot disable MFA without valid authentication.",
+            detail="Invalid MFA token or backup code. Cannot disable MFA without valid authentication.",
         )
 
     # Disable MFA
@@ -202,18 +284,84 @@ async def disable_mfa(
     return {"enabled": False, "message": "MFA has been disabled."}
 
 
+@router.post("/backup-codes", response_model=MFABackupCodesResponse)
+async def regenerate_backup_codes(
+    request: MFAVerifySetupRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """
+    Regenerate backup codes for MFA recovery.
+
+    Requires a valid current TOTP token to confirm identity. This invalidates
+    all previous backup codes and generates a fresh set of 10 codes.
+    """
+    from auth.mfa import verify_mfa_token, generate_backup_codes
+
+    if not current_user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is not enabled. Enable MFA first.",
+        )
+
+    if not current_user.mfa_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA configuration is invalid. Please disable and re-enable MFA.",
+        )
+
+    # Verify identity with current TOTP token
+    if not verify_mfa_token(current_user.mfa_secret, request.token):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid MFA token. Please provide a valid code from your authenticator app.",
+        )
+
+    # Generate new backup codes (replaces all existing ones)
+    plain_codes, hashed_codes = generate_backup_codes()
+
+    current_user.mfa_backup_codes = hashed_codes
+    db.commit()
+
+    logger.info(f"Backup codes regenerated for user {current_user.email}")
+
+    return MFABackupCodesResponse(
+        backup_codes=plain_codes,
+        count=len(plain_codes),
+    )
+
+
 @router.get("/status", response_model=MFAStatusResponse)
 async def get_mfa_status(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """
-    Check if MFA is enabled for the current user.
+    Check MFA status for the current user.
+
+    Returns whether MFA is enabled, when it was enabled, the number of remaining
+    backup codes, and whether the user's organization requires MFA.
     """
+    # Check org-level MFA requirement
+    org_mfa_required = False
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        try:
+            import main
+            Organization = main.Organization
+            org = db.query(Organization).filter(Organization.id == org_id).first()
+            if org and getattr(org, 'mfa_required', False):
+                org_mfa_required = True
+        except Exception as e:
+            logger.debug(f"Org MFA check skipped in status: {e}")
+
+    backup_codes = current_user.mfa_backup_codes or []
     return MFAStatusResponse(
         enabled=current_user.mfa_enabled or False,
         enabled_at=current_user.mfa_enabled_at.isoformat() if current_user.mfa_enabled_at else None,
-        has_backup_codes=bool(current_user.mfa_backup_codes),
+        has_backup_codes=bool(backup_codes),
+        backup_codes_remaining=len(backup_codes),
+        org_mfa_required=org_mfa_required,
     )
 
 
@@ -242,6 +390,7 @@ async def verify_mfa_login(
     On success, returns a new fully-authenticated token pair.
 
     This endpoint accepts either a 6-digit TOTP code or a backup code.
+    The provisional token is short-lived (5 min) and only valid for this endpoint.
     """
     # Rate limit MFA verification — 5/minute and 15/hour per IP to prevent brute force
     from routes.auth_routes import (

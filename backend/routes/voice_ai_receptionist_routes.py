@@ -1142,7 +1142,7 @@ Be concise - you're texting!"""
             messaging_profile_id=messaging_profile_id,
             user_id=user_id,
             lead_id=lead_id or (conversation.lead_id if conversation else None),
-            organization_id=getattr(current_user, 'organization_id', None) if 'current_user' in dir() else None,
+            organization_id=None,
         )
 
         # Store outbound message

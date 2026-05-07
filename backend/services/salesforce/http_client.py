@@ -116,8 +116,6 @@ _api_usage_lock = asyncio.Lock()
 
 async def _check_rate_limit():
     """Check and enforce Salesforce API rate limits."""
-    global _daily_api_calls, _daily_api_limit
-
     if _daily_api_limit <= 0:
         return
 

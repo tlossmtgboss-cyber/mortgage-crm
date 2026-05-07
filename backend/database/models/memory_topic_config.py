@@ -23,12 +23,12 @@ class MemoryTopicConfig(Base):
     __tablename__ = "memory_topic_config"
     __table_args__ = (
         Index("ix_topic_config_trigger", "call_trigger"),
-        Index("ix_topic_config_tenant", "tenant_id"),
+        Index("ix_topic_config_org", "organization_id"),
         {"extend_existing": True},
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     call_trigger = Column(String(50), nullable=False)
     loan_stage = Column(String(50), nullable=True)
     topics = Column(JSONB, nullable=False)

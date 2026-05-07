@@ -12,7 +12,10 @@ from datetime import datetime, timedelta, timezone
 import anthropic
 import re
 import json
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 # Lazy import to avoid circular imports

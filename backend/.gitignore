@@ -7,7 +7,7 @@ env/
 .env
 .env.*
 !.env.example
-!.env.template
+!.env.*.example
 
 # Python cache
 __pycache__/

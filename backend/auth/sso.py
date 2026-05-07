@@ -20,6 +20,8 @@ Usage:
     )
 """
 
+from __future__ import annotations
+
 import base64
 import hashlib
 import logging
@@ -28,10 +30,13 @@ import uuid
 import zlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
 
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from database.models.core import User
 
 logger = logging.getLogger(__name__)
 

@@ -1024,6 +1024,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Include IT Helpdesk routes (EXPERIMENTAL tier - gated)
     try:
+        from feature_tiers import get_tier, FeatureTier
         if get_tier("it_helpdesk") != FeatureTier.EXPERIMENTAL:
             from routes.it_helpdesk_routes import router as it_helpdesk_router
             app.include_router(it_helpdesk_router, prefix="/api/v1/it-helpdesk", tags=["IT Helpdesk"])

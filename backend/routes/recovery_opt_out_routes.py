@@ -298,10 +298,10 @@ async def list_chronic_no_shows(
     if not org_id:
         raise HTTPException(status_code=400, detail="No organization context")
 
+    from services.no_show_recovery import no_show_recovery_service
+
     _models = no_show_recovery_service._get_models()
     Appointment = _models["Appointment"]
-
-    from services.no_show_recovery import no_show_recovery_service
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 

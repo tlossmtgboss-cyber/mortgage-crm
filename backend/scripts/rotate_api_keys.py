@@ -276,10 +276,10 @@ CALENDLY_CLIENT_SECRET=<GET_FROM_CALENDLY>
 ENVIRONMENT=development
 '''
 
-    template_path = os.path.join(os.path.dirname(__file__), '..', '.env.template')
+    template_path = os.path.join(os.path.dirname(__file__), '..', '.env.template.example')
     with open(template_path, 'w') as f:
         f.write(template)
-    print(f"\n✅ Created .env.template at {template_path}")
+    print(f"\n✅ Created .env.template.example at {template_path}")
     print("   Use this as a reference for required variables.")
 
 

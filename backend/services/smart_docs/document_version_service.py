@@ -57,10 +57,12 @@ Usage:
     )
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
@@ -70,6 +72,9 @@ from exceptions import (
     PerenniaError,
     TenantIsolationError,
 )
+
+if TYPE_CHECKING:
+    from database.models.document_version import DocumentVersion
 
 logger = logging.getLogger(__name__)
 

@@ -1274,7 +1274,9 @@ async def get_permission_audit_log(
         query += " AND pal.timestamp <= :end_date"
         params["end_date"] = end_date
 
-    # Get total count
+    # SAFETY: 'query' is built entirely from hardcoded SQL string literals above
+    # (the base SELECT and conditional WHERE clauses like "AND pal.action = :action").
+    # All user-supplied values use :param bind syntax — never interpolated.
     count_result = db.execute(text(f"SELECT COUNT(*) FROM ({query}) sub"), params)
     total = count_result.scalar()
 

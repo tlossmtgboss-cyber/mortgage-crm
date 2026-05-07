@@ -96,7 +96,6 @@ _sla_trigger_service = None
 
 def get_sla_trigger_service(db: Session):
     """Get SLA trigger service instance."""
-    global _sla_trigger_service
     try:
         from services.salesforce_sla_trigger_service import SalesforceSLATriggerService
         return SalesforceSLATriggerService(db)

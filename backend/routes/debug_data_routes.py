@@ -17,6 +17,7 @@ import requests
 from utils.pii_mask import mask_email
 
 from auth.dependencies import require_auth
+from db import SessionLocal
 
 logger = logging.getLogger(__name__)
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")

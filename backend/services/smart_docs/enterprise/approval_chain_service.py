@@ -39,12 +39,21 @@ Usage:
     )
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import func, and_, or_, case, text
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from database.models.approval_chain import (
+        ApprovalChainConfig,
+        ApprovalDelegation,
+        ApprovalRequest,
+    )
 
 logger = logging.getLogger(__name__)
 

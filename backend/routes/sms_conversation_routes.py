@@ -338,7 +338,7 @@ async def get_conversation(
     def _set_rls():
         """(Re)set RLS tenant context for the current transaction."""
         try:
-            db.execute(text("SET LOCAL app.current_tenant = :org_id"), {"org_id": str(_rls_org)})
+            db.execute(text("SET LOCAL app.current_tenant = :org_id"), {"org_id": str(org_id)})
         except Exception:
             pass
 

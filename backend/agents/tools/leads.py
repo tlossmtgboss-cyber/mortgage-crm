@@ -1278,6 +1278,9 @@ def update_lead_fields(
         if not updates:
             return ToolResult.error("No fields provided to update")
 
+        # SAFETY: All keys in 'updates' are hardcoded string literals set in the
+        # if-chain above (stage, loan_amount, credit_score, etc.). Values use
+        # :param bind syntax — never interpolated into SQL.
         set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
         updates["lead_id"] = lead_id
 

@@ -3,12 +3,20 @@ GDPR/CCPA Data Routes
 Enterprise Readiness Check 8.11 + CMP-004/CMP-005
 
 Endpoints:
-    POST /api/v1/admin/gdpr/export              - Export all org data as JSON
-    POST /api/v1/admin/gdpr/deletion-request     - Submit a new deletion request
-    GET  /api/v1/admin/gdpr/deletion-requests    - List past deletion requests
+    --- Existing (org-level) ---
+    POST /api/v1/admin/gdpr/export              - Export all org data as JSON ZIP
+    POST /api/v1/admin/gdpr/deletion-request     - Submit & immediately execute a deletion
+    GET  /api/v1/admin/gdpr/deletion-requests    - List past deletion requests from audit log
     POST /api/v1/gdpr/data-subject-request       - Public: submit a DSAR (no auth)
     GET  /api/v1/gdpr/data-subject-request/{id}  - Public: check DSAR status by email
     GET  /api/v1/admin/gdpr/data-subject-requests - Admin: list/manage DSARs for org
+
+    --- New (right-to-erasure lifecycle) ---
+    POST /api/v1/gdpr/erasure-request                - Create erasure request (admin only)
+    GET  /api/v1/gdpr/erasure-requests               - List erasure requests (admin only)
+    POST /api/v1/gdpr/erasure-requests/{id}/execute   - Execute a pending erasure request
+    GET  /api/v1/gdpr/erasure-requests/{id}/report    - Audit report for an erasure request
+    GET  /api/v1/gdpr/data-export/{user_id}          - Export all data for a specific person
 
 Registration pattern: function-based (same as scorecard_routes, admin_ops_routes)
 """
@@ -18,7 +26,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 import json
 import io
 import zipfile
@@ -32,7 +40,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 class DeletionRequestBody(BaseModel):
-    """Request body for GDPR deletion request."""
+    """Request body for GDPR deletion request (immediate execution)."""
     user_id: Optional[int] = None
     borrower_email: Optional[str] = None
     reason: str = "gdpr_right_to_erasure"
@@ -52,6 +60,16 @@ class DeletionRequestResponse(BaseModel):
     error: Optional[str] = None
 
 
+class ErasureRequestBody(BaseModel):
+    """Request body for creating a managed erasure request."""
+    email: Optional[str] = Field(None, description="Email of the data subject")
+    user_id: Optional[int] = Field(None, description="Internal user ID of the data subject")
+    reason: str = Field(
+        "GDPR Article 17 right to erasure",
+        description="Legal basis or reason for the erasure request",
+    )
+
+
 class DSARSubmitBody(BaseModel):
     """Public DSAR submission body."""
     request_type: str = Field("access", description="Type: access, rectification, erasure, restriction")
@@ -65,15 +83,17 @@ class DSARSubmitBody(BaseModel):
 # ============================================================================
 
 def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
-    """Register GDPR/CCPA data deletion routes.
+    """Register GDPR/CCPA data privacy routes.
 
-    Endpoints:
-        POST /api/v1/admin/gdpr/deletion-request
-        GET  /api/v1/admin/gdpr/deletion-requests
+    Endpoints cover:
+    - Data export (org-wide and per-person)
+    - Data deletion (immediate and managed lifecycle)
+    - Data Subject Access Requests (DSAR)
+    - Erasure request tracking and audit reporting
     """
 
     # ==================================================================
-    # CMP-004: GDPR Data Export (Right to Portability)
+    # CMP-004: GDPR Data Export (Right to Portability) — Org-wide
     # ==================================================================
 
     @app.post("/api/v1/admin/gdpr/export", tags=["GDPR"])
@@ -103,7 +123,6 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
 
         try:
             # Tables to export — all tenant-scoped tables with organization_id
-            # Includes all PII-bearing tables for GDPR Article 20 compliance.
             EXPORT_TABLES = [
                 ("users", "SELECT id, email, first_name, last_name, phone, role, permission_role, is_active, created_at FROM users WHERE organization_id = :org_id"),
                 ("leads", "SELECT id, name, first_name, last_name, email, phone, stage, source, assigned_to, created_at, updated_at FROM leads WHERE organization_id = :org_id"),
@@ -125,7 +144,6 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                 ("audit_logs", "SELECT id, user_id, change_type, entity_type, reason, timestamp FROM audit_logs WHERE organization_id = :org_id ORDER BY timestamp DESC LIMIT 10000"),
             ]
 
-            # Build ZIP in memory
             zip_buffer = io.BytesIO()
             export_manifest = {
                 "organization_id": org_id,
@@ -142,8 +160,6 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                         if rows:
                             columns = rows[0]._fields if hasattr(rows[0], '_fields') else rows[0].keys()
                             data = [dict(zip(columns, row)) for row in rows]
-
-                            # Serialize with date handling
                             json_str = json.dumps(data, default=str, indent=2)
                             zf.writestr(f"{table_name}.json", json_str)
                             export_manifest["tables"][table_name] = len(data)
@@ -151,11 +167,9 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                             zf.writestr(f"{table_name}.json", "[]")
                             export_manifest["tables"][table_name] = 0
                     except Exception as table_err:
-                        # Table may not exist — skip gracefully
                         logger.warning(f"GDPR export skipped table {table_name}: {table_err}")
                         export_manifest["tables"][table_name] = f"skipped: {str(table_err)[:100]}"
 
-                # Add manifest
                 zf.writestr("_manifest.json", json.dumps(export_manifest, indent=2))
 
             # Log the export in audit trail
@@ -193,7 +207,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
             )
 
     # ==================================================================
-    # CMP-005: GDPR Data Deletion (Right to Erasure)
+    # CMP-005: GDPR Data Deletion — Immediate (existing)
     # ==================================================================
 
     @app.post("/api/v1/admin/gdpr/deletion-request", tags=["GDPR"])
@@ -203,7 +217,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
         current_user=Depends(get_current_user),
     ):
         """
-        Submit a GDPR/CCPA data deletion request.
+        Submit a GDPR/CCPA data deletion request (immediate execution).
 
         Requires admin privileges. Cascades PII removal across all tables
         while retaining required regulatory/audit records.
@@ -212,7 +226,6 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
         - user_id: Deletes PII for an internal user account
         - borrower_email: Deletes PII for a borrower across all related tables
         """
-        # Admin-only access check
         from utils.auth import require_admin
         require_admin(current_user)
 
@@ -265,7 +278,6 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
         Requires admin privileges. Returns deletion events recorded in the
         audit trail, ordered by most recent first.
         """
-        # Admin-only access check
         from utils.auth import require_admin
         require_admin(current_user)
 
@@ -298,9 +310,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                     "timestamp": row.timestamp.isoformat() if row.timestamp else None,
                 }
 
-                # Parse the after_state JSON for details
                 if row.after_state:
-                    import json
                     try:
                         details = json.loads(row.after_state) if isinstance(row.after_state, str) else row.after_state
                         entry["request_type"] = details.get("request_type")
@@ -322,6 +332,286 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to retrieve deletion history",
+            )
+
+    # ==================================================================
+    # NEW: Erasure Request Lifecycle (pending -> execute -> report)
+    # ==================================================================
+
+    @app.post("/api/v1/gdpr/erasure-request", tags=["GDPR"])
+    async def create_erasure_request(
+        body: ErasureRequestBody,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Submit a GDPR data erasure request (admin only).
+
+        Creates an erasure request record with status tracking. The request
+        starts in 'pending' status and must be explicitly executed via the
+        /execute endpoint.
+
+        Takes email and/or user_id to identify the data subject. At least
+        one must be provided.
+
+        IMPORTANT: Mortgage compliance requires 7-year record retention
+        (NMLS/RESPA/TRID). Erasure will anonymize borrower PII while
+        preserving loan record structure for regulatory compliance.
+        """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
+        if not body.email and not body.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one of 'email' or 'user_id' must be provided to identify the data subject",
+            )
+
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with current user",
+            )
+
+        try:
+            from services.gdpr_service import GDPRErasureService
+
+            svc = GDPRErasureService(db)
+            result = svc.create_erasure_request(
+                requester_id=current_user.id,
+                organization_id=org_id,
+                data_subject_email=body.email,
+                data_subject_user_id=body.user_id,
+                reason=body.reason,
+            )
+
+            logger.info(
+                f"GDPR erasure request created: id={result['id']}, "
+                f"by user {current_user.id}, subject={body.email or body.user_id}"
+            )
+
+            return result
+
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        except Exception as e:
+            logger.error(f"Failed to create erasure request: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create erasure request",
+            )
+
+    @app.get("/api/v1/gdpr/erasure-requests", tags=["GDPR"])
+    async def list_erasure_requests(
+        status_filter: Optional[str] = Query(None, alias="status", description="Filter by status: pending, approved, executing, completed, failed"),
+        limit: int = Query(50, ge=1, le=200),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        List GDPR erasure requests for the current organization (admin only).
+
+        Returns erasure requests with their lifecycle status, ordered by
+        most recent first.
+        """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with current user",
+            )
+
+        try:
+            from services.gdpr_service import GDPRErasureService
+
+            svc = GDPRErasureService(db)
+            requests = svc.list_erasure_requests(
+                organization_id=org_id,
+                status_filter=status_filter,
+                limit=limit,
+            )
+
+            return {
+                "total": len(requests),
+                "requests": requests,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to list erasure requests: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list erasure requests",
+            )
+
+    @app.post("/api/v1/gdpr/erasure-requests/{request_id}/execute", tags=["GDPR"])
+    async def execute_erasure_request(
+        request_id: int,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Execute a pending GDPR erasure request (admin only).
+
+        Transitions the request from pending/approved to executing, then
+        cascades PII removal across all related tables:
+        - Anonymize PII fields (replace with "[GDPR_REDACTED]")
+        - Keep audit trail records but strip PII from free-text fields
+        - Preserve loan records required for NMLS/RESPA compliance (7-year
+          retention) but anonymize borrower PII on them
+        - Handle cascade: lead -> loans -> documents -> activities -> communications
+
+        IMPORTANT: This operation is IRREVERSIBLE. Once PII is anonymized,
+        it cannot be recovered. Loan financial structure (amounts, rates,
+        dates, fees, disclosures) is preserved for regulatory compliance.
+        """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
+        try:
+            from services.gdpr_service import GDPRErasureService
+
+            svc = GDPRErasureService(db)
+            result = svc.execute_erasure_request(
+                request_id=request_id,
+                executed_by_id=current_user.id,
+            )
+
+            logger.info(
+                f"GDPR erasure request {request_id} executed by user {current_user.id}: "
+                f"deleted={result.get('records_deleted', 0)}, "
+                f"redacted={result.get('records_redacted', 0)}"
+            )
+
+            return result
+
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        except Exception as e:
+            logger.error(f"Erasure request {request_id} execution failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to execute erasure request",
+            )
+
+    @app.get("/api/v1/gdpr/erasure-requests/{request_id}/report", tags=["GDPR"])
+    async def get_erasure_report(
+        request_id: int,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Get a detailed audit report for a GDPR erasure request (admin only).
+
+        The report documents exactly what was anonymized/deleted, when, and
+        by whom. Designed for compliance officers and DPOs to verify that
+        erasure was properly executed per GDPR Article 17.
+
+        Includes compliance notes on the mortgage regulatory retention
+        tension (7-year NMLS/RESPA/TRID requirement vs GDPR erasure).
+        """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
+        try:
+            from services.gdpr_service import GDPRErasureService
+
+            svc = GDPRErasureService(db)
+            report = svc.generate_erasure_report(request_id=request_id)
+            return report
+
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate erasure report for {request_id}: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate erasure report",
+            )
+
+    # ==================================================================
+    # NEW: Per-Person Data Export (Article 20 — Individual Portability)
+    # ==================================================================
+
+    @app.get("/api/v1/gdpr/data-export/{identifier}", tags=["GDPR"])
+    async def export_person_data(
+        identifier: str,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Export all data for a specific person (admin only).
+
+        GDPR Article 20 — Right to data portability for an individual.
+        Returns a structured JSON document with all personal data organized
+        by category.
+
+        The identifier can be:
+        - An email address (detected by presence of '@')
+        - An internal user ID (numeric string)
+
+        Loan records are included with a note about 7-year regulatory
+        retention requirements.
+        """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with current user",
+            )
+
+        # Determine if identifier is email or user_id
+        email = None
+        user_id = None
+
+        if "@" in identifier:
+            email = identifier
+        else:
+            try:
+                user_id = int(identifier)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Identifier must be an email address or numeric user ID",
+                )
+
+        try:
+            from services.gdpr_service import GDPRErasureService
+
+            svc = GDPRErasureService(db)
+            export = svc.export_contact_data(
+                org_id=org_id,
+                email=email,
+                user_id=user_id,
+            )
+
+            return export
+
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        except Exception as e:
+            logger.error(f"GDPR per-person export failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to export person data",
             )
 
     # ==================================================================
@@ -535,4 +825,4 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                 detail="Failed to list data subject requests",
             )
 
-    logger.info("GDPR/CCPA data deletion routes loaded")
+    logger.info("GDPR/CCPA data privacy routes loaded (export, deletion, erasure lifecycle, DSAR)")

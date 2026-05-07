@@ -25,14 +25,19 @@ Usage:
     # Returns {"large_deposit_threshold": 5000, "nsf_max_count_6months": 3, ...}
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from database.models.business_rules import BusinessRuleConfig
 
 logger = logging.getLogger(__name__)
 

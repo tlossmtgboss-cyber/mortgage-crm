@@ -4,7 +4,12 @@ Report Export Routes
 
 Enterprise Readiness Domain 9: Analytics & Reporting
 
-Endpoints:
+General-Purpose Report Exports (CSV/XLSX):
+- GET  /api/v1/reports/pipeline/export?format=csv|xlsx   — Pipeline data (leads + loans)
+- GET  /api/v1/reports/production/export?format=csv|xlsx — LO production scorecard
+- GET  /api/v1/reports/compliance/export?format=csv|xlsx — Compliance / SLA / risk report
+
+Legacy / Structured Report Exports:
 - GET  /api/v1/reports/sla-compliance         — SLA compliance report (Check 9.3)
 - POST /api/v1/reports/export/pdf              — Export any report as PDF (Check 9.8)
 - POST /api/v1/reports/export/excel            — Export any report as Excel (Check 9.9)
@@ -129,6 +134,183 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
+
+    # =========================================================================
+    # General-Purpose Pipeline / Production / Compliance Export (GET)
+    # =========================================================================
+
+    @app.get("/api/v1/reports/pipeline/export")
+    async def export_pipeline_report(
+        request: Request,
+        format: Literal["csv", "xlsx"] = Query("csv"),
+        stage: Optional[str] = Query(None, description="Filter by stage"),
+        date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+        date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Export pipeline data (leads + loans) as CSV or XLSX.
+        Scoped by role via get_report_scope().
+        """
+        from middleware.report_access import get_report_scope
+        from services.report_export_service import (
+            format_pipeline_report,
+            export_to_csv,
+            export_to_excel,
+            PIPELINE_COLUMNS,
+        )
+
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
+
+        scope = get_report_scope(current_user)
+
+        filters = {}
+        if stage:
+            filters["stage"] = stage
+        if date_from:
+            try:
+                filters["date_from"] = datetime.strptime(date_from, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(400, "date_from must be YYYY-MM-DD")
+        if date_to:
+            try:
+                filters["date_to"] = datetime.strptime(date_to, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(400, "date_to must be YYYY-MM-DD")
+
+        data = format_pipeline_report(db=db, org_id=org_id, scope=scope, filters=filters)
+
+        # Audit trail
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=org_id,
+                resource_type="pipeline_report", export_format=format,
+                ip_address=_get_client_ip(request),
+                details={"record_count": len(data), "filters": filters},
+            )
+        except Exception:
+            pass
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        if format == "xlsx":
+            return export_to_excel(data, PIPELINE_COLUMNS, sheet_name="Pipeline", filename=f"pipeline_report_{ts}.xlsx")
+        return export_to_csv(data, PIPELINE_COLUMNS, filename=f"pipeline_report_{ts}.csv")
+
+    @app.get("/api/v1/reports/production/export")
+    async def export_production_report(
+        request: Request,
+        format: Literal["csv", "xlsx"] = Query("csv"),
+        date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+        date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Export LO production scorecard as CSV or XLSX.
+        Scoped by role via get_report_scope().
+        """
+        from middleware.report_access import get_report_scope
+        from services.report_export_service import (
+            format_production_report,
+            export_to_csv,
+            export_to_excel,
+            PRODUCTION_COLUMNS,
+        )
+
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
+
+        scope = get_report_scope(current_user)
+
+        parsed_from = None
+        parsed_to = None
+        if date_from:
+            try:
+                parsed_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(400, "date_from must be YYYY-MM-DD")
+        if date_to:
+            try:
+                parsed_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(400, "date_to must be YYYY-MM-DD")
+
+        data = format_production_report(
+            db=db, org_id=org_id, scope=scope,
+            date_from=parsed_from, date_to=parsed_to,
+        )
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=org_id,
+                resource_type="production_report", export_format=format,
+                ip_address=_get_client_ip(request),
+                details={"record_count": len(data), "date_from": date_from, "date_to": date_to},
+            )
+        except Exception:
+            pass
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        if format == "xlsx":
+            return export_to_excel(data, PRODUCTION_COLUMNS, sheet_name="Production", filename=f"production_report_{ts}.xlsx")
+        return export_to_csv(data, PRODUCTION_COLUMNS, filename=f"production_report_{ts}.csv")
+
+    @app.get("/api/v1/reports/compliance/export")
+    async def export_compliance_report(
+        request: Request,
+        format: Literal["csv", "xlsx"] = Query("csv"),
+        period_days: int = Query(30, ge=1, le=365),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Export compliance report (loan SLA/risk data) as CSV or XLSX.
+        Scoped by role via get_report_scope().
+        """
+        from middleware.report_access import get_report_scope
+        from services.report_export_service import (
+            format_compliance_report,
+            export_to_csv,
+            export_to_excel,
+            COMPLIANCE_COLUMNS,
+        )
+
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
+
+        scope = get_report_scope(current_user)
+
+        data = format_compliance_report(
+            db=db, org_id=org_id, scope=scope,
+            period_days=period_days,
+        )
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=org_id,
+                resource_type="compliance_report", export_format=format,
+                ip_address=_get_client_ip(request),
+                details={"record_count": len(data), "period_days": period_days},
+            )
+        except Exception:
+            pass
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        if format == "xlsx":
+            return export_to_excel(data, COMPLIANCE_COLUMNS, sheet_name="Compliance", filename=f"compliance_report_{ts}.xlsx")
+        return export_to_csv(data, COMPLIANCE_COLUMNS, filename=f"compliance_report_{ts}.csv")
+
+    # =========================================================================
+    # Legacy POST-based Exports (Enterprise Readiness Domain 9)
+    # =========================================================================
 
     @app.post("/api/v1/reports/export/pdf")
     async def export_report_pdf(

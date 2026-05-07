@@ -19,13 +19,13 @@ class MemoryStaging(Base):
     __tablename__ = "memory_staging"
     __table_args__ = (
         Index("ix_staging_status", "status"),
-        Index("ix_staging_tenant", "tenant_id"),
+        Index("ix_staging_org", "organization_id"),
         Index("ix_staging_borrower", "borrower_id"),
         {"extend_existing": True},
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     borrower_id = Column(Integer, ForeignKey("leads.id"), nullable=False)
     source_call_id = Column(String(255), nullable=False)
     fact_text = Column(Text, nullable=False)

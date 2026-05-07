@@ -713,28 +713,61 @@ class PerenniaS3Service:
 
         return f"org-{organization_id}/documents/{borrower_folder}/{loan_folder}/{doc_type.lower()}/{unique_id}.{ext}"
 
-    def validate_org_access(self, storage_key: str, organization_id: int) -> bool:
+    def validate_org_access(
+        self,
+        storage_key: str,
+        organization_id: int,
+        allow_legacy_keys: bool = False,
+    ) -> bool:
         """
         Verify the storage key belongs to the requesting organization.
 
-        Checks both new (org-{id}/) and old (org/{id}/) prefix formats.
+        Keys MUST begin with org-{id}/ or org/{id}/. Legacy untagged keys
+        are denied by default and must be migrated via
+        scripts/migrate_legacy_s3_keys.py.
 
         Args:
             storage_key: S3 object key to validate
             organization_id: Organization ID of the requesting user
+            allow_legacy_keys: Explicit admin override for legacy keys
+                that have not yet been migrated. Should only be True
+                during migration or admin-initiated operations.
 
         Returns:
             True if the key belongs to the org, False otherwise
         """
-        if not organization_id:
+        if not organization_id or not storage_key:
             return False
+
         # Check new format (org-{id}/) and legacy format (org/{id}/)
         new_prefix = f"org-{organization_id}/"
         legacy_prefix = f"org/{organization_id}/"
+        if storage_key.startswith(new_prefix) or storage_key.startswith(legacy_prefix):
+            return True
+
+        # Key has an org prefix but for a different org -- deny
         if storage_key.startswith("org-") or storage_key.startswith("org/"):
-            return storage_key.startswith(new_prefix) or storage_key.startswith(legacy_prefix)
-        # Legacy keys (no org prefix) -- allow access for backward compatibility
-        return True
+            logger.warning(
+                "s3_access_denied key=%s org_id=%s reason=wrong_org_prefix",
+                storage_key, organization_id,
+            )
+            return False
+
+        # Legacy key (no org prefix at all) -- deny unless explicitly overridden
+        if allow_legacy_keys:
+            logger.warning(
+                "s3_legacy_key_access_allowed key=%s org_id=%s "
+                "reason=admin_override (migrate via scripts/migrate_legacy_s3_keys.py)",
+                storage_key, organization_id,
+            )
+            return True
+
+        logger.warning(
+            "s3_access_denied key=%s org_id=%s reason=no_org_prefix "
+            "(legacy key must be migrated via scripts/migrate_legacy_s3_keys.py)",
+            storage_key, organization_id,
+        )
+        return False
 
     def list_loan_documents(
         self,

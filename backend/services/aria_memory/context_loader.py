@@ -181,22 +181,22 @@ class AriaContextLoader:
             self._db.query(MemoryTopicConfig)
             .filter(
                 MemoryTopicConfig.call_trigger == call_trigger,
-                (MemoryTopicConfig.tenant_id == tenant_id) | (MemoryTopicConfig.tenant_id.is_(None)),
+                (MemoryTopicConfig.organization_id == tenant_id) | (MemoryTopicConfig.organization_id.is_(None)),
             )
             .order_by(MemoryTopicConfig.priority.desc())
             .all()
         )
 
         for cfg in configs:
-            if cfg.tenant_id == tenant_id and cfg.loan_stage == loan_stage:
+            if cfg.organization_id == tenant_id and cfg.loan_stage == loan_stage:
                 return cfg.topics or []
-            if cfg.tenant_id == tenant_id and cfg.loan_stage is None:
+            if cfg.organization_id == tenant_id and cfg.loan_stage is None:
                 return cfg.topics or []
 
         for cfg in configs:
-            if cfg.tenant_id is None and cfg.loan_stage == loan_stage:
+            if cfg.organization_id is None and cfg.loan_stage == loan_stage:
                 return cfg.topics or []
-            if cfg.tenant_id is None and cfg.loan_stage is None:
+            if cfg.organization_id is None and cfg.loan_stage is None:
                 return cfg.topics or []
 
         return ["general", "preferences"]

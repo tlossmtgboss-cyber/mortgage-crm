@@ -12,12 +12,18 @@ This service can be triggered by:
 - External cron job calling the API endpoint
 - Railway scheduled task
 - Manual trigger from admin panel
+
+TENANT ISOLATION:
+This module runs as a background/cron task outside the FastAPI request lifecycle.
+All database access MUST use get_db_with_tenant(org_id) to set RLS context.
+The top-level function process_weekly_tasks_all_orgs() iterates over every active
+organization, creating a tenant-scoped session for each one.
 """
 
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text as sa_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,11 +47,15 @@ EXCLUDED_STAKEHOLDER_ROLES = ['underwriter', 'closer']
 class WeeklyTaskScheduler:
     """
     Manages weekly recurring tasks for loan workflows.
+
+    IMPORTANT: The db session passed to this class MUST have RLS tenant context
+    set via get_db_with_tenant(org_id). Never pass an unscoped session.
     """
 
-    def __init__(self, db: Session, models: Dict[str, Any]):
+    def __init__(self, db: Session, models: Dict[str, Any], organization_id: Optional[int] = None):
         self.db = db
         self.models = models
+        self.organization_id = organization_id
         self.Loan = models.get('Loan')
         self.Task = models.get('Task')
         self.User = models.get('User')
@@ -82,23 +92,20 @@ class WeeklyTaskScheduler:
 
     def get_loans_for_weekly_update(self, workflow_key: str = 'under_contract') -> List[Any]:
         """
-        Get all loans eligible for weekly updates.
+        Get all loans eligible for weekly updates within the current tenant scope.
 
         Criteria:
         - Loan is in Disclosed status or later (but not closed/canceled/etc.)
         - Has a disclosed_date set
         - Not in a terminal status
+        - Belongs to the current organization (enforced by RLS + explicit filter)
         """
         if not self.Loan:
             logger.error("Loan model not available")
             return []
 
-        # Get active loans that have entered LE Pending
-        # Exclude terminal statuses
-        terminal_statuses = DEFAULT_STOP_STATUSES
-
         try:
-            loans = self.db.query(self.Loan).filter(
+            query = self.db.query(self.Loan).filter(
                 and_(
                     # Has entered processing (has Disclosed date or equivalent)
                     or_(
@@ -108,13 +115,22 @@ class WeeklyTaskScheduler:
                     # Not in terminal status
                     ~self.Loan.stage.in_(['FUNDED', 'WITHDRAWN', 'DENIED'])
                 )
-            ).all()
+            )
 
-            logger.info(f"Found {len(loans)} loans eligible for weekly updates")
+            # Explicit organization_id filter as defense-in-depth alongside RLS
+            if self.organization_id and hasattr(self.Loan, 'organization_id'):
+                query = query.filter(self.Loan.organization_id == self.organization_id)
+
+            loans = query.all()
+
+            logger.info(
+                f"Found {len(loans)} loans eligible for weekly updates "
+                f"(org_id={self.organization_id})"
+            )
             return loans
 
         except Exception as e:
-            logger.error(f"Error querying loans for weekly update: {e}")
+            logger.error(f"Error querying loans for weekly update (org_id={self.organization_id}): {e}")
             return []
 
     def get_loan_stakeholders(self, loan_id: int, exclude_roles: List[str] = None) -> List[Dict]:
@@ -326,7 +342,7 @@ class WeeklyTaskScheduler:
 
     def process_weekly_tasks(self, workflow_key: str = 'under_contract', dry_run: bool = False) -> Dict:
         """
-        Process all weekly recurring tasks for a workflow.
+        Process all weekly recurring tasks for a workflow within the current tenant scope.
 
         Args:
             workflow_key: The workflow to process
@@ -340,6 +356,7 @@ class WeeklyTaskScheduler:
 
         results = {
             'workflow_key': workflow_key,
+            'organization_id': self.organization_id,
             'date': today.isoformat(),
             'dry_run': dry_run,
             'loans_processed': 0,
@@ -354,9 +371,24 @@ class WeeklyTaskScheduler:
                 results['errors'].append("WorkflowConfiguration model not available")
                 return results
 
-            workflow = self.db.query(self.WorkflowConfiguration).filter(
+            query = self.db.query(self.WorkflowConfiguration).filter(
                 self.WorkflowConfiguration.workflow_key == workflow_key
-            ).first()
+            )
+
+            # Explicit org filter as defense-in-depth alongside RLS
+            if self.organization_id and hasattr(self.WorkflowConfiguration, 'organization_id'):
+                query = query.filter(
+                    or_(
+                        self.WorkflowConfiguration.organization_id == self.organization_id,
+                        # Also include system templates (org_id=None, is_system_template=True)
+                        and_(
+                            self.WorkflowConfiguration.organization_id.is_(None),
+                            self.WorkflowConfiguration.is_system_template == True
+                        )
+                    )
+                )
+
+            workflow = query.first()
 
             if not workflow:
                 results['errors'].append(f"Workflow '{workflow_key}' not found")
@@ -379,7 +411,7 @@ class WeeklyTaskScheduler:
                 results['message'] = "No weekly recurring tasks configured for this workflow"
                 return results
 
-            logger.info(f"Found {len(weekly_days)} weekly task configurations")
+            logger.info(f"Found {len(weekly_days)} weekly task configurations (org_id={self.organization_id})")
 
             # Get eligible loans
             loans = self.get_loans_for_weekly_update(workflow_key)
@@ -429,10 +461,13 @@ class WeeklyTaskScheduler:
             if not dry_run:
                 self.db.commit()
 
-            logger.info(f"Weekly task processing complete: {results['tasks_created']} tasks created")
+            logger.info(
+                f"Weekly task processing complete for org_id={self.organization_id}: "
+                f"{results['tasks_created']} tasks created"
+            )
 
         except Exception as e:
-            error_msg = f"Error in process_weekly_tasks: {str(e)}"
+            error_msg = f"Error in process_weekly_tasks (org_id={self.organization_id}): {str(e)}"
             logger.error(error_msg)
             results['errors'].append(error_msg)
             self.db.rollback()
@@ -440,6 +475,113 @@ class WeeklyTaskScheduler:
         return results
 
 
-def get_weekly_task_scheduler(db: Session, models: Dict[str, Any]) -> WeeklyTaskScheduler:
-    """Factory function to create a WeeklyTaskScheduler instance."""
-    return WeeklyTaskScheduler(db, models)
+def get_weekly_task_scheduler(
+    db: Session,
+    models: Dict[str, Any],
+    organization_id: Optional[int] = None
+) -> WeeklyTaskScheduler:
+    """Factory function to create a WeeklyTaskScheduler instance.
+
+    Args:
+        db: SQLAlchemy session (should have RLS tenant context set).
+        models: Dict of model classes (Loan, Task, User, WorkflowConfiguration, etc.).
+        organization_id: Organization ID for explicit filtering (defense-in-depth).
+    """
+    return WeeklyTaskScheduler(db, models, organization_id=organization_id)
+
+
+def process_weekly_tasks_all_orgs(
+    models: Dict[str, Any],
+    workflow_key: str = 'under_contract',
+    dry_run: bool = False
+) -> Dict:
+    """
+    Process weekly tasks across ALL active organizations with proper tenant isolation.
+
+    This is the correct entry point for cron jobs, Railway scheduled tasks, and any
+    background execution that runs outside the FastAPI request lifecycle.
+
+    Each organization gets its own tenant-scoped database session via
+    get_db_with_tenant(org_id), ensuring RLS policies are enforced and
+    no cross-tenant data leakage can occur.
+
+    Args:
+        models: Dict of model classes.
+        workflow_key: Which workflow to process (default: under_contract).
+        dry_run: If True, only simulate and report what would be done.
+
+    Returns:
+        Aggregate summary across all organizations.
+    """
+    from db import SessionLocal, get_db_with_tenant
+
+    logger.info(f"Starting weekly task processing across all orgs (workflow_key={workflow_key}, dry_run={dry_run})")
+    start_time = datetime.now(timezone.utc)
+
+    # Step 1: Get all active organization IDs with an unscoped session
+    lookup_db = SessionLocal()
+    try:
+        org_ids = [
+            row[0] for row in
+            lookup_db.execute(sa_text(
+                "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
+            )).fetchall()
+        ]
+    finally:
+        lookup_db.close()
+
+    logger.info(f"Found {len(org_ids)} active organizations to process")
+
+    aggregate = {
+        'workflow_key': workflow_key,
+        'date': start_time.isoformat(),
+        'dry_run': dry_run,
+        'organizations_processed': 0,
+        'organizations_with_tasks': 0,
+        'total_loans_processed': 0,
+        'total_tasks_created': 0,
+        'total_tasks_skipped': 0,
+        'org_errors': 0,
+        'per_org_results': [],
+        'errors': []
+    }
+
+    # Step 2: Iterate per-org with tenant-scoped sessions
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                scheduler = WeeklyTaskScheduler(tenant_db, models, organization_id=org_id)
+                org_results = scheduler.process_weekly_tasks(
+                    workflow_key=workflow_key,
+                    dry_run=dry_run
+                )
+
+                aggregate['organizations_processed'] += 1
+                aggregate['total_loans_processed'] += org_results.get('loans_processed', 0)
+                aggregate['total_tasks_created'] += org_results.get('tasks_created', 0)
+                aggregate['total_tasks_skipped'] += org_results.get('tasks_skipped', 0)
+
+                if org_results.get('tasks_created', 0) > 0:
+                    aggregate['organizations_with_tasks'] += 1
+
+                if org_results.get('errors'):
+                    aggregate['per_org_results'].append({
+                        'org_id': org_id,
+                        'errors': org_results['errors']
+                    })
+
+        except Exception as e:
+            aggregate['org_errors'] += 1
+            error_msg = f"Weekly task processing failed for org_id={org_id}: {str(e)}"
+            logger.exception(error_msg)
+            aggregate['errors'].append(error_msg)
+
+    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+    logger.info(
+        f"Weekly task processing complete in {elapsed:.1f}s: "
+        f"{aggregate['organizations_processed']} orgs processed, "
+        f"{aggregate['total_tasks_created']} tasks created, "
+        f"{aggregate['org_errors']} org errors"
+    )
+
+    return aggregate

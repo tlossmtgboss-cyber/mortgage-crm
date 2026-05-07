@@ -173,7 +173,7 @@ TRANSCRIPT:
         for item in items:
             content_hash = hashlib.md5(item["fact_text"].encode()).hexdigest()[:32]
             staging = MemoryStaging(
-                tenant_id=tenant_id,
+                organization_id=tenant_id,
                 borrower_id=borrower_id,
                 source_call_id=source_call_id,
                 fact_text=item["fact_text"],
@@ -246,7 +246,7 @@ TRANSCRIPT:
         try:
             from database.models.memory_audit import MemoryAuditEvent
             event = MemoryAuditEvent(
-                tenant_id=tenant_id,
+                organization_id=tenant_id,
                 borrower_id=borrower_id,
                 event_type=event_type,
                 source_call_id=source_call_id,

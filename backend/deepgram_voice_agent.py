@@ -12,6 +12,7 @@ import json
 import asyncio
 import base64
 import os
+import websockets
 from typing import Optional, Dict, Any
 import uuid
 

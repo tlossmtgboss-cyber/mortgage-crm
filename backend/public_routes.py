@@ -32,6 +32,7 @@ _ENUM_FIX_COLUMNS = frozenset({
     "tolerance_category", "day_of_week", "priority", "meeting_mode",
     "meeting_type", "status", "default_meeting_mode", "routing_strategy",
     "default_mode", "type", "severity", "category",
+    "doc_type", "doc_category",
 })
 _ENUM_FIX_TYPES = frozenset({
     "leadstage", "loanstage", "loanpurpose", "emailintakematchstatus",
@@ -296,6 +297,9 @@ async def seed_demo_data(
             ("referral_partners", "status", None),
             ("mum_clients", "status", None),
         ]
+        # SAFETY: tbl, col, enum_name all come from the hardcoded enum_fixes list
+        # above (never from user input). Each is additionally validated against
+        # _ENUM_FIX_TABLES, _ENUM_FIX_COLUMNS, and _ENUM_FIX_TYPES frozensets.
         for tbl, col, enum_name in enum_fixes:
             if tbl not in _ENUM_FIX_TABLES:
                 raise ValueError(f"Blocked SQL on non-whitelisted table: {tbl}")
@@ -322,6 +326,8 @@ async def seed_demo_data(
         db.commit()
 
         # Clean existing demo data (order matters for FKs)
+        # SAFETY: table names are hardcoded literals in the list below, validated
+        # against _DEMO_CLEANUP_TABLES frozenset. org_id uses :oid bind parameter.
         for table in [
             "morning_briefings", "stage_history", "disclosure_events", "loan_fees",
             "compliance_alerts", "scheduler_appointments", "availability_slots",
@@ -394,12 +400,15 @@ async def seed_demo_data(
             lead_ids.append(lid)
 
         # ── FORCE-CLEAN EXISTING LOANS by loan_number pattern ──
-        # NOTE: fk_table names are from a static hardcoded list (safe for f-string interpolation).
-        # The subquery uses a bound parameter to prevent SQL injection.
+        # SAFETY: fk_table names are hardcoded literals in the list below, validated
+        # against _DEMO_CLEANUP_TABLES frozenset for defense-in-depth. The subquery
+        # uses :loan_pattern bind parameter to prevent SQL injection.
         _loan_subq = "SELECT id FROM loans WHERE loan_number LIKE :loan_pattern"
         _loan_pattern_param = {"loan_pattern": "SP-2026-%"}
         for fk_table in ["stage_history", "disclosure_events", "loan_fees", "compliance_alerts",
                          "documents", "activities", "loan_team_members", "scheduler_appointments"]:
+            if fk_table not in _DEMO_CLEANUP_TABLES:
+                raise ValueError(f"Blocked SQL on non-whitelisted table: {fk_table}")
             try:
                 sp = db.begin_nested()
                 db.execute(_text(f"DELETE FROM {fk_table} WHERE loan_id IN ({_loan_subq})"), _loan_pattern_param)

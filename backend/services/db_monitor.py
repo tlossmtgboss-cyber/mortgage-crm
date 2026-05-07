@@ -213,8 +213,6 @@ def check_pool_health() -> Dict[str, Any]:
 
 def _monitor_loop():
     """Background loop that logs pool stats every MONITOR_INTERVAL_SECONDS."""
-    global _monitor_running
-
     logger.info(
         f"DB pool monitor started (interval={MONITOR_INTERVAL_SECONDS}s, "
         f"warn={POOL_WARNING_THRESHOLD*100:.0f}%, crit={POOL_CRITICAL_THRESHOLD*100:.0f}%)"

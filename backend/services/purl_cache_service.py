@@ -13,6 +13,11 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from functools import wraps
 
+try:
+    import redis
+except ImportError:
+    redis = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +34,9 @@ def get_redis_client():
 
     if _redis_client is None:
         try:
-            import redis
+            if redis is None:
+                logger.warning("Redis package not installed. Caching disabled.")
+                return None
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             _redis_client = redis.from_url(redis_url, decode_responses=True)
             # Test connection

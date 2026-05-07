@@ -17,6 +17,9 @@ from integrations.microsoft_graph import graph_client
 from integrations.sms_service import get_sms_client, SMSTemplates
 from integrations.agentic_ai import agentic_ai, TriggerType
 
+# Module-level sms_client for integration dicts passed to agentic AI
+sms_client = get_sms_client()
+
 # OpenAI for AI-powered SMS responses
 try:
     from services.openai_conversation_service import OpenAIConversationService

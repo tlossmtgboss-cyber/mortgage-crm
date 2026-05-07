@@ -8,7 +8,7 @@ Admin-only endpoint that triggers full recalc of computed fields.
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,7 @@ def _get_market_rate(db: Session) -> float:
 
 @router.post("/recalculate")
 async def batch_recalculate(
+    request: Request,
     dry_run: bool = False,
     limit: int = 1000,
     db: Session = Depends(get_db),

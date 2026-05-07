@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 
 # Try to import redis.asyncio - gracefully degrade if not available
 try:
+    import redis
     import redis.asyncio as aioredis
     REDIS_AVAILABLE = True
 except ImportError:
+    redis = None  # type: ignore[assignment]
     aioredis = None
     REDIS_AVAILABLE = False
     logger.warning("redis.asyncio not available - CRM context caching disabled")

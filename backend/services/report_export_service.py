@@ -35,6 +35,8 @@ from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from decimal import Decimal
 
+from fastapi.responses import StreamingResponse
+
 logger = logging.getLogger(__name__)
 
 
@@ -738,6 +740,471 @@ def generate_csv(report_data: Dict[str, Any], report_type: str) -> bytes:
 
 
 # =============================================================================
+# General-Purpose Export Helpers (StreamingResponse wrappers)
+# =============================================================================
+
+def export_to_csv(
+    data: List[Dict[str, Any]],
+    columns: List[str],
+    filename: str = "export.csv",
+) -> StreamingResponse:
+    """
+    Export a list of dicts to CSV with proper escaping and UTF-8 BOM.
+
+    Args:
+        data: Rows as list of dicts.
+        columns: Ordered list of column keys to include.
+        filename: Download filename.
+
+    Returns:
+        FastAPI StreamingResponse ready to return from an endpoint.
+    """
+    from fastapi.responses import StreamingResponse
+
+    buffer = io.BytesIO()
+    # UTF-8 BOM so Excel opens with correct encoding
+    buffer.write(b"\xef\xbb\xbf")
+
+    text_wrapper = io.TextIOWrapper(buffer, encoding="utf-8", newline="", write_through=True)
+    writer = csv.DictWriter(text_wrapper, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    for row in data:
+        # Coerce values to string-safe representations
+        safe_row = {}
+        for col in columns:
+            val = row.get(col, "")
+            if val is None:
+                safe_row[col] = ""
+            elif isinstance(val, Decimal):
+                safe_row[col] = str(val)
+            elif isinstance(val, (datetime, date)):
+                safe_row[col] = val.isoformat()
+            else:
+                safe_row[col] = val
+        writer.writerow(safe_row)
+
+    text_wrapper.detach()  # release without closing underlying buffer
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def export_to_excel(
+    data: List[Dict[str, Any]],
+    columns: List[str],
+    sheet_name: str = "Report",
+    filename: str = "export.xlsx",
+) -> StreamingResponse:
+    """
+    Export a list of dicts to an XLSX workbook using openpyxl.
+
+    Args:
+        data: Rows as list of dicts.
+        columns: Ordered list of column keys to include.
+        sheet_name: Worksheet name.
+        filename: Download filename.
+
+    Returns:
+        FastAPI StreamingResponse ready to return from an endpoint.
+    """
+    from fastapi.responses import StreamingResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+
+    # Header styling
+    header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=10)
+    header_fill = PatternFill(start_color="2B6CB0", end_color="2B6CB0", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+
+    # Write header row
+    for col_idx, col_name in enumerate(columns, 1):
+        cell = ws.cell(row=1, column=col_idx, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    # Write data rows
+    for row_idx, row in enumerate(data, 2):
+        for col_idx, col_name in enumerate(columns, 1):
+            val = row.get(col_name, "")
+            if isinstance(val, Decimal):
+                val = float(val)
+            elif isinstance(val, (datetime, date)):
+                val = val.isoformat()
+            elif val is None:
+                val = ""
+            ws.cell(row=row_idx, column=col_idx, value=val).border = thin_border
+
+    # Auto-fit column widths
+    for col_idx in range(1, len(columns) + 1):
+        col_letter = get_column_letter(col_idx)
+        max_len = len(str(ws.cell(row=1, column=col_idx).value or ""))
+        for row_idx in range(2, min(len(data) + 2, 102)):  # sample first 100 rows
+            cell_len = len(str(ws.cell(row=row_idx, column=col_idx).value or ""))
+            if cell_len > max_len:
+                max_len = cell_len
+        ws.column_dimensions[col_letter].width = max(10, min(max_len + 2, 40))
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# =============================================================================
+# Report Formatters (query DB and return flat list[dict] for export)
+# =============================================================================
+
+def format_pipeline_report(
+    db,
+    org_id: int,
+    scope: Dict[str, Any],
+    filters: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Build a flat pipeline report from leads and loans.
+
+    Args:
+        db: SQLAlchemy session.
+        org_id: Organization ID.
+        scope: Scope dict from get_report_scope().
+        filters: Optional dict with keys like 'stage', 'date_from', 'date_to'.
+
+    Returns:
+        List of dicts ready for CSV/Excel export.
+    """
+    from database.models import Lead, Loan, User
+
+    filters = filters or {}
+
+    # --- Leads ---
+    from middleware.report_access import apply_scope_to_lead_query, apply_scope_to_loan_query
+
+    lead_q = db.query(
+        Lead.id,
+        Lead.name,
+        Lead.email,
+        Lead.phone,
+        Lead.stage,
+        Lead.source,
+        Lead.ai_score,
+        Lead.loan_amount,
+        Lead.loan_type,
+        Lead.created_at,
+    )
+    lead_q = apply_scope_to_lead_query(lead_q, scope, Lead)
+
+    if filters.get("stage"):
+        lead_q = lead_q.filter(Lead.stage == filters["stage"])
+    if filters.get("date_from"):
+        lead_q = lead_q.filter(Lead.created_at >= filters["date_from"])
+    if filters.get("date_to"):
+        lead_q = lead_q.filter(Lead.created_at <= filters["date_to"])
+
+    lead_q = lead_q.order_by(Lead.created_at.desc()).limit(5000)
+    leads = lead_q.all()
+
+    # --- Loans ---
+    loan_q = db.query(
+        Loan.id,
+        Loan.loan_number,
+        Loan.borrower_name,
+        Loan.stage,
+        Loan.loan_type,
+        Loan.amount,
+        Loan.rate,
+        Loan.days_in_stage,
+        Loan.closing_date,
+        Loan.funded_date,
+        Loan.created_at,
+        Loan.loan_officer_name,
+    )
+    loan_q = apply_scope_to_loan_query(loan_q, scope, Loan)
+
+    if filters.get("stage"):
+        loan_q = loan_q.filter(Loan.stage == filters["stage"])
+    if filters.get("date_from"):
+        loan_q = loan_q.filter(Loan.created_at >= filters["date_from"])
+    if filters.get("date_to"):
+        loan_q = loan_q.filter(Loan.created_at <= filters["date_to"])
+
+    loan_q = loan_q.order_by(Loan.created_at.desc()).limit(5000)
+    loans = loan_q.all()
+
+    rows: List[Dict[str, Any]] = []
+
+    for ld in leads:
+        rows.append({
+            "record_type": "Lead",
+            "id": ld.id,
+            "name": ld.name or "",
+            "email": ld.email or "",
+            "phone": ld.phone or "",
+            "stage": ld.stage or "",
+            "source": ld.source or "",
+            "ai_score": ld.ai_score,
+            "loan_type": ld.loan_type or "",
+            "amount": ld.loan_amount,
+            "rate": None,
+            "days_in_stage": None,
+            "loan_number": None,
+            "loan_officer": None,
+            "closing_date": None,
+            "funded_date": None,
+            "created_at": ld.created_at,
+        })
+
+    for ln in loans:
+        rows.append({
+            "record_type": "Loan",
+            "id": ln.id,
+            "name": ln.borrower_name or "",
+            "email": "",
+            "phone": "",
+            "stage": ln.stage or "",
+            "source": "",
+            "ai_score": None,
+            "loan_type": ln.loan_type or "",
+            "amount": ln.amount,
+            "rate": ln.rate,
+            "days_in_stage": ln.days_in_stage,
+            "loan_number": ln.loan_number or "",
+            "loan_officer": ln.loan_officer_name or "",
+            "closing_date": ln.closing_date,
+            "funded_date": ln.funded_date,
+            "created_at": ln.created_at,
+        })
+
+    return rows
+
+
+PIPELINE_COLUMNS = [
+    "record_type", "id", "name", "email", "phone", "stage", "source",
+    "ai_score", "loan_type", "amount", "rate", "days_in_stage",
+    "loan_number", "loan_officer", "closing_date", "funded_date", "created_at",
+]
+
+
+def format_production_report(
+    db,
+    org_id: int,
+    scope: Dict[str, Any],
+    date_from: Optional["date"] = None,
+    date_to: Optional["date"] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Build an LO production scorecard.
+
+    Each row represents one user with their key production metrics.
+
+    Args:
+        db: SQLAlchemy session.
+        org_id: Organization ID.
+        scope: Scope dict from get_report_scope().
+        date_from: Start of date range (defaults to 30 days ago).
+        date_to: End of date range (defaults to today).
+
+    Returns:
+        List of dicts ready for CSV/Excel export.
+    """
+    from sqlalchemy import func, case
+    from database.models import User, Loan, Lead
+    from database.enums import LoanStage
+
+    if date_from is None:
+        date_from = date.today() - timedelta(days=30)
+    if date_to is None:
+        date_to = date.today()
+
+    # Determine which users to include
+    user_q = db.query(User).filter(
+        User.organization_id == org_id,
+        User.is_active == True,
+    )
+    if scope["scope"] == "user":
+        user_q = user_q.filter(User.id == scope.get("user_id"))
+    elif scope["scope"] == "branch":
+        branch_id = scope.get("branch_id")
+        if branch_id:
+            user_q = user_q.filter(User.branch_id == branch_id)
+
+    users = user_q.all()
+    user_ids = [u.id for u in users]
+    user_map = {u.id: u for u in users}
+
+    if not user_ids:
+        return []
+
+    # Aggregate loan metrics per LO
+    loan_agg = db.query(
+        Loan.loan_officer_id,
+        func.count(Loan.id).label("total_loans"),
+        func.count(case((Loan.stage == LoanStage.FUNDED, 1))).label("funded_count"),
+        func.sum(case((Loan.stage == LoanStage.FUNDED, Loan.amount), else_=0)).label("funded_volume"),
+        func.sum(Loan.amount).label("total_pipeline_volume"),
+        func.avg(Loan.days_in_stage).label("avg_days_in_stage"),
+    ).filter(
+        Loan.organization_id == org_id,
+        Loan.loan_officer_id.in_(user_ids),
+        Loan.created_at >= date_from,
+        Loan.created_at <= date_to + timedelta(days=1),
+    ).group_by(Loan.loan_officer_id).all()
+
+    loan_map = {row.loan_officer_id: row for row in loan_agg}
+
+    # Aggregate lead counts per LO
+    lead_agg = db.query(
+        Lead.owner_id,
+        func.count(Lead.id).label("total_leads"),
+    ).filter(
+        Lead.organization_id == org_id,
+        Lead.owner_id.in_(user_ids),
+        Lead.created_at >= date_from,
+        Lead.created_at <= date_to + timedelta(days=1),
+    ).group_by(Lead.owner_id).all()
+
+    lead_map = {row.owner_id: row.total_leads for row in lead_agg}
+
+    rows: List[Dict[str, Any]] = []
+    for uid in user_ids:
+        u = user_map[uid]
+        lm = loan_map.get(uid)
+        total_loans = lm.total_loans if lm else 0
+        funded = lm.funded_count if lm else 0
+        funded_vol = float(lm.funded_volume or 0) if lm else 0.0
+        pipeline_vol = float(lm.total_pipeline_volume or 0) if lm else 0.0
+        avg_days = round(float(lm.avg_days_in_stage or 0), 1) if lm else 0.0
+        total_leads = lead_map.get(uid, 0)
+        pull_through = round((funded / total_loans * 100), 1) if total_loans > 0 else 0.0
+
+        rows.append({
+            "user_id": uid,
+            "name": u.full_name,
+            "email": u.email,
+            "role": u.permission_role or u.role or "",
+            "total_leads": total_leads,
+            "total_loans": total_loans,
+            "funded_count": funded,
+            "funded_volume": funded_vol,
+            "pipeline_volume": pipeline_vol,
+            "pull_through_pct": pull_through,
+            "avg_days_in_stage": avg_days,
+            "period_from": str(date_from),
+            "period_to": str(date_to),
+        })
+
+    # Sort by funded volume descending
+    rows.sort(key=lambda r: r["funded_volume"], reverse=True)
+    return rows
+
+
+PRODUCTION_COLUMNS = [
+    "name", "email", "role", "total_leads", "total_loans",
+    "funded_count", "funded_volume", "pipeline_volume",
+    "pull_through_pct", "avg_days_in_stage", "period_from", "period_to",
+]
+
+
+def format_compliance_report(
+    db,
+    org_id: int,
+    scope: Dict[str, Any],
+    period_days: int = 30,
+) -> List[Dict[str, Any]]:
+    """
+    Build a compliance export: one row per loan with SLA and compliance flags.
+
+    Args:
+        db: SQLAlchemy session.
+        org_id: Organization ID.
+        scope: Scope dict from get_report_scope().
+        period_days: Lookback window in days.
+
+    Returns:
+        List of dicts ready for CSV/Excel export.
+    """
+    from database.models import Loan
+    from middleware.report_access import apply_scope_to_loan_query
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
+
+    loan_q = db.query(
+        Loan.id,
+        Loan.loan_number,
+        Loan.borrower_name,
+        Loan.stage,
+        Loan.loan_type,
+        Loan.amount,
+        Loan.days_in_stage,
+        Loan.sla_status,
+        Loan.risk_score,
+        Loan.closing_date,
+        Loan.funded_date,
+        Loan.lock_expiration_date,
+        Loan.loan_officer_name,
+        Loan.created_at,
+    ).filter(
+        Loan.created_at >= cutoff,
+    )
+    loan_q = apply_scope_to_loan_query(loan_q, scope, Loan)
+    loan_q = loan_q.order_by(Loan.created_at.desc()).limit(5000)
+    loans = loan_q.all()
+
+    rows: List[Dict[str, Any]] = []
+    now = datetime.now(timezone.utc)
+    for ln in loans:
+        lock_expired = False
+        if ln.lock_expiration_date and ln.lock_expiration_date < now:
+            lock_expired = True
+
+        rows.append({
+            "loan_id": ln.id,
+            "loan_number": ln.loan_number or "",
+            "borrower": ln.borrower_name or "",
+            "stage": ln.stage or "",
+            "loan_type": ln.loan_type or "",
+            "amount": ln.amount,
+            "days_in_stage": ln.days_in_stage or 0,
+            "sla_status": ln.sla_status or "unknown",
+            "risk_score": ln.risk_score or 0,
+            "lock_expired": lock_expired,
+            "lock_expiration_date": ln.lock_expiration_date,
+            "closing_date": ln.closing_date,
+            "funded_date": ln.funded_date,
+            "loan_officer": ln.loan_officer_name or "",
+            "created_at": ln.created_at,
+        })
+
+    return rows
+
+
+COMPLIANCE_COLUMNS = [
+    "loan_id", "loan_number", "borrower", "stage", "loan_type", "amount",
+    "days_in_stage", "sla_status", "risk_score", "lock_expired",
+    "lock_expiration_date", "closing_date", "funded_date",
+    "loan_officer", "created_at",
+]
+
+
+# =============================================================================
 # Module-Level Convenience
 # =============================================================================
 
@@ -747,6 +1214,11 @@ class ReportExporter:
     generate_excel = staticmethod(generate_excel)
     generate_csv = staticmethod(generate_csv)
     generate_sla_compliance_report = staticmethod(generate_sla_compliance_report)
+    export_to_csv = staticmethod(export_to_csv)
+    export_to_excel = staticmethod(export_to_excel)
+    format_pipeline_report = staticmethod(format_pipeline_report)
+    format_production_report = staticmethod(format_production_report)
+    format_compliance_report = staticmethod(format_compliance_report)
 
 
 report_exporter = ReportExporter()

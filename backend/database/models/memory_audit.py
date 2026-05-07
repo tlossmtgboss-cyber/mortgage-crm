@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text,
-    Index,
+    ForeignKey, Index,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -20,7 +20,7 @@ from db import Base
 class MemoryAuditEvent(Base):
     __tablename__ = "memory_audit_events"
     __table_args__ = (
-        Index("ix_audit_mem_tenant", "tenant_id"),
+        Index("ix_audit_mem_org", "organization_id"),
         Index("ix_audit_mem_borrower", "borrower_id"),
         Index("ix_audit_mem_event", "event_type"),
         Index("ix_audit_mem_call", "source_call_id"),
@@ -29,7 +29,7 @@ class MemoryAuditEvent(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     borrower_id = Column(Integer, nullable=True)
     event_type = Column(String(50), nullable=False)
     source_call_id = Column(String(255), nullable=True)

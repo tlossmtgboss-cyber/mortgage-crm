@@ -672,6 +672,9 @@ from .client_file import ClientFile, ClientFileCollaborator
 # Aria Campaign models (mass text outreach)
 from .aria_campaign import AriaCampaign, AriaCampaignRecipient
 
+# GDPR erasure request lifecycle tracking
+from .gdpr import ErasureRequest
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1371,4 +1374,9 @@ __all__ = [
     # =====================
     "AriaCampaign",
     "AriaCampaignRecipient",
+
+    # =====================
+    # GDPR Erasure Requests
+    # =====================
+    "ErasureRequest",
 ]

@@ -1256,6 +1256,9 @@ async def list_voice_calls(
     """List the authenticated user's voice conversation history."""
     from sqlalchemy import text as sa_text
 
+    # SAFETY: where_clauses contains only hardcoded string literals
+    # ("user_id = :user_id", "status = :status"). All values use :param
+    # bind syntax — never interpolated into SQL.
     where_clauses = ["user_id = :user_id"]
     params: Dict[str, Any] = {"user_id": current_user.id, "lim": min(max(limit, 1), 100), "off": max(offset, 0)}
 

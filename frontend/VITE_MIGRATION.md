@@ -86,7 +86,7 @@ VITE_API_URL=http://localhost:8000
 VITE_WS_URL=ws://localhost:8000
 VITE_ENVIRONMENT=development
 
-# .env.production
+# .env.production (local only — do NOT commit; see .env.example for values)
 VITE_API_URL=https://api.perenniaai.com
 VITE_WS_URL=wss://api.perenniaai.com
 VITE_ENVIRONMENT=production

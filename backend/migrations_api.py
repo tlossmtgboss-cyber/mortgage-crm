@@ -2228,7 +2228,7 @@ async def test_mum_import_row(admin: Any = Depends(verify_admin_access), user_id
     """
 
     import psycopg2
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     # Simulate data that would come from import
     test_row = {

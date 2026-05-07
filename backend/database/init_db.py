@@ -1969,8 +1969,9 @@ def init_db():
 def create_sample_data(db: Session):
     """Create sample data for testing"""
     # Lazy imports to avoid circular dependencies
-    from database.models import User, Branch, Lead, Loan, AITask, MUMClient
-    from database.enums import LeadStage, LoanStage
+    from database.models import User, Branch, Lead, Loan, AITask, MUMClient, ReferralPartner
+    from database.enums import LeadStage, LoanStage, TaskType
+    from services.dre_helpers import generate_ai_insights
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     def get_password_hash(password):

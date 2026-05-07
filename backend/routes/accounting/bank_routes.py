@@ -10,7 +10,7 @@ Provides endpoints for:
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import case, func, and_, or_
 from typing import Optional, List, Literal
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal

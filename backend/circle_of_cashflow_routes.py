@@ -303,6 +303,9 @@ async def update_partner(partner_id: int, data: dict, db: Session = Depends(get_
         safe_key = _safe_column_name(key)
         if not safe_key or safe_key not in _ALLOWED_PARTNER_COLUMNS:
             continue
+        # SAFETY: safe_key is validated against _ALLOWED_PARTNER_COLUMNS (hardcoded
+        # frozenset) AND passes ^[a-zA-Z_][a-zA-Z0-9_]*$ regex. Values use :param
+        # bind syntax — never interpolated into SQL.
         updates.append(f"{safe_key} = :{safe_key}")
         params[safe_key] = value
 
@@ -505,6 +508,8 @@ async def list_referrals(
 @router.patch("/referrals/{referral_id}/status")
 async def update_referral_status(referral_id: int, status: str, outcome: str = None, db: Session = Depends(get_db)):
     """Update referral status"""
+    # SAFETY: All column names in 'updates' are hardcoded string literals below
+    # (status, outcome, completed_date). Values use :param bind syntax.
     updates = ["status = :status", "updated_at = NOW()"]
     params = {"referral_id": referral_id, "status": status}
 

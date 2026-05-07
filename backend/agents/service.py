@@ -14,7 +14,7 @@ import logging
 import os
 import uuid
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from anthropic import Anthropic, AsyncAnthropic
 from sqlalchemy.orm import Session

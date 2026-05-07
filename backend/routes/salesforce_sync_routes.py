@@ -8,6 +8,7 @@ import asyncio
 import os
 import logging
 import re
+import xml.etree.ElementTree
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -81,7 +82,7 @@ def _validate_and_filter_loan_data(loan_data: Dict[str, Any]) -> Dict[str, Any]:
     return safe_data
 
 
-def _safe_parse_xml(xml_string: bytes) -> "xml.etree.ElementTree.Element":
+def _safe_parse_xml(xml_string: bytes) -> xml.etree.ElementTree.Element:
     """Parse XML with XXE protection via defusedxml."""
     import defusedxml.ElementTree as ET
     return ET.fromstring(xml_string)

@@ -13,6 +13,7 @@ Author: System
 Date: 2025-11-15
 """
 
+import logging
 from typing import Optional, Dict, Any, List, Set
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
@@ -23,11 +24,14 @@ import json
 import hashlib
 from sqlalchemy.exc import SQLAlchemyError
 
+logger = logging.getLogger(__name__)
+
 # Redis imports (will implement caching in next phase)
 try:
     import redis
     REDIS_AVAILABLE = True
 except ImportError:
+    redis = None  # type: ignore[assignment]
     REDIS_AVAILABLE = False
 
 

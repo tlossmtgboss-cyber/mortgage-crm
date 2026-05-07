@@ -98,7 +98,6 @@ def init_tracer():
 
 def get_tracer():
     """Get the DataDog tracer instance."""
-    global _tracer
     if _tracer is None:
         init_tracer()
     return _tracer
@@ -148,7 +147,6 @@ def init_statsd():
 
 def get_statsd():
     """Get the DogStatsD client instance."""
-    global _statsd
     if _statsd is None:
         init_statsd()
     return _statsd

@@ -34,12 +34,12 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run API Tests
-        run: npx playwright test tests/api.spec.js --project=chromium
+        run: npx playwright test tests/api.spec.js --project=desktop-chromium
         env:
           API_BASE_URL: ${{ vars.STAGING_API_URL || 'http://localhost:8000' }}
 
       - name: Run E2E Tests
-        run: npx playwright test --project=chromium --ignore-pattern="**/api.spec.js"
+        run: npx playwright test --project=desktop-chromium --ignore-pattern="**/api.spec.js"
         env:
           TEST_BASE_URL: ${{ vars.STAGING_FRONTEND_URL || 'http://localhost:5173' }}
 

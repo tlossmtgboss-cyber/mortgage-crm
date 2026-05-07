@@ -33,7 +33,7 @@ class ShadowEvaluator:
             MemoryStaging.review_action.isnot(None)
         )
         if tenant_id:
-            query = query.filter(MemoryStaging.tenant_id == tenant_id)
+            query = query.filter(MemoryStaging.organization_id == tenant_id)
 
         reviewed = query.all()
         if not reviewed:
@@ -89,7 +89,7 @@ class ShadowEvaluator:
         from database.models.memory_audit import MemoryAuditEvent
         event_type = "shadow_exit_ready" if metrics["exit_ready"] else "shadow_evaluation"
         event = MemoryAuditEvent(
-            tenant_id=tenant_id or 0,
+            organization_id=tenant_id or 0,
             event_type=event_type,
             details=metrics,
         )

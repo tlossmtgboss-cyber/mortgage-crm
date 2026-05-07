@@ -9,12 +9,11 @@
 # production
 /build
 
-# Environment files (all variants except templates and production)
+# Environment files - NEVER commit these
 .env
 .env.*
 !.env.example
-!.env.template
-!.env.production
+!.env.*.example
 
 # misc
 .DS_Store

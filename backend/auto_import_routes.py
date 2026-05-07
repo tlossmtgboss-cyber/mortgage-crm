@@ -174,12 +174,24 @@ def build_safe_update_sql(table_name: str, update_data: dict) -> tuple:
 
     Returns (sql_string, params_dict) tuple.
     Raises ValueError if columns are invalid.
+
+    SAFETY: table_name is validated against the VALID_IMPORT_COLUMNS dict
+    (hardcoded server-side keys: 'leads', 'loans', 'mum_clients').
+    Column names are validated against the per-table allowlist AND pass
+    alphanumeric-only regex in sanitize_column_name(). Values use :param
+    bind placeholders (never interpolated).
     """
+    # Validate table_name against hardcoded allowlist (VALID_IMPORT_COLUMNS keys)
+    if table_name not in VALID_IMPORT_COLUMNS:
+        raise ValueError(f"Unknown table for import: {table_name}")
+
     validated_columns = validate_columns_for_table(list(update_data.keys()), table_name)
 
     # Filter update_data to only include validated columns
     safe_data = {k: v for k, v in update_data.items() if k in validated_columns}
 
+    # SAFETY: col values come from validated_columns (allowlisted + regex-sanitized).
+    # Values use SQLAlchemy :param bind syntax — never interpolated into SQL.
     set_clause = ', '.join([f"{col} = :{col}" for col in safe_data.keys()])
     sql = f"UPDATE {table_name} SET {set_clause} WHERE id = :id"
 
@@ -192,12 +204,24 @@ def build_safe_insert_sql(table_name: str, row_data: dict) -> tuple:
 
     Returns (sql_string, params_dict) tuple.
     Raises ValueError if columns are invalid.
+
+    SAFETY: table_name is validated against the VALID_IMPORT_COLUMNS dict
+    (hardcoded server-side keys: 'leads', 'loans', 'mum_clients').
+    Column names are validated against the per-table allowlist AND pass
+    alphanumeric-only regex in sanitize_column_name(). Values use :param
+    bind placeholders (never interpolated).
     """
+    # Validate table_name against hardcoded allowlist (VALID_IMPORT_COLUMNS keys)
+    if table_name not in VALID_IMPORT_COLUMNS:
+        raise ValueError(f"Unknown table for import: {table_name}")
+
     validated_columns = validate_columns_for_table(list(row_data.keys()), table_name)
 
     # Filter row_data to only include validated columns
     safe_data = {k: v for k, v in row_data.items() if k in validated_columns}
 
+    # SAFETY: col values come from validated_columns (allowlisted + regex-sanitized).
+    # Values use SQLAlchemy :param bind syntax — never interpolated into SQL.
     columns_str = ', '.join(safe_data.keys())
     placeholders = ', '.join([f":{col}" for col in safe_data.keys()])
     sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"

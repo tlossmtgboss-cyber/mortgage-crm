@@ -4,6 +4,7 @@ Webhook endpoints for external system integrations, cache invalidation,
 and Microsoft Graph email notifications.
 """
 import hmac
+import json
 import os
 import logging
 import httpx
@@ -12,6 +13,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Header, HTTPException, Request, Query, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 

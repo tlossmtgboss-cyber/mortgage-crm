@@ -110,7 +110,6 @@ async def update_presets(presets: dict):
             json.dump(presets, f, indent=2)
 
         # Reload the service to pick up changes
-        global _quote_language_service
         from services import quote_language_service
         quote_language_service._quote_language_service = None
 

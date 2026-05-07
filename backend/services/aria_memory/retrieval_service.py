@@ -221,7 +221,7 @@ class AriaRetrievalService:
         try:
             from database.models.memory_audit import MemoryAuditEvent
             event = MemoryAuditEvent(
-                tenant_id=kwargs.get("tenant_id"),
+                organization_id=kwargs.get("tenant_id"),
                 borrower_id=kwargs.get("borrower_id"),
                 event_type=kwargs.get("event_type", "retrieval"),
                 query_text=kwargs.get("query_text"),

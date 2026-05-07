@@ -24,6 +24,8 @@ from AI_KNOWLEDGE_TEST_PART1_FRAMEWORK import (
     KnowledgeTest,
     ExpectedAnswer,
     MortgageKnowledgeBase,
+    ToolUsageTest,
+    DataAccuracyTest,
     create_pipeline_validator,
     create_tool_count_validator,
     create_compliance_validator,

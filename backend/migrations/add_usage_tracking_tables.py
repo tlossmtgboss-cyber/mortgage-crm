@@ -233,7 +233,17 @@ def create_tables(engine):
     print("Creating usage tracking tables...")
 
     # Import models to register them with Base
-    from models import usage_tracking
+    from models.usage_tracking import (
+        AITokenUsageLog,
+        UserUsageSnapshot,
+        TeamUsageSnapshot,
+        OrgUsageSnapshot,
+        UsageForecast,
+        PricingRecommendation,
+        UsageAlert,
+        AIModelPricing,
+    )
+    from database import Base
 
     # List of tables to create
     usage_tables = [
