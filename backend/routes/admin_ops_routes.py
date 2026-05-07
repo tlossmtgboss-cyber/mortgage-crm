@@ -3072,3 +3072,37 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             return JSONResponse(status_code=500, content={
                 "status": "error", "error": str(e), "traceback": traceback.format_exc(),
             })
+
+    @app.get("/api/v1/admin/verify-demo-data")
+    async def verify_demo_data(admin_key: str = Query(None), db: Session = Depends(get_db)):
+        """Verify demo org data counts by querying each table directly."""
+        _verify_admin_key(admin_key)
+        org_row = db.execute(text("SELECT id FROM organizations WHERE slug = 'summit-peak-demo-appstore'")).fetchone()
+        if not org_row:
+            return {"status": "error", "error": "Demo org not found"}
+        oid = org_row[0]
+        user_row = db.execute(text("SELECT id FROM users WHERE email = 'demo@perenniaai.com'")).fetchone()
+        uid = user_row[0] if user_row else None
+        tables = {
+            "leads": f"SELECT COUNT(*) FROM leads WHERE organization_id = {oid}",
+            "loans": f"SELECT COUNT(*) FROM loans WHERE organization_id = {oid}",
+            "activities": f"SELECT COUNT(*) FROM activities WHERE user_id = {uid}" if uid else None,
+            "calendar_events": f"SELECT COUNT(*) FROM calendar_events WHERE user_id = {uid}" if uid else None,
+            "tasks": f"SELECT COUNT(*) FROM tasks WHERE organization_id = {oid}",
+            "appointments": f"SELECT COUNT(*) FROM scheduler_appointments WHERE organization_id = {oid}",
+            "documents": f"SELECT COUNT(*) FROM documents WHERE organization_id = {oid}",
+            "mum_clients": f"SELECT COUNT(*) FROM mum_clients WHERE organization_id = {oid}",
+            "referral_partners": f"SELECT COUNT(*) FROM referral_partners WHERE organization_id = {oid}",
+            "sms_conversations": f"SELECT COUNT(*) FROM sms_ai_conversations WHERE organization_id = {oid}",
+            "morning_briefings": f"SELECT COUNT(*) FROM morning_briefings WHERE user_id = {uid}" if uid else None,
+        }
+        counts = {}
+        for name, sql in tables.items():
+            if not sql:
+                counts[name] = "N/A (no user)"
+                continue
+            try:
+                counts[name] = db.execute(text(sql)).scalar()
+            except Exception as e:
+                counts[name] = f"ERROR: {e}"
+        return {"org_id": oid, "user_id": uid, "counts": counts}
