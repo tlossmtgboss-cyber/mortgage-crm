@@ -388,21 +388,21 @@ def _get_license_info(db: Session, user, state: str) -> Optional[Dict[str, Any]]
         if isinstance(licensed_states, list) and state in licensed_states:
             return {"state": state, "status": "active", "expiration_date": None}
 
-    # Try lo_licenses table (may not exist)
+    # Query lo_licenses table via ORM model
     try:
-        from sqlalchemy import text
-        row = db.execute(
-            text("SELECT state, status, expiration_date FROM lo_licenses WHERE user_id = :uid AND state = :state"),
-            {"uid": user.id, "state": state},
+        from database.models.lo_license import LoanOfficerLicense
+        lic = db.query(LoanOfficerLicense).filter(
+            LoanOfficerLicense.user_id == user.id,
+            LoanOfficerLicense.state == state,
         ).first()
-        if row:
+        if lic:
             return {
-                "state": row[0],
-                "status": row[1],
-                "expiration_date": str(row[2]) if row[2] else None,
+                "state": lic.state,
+                "status": lic.status,
+                "expiration_date": str(lic.expiration_date) if lic.expiration_date else None,
             }
     except Exception as e:
-        logger.exception(f"Failed to query lo_licenses table (may not exist): {e}")
+        logger.exception(f"Failed to query lo_licenses table: {e}")
 
     return None
 
@@ -427,23 +427,22 @@ def _get_all_licenses(db: Session, user) -> List[Dict[str, Any]]:
                 if state not in existing:
                     licenses.append({"state": state, "status": "active", "expiration_date": None})
 
-    # From lo_licenses table
+    # From lo_licenses table via ORM model
     try:
-        from sqlalchemy import text
-        rows = db.execute(
-            text("SELECT state, status, expiration_date FROM lo_licenses WHERE user_id = :uid"),
-            {"uid": user.id},
-        ).fetchall()
+        from database.models.lo_license import LoanOfficerLicense
+        rows = db.query(LoanOfficerLicense).filter(
+            LoanOfficerLicense.user_id == user.id,
+        ).all()
         existing = {l.get("state") for l in licenses}
-        for row in rows:
-            if row[0] not in existing:
+        for lic in rows:
+            if lic.state not in existing:
                 licenses.append({
-                    "state": row[0],
-                    "status": row[1],
-                    "expiration_date": str(row[2]) if row[2] else None,
+                    "state": lic.state,
+                    "status": lic.status,
+                    "expiration_date": str(lic.expiration_date) if lic.expiration_date else None,
                 })
     except Exception as e:
-        logger.exception(f"Failed to query lo_licenses table for all licenses: {e}")
+        logger.exception(f"Failed to query lo_licenses table: {e}")
 
     return licenses
 

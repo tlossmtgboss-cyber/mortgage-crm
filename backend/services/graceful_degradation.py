@@ -99,8 +99,11 @@ class GracefulDegradation:
         # Check Redis
         health['redis'] = await self._check_redis_health()
 
-        # Check Telnyx (lightweight check)
+        # Check Telnyx (SMS/direct telephony)
         health['telnyx'] = await self._check_telnyx_health()
+
+        # Check Vapi (AI voice calls)
+        health['vapi'] = await self._check_vapi_health()
 
         return health
 
@@ -114,16 +117,19 @@ class GracefulDegradation:
 
         health = await self.check_service_health()
 
+        # Telephony is healthy if either Telnyx (SMS) or Vapi (voice) is up
+        telephony_healthy = health['telnyx'].healthy or health['vapi'].healthy
+
         # All healthy = FULL
         if all(h.healthy for h in health.values()):
             level = ServiceLevel.FULL
 
-        # Database and Telnyx healthy = DEGRADED (can do calls, cached AI)
-        elif health['database'].healthy and health['telnyx'].healthy:
+        # Database and telephony healthy = DEGRADED (can do calls, cached AI)
+        elif health['database'].healthy and telephony_healthy:
             level = ServiceLevel.DEGRADED
 
-        # Only Telnyx healthy = MINIMAL (calls only)
-        elif health['telnyx'].healthy:
+        # Only telephony healthy = MINIMAL (calls only)
+        elif telephony_healthy:
             level = ServiceLevel.MINIMAL
 
         # Nothing working = MAINTENANCE
@@ -281,10 +287,52 @@ class GracefulDegradation:
             return ServiceHealth(name='redis', healthy=False, error=str(e))
 
     async def _check_telnyx_health(self) -> ServiceHealth:
-        """Check Telnyx API health (lightweight check)"""
-        # In production, could check Telnyx status page or make test API call
-        # For now, assume healthy unless we have evidence otherwise
-        return ServiceHealth(name='telnyx', healthy=True, latency_ms=0)
+        """Check Telnyx API health (lightweight credential validation)"""
+        import time
+        start = time.time()
+
+        telnyx_key = __import__("os").getenv("TELNYX_API_KEY")
+        if not telnyx_key:
+            return ServiceHealth(name='telnyx', healthy=False, error='TELNYX_API_KEY not configured')
+
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    "https://api.telnyx.com/v2/messaging_profiles",
+                    headers={"Authorization": f"Bearer {telnyx_key}"},
+                    params={"page[size]": 1},
+                )
+            latency = (time.time() - start) * 1000
+            healthy = resp.status_code == 200
+            error = None if healthy else f"HTTP {resp.status_code}"
+            return ServiceHealth(name='telnyx', healthy=healthy, latency_ms=latency, error=error)
+        except Exception as e:
+            return ServiceHealth(name='telnyx', healthy=False, error=str(e))
+
+    async def _check_vapi_health(self) -> ServiceHealth:
+        """Check Vapi API health (lightweight assistant list)"""
+        import time
+        start = time.time()
+
+        vapi_key = __import__("os").getenv("VAPI_API_KEY")
+        if not vapi_key:
+            return ServiceHealth(name='vapi', healthy=False, error='VAPI_API_KEY not configured')
+
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    "https://api.vapi.ai/assistant",
+                    headers={"Authorization": f"Bearer {vapi_key}"},
+                    params={"limit": 1},
+                )
+            latency = (time.time() - start) * 1000
+            healthy = resp.status_code == 200
+            error = None if healthy else f"HTTP {resp.status_code}"
+            return ServiceHealth(name='vapi', healthy=healthy, latency_ms=latency, error=error)
+        except Exception as e:
+            return ServiceHealth(name='vapi', healthy=False, error=str(e))
 
     def force_level(self, level: ServiceLevel):
         """Force a specific service level (for maintenance windows)"""

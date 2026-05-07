@@ -355,6 +355,13 @@ try:
 except Exception as e:
     logger.warning(f"Mapper configuration warning (may be handled later): {e}")
 
+# Register audit immutability protection (app-level DELETE/UPDATE prevention
+# on audit and compliance tables). Must run after configure_mappers().
+try:
+    from middleware.audit_immutability import register_audit_protection
+    register_audit_protection()
+except Exception as e:
+    logger.warning(f"Failed to register audit immutability protection: {e}")
 
 
 # ============================================================================
@@ -447,6 +454,7 @@ from middleware.tenant_context_middleware import TenantContextMiddleware
 #  6. BreadcrumbAuditMiddleware     — audit_events table (defense-in-depth, mutations only)
 #  7. TenantContextMiddleware       — sets request.state.user/tenant from JWT
 #  8. RBACEnforcementMiddleware     — defense-in-depth role checks on admin routes
+#  8b. CentralizedRBACMiddleware    — granular route-to-permission mapping
 #  9. TenantRateLimitMiddleware     — per-org rate limits
 # 10. MobileRateLimitMiddleware     — mobile-specific rate limits
 # 11. APIRateLimitMiddleware        — per-user/per-IP sliding window (primary rate limiter)
@@ -566,6 +574,15 @@ try:
 except Exception as e:
     logger.warning(f"RBAC enforcement middleware not loaded: {e}")
 
+# Centralized RBAC — granular route-to-permission mapping (extends rbac_enforcement).
+# Added BEFORE TenantContextMiddleware (LIFO: inner = runs after Tenant sets user).
+try:
+    from middleware.rbac_middleware import CentralizedRBACMiddleware
+    app.add_middleware(CentralizedRBACMiddleware)
+    logger.info("Centralized RBAC middleware enabled (granular route permissions)")
+except Exception as e:
+    logger.warning(f"Centralized RBAC middleware not loaded: {e}")
+
 # Multi-Tenant: Add tenant context middleware
 # This sets request.state.user and request.state.tenant_context for authenticated requests
 try:
@@ -667,6 +684,92 @@ except Exception as e:
     dd_metrics = None
 
 # ============================================================================
+# GRACEFUL DEGRADATION — Startup health check for dependency tracking
+# Registers degradation health checks for: database, Redis, AI (Claude),
+# telephony (Telnyx/Vapi). The GracefulDegradation service is used by:
+#   - GET /api/v1/health/degradation (public, in health_routes.py)
+#   - GET /api/v1/admin/dr/degradation-health (admin, in dr_routes.py)
+#   - chat_system_bootstrap.py (chat session health)
+# ============================================================================
+try:
+    from services.graceful_degradation import GracefulDegradation, ServiceLevel
+
+    # Build a one-shot degradation checker at startup to verify all
+    # dependencies are reachable. This is a log-only check — it does not
+    # block startup, but logs the initial service level so operators can
+    # see degradation immediately in Railway logs.
+    async def _startup_degradation_check():
+        """Run once at startup to log initial degradation level."""
+        _redis_client = None
+        _db = None
+        try:
+            import redis as _redis_lib
+            _redis_url = os.getenv("REDIS_URL")
+            if _redis_url:
+                _redis_client = _redis_lib.from_url(_redis_url, socket_timeout=5)
+        except Exception:
+            pass
+        try:
+            _db = SessionLocal()
+        except Exception:
+            pass
+
+        _breaker = None
+        try:
+            from services.circuit_breaker import CircuitBreaker
+            _breaker = CircuitBreaker(name="anthropic_api", failure_threshold=5, recovery_timeout=30)
+        except Exception:
+            pass
+
+        try:
+            degradation = GracefulDegradation(redis_client=_redis_client, db=_db, circuit_breaker=_breaker)
+            level = await degradation.determine_service_level()
+            health = await degradation.check_service_health()
+            unhealthy = [name for name, h in health.items() if not h.healthy]
+            if level == ServiceLevel.FULL:
+                logger.info(f"Graceful degradation startup check: service_level=FULL (all dependencies healthy)")
+            else:
+                logger.warning(
+                    f"Graceful degradation startup check: service_level={level.value.upper()}, "
+                    f"unhealthy_services={unhealthy}"
+                )
+        except Exception as e:
+            logger.warning(f"Graceful degradation startup check failed: {e}")
+        finally:
+            if _db:
+                try:
+                    _db.close()
+                except Exception:
+                    pass
+
+    # Register with the production health_checker if available
+    if health_checker:
+        async def check_degradation_level():
+            """Returns True if service level is FULL, False otherwise."""
+            _db = None
+            try:
+                _db = SessionLocal()
+                degradation = GracefulDegradation(db=_db)
+                level = await degradation.determine_service_level()
+                return level == ServiceLevel.FULL
+            except Exception as e:
+                logger.warning(f"Degradation health check failed: {e}")
+                return False
+            finally:
+                if _db:
+                    try:
+                        _db.close()
+                    except Exception:
+                        pass
+
+        health_checker.register_check("graceful_degradation", check_degradation_level)
+
+    logger.info("Graceful degradation service registered (startup check + health checker)")
+except Exception as e:
+    logger.warning(f"Graceful degradation service not loaded: {e}")
+    _startup_degradation_check = None
+
+# ============================================================================
 # CACHE-CONTROL MIDDLEWARE — Sets Cache-Control headers for mobile API responses
 # Dashboard/pipeline: private, max-age=60 | Config: public, max-age=300
 # User data (leads/loans/tasks): private, no-cache | Health: no-store
@@ -698,6 +801,7 @@ try:
         expose_headers=[
             "Content-Length", "Content-Type", "X-Request-ID", "X-Response-Time",
             "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+            "X-RateLimit-Tier", "Retry-After",
         ],
         max_age=3600,
     )
@@ -1788,6 +1892,14 @@ try:
 except Exception as e:
     logger.warning(f"TCPA Consent routes skipped: {e}")
 
+# Unified Consent Audit Trail
+try:
+    from routes.tcpa_consent_routes import consent_audit_router
+    app.include_router(consent_audit_router, tags=["Consent Audit"])
+    logger.info("Consent Audit routes loaded")
+except Exception as e:
+    logger.warning(f"Consent Audit routes skipped: {e}")
+
 # Credit Bureau Monitoring & Recapture Intelligence
 try:
     from routes.credit_monitoring_routes import router as credit_monitoring_router
@@ -2429,6 +2541,30 @@ try:
 except Exception as e:
     logger.warning(f"Compliance routes failed to load: {e}")
 
+# --- State Licensing Compliance (Domain 2 - Check 2.20) ---
+try:
+    from routes.state_licensing_routes import register_state_licensing_routes
+    register_state_licensing_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("State licensing compliance routes loaded")
+except Exception as e:
+    logger.warning(f"State licensing routes failed to load: {e}")
+
+# --- TRID Deadline Tracking (LE/CD deadline scheduler, Domain 2) ---
+try:
+    from routes.trid_routes import register_trid_routes
+    register_trid_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("TRID deadline routes loaded (LE/CD deadline tracking)")
+except Exception as e:
+    logger.warning(f"TRID deadline routes failed to load: {e}")
+
 # --- Data import (CSV/Excel lead import, field mapping, rollback) ---
 try:
     from routes.data_import_routes import register_data_import_routes
@@ -2511,6 +2647,18 @@ try:
     logger.info("Data quality routes loaded")
 except Exception as e:
     logger.warning(f"Data quality routes failed to load: {e}")
+
+# --- Data freshness monitoring (Domain 3: stale leads, pipeline, sync, completeness) ---
+try:
+    from routes.data_freshness_routes import register_data_freshness_routes
+    register_data_freshness_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Data freshness routes loaded (Domain 3: freshness, completeness, score)")
+except Exception as e:
+    logger.warning(f"Data freshness routes failed to load: {e}")
 
 # --- Disaster recovery (failover, RTO benchmarking, retention policy) ---
 try:
@@ -3000,6 +3148,14 @@ try:
 except Exception as e:
     logger.warning(f"Rate alerts routes skipped: {e}")
 
+# --- Data Quality / Deduplication ---
+try:
+    from routes.deduplication_routes import router as dedup_router
+    app.include_router(dedup_router, tags=["Data Quality"])
+    logger.info("Data quality / deduplication routes loaded")
+except Exception as e:
+    logger.warning(f"Data quality routes skipped: {e}")
+
 # ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
 # ============================================================================
@@ -3128,6 +3284,15 @@ async def startup_event():
         logger.error(f"CRITICAL: Missing route registrations: {missing}")
     else:
         logger.info(f"✅ All {len(critical_paths)} critical route groups verified")
+
+    # Graceful degradation startup check — log initial service level (non-blocking)
+    try:
+        if _startup_degradation_check is not None:
+            import asyncio
+            asyncio.create_task(_startup_degradation_check())
+            logger.info("Graceful degradation startup check scheduled (background)")
+    except Exception as e:
+        logger.warning(f"Graceful degradation startup check skipped: {e}")
 
     # Verify certificate pins against live TLS chains (non-blocking background task)
     try:
@@ -3580,6 +3745,16 @@ async def _check_vapi_phone_config():
     except Exception as e:
         logger.error("Vapi phone config check error: %s", e)
 
+
+# ============================================================================
+# ADMIN WEBHOOK DEAD-LETTER QUEUE
+# ============================================================================
+try:
+    from routes.admin_webhook_routes import router as admin_webhook_router
+    app.include_router(admin_webhook_router)
+    logger.info("Admin webhook DLQ routes loaded")
+except Exception as e:
+    logger.warning(f"Admin webhook DLQ routes skipped: {e}")
 
 # ============================================================================
 # MAIN

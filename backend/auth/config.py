@@ -38,7 +38,9 @@ class AuthSettings(BaseModel):
     )
     algorithm: Literal["HS256", "RS256"] = Field(
         default_factory=lambda: os.getenv("AUTH_ALGORITHM", "HS256"),
-        description="JWT signing algorithm (RS256 recommended for production)"
+        description="JWT signing algorithm (RS256 recommended for production). "
+        "Only HS256 and RS256 are allowed — 'none' is explicitly rejected to prevent "
+        "algorithm confusion attacks."
     )
     access_token_expire_minutes: int = Field(
         default=15,

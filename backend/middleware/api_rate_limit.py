@@ -178,7 +178,7 @@ class _SlidingWindowStore:
             (allowed, remaining, reset_seconds)
             - allowed: True if under limit
             - remaining: requests left in window
-            - reset_seconds: seconds until oldest entry expires (0 if allowed)
+            - reset_seconds: seconds until oldest entry expires
         """
         now = time.monotonic()
 
@@ -204,7 +204,10 @@ class _SlidingWindowStore:
 
             bucket.append(now)
             remaining = limit - current_count - 1
-            return True, remaining, 0
+            # Compute seconds until the oldest entry in the window expires
+            oldest = bucket[0] if bucket else now
+            reset_seconds = max(1, int((oldest + window) - now))
+            return True, remaining, reset_seconds
 
     def _maybe_cleanup(self, now: float) -> None:
         """Remove fully-stale buckets and evict oldest if over capacity."""
@@ -299,7 +302,14 @@ class _RedisSlidingWindowStore:
                 return False, 0, reset_seconds
 
             remaining = limit - current_count - 1
-            return True, remaining, 0
+            # Compute seconds until the oldest entry in the window expires
+            oldest = self._redis.zrange(redis_key, 0, 0, withscores=True)
+            if oldest:
+                oldest_ts = oldest[0][1]
+                reset_seconds = max(1, int((oldest_ts + window) - now))
+            else:
+                reset_seconds = window
+            return True, remaining, reset_seconds
 
         except Exception as exc:
             # Any Redis error — caller should fall back to in-memory
@@ -420,7 +430,7 @@ class APIRateLimitMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=429,
                 content={
-                    "error": "Too many requests",
+                    "error": "Rate limit exceeded",
                     "detail": f"Rate limit of {limit} requests per minute exceeded. "
                               f"Retry after {reset_seconds} seconds.",
                     "retry_after": reset_seconds,
@@ -439,8 +449,7 @@ class APIRateLimitMiddleware(BaseHTTPMiddleware):
         # Attach rate limit headers to every response
         response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
-        if reset_seconds:
-            response.headers["X-RateLimit-Reset"] = str(reset_seconds)
+        response.headers["X-RateLimit-Reset"] = str(reset_seconds)
 
         return response
 

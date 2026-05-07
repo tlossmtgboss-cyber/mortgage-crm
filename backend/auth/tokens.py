@@ -286,6 +286,10 @@ def decode_token(token: str, verify_exp: bool = True) -> Optional[Dict[str, Any]
     """
     Decode a JWT token and return the payload.
 
+    SECURITY: Only the single configured algorithm is accepted. This prevents
+    algorithm confusion attacks where an attacker crafts a token with alg=none
+    or switches RS256 -> HS256 (using the public key as HMAC secret).
+
     Args:
         token: The JWT token string
         verify_exp: Whether to verify expiration (set False for inspection)
@@ -294,6 +298,14 @@ def decode_token(token: str, verify_exp: bool = True) -> Optional[Dict[str, Any]
         Decoded token payload or None if invalid
     """
     settings = get_auth_settings()
+
+    # SECURITY: Reject "none" algorithm and enforce single-algorithm verification.
+    # This is defense-in-depth — PyJWT >= 2.4 rejects "none" by default, but we
+    # make the intent explicit to survive library upgrades or misconfigurations.
+    allowed_algorithm = settings.algorithm
+    if allowed_algorithm.lower() == "none":
+        logger.error("JWT algorithm configured as 'none' — rejecting all tokens")
+        return None
 
     try:
         options = {}
@@ -304,11 +316,22 @@ def decode_token(token: str, verify_exp: bool = True) -> Optional[Dict[str, Any]
         payload = jwt.decode(
             token,
             verification_key,
-            algorithms=[settings.algorithm],
+            algorithms=[allowed_algorithm],
             audience=settings.audience,
             issuer=settings.issuer,
             options=options,
         )
+
+        # Defense-in-depth: verify the token's header algorithm matches what we expect.
+        # PyJWT should enforce this via the algorithms parameter, but we double-check.
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") != allowed_algorithm:
+            logger.warning(
+                "JWT header alg=%s does not match configured algorithm=%s — rejecting",
+                header.get("alg"), allowed_algorithm,
+            )
+            return None
+
         return payload
     except InvalidTokenError as e:
         logger.debug(f"Token decode failed: {e}")

@@ -17,6 +17,8 @@ Legacy / Structured Report Exports:
 - POST /api/v1/reports/schedule                — Schedule recurring report delivery (Check 9.11)
 - GET  /api/v1/reports/schedules               — List scheduled reports
 - DELETE /api/v1/reports/schedules/{schedule_id} — Cancel scheduled report
+- POST /api/v1/reports/schedule/{id}/run-now   — Trigger on-demand execution of a scheduled report
+- GET  /api/v1/reports/schedule/due            — List reports that are currently due for execution
 
 Performance Monitoring:
 - GET  /api/v1/monitoring/performance          — Performance baseline report (Check 6.1-6.4)
@@ -27,16 +29,75 @@ Performance Monitoring:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List, Literal
 from datetime import datetime
+import asyncio
+import functools
+import gzip
 import io
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Export safety constants
+# ---------------------------------------------------------------------------
+EXPORT_TIMEOUT_SECONDS: int = 30
+"""Abort report generation if it takes longer than this many seconds."""
+
+_export_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="report-export")
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared across all export endpoints
+# ---------------------------------------------------------------------------
+
+def _accept_gzip(request: Request) -> str:
+    """Return the Accept-Encoding header value (empty string if absent)."""
+    return request.headers.get("accept-encoding", "")
+
+
+async def _run_with_timeout(func, *args, **kwargs):
+    """
+    Execute a synchronous *func* in a thread pool with a hard timeout.
+
+    Raises ``HTTPException(504)`` if the function does not finish within
+    ``EXPORT_TIMEOUT_SECONDS``.
+    """
+    loop = asyncio.get_running_loop()
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(_export_executor, functools.partial(func, *args, **kwargs)),
+            timeout=EXPORT_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                f"Report generation exceeded the {EXPORT_TIMEOUT_SECONDS}s timeout. "
+                "Try narrowing filters or reducing the date range to export a smaller dataset."
+            ),
+        )
+
+
+def _maybe_gzip_streaming(body: bytes, media_type: str, filename: str,
+                           accept_encoding: str) -> Response:
+    """
+    Wrap *body* bytes in a Response, optionally gzip-compressing if the
+    payload exceeds the threshold and the client accepts gzip.
+    """
+    from services.report_export_service import GZIP_THRESHOLD_BYTES
+
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if len(body) > GZIP_THRESHOLD_BYTES and "gzip" in accept_encoding.lower():
+        body = gzip.compress(body)
+        headers["Content-Encoding"] = "gzip"
+    return Response(content=body, media_type=media_type, headers=headers)
 
 router = APIRouter(tags=["reports"])
 
@@ -96,7 +157,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         if not org_id:
             raise HTTPException(status_code=403, detail="Organization context required")
 
-        report_data = report_exporter.generate_sla_compliance_report(
+        report_data = await _run_with_timeout(
+            report_exporter.generate_sla_compliance_report,
             db=db,
             org_id=org_id,
             period_days=period_days,
@@ -107,7 +169,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         if format == "json":
             return {"success": True, "report": report_data}
 
-        elif format == "pdf":
+        encoding = _accept_gzip(request)
+
+        if format == "pdf":
             from services.white_label_service import get_report_branding
             branding = get_report_branding(db, org_id)
             pdf_bytes = report_exporter.generate_pdf(report_data, "sla_compliance", branding=branding)
@@ -117,11 +181,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type="sla_compliance_report", export_format="pdf", ip_address=_get_client_ip(request), details={"period_days": period_days})
             except Exception:
                 pass
-            return StreamingResponse(
-                io.BytesIO(pdf_bytes),
-                media_type="application/pdf",
-                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-            )
+            return _maybe_gzip_streaming(pdf_bytes, "application/pdf", filename, encoding)
 
         elif format == "excel":
             xlsx_bytes = report_exporter.generate_excel(report_data, "sla_compliance")
@@ -131,10 +191,10 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type="sla_compliance_report", export_format="xlsx", ip_address=_get_client_ip(request), details={"period_days": period_days})
             except Exception:
                 pass
-            return StreamingResponse(
-                io.BytesIO(xlsx_bytes),
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            return _maybe_gzip_streaming(
+                xlsx_bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename, encoding,
             )
 
     # =========================================================================
@@ -183,7 +243,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
             except ValueError:
                 raise HTTPException(400, "date_to must be YYYY-MM-DD")
 
-        data = format_pipeline_report(db=db, org_id=org_id, scope=scope, filters=filters)
+        data, total_rows = await _run_with_timeout(
+            format_pipeline_report, db=db, org_id=org_id, scope=scope, filters=filters,
+        )
 
         # Audit trail
         try:
@@ -192,15 +254,23 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 db=db, user_id=current_user.id, organization_id=org_id,
                 resource_type="pipeline_report", export_format=format,
                 ip_address=_get_client_ip(request),
-                details={"record_count": len(data), "filters": filters},
+                details={"record_count": len(data), "total_rows": total_rows, "filters": filters},
             )
         except Exception:
             pass
 
+        encoding = _accept_gzip(request)
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         if format == "xlsx":
-            return export_to_excel(data, PIPELINE_COLUMNS, sheet_name="Pipeline", filename=f"pipeline_report_{ts}.xlsx")
-        return export_to_csv(data, PIPELINE_COLUMNS, filename=f"pipeline_report_{ts}.csv")
+            return export_to_excel(
+                data, PIPELINE_COLUMNS, sheet_name="Pipeline",
+                filename=f"pipeline_report_{ts}.xlsx",
+                accept_encoding=encoding, total_rows=total_rows,
+            )
+        return export_to_csv(
+            data, PIPELINE_COLUMNS, filename=f"pipeline_report_{ts}.csv",
+            accept_encoding=encoding, total_rows=total_rows,
+        )
 
     @app.get("/api/v1/reports/production/export")
     async def export_production_report(
@@ -242,7 +312,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
             except ValueError:
                 raise HTTPException(400, "date_to must be YYYY-MM-DD")
 
-        data = format_production_report(
+        data, total_rows = await _run_with_timeout(
+            format_production_report,
             db=db, org_id=org_id, scope=scope,
             date_from=parsed_from, date_to=parsed_to,
         )
@@ -253,15 +324,23 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 db=db, user_id=current_user.id, organization_id=org_id,
                 resource_type="production_report", export_format=format,
                 ip_address=_get_client_ip(request),
-                details={"record_count": len(data), "date_from": date_from, "date_to": date_to},
+                details={"record_count": len(data), "total_rows": total_rows, "date_from": date_from, "date_to": date_to},
             )
         except Exception:
             pass
 
+        encoding = _accept_gzip(request)
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         if format == "xlsx":
-            return export_to_excel(data, PRODUCTION_COLUMNS, sheet_name="Production", filename=f"production_report_{ts}.xlsx")
-        return export_to_csv(data, PRODUCTION_COLUMNS, filename=f"production_report_{ts}.csv")
+            return export_to_excel(
+                data, PRODUCTION_COLUMNS, sheet_name="Production",
+                filename=f"production_report_{ts}.xlsx",
+                accept_encoding=encoding, total_rows=total_rows,
+            )
+        return export_to_csv(
+            data, PRODUCTION_COLUMNS, filename=f"production_report_{ts}.csv",
+            accept_encoding=encoding, total_rows=total_rows,
+        )
 
     @app.get("/api/v1/reports/compliance/export")
     async def export_compliance_report(
@@ -289,7 +368,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
 
         scope = get_report_scope(current_user)
 
-        data = format_compliance_report(
+        data, total_rows = await _run_with_timeout(
+            format_compliance_report,
             db=db, org_id=org_id, scope=scope,
             period_days=period_days,
         )
@@ -300,15 +380,23 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 db=db, user_id=current_user.id, organization_id=org_id,
                 resource_type="compliance_report", export_format=format,
                 ip_address=_get_client_ip(request),
-                details={"record_count": len(data), "period_days": period_days},
+                details={"record_count": len(data), "total_rows": total_rows, "period_days": period_days},
             )
         except Exception:
             pass
 
+        encoding = _accept_gzip(request)
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         if format == "xlsx":
-            return export_to_excel(data, COMPLIANCE_COLUMNS, sheet_name="Compliance", filename=f"compliance_report_{ts}.xlsx")
-        return export_to_csv(data, COMPLIANCE_COLUMNS, filename=f"compliance_report_{ts}.csv")
+            return export_to_excel(
+                data, COMPLIANCE_COLUMNS, sheet_name="Compliance",
+                filename=f"compliance_report_{ts}.xlsx",
+                accept_encoding=encoding, total_rows=total_rows,
+            )
+        return export_to_csv(
+            data, COMPLIANCE_COLUMNS, filename=f"compliance_report_{ts}.csv",
+            accept_encoding=encoding, total_rows=total_rows,
+        )
 
     # =========================================================================
     # Legacy POST-based Exports (Enterprise Readiness Domain 9)
@@ -334,7 +422,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         # If data not provided, generate it server-side
         report_data = body.data
         if not report_data and body.report_type == "sla_compliance":
-            report_data = report_exporter.generate_sla_compliance_report(
+            report_data = await _run_with_timeout(
+                report_exporter.generate_sla_compliance_report,
                 db=db, org_id=org_id,
                 period_days=body.period_days,
                 scope_type=body.scope_type,
@@ -354,11 +443,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         except Exception:
             pass
 
-        return StreamingResponse(
-            io.BytesIO(pdf_bytes),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        encoding = _accept_gzip(request)
+        return _maybe_gzip_streaming(pdf_bytes, "application/pdf", filename, encoding)
 
     @app.post("/api/v1/reports/export/excel")
     async def export_report_excel(
@@ -379,7 +465,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
 
         report_data = body.data
         if not report_data and body.report_type == "sla_compliance":
-            report_data = report_exporter.generate_sla_compliance_report(
+            report_data = await _run_with_timeout(
+                report_exporter.generate_sla_compliance_report,
                 db=db, org_id=org_id,
                 period_days=body.period_days,
                 scope_type=body.scope_type,
@@ -397,10 +484,11 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         except Exception:
             pass
 
-        return StreamingResponse(
-            io.BytesIO(xlsx_bytes),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        encoding = _accept_gzip(request)
+        return _maybe_gzip_streaming(
+            xlsx_bytes,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename, encoding,
         )
 
     @app.post("/api/v1/reports/export/csv")
@@ -422,7 +510,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
 
         report_data = body.data
         if not report_data and body.report_type == "sla_compliance":
-            report_data = report_exporter.generate_sla_compliance_report(
+            report_data = await _run_with_timeout(
+                report_exporter.generate_sla_compliance_report,
                 db=db, org_id=org_id,
                 period_days=body.period_days,
                 scope_type=body.scope_type,
@@ -440,11 +529,8 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         except Exception:
             pass
 
-        return StreamingResponse(
-            io.BytesIO(csv_bytes),
-            media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        encoding = _accept_gzip(request)
+        return _maybe_gzip_streaming(csv_bytes, "text/csv", filename, encoding)
 
     # =========================================================================
     # Scheduled Report Delivery (Check 9.11)
@@ -564,6 +650,79 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(404, "Schedule not found")
 
         return {"success": True, "message": "Schedule cancelled"}
+
+    # =========================================================================
+    # Scheduled Report Execution (Domain 9, Check 9.11 — execution engine)
+    # =========================================================================
+
+    @app.post("/api/v1/reports/schedule/{schedule_id}/run-now")
+    async def run_scheduled_report_now(
+        schedule_id: int,
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Trigger on-demand execution of a specific scheduled report.
+        Generates the report immediately and initiates email delivery
+        to the configured recipients, regardless of the schedule's
+        frequency/day/hour settings.
+        """
+        from services.scheduled_report_executor import run_single_report
+
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
+
+        try:
+            result = run_single_report(db=db, schedule_id=schedule_id, org_id=org_id)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Report generation failed"))
+
+        return result
+
+    @app.get("/api/v1/reports/schedule/due")
+    async def list_due_reports(
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        List scheduled reports that are currently due for execution.
+        Useful for operators to inspect what would run before triggering
+        the execution sweep.
+        """
+        from services.scheduled_report_executor import get_due_reports
+
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
+
+        all_due = get_due_reports(db)
+
+        # Filter to current org only
+        org_due = [r for r in all_due if r["organization_id"] == org_id]
+
+        return {
+            "success": True,
+            "due_count": len(org_due),
+            "reports": [
+                {
+                    "id": r["id"],
+                    "report_type": r["report_type"],
+                    "format": r["export_format"],
+                    "frequency": r["frequency"],
+                    "recipients": r["recipients"],
+                    "title": r["title"],
+                    "last_sent_at": r["last_sent_at"].isoformat() if r.get("last_sent_at") and hasattr(r["last_sent_at"], "isoformat") else r.get("last_sent_at"),
+                    "due_reason": r.get("due_reason", ""),
+                }
+                for r in org_due
+            ],
+        }
 
     # =========================================================================
     # Performance Monitoring Endpoints (Domain 6)

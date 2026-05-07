@@ -5,12 +5,17 @@ API endpoints for enterprise custom-domain provisioning. Stores domain state
 in WhiteLabelConfig (organization_branding table) and optionally
 integrates with Vercel for automatic SSL cert issuance.
 
-Flow:
+Admin endpoints (original):
   1. POST  /api/v1/admin/custom-domain/setup   — Register domain, get TXT token
   2. Add TXT DNS record at registrar
   3. POST  /api/v1/admin/custom-domain/verify   — DNS lookup; marks verified, calls Vercel
   4. GET   /api/v1/admin/custom-domain/status   — Poll SSL status
   5. DELETE /api/v1/admin/custom-domain          — Remove domain and revoke Vercel entry
+
+White-label endpoints (Domain 12):
+  1. POST  /api/v1/white-label/domain/configure — Set custom domain (validates format)
+  2. POST  /api/v1/white-label/domain/verify    — DNS verification (TXT + CNAME check)
+  3. GET   /api/v1/white-label/domain/status     — Current domain + SSL status
 
 Registered via register_custom_domain_routes(app, get_db_func, get_current_user_flexible)
 from main.py — never imported at module load time to avoid circular imports.
@@ -19,9 +24,13 @@ Requires admin / site_admin / platform_admin permission role.
 """
 
 import logging
+import re
 import uuid
 
 logger = logging.getLogger(__name__)
+
+# Expected CNAME target for custom domains
+_CNAME_TARGET = "cname.vercel-dns.com"
 
 _ADMIN_ROLES = {"admin", "site_admin", "platform_admin"}
 
@@ -407,4 +416,357 @@ def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
         return {
             "success": True,
             "message": f"Custom domain '{domain}' removed successfully.",
+        }
+
+    # ------------------------------------------------------------------ #
+    # Domain format validation helper                                      #
+    # ------------------------------------------------------------------ #
+
+    _DOMAIN_PATTERN = re.compile(
+        r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$"
+    )
+
+    def _validate_domain_format(domain: str) -> str | None:
+        """Return an error message if domain format is invalid, else None."""
+        if not domain or len(domain) > 253:
+            return "Domain must be between 1 and 253 characters."
+        if not _DOMAIN_PATTERN.match(domain):
+            return (
+                "Invalid domain format. Use a fully qualified domain name "
+                "(e.g. portal.example.com). No protocol prefix or trailing slash."
+            )
+        # Block bare TLDs and common reserved domains
+        if domain.count(".") < 1:
+            return "Domain must have at least two labels (e.g. portal.example.com)."
+        return None
+
+    # ------------------------------------------------------------------ #
+    # DNS lookup helpers                                                    #
+    # ------------------------------------------------------------------ #
+
+    def _check_txt_record(domain: str, expected_token: str) -> tuple[bool, str | None]:
+        """Check TXT record for domain verification.
+
+        Returns (verified, error_message).
+        """
+        txt_record_name = f"_perennia-verify.{domain}"
+        try:
+            import dns.resolver
+
+            answers = dns.resolver.resolve(txt_record_name, "TXT")
+            found_values = []
+            for rdata in answers:
+                for s in rdata.strings:
+                    found_values.append(s.decode("utf-8", errors="replace"))
+
+            if expected_token in found_values:
+                return True, None
+            return False, (
+                f"TXT record found but value did not match. "
+                f"Expected '{expected_token}', found: {found_values}"
+            )
+        except Exception as exc:
+            return False, f"TXT lookup for {txt_record_name} failed: {exc}"
+
+    def _check_cname_record(domain: str) -> tuple[bool, str | None]:
+        """Check CNAME record points to the expected target.
+
+        Returns (matches, error_message).
+        """
+        try:
+            import dns.resolver
+
+            answers = dns.resolver.resolve(domain, "CNAME")
+            targets = [rdata.target.to_text().rstrip(".").lower() for rdata in answers]
+
+            if _CNAME_TARGET in targets:
+                return True, None
+            return False, (
+                f"CNAME record found but target did not match. "
+                f"Expected '{_CNAME_TARGET}', found: {targets}"
+            )
+        except dns.resolver.NoAnswer:
+            # May be an A record or ALIAS instead (some providers don't use CNAME
+            # for apex domains). Fall back to checking if it resolves at all.
+            return False, (
+                f"No CNAME record found for {domain}. "
+                f"Ensure a CNAME pointing to {_CNAME_TARGET} exists."
+            )
+        except dns.resolver.NXDOMAIN:
+            return False, f"Domain {domain} does not exist in DNS."
+        except Exception as exc:
+            return False, f"CNAME lookup for {domain} failed: {exc}"
+
+    # ================================================================== #
+    # White-Label Domain Endpoints (Domain 12)                             #
+    # ================================================================== #
+
+    # ------------------------------------------------------------------ #
+    # POST /api/v1/white-label/domain/configure                            #
+    # ------------------------------------------------------------------ #
+
+    @app.post("/api/v1/white-label/domain/configure", tags=["White-Label Domain"])
+    async def configure_white_label_domain(
+        body: DomainSetupRequest,
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Set or update the custom domain for the org's white-label portal.
+
+        Validates the domain format, generates a verification token, and returns
+        DNS instructions. The caller must create the required DNS records and
+        then call POST /api/v1/white-label/domain/verify.
+        """
+        _require_admin(current_user)
+
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
+            )
+
+        domain = _clean_domain(body.domain)
+
+        # Validate domain format
+        validation_error = _validate_domain_format(domain)
+        if validation_error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=validation_error,
+            )
+
+        config = _get_white_label_config(db, organization_id)
+        if config is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    "No active white-label configuration found for your organisation. "
+                    "Create one first via the White-Label settings."
+                ),
+            )
+
+        # Generate verification token
+        verification_token = f"perennia-verify={uuid.uuid4().hex}"
+
+        config.custom_domain = domain
+        config.domain_verification_token = verification_token
+        config.domain_verified = False
+        config.ssl_status = "pending"
+        config.vercel_domain_id = None
+        db.commit()
+
+        txt_record_name = f"_perennia-verify.{domain}"
+        return {
+            "domain": domain,
+            "verification_token": verification_token,
+            "ssl_status": "pending",
+            "dns_instructions": {
+                "txt_record": {
+                    "name": txt_record_name,
+                    "type": "TXT",
+                    "value": verification_token,
+                    "purpose": "Domain ownership verification",
+                },
+                "cname_record": {
+                    "name": domain,
+                    "type": "CNAME",
+                    "value": _CNAME_TARGET,
+                    "purpose": "Route traffic to Perennia portal",
+                },
+            },
+            "next_step": "POST /api/v1/white-label/domain/verify",
+        }
+
+    # ------------------------------------------------------------------ #
+    # POST /api/v1/white-label/domain/verify                               #
+    # ------------------------------------------------------------------ #
+
+    @app.post("/api/v1/white-label/domain/verify", tags=["White-Label Domain"])
+    async def verify_white_label_domain(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Verify domain ownership via DNS TXT + CNAME lookup.
+
+        Checks both:
+        1. TXT record at ``_perennia-verify.<domain>`` matches the stored token.
+        2. CNAME record on ``<domain>`` points to ``cname.vercel-dns.com``.
+
+        On full verification, marks the domain as verified and triggers Vercel
+        SSL provisioning (best-effort). Updates ssl_status through the lifecycle:
+        pending -> verified -> provisioning -> active (or failed).
+        """
+        _require_admin(current_user)
+
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
+            )
+
+        config = _get_white_label_config(db, organization_id)
+        if config is None or not config.custom_domain:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No custom domain configured. Call /configure first.",
+            )
+
+        domain = config.custom_domain
+        expected_token = config.domain_verification_token
+
+        if not expected_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No verification token found. Call /configure first.",
+            )
+
+        # ---- DNS checks ------------------------------------------------ #
+        txt_ok, txt_error = _check_txt_record(domain, expected_token)
+        cname_ok, cname_error = _check_cname_record(domain)
+
+        checks = {
+            "txt_record": {
+                "passed": txt_ok,
+                "error": txt_error,
+            },
+            "cname_record": {
+                "passed": cname_ok,
+                "error": cname_error,
+            },
+        }
+
+        if not txt_ok:
+            # TXT is mandatory for ownership proof
+            config.ssl_status = "pending"
+            db.commit()
+            return {
+                "verified": False,
+                "ssl_status": "pending",
+                "checks": checks,
+                "message": (
+                    "Domain ownership not verified. "
+                    "Ensure the TXT record is set correctly and DNS has propagated."
+                ),
+            }
+
+        # TXT passed — mark ownership verified
+        config.domain_verified = True
+
+        if not cname_ok:
+            # Ownership proven but routing not set up
+            config.ssl_status = "verified"
+            db.commit()
+            return {
+                "verified": True,
+                "ssl_status": "verified",
+                "checks": checks,
+                "message": (
+                    "Domain ownership verified, but CNAME record is missing or "
+                    f"not pointing to {_CNAME_TARGET}. SSL cannot be provisioned "
+                    "until CNAME is configured."
+                ),
+            }
+
+        # Both checks passed — provision SSL
+        config.ssl_status = "provisioning"
+
+        # ---- Vercel integration (best-effort) ------------------------- #
+        vercel_domain_id = None
+        try:
+            from services import vercel_domain_service
+
+            result = vercel_domain_service.add_domain(domain)
+            if result and not result.get("error") and not result.get("skipped"):
+                vercel_domain_id = result.get("name") or result.get("id") or domain
+                logger.info("Vercel domain added: %s -> %s", domain, vercel_domain_id)
+        except Exception as exc:
+            logger.warning("Vercel add_domain failed for %s: %s", domain, exc)
+
+        config.vercel_domain_id = vercel_domain_id
+        db.commit()
+
+        return {
+            "verified": True,
+            "ssl_status": config.ssl_status,
+            "checks": checks,
+            "vercel_domain_id": vercel_domain_id,
+            "message": (
+                "Domain fully verified. SSL provisioning is underway — "
+                "check /status in a few minutes."
+            ),
+        }
+
+    # ------------------------------------------------------------------ #
+    # GET /api/v1/white-label/domain/status                                #
+    # ------------------------------------------------------------------ #
+
+    @app.get("/api/v1/white-label/domain/status", tags=["White-Label Domain"])
+    async def get_white_label_domain_status(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Return current domain configuration and SSL status.
+
+        If Vercel credentials are present and the domain is verified, polls
+        Vercel for a live SSL status update before responding.
+        """
+        _require_admin(current_user)
+
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
+            )
+
+        config = _get_white_label_config(db, organization_id)
+        if config is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active white-label configuration found.",
+            )
+
+        if not config.custom_domain:
+            return {
+                "configured": False,
+                "domain": None,
+                "domain_verified": False,
+                "ssl_status": "pending",
+                "vercel_domain_id": None,
+                "message": "No custom domain configured yet.",
+            }
+
+        # Refresh SSL status from Vercel if domain is verified
+        if config.domain_verified and config.vercel_domain_id:
+            try:
+                from services import vercel_domain_service
+
+                live_ssl = vercel_domain_service.check_ssl_status(config.custom_domain)
+                if live_ssl not in ("unknown", config.ssl_status):
+                    config.ssl_status = live_ssl
+                    db.commit()
+            except Exception as exc:
+                logger.warning("Vercel SSL status check failed: %s", exc)
+
+        return {
+            "configured": True,
+            "domain": config.custom_domain,
+            "domain_verified": bool(config.domain_verified),
+            "ssl_status": config.ssl_status or "pending",
+            "vercel_domain_id": config.vercel_domain_id,
+            "verification_token": config.domain_verification_token,
+            "dns_instructions": {
+                "txt_record": {
+                    "name": f"_perennia-verify.{config.custom_domain}",
+                    "type": "TXT",
+                    "value": config.domain_verification_token,
+                },
+                "cname_record": {
+                    "name": config.custom_domain,
+                    "type": "CNAME",
+                    "value": _CNAME_TARGET,
+                },
+            } if not config.domain_verified else None,
         }

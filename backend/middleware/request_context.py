@@ -199,9 +199,12 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
 
-        # Fast exit for health checks and static files -- no logging, no overhead
+        # Fast exit for health checks and static files -- no logging, no overhead,
+        # but still add X-Request-ID for consistent request tracing.
         if path in _SKIP_LOG_PATHS or _is_static_path(path):
+            request_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
             response = await call_next(request)
+            response.headers[REQUEST_ID_HEADER] = request_id
             return response
 
         # 1. Generate or propagate correlation ID

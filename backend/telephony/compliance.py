@@ -204,8 +204,9 @@ def verify_voice_consent(
       - Not expired (retention_expires_at > now OR NULL)
       - consent_type is NOT 'REVOKED'
 
-    Every verification (pass or fail) is logged to VoiceConsentAudit so there
-    is a provable record that consent was checked before each AI voice call.
+    Every verification (pass or fail) is logged to both VoiceConsentAudit AND
+    the unified ConsentAuditLog so there is a provable record that consent was
+    checked before each AI voice call.
 
     Args:
         phone_number: The phone number to verify consent for (any format).
@@ -280,6 +281,25 @@ def verify_voice_consent(
             )
             db.add(audit_entry)
             # Don't commit — let the caller's transaction handle it
+
+        # Also log to unified ConsentAuditLog
+        try:
+            from telephony.consent_audit import log_consent_verified
+            log_consent_verified(
+                db,
+                organization_id=org_id,
+                contact_id=consent.lead_id if consent else None,
+                consent_type="voice_ai",
+                verification_result="passed" if consent else "failed",
+                phone=phone_number,
+                actor_user_id=actor_user_id,
+                source_table="voice_consents",
+                source_record_id=str(consent.id) if consent else None,
+                reason="Voice consent verified" if consent else "No active voice consent found",
+                details=audit_details,
+            )
+        except Exception as e:
+            logger.debug(f"ConsentAuditLog write skipped: {e}")
 
         if consent:
             logger.info(
@@ -358,6 +378,43 @@ class ComplianceChecker:
             # Don't commit here -- let the caller's transaction handle it
         except Exception as e:
             logger.error(f"Failed to log compliance decision: {e}")
+
+    def _log_consent_audit(
+        self,
+        consent_type: str,
+        action: str,
+        verification_result: Optional[str] = None,
+        contact_id: Optional[int] = None,
+        phone: Optional[str] = None,
+        method: Optional[str] = None,
+        source_table: Optional[str] = None,
+        source_record_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        details: Optional[dict] = None,
+        actor_user_id: Optional[int] = None,
+        ip_address: Optional[str] = None,
+    ):
+        """Log a consent event to the immutable ConsentAuditLog."""
+        try:
+            from telephony.consent_audit import log_consent_event
+            log_consent_event(
+                self.db,
+                organization_id=self.organization_id,
+                contact_id=contact_id,
+                consent_type=consent_type,
+                action=action,
+                verification_result=verification_result,
+                method=method,
+                ip_address=ip_address,
+                source_table=source_table,
+                source_record_id=source_record_id,
+                actor_user_id=actor_user_id,
+                phone=phone,
+                reason=reason,
+                details=details,
+            )
+        except Exception as e:
+            logger.debug(f"ConsentAuditLog write skipped: {e}")
 
     # =========================================================================
     # DNC Checks
@@ -962,6 +1019,15 @@ class ComplianceChecker:
                 reason=no_contact_reason,
                 details={"failure": "no_contact_record"},
             )
+            # Log to unified consent audit trail
+            self._log_consent_audit(
+                consent_type="call",
+                action="verified",
+                verification_result="not_found",
+                phone=phone_number,
+                reason=no_contact_reason,
+                details={"failure": "no_contact_record"},
+            )
             return False, no_contact_reason
 
         # Look up ChannelPreference for this lead.
@@ -985,6 +1051,15 @@ class ComplianceChecker:
                 lead_id=lead_id,
                 details={"failure": "no_channel_preference"},
             )
+            self._log_consent_audit(
+                contact_id=lead_id,
+                consent_type="call",
+                action="verified",
+                verification_result="not_found",
+                phone=phone_number,
+                reason=no_pref_reason,
+                details={"failure": "no_channel_preference"},
+            )
             return False, no_pref_reason
 
         if not pref.call_consent:
@@ -1000,6 +1075,17 @@ class ComplianceChecker:
                 lead_id=lead_id,
                 details={"failure": "consent_not_granted"},
             )
+            self._log_consent_audit(
+                contact_id=lead_id,
+                consent_type="call",
+                action="verified",
+                verification_result="failed",
+                phone=phone_number,
+                source_table="channel_preferences",
+                source_record_id=str(pref.id),
+                reason=no_consent_reason,
+                details={"failure": "consent_not_granted", "call_consent": False},
+            )
             return False, no_consent_reason
 
         self._log_decision(
@@ -1008,6 +1094,17 @@ class ComplianceChecker:
             decision="allowed",
             reason="Call consent verified",
             lead_id=lead_id,
+        )
+        self._log_consent_audit(
+            contact_id=lead_id,
+            consent_type="call",
+            action="verified",
+            verification_result="passed",
+            phone=phone_number,
+            source_table="channel_preferences",
+            source_record_id=str(pref.id),
+            reason="Call consent verified via ChannelPreference",
+            details={"call_consent": True, "consent_date": pref.call_consent_date.isoformat() if pref.call_consent_date else None},
         )
         return True, None
 

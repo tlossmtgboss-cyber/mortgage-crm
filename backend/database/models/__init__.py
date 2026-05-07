@@ -622,6 +622,9 @@ from .agent_metrics import AgentInvocation
 # Compliance decision audit log (TCPA/DNC/calling-hours immutable log)
 from .compliance_log import ComplianceDecisionLog
 
+# Consent audit trail (immutable log of all consent grants/revocations/verifications)
+from .consent_audit import ConsentAuditLog
+
 # SMS persistence models (campaign & scheduled job DB-backed state)
 from .sms_persistence import SMSCampaignRecord, ScheduledSMSJobRecord
 
@@ -674,6 +677,9 @@ from .aria_campaign import AriaCampaign, AriaCampaignRecipient
 
 # GDPR erasure request lifecycle tracking
 from .gdpr import ErasureRequest
+
+# Loan Officer License (multi-state SAFE Act compliance)
+from .lo_license import LoanOfficerLicense, LicenseStatus, LicenseType
 
 __all__ = [
     # =====================
@@ -1304,6 +1310,11 @@ __all__ = [
     "ComplianceDecisionLog",
 
     # =====================
+    # Consent Audit Trail
+    # =====================
+    "ConsentAuditLog",
+
+    # =====================
     # SMS Persistence
     # =====================
     "SMSCampaignRecord",
@@ -1379,4 +1390,11 @@ __all__ = [
     # GDPR Erasure Requests
     # =====================
     "ErasureRequest",
+
+    # =====================
+    # Loan Officer License (SAFE Act)
+    # =====================
+    "LoanOfficerLicense",
+    "LicenseStatus",
+    "LicenseType",
 ]

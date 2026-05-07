@@ -16,6 +16,7 @@ import csv
 import io
 import json
 import logging
+import re
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -39,6 +40,27 @@ PREVIEW_ROW_COUNT = 10
 
 
 # ---------------------------------------------------------------------------
+# Phone normalization for duplicate detection
+# ---------------------------------------------------------------------------
+
+_PHONE_STRIP_RE = re.compile(r"[^\d+]")
+
+
+def _normalize_phone(raw: Optional[str]) -> Optional[str]:
+    """Normalize phone to +1XXXXXXXXXX for duplicate matching."""
+    if not raw or not str(raw).strip():
+        return None
+    digits = _PHONE_STRIP_RE.sub("", str(raw).strip())
+    if digits.startswith("+"):
+        return digits
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+    return digits if digits else None
+
+
+# ---------------------------------------------------------------------------
 # Result types
 # ---------------------------------------------------------------------------
 
@@ -51,6 +73,7 @@ class ImportProgress:
     skipped_rows: int = 0
     error_rows: int = 0
     updated_rows: int = 0
+    duplicate_rows: int = 0
     status: str = "pending"
     errors: List[Dict[str, Any]] = field(default_factory=list)
     imported_ids: List[int] = field(default_factory=list)
@@ -79,6 +102,12 @@ class ImportProgress:
             self.skipped_rows += 1
             self.processed_rows += 1
 
+    def add_duplicate(self) -> None:
+        with self._lock:
+            self.duplicate_rows += 1
+            self.skipped_rows += 1
+            self.processed_rows += 1
+
     def add_error(self, row_num: int, errors: List[str]) -> None:
         with self._lock:
             self.error_rows += 1
@@ -98,6 +127,7 @@ class ImportResult:
     updated: int
     skipped: int
     errors: int
+    duplicate_rows: int
     error_details: List[Dict[str, Any]]
     imported_ids: List[int]
     field_mapping: Dict[str, str]
@@ -455,6 +485,20 @@ class ImportService:
         now = datetime.now(timezone.utc)
         rolled_back_count = 0
 
+        # -----------------------------------------------------------------
+        # Pre-delete snapshot: log the count and IDs that will be affected
+        # -----------------------------------------------------------------
+        logger.info(
+            "Import rollback starting: import_id=%s, method=%s, "
+            "record_count=%d, record_ids=%s, user_id=%d, org_id=%d",
+            batch_id,
+            "hard_delete" if hard_delete else "soft_delete",
+            len(lead_ids),
+            lead_ids,
+            self.user_id,
+            self.organization_id,
+        )
+
         # Use a savepoint so rollback of the rollback is possible
         savepoint = self.db.begin_nested()
         try:
@@ -509,6 +553,20 @@ class ImportService:
             raise
 
         self.db.commit()
+
+        # -----------------------------------------------------------------
+        # Audit log: record the completed rollback
+        # -----------------------------------------------------------------
+        logger.info(
+            "Import rollback completed: import_id=%s, method=%s, "
+            "records_affected=%d, total_ids=%d, user_id=%d, org_id=%d",
+            batch_id,
+            "hard_delete" if hard_delete else "soft_delete",
+            rolled_back_count,
+            len(lead_ids),
+            self.user_id,
+            self.organization_id,
+        )
 
         return {
             "import_id": batch_id,
@@ -613,6 +671,7 @@ class ImportService:
                     "skipped": progress.skipped_rows,
                     "errors": progress.error_rows,
                     "updated": progress.updated_rows,
+                    "duplicates": progress.duplicate_rows,
                 },
                 "is_active": True,
             }
@@ -900,6 +959,7 @@ class ImportService:
             f"Imported {progress.imported_rows} records"
             f"{f', updated {progress.updated_rows}' if progress.updated_rows else ''}"
             f"{f', skipped {progress.skipped_rows}' if progress.skipped_rows else ''}"
+            f"{f' ({progress.duplicate_rows} duplicates)' if progress.duplicate_rows else ''}"
             f"{f', {progress.error_rows} errors' if progress.error_rows else ''}"
         )
 
@@ -912,6 +972,7 @@ class ImportService:
             updated=progress.updated_rows,
             skipped=progress.skipped_rows,
             errors=progress.error_rows,
+            duplicate_rows=progress.duplicate_rows,
             error_details=progress.errors[:50],
             imported_ids=progress.imported_ids,
             field_mapping=field_mapping,
@@ -963,23 +1024,50 @@ class ImportService:
                 # Set organization scoping
                 clean["organization_id"] = self.organization_id
 
-                # Duplicate check (by email within org)
+                # ---------------------------------------------------------
+                # Natural-key duplicate detection (email + phone)
+                # ---------------------------------------------------------
                 existing_id = None
-                if clean.get("email") and duplicate_strategy != "create":
-                    query = f"""
-                        SELECT id FROM {entity_type}
-                        WHERE email = :email AND organization_id = :org_id
-                        LIMIT 1
-                    """
-                    dup_row = self.db.execute(text(query), {
-                        "email": clean["email"],
-                        "org_id": self.organization_id,
-                    }).fetchone()
-                    if dup_row:
-                        existing_id = dup_row[0]
+                dup_match_key = None  # tracks which key matched
+
+                if duplicate_strategy != "create":
+                    # Check email (case-insensitive, normalized)
+                    raw_email = clean.get("email")
+                    if raw_email and str(raw_email).strip():
+                        norm_email = str(raw_email).strip().lower()
+                        dup_row = self.db.execute(text(f"""
+                            SELECT id FROM {entity_type}
+                            WHERE LOWER(TRIM(email)) = :email
+                              AND organization_id = :org_id
+                            LIMIT 1
+                        """), {
+                            "email": norm_email,
+                            "org_id": self.organization_id,
+                        }).fetchone()
+                        if dup_row:
+                            existing_id = dup_row[0]
+                            dup_match_key = "email"
+
+                    # Check phone (normalized) — only if no email match
+                    if existing_id is None:
+                        raw_phone = clean.get("phone")
+                        norm_phone = _normalize_phone(raw_phone)
+                        if norm_phone:
+                            dup_row = self.db.execute(text(f"""
+                                SELECT id FROM {entity_type}
+                                WHERE phone = :phone
+                                  AND organization_id = :org_id
+                                LIMIT 1
+                            """), {
+                                "phone": norm_phone,
+                                "org_id": self.organization_id,
+                            }).fetchone()
+                            if dup_row:
+                                existing_id = dup_row[0]
+                                dup_match_key = "phone"
 
                 if existing_id and duplicate_strategy == "skip":
-                    progress.add_skipped()
+                    progress.add_duplicate()
                     continue
 
                 if existing_id and duplicate_strategy == "update":

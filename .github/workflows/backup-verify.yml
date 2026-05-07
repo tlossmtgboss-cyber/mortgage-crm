@@ -4,6 +4,15 @@
 # Weekly: pulls a fresh dump from production, restores into a scratch DB,
 # asserts counts, posts result to Slack. SOC 2 evidence that backups are
 # actually restorable — not just that snapshots exist.
+#
+# BACKUP RETENTION POLICY:
+# Dumps are ephemeral — created in /tmp inside the runner, verified for
+# restorability, then discarded when the runner terminates. No backup
+# artifacts are persisted long-term. The purpose of this workflow is to
+# prove that Railway's automated snapshots are restorable, not to store
+# an additional copy of production data. The verification report (counts
+# and pass/fail) is uploaded as a GitHub Actions artifact retained for
+# 90 days as SOC 2 evidence.
 
 name: Backup verification
 
@@ -35,6 +44,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify PROD_DATABASE_URL_READONLY secret exists
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL_READONLY }}
+        run: |
+          if [ -z "${PROD_DATABASE_URL}" ]; then
+            echo "::error::PROD_DATABASE_URL_READONLY secret is not set."
+            echo "This secret must contain a read-only PostgreSQL connection string"
+            echo "for the production database. Without it, pg_dump will fail with"
+            echo "a cryptic connection error."
+            echo ""
+            echo "To fix: add PROD_DATABASE_URL_READONLY to the repository secrets"
+            echo "at Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "PROD_DATABASE_URL_READONLY secret is present (length=${#PROD_DATABASE_URL})"
 
       - name: Install postgres client
         run: |
@@ -78,6 +103,44 @@ jobs:
             echo "recent_audit=${AUDIT}"
           } >> "$GITHUB_OUTPUT"
         id: counts
+
+      - name: Generate verification report
+        if: always()
+        run: |
+          mkdir -p /tmp/backup-report
+          cat > /tmp/backup-report/verification-report.txt <<REPORT
+          ========================================
+          BACKUP VERIFICATION REPORT
+          ========================================
+          Run ID:     ${{ github.run_id }}
+          Trigger:    ${{ github.event_name }}
+          Date (UTC): $(date -u '+%Y-%m-%d %H:%M:%S')
+          Repository: ${{ github.repository }}
+          Branch:     ${{ github.ref_name }}
+
+          --- Sanity Check Results ---
+          Users count:         ${{ steps.counts.outputs.users || 'N/A (step did not run)' }}
+          Loans count:         ${{ steps.counts.outputs.loans || 'N/A (step did not run)' }}
+          Recent audit events: ${{ steps.counts.outputs.recent_audit || 'N/A (step did not run)' }}
+
+          --- Verdict ---
+          Overall: ${{ job.status }}
+
+          --- Retention Note ---
+          The pg_dump file (/tmp/backup.dump) is ephemeral and will be
+          discarded when this runner terminates. Only this summary report
+          is retained as a GitHub Actions artifact for SOC 2 evidence.
+          REPORT
+
+          cat /tmp/backup-report/verification-report.txt
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-verification-report-${{ github.run_id }}
+          path: /tmp/backup-report/verification-report.txt
+          retention-days: 90
 
       - name: Notify Slack on success
         if: success()

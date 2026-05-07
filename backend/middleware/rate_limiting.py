@@ -1,15 +1,23 @@
 """
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+DEPRECATED — DO NOT USE — Scheduled for removal
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 Adaptive Rate Limiting & DDoS Protection  [DEPRECATED 2026-04-30]
 
-This middleware is NOT registered in main.py and never has been.  It is only
-imported by chat_system_bootstrap.py (which is itself unused from main.py).
-Active rate limiting is provided by:
-  - middleware/api_rate_limit.py (APIRateLimitMiddleware) — per-user/IP sliding window
-  - middleware/tenant_rate_limiter.py (TenantRateLimitMiddleware) — per-org limits
-  - middleware/mobile_rate_limit.py (MobileRateLimitMiddleware) — mobile-specific
-  - middleware/rate_limiter.py — decorator-based per-endpoint rate limiting
+STATUS: DEAD CODE.  This middleware is NOT registered in main.py and never was.
+It is only imported by chat_system_bootstrap.py (which is itself unused).
 
-This middleware provides:
+DO NOT import this module in new code.  All active rate limiting is handled by:
+  - middleware/api_rate_limit.py  (APIRateLimitMiddleware) — primary per-user/IP
+  - middleware/tenant_rate_limiter.py (TenantRateLimitMiddleware) — per-org
+  - middleware/mobile_rate_limit.py  (MobileRateLimitMiddleware) — mobile
+  - middleware/rate_limiter.py — decorator-based per-endpoint
+
+This file is retained only to avoid breaking the (unused) chat_system_bootstrap
+import.  It will be deleted when chat_system_bootstrap.py is removed.
+
+Original purpose (no longer active):
 - Per-tenant rate limiting with tier-based quotas (PERF-004)
 - Tiered rate limiting by route category
 - Suspicious activity detection
@@ -634,3 +642,15 @@ def create_rate_limiter(redis_url: str):
     """Factory function to create rate limiter with Redis connection"""
     redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
     return lambda app: AdaptiveRateLimiter(app, redis_client)
+
+
+def setup_rate_limiting(app, redis_client):
+    """DEPRECATED stub — retained only for chat_system_bootstrap.py import compat.
+
+    This function is a no-op.  Active rate limiting is handled by
+    APIRateLimitMiddleware registered in main.py.
+    """
+    logger.warning(
+        "setup_rate_limiting() called but is deprecated and a no-op. "
+        "Rate limiting is handled by APIRateLimitMiddleware."
+    )

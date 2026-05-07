@@ -581,14 +581,34 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         current_time = time.time()
 
-        # CORS headers for 429 responses
-        origin = request.headers.get("origin", "*")
-        cors_headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Requested-With",
+        # CORS headers for 429 responses — validated against allowlist to prevent
+        # origin reflection attacks.  DynamicCORSMiddleware wraps us and will add
+        # its own CORS headers, but 429 responses short-circuit before reaching it,
+        # so we must set headers here for the browser to read the error body.
+        origin = request.headers.get("origin", "")
+        _RATE_LIMIT_ALLOWED_ORIGINS = {
+            "https://perenniaai.com",
+            "https://www.perenniaai.com",
+            "https://app.perenniaai.com",
+            "https://api.perenniaai.com",
+            "capacitor://localhost",
+            "ionic://localhost",
         }
+        if ENVIRONMENT != "production":
+            _RATE_LIMIT_ALLOWED_ORIGINS.update({
+                "http://localhost",
+                "http://localhost:3000",
+                "http://localhost:5173",
+            })
+        cors_origin = origin if origin in _RATE_LIMIT_ALLOWED_ORIGINS else ""
+        cors_headers = {}
+        if cors_origin:
+            cors_headers = {
+                "Access-Control-Allow-Origin": cors_origin,
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+                "Access-Control-Allow-Headers": "Accept, Authorization, Content-Type, X-Requested-With, X-CSRF-Token, X-Request-ID, X-API-Key",
+            }
 
         # Check burst limit for expensive endpoints (always in-memory — 10-second window)
         if endpoint_config and endpoint_config.get("burst_allowed"):

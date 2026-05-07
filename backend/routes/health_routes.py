@@ -1696,6 +1696,89 @@ def register_health_routes(app, get_db, **kwargs):
         status_code = 200 if overall_status in ("healthy", "degraded") else 503
         return JSONResponse(status_code=status_code, content=response_data)
 
+    # ========================================================================
+    # Graceful Degradation Status — public endpoint (no admin required)
+    # ========================================================================
+
+    @app.get("/api/v1/health/degradation", tags=["Health"])
+    async def get_degradation_status(request: Request):
+        """
+        Get current graceful degradation status.
+
+        Returns the system service level (full/degraded/minimal/maintenance),
+        per-service health (database, Redis, AI API, Telnyx, Vapi), available
+        capabilities, and user-facing message. No authentication required so
+        the frontend can poll this to show banners when services are down.
+        """
+        import os as _os
+
+        try:
+            from services.graceful_degradation import GracefulDegradation
+
+            # Build Redis client (best-effort)
+            redis_client = None
+            try:
+                import redis as redis_lib
+                redis_url = _os.getenv("REDIS_URL")
+                if redis_url:
+                    redis_client = redis_lib.from_url(redis_url, socket_timeout=5)
+            except Exception:
+                pass
+
+            # Build DB session (best-effort)
+            db = None
+            try:
+                if SessionLocal:
+                    db = SessionLocal()
+            except Exception:
+                pass
+
+            # Build circuit breaker (best-effort)
+            breaker = None
+            try:
+                from services.circuit_breaker import CircuitBreaker
+                breaker = CircuitBreaker(
+                    name="anthropic_api",
+                    failure_threshold=5,
+                    recovery_timeout=30,
+                )
+            except Exception:
+                pass
+
+            try:
+                degradation = GracefulDegradation(
+                    redis_client=redis_client,
+                    db=db,
+                    circuit_breaker=breaker,
+                )
+                capabilities = await degradation.get_capabilities()
+
+                return {
+                    "service_level": capabilities["level"],
+                    "capabilities": capabilities["capabilities"],
+                    "health": capabilities["health"],
+                    "message": capabilities.get("message"),
+                    "actions": capabilities.get("actions", []),
+                    "timestamp": capabilities.get("timestamp"),
+                }
+            finally:
+                if db:
+                    try:
+                        db.close()
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            logger.error(f"Degradation health check failed: {e}")
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "service_level": "unknown",
+                    "error": "Could not determine degradation status",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
 
 # ==========================================================================
 # Deep health check helper functions (module-level, outside register func)

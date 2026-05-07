@@ -30,14 +30,28 @@ Usage:
 
 import io
 import csv
+import gzip
 import logging
 from datetime import datetime, date, timedelta, timezone
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from decimal import Decimal
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Export Limits
+# =============================================================================
+
+MAX_EXPORT_ROWS: int = 10_000
+"""Maximum rows any single export query may return. Configurable via monkey-patch
+or environment override at startup."""
+
+# Threshold in bytes above which responses are gzip-compressed (when client
+# sends Accept-Encoding: gzip).
+GZIP_THRESHOLD_BYTES: int = 100_000  # 100 KB
 
 
 # =============================================================================
@@ -747,20 +761,26 @@ def export_to_csv(
     data: List[Dict[str, Any]],
     columns: List[str],
     filename: str = "export.csv",
-) -> StreamingResponse:
+    accept_encoding: str = "",
+    total_rows: Optional[int] = None,
+) -> Response:
     """
     Export a list of dicts to CSV with proper escaping and UTF-8 BOM.
+
+    Applies gzip compression when the payload exceeds GZIP_THRESHOLD_BYTES and
+    the client sends ``Accept-Encoding: gzip``.  Adds ``X-Export-Truncated``
+    and ``X-Export-Total-Rows`` headers when the result set was truncated.
 
     Args:
         data: Rows as list of dicts.
         columns: Ordered list of column keys to include.
         filename: Download filename.
+        accept_encoding: Value of the request ``Accept-Encoding`` header.
+        total_rows: Total rows available before truncation (if known).
 
     Returns:
-        FastAPI StreamingResponse ready to return from an endpoint.
+        FastAPI Response ready to return from an endpoint.
     """
-    from fastapi.responses import StreamingResponse
-
     buffer = io.BytesIO()
     # UTF-8 BOM so Excel opens with correct encoding
     buffer.write(b"\xef\xbb\xbf")
@@ -784,11 +804,27 @@ def export_to_csv(
         writer.writerow(safe_row)
 
     text_wrapper.detach()  # release without closing underlying buffer
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
+
+    body = buffer.getvalue()
+    headers: Dict[str, str] = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+
+    # Truncation headers
+    truncated = total_rows is not None and total_rows > len(data)
+    if truncated:
+        headers["X-Export-Truncated"] = "true"
+        headers["X-Export-Total-Rows"] = str(total_rows)
+
+    # Gzip compression for large payloads
+    if len(body) > GZIP_THRESHOLD_BYTES and "gzip" in accept_encoding.lower():
+        body = gzip.compress(body)
+        headers["Content-Encoding"] = "gzip"
+
+    return Response(
+        content=body,
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=headers,
     )
 
 
@@ -797,20 +833,27 @@ def export_to_excel(
     columns: List[str],
     sheet_name: str = "Report",
     filename: str = "export.xlsx",
-) -> StreamingResponse:
+    accept_encoding: str = "",
+    total_rows: Optional[int] = None,
+) -> Response:
     """
     Export a list of dicts to an XLSX workbook using openpyxl.
+
+    Applies gzip compression when the payload exceeds GZIP_THRESHOLD_BYTES and
+    the client sends ``Accept-Encoding: gzip``.  Adds ``X-Export-Truncated``
+    and ``X-Export-Total-Rows`` headers when the result set was truncated.
 
     Args:
         data: Rows as list of dicts.
         columns: Ordered list of column keys to include.
         sheet_name: Worksheet name.
         filename: Download filename.
+        accept_encoding: Value of the request ``Accept-Encoding`` header.
+        total_rows: Total rows available before truncation (if known).
 
     Returns:
-        FastAPI StreamingResponse ready to return from an endpoint.
+        FastAPI Response ready to return from an endpoint.
     """
-    from fastapi.responses import StreamingResponse
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
@@ -859,13 +902,29 @@ def export_to_excel(
                 max_len = cell_len
         ws.column_dimensions[col_letter].width = max(10, min(max_len + 2, 40))
 
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
+    buf = io.BytesIO()
+    wb.save(buf)
+    body = buf.getvalue()
+
+    headers: Dict[str, str] = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+
+    # Truncation headers
+    truncated = total_rows is not None and total_rows > len(data)
+    if truncated:
+        headers["X-Export-Truncated"] = "true"
+        headers["X-Export-Total-Rows"] = str(total_rows)
+
+    # Gzip compression for large payloads
+    if len(body) > GZIP_THRESHOLD_BYTES and "gzip" in accept_encoding.lower():
+        body = gzip.compress(body)
+        headers["Content-Encoding"] = "gzip"
+
+    return Response(
+        content=body,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=headers,
     )
 
 
@@ -878,7 +937,7 @@ def format_pipeline_report(
     org_id: int,
     scope: Dict[str, Any],
     filters: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], int]:
     """
     Build a flat pipeline report from leads and loans.
 
@@ -889,8 +948,10 @@ def format_pipeline_report(
         filters: Optional dict with keys like 'stage', 'date_from', 'date_to'.
 
     Returns:
-        List of dicts ready for CSV/Excel export.
+        Tuple of (rows, total_unfettered_count). When total exceeds
+        MAX_EXPORT_ROWS the rows list is truncated.
     """
+    from sqlalchemy import func
     from database.models import Lead, Loan, User
 
     filters = filters or {}
@@ -919,7 +980,10 @@ def format_pipeline_report(
     if filters.get("date_to"):
         lead_q = lead_q.filter(Lead.created_at <= filters["date_to"])
 
-    lead_q = lead_q.order_by(Lead.created_at.desc()).limit(5000)
+    # Count before limit for truncation detection
+    lead_count_q = lead_q.with_entities(func.count()).scalar() or 0
+
+    lead_q = lead_q.order_by(Lead.created_at.desc()).limit(MAX_EXPORT_ROWS)
     leads = lead_q.all()
 
     # --- Loans ---
@@ -946,8 +1010,12 @@ def format_pipeline_report(
     if filters.get("date_to"):
         loan_q = loan_q.filter(Loan.created_at <= filters["date_to"])
 
-    loan_q = loan_q.order_by(Loan.created_at.desc()).limit(5000)
+    loan_count_q = loan_q.with_entities(func.count()).scalar() or 0
+
+    loan_q = loan_q.order_by(Loan.created_at.desc()).limit(MAX_EXPORT_ROWS)
     loans = loan_q.all()
+
+    total_available = lead_count_q + loan_count_q
 
     rows: List[Dict[str, Any]] = []
 
@@ -993,7 +1061,11 @@ def format_pipeline_report(
             "created_at": ln.created_at,
         })
 
-    return rows
+    # Enforce combined row cap
+    if len(rows) > MAX_EXPORT_ROWS:
+        rows = rows[:MAX_EXPORT_ROWS]
+
+    return rows, total_available
 
 
 PIPELINE_COLUMNS = [
@@ -1009,7 +1081,7 @@ def format_production_report(
     scope: Dict[str, Any],
     date_from: Optional["date"] = None,
     date_to: Optional["date"] = None,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], int]:
     """
     Build an LO production scorecard.
 
@@ -1023,7 +1095,8 @@ def format_production_report(
         date_to: End of date range (defaults to today).
 
     Returns:
-        List of dicts ready for CSV/Excel export.
+        Tuple of (rows, total_count). When total exceeds MAX_EXPORT_ROWS
+        the rows list is truncated.
     """
     from sqlalchemy import func, case
     from database.models import User, Loan, Lead
@@ -1051,7 +1124,7 @@ def format_production_report(
     user_map = {u.id: u for u in users}
 
     if not user_ids:
-        return []
+        return [], 0
 
     # Aggregate loan metrics per LO
     loan_agg = db.query(
@@ -1113,7 +1186,12 @@ def format_production_report(
 
     # Sort by funded volume descending
     rows.sort(key=lambda r: r["funded_volume"], reverse=True)
-    return rows
+
+    total_available = len(rows)
+    if len(rows) > MAX_EXPORT_ROWS:
+        rows = rows[:MAX_EXPORT_ROWS]
+
+    return rows, total_available
 
 
 PRODUCTION_COLUMNS = [
@@ -1128,7 +1206,7 @@ def format_compliance_report(
     org_id: int,
     scope: Dict[str, Any],
     period_days: int = 30,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], int]:
     """
     Build a compliance export: one row per loan with SLA and compliance flags.
 
@@ -1139,14 +1217,16 @@ def format_compliance_report(
         period_days: Lookback window in days.
 
     Returns:
-        List of dicts ready for CSV/Excel export.
+        Tuple of (rows, total_count). When total exceeds MAX_EXPORT_ROWS
+        the rows list is truncated.
     """
+    from sqlalchemy import func as sa_func
     from database.models import Loan
     from middleware.report_access import apply_scope_to_loan_query
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
-    loan_q = db.query(
+    base_q = db.query(
         Loan.id,
         Loan.loan_number,
         Loan.borrower_name,
@@ -1164,8 +1244,12 @@ def format_compliance_report(
     ).filter(
         Loan.created_at >= cutoff,
     )
-    loan_q = apply_scope_to_loan_query(loan_q, scope, Loan)
-    loan_q = loan_q.order_by(Loan.created_at.desc()).limit(5000)
+    base_q = apply_scope_to_loan_query(base_q, scope, Loan)
+
+    # Count before limit for truncation detection
+    total_available = base_q.with_entities(sa_func.count()).scalar() or 0
+
+    loan_q = base_q.order_by(Loan.created_at.desc()).limit(MAX_EXPORT_ROWS)
     loans = loan_q.all()
 
     rows: List[Dict[str, Any]] = []
@@ -1193,7 +1277,7 @@ def format_compliance_report(
             "created_at": ln.created_at,
         })
 
-    return rows
+    return rows, total_available
 
 
 COMPLIANCE_COLUMNS = [

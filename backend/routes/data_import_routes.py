@@ -826,6 +826,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             "imported": result.imported,
             "updated": result.updated,
             "skipped": result.skipped,
+            "duplicate_rows": result.duplicate_rows,
             "errors": result.errors,
             "error_details": result.error_details[:50],
             "message": result.message,
@@ -906,6 +907,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             "imported": result.imported,
             "updated": result.updated,
             "skipped": result.skipped,
+            "duplicate_rows": result.duplicate_rows,
             "errors": result.errors,
             "error_details": result.error_details[:50],
             "message": result.message,
@@ -988,6 +990,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             "imported": result.imported,
             "updated": result.updated,
             "skipped": result.skipped,
+            "duplicate_rows": result.duplicate_rows,
             "errors": result.errors,
             "error_details": result.error_details[:50],
             "message": result.message,
@@ -1093,6 +1096,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             "imported": result.imported,
             "updated": result.updated,
             "skipped": result.skipped,
+            "duplicate_rows": result.duplicate_rows,
             "errors": result.errors,
             "error_details": result.error_details[:50],
             "message": result.message,
@@ -1165,6 +1169,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
     async def rollback_import(
         import_id: str,
         hard_delete: bool = Query(False, description="If true, permanently delete records instead of soft-delete"),
+        confirm: bool = Query(False, description="Required for hard-delete rollbacks. Set to true to confirm permanent deletion."),
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
@@ -1175,6 +1180,10 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         a rollback note). Pass ?hard_delete=true to permanently remove
         the imported records.
 
+        Hard-delete requires ?confirm=true. Without it, the endpoint
+        returns the count of records that would be deleted so the caller
+        can prompt the user for confirmation.
+
         The operation is wrapped in a savepoint for safety.
         """
         from services.import_service import ImportService
@@ -1183,13 +1192,67 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, "organization_id", None) or 0
         user_id = getattr(current_user, "id", None)
 
+        # ---------------------------------------------------------------
+        # Hard-delete confirmation gate
+        # ---------------------------------------------------------------
+        if hard_delete and not confirm:
+            # Look up the import job to report how many records would be
+            # permanently deleted, without actually deleting anything.
+            job = db.execute(text("""
+                SELECT imported_lead_ids, filename
+                FROM import_jobs
+                WHERE id = :id AND organization_id = :org_id
+            """), {"id": import_id, "org_id": org_id}).fetchone()
+
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Import job {import_id} not found")
+
+            lead_ids_raw = job[0]
+            if isinstance(lead_ids_raw, str):
+                try:
+                    lead_ids = json.loads(lead_ids_raw)
+                except json.JSONDecodeError:
+                    lead_ids = []
+            elif isinstance(lead_ids_raw, list):
+                lead_ids = lead_ids_raw
+            else:
+                lead_ids = []
+
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": (
+                        f"Hard-delete will permanently remove {len(lead_ids)} "
+                        f"lead(s) imported from '{job[1] or 'unknown'}'. "
+                        "This action cannot be undone. "
+                        "Re-submit with ?hard_delete=true&confirm=true to proceed."
+                    ),
+                    "records_to_delete": len(lead_ids),
+                    "import_id": import_id,
+                    "requires_confirmation": True,
+                },
+            )
+
         svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
 
         try:
-            return svc.rollback_import(
+            result = svc.rollback_import(
                 batch_id=import_id,
                 hard_delete=hard_delete,
             )
+
+            # Log hard-delete rollbacks to audit trail
+            if hard_delete:
+                logger.warning(
+                    "AUDIT: Hard-delete rollback executed — import_id=%s, "
+                    "user_id=%s, org_id=%s, leads_affected=%s",
+                    import_id,
+                    user_id,
+                    org_id,
+                    result.get("leads_affected", 0),
+                )
+
+            return result
         except ValueError as e:
             status_code = 404 if "not found" in str(e).lower() else 400
             raise HTTPException(status_code=status_code, detail=str(e))

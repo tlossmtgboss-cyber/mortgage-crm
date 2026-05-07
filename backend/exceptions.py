@@ -135,6 +135,33 @@ class ComplianceViolationError(PerenniaError):
         )
 
 
+class AuditImmutabilityError(ComplianceViolationError):
+    """Raised when code attempts to mutate an immutable audit record.
+
+    This is the canonical exception class. The middleware module
+    (middleware.audit_immutability) subclasses this for its own use,
+    but callers should catch this base type.
+    """
+
+    def __init__(
+        self,
+        message: str = "Audit record mutation blocked",
+        operation: Optional[str] = None,
+        table_name: Optional[str] = None,
+        record_id: Any = None,
+        field: Optional[str] = None,
+    ):
+        self.operation = operation
+        self.table_name = table_name
+        self.record_id = record_id
+        self.field = field
+        super().__init__(
+            message=message,
+            violation_type="audit_immutability",
+            severity="critical",
+        )
+
+
 class SLABreachError(PerenniaError):
     """Raised when an SLA deadline is breached."""
 
@@ -425,6 +452,7 @@ __all__ = [
     'AuthorizationError',
     # Compliance
     'ComplianceViolationError',
+    'AuditImmutabilityError',
     'SLABreachError',
     # Data integrity
     'InvalidStageError',

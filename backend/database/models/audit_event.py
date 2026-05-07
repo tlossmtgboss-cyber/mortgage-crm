@@ -98,4 +98,6 @@ class AuditEvent(Base):
         Index("ix_audit_actor_occurred", "actor_id", "occurred_at"),
         Index("ix_audit_resource", "resource_type", "resource_id", "occurred_at"),
         Index("ix_audit_metadata_gin", "metadata", postgresql_using="gin"),
+        Index("ix_audit_org_occurred", "org_id", "occurred_at"),
+        Index("ix_audit_org_event_type", "org_id", "event_type"),
     )

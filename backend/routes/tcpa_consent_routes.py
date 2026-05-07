@@ -380,6 +380,35 @@ async def record_consent(
 
     try:
         db.add(record)
+
+        # Log to immutable consent audit trail (same transaction)
+        try:
+            from telephony.consent_audit import log_consent_granted
+            actor_id = getattr(current_user, "id", None)
+            actor_id_int = int(actor_id) if actor_id is not None else None
+            log_consent_granted(
+                db,
+                organization_id=int(org_id) if org_id else None,
+                contact_uuid=str(contact_uuid),
+                contact_type=payload.contact_type,
+                consent_type=payload.consent_channel,  # call, sms, both
+                method=payload.consent_source or "api",
+                ip_address=payload.consent_ip_address,
+                user_agent=payload.consent_user_agent,
+                source_table="tcpa_consents",
+                actor_user_id=actor_id_int,
+                phone=payload.phone_number,
+                details={
+                    "consent_classification": payload.consent_type,
+                    "consent_channel": payload.consent_channel,
+                    "expires_at": payload.expires_at.isoformat() if payload.expires_at else None,
+                    "has_recording": bool(payload.recording_url),
+                    "has_document": bool(payload.document_url),
+                },
+            )
+        except Exception as audit_err:
+            logger.debug("Consent audit log skipped on grant: %s", audit_err)
+
         db.commit()
         db.refresh(record)
     except Exception as e:
@@ -579,6 +608,79 @@ async def revoke_consent(
             record.revoked_at = now
             record.revocation_method = payload.revocation_method
             record.updated_at = now
+
+        # IMMEDIATE OPT-OUT: Update ChannelPreference in the same transaction
+        # so all outbound is blocked before this request returns.
+        channel_prefs_updated = 0
+        try:
+            from database.models.communication import ChannelPreference
+            from database.models.lead_loan import Lead
+
+            # Find all leads with this phone in this org
+            lead_ids = [
+                lid for (lid,) in
+                db.query(Lead.id)
+                .filter(
+                    Lead.phone == payload.phone_number,
+                    Lead.organization_id == int(org_id),
+                )
+                .all()
+            ]
+            if lead_ids:
+                prefs = (
+                    db.query(ChannelPreference)
+                    .filter(ChannelPreference.lead_id.in_(lead_ids))
+                    .all()
+                )
+                consent_channels_revoked = set()
+                for rec in records:
+                    if rec.consent_channel in ("call", "both"):
+                        consent_channels_revoked.add("call")
+                    if rec.consent_channel in ("sms", "both"):
+                        consent_channels_revoked.add("sms")
+
+                for pref in prefs:
+                    if "call" in consent_channels_revoked:
+                        pref.call_consent = False
+                        pref.do_not_call = True
+                    if "sms" in consent_channels_revoked:
+                        pref.sms_consent = False
+                        pref.do_not_sms = True
+                    pref.updated_at = now
+                    channel_prefs_updated += 1
+        except Exception as cp_err:
+            logger.warning(
+                "ChannelPreference immediate opt-out failed (consent still revoked in TCPA table): %s",
+                cp_err,
+            )
+
+        # Log each revocation to immutable consent audit trail
+        try:
+            from telephony.consent_audit import log_consent_revoked
+            actor_id = getattr(current_user, "id", None)
+            actor_id_int = int(actor_id) if actor_id is not None else None
+            for record in records:
+                log_consent_revoked(
+                    db,
+                    organization_id=int(org_id) if org_id else None,
+                    contact_uuid=str(record.contact_id),
+                    contact_type=record.contact_type,
+                    consent_type=record.consent_channel,
+                    method=payload.revocation_method,
+                    source_table="tcpa_consents",
+                    source_record_id=str(record.id),
+                    actor_user_id=actor_id_int,
+                    phone=payload.phone_number,
+                    reason=f"Consent revoked via {payload.revocation_method}",
+                    details={
+                        "original_consent_type": record.consent_type,
+                        "original_granted_at": record.granted_at.isoformat() if record.granted_at else None,
+                        "channel_prefs_updated": channel_prefs_updated,
+                    },
+                )
+        except Exception as audit_err:
+            logger.debug("Consent audit log skipped on revoke: %s", audit_err)
+
         db.commit()
     except Exception as e:
         db.rollback()
@@ -591,11 +693,12 @@ async def revoke_consent(
         ) from e
 
     logger.info(
-        "TCPA consent revoked: phone=%s count=%d method=%s by_user=%s",
+        "TCPA consent revoked: phone=%s count=%d method=%s by_user=%s channel_prefs_blocked=%d",
         payload.phone_number,
         len(records),
         payload.revocation_method,
         getattr(current_user, "id", "unknown"),
+        channel_prefs_updated,
     )
 
     return ConsentRevokeResponse(
@@ -605,7 +708,8 @@ async def revoke_consent(
         revoked_at=now,
         message=(
             f"{len(records)} consent record(s) revoked. "
-            "Ensure outbound contact stops within 10 business days per FCC rules."
+            f"Outbound contact blocked immediately ({channel_prefs_updated} channel preference(s) updated). "
+            "FCC opt-out honoured within this request."
         ),
     )
 
@@ -837,4 +941,149 @@ async def verify_before_call(
             f"Granted on {record.granted_at.strftime('%Y-%m-%d')}. "
             "Contact is permitted."
         ),
+    )
+
+
+# =============================================================================
+# Unified Consent Audit Trail
+# =============================================================================
+
+class UnifiedConsentAuditEntry(BaseModel):
+    """Single entry in the unified consent audit trail."""
+
+    id: int
+    consent_type: str
+    action: str
+    method: Optional[str] = None
+    verification_result: Optional[str] = None
+    source_table: Optional[str] = None
+    source_record_id: Optional[str] = None
+    actor_user_id: Optional[int] = None
+    phone_masked: Optional[str] = None
+    reason: Optional[str] = None
+    details: Optional[dict] = None
+    created_at: datetime
+
+
+class UnifiedConsentAuditResponse(BaseModel):
+    """Full unified consent audit trail for a contact."""
+
+    contact_id: str
+    organization_id: Optional[str] = None
+    total_records: int
+    grants: int
+    revocations: int
+    verifications: int
+    records: List[UnifiedConsentAuditEntry]
+
+
+# Use a separate router for the unified consent audit endpoint at
+# /api/v1/compliance/consent/ (not under /tcpa/)
+consent_audit_router = APIRouter(
+    prefix="/api/v1/compliance/consent",
+    tags=["consent-audit"],
+    dependencies=[Depends(get_current_user)],
+)
+
+
+@consent_audit_router.get(
+    "/audit/{contact_id}",
+    response_model=UnifiedConsentAuditResponse,
+    summary="Unified consent audit trail for a contact",
+    description=(
+        "Returns every consent event -- grants, revocations, verifications, "
+        "and expirations -- from the immutable ConsentAuditLog for the given "
+        "contact. Supports both integer lead IDs and UUID-based contact IDs. "
+        "This endpoint aggregates events across ALL consent sources "
+        "(ChannelPreference, TCPAConsent, VoiceConsent, etc.)."
+    ),
+)
+async def get_unified_consent_audit(
+    contact_id: str,
+    consent_type: Optional[str] = Query(
+        default=None,
+        description='Filter by consent type: "call", "sms", "email", "voice_ai", "both".',
+    ),
+    action: Optional[str] = Query(
+        default=None,
+        description='Filter by action: "granted", "revoked", "verified", "expired", "updated".',
+    ),
+    limit: int = Query(default=100, ge=1, le=1000, description="Max records to return."),
+    offset: int = Query(default=0, ge=0, description="Pagination offset."),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Return the full unified consent audit trail for a contact."""
+    from database.models.consent_audit import ConsentAuditLog
+
+    org_id = getattr(current_user, "organization_id", None)
+
+    # Build query: try integer contact_id first, fall back to UUID
+    is_int_id = False
+    try:
+        int_contact_id = int(contact_id)
+        is_int_id = True
+    except (ValueError, TypeError):
+        pass
+
+    base_query = db.query(ConsentAuditLog)
+
+    if is_int_id:
+        base_query = base_query.filter(ConsentAuditLog.contact_id == int_contact_id)
+    else:
+        base_query = base_query.filter(ConsentAuditLog.contact_uuid == contact_id)
+
+    # Tenant isolation
+    if org_id is not None:
+        try:
+            base_query = base_query.filter(
+                ConsentAuditLog.organization_id == int(org_id)
+            )
+        except (ValueError, TypeError):
+            pass
+
+    # Optional filters
+    if consent_type:
+        base_query = base_query.filter(ConsentAuditLog.consent_type == consent_type)
+    if action:
+        base_query = base_query.filter(ConsentAuditLog.action == action)
+
+    total = base_query.count()
+
+    records = (
+        base_query
+        .order_by(ConsentAuditLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    grants = sum(1 for r in records if r.action == "granted")
+    revocations = sum(1 for r in records if r.action == "revoked")
+    verifications = sum(1 for r in records if r.action == "verified")
+
+    return UnifiedConsentAuditResponse(
+        contact_id=contact_id,
+        organization_id=str(org_id) if org_id else None,
+        total_records=total,
+        grants=grants,
+        revocations=revocations,
+        verifications=verifications,
+        records=[
+            UnifiedConsentAuditEntry(
+                id=r.id,
+                consent_type=r.consent_type,
+                action=r.action,
+                method=r.method,
+                verification_result=r.verification_result,
+                source_table=r.source_table,
+                source_record_id=r.source_record_id,
+                actor_user_id=r.actor_user_id,
+                phone_masked=r.phone_masked,
+                reason=r.reason,
+                details=r.details,
+                created_at=r.created_at,
+            )
+            for r in records
+        ],
     )

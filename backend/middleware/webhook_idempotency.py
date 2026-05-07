@@ -14,6 +14,11 @@ Two layers are provided:
    ``webhook_idempotency`` database table as the durable store.  Provides
    richer tracking (status, response_code) at the cost of a DB round-trip.
 
+3. **Dead-letter queue** (``record_webhook_failure``, ``get_failed_webhooks``,
+   ``retry_webhook``): Stores failed webhook events for later inspection and
+   reprocessing.  Uses Redis list with in-memory deque fallback.  Capped at
+   1000 entries per provider (FIFO eviction).
+
 Usage — lightweight:
     from middleware.webhook_idempotency import is_duplicate_webhook
 
@@ -44,14 +49,27 @@ Usage — database-backed:
         except Exception:
             mark_failed(db, idem["key"], response_code=500)
             raise
+
+Usage — dead-letter queue:
+    from middleware.webhook_idempotency import record_webhook_failure, get_failed_webhooks, retry_webhook
+
+    try:
+        process_webhook(payload)
+    except Exception as e:
+        record_webhook_failure("vapi:end-of-call:call_123", "vapi", str(e), payload)
+
+    # Admin: list and retry
+    failed = get_failed_webhooks(provider="vapi", limit=20)
+    retry_webhook("vapi:end-of-call:call_123")
 """
 
+import collections
 import hashlib
 import json
 import logging
 import threading
 import time
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -141,6 +159,224 @@ def is_duplicate_webhook(provider: str, event_key: str) -> bool:
         _seen_events[full_key] = now + _WEBHOOK_TTL_SECONDS
         logger.debug("Webhook dedup [memory]: new event %s", full_key[:80])
         return False
+
+
+# ---------------------------------------------------------------------------
+# Dead-letter queue (DLQ) for failed webhook events
+# ---------------------------------------------------------------------------
+
+_DLQ_MAX_PER_PROVIDER = 1000
+_DLQ_REDIS_PREFIX = "webhook:dlq:"
+
+# In-memory fallback: provider -> deque of serialized JSON entries
+_dlq_store: dict[str, collections.deque] = {}
+_dlq_lock = threading.Lock()
+
+
+def _dlq_entry(event_key: str, provider: str, error: str, payload: dict) -> dict:
+    """Build a dead-letter entry dict."""
+    from datetime import datetime, timezone
+    return {
+        "event_key": event_key,
+        "provider": provider,
+        "error": error,
+        "payload": payload,
+        "failed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def record_webhook_failure(
+    event_key: str, provider: str, error: str, payload: dict,
+) -> None:
+    """
+    Store a failed webhook event in the dead-letter queue.
+
+    Args:
+        event_key: Unique key for this event (same format as idempotency key).
+        provider: Provider name (e.g. "vapi", "telnyx", "stripe").
+        error: Error message / traceback summary.
+        payload: The original webhook payload (will be JSON-serialized).
+    """
+    entry = _dlq_entry(event_key, provider, error, payload)
+    entry_json = json.dumps(entry, default=str)
+    redis_key = f"{_DLQ_REDIS_PREFIX}{provider}"
+
+    redis = _get_redis()
+    if redis is not None:
+        try:
+            redis.lpush(redis_key, entry_json)
+            # Trim to cap — keep the newest _DLQ_MAX_PER_PROVIDER entries
+            redis.ltrim(redis_key, 0, _DLQ_MAX_PER_PROVIDER - 1)
+            logger.info(
+                "Webhook DLQ [redis]: recorded failure for %s (provider=%s)",
+                event_key[:80], provider,
+            )
+            return
+        except Exception as e:
+            logger.warning("Webhook DLQ: Redis error, falling back to memory: %s", e)
+
+    # In-memory fallback
+    with _dlq_lock:
+        if provider not in _dlq_store:
+            _dlq_store[provider] = collections.deque(maxlen=_DLQ_MAX_PER_PROVIDER)
+        _dlq_store[provider].appendleft(entry_json)
+    logger.info(
+        "Webhook DLQ [memory]: recorded failure for %s (provider=%s)",
+        event_key[:80], provider,
+    )
+
+
+def get_failed_webhooks(
+    provider: str = None, limit: int = 50,
+) -> List[dict]:
+    """
+    Retrieve failed webhook events from the dead-letter queue.
+
+    Args:
+        provider: Filter by provider name.  None returns all providers.
+        limit: Maximum number of entries to return (default 50).
+
+    Returns:
+        List of dicts, each with keys: event_key, provider, error, payload, failed_at.
+        Ordered newest-first.
+    """
+    results: list[dict] = []
+
+    providers_to_check = [provider] if provider else None
+
+    redis = _get_redis()
+    if redis is not None:
+        try:
+            if providers_to_check is None:
+                # Discover all DLQ keys
+                cursor_keys = redis.keys(f"{_DLQ_REDIS_PREFIX}*")
+                providers_to_check = [
+                    k.decode() if isinstance(k, bytes) else k
+                    for k in cursor_keys
+                ]
+                # Strip prefix to get provider names, then re-add for fetching
+                providers_to_check = [
+                    k.replace(_DLQ_REDIS_PREFIX, "") for k in providers_to_check
+                ]
+
+            for prov in providers_to_check:
+                rkey = f"{_DLQ_REDIS_PREFIX}{prov}"
+                entries = redis.lrange(rkey, 0, limit - 1)
+                for raw in entries:
+                    try:
+                        entry = json.loads(raw)
+                        results.append(entry)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                if len(results) >= limit:
+                    break
+
+            # Sort by failed_at descending and cap
+            results.sort(key=lambda x: x.get("failed_at", ""), reverse=True)
+            return results[:limit]
+        except Exception as e:
+            logger.warning("Webhook DLQ: Redis read error, falling back to memory: %s", e)
+
+    # In-memory fallback
+    with _dlq_lock:
+        if providers_to_check is None:
+            providers_to_check = list(_dlq_store.keys())
+
+        for prov in providers_to_check:
+            dq = _dlq_store.get(prov)
+            if not dq:
+                continue
+            for raw in list(dq)[:limit]:
+                try:
+                    entry = json.loads(raw)
+                    results.append(entry)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            if len(results) >= limit:
+                break
+
+    results.sort(key=lambda x: x.get("failed_at", ""), reverse=True)
+    return results[:limit]
+
+
+def retry_webhook(event_key: str) -> bool:
+    """
+    Mark a failed event for retry: remove it from the DLQ and clear
+    its idempotency record so it can be reprocessed on next delivery.
+
+    Args:
+        event_key: The event_key of the failed entry to retry.
+
+    Returns:
+        True if the entry was found and removed, False otherwise.
+    """
+    found = False
+
+    redis = _get_redis()
+    if redis is not None:
+        try:
+            # Scan all DLQ lists for the matching entry
+            cursor_keys = redis.keys(f"{_DLQ_REDIS_PREFIX}*")
+            for rkey in cursor_keys:
+                rkey_str = rkey.decode() if isinstance(rkey, bytes) else rkey
+                entries = redis.lrange(rkey_str, 0, -1)
+                for raw in entries:
+                    try:
+                        entry = json.loads(raw)
+                        if entry.get("event_key") == event_key:
+                            redis.lrem(rkey_str, 1, raw)
+                            found = True
+                            break
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                if found:
+                    break
+
+            # Clear the idempotency key so the event can be reprocessed
+            if found:
+                # The lightweight layer uses "webhook:idem:{provider}:{event_key}"
+                # but event_key here is already the full composite key.
+                # Try removing both possible Redis key formats.
+                redis.delete(f"webhook:idem:{event_key}")
+                logger.info("Webhook DLQ [redis]: removed %s for retry", event_key[:80])
+                return True
+
+        except Exception as e:
+            logger.warning("Webhook DLQ: Redis retry error, falling back to memory: %s", e)
+
+    # In-memory fallback
+    with _dlq_lock:
+        for prov, dq in _dlq_store.items():
+            for i, raw in enumerate(list(dq)):
+                try:
+                    entry = json.loads(raw)
+                    if entry.get("event_key") == event_key:
+                        dq.remove(raw)
+                        found = True
+                        break
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            if found:
+                break
+
+    # Clear in-memory idempotency cache
+    if found:
+        with _seen_lock:
+            # Try both possible key formats
+            _seen_events.pop(f"webhook:idem:{event_key}", None)
+            # Also try with provider prefix already included
+            for k in list(_seen_events.keys()):
+                if event_key in k:
+                    _seen_events.pop(k, None)
+                    break
+        logger.info("Webhook DLQ [memory]: removed %s for retry", event_key[:80])
+
+    return found
+
+
+# Backward-compatibility alias — some callers may use the DB-backed name
+# for the lightweight check. Keep both names available.
+check_duplicate_webhook = is_duplicate_webhook
 
 
 # ---------------------------------------------------------------------------

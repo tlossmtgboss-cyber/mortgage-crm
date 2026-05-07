@@ -190,7 +190,11 @@ def register_enterprise_readiness_routes(app, get_db, get_current_user):
         if not org_id:
             raise HTTPException(status_code=400, detail="Organization context required")
         body = await request.json()
-        return update_tenant_branding(db, org_id, body)
+        user_id = getattr(user, "id", None)
+        try:
+            return update_tenant_branding(db, org_id, body, user_id=user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
     @app.get("/api/v1/branding/sms-sender", tags=["White-Label"])
     async def sms_sender(request: Request, db=Depends(get_db), user=Depends(get_current_user)):

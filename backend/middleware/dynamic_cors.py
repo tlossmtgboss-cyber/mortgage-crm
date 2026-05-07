@@ -80,6 +80,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         "X-RateLimit-Limit",
         "X-RateLimit-Remaining",
         "X-RateLimit-Reset",
+        "X-RateLimit-Tier",
+        "Retry-After",
     ]
 
     # Production origins (always allowed)

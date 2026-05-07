@@ -146,7 +146,7 @@ def _scim_error(status: int, detail: str, scim_type: Optional[str] = None) -> di
 
 
 def _user_to_scim(row, base_url: str = "") -> dict:
-    """Convert a DB user row to SCIM 2.0 User resource (RFC 7643 Section 4.1)."""
+    """Convert a DB user row to SCIM 2.0 User resource (RFC 7643 Section 4.1 + 4.3)."""
     user_id = str(row.id)
     first_name = row.first_name or ""
     last_name = row.last_name or ""
@@ -177,12 +177,69 @@ def _user_to_scim(row, base_url: str = "") -> dict:
         },
     }
 
-    # Enterprise extension: role / department
+    # phoneNumbers (RFC 7643 Section 4.1.2)
+    phone_numbers = []
+    if hasattr(row, "phone") and row.phone:
+        phone_numbers.append({
+            "value": row.phone,
+            "type": "work",
+            "primary": True,
+        })
+    if phone_numbers:
+        resource["phoneNumbers"] = phone_numbers
+
+    # addresses (RFC 7643 Section 4.1.2)
+    addresses = []
+    if hasattr(row, "business_address") and row.business_address:
+        addresses.append({
+            "value": row.business_address,
+            "formatted": row.business_address,
+            "type": "work",
+            "primary": True,
+        })
+    if addresses:
+        resource["addresses"] = addresses
+
+    # title (RFC 7643 Section 4.1.1)
+    if hasattr(row, "title") and row.title:
+        resource["title"] = row.title
+
+    # Enterprise extension (RFC 7643 Section 4.3)
     enterprise_ext = {}
-    if hasattr(row, "permission_role") and row.permission_role:
-        enterprise_ext["department"] = row.permission_role
+
+    # employeeNumber — prefer nmls_number, fall back to nmls_id
+    employee_number = None
+    if hasattr(row, "nmls_number") and row.nmls_number:
+        employee_number = row.nmls_number
+    elif hasattr(row, "nmls_id") and row.nmls_id:
+        employee_number = row.nmls_id
+    if employee_number:
+        enterprise_ext["employeeNumber"] = employee_number
+
+    # department — use branch_name if joined, else team_name, else permission_role
+    department = None
+    if hasattr(row, "branch_name") and row.branch_name:
+        department = row.branch_name
+    elif hasattr(row, "team_name") and row.team_name:
+        department = row.team_name
+    elif hasattr(row, "permission_role") and row.permission_role:
+        department = row.permission_role
+    if department:
+        enterprise_ext["department"] = department
+
     if hasattr(row, "organization_id") and row.organization_id:
         enterprise_ext["organization"] = str(row.organization_id)
+
+    # manager (RFC 7643 Section 4.3 — $ref + value + displayName)
+    if hasattr(row, "manager_id") and row.manager_id:
+        manager_ref = {
+            "value": str(row.manager_id),
+            "$ref": f"{base_url}/scim/v2/Users/{row.manager_id}",
+        }
+        if hasattr(row, "manager_display_name") and row.manager_display_name:
+            manager_ref["displayName"] = row.manager_display_name
+        enterprise_ext["manager"] = manager_ref
+
     if enterprise_ext:
         resource["schemas"].append(SCIM_ENTERPRISE_SCHEMA)
         resource[SCIM_ENTERPRISE_SCHEMA] = enterprise_ext
@@ -223,6 +280,120 @@ def _validate_scim_token(request: Request) -> str:
         )
 
     return token
+
+
+def _parse_scim_filter(filter_str: str) -> Optional[tuple]:
+    """
+    Parse a SCIM filter expression into (attribute, operator, value).
+
+    Supports RFC 7644 Section 3.4.2.2 filter operators:
+        eq  — equals (exact match, case-insensitive for strings)
+        co  — contains (substring match)
+        sw  — starts with (prefix match)
+
+    Examples:
+        userName eq "john@example.com"
+        displayName co "John"
+        name.familyName sw "Sm"
+        active eq true
+
+    Returns None if the filter cannot be parsed.
+    """
+    # Pattern: attribute SPACE operator SPACE value
+    # Value is either "quoted string" or true/false (boolean)
+    match = re.match(
+        r'(\S+)\s+(eq|co|sw)\s+(?:"([^"]*)"|(\S+))',
+        filter_str,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    attr = match.group(1)
+    op = match.group(2).lower()
+    # Quoted string value or bare value (for booleans)
+    value = match.group(3) if match.group(3) is not None else match.group(4)
+    return (attr, op, value)
+
+
+# Map SCIM attribute names to SQL column references (using 'u.' alias)
+_SCIM_ATTR_TO_COLUMN = {
+    "userName": "u.email",
+    "emails.value": "u.email",
+    "name.givenName": "u.first_name",
+    "name.familyName": "u.last_name",
+    "displayName": "u.first_name",  # best effort — display is computed from first+last
+    "title": "u.title",
+    "phoneNumbers.value": "u.phone",
+    "active": "u.is_active",
+    # Enterprise extension attributes
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber": "u.nmls_number",
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department": "b.name",
+    "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager.value": "u.manager_id",
+}
+
+
+def _build_filter_clause(attr: str, op: str, value: str) -> tuple:
+    """
+    Build a SQL WHERE clause fragment from a parsed SCIM filter.
+
+    Returns (clause_sql, param_key, param_value).
+    Returns (None, None, None) if the attribute is not supported.
+    """
+    column = _SCIM_ATTR_TO_COLUMN.get(attr)
+    if not column:
+        return (None, None, None)
+
+    param_key = "scim_filter_val"
+
+    # Boolean attribute (active)
+    if attr == "active":
+        if op != "eq":
+            return (None, None, None)
+        bool_val = value.lower() == "true"
+        return (f"{column} = :{param_key}", param_key, bool_val)
+
+    # String attributes
+    if op == "eq":
+        return (f"LOWER({column}) = LOWER(:{param_key})", param_key, value)
+    elif op == "co":
+        return (f"LOWER({column}) LIKE LOWER(:{param_key})", param_key, f"%{value}%")
+    elif op == "sw":
+        return (f"LOWER({column}) LIKE LOWER(:{param_key})", param_key, f"{value}%")
+
+    return (None, None, None)
+
+
+def _apply_enterprise_ext(ext: dict, update_fields: dict):
+    """
+    Apply enterprise extension attributes (RFC 7643 Section 4.3) to the
+    update_fields dict used by SCIM PATCH/PUT operations.
+
+    Maps:
+        employeeNumber -> nmls_number
+        department     -> permission_role (if valid role) or team_name
+        manager        -> manager_id
+    """
+    if "employeeNumber" in ext:
+        update_fields["nmls_number"] = str(ext["employeeNumber"]) if ext["employeeNumber"] else None
+    if "department" in ext:
+        dept = ext["department"]
+        if isinstance(dept, str) and dept in VALID_IMPORT_ROLES:
+            update_fields["permission_role"] = dept
+            update_fields["role"] = dept
+        elif isinstance(dept, str):
+            update_fields["team_name"] = dept
+    if "manager" in ext:
+        mgr = ext["manager"]
+        if isinstance(mgr, dict):
+            mgr_id = mgr.get("value")
+        else:
+            mgr_id = mgr
+        if mgr_id is not None:
+            try:
+                update_fields["manager_id"] = int(mgr_id)
+            except (ValueError, TypeError):
+                pass
 
 
 def _get_scim_org_id(db: Session) -> Optional[int]:
@@ -295,55 +466,58 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         where_clauses = []
 
         if org_id is not None:
-            where_clauses.append("organization_id = :org_id")
+            where_clauses.append("u.organization_id = :org_id")
             params["org_id"] = org_id
 
-        # Parse SCIM filter (simplified: supports userName eq "..." and active eq true/false)
+        # Parse SCIM filter (RFC 7644 Section 3.4.2.2)
+        # Supports operators: eq (equals), co (contains), sw (starts with)
+        # Supports attributes: userName, active, displayName, name.familyName,
+        #   name.givenName, emails.value, title, phoneNumbers.value
         if filter:
-            filter_stripped = filter.strip()
-
-            # userName eq "value"
-            username_match = re.match(
-                r'userName\s+eq\s+"([^"]+)"', filter_stripped, re.IGNORECASE
-            )
-            if username_match:
-                where_clauses.append("email = :filter_email")
-                params["filter_email"] = username_match.group(1)
-
-            # active eq true/false
-            active_match = re.match(
-                r'active\s+eq\s+(true|false)', filter_stripped, re.IGNORECASE
-            )
-            if active_match:
-                is_active = active_match.group(1).lower() == "true"
-                where_clauses.append("is_active = :filter_active")
-                params["filter_active"] = is_active
+            parsed = _parse_scim_filter(filter.strip())
+            if parsed:
+                attr, op, value = parsed
+                clause, param_key, param_val = _build_filter_clause(attr, op, value)
+                if clause:
+                    where_clauses.append(clause)
+                    params[param_key] = param_val
 
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         # Sorting
-        order_column = "id"
+        order_column = "u.id"
         if sortBy == "userName":
-            order_column = "email"
+            order_column = "u.email"
         elif sortBy in ("name.familyName",):
-            order_column = "last_name"
+            order_column = "u.last_name"
         elif sortBy in ("name.givenName",):
-            order_column = "first_name"
+            order_column = "u.first_name"
         elif sortBy == "displayName":
-            order_column = "first_name"
+            order_column = "u.first_name"
 
         order_dir = "DESC" if sortOrder and sortOrder.lower() == "descending" else "ASC"
 
-        # Count total
-        count_sql = "SELECT COUNT(*) as cnt FROM users WHERE " + where_sql
+        # Count total (uses same alias + joins as the main query for filter consistency)
+        count_sql = (
+            "SELECT COUNT(*) as cnt FROM users u"
+            " LEFT JOIN branches b ON b.id = u.branch_id"
+            " LEFT JOIN users m ON m.id = u.manager_id"
+            " WHERE " + where_sql
+        )
         total_row = db.execute(text(count_sql), params).fetchone()
         total_count = total_row.cnt if total_row else 0
 
-        # Fetch page
+        # Fetch page — include columns for enterprise extension (RFC 7643 Section 4.3)
         select_sql = (
-            "SELECT id, email, first_name, last_name, is_active,"
-            "       permission_role, organization_id, created_at"
-            " FROM users"
+            "SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,"
+            "       u.permission_role, u.organization_id, u.created_at,"
+            "       u.phone, u.business_address, u.title, u.team_name,"
+            "       u.nmls_number, u.nmls_id, u.manager_id,"
+            "       b.name AS branch_name,"
+            "       COALESCE(m.first_name || ' ' || m.last_name, '') AS manager_display_name"
+            " FROM users u"
+            " LEFT JOIN branches b ON b.id = u.branch_id"
+            " LEFT JOIN users m ON m.id = u.manager_id"
             " WHERE " + where_sql +
             " ORDER BY " + order_column + " " + order_dir +
             " LIMIT :limit OFFSET :offset"
@@ -409,11 +583,45 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         org_id = _get_scim_org_id(db)
 
-        # Enterprise extension: role
+        # Enterprise extension (RFC 7643 Section 4.3)
         enterprise = body.get(SCIM_ENTERPRISE_SCHEMA, {})
         role = enterprise.get("department", "sales")
         if role not in VALID_IMPORT_ROLES:
             role = "sales"
+
+        employee_number = enterprise.get("employeeNumber")
+        manager_id = None
+        if "manager" in enterprise:
+            mgr = enterprise["manager"]
+            mgr_val = mgr.get("value") if isinstance(mgr, dict) else mgr
+            if mgr_val is not None:
+                try:
+                    manager_id = int(mgr_val)
+                except (ValueError, TypeError):
+                    pass
+
+        # phoneNumbers (RFC 7643 Section 4.1.2)
+        phone = None
+        phone_numbers = body.get("phoneNumbers", [])
+        for pn in phone_numbers:
+            if pn.get("primary"):
+                phone = pn.get("value")
+                break
+        if phone is None and phone_numbers:
+            phone = phone_numbers[0].get("value")
+
+        # addresses (RFC 7643 Section 4.1.2)
+        business_address = None
+        addresses = body.get("addresses", [])
+        for addr in addresses:
+            if addr.get("primary"):
+                business_address = addr.get("formatted") or addr.get("value", "")
+                break
+        if business_address is None and addresses:
+            business_address = addresses[0].get("formatted") or addresses[0].get("value", "")
+
+        # title (RFC 7643 Section 4.1.1)
+        title = body.get("title")
 
         # Create with random password (IdP-managed, password login not used)
         random_pw = secrets.token_urlsafe(32)
@@ -424,14 +632,20 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 INSERT INTO users (
                     email, hashed_password, first_name, last_name,
                     permission_role, role, organization_id, is_active,
-                    sso_provider, sso_subject_id, created_at
+                    sso_provider, sso_subject_id,
+                    phone, business_address, title, nmls_number, manager_id,
+                    created_at
                 ) VALUES (
                     :email, :hashed_password, :first_name, :last_name,
                     :permission_role, :role, :org_id, :is_active,
-                    'scim', :external_id, NOW()
+                    'scim', :external_id,
+                    :phone, :business_address, :title, :nmls_number, :manager_id,
+                    NOW()
                 )
                 RETURNING id, email, first_name, last_name, is_active,
-                          permission_role, organization_id, created_at
+                          permission_role, organization_id, created_at,
+                          phone, business_address, title, nmls_number, nmls_id, manager_id,
+                          team_name
             """),
             {
                 "email": user_name,
@@ -443,6 +657,11 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 "org_id": org_id,
                 "is_active": is_active,
                 "external_id": body.get("externalId", ""),
+                "phone": phone,
+                "business_address": business_address,
+                "title": title,
+                "nmls_number": employee_number,
+                "manager_id": manager_id,
             },
         )
 
@@ -488,9 +707,16 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         row = db.execute(
             text("""
-                SELECT id, email, first_name, last_name, is_active,
-                       permission_role, organization_id, created_at
-                FROM users WHERE id = :user_id
+                SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
+                       u.permission_role, u.organization_id, u.created_at,
+                       u.phone, u.business_address, u.title, u.team_name,
+                       u.nmls_number, u.nmls_id, u.manager_id,
+                       b.name AS branch_name,
+                       COALESCE(m.first_name || ' ' || m.last_name, '') AS manager_display_name
+                FROM users u
+                LEFT JOIN branches b ON b.id = u.branch_id
+                LEFT JOIN users m ON m.id = u.manager_id
+                WHERE u.id = :user_id
             """),
             {"user_id": user_id},
         ).fetchone()
@@ -580,12 +806,51 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         enterprise = body.get(SCIM_ENTERPRISE_SCHEMA, {})
         role = enterprise.get("department")
 
+        # phoneNumbers (RFC 7643 Section 4.1.2)
+        phone = None
+        phone_numbers = body.get("phoneNumbers", [])
+        for pn in phone_numbers:
+            if pn.get("primary"):
+                phone = pn.get("value")
+                break
+        if phone is None and phone_numbers:
+            phone = phone_numbers[0].get("value")
+
+        # addresses (RFC 7643 Section 4.1.2)
+        business_address = None
+        addresses = body.get("addresses", [])
+        for addr in addresses:
+            if addr.get("primary"):
+                business_address = addr.get("formatted") or addr.get("value", "")
+                break
+        if business_address is None and addresses:
+            business_address = addresses[0].get("formatted") or addresses[0].get("value", "")
+
+        title = body.get("title")
+
+        # Enterprise extension fields
+        employee_number = enterprise.get("employeeNumber")
+        manager_id = None
+        if "manager" in enterprise:
+            mgr = enterprise["manager"]
+            mgr_val = mgr.get("value") if isinstance(mgr, dict) else mgr
+            if mgr_val is not None:
+                try:
+                    manager_id = int(mgr_val)
+                except (ValueError, TypeError):
+                    pass
+
         update_params = {
             "user_id": user_id,
             "email": user_name,
             "first_name": first_name,
             "last_name": last_name,
             "is_active": is_active,
+            "phone": phone,
+            "business_address": business_address,
+            "title": title,
+            "nmls_number": employee_number,
+            "manager_id": manager_id,
         }
 
         role_clause = ""
@@ -599,19 +864,31 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             "    email = :email,"
             "    first_name = :first_name,"
             "    last_name = :last_name,"
-            "    is_active = :is_active"
+            "    is_active = :is_active,"
+            "    phone = :phone,"
+            "    business_address = :business_address,"
+            "    title = :title,"
+            "    nmls_number = :nmls_number,"
+            "    manager_id = :manager_id"
             "    " + role_clause +
             " WHERE id = :user_id"
         )
         db.execute(text(update_sql), update_params)
         db.commit()
 
-        # Re-fetch and return
+        # Re-fetch and return (with enterprise extension columns)
         row = db.execute(
             text("""
-                SELECT id, email, first_name, last_name, is_active,
-                       permission_role, organization_id, created_at
-                FROM users WHERE id = :user_id
+                SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
+                       u.permission_role, u.organization_id, u.created_at,
+                       u.phone, u.business_address, u.title, u.team_name,
+                       u.nmls_number, u.nmls_id, u.manager_id,
+                       b.name AS branch_name,
+                       COALESCE(m.first_name || ' ' || m.last_name, '') AS manager_display_name
+                FROM users u
+                LEFT JOIN branches b ON b.id = u.branch_id
+                LEFT JOIN users m ON m.id = u.manager_id
+                WHERE u.id = :user_id
             """),
             {"user_id": user_id},
         ).fetchone()
@@ -703,13 +980,19 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             "role": existing.permission_role,
         }
 
-        # Process each operation
+        # Process each operation (RFC 7644 Section 3.5.2)
         update_fields = {}
 
         for op in operations:
             op_type = op.get("op", "").lower()
             path = op.get("path", "")
             value = op.get("value")
+
+            if op_type not in ("replace", "add", "remove"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=_scim_error(400, f"Unsupported operation: {op.get('op')}", "invalidValue"),
+                )
 
             if op_type in ("replace", "add"):
                 if path == "active" or (not path and isinstance(value, dict) and "active" in value):
@@ -741,6 +1024,65 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                         if len(parts) > 1:
                             update_fields["last_name"] = parts[1]
 
+                elif path == "title":
+                    update_fields["title"] = value if isinstance(value, str) else str(value)
+
+                # phoneNumbers — extract primary or first work number
+                elif path == "phoneNumbers":
+                    if isinstance(value, list):
+                        phone_val = None
+                        for pn in value:
+                            if pn.get("primary"):
+                                phone_val = pn.get("value")
+                                break
+                        if phone_val is None and value:
+                            phone_val = value[0].get("value")
+                        if phone_val:
+                            update_fields["phone"] = phone_val
+                    elif isinstance(value, dict):
+                        update_fields["phone"] = value.get("value", "")
+
+                # addresses — extract primary or first work address
+                elif path == "addresses":
+                    if isinstance(value, list):
+                        addr_val = None
+                        for addr in value:
+                            if addr.get("primary"):
+                                addr_val = addr.get("formatted") or addr.get("value", "")
+                                break
+                        if addr_val is None and value:
+                            addr_val = value[0].get("formatted") or value[0].get("value", "")
+                        if addr_val:
+                            update_fields["business_address"] = addr_val
+                    elif isinstance(value, dict):
+                        update_fields["business_address"] = value.get("formatted") or value.get("value", "")
+
+                # Enterprise extension attributes via path
+                elif path == f"{SCIM_ENTERPRISE_SCHEMA}:employeeNumber":
+                    update_fields["nmls_number"] = str(value) if value else None
+
+                elif path == f"{SCIM_ENTERPRISE_SCHEMA}:department":
+                    if isinstance(value, str) and value in VALID_IMPORT_ROLES:
+                        update_fields["permission_role"] = value
+                        update_fields["role"] = value
+                    elif isinstance(value, str):
+                        update_fields["team_name"] = value
+
+                elif path == f"{SCIM_ENTERPRISE_SCHEMA}:manager":
+                    if isinstance(value, dict):
+                        mgr_id = value.get("value")
+                    else:
+                        mgr_id = value
+                    if mgr_id is not None:
+                        try:
+                            update_fields["manager_id"] = int(mgr_id)
+                        except (ValueError, TypeError):
+                            pass
+
+                # Handle enterprise extension as nested object in path
+                elif path == SCIM_ENTERPRISE_SCHEMA and isinstance(value, dict):
+                    _apply_enterprise_ext(value, update_fields)
+
                 # Handle no path (bulk replace)
                 elif not path and isinstance(value, dict):
                     if "name" in value and isinstance(value["name"], dict):
@@ -753,18 +1095,52 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                             if em.get("primary") and em.get("value"):
                                 update_fields["email"] = em["value"]
                                 break
+                    if "phoneNumbers" in value and isinstance(value["phoneNumbers"], list):
+                        for pn in value["phoneNumbers"]:
+                            if pn.get("primary") and pn.get("value"):
+                                update_fields["phone"] = pn["value"]
+                                break
+                    if "addresses" in value and isinstance(value["addresses"], list):
+                        for addr in value["addresses"]:
+                            if addr.get("primary"):
+                                update_fields["business_address"] = addr.get("formatted") or addr.get("value", "")
+                                break
+                    if "title" in value:
+                        update_fields["title"] = value["title"]
+                    # Enterprise extension inside bulk value
+                    if SCIM_ENTERPRISE_SCHEMA in value:
+                        _apply_enterprise_ext(value[SCIM_ENTERPRISE_SCHEMA], update_fields)
 
             elif op_type == "remove":
                 if path == "active":
                     update_fields["is_active"] = False
+                elif path == "title":
+                    update_fields["title"] = None
+                elif path == "phoneNumbers":
+                    update_fields["phone"] = None
+                elif path == "addresses":
+                    update_fields["business_address"] = None
+                elif path == f"{SCIM_ENTERPRISE_SCHEMA}:employeeNumber":
+                    update_fields["nmls_number"] = None
+                elif path == f"{SCIM_ENTERPRISE_SCHEMA}:department":
+                    update_fields["team_name"] = None
+                elif path == f"{SCIM_ENTERPRISE_SCHEMA}:manager":
+                    update_fields["manager_id"] = None
 
         if not update_fields:
-            # No-op; return current state
+            # No-op; return current state (with enterprise extension columns)
             row = db.execute(
                 text("""
-                    SELECT id, email, first_name, last_name, is_active,
-                           permission_role, organization_id, created_at
-                    FROM users WHERE id = :user_id
+                    SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
+                           u.permission_role, u.organization_id, u.created_at,
+                           u.phone, u.business_address, u.title, u.team_name,
+                           u.nmls_number, u.nmls_id, u.manager_id,
+                           b.name AS branch_name,
+                           COALESCE(m.first_name || ' ' || m.last_name, '') AS manager_display_name
+                    FROM users u
+                    LEFT JOIN branches b ON b.id = u.branch_id
+                    LEFT JOIN users m ON m.id = u.manager_id
+                    WHERE u.id = :user_id
                 """),
                 {"user_id": user_id},
             ).fetchone()
@@ -797,9 +1173,16 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         row = db.execute(
             text("""
-                SELECT id, email, first_name, last_name, is_active,
-                       permission_role, organization_id, created_at
-                FROM users WHERE id = :user_id
+                SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
+                       u.permission_role, u.organization_id, u.created_at,
+                       u.phone, u.business_address, u.title, u.team_name,
+                       u.nmls_number, u.nmls_id, u.manager_id,
+                       b.name AS branch_name,
+                       COALESCE(m.first_name || ' ' || m.last_name, '') AS manager_display_name
+                FROM users u
+                LEFT JOIN branches b ON b.id = u.branch_id
+                LEFT JOIN users m ON m.id = u.manager_id
+                WHERE u.id = :user_id
             """),
             {"user_id": user_id},
         ).fetchone()

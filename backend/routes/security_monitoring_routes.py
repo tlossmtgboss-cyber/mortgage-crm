@@ -83,8 +83,9 @@ async def get_security_dashboard(
         # Get security configuration
         security_config = _get_security_config()
 
-        # Get recent security events from database
-        security_events = _get_recent_security_events(db)
+        # Get recent security events from database (tenant-scoped)
+        _user_org_id = getattr(current_user, 'organization_id', None)
+        security_events = _get_recent_security_events(db, org_id=_user_org_id)
 
         # Get failed login attempts
         failed_logins = _get_failed_login_stats(app, db)
@@ -246,9 +247,10 @@ async def get_security_events(
     limit: int = 100,
     event_type: Optional[str] = None
 ):
-    """Get recent security events from audit log."""
+    """Get recent security events from audit log (tenant-scoped)."""
     try:
-        events = _get_recent_security_events(db, limit=limit, event_type=event_type)
+        _user_org_id = getattr(current_user, 'organization_id', None)
+        events = _get_recent_security_events(db, limit=limit, event_type=event_type, org_id=_user_org_id)
         return {
             "count": len(events),
             "events": events
@@ -378,8 +380,21 @@ def _get_security_config() -> Dict[str, Any]:
     }
 
 
-def _get_recent_security_events(db: Session, limit: int = 50, event_type: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Get recent security events from audit log."""
+def _get_recent_security_events(
+    db: Session,
+    limit: int = 50,
+    event_type: Optional[str] = None,
+    org_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Get recent security events from audit log, scoped to organization.
+
+    Args:
+        db: Database session
+        limit: Max events to return
+        event_type: Optional filter on event_type
+        org_id: Organization ID for tenant scoping. When provided, only
+                events belonging to this org are returned.
+    """
     events = []
 
     try:
@@ -389,21 +404,25 @@ def _get_recent_security_events(db: Session, limit: int = 50, event_type: Option
         query = """
             SELECT id, event_type, user_id, ip_address, details, created_at
             FROM audit_logs
-            WHERE event_type LIKE '%security%'
+            WHERE (event_type LIKE '%security%'
                OR event_type LIKE '%login%'
                OR event_type LIKE '%auth%'
                OR event_type LIKE '%block%'
-               OR event_type LIKE '%rate_limit%'
+               OR event_type LIKE '%rate_limit%')
         """
 
+        params: Dict[str, Any] = {"limit": limit}
+
+        # Tenant scoping — only return events for this organization
+        if org_id is not None:
+            query += " AND (organization_id = :org_id OR organization_id IS NULL)"
+            params["org_id"] = org_id
+
         if event_type:
-            query += f" AND event_type = :event_type"
+            query += " AND event_type = :event_type"
+            params["event_type"] = event_type
 
         query += " ORDER BY created_at DESC LIMIT :limit"
-
-        params = {"limit": limit}
-        if event_type:
-            params["event_type"] = event_type
 
         result = db.execute(text(query), params)
 

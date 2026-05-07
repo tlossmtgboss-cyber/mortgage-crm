@@ -28,6 +28,8 @@ Endpoints:
     GET  /api/v1/compliance/hmda/validate/{loan_id} - HMDA field completeness validation
     GET  /api/v1/compliance/hmda/validate           - Batch HMDA validation for all loans in period
     GET  /api/v1/compliance/hmda/lar/export         - HMDA LAR pipe-delimited export
+    GET  /api/v1/compliance/hmda/export             - HMDA LAR export (hmda_export_service)
+    GET  /api/v1/compliance/hmda/summary            - HMDA readiness summary statistics
     POST /api/v1/compliance/ecoa/adverse-action      - Create adverse action notice (audited)
     PUT  /api/v1/compliance/ecoa/adverse-action/{notice_id} - Update adverse action notice (audited)
     GET  /api/v1/compliance/ecoa/adverse-action/{notice_id}/audit-trail - Get audit trail
@@ -781,6 +783,105 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 "Content-Type": "text/plain; charset=utf-8",
             },
         )
+
+    # -----------------------------------------------------------------
+    # HMDA Export & Validate via hmda_export_service (Check 2.12)
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/compliance/hmda/export",
+        tags=["Compliance"],
+    )
+    async def export_hmda(
+        request: Request,
+        year: int = Query(None, description="Reporting year (defaults to current year)"),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Export HMDA LAR as a pipe-delimited text file via the HMDA export service.
+
+        Generates a CFPB 2018+ Regulation C compliant pipe-delimited file
+        containing all reportable loan data for the specified year.  Each row
+        contains 93 fields per the CFPB Filing Instructions Guide.
+
+        Returns a downloadable .txt file.  If no reportable loans exist for
+        the year, returns a 404 with a descriptive message.
+
+        Requires admin, leadership, or management role.
+        """
+        _require_compliance_access(current_user)
+        org_id = getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="User has no organization")
+
+        from datetime import date as date_type
+        from services.hmda_export_service import generate_hmda_lar
+
+        if year is None:
+            year = date_type.today().year
+
+        lar_content = generate_hmda_lar(db, org_id=org_id, year=year)
+
+        if not lar_content:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No reportable HMDA loans found for year {year}",
+            )
+
+        # Audit log
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=org_id,
+                resource_type="hmda_lar", export_format="txt",
+                ip_address=_get_client_ip(request),
+                details={"year": year, "source": "hmda_export_service"},
+            )
+        except Exception:
+            pass
+
+        return StreamingResponse(
+            iter([lar_content]),
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename=hmda_lar_{year}.txt",
+                "Content-Type": "text/plain; charset=utf-8",
+            },
+        )
+
+    @app.get(
+        "/api/v1/compliance/hmda/summary",
+        tags=["Compliance"],
+    )
+    async def hmda_summary(
+        year: int = Query(None, description="Reporting year (defaults to current year)"),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Get HMDA readiness summary statistics.
+
+        Returns aggregate validation statistics for all reportable loans
+        in the specified year: total count, valid/invalid counts,
+        completeness rate, and the most commonly missing fields.
+
+        Useful as a pre-export check to identify data quality issues
+        before generating the official LAR file.
+
+        Requires admin, leadership, or management role.
+        """
+        _require_compliance_access(current_user)
+        org_id = getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="User has no organization")
+
+        from datetime import date as date_type
+        from services.hmda_export_service import get_hmda_summary
+
+        if year is None:
+            year = date_type.today().year
+
+        summary = get_hmda_summary(db, org_id=org_id, year=year)
+        return summary
 
     # -----------------------------------------------------------------
     # ECOA Adverse Action Audit Trail (Check 2.13)

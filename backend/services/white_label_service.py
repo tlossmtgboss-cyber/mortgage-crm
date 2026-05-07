@@ -18,10 +18,48 @@ Provides:
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Validation constants
+# ---------------------------------------------------------------------------
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+_COLOR_FIELDS = {"primary_color", "secondary_color", "accent_color"}
+
+# Patterns that must never appear in font_family values (XSS vectors).
+_FONT_XSS_PATTERNS = [
+    re.compile(r"<script", re.IGNORECASE),
+    re.compile(r"javascript\s*:", re.IGNORECASE),
+    re.compile(r"on\w+\s*=", re.IGNORECASE),       # onclick=, onerror=, etc.
+    re.compile(r"expression\s*\(", re.IGNORECASE),  # CSS expression()
+    re.compile(r"url\s*\(", re.IGNORECASE),         # url() injection
+    re.compile(r"<\s*/?\s*\w", re.IGNORECASE),      # any HTML tag
+]
+
+
+def _validate_hex_color(field_name: str, value: str) -> None:
+    """Raise ValueError if *value* is not a valid #RRGGBB hex color."""
+    if not _HEX_COLOR_RE.match(value):
+        raise ValueError(
+            f"Invalid color for '{field_name}': '{value}' — "
+            "expected 6-digit hex color (e.g. #1a73e8)"
+        )
+
+
+def _validate_font_family(value: str) -> None:
+    """Raise ValueError if *value* contains XSS vectors."""
+    for pattern in _FONT_XSS_PATTERNS:
+        if pattern.search(value):
+            raise ValueError(
+                f"Invalid font_family: value contains disallowed pattern "
+                f"(matched '{pattern.pattern}'). "
+                "Only CSS font names are accepted."
+            )
+
 
 # Default platform name (should not appear in white-labeled output)
 PLATFORM_NAME = "Perennia"
@@ -116,10 +154,18 @@ def get_tenant_branding(db, org_id: int) -> Dict:
     }
 
 
-def update_tenant_branding(db, org_id: int, updates: Dict) -> Dict:
+def update_tenant_branding(
+    db, org_id: int, updates: Dict, *, user_id: Optional[int] = None
+) -> Dict:
     """
     Update branding configuration for a tenant.
     Supports partial updates (only specified fields are changed).
+
+    Validates:
+      - Color fields must be valid #RRGGBB hex
+      - font_family must not contain XSS vectors
+
+    Logs every change to the server-side audit trail (AuditEvent).
     """
     from database.models.white_label_config import WhiteLabelConfig
 
@@ -137,11 +183,31 @@ def update_tenant_branding(db, org_id: int, updates: Dict) -> Dict:
     if not valid_updates:
         return {"updated": False, "reason": "No valid fields to update"}
 
-    config = _get_config(db, org_id)
+    # ----- Input validation ---------------------------------------------------
 
-    if config is None:
+    # Color hex validation
+    for field in _COLOR_FIELDS & valid_updates.keys():
+        value = valid_updates[field]
+        if value is not None:
+            _validate_hex_color(field, str(value))
+
+    # Font family XSS validation
+    if "font_family" in valid_updates and valid_updates["font_family"] is not None:
+        _validate_font_family(str(valid_updates["font_family"]))
+
+    # ----- Apply updates ------------------------------------------------------
+
+    config = _get_config(db, org_id)
+    is_new = config is None
+
+    if is_new:
         config = WhiteLabelConfig(organization_id=org_id)
         db.add(config)
+
+    # Capture old values for audit trail (before mutation)
+    old_values = {}
+    for key in valid_updates:
+        old_values[key] = getattr(config, key, None) if not is_new else None
 
     for key, value in valid_updates.items():
         setattr(config, key, value)
@@ -149,7 +215,56 @@ def update_tenant_branding(db, org_id: int, updates: Dict) -> Dict:
     config.updated_at = datetime.now(timezone.utc)
     db.commit()
 
+    # ----- Audit trail --------------------------------------------------------
+    _log_branding_change(
+        db,
+        org_id=org_id,
+        user_id=user_id,
+        fields_changed=list(valid_updates.keys()),
+        old_values=old_values,
+        new_values=valid_updates,
+        is_new_config=is_new,
+    )
+
     return {"updated": True, "fields": list(valid_updates.keys())}
+
+
+def _log_branding_change(
+    db,
+    *,
+    org_id: int,
+    user_id: Optional[int],
+    fields_changed: List[str],
+    old_values: Dict,
+    new_values: Dict,
+    is_new_config: bool,
+) -> None:
+    """
+    Write a CONFIG_CHANGED audit event for branding updates.
+    Non-blocking — failures are logged but do not roll back the branding change.
+    """
+    try:
+        from services.audit_events import EventType, audit_event
+
+        audit_event(
+            db,
+            event_type=EventType.CONFIG_CHANGED,
+            outcome="success",
+            actor_id=user_id,
+            org_id=org_id,
+            resource_type="white_label_config",
+            resource_id=str(org_id),
+            metadata={
+                "action": "branding_update",
+                "is_new_config": is_new_config,
+                "fields_changed": fields_changed,
+                "old_values": {k: v for k, v in old_values.items() if v != new_values.get(k)},
+                "new_values": {k: v for k, v in new_values.items() if v != old_values.get(k)},
+            },
+        )
+        db.commit()
+    except Exception as e:
+        logger.exception("Failed to log branding audit event for org %s: %s", org_id, e)
 
 
 # =============================================================================
