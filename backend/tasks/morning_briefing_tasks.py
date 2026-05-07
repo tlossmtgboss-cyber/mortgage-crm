@@ -272,6 +272,7 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
                 conditions=ctx.conditions,
                 yesterday=ctx.yesterday,
                 team=ctx.team,
+                dashboard_snapshot=ctx.dashboard_snapshot,
                 **branding,
             )
             briefing.html_content = html
