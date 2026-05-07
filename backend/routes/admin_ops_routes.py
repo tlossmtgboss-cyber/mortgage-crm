@@ -3041,3 +3041,34 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 "error": str(e),
                 "traceback": traceback.format_exc(),
             })
+
+    @app.post("/api/v1/admin/seed-demo-org-data")
+    async def seed_demo_org_data_endpoint(
+        admin_key: str = Query(None),
+        db: Session = Depends(get_db),
+    ):
+        """Seed demo data into the demo org using ADMIN_API_KEY auth."""
+        _verify_admin_key(admin_key)
+
+        try:
+            demo_email = "demo@perenniaai.com"
+            org_slug = "summit-peak-demo-appstore"
+            org_row = db.execute(text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).fetchone()
+            if not org_row:
+                raise HTTPException(status_code=404, detail="Demo org not found")
+            user_row = db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
+            if not user_row:
+                raise HTTPException(status_code=404, detail="Demo user not found")
+
+            from scripts.seed_demo_org import seed_demo_data
+            result = seed_demo_data(db, organization_id=org_row[0], user_id=user_row[0])
+            return {"status": "ok", "message": f"Seeded {result['total']} entities", **result}
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.rollback()
+            logger.exception("Demo org data seed failed")
+            import traceback
+            return JSONResponse(status_code=500, content={
+                "status": "error", "error": str(e), "traceback": traceback.format_exc(),
+            })
