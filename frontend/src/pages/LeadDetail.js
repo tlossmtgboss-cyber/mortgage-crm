@@ -4082,7 +4082,7 @@ function LeadDetail() {
                           <div style={{ fontSize: '13px', color: '#666' }}>
                             {contact.email && <span>{contact.email}</span>}
                             {contact.email && contact.phone && <span> • </span>}
-                            {contact.phone && <span>{contact.phone}</span>}
+                            {contact.phone && <ClickablePhone phone={contact.phone} />}
                           </div>
                           {contact.notes && <div style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>{contact.notes}</div>}
                         </div>
@@ -4176,7 +4176,7 @@ function LeadDetail() {
                                 <div style={{ fontSize: '12px', color: '#666' }}>
                                   {result.email && <span>{result.email}</span>}
                                   {result.email && result.phone && <span> • </span>}
-                                  {result.phone && <span>{result.phone}</span>}
+                                  {result.phone && <ClickablePhone phone={result.phone} />}
                                 </div>
                               </div>
                             ))}

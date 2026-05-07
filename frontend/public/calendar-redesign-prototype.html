@@ -1,0 +1,2772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Perennia — Calendar</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ==========================================================================
+   PERENNIA CALENDAR — Stylesheet
+   Shared design system + calendar-specific components.
+   ========================================================================== */
+
+:root {
+  --bg-page: #FAF7F1;
+  --bg-surface: #FFFFFF;
+  --bg-sidebar: #F6F2EA;
+  --bg-elevated: #F2EDE2;
+  --bg-soft: #FBF8F2;
+  --border: #ECE6D8;
+  --border-strong: #D8D0BD;
+  --text-primary: #1A1F1B;
+  --text-secondary: #4F554E;
+  --text-muted: #8B8A7E;
+  --text-faint: #B5B2A4;
+  --brand: #1F3D2E;
+  --brand-hover: #2A4F3D;
+  --brand-soft: #E5EDE6;
+  --brand-tint: #EFF3EE;
+  --gold: #B8924A;
+  --gold-soft: #F5EDD9;
+  --gold-deep: #6B4F1A;
+  --success: #2D7A52;
+  --success-soft: #E3EFE5;
+  --warn: #B25F18;
+  --warn-soft: #F8E8D6;
+  --danger: #9B2C2C;
+}
+
+* { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+html, body {
+  font-family: 'Geist', system-ui, -apple-system, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-feature-settings: 'ss01', 'cv01', 'cv11';
+  letter-spacing: -0.005em;
+}
+.font-display { font-family: 'Fraunces', Georgia, serif; font-feature-settings: 'ss01'; letter-spacing: -0.018em; }
+.font-mono    { font-family: 'Geist Mono', ui-monospace, monospace; }
+
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: radial-gradient(rgba(31,61,46,.025) 1px, transparent 1px);
+  background-size: 4px 4px;
+  opacity: .6;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #DDD6C5; border-radius: 8px; border: 2px solid var(--bg-page); }
+::-webkit-scrollbar-thumb:hover { background: #C7BFA9; }
+
+/* ===========================================================================
+   SHARED COMPONENTS — match URLA / Docs / Tasks pages exactly
+   =========================================================================== */
+
+/* Sidebar nav */
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 12px; border-radius: 8px;
+  color: var(--text-secondary); font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: background .12s, color .12s;
+}
+.nav-item:hover { background: rgba(31,61,46,.06); color: var(--text-primary); }
+.nav-item.is-active { background: var(--brand); color: #F5F2E9; }
+.nav-item.is-active .nav-icon { color: #F5F2E9; }
+.nav-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--text-muted); }
+.nav-item:hover .nav-icon { color: var(--text-primary); }
+
+/* Topbar */
+.topbar-link {
+  font-size: 13px; color: var(--text-secondary); font-weight: 500;
+  padding: 6px 10px; border-radius: 6px; cursor: pointer;
+}
+.topbar-link:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 22px;
+  border-radius: 8px;
+  font-weight: 500; font-size: 14px;
+  cursor: pointer; transition: all .15s;
+  border: 1px solid transparent;
+  font-family: inherit;
+}
+.btn-primary { background: var(--brand); color: #F5F2E9; }
+.btn-primary:hover { background: var(--brand-hover); }
+.btn-secondary {
+  background: var(--bg-surface); color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.btn-secondary:hover { background: var(--bg-elevated); }
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { color: var(--text-primary); }
+
+/* Wax-seal avatars */
+.seal {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #2E5740, #1F3D2E 60%, #14291F);
+  display: grid; place-items: center;
+  color: #E8DDC0; font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px;
+  box-shadow: inset 0 0 0 2px rgba(232,221,192,.18), 0 1px 2px rgba(0,0,0,.18);
+  flex-shrink: 0;
+}
+.seal--ext {
+  background: radial-gradient(circle at 30% 30%, #C8B485, #B8924A 60%, #8E6A2F);
+  color: #2C1F08;
+  box-shadow: inset 0 0 0 2px rgba(44,31,8,.15), 0 1px 2px rgba(0,0,0,.18);
+}
+.seal--neutral {
+  background: radial-gradient(circle at 30% 30%, #B5B2A4, #8B8A7E 60%, #6B6B5F);
+  color: #FAF7F1;
+}
+
+/* Chips */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  background: var(--brand-tint); color: var(--brand);
+  border: 1px solid var(--brand-soft);
+}
+.chip-gold     { background: var(--gold-soft); color: var(--gold-deep); border-color: #E5D49A; }
+.chip-success  { background: var(--success-soft); color: var(--success); border-color: #C8DCC8; }
+.chip-warn     { background: var(--warn-soft); color: var(--warn); border-color: #E8C9A8; }
+.chip-neutral  { background: var(--bg-elevated); color: var(--text-secondary); border-color: var(--border-strong); }
+.chip-danger   { background: rgba(155,44,44,.08); color: var(--danger); border-color: rgba(155,44,44,.2); }
+
+/* Status pill (used in event detail) */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 11px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 600;
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.status-pill__dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.status-pill-meeting   { background: var(--brand-tint); color: var(--brand); border: 1px solid var(--brand-soft); }
+.status-pill-milestone { background: var(--gold-soft); color: var(--gold-deep); border: 1px solid #E5D49A; }
+.status-pill-deadline  { background: var(--warn-soft); color: var(--warn); border: 1px solid #E8C9A8; }
+.status-pill-done      { background: var(--success-soft); color: var(--success); border: 1px solid #C8DCC8; }
+.status-pill-cancelled { background: rgba(155,44,44,.08); color: var(--danger); border: 1px solid rgba(155,44,44,.2); }
+
+/* Ask Aria button (sidebar variant) */
+.ask-aria-btn {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 9px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--brand-tint) 0%, #F5EDD9 100%);
+  border: 1px solid rgba(31,61,46,.12);
+  cursor: pointer; transition: all .2s; font-family: inherit;
+  text-align: left;
+}
+.ask-aria-btn:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -6px rgba(31,61,46,.22);
+}
+.ask-aria-icon {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #2E5740, #1F3D2E 60%, #14291F);
+  display: grid; place-items: center; color: #E8DDC0;
+  flex-shrink: 0; box-shadow: inset 0 0 0 1.5px rgba(184,146,74,.4);
+}
+.ask-aria-text { flex: 1; min-width: 0; }
+.ask-aria-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.2; display:block; }
+.ask-aria-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; display:block; }
+
+/* Aria FAB */
+.aria-fab {
+  position: fixed; bottom: 26px; right: 26px; z-index: 60;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--brand); color: #F5F2E9;
+  display: grid; place-items: center; cursor: pointer; border: none;
+  box-shadow: 0 10px 28px -8px rgba(31,61,46,.45), 0 2px 6px rgba(0,0,0,.08);
+  transition: transform .25s cubic-bezier(.2,.7,.2,1), opacity .2s, background .15s;
+}
+.aria-fab:hover { background: var(--brand-hover); transform: scale(1.06); }
+.aria-fab.is-hidden { transform: scale(0); opacity: 0; pointer-events: none; }
+.aria-fab::after {
+  content: ''; position: absolute; inset: -2px;
+  border-radius: 50%; border: 2px solid var(--brand);
+  opacity: 0; animation: aria-pulse 2.6s ease-out infinite;
+}
+@keyframes aria-pulse {
+  0% { opacity: .55; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+.aria-fab-label {
+  position: absolute; right: 64px; top: 50%; transform: translateY(-50%);
+  background: var(--text-primary); color: var(--bg-page);
+  padding: 6px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 500;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity .15s, transform .15s;
+}
+.aria-fab:hover .aria-fab-label { opacity: 1; }
+
+/* Slide-over chassis (shared by event detail / sync / schedule / aria) */
+.slide-overlay {
+  position: fixed; inset: 0; background: rgba(20,41,31,.22);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  z-index: 70; opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.slide-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+.slide-panel {
+  position: fixed; top: 0; right: 0; height: 100vh;
+  background: var(--bg-page); z-index: 80;
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .4s cubic-bezier(.2,.7,.2,1);
+  box-shadow: -20px 0 60px -20px rgba(0,0,0,.22);
+  border-left: 1px solid var(--border);
+  width: 540px; max-width: 92vw;
+}
+.slide-panel.is-open { transform: translateX(0); }
+.slide-panel--aria { width: 460px; }
+
+.slide-header { padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; }
+.slide-body { flex: 1; overflow-y: auto; padding: 22px 20px 8px; }
+.slide-footer { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg-surface); padding: 12px 16px 14px; }
+
+/* Aria messaging */
+.aria-msg-row { display: flex; gap: 10px; margin-bottom: 16px; animation: msgFade .35s cubic-bezier(.2,.7,.2,1); }
+@keyframes msgFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.aria-msg-row.is-aria { justify-content: flex-start; }
+.aria-msg-row.is-user { justify-content: flex-end; }
+.aria-msg-bubble {
+  max-width: 84%; padding: 12px 14px;
+  border-radius: 14px; font-size: 13.5px; line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.is-aria .aria-msg-bubble {
+  background: var(--bg-surface); border: 1px solid var(--border);
+  color: var(--text-primary); border-top-left-radius: 4px;
+  position: relative; overflow: hidden;
+}
+.is-aria .aria-msg-bubble::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--brand), var(--gold) 75%, transparent);
+  opacity: .55;
+}
+.is-user .aria-msg-bubble {
+  background: var(--brand); color: #F5F2E9; border-top-right-radius: 4px;
+}
+.aria-msg-bubble p { margin: 0 0 8px; }
+.aria-msg-bubble p:last-child { margin-bottom: 0; }
+.aria-msg-bubble ul { margin: 6px 0; padding-left: 18px; }
+.aria-msg-bubble li { margin: 3px 0; }
+.aria-msg-bubble strong { font-weight: 600; }
+.aria-typing {
+  display: inline-flex; gap: 4px; padding: 14px 16px;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: 14px; border-top-left-radius: 4px;
+}
+.aria-typing-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+  animation: typing 1.4s ease-in-out infinite;
+}
+.aria-typing-dot:nth-child(2) { animation-delay: .15s; }
+.aria-typing-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes typing {
+  0%, 60%, 100% { opacity: .3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+.aria-input-row {
+  display: flex; align-items: flex-end; gap: 6px;
+  background: var(--bg-page); border: 1px solid var(--border-strong);
+  border-radius: 14px; padding: 5px 5px 5px 14px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.aria-input-row:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
+.aria-input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-family: inherit; font-size: 14px; padding: 9px 0;
+  resize: none; max-height: 120px; color: var(--text-primary);
+  line-height: 1.4;
+}
+.aria-input::placeholder { color: var(--text-faint); }
+.aria-icon-btn {
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border-radius: 10px; border: none; cursor: pointer;
+  transition: background .15s, color .15s; background: transparent;
+  color: var(--text-secondary); flex-shrink: 0;
+}
+.aria-icon-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.aria-send-btn { background: var(--brand); color: #F5F2E9; }
+.aria-send-btn:hover { background: var(--brand-hover); color: #F5F2E9; }
+.aria-send-btn:disabled { background: var(--bg-elevated); color: var(--text-faint); cursor: not-allowed; }
+
+/* Section headers (shared) */
+.section-header {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.section-title {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.018em;
+  color: var(--text-primary);
+}
+.section-line { flex: 1; height: 1px; background: var(--border); min-width: 24px; }
+
+/* Slide-over inner sections */
+.so-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+.so-section { margin-bottom: 24px; }
+
+.why-card {
+  background: var(--brand-tint);
+  border: 1px solid var(--brand-soft);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+/* Timeline (shared with tasks/docs) */
+.timeline { display: flex; flex-direction: column; gap: 16px; }
+.timeline__item { display: flex; gap: 12px; position: relative; }
+.timeline__item:not(:last-child)::before {
+  content: ''; position: absolute;
+  left: 13px; top: 28px; bottom: -16px;
+  width: 1px; background: var(--border);
+}
+.timeline__dot {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--brand-tint);
+  color: var(--brand);
+  display: grid; place-items: center;
+  flex-shrink: 0; z-index: 1;
+  border: 2px solid var(--bg-page);
+}
+.timeline__dot--gold { background: var(--gold-soft); color: var(--gold-deep); }
+.timeline__dot--success { background: var(--success-soft); color: var(--success); }
+.timeline__title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0; line-height: 1.4; }
+.timeline__time { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--text-muted); margin: 3px 0 0; }
+
+/* ===========================================================================
+   CALENDAR HERO — Countdown + Up Next
+   =========================================================================== */
+
+.calendar-hero {
+  background: linear-gradient(135deg, #FBF6E8 0%, #F8F0D8 50%, var(--brand-tint) 100%);
+  border: 1px solid #E5D49A;
+  border-radius: 18px;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+}
+.calendar-hero::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 240px;
+  background: radial-gradient(ellipse at top right, rgba(184,146,74,.22) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-inner {
+  display: grid;
+  grid-template-columns: 1.1fr 1px 1fr;
+  gap: 0;
+  position: relative;
+  z-index: 1;
+}
+.hero-divider {
+  background: linear-gradient(180deg, transparent 0%, rgba(229,212,154,.7) 30%, rgba(229,212,154,.7) 70%, transparent 100%);
+}
+.hero-half { padding: 28px 32px; }
+
+.hero-eyebrow {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold-deep);
+  font-weight: 600;
+  margin: 0 0 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.hero-eyebrow::after {
+  content: '';
+  flex: 1; height: 1px;
+  background: rgba(184,146,74,.3);
+  max-width: 80px;
+}
+
+.countdown-row {
+  display: flex; align-items: baseline; gap: 14px;
+}
+.countdown-num {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 88px;
+  font-weight: 500;
+  line-height: 0.9;
+  color: var(--gold-deep);
+  letter-spacing: -0.04em;
+}
+.countdown-unit {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.countdown-label-1 {
+  font-family: 'Fraunces', serif;
+  font-size: 18px;
+  color: var(--gold-deep);
+  font-weight: 500;
+}
+.countdown-label-2 {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hero-meta {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(184,146,74,.35);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.hero-meta-row {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.hero-meta-row svg { color: var(--gold-deep); flex-shrink: 0; }
+.hero-meta-row strong { font-weight: 600; }
+
+.hero-up-next {
+  margin-top: 4px;
+}
+.hero-up-next__time {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  color: var(--brand);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.hero-up-next__title {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  letter-spacing: -0.012em;
+}
+.hero-up-next__sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.hero-up-next__details {
+  display: flex; flex-direction: column; gap: 7px;
+  margin-bottom: 16px;
+}
+.hero-up-next__detail-row {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.hero-up-next__detail-row svg { color: var(--text-muted); flex-shrink: 0; }
+.hero-up-next__cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px;
+  background: var(--brand);
+  color: #F5F2E9;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background .15s;
+  font-family: inherit;
+}
+.hero-up-next__cta:hover { background: var(--brand-hover); }
+
+/* ===========================================================================
+   MONTH GRID
+   =========================================================================== */
+
+.month-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  min-width: 0;
+}
+.month-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.month-nav-btn {
+  width: 30px; height: 30px;
+  border-radius: 7px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  display: grid; place-items: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all .15s;
+}
+.month-nav-btn:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border-strong); }
+.month-legend {
+  display: flex; align-items: center; gap: 14px;
+}
+.legend-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.legend-dot--meeting   { background: var(--brand); }
+.legend-dot--milestone { background: var(--gold); }
+.legend-dot--deadline  { background: var(--bg-page); border: 1.5px solid var(--gold); }
+
+.month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  margin-bottom: 6px;
+}
+.month-weekdays > div {
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.month-cell {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 6px 4px;
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+  overflow: hidden;
+}
+.month-cell:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+.month-cell--empty {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+.month-cell--empty:hover { background: transparent; border-color: transparent; }
+.month-cell--past {
+  background: transparent;
+  border-color: var(--border);
+  opacity: 0.62;
+}
+.month-cell--past:hover { opacity: 1; background: var(--bg-soft); }
+.month-cell--today {
+  background: var(--bg-surface);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.month-cell--selected {
+  background: var(--bg-surface);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 4px 14px -8px rgba(184,146,74,.4);
+}
+.month-cell--closing {
+  background: linear-gradient(180deg, var(--gold-soft) 0%, var(--bg-surface) 100%);
+  border-color: var(--gold);
+}
+.month-cell--closing::after {
+  content: '';
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 8px; height: 8px;
+  background: var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(184,146,74,.6);
+  animation: pulse 2.4s infinite;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(184,146,74,.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(184,146,74,0); }
+  100% { box-shadow: 0 0 0 0 rgba(184,146,74,0); }
+}
+
+.month-cell__date {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1;
+  padding: 2px 4px;
+}
+.month-cell--today .month-cell__date {
+  color: var(--brand);
+  font-weight: 700;
+}
+.month-cell--past .month-cell__date {
+  color: var(--text-faint);
+  font-weight: 500;
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+.month-cell--closing .month-cell__date {
+  color: var(--gold-deep);
+  font-weight: 700;
+}
+
+/* Event bars in month cells */
+.event-bar {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.3;
+}
+.event-bar--meeting {
+  background: var(--brand);
+  color: #F5F2E9;
+}
+.event-bar--milestone {
+  background: var(--gold-soft);
+  color: var(--gold-deep);
+  border: 1px solid #E5D49A;
+}
+.event-bar--deadline {
+  background: var(--bg-page);
+  color: var(--gold-deep);
+  border: 1px solid var(--gold);
+  border-left-width: 3px;
+}
+.event-bar--done {
+  background: transparent;
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+  padding-left: 2px;
+}
+.event-bar__dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+.event-bar__more {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 1px 4px;
+  font-weight: 500;
+}
+
+/* ===========================================================================
+   DAY PANEL (right column)
+   =========================================================================== */
+
+.day-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+  position: sticky;
+  top: 24px;
+  align-self: start;
+}
+.day-panel__head {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.day-panel__eyebrow {
+  font-family: 'Geist Mono', monospace;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.day-panel__title {
+  font-family: 'Fraunces', serif;
+  font-size: 20px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--text-primary);
+  letter-spacing: -0.012em;
+}
+.day-panel__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+.day-panel__events {
+  display: flex; flex-direction: column; gap: 10px;
+  flex: 1;
+}
+
+.event-card {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+}
+.event-card:hover { border-color: var(--border-strong); background: var(--bg-elevated); }
+.event-card--meeting   { border-left-color: var(--brand); }
+.event-card--milestone { border-left-color: var(--gold); }
+.event-card--deadline  { border-left-color: var(--warn); }
+.event-card--closing {
+  background: linear-gradient(180deg, var(--gold-soft) 0%, var(--bg-soft) 60%);
+  border-color: var(--gold);
+}
+
+.event-card__time {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 4px;
+}
+.event-card__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  line-height: 1.35;
+}
+.event-card__sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.day-panel__empty {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  color: var(--text-muted);
+  padding: 32px 16px;
+  gap: 8px;
+}
+.day-panel__empty-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  display: grid; place-items: center;
+  color: var(--text-faint);
+}
+.day-panel__empty-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.day-panel__empty-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.day-panel__footer {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.schedule-cta {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  background: linear-gradient(135deg, var(--brand-tint) 0%, var(--gold-soft) 100%);
+  border: 1px solid var(--brand-soft);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left;
+  font-family: inherit;
+}
+.schedule-cta:hover {
+  border-color: var(--brand);
+  box-shadow: 0 4px 14px -6px rgba(31,61,46,.22);
+}
+.schedule-cta__icon {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #F5F2E9;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.schedule-cta__text { flex: 1; min-width: 0; }
+.schedule-cta__title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0; line-height: 1.2; }
+.schedule-cta__sub { font-size: 11px; color: var(--text-muted); margin: 2px 0 0; }
+
+/* ===========================================================================
+   EVENT FILTERS + UPCOMING LIST
+   =========================================================================== */
+
+.event-filters {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.event-filter {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: all .15s;
+}
+.event-filter:hover { color: var(--text-primary); }
+.event-filter.is-active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(31,61,46,.08), 0 0 0 1px var(--border);
+}
+
+/* Day group header in upcoming list */
+.day-group-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 10px;
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
+.day-group-header:first-child { margin-top: 0; }
+.day-group-header__date {
+  font-family: 'Fraunces', serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.day-group-header__day {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: 'Geist Mono', monospace;
+}
+.day-group-header__rel {
+  font-size: 10.5px;
+  color: var(--gold-deep);
+  background: var(--gold-soft);
+  border: 1px solid #E5D49A;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.day-group-header__line { flex: 1; height: 1px; background: var(--border); }
+
+/* Event row in upcoming/past list */
+.event-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+}
+.event-row:hover {
+  border-color: var(--border-strong);
+  border-left-color: var(--brand);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 0 rgba(31,61,46,.04), 0 8px 24px -16px rgba(31,61,46,.18);
+}
+.event-row--meeting   { border-left-color: var(--brand); }
+.event-row--milestone { border-left-color: var(--gold); }
+.event-row--deadline  { border-left-color: var(--warn); }
+.event-row--meeting:hover   { border-left-color: var(--brand); }
+.event-row--milestone:hover { border-left-color: var(--gold); }
+.event-row--deadline:hover  { border-left-color: var(--warn); }
+
+.event-row--closing {
+  background: linear-gradient(180deg, rgba(245,237,217,.5) 0%, var(--bg-surface) 30%);
+  border-color: var(--gold);
+}
+.event-row--past {
+  background: var(--bg-soft);
+}
+.event-row--past .event-row__title {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+  text-decoration-thickness: 1px;
+}
+
+.event-row__time {
+  text-align: right;
+  min-width: 88px;
+}
+.event-row__time-primary {
+  font-family: 'Geist Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.event-row__time-sub {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.event-row__icon {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.event-row--meeting   .event-row__icon { background: var(--brand-tint); color: var(--brand); }
+.event-row--milestone .event-row__icon { background: var(--gold-soft); color: var(--gold-deep); }
+.event-row--deadline  .event-row__icon { background: var(--warn-soft); color: var(--warn); }
+.event-row--past      .event-row__icon { background: var(--success-soft); color: var(--success); }
+
+.event-row__main { min-width: 0; }
+.event-row__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.35;
+}
+.event-row__sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 3px 0 0;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.event-row__meta {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 7px;
+  flex-wrap: wrap;
+}
+.event-row__meta-chip {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.event-row__meta-chip svg { color: var(--text-muted); flex-shrink: 0; }
+
+.event-row__attendee {
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.event-row__attendee-name {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-align: right;
+}
+
+.event-row__arrow {
+  color: var(--text-faint);
+  transition: color .15s, transform .15s;
+  flex-shrink: 0;
+}
+.event-row:hover .event-row__arrow {
+  color: var(--brand);
+  transform: translateX(2px);
+}
+
+/* ===========================================================================
+   SYNC SLIDE-OVER ROWS
+   =========================================================================== */
+
+.sync-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+}
+.sync-row:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-soft);
+  transform: translateY(-1px);
+}
+.sync-row__icon {
+  width: 38px; height: 38px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+.sync-row__text { flex: 1; min-width: 0; }
+.sync-row__title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); margin: 0; line-height: 1.2; }
+.sync-row__sub { font-size: 11.5px; color: var(--text-muted); margin: 3px 0 0; }
+.sync-row__arrow { color: var(--text-faint); flex-shrink: 0; transition: color .15s; }
+.sync-row:hover .sync-row__arrow { color: var(--brand); }
+
+/* ===========================================================================
+   RESPONSIVE
+   =========================================================================== */
+
+@media (max-width: 1024px) {
+  .hero-inner { grid-template-columns: 1fr; }
+  .hero-divider { display: none; }
+  .hero-half { padding: 24px; }
+  .day-panel { position: static; min-height: 0; }
+}
+@media (max-width: 768px) {
+  aside.app-sidebar { display: none; }
+  .month-cell { min-height: 64px; }
+  .countdown-num { font-size: 64px; }
+  .month-legend { display: none; }
+  .slide-panel { width: 100vw; }
+}
+
+</style>
+</head>
+<body class="relative">
+
+<!-- ============================== TOP BAR ============================== -->
+<header class="relative z-10 bg-[var(--bg-sidebar)] border-b border-[var(--border)]">
+  <div class="flex items-center justify-between px-6 h-[60px]">
+    <div class="flex items-center gap-8">
+      <div class="flex items-center gap-2.5">
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+          <path d="M16 2 C 9 2 4 8 4 16 C 4 22 8 27 14 28 L 14 14 C 14 11 16 9 19 9 C 22 9 24 11 24 14 C 24 17 22 19 19 19 L 17 19 L 17 28 C 24 27 28 22 28 16 C 28 8 23 2 16 2 Z" fill="#1F3D2E"/>
+          <circle cx="19" cy="14" r="2.5" fill="#B8924A"/>
+        </svg>
+        <span class="font-display text-[20px] font-medium tracking-tight text-[var(--text-primary)]">Perennia</span>
+      </div>
+      <nav class="hidden md:flex items-center gap-1">
+        <span class="topbar-link">Dashboard</span>
+        <span class="topbar-link">Application</span>
+        <span class="topbar-link">Documents</span>
+        <span class="topbar-link">Tasks</span>
+        <span class="topbar-link" style="color: var(--text-primary); background: var(--bg-elevated);">Calendar</span>
+        <span class="topbar-link">Resources</span>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="hidden md:flex items-center gap-2 text-[12px] text-[var(--text-secondary)] font-mono">
+        <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+        <span id="topbar-sync-status">Synced just now</span>
+      </div>
+      <button class="btn btn-ghost text-[13px]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      </button>
+      <div class="seal" style="width:36px;height:36px;font-size:14px;">TL</div>
+    </div>
+  </div>
+</header>
+
+<div class="relative z-10 flex" style="min-height: calc(100vh - 60px);">
+
+  <!-- ============================== SIDEBAR ============================== -->
+  <aside class="app-sidebar w-[260px] flex-shrink-0 bg-[var(--bg-sidebar)] border-r border-[var(--border)] flex flex-col">
+    <div class="p-4">
+      <div class="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl p-4 mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Loan File</span>
+          <span class="chip chip-gold text-[10.5px] py-0.5 px-2">In progress</span>
+        </div>
+        <div class="font-display text-[17px] font-medium leading-tight mb-0.5">Purchase · Primary</div>
+        <div class="font-mono text-[11px] text-[var(--text-muted)]">PRN-2026-04881</div>
+        <div class="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between text-[11.5px]">
+          <span class="text-[var(--text-secondary)]">Targeted close</span>
+          <span class="font-mono text-[var(--brand)] font-medium">May 22, 2026</span>
+        </div>
+        <button type="button" class="ask-aria-btn mt-3.5" data-aria-trigger>
+          <span class="ask-aria-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+          </span>
+          <span class="ask-aria-text">
+            <span class="ask-aria-title">Ask Aria a question</span>
+            <span class="ask-aria-sub">Instant answers, anytime</span>
+          </span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] px-3 mb-2">Your loan</div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Home</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          <span>Application</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Documents</span>
+          <span class="ml-auto chip chip-gold text-[10px] py-0 px-1.5">3</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span>Tasks</span>
+          <span class="ml-auto text-[11px] font-mono text-[var(--text-muted)]">5</span>
+        </div>
+        <div class="nav-item is-active">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Calendar</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Messages</span>
+          <span class="ml-auto w-2 h-2 rounded-full bg-[var(--gold)]"></span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>Disclosures</span>
+        </div>
+      </nav>
+
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] px-3 mb-2 mt-6">Tools</div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/></svg>
+          <span>Calculators</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          <span>Help &amp; support</span>
+        </div>
+      </nav>
+    </div>
+
+    <div class="mt-auto p-4 border-t border-[var(--border)]">
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] mb-2.5">Your loan officer</div>
+      <div class="flex items-center gap-3">
+        <div class="seal" style="width:38px;height:38px;font-size:13px;">SR</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[13.5px] font-medium leading-tight truncate">Sarah Reyes</div>
+          <div class="text-[11.5px] text-[var(--text-muted)] truncate">NMLS #2014872</div>
+        </div>
+        <button class="btn btn-secondary p-2 rounded-lg" title="Message Sarah">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+      </div>
+      <button type="button" class="ask-aria-btn mt-3" data-aria-trigger>
+        <span class="ask-aria-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+        </span>
+        <span class="ask-aria-text">
+          <span class="ask-aria-title">Or ask Aria</span>
+          <span class="ask-aria-sub">AI answers in seconds · 24/7</span>
+        </span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============================== MAIN ============================== -->
+  <main class="flex-1 min-w-0 px-10 py-10 overflow-x-hidden">
+    <div class="max-w-[1280px] mx-auto">
+
+      <!-- Page header -->
+      <div class="flex items-end justify-between gap-6 mb-7">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="chip">Smart Calendar</span>
+            <span class="text-[12px] text-[var(--text-muted)]">·</span>
+            <span class="text-[12px] text-[var(--text-muted)]">Synced from your CRM in real time</span>
+          </div>
+          <h1 class="font-display text-[40px] leading-[1.05] font-medium tracking-tight mb-2">
+            Calendar
+          </h1>
+          <p class="text-[16px] text-[var(--text-secondary)] max-w-[640px] leading-relaxed">
+            Every meeting, milestone, and deadline on your loan — all in one place. Subscribe to put it on your personal calendar too.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button class="btn btn-secondary" id="btn-sync">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Sync calendar
+          </button>
+          <button class="btn btn-primary" id="btn-schedule">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Schedule a meeting
+          </button>
+        </div>
+      </div>
+
+      <!-- Hero countdown card (rendered by JS) -->
+      <div id="hero-mount" class="mb-7"></div>
+
+      <!-- Calendar grid + day panel -->
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-6 mb-10">
+        <div class="month-card">
+          <div class="month-head">
+            <div class="flex items-center gap-3">
+              <button class="btn btn-secondary text-[12px] px-2.5 py-1.5" id="btn-today">Today</button>
+              <div class="flex items-center gap-1">
+                <button class="month-nav-btn" id="btn-prev" aria-label="Previous month">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <button class="month-nav-btn" id="btn-next" aria-label="Next month">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+              <h2 class="font-display text-[22px] font-medium leading-none ml-2" id="month-label">April 2026</h2>
+            </div>
+            <div class="month-legend">
+              <span class="legend-item"><span class="legend-dot legend-dot--meeting"></span> Meeting</span>
+              <span class="legend-item"><span class="legend-dot legend-dot--milestone"></span> Milestone</span>
+              <span class="legend-item"><span class="legend-dot legend-dot--deadline"></span> Deadline</span>
+            </div>
+          </div>
+
+          <div class="month-weekdays">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+
+          <div class="month-grid" id="month-grid"></div>
+        </div>
+
+        <!-- Day panel -->
+        <aside class="day-panel" id="day-panel"></aside>
+      </div>
+
+      <!-- Upcoming events -->
+      <section class="mb-10">
+        <div class="section-header">
+          <h2 class="section-title">Upcoming</h2>
+          <span class="chip text-[11px]" id="upcoming-count">8 items</span>
+          <div class="section-line"></div>
+
+          <div class="event-filters" id="event-filters">
+            <button class="event-filter is-active" data-filter="all">All</button>
+            <button class="event-filter" data-filter="meeting">
+              <span class="legend-dot legend-dot--meeting"></span> Meetings
+            </button>
+            <button class="event-filter" data-filter="milestone">
+              <span class="legend-dot legend-dot--milestone"></span> Milestones
+            </button>
+            <button class="event-filter" data-filter="deadline">
+              <span class="legend-dot legend-dot--deadline"></span> Deadlines
+            </button>
+          </div>
+        </div>
+
+        <div id="upcoming-list" class="flex flex-col gap-2.5"></div>
+      </section>
+
+      <!-- Past activity -->
+      <section class="mb-12">
+        <div class="section-header">
+          <h2 class="section-title">Past Activity</h2>
+          <span class="chip chip-success text-[11px]" id="past-count">3 completed</span>
+          <div class="section-line"></div>
+        </div>
+
+        <div id="past-list" class="flex flex-col gap-2"></div>
+      </section>
+
+      <!-- Footnote -->
+      <div class="flex items-center gap-3 text-[12px] text-[var(--text-muted)]">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>
+        <span>This calendar is a live mirror of your loan in Perennia. Any change Sarah makes shows up here within seconds.</span>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============================== EVENT DETAIL SLIDE-OVER ============================== -->
+<div class="slide-overlay" id="event-overlay"></div>
+<aside class="slide-panel" id="event-panel" role="dialog" aria-label="Event detail">
+  <div id="event-panel-content"></div>
+</aside>
+
+<!-- ============================== SYNC SLIDE-OVER ============================== -->
+<div class="slide-overlay" id="sync-overlay"></div>
+<aside class="slide-panel" id="sync-panel" role="dialog" aria-label="Sync calendar" style="width: 480px;">
+  <header class="slide-header">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex-1 min-w-0">
+        <h2 class="font-display text-[22px] font-medium leading-tight">Sync your loan calendar</h2>
+        <p class="text-[12.5px] text-[var(--text-secondary)] mt-1.5 leading-relaxed">
+          Add this calendar to your personal one. Updates flow automatically — when Sarah reschedules, your calendar updates too.
+        </p>
+      </div>
+      <button class="aria-icon-btn" id="sync-close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="slide-body">
+
+    <p class="so-label">One-tap subscribe</p>
+    <div class="flex flex-col gap-2.5 mb-6">
+      <button class="sync-row">
+        <div class="sync-row__icon" style="background:#FFF;color:#4285F4;border:1px solid var(--border);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="1.8"/><path d="M9 14h2v4H9zM13 14h2v4h-2z" /></svg>
+        </div>
+        <div class="sync-row__text">
+          <p class="sync-row__title">Google Calendar</p>
+          <p class="sync-row__sub">Opens in browser · auto-refreshes</p>
+        </div>
+        <svg class="sync-row__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+
+      <button class="sync-row">
+        <div class="sync-row__icon" style="background:#000;color:#FFF;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+        </div>
+        <div class="sync-row__text">
+          <p class="sync-row__title">Apple Calendar</p>
+          <p class="sync-row__sub">Opens in Calendar.app · iOS &amp; macOS</p>
+        </div>
+        <svg class="sync-row__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+
+      <button class="sync-row">
+        <div class="sync-row__icon" style="background:#0078D4;color:#FFF;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21.86 5.05l-9.5-2.43a1 1 0 0 0-.36-.05L3.83 4.13a1 1 0 0 0-.83 1V18.9a1 1 0 0 0 .83 1l8.17 1.55a1.18 1.18 0 0 0 .36-.05l9.5-2.43a1 1 0 0 0 .75-1V6a1 1 0 0 0-.75-.95zM7.5 16a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+        </div>
+        <div class="sync-row__text">
+          <p class="sync-row__title">Outlook</p>
+          <p class="sync-row__sub">Microsoft 365 · Outlook for desktop</p>
+        </div>
+        <svg class="sync-row__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+
+    <p class="so-label">Other options</p>
+    <div class="flex flex-col gap-2.5 mb-6">
+      <button class="sync-row">
+        <div class="sync-row__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div class="sync-row__text">
+          <p class="sync-row__title">Download .ics file</p>
+          <p class="sync-row__sub">Snapshot · won't auto-update</p>
+        </div>
+        <svg class="sync-row__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+
+      <button class="sync-row">
+        <div class="sync-row__icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        </div>
+        <div class="sync-row__text">
+          <p class="sync-row__title">Copy webcal:// URL</p>
+          <p class="sync-row__sub font-mono text-[11px] truncate">webcal://perennia.app/cal/PRN-2026-04881.ics</p>
+        </div>
+        <svg class="sync-row__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+    </div>
+
+    <div class="why-card">
+      <strong>What gets synced:</strong> meetings with Sarah and your appraiser, loan milestones (LE ready, title commitment, closing day), and your deadlines from Tasks. Updates push automatically when anything changes in Sarah's CRM.
+    </div>
+
+  </div>
+</aside>
+
+<!-- ============================== SCHEDULE MEETING SLIDE-OVER ============================== -->
+<div class="slide-overlay" id="schedule-overlay"></div>
+<aside class="slide-panel" id="schedule-panel" role="dialog" aria-label="Schedule meeting" style="width: 540px;">
+  <div id="schedule-content"></div>
+</aside>
+
+<!-- ============================== ARIA ============================== -->
+<button type="button" class="aria-fab" id="aria-fab" data-aria-trigger aria-label="Ask Aria">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/>
+    <circle cx="19" cy="5" r="1.5" opacity="0.7"/>
+    <circle cx="5" cy="19" r="1" opacity="0.5"/>
+  </svg>
+  <span class="aria-fab-label">Ask Aria</span>
+</button>
+
+<div class="slide-overlay" id="aria-overlay"></div>
+
+<aside class="slide-panel slide-panel--aria" id="aria-panel" role="dialog" aria-label="Aria AI Assistant">
+  <header class="slide-header">
+    <div class="flex items-center gap-3">
+      <div class="seal" style="width:42px;height:42px;font-size:16px;font-family:'Fraunces',serif;">A</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-display text-[18px] font-medium leading-none">Aria</span>
+          <span class="chip text-[9.5px] py-0 px-2" style="background: var(--brand-soft); color: var(--brand); border-color: transparent;">
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+            Online
+          </span>
+        </div>
+        <div class="text-[11.5px] text-[var(--text-muted)] mt-1">AI loan assistant · Loan file + Agency guidelines</div>
+      </div>
+      <button type="button" id="aria-close" class="aria-icon-btn" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center gap-1.5 mt-3">
+      <span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+        Your loan file
+      </span>
+      <span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/></svg>
+        FNMA · FHLMC · FHA · VA
+      </span>
+    </div>
+  </header>
+
+  <div class="slide-body" id="aria-body"></div>
+
+  <footer class="slide-footer">
+    <div class="flex flex-wrap gap-1.5 mb-2.5" id="aria-suggestions"></div>
+    <form id="aria-form">
+      <div class="aria-input-row">
+        <textarea id="aria-input" class="aria-input" rows="1" placeholder="Ask anything about your schedule..."></textarea>
+        <button type="button" class="aria-icon-btn" title="Voice" aria-label="Voice">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button type="submit" id="aria-send" class="aria-icon-btn aria-send-btn" title="Send" aria-label="Send" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+    </form>
+    <div class="text-[10.5px] text-[var(--text-muted)] mt-2.5 text-center leading-relaxed">
+      Aria can make mistakes. For final decisions, Sarah is your source of truth.
+    </div>
+  </footer>
+</aside>
+
+<script>
+/* =============================================================================
+   PERENNIA CALENDAR — Application logic
+   Unifies three sources: scheduler_appointments, SLA milestones, task deadlines.
+   ============================================================================= */
+
+// Today's anchor (matches the rest of the demo: Sat, Apr 25, 2026)
+const TODAY = new Date(2026, 3, 25);
+const CLOSING_DATE = new Date(2026, 4, 22);
+const LOAN_FILE = 'PRN-2026-04881';
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_NAMES_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DAY_NAMES_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+/* =============================================================================
+   EVENTS — unified from 3 backend sources
+   Each event: { id, type, source, sourceRef, title, start, end?, location?,
+                 attendee?, icsUrl?, status, description, actions[] }
+   ============================================================================= */
+
+const EVENTS = [
+  // ─── PAST: completed meetings (source: scheduler) ───
+  {
+    id: 'apt-4201', type: 'meeting', source: 'scheduler',
+    sourceRef: { table: 'scheduler_appointments', id: 4201 },
+    title: 'Initial consultation with Sarah',
+    description: 'Welcome call · introduce the loan process and gather initial details.',
+    start: '2026-04-14T11:00:00', end: '2026-04-14T11:45:00',
+    location: 'Video · perennia.video/sarah-reyes',
+    attendee: { name: 'Sarah Reyes', initials: 'SR', kind: 'lo', nmls: '#2014872' },
+    icsUrl: '/api/v1/scheduler/public/appointment/4201/ics',
+    status: 'completed',
+    actions: ['view_recording', 'view_notes']
+  },
+  {
+    id: 'apt-4244', type: 'meeting', source: 'scheduler',
+    sourceRef: { table: 'scheduler_appointments', id: 4244 },
+    title: 'Pre-approval discussion',
+    description: 'Reviewed your numbers and discussed loan options. Pre-approval letter issued same day.',
+    start: '2026-04-18T14:30:00', end: '2026-04-18T15:00:00',
+    location: 'Phone',
+    attendee: { name: 'Sarah Reyes', initials: 'SR', kind: 'lo', nmls: '#2014872' },
+    icsUrl: '/api/v1/scheduler/public/appointment/4244/ics',
+    status: 'completed',
+    actions: ['view_notes']
+  },
+  {
+    id: 'apt-4291', type: 'meeting', source: 'scheduler',
+    sourceRef: { table: 'scheduler_appointments', id: 4291 },
+    title: 'Application review with Sarah',
+    description: 'Walked through your URLA 1003 application before submitting to underwriting.',
+    start: '2026-04-22T10:00:00', end: '2026-04-22T11:00:00',
+    location: 'Video · perennia.video/sarah-reyes',
+    attendee: { name: 'Sarah Reyes', initials: 'SR', kind: 'lo', nmls: '#2014872' },
+    icsUrl: '/api/v1/scheduler/public/appointment/4291/ics',
+    status: 'completed',
+    actions: ['view_recording', 'view_notes']
+  },
+
+  // ─── UPCOMING: real appointments (source: scheduler) ───
+  {
+    id: 'apt-4318', type: 'meeting', source: 'scheduler',
+    sourceRef: { table: 'scheduler_appointments', id: 4318 },
+    title: 'Property appraisal walkthrough',
+    description: 'Stratford Appraisal Group will photograph each room, measure square footage, and assess major systems.',
+    start: '2026-04-26T10:30:00', end: '2026-04-26T11:15:00',
+    location: '847 Magnolia Pointe Ln, Mount Pleasant, SC',
+    attendee: { name: 'Stratford Appraisal Group', initials: 'SA', kind: 'ext' },
+    icsUrl: '/api/v1/scheduler/public/appointment/4318/ics',
+    status: 'confirmed',
+    actions: ['confirm_access', 'reschedule', 'add_to_calendar', 'directions']
+  },
+  {
+    id: 'apt-4385', type: 'meeting', source: 'scheduler',
+    sourceRef: { table: 'scheduler_appointments', id: 4385 },
+    title: 'Conditional approval review with Sarah',
+    description: 'Walk through any conditions the underwriter sets and plan how to clear them quickly.',
+    start: '2026-05-06T13:00:00', end: '2026-05-06T13:30:00',
+    location: 'Video · perennia.video/sarah-reyes',
+    attendee: { name: 'Sarah Reyes', initials: 'SR', kind: 'lo', nmls: '#2014872' },
+    icsUrl: '/api/v1/scheduler/public/appointment/4385/ics',
+    status: 'confirmed',
+    actions: ['reschedule', 'cancel', 'add_to_calendar']
+  },
+  {
+    id: 'apt-4421', type: 'meeting', source: 'scheduler',
+    sourceRef: { table: 'scheduler_appointments', id: 4421 },
+    title: 'Closing Disclosure review',
+    description: 'Final review of the CD before closing. Federal regulation requires a 3-business-day waiting period after this.',
+    start: '2026-05-18T10:00:00', end: '2026-05-18T10:30:00',
+    location: 'Video · perennia.video/sarah-reyes',
+    attendee: { name: 'Sarah Reyes', initials: 'SR', kind: 'lo', nmls: '#2014872' },
+    icsUrl: '/api/v1/scheduler/public/appointment/4421/ics',
+    status: 'confirmed',
+    actions: ['reschedule', 'cancel', 'add_to_calendar']
+  },
+  {
+    id: 'apt-4488', type: 'meeting', source: 'scheduler',
+    sourceRef: { table: 'scheduler_appointments', id: 4488 },
+    title: 'Closing Day',
+    description: 'Sign the note, fund the loan, get the keys. Bring your driver\'s license and a cashier\'s check for closing costs.',
+    start: '2026-05-22T10:00:00', end: '2026-05-22T11:30:00',
+    location: 'Carolina Title Co. · 215 Rutledge Ave, Charleston, SC',
+    attendee: { name: 'Carolina Title Co.', initials: 'CT', kind: 'neutral' },
+    icsUrl: '/api/v1/scheduler/public/appointment/4488/ics',
+    status: 'confirmed',
+    isClosing: true,
+    actions: ['add_to_calendar', 'directions', 'closing_checklist']
+  },
+
+  // ─── MILESTONES (source: SLA / AI Operations Manager) ───
+  {
+    id: 'mile-le', type: 'milestone', source: 'sla',
+    sourceRef: { table: 'sla_milestones', id: 'le-issued' },
+    title: 'Loan Estimate ready',
+    description: 'Federal disclosure of your rate, fees, and projected closing costs. Auto-delivered to your inbox the moment it issues.',
+    start: '2026-04-27', allDay: true,
+    status: 'expected',
+    actions: ['view_when_ready']
+  },
+  {
+    id: 'mile-title', type: 'milestone', source: 'sla',
+    sourceRef: { table: 'sla_milestones', id: 'title-commitment' },
+    title: 'Title commitment expected',
+    description: 'Carolina Title Co. delivers their title search and lien check. No action needed from you.',
+    start: '2026-04-29', allDay: true,
+    attendee: { name: 'Carolina Title Co.', initials: 'CT', kind: 'neutral' },
+    status: 'expected',
+    actions: ['view_order']
+  },
+  {
+    id: 'mile-appraisal', type: 'milestone', source: 'sla',
+    sourceRef: { table: 'sla_milestones', id: 'appraisal-report' },
+    title: 'Appraisal report expected',
+    description: 'Stratford Appraisal Group delivers the full report. Sarah will review and share any flags.',
+    start: '2026-05-03', allDay: true,
+    attendee: { name: 'Stratford Appraisal Group', initials: 'SA', kind: 'ext' },
+    status: 'expected',
+    actions: ['view_order']
+  },
+  {
+    id: 'mile-uw', type: 'milestone', source: 'sla',
+    sourceRef: { table: 'sla_milestones', id: 'final-uw' },
+    title: 'Final underwriting review',
+    description: 'Last underwriter pass before clear-to-close. Conditions cleared at this stage.',
+    start: '2026-05-13', allDay: true,
+    status: 'expected',
+    actions: []
+  },
+  {
+    id: 'mile-rate-lock', type: 'milestone', source: 'sla',
+    sourceRef: { table: 'sla_milestones', id: 'rate-lock-expiry' },
+    title: 'Rate lock expires',
+    description: 'Your 30-day rate lock at 6.625% expires today. Closing must fund by EOD.',
+    start: '2026-05-22', allDay: true,
+    status: 'expected',
+    actions: []
+  },
+
+  // ─── DEADLINES (source: tasks) ───
+  {
+    id: 'dl-paystubs', type: 'deadline', source: 'tasks',
+    sourceRef: { table: 'tasks', id: 'paystubs' },
+    title: 'Paystubs due',
+    description: 'Two most recent paystubs from TL Development LLC. Holding up underwriting\'s first review.',
+    start: '2026-04-28T23:59:00', allDay: false,
+    status: 'pending', urgency: 'soon',
+    actions: ['upload', 'view_task']
+  },
+  {
+    id: 'dl-disclosures', type: 'deadline', source: 'tasks',
+    sourceRef: { table: 'tasks', id: 'disclosures' },
+    title: 'Initial disclosures + LOX deadline',
+    description: '9 disclosures to sign + letter of explanation for the $4,500 deposit on Apr 8.',
+    start: '2026-04-30T23:59:00', allDay: false,
+    status: 'pending', urgency: 'soon',
+    actions: ['view_task']
+  }
+];
+
+/* =============================================================================
+   DATE UTILITIES
+   ============================================================================= */
+
+function parseISODate(iso) { return new Date(iso); }
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function diffDays(a, b) {
+  const aDay = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const bDay = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((bDay - aDay) / (1000 * 60 * 60 * 24));
+}
+function formatTime(d) {
+  let h = d.getHours(), m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${String(m).padStart(2,'0')} ${ampm}`;
+}
+function formatDuration(start, end) {
+  const mins = Math.round((end - start) / 60000);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins/60), m = mins % 60;
+  return m === 0 ? `${h} hr` : `${h}h ${m}m`;
+}
+function formatDayLabel(d) {
+  const days = diffDays(TODAY, d);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days === -1) return 'Yesterday';
+  if (days > 0 && days < 7) return DAY_NAMES_LONG[d.getDay()];
+  return null;
+}
+function eventStartDate(e) {
+  if (e.allDay) {
+    const [y,m,d] = e.start.split('-').map(Number);
+    return new Date(y, m-1, d);
+  }
+  return new Date(e.start);
+}
+function eventEndDate(e) { return e.end ? new Date(e.end) : null; }
+
+/* =============================================================================
+   STATE
+   ============================================================================= */
+
+const state = {
+  viewYear: TODAY.getFullYear(),
+  viewMonth: TODAY.getMonth(),
+  selectedDate: dateKey(TODAY),
+  filter: 'all',
+};
+
+/* =============================================================================
+   RENDER: HERO
+   ============================================================================= */
+
+function renderHero() {
+  const daysToClose = diffDays(TODAY, CLOSING_DATE);
+  const closingEvent = EVENTS.find(e => e.id === 'apt-4488');
+  const closingDate = eventStartDate(closingEvent);
+
+  const upcoming = EVENTS
+    .filter(e => e.status !== 'completed' && eventStartDate(e) >= new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate()))
+    .sort((a, b) => eventStartDate(a) - eventStartDate(b));
+  const next = upcoming[0];
+
+  const nextDate = eventStartDate(next);
+  const dayLabel = formatDayLabel(nextDate) || `${MONTH_NAMES[nextDate.getMonth()].slice(0,3)} ${nextDate.getDate()}`;
+  const timeStr = next.allDay ? 'All day' : formatTime(nextDate);
+
+  document.getElementById('hero-mount').innerHTML = `
+    <div class="calendar-hero">
+      <div class="hero-inner">
+        <div class="hero-half">
+          <p class="hero-eyebrow">Countdown to close</p>
+          <div class="countdown-row">
+            <div class="countdown-num">${daysToClose}</div>
+            <div class="countdown-unit">
+              <span class="countdown-label-1">days</span>
+              <span class="countdown-label-2">until closing</span>
+            </div>
+          </div>
+          <div class="hero-meta">
+            <div class="hero-meta-row">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span><strong>Friday, May 22, 2026</strong> · 10:00 AM</span>
+            </div>
+            <div class="hero-meta-row">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>Carolina Title Co. · Charleston, SC</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-divider"></div>
+
+        <div class="hero-half">
+          <p class="hero-eyebrow">Up next</p>
+          <div class="hero-up-next">
+            <div class="hero-up-next__time">${dayLabel} · ${timeStr}</div>
+            <h3 class="hero-up-next__title">${escapeHtml(next.title)}</h3>
+            <p class="hero-up-next__sub">${escapeHtml(next.description.split('.')[0])}.</p>
+            <div class="hero-up-next__details">
+              ${next.location ? `
+                <div class="hero-up-next__detail-row">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <span>${escapeHtml(next.location)}</span>
+                </div>
+              ` : ''}
+              ${next.end ? `
+                <div class="hero-up-next__detail-row">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span>${formatDuration(eventStartDate(next), eventEndDate(next))} · ${next.location?.includes('Video') ? 'video call' : 'on-site'}</span>
+                </div>
+              ` : ''}
+            </div>
+            <button class="hero-up-next__cta" data-event-id="${next.id}">
+              View details
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.querySelector('.hero-up-next__cta')?.addEventListener('click', e => {
+    openEventPanel(e.currentTarget.dataset.eventId);
+  });
+}
+
+/* =============================================================================
+   RENDER: MONTH GRID
+   ============================================================================= */
+
+function renderMonth() {
+  document.getElementById('month-label').textContent = `${MONTH_NAMES[state.viewMonth]} ${state.viewYear}`;
+  const grid = document.getElementById('month-grid');
+
+  const firstDayOfMonth = new Date(state.viewYear, state.viewMonth, 1);
+  const lastDayOfMonth = new Date(state.viewYear, state.viewMonth + 1, 0);
+  const startOffset = firstDayOfMonth.getDay();
+  const daysInMonth = lastDayOfMonth.getDate();
+
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(state.viewYear, state.viewMonth, d));
+  while (cells.length < 42) {
+    const last = cells[cells.length - 1];
+    cells.push(last ? new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1) : null);
+  }
+
+  grid.innerHTML = cells.map(d => {
+    if (!d) return `<div class="month-cell month-cell--empty"></div>`;
+
+    const key = dateKey(d);
+    const isPast = d < new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+    const isToday = isSameDay(d, TODAY);
+    const isSelected = key === state.selectedDate;
+    const isClosing = isSameDay(d, CLOSING_DATE);
+    const inMonth = d.getMonth() === state.viewMonth;
+
+    const dayEvents = EVENTS.filter(e => isSameDay(eventStartDate(e), d));
+
+    let cls = 'month-cell';
+    if (!inMonth) cls += ' month-cell--past';
+    else if (isPast) cls += ' month-cell--past';
+    if (isToday) cls += ' month-cell--today';
+    if (isSelected) cls += ' month-cell--selected';
+    if (isClosing) cls += ' month-cell--closing';
+
+    const maxBars = 2;
+    const visibleEvents = dayEvents.slice(0, maxBars);
+    const overflow = dayEvents.length - maxBars;
+
+    const barsHTML = visibleEvents.map(e => {
+      if (e.status === 'completed') {
+        return `<div class="event-bar event-bar--done">${escapeHtml(e.title.length > 18 ? e.title.slice(0,18)+'…' : e.title)}</div>`;
+      }
+      if (e.type === 'meeting') {
+        const t = e.allDay ? '' : formatTime(eventStartDate(e)).replace(' AM','a').replace(' PM','p');
+        const text = t ? `${t} ${shortenTitle(e.title, 12)}` : shortenTitle(e.title, 18);
+        return `<div class="event-bar event-bar--meeting">${escapeHtml(text)}</div>`;
+      }
+      if (e.type === 'milestone') {
+        return `<div class="event-bar event-bar--milestone"><span class="event-bar__dot"></span>${escapeHtml(shortenTitle(e.title, 16))}</div>`;
+      }
+      if (e.type === 'deadline') {
+        return `<div class="event-bar event-bar--deadline">${escapeHtml(shortenTitle(e.title, 18))}</div>`;
+      }
+      return '';
+    }).join('');
+
+    const overflowHTML = overflow > 0 ? `<div class="event-bar__more">+${overflow} more</div>` : '';
+
+    return `
+      <div class="${cls}" data-date="${key}">
+        <div class="month-cell__date">${d.getDate()}</div>
+        ${barsHTML}
+        ${overflowHTML}
+      </div>
+    `;
+  }).join('');
+
+  grid.querySelectorAll('[data-date]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.selectedDate = el.dataset.date;
+      renderMonth();
+      renderDayPanel();
+    });
+  });
+}
+
+function shortenTitle(s, max) {
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1) + '…';
+}
+
+/* =============================================================================
+   RENDER: DAY PANEL
+   ============================================================================= */
+
+function renderDayPanel() {
+  const [y, m, d] = state.selectedDate.split('-').map(Number);
+  const date = new Date(y, m-1, d);
+  const dayEvents = EVENTS
+    .filter(e => isSameDay(eventStartDate(e), date))
+    .sort((a, b) => eventStartDate(a) - eventStartDate(b));
+
+  const isToday = isSameDay(date, TODAY);
+  const eyebrow = formatDayLabel(date) || `${DAY_NAMES_LONG[date.getDay()]}`;
+  const sub = `${MONTH_NAMES[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+
+  let bodyHTML = '';
+  if (dayEvents.length === 0) {
+    bodyHTML = `
+      <div class="day-panel__empty">
+        <div class="day-panel__empty-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="day-panel__empty-text">Nothing scheduled${isToday ? ' today' : ''}</div>
+        <div class="day-panel__empty-sub">${isToday ? 'Use this time to upload outstanding documents' : 'Click another date to see what\'s scheduled'}</div>
+      </div>
+    `;
+  } else {
+    bodyHTML = dayEvents.map(e => renderEventCard(e)).join('');
+  }
+
+  document.getElementById('day-panel').innerHTML = `
+    <div class="day-panel__head">
+      <p class="day-panel__eyebrow">${eyebrow}</p>
+      <h3 class="day-panel__title">${sub}</h3>
+      <p class="day-panel__sub">${dayEvents.length === 0 ? 'No events' : `${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}</p>
+    </div>
+    <div class="day-panel__events">${bodyHTML}</div>
+    <div class="day-panel__footer">
+      <button class="schedule-cta" data-action="schedule">
+        <span class="schedule-cta__icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </span>
+        <span class="schedule-cta__text">
+          <span class="schedule-cta__title">Schedule with Sarah</span>
+          <span class="schedule-cta__sub">Pick a time · 30 sec to book</span>
+        </span>
+      </button>
+    </div>
+  `;
+
+  document.querySelectorAll('#day-panel [data-event-id]').forEach(el => {
+    el.addEventListener('click', () => openEventPanel(el.dataset.eventId));
+  });
+  document.querySelector('#day-panel [data-action="schedule"]')?.addEventListener('click', openSchedulePanel);
+}
+
+function renderEventCard(e) {
+  const startD = eventStartDate(e);
+  const time = e.allDay ? 'All day' : formatTime(startD);
+  const dur = (!e.allDay && e.end) ? ` · ${formatDuration(startD, eventEndDate(e))}` : '';
+  let cls = `event-card event-card--${e.type}`;
+  if (e.isClosing) cls += ' event-card--closing';
+  return `
+    <button class="${cls}" data-event-id="${e.id}">
+      <p class="event-card__time">${time}${dur}</p>
+      <p class="event-card__title">${escapeHtml(e.title)}</p>
+      <p class="event-card__sub">${escapeHtml(e.description.split('.')[0])}.</p>
+    </button>
+  `;
+}
+
+/* =============================================================================
+   RENDER: UPCOMING LIST
+   ============================================================================= */
+
+function renderUpcomingList() {
+  const todayMidnight = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  let upcoming = EVENTS
+    .filter(e => e.status !== 'completed' && eventStartDate(e) >= todayMidnight)
+    .filter(e => state.filter === 'all' || e.type === state.filter)
+    .sort((a, b) => eventStartDate(a) - eventStartDate(b));
+
+  document.getElementById('upcoming-count').textContent = `${upcoming.length} item${upcoming.length === 1 ? '' : 's'}`;
+
+  const groups = {};
+  upcoming.forEach(e => {
+    const d = eventStartDate(e);
+    const key = dateKey(d);
+    if (!groups[key]) groups[key] = { date: d, events: [] };
+    groups[key].events.push(e);
+  });
+
+  const html = Object.values(groups).map(g => {
+    const rel = formatDayLabel(g.date);
+    const dayLine = `${MONTH_NAMES[g.date.getMonth()]} ${g.date.getDate()}, ${g.date.getFullYear()}`;
+    const dayName = DAY_NAMES_LONG[g.date.getDay()];
+
+    const eventsHTML = g.events.map(e => renderEventRow(e)).join('');
+
+    return `
+      <div>
+        <div class="day-group-header">
+          <div class="day-group-header__date">${dayLine}</div>
+          <div class="day-group-header__day">${dayName}</div>
+          ${rel ? `<div class="day-group-header__rel">${rel}</div>` : ''}
+          <div class="day-group-header__line"></div>
+        </div>
+        <div class="flex flex-col gap-2">${eventsHTML}</div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('upcoming-list').innerHTML = html || `
+    <div class="event-row" style="cursor: default; justify-content: center; color: var(--text-muted); font-size: 13px;">
+      No ${state.filter === 'all' ? '' : state.filter + ' '}events upcoming
+    </div>
+  `;
+
+  document.querySelectorAll('#upcoming-list [data-event-id]').forEach(el => {
+    el.addEventListener('click', () => openEventPanel(el.dataset.eventId));
+  });
+}
+
+/* =============================================================================
+   RENDER: PAST LIST
+   ============================================================================= */
+
+function renderPastList() {
+  const past = EVENTS
+    .filter(e => e.status === 'completed')
+    .sort((a, b) => eventStartDate(b) - eventStartDate(a));
+
+  document.getElementById('past-count').textContent = `${past.length} completed`;
+  document.getElementById('past-list').innerHTML = past.map(e => renderEventRow(e, true)).join('');
+
+  document.querySelectorAll('#past-list [data-event-id]').forEach(el => {
+    el.addEventListener('click', () => openEventPanel(el.dataset.eventId));
+  });
+}
+
+function renderEventRow(e, isPast = false) {
+  const startD = eventStartDate(e);
+  const time = e.allDay ? 'All day' : formatTime(startD);
+  const timeSub = e.allDay ? '' : (e.end ? formatDuration(startD, eventEndDate(e)) : '');
+
+  let cls = `event-row event-row--${e.type}`;
+  if (e.isClosing) cls += ' event-row--closing';
+  if (isPast) cls += ' event-row--past';
+
+  let iconSVG = '';
+  if (e.type === 'meeting') {
+    iconSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  } else if (e.type === 'milestone') {
+    iconSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg>`;
+  } else if (e.type === 'deadline') {
+    iconSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+  }
+  if (isPast) {
+    iconSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+  }
+
+  const sourceChip = {
+    'scheduler': 'Smart Calendar',
+    'sla':       'AI Operations',
+    'tasks':     'From Tasks'
+  }[e.source] || '';
+
+  let metaChips = `<span class="event-row__meta-chip">${sourceChip}</span>`;
+  if (e.location) {
+    metaChips += `<span class="event-row__meta-chip">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      ${escapeHtml(e.location.split('·')[0].trim())}
+    </span>`;
+  }
+  if (e.isClosing) {
+    metaChips += `<span class="event-row__meta-chip" style="background: var(--gold-soft); color: var(--gold-deep); border-color: #E5D49A;">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+      Closing day
+    </span>`;
+  }
+
+  let attendeeHTML = '';
+  if (e.attendee) {
+    const sealClass = e.attendee.kind === 'ext' ? 'seal--ext' : (e.attendee.kind === 'neutral' ? 'seal--neutral' : '');
+    attendeeHTML = `
+      <div class="event-row__attendee">
+        <div class="event-row__attendee-name">${escapeHtml(e.attendee.name)}</div>
+        <div class="seal ${sealClass}" style="width:30px;height:30px;font-size:11px;">${e.attendee.initials}</div>
+      </div>
+    `;
+  }
+
+  return `
+    <button class="${cls}" data-event-id="${e.id}">
+      <div class="event-row__time">
+        <span class="event-row__time-primary">${time}</span>
+        ${timeSub ? `<span class="event-row__time-sub">${timeSub}</span>` : ''}
+      </div>
+      <div class="event-row__icon">${iconSVG}</div>
+      <div class="event-row__main">
+        <p class="event-row__title">${escapeHtml(e.title)}</p>
+        <p class="event-row__sub">${escapeHtml(e.description.split('.')[0])}.</p>
+        <div class="event-row__meta">${metaChips}</div>
+      </div>
+      ${attendeeHTML}
+      <svg class="event-row__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  `;
+}
+
+/* =============================================================================
+   EVENT DETAIL SLIDE-OVER
+   ============================================================================= */
+
+function openEventPanel(eventId) {
+  const e = EVENTS.find(x => x.id === eventId);
+  if (!e) return;
+
+  const startD = eventStartDate(e);
+  const endD = eventEndDate(e);
+  const time = e.allDay ? 'All day' : formatTime(startD);
+  const timeSub = (!e.allDay && endD) ? ` – ${formatTime(endD)} · ${formatDuration(startD, endD)}` : '';
+  const dateLine = `${DAY_NAMES_LONG[startD.getDay()]}, ${MONTH_NAMES[startD.getMonth()]} ${startD.getDate()}, ${startD.getFullYear()}`;
+
+  const statusMap = {
+    'meeting':   { cls: 'status-pill-meeting', label: 'Meeting' },
+    'milestone': { cls: 'status-pill-milestone', label: 'Milestone' },
+    'deadline':  { cls: 'status-pill-deadline', label: 'Deadline' }
+  };
+  if (e.status === 'completed') statusMap[e.type] = { cls: 'status-pill-done', label: 'Completed' };
+  if (e.status === 'cancelled') statusMap[e.type] = { cls: 'status-pill-cancelled', label: 'Cancelled' };
+  const statusInfo = statusMap[e.type] || { cls: 'status-pill-meeting', label: e.type };
+
+  const sourceLabel = {
+    'scheduler': 'From Smart Calendar (CRM)',
+    'sla':       'From AI Operations Manager (SLA)',
+    'tasks':     'From your Tasks list'
+  }[e.source] || '';
+
+  let footerHTML = '';
+  if (e.type === 'meeting' && e.status === 'confirmed') {
+    if (e.isClosing) {
+      footerHTML = `
+        <div class="flex gap-2">
+          <button class="btn btn-primary flex-1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            View closing checklist
+          </button>
+          <button class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            Get directions
+          </button>
+        </div>
+      `;
+    } else {
+      footerHTML = `
+        <div class="flex gap-2">
+          <button class="btn btn-primary flex-1">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+            Add to my calendar
+          </button>
+          <button class="btn btn-secondary">Reschedule</button>
+          <button class="btn btn-ghost" style="color: var(--danger);">Cancel</button>
+        </div>
+      `;
+    }
+  } else if (e.type === 'deadline') {
+    footerHTML = `
+      <div class="flex gap-2">
+        <button class="btn btn-primary flex-1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          Open in Tasks
+        </button>
+        <button class="btn btn-secondary">Message Sarah</button>
+      </div>
+    `;
+  } else if (e.status === 'completed') {
+    footerHTML = `
+      <div class="flex gap-2">
+        ${e.actions.includes('view_recording') ? '<button class="btn btn-secondary flex-1">View recording</button>' : ''}
+        ${e.actions.includes('view_notes') ? '<button class="btn btn-secondary flex-1">View notes</button>' : ''}
+      </div>
+    `;
+  } else if (e.type === 'milestone') {
+    footerHTML = `
+      <div class="flex gap-2">
+        <button class="btn btn-secondary flex-1">View related</button>
+      </div>
+    `;
+  }
+
+  let attendeeHTML = '';
+  if (e.attendee) {
+    const sealClass = e.attendee.kind === 'ext' ? 'seal--ext' : (e.attendee.kind === 'neutral' ? 'seal--neutral' : '');
+    const subline = e.attendee.kind === 'lo' ? `Loan Officer · NMLS ${e.attendee.nmls}` :
+                    e.attendee.kind === 'ext' ? 'External partner' :
+                    'Settlement agent';
+    attendeeHTML = `
+      <div class="so-section">
+        <p class="so-label">${e.attendee.kind === 'lo' ? 'With' : 'Provider'}</p>
+        <div class="flex items-center gap-3 p-3 bg-[var(--bg-soft)] border border-[var(--border)] rounded-xl">
+          <div class="seal ${sealClass}" style="width:40px;height:40px;font-size:14px;">${e.attendee.initials}</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-[14px] font-semibold m-0">${escapeHtml(e.attendee.name)}</p>
+            <p class="text-[11.5px] text-[var(--text-muted)] m-0 mt-0.5">${subline}</p>
+          </div>
+          ${e.attendee.kind === 'lo' ? `
+            <button class="btn btn-secondary text-[12px] px-3 py-1.5">Message</button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('event-panel-content').innerHTML = `
+    <header class="slide-header">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-2 flex-wrap">
+            <span class="status-pill ${statusInfo.cls}">
+              <span class="status-pill__dot"></span> ${statusInfo.label}
+            </span>
+            ${e.isClosing ? '<span class="chip chip-gold text-[10.5px]">★ Closing day</span>' : ''}
+          </div>
+          <h2 class="font-display text-[22px] font-medium leading-tight">${escapeHtml(e.title)}</h2>
+          <p class="text-[12.5px] text-[var(--text-secondary)] mt-1.5 font-mono">${dateLine} · ${time}${timeSub}</p>
+        </div>
+        <button class="aria-icon-btn" id="event-close" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="slide-body">
+
+      <div class="so-section">
+        <p class="so-label">What this is</p>
+        <div class="why-card">${escapeHtml(e.description)}</div>
+      </div>
+
+      ${e.location ? `
+        <div class="so-section">
+          <p class="so-label">Where</p>
+          <div class="flex items-center gap-3 p-3 bg-[var(--bg-soft)] border border-[var(--border)] rounded-xl">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span class="text-[13px] text-[var(--text-primary)]">${escapeHtml(e.location)}</span>
+          </div>
+        </div>
+      ` : ''}
+
+      ${attendeeHTML}
+
+      <div class="so-section">
+        <p class="so-label">Source</p>
+        <div class="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]">
+          <span class="chip chip-neutral">${sourceLabel}</span>
+          <span class="font-mono text-[10.5px] text-[var(--text-muted)]">${e.sourceRef.table}#${e.sourceRef.id}</span>
+        </div>
+      </div>
+
+      <button class="ask-aria-btn" data-aria-trigger style="background: linear-gradient(135deg, var(--brand-tint) 0%, var(--gold-soft) 100%); padding: 14px;">
+        <span class="ask-aria-icon" style="width:36px;height:36px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+        </span>
+        <span class="ask-aria-text">
+          <span class="ask-aria-title">Ask Aria about this</span>
+          <span class="ask-aria-sub">"What should I prepare?" · "Can I move it?"</span>
+        </span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    ${footerHTML ? `<footer class="slide-footer">${footerHTML}</footer>` : ''}
+  `;
+
+  document.getElementById('event-overlay').classList.add('is-open');
+  document.getElementById('event-panel').classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('event-close').addEventListener('click', closeEventPanel);
+}
+
+function closeEventPanel() {
+  document.getElementById('event-overlay').classList.remove('is-open');
+  document.getElementById('event-panel').classList.remove('is-open');
+  document.body.style.overflow = '';
+}
+
+/* =============================================================================
+   SCHEDULE MEETING SLIDE-OVER
+   ============================================================================= */
+
+let scheduleState = { type: 'review', selectedDay: null, selectedTime: null };
+
+function openSchedulePanel() {
+  scheduleState = { type: 'review', selectedDay: null, selectedTime: null };
+  renderSchedulePanel();
+  document.getElementById('schedule-overlay').classList.add('is-open');
+  document.getElementById('schedule-panel').classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSchedulePanel() {
+  document.getElementById('schedule-overlay').classList.remove('is-open');
+  document.getElementById('schedule-panel').classList.remove('is-open');
+  document.body.style.overflow = '';
+}
+
+function renderSchedulePanel() {
+  const MEETING_TYPES = [
+    { id: 'checkin', label: 'Quick check-in', sub: 'Phone or video · 15 min' },
+    { id: 'review',  label: 'Status review',  sub: 'Video · 30 min', recommended: true },
+    { id: 'consult', label: 'Full discussion',sub: 'Video or in-person · 60 min' }
+  ];
+
+  const days = [];
+  let d = new Date(TODAY);
+  d.setDate(d.getDate() + 1);
+  while (days.length < 7) {
+    if (d.getDay() !== 0 && d.getDay() !== 6) days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+
+  const dayBtns = days.map(day => {
+    const key = dateKey(day);
+    const isSelected = scheduleState.selectedDay === key;
+    return `
+      <button class="schedule-day-btn ${isSelected ? 'is-selected' : ''}" data-day="${key}">
+        <div class="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1">${DAY_NAMES_SHORT[day.getDay()]}</div>
+        <div class="font-display text-[18px] font-medium">${day.getDate()}</div>
+        <div class="text-[10px] text-[var(--text-muted)] mt-1">${MONTH_NAMES[day.getMonth()].slice(0,3)}</div>
+      </button>
+    `;
+  }).join('');
+
+  const TIMES = ['9:00 AM','9:30 AM','10:00 AM','10:30 AM','11:00 AM','1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM','4:00 PM'];
+  const timeBtns = scheduleState.selectedDay ? TIMES.map(t => {
+    const isSelected = scheduleState.selectedTime === t;
+    const isBooked = (scheduleState.selectedDay.charCodeAt(8) + t.charCodeAt(0)) % 7 === 0;
+    let cls = 'schedule-time-btn';
+    if (isBooked) cls += ' is-booked';
+    if (isSelected) cls += ' is-selected';
+    return `<button class="${cls}" ${isBooked ? 'disabled' : ''} data-time="${t}">${t}</button>`;
+  }).join('') : '';
+
+  const ready = scheduleState.selectedDay && scheduleState.selectedTime;
+  const meetingType = MEETING_TYPES.find(m => m.id === scheduleState.type);
+
+  document.getElementById('schedule-content').innerHTML = `
+    <header class="slide-header">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <h2 class="font-display text-[22px] font-medium leading-tight">Schedule a meeting with Sarah</h2>
+          <p class="text-[12.5px] text-[var(--text-secondary)] mt-1.5">Powered by Smart Calendar · slot held for 5 minutes once you pick a time</p>
+        </div>
+        <button class="aria-icon-btn" id="schedule-close" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="slide-body">
+
+      <div class="so-section">
+        <p class="so-label">Meeting type</p>
+        <div class="grid grid-cols-3 gap-2">
+          ${MEETING_TYPES.map(m => `
+            <button class="meeting-type-card ${scheduleState.type === m.id ? 'is-selected' : ''}" data-type="${m.id}">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-[13px] font-semibold">${m.label}</span>
+                ${m.recommended ? '<span class="chip chip-gold text-[9px] py-0 px-1.5">Recommended</span>' : ''}
+              </div>
+              <span class="text-[11px] text-[var(--text-muted)]">${m.sub}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="so-section">
+        <p class="so-label">Pick a day</p>
+        <div class="grid grid-cols-7 gap-1.5">${dayBtns}</div>
+      </div>
+
+      ${scheduleState.selectedDay ? `
+        <div class="so-section">
+          <p class="so-label">Pick a time · Eastern</p>
+          <div class="grid grid-cols-4 gap-1.5">${timeBtns}</div>
+        </div>
+      ` : ''}
+    </div>
+    <footer class="slide-footer">
+      <button class="btn btn-primary w-full" id="schedule-confirm" ${ready ? '' : 'disabled style="opacity:.5; cursor:not-allowed;"'}>
+        ${ready
+          ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Confirm ${meetingType.label} · ${scheduleState.selectedTime}`
+          : 'Pick a day and time to continue'
+        }
+      </button>
+    </footer>
+  `;
+
+  document.getElementById('schedule-close').addEventListener('click', closeSchedulePanel);
+  document.querySelectorAll('[data-type]').forEach(el => el.addEventListener('click', () => {
+    scheduleState.type = el.dataset.type;
+    renderSchedulePanel();
+  }));
+  document.querySelectorAll('[data-day]').forEach(el => el.addEventListener('click', () => {
+    scheduleState.selectedDay = el.dataset.day;
+    scheduleState.selectedTime = null;
+    renderSchedulePanel();
+  }));
+  document.querySelectorAll('[data-time]').forEach(el => el.addEventListener('click', () => {
+    if (el.disabled) return;
+    scheduleState.selectedTime = el.dataset.time;
+    renderSchedulePanel();
+  }));
+  document.getElementById('schedule-confirm').addEventListener('click', () => {
+    if (!ready) return;
+    alert(`Meeting confirmed: ${meetingType.label} on ${scheduleState.selectedDay} at ${scheduleState.selectedTime}.\n\nIn production, this would POST to /api/v1/scheduler/public/book/{slug}/ and emit APPOINTMENT_CONFIRMED to the event bus.`);
+    closeSchedulePanel();
+  });
+}
+
+/* =============================================================================
+   SYNC SLIDE-OVER
+   ============================================================================= */
+
+document.getElementById('btn-sync').addEventListener('click', () => {
+  document.getElementById('sync-overlay').classList.add('is-open');
+  document.getElementById('sync-panel').classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+});
+document.getElementById('sync-close').addEventListener('click', closeSyncPanel);
+document.getElementById('sync-overlay').addEventListener('click', closeSyncPanel);
+function closeSyncPanel() {
+  document.getElementById('sync-overlay').classList.remove('is-open');
+  document.getElementById('sync-panel').classList.remove('is-open');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('btn-schedule').addEventListener('click', openSchedulePanel);
+document.getElementById('schedule-overlay').addEventListener('click', closeSchedulePanel);
+
+document.getElementById('event-overlay').addEventListener('click', closeEventPanel);
+
+/* =============================================================================
+   MONTH NAVIGATION
+   ============================================================================= */
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  if (state.viewMonth === 0) { state.viewMonth = 11; state.viewYear--; }
+  else state.viewMonth--;
+  renderMonth();
+});
+document.getElementById('btn-next').addEventListener('click', () => {
+  if (state.viewMonth === 11) { state.viewMonth = 0; state.viewYear++; }
+  else state.viewMonth++;
+  renderMonth();
+});
+document.getElementById('btn-today').addEventListener('click', () => {
+  state.viewYear = TODAY.getFullYear();
+  state.viewMonth = TODAY.getMonth();
+  state.selectedDate = dateKey(TODAY);
+  renderMonth();
+  renderDayPanel();
+});
+
+/* =============================================================================
+   FILTERS
+   ============================================================================= */
+
+document.querySelectorAll('.event-filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.event-filter').forEach(b => b.classList.remove('is-active'));
+    btn.classList.add('is-active');
+    state.filter = btn.dataset.filter;
+    renderUpcomingList();
+  });
+});
+
+/* =============================================================================
+   ARIA — calendar-aware
+   ============================================================================= */
+
+const ARIA_RESPONSES = {
+  countdown: {
+    html: `<p>You have <strong>27 days until close</strong>, on Friday, May 22 at 10:00 AM at Carolina Title Co.</p>
+           <p>Here's what's between now and then:</p>
+           <ul>
+             <li><strong>This week:</strong> appraisal walkthrough tomorrow, Loan Estimate ready Monday, paystubs due Tuesday</li>
+             <li><strong>Next week:</strong> title commitment, deposit explanation due, appraisal report</li>
+             <li><strong>Week of May 4:</strong> conditional approval review with Sarah on May 6</li>
+             <li><strong>Week of May 18:</strong> CD review on May 18, then 3-day waiting period, then closing on May 22</li>
+           </ul>
+           <p>You're on pace. The most likely thing to slip is the LOX or paystubs landing late — stay on top of those and you'll be solid.</p>`,
+    sources: ['Your loan file', 'Smart Calendar (Sarah\'s schedule)', 'AI Operations Manager (SLA)'],
+    followups: ['Can we close earlier?', 'What if the appraisal is delayed?', 'When does my rate lock expire?']
+  },
+  tomorrow: {
+    html: `<p><strong>Tomorrow at 10:30 AM:</strong> Property appraisal walkthrough with Stratford Appraisal Group.</p>
+           <ul>
+             <li>The appraiser (Mark Henderson, SC license #4429) will arrive at 847 Magnolia Pointe Ln</li>
+             <li>Plan for 30–45 minutes inside</li>
+             <li>They'll measure rooms, photograph each space, and check major systems</li>
+             <li>You don't need to do anything — just be available or arrange access</li>
+           </ul>
+           <p>Report typically delivers within 5 business days, so you should have it by <strong>May 3</strong>.</p>`,
+    sources: ['Smart Calendar (appt #4318)', 'Stratford Appraisal Group order'],
+    followups: ['Can I reschedule the appraisal?', 'What if the appraisal comes in low?', 'Do I need to be home?']
+  },
+  reschedule: {
+    html: `<p>Yes — most meetings can be rescheduled. Here's how it works:</p>
+           <ul>
+             <li><strong>Sarah meetings:</strong> Click the meeting on your calendar, then "Reschedule." Pick a new time and Sarah is notified automatically.</li>
+             <li><strong>Appraisal:</strong> 24-hour minimum notice for Stratford. If less, message Sarah directly.</li>
+             <li><strong>Closing:</strong> Possible but expensive — title, lender, and seller all need to coordinate. Come talk to Sarah before requesting.</li>
+           </ul>
+           <p>Anything you reschedule here updates Sarah's calendar in the CRM in real time. No double-bookings, no awkward "did you get my email" calls.</p>`,
+    sources: ['Smart Calendar', 'Your loan file'],
+    followups: ['How do I cancel a meeting?', 'Can closing day move?', 'What\'s the latest I can reschedule?']
+  },
+  closing: {
+    html: `<p>If you miss the closing window — meaning closing doesn't happen by <strong>May 22</strong>:</p>
+           <ul>
+             <li>Your <strong>rate lock expires</strong> that same day (6.625%)</li>
+             <li>If rates are higher when we re-lock, your monthly payment goes up</li>
+             <li>Sarah can request a 7-day extension at a small cost (typically 0.125% to the lender)</li>
+             <li>Beyond that, we'd re-quote at current market</li>
+           </ul>
+           <p>This is why I'm watching the LOX and paystubs hard — those are the two most common late-stage slip-ups.</p>`,
+    sources: ['Your loan file', 'Rate lock confirmation', 'FNMA Selling Guide B2-1.4'],
+    followups: ['Can I extend the rate lock?', 'What\'s today\'s rate?', 'How do I avoid this?']
+  },
+  default: {
+    html: `<p>I can answer anything about your schedule — meetings, milestones, deadlines, or what to do if something needs to move.</p>
+           <p>A few things people ask most:</p>`,
+    sources: ['Your loan file', 'Smart Calendar'],
+    followups: ['What\'s tomorrow?', 'Can I close earlier?', 'How do I reschedule?']
+  }
+};
+
+function matchAriaResponse(text) {
+  const t = text.toLowerCase();
+  if (/tomorrow|appraisal|appraiser|stratford|access/.test(t)) return ARIA_RESPONSES.tomorrow;
+  if (/reschedule|move|change.*time|cancel/.test(t)) return ARIA_RESPONSES.reschedule;
+  if (/miss|delay|late|extend|expire/.test(t)) return ARIA_RESPONSES.closing;
+  if (/close|closing|when|how long|may 22|countdown|track/.test(t)) return ARIA_RESPONSES.countdown;
+  return ARIA_RESPONSES.default;
+}
+
+const ariaState = {
+  open: false,
+  thinking: false,
+  messages: [{
+    role: 'aria',
+    html: `<p>Hi Timothy. I'm <strong>Aria</strong> — your AI loan assistant.</p>
+           <p>You're <strong>27 days from closing</strong> on May 22. Tomorrow is your appraisal at 10:30 AM. After that, the next big thing on your calendar is your conditional approval review on May 6.</p>
+           <p>What can I help with?</p>`,
+    sources: ['Your loan file (PRN-2026-04881)', 'Smart Calendar', 'AI Operations Manager']
+  }],
+  suggestions: ['What\'s tomorrow?', 'Can I close earlier?', 'How do I reschedule the appraisal?', 'What if I miss the closing window?']
+};
+
+function ariaSourceChip(s) {
+  return `<span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+    ${s}
+  </span>`;
+}
+
+function renderAriaConversation() {
+  const body = document.getElementById('aria-body');
+  if (!body) return;
+  let html = ariaState.messages.map(m => {
+    if (m.role === 'aria') {
+      const sources = m.sources?.length
+        ? `<div class="mt-2.5 pt-2.5 border-t border-dashed border-[var(--border)] flex flex-wrap gap-1.5">
+             <div class="text-[9.5px] uppercase tracking-wider text-[var(--text-muted)] font-semibold w-full mb-0.5">Sources</div>
+             ${m.sources.map(ariaSourceChip).join('')}
+           </div>` : '';
+      return `<div class="aria-msg-row is-aria">
+        <div class="seal" style="width:28px;height:28px;font-size:11px;font-family:'Fraunces',serif;align-self:flex-start;">A</div>
+        <div class="aria-msg-bubble">${m.html}${sources}</div>
+      </div>`;
+    }
+    return `<div class="aria-msg-row is-user"><div class="aria-msg-bubble">${m.html}</div></div>`;
+  }).join('');
+
+  if (ariaState.thinking) {
+    html += `<div class="aria-msg-row is-aria">
+      <div class="seal" style="width:28px;height:28px;font-size:11px;font-family:'Fraunces',serif;align-self:flex-start;">A</div>
+      <div class="aria-typing"><span class="aria-typing-dot"></span><span class="aria-typing-dot"></span><span class="aria-typing-dot"></span></div>
+    </div>`;
+  }
+  body.innerHTML = html;
+  body.scrollTop = body.scrollHeight;
+
+  const sug = document.getElementById('aria-suggestions');
+  if (ariaState.suggestions?.length && !ariaState.thinking) {
+    sug.style.display = 'flex';
+    sug.innerHTML = ariaState.suggestions.map(s => `
+      <button type="button" class="px-3 py-1.5 rounded-full text-[12px] font-medium bg-[var(--bg-page)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--brand)] hover:bg-[var(--brand-tint)] transition" data-suggestion>${s}</button>
+    `).join('');
+    sug.querySelectorAll('[data-suggestion]').forEach((btn, i) => {
+      btn.addEventListener('click', () => sendAriaMessage(ariaState.suggestions[i]));
+    });
+  } else {
+    sug.style.display = 'none';
+    sug.innerHTML = '';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function sendAriaMessage(text) {
+  const t = (text || '').trim();
+  if (!t || ariaState.thinking) return;
+  ariaState.messages.push({ role: 'user', html: escapeHtml(t) });
+  ariaState.suggestions = [];
+  ariaState.thinking = true;
+  const input = document.getElementById('aria-input');
+  if (input) { input.value = ''; input.style.height = 'auto'; }
+  document.getElementById('aria-send').disabled = true;
+  renderAriaConversation();
+
+  setTimeout(() => {
+    const resp = matchAriaResponse(t);
+    ariaState.messages.push({ role: 'aria', html: resp.html, sources: resp.sources });
+    ariaState.suggestions = resp.followups || [];
+    ariaState.thinking = false;
+    renderAriaConversation();
+  }, 900 + Math.random() * 700);
+}
+
+function openAria() {
+  if (ariaState.open) return;
+  ariaState.open = true;
+  document.getElementById('aria-overlay').classList.add('is-open');
+  document.getElementById('aria-panel').classList.add('is-open');
+  document.getElementById('aria-fab').classList.add('is-hidden');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('aria-input')?.focus(), 380);
+}
+function closeAria() {
+  if (!ariaState.open) return;
+  ariaState.open = false;
+  document.getElementById('aria-overlay').classList.remove('is-open');
+  document.getElementById('aria-panel').classList.remove('is-open');
+  document.getElementById('aria-fab').classList.remove('is-hidden');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-aria-trigger]')) { e.preventDefault(); openAria(); }
+});
+document.getElementById('aria-overlay').addEventListener('click', closeAria);
+document.getElementById('aria-close').addEventListener('click', closeAria);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (ariaState.open) closeAria();
+    else if (document.getElementById('event-panel').classList.contains('is-open')) closeEventPanel();
+    else if (document.getElementById('schedule-panel').classList.contains('is-open')) closeSchedulePanel();
+    else if (document.getElementById('sync-panel').classList.contains('is-open')) closeSyncPanel();
+  }
+});
+document.getElementById('aria-form').addEventListener('submit', e => {
+  e.preventDefault();
+  sendAriaMessage(document.getElementById('aria-input').value);
+});
+
+const ariaInput = document.getElementById('aria-input');
+const ariaSendBtn = document.getElementById('aria-send');
+ariaInput.addEventListener('input', () => {
+  ariaSendBtn.disabled = !ariaInput.value.trim() || ariaState.thinking;
+  ariaInput.style.height = 'auto';
+  ariaInput.style.height = Math.min(ariaInput.scrollHeight, 120) + 'px';
+});
+ariaInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendAriaMessage(ariaInput.value);
+  }
+});
+
+/* =============================================================================
+   STYLES injected for schedule slide-over (keeps CSS file focused)
+   ============================================================================= */
+const inlineStyles = document.createElement('style');
+inlineStyles.textContent = `
+  .schedule-day-btn {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 10px 4px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: inherit;
+  }
+  .schedule-day-btn:hover { border-color: var(--brand); background: var(--brand-tint); }
+  .schedule-day-btn.is-selected { border-color: var(--brand); background: var(--brand); color: #F5F2E9; }
+  .schedule-day-btn.is-selected .text-\\[10px\\], .schedule-day-btn.is-selected div { color: #F5F2E9 !important; }
+  .schedule-time-btn {
+    padding: 9px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: 'Geist Mono', monospace;
+    color: var(--text-primary);
+  }
+  .schedule-time-btn:hover { border-color: var(--brand); background: var(--brand-tint); }
+  .schedule-time-btn.is-selected { background: var(--brand); border-color: var(--brand); color: #F5F2E9; }
+  .schedule-time-btn.is-booked {
+    background: var(--bg-elevated); color: var(--text-faint); cursor: not-allowed;
+    text-decoration: line-through;
+  }
+  .meeting-type-card {
+    display: flex; flex-direction: column;
+    padding: 12px 14px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .15s;
+    text-align: left;
+    font-family: inherit;
+  }
+  .meeting-type-card:hover { border-color: var(--brand); }
+  .meeting-type-card.is-selected { border-color: var(--brand); background: var(--brand-tint); box-shadow: inset 0 0 0 1px var(--brand); }
+`;
+document.head.appendChild(inlineStyles);
+
+/* =============================================================================
+   INIT
+   ============================================================================= */
+
+renderHero();
+renderMonth();
+renderDayPanel();
+renderUpcomingList();
+renderPastList();
+renderAriaConversation();
+
+</script>
+</body>
+</html>

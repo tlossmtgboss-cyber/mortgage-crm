@@ -1135,8 +1135,8 @@ function Leads() {
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal modal-wide">
             <div className="modal-header">
               <h2>{editingLead ? 'Edit Lead' : 'New Lead'}</h2>
               <button className="close-btn" onClick={() => setShowModal(false)}>

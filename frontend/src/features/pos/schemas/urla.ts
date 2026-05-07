@@ -30,7 +30,7 @@ const phone = z
 const email = z.string().email('Enter a valid email');
 
 const currency = z
-  .number({ invalid_type_error: 'Enter a number' })
+  .number({ error: 'Enter a number' })
   .nonnegative('Cannot be negative');
 
 // ---------- section schemas ----------
@@ -173,8 +173,7 @@ export const SECTION_SCHEMAS: Record<SectionKey, z.ZodTypeAny> = {
   reo: reoSchema,
   loan: loanSchema,
   declarations: declarationsSchema,
-  // The Review section's "data" is just the certifications acked; not
-  // separately validated here.
+  schedule: z.object({}).passthrough(),
   review: z.object({}).passthrough(),
 };
 

@@ -43,7 +43,10 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 export const useLeads = (options = {}) => {
   return useQuery({
     queryKey: ['leads', options],
-    queryFn: () => fetchWithAuth('/api/v1/leads/'),
+    queryFn: async () => {
+      const data = await fetchWithAuth('/api/v1/leads/');
+      return Array.isArray(data) ? data : (data?.items ?? []);
+    },
     staleTime: 1000 * 60 * 5, // 5 minutes
     ...options,
   });
@@ -75,7 +78,10 @@ export const useLeadStats = (options = {}) => {
 export const useLoans = (options = {}) => {
   return useQuery({
     queryKey: ['loans', options],
-    queryFn: () => fetchWithAuth('/api/v1/loans/'),
+    queryFn: async () => {
+      const data = await fetchWithAuth('/api/v1/loans/');
+      return Array.isArray(data) ? data : (data?.items ?? []);
+    },
     staleTime: 1000 * 60 * 5,
     ...options,
   });

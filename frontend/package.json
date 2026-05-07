@@ -74,20 +74,6 @@
     "android:open": "npx cap open android",
     "android:sync": "npx cap sync android"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app"
-    ],
-    "rules": {
-      "no-unused-vars": [
-        "warn",
-        {
-          "varsIgnorePattern": "^_",
-          "argsIgnorePattern": "^_"
-        }
-      ]
-    }
-  },
   "browserslist": {
     "production": [
       ">0.2%",

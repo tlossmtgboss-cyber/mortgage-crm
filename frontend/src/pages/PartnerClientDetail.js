@@ -16,6 +16,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import MilestoneProgressTracker from '../components/MilestoneProgressTracker';
 import PreApprovalLetterModal from '../components/PreApprovalLetterModal';
 import { activitiesAPI } from '../services/api';
+import { ClickablePhone } from '../components/ClickableContact';
 import './PartnerClientDetail.css';
 import { toast } from '../utils/toast';
 import { getToken } from '../utils/tokenStore';
@@ -412,7 +413,7 @@ const ContactCard = ({ client, loanOfficer }) => (
         {client?.phone && (
           <div className="contact-row">
             <span className="contact-icon">📱</span>
-            <a href={`tel:${client.phone}`}>{formatPhone(client.phone)}</a>
+            <ClickablePhone phone={client.phone} />
           </div>
         )}
       </div>
@@ -434,9 +435,7 @@ const ContactCard = ({ client, loanOfficer }) => (
               </a>
             )}
             {loanOfficer.phone && (
-              <a href={`tel:${loanOfficer.phone}`}>
-                📞 {formatPhone(loanOfficer.phone)}
-              </a>
+              <span>📞 <ClickablePhone phone={loanOfficer.phone} /></span>
             )}
           </div>
         </div>

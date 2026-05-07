@@ -22,4 +22,7 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
+ENV PORT=8080
+EXPOSE 8080
+
 ENTRYPOINT ["python", "voice_agent.py", "start"]

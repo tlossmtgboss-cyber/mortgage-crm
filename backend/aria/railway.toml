@@ -7,3 +7,6 @@ dockerfilePath = "Dockerfile"
 [deploy]
 startCommand = "python voice_agent.py start"
 restartPolicyType = "always"
+healthcheckPath = "/health/live"
+healthcheckTimeout = 300
+numReplicas = 1

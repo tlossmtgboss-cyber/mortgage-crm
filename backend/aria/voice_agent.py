@@ -1428,7 +1428,32 @@ async def aria_voice_session(ctx: agents.JobContext):
     await session.start(room=ctx.room, agent=agent)
 
 
+# ─── Health Server (Railway requires an HTTP endpoint) ───────────────────────
+
+def _start_health_server():
+    """Tiny HTTP server so Railway's healthcheck passes."""
+    import threading
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    class _H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *_args):
+            pass
+
+    port = int(os.environ.get("PORT", "8080"))
+    srv = HTTPServer(("0.0.0.0", port), _H)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    logger.info(f"[AriaVoice] Health server listening on :{port}")
+
+
 # ─── Entrypoint ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    _start_health_server()
     agents.cli.run_app(server)

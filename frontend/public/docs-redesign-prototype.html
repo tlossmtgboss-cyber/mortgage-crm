@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Perennia — Documents</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-page: #FAF7F1;
+    --bg-surface: #FFFFFF;
+    --bg-sidebar: #F6F2EA;
+    --bg-elevated: #F2EDE2;
+    --bg-soft: #FBF8F2;
+    --border: #ECE6D8;
+    --border-strong: #D8D0BD;
+    --border-active: #1F3D2E;
+    --text-primary: #1A1F1B;
+    --text-secondary: #4F554E;
+    --text-muted: #8B8A7E;
+    --text-faint: #B5B2A4;
+    --brand: #1F3D2E;
+    --brand-hover: #2A4F3D;
+    --brand-soft: #E5EDE6;
+    --brand-tint: #EFF3EE;
+    --gold: #B8924A;
+    --gold-soft: #F5EDD9;
+    --gold-deep: #6B4F1A;
+    --success: #2D7A52;
+    --success-soft: #E3EFE5;
+    --warn: #B25F18;
+    --warn-soft: #F8E8D6;
+    --danger: #9B2C2C;
+  }
+
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+  html, body {
+    font-family: 'Geist', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-feature-settings: 'ss01', 'cv01', 'cv11';
+    letter-spacing: -0.005em;
+  }
+
+  .font-display { font-family: 'Fraunces', Georgia, serif; font-feature-settings: 'ss01'; letter-spacing: -0.018em; }
+  .font-mono    { font-family: 'Geist Mono', ui-monospace, monospace; }
+
+  /* Subtle paper grain on page background */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: radial-gradient(rgba(31,61,46,.025) 1px, transparent 1px);
+    background-size: 4px 4px;
+    opacity: .6;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #DDD6C5; border-radius: 8px; border: 2px solid var(--bg-page); }
+  ::-webkit-scrollbar-thumb:hover { background: #C7BFA9; }
+
+  /* ============================== ARIA AI ASSISTANT ============================== */
+  .ask-aria-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 9px 12px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--brand-tint) 0%, #F5EDD9 100%);
+    border: 1px solid rgba(31,61,46,.12);
+    cursor: pointer; transition: all .2s; font-family: inherit;
+    text-align: left;
+  }
+  .ask-aria-btn:hover {
+    border-color: var(--brand);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px -6px rgba(31,61,46,.22);
+  }
+  .ask-aria-icon {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #2E5740, #1F3D2E 60%, #14291F);
+    display: grid; place-items: center; color: #E8DDC0;
+    flex-shrink: 0; box-shadow: inset 0 0 0 1.5px rgba(184,146,74,.4);
+  }
+  .ask-aria-text { flex: 1; min-width: 0; }
+  .ask-aria-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.2; display:block; }
+  .ask-aria-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; display:block; }
+
+  /* FAB */
+  .aria-fab {
+    position: fixed; bottom: 26px; right: 26px; z-index: 60;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--brand); color: #F5F2E9;
+    display: grid; place-items: center; cursor: pointer; border: none;
+    box-shadow: 0 10px 28px -8px rgba(31,61,46,.45), 0 2px 6px rgba(0,0,0,.08);
+    transition: transform .25s cubic-bezier(.2,.7,.2,1), opacity .2s, background .15s;
+  }
+  .aria-fab:hover { background: var(--brand-hover); transform: scale(1.06); }
+  .aria-fab.is-hidden { transform: scale(0); opacity: 0; pointer-events: none; }
+  .aria-fab::after {
+    content: ''; position: absolute; inset: -2px;
+    border-radius: 50%; border: 2px solid var(--brand);
+    opacity: 0; animation: aria-pulse 2.6s ease-out infinite;
+  }
+  @keyframes aria-pulse {
+    0% { opacity: .55; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.35); }
+  }
+  .aria-fab-label {
+    position: absolute; right: 64px; top: 50%; transform: translateY(-50%);
+    background: var(--text-primary); color: var(--bg-page);
+    padding: 6px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 500;
+    white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity .15s, transform .15s;
+  }
+  .aria-fab:hover .aria-fab-label { opacity: 1; }
+
+  /* Slide-over (used by both Aria and the doc detail panel) */
+  .slide-overlay {
+    position: fixed; inset: 0; background: rgba(20,41,31,.22);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+    z-index: 70; opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .slide-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+  .slide-panel {
+    position: fixed; top: 0; right: 0; height: 100vh;
+    background: var(--bg-page); z-index: 80;
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform .4s cubic-bezier(.2,.7,.2,1);
+    box-shadow: -20px 0 60px -20px rgba(0,0,0,.22);
+    border-left: 1px solid var(--border);
+    width: 540px; max-width: 92vw;
+  }
+  .slide-panel.is-open { transform: translateX(0); }
+  .slide-panel--aria { width: 460px; }
+
+  .slide-header { padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; }
+  .slide-body { flex: 1; overflow-y: auto; padding: 20px 18px 8px; }
+  .slide-footer { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg-surface); padding: 12px 16px 14px; }
+
+  /* Aria messaging */
+  .aria-msg-row { display: flex; gap: 10px; margin-bottom: 16px; animation: msgFade .35s cubic-bezier(.2,.7,.2,1); }
+  @keyframes msgFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .aria-msg-row.is-aria { justify-content: flex-start; }
+  .aria-msg-row.is-user { justify-content: flex-end; }
+
+  .aria-msg-bubble {
+    max-width: 84%; padding: 12px 14px;
+    border-radius: 14px; font-size: 13.5px; line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .is-aria .aria-msg-bubble {
+    background: var(--bg-surface); border: 1px solid var(--border);
+    color: var(--text-primary); border-top-left-radius: 4px;
+    position: relative; overflow: hidden;
+  }
+  .is-aria .aria-msg-bubble::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--brand), var(--gold) 75%, transparent);
+    opacity: .55;
+  }
+  .is-user .aria-msg-bubble {
+    background: var(--brand); color: #F5F2E9; border-top-right-radius: 4px;
+  }
+  .aria-msg-bubble p { margin: 0 0 8px; }
+  .aria-msg-bubble p:last-child { margin-bottom: 0; }
+  .aria-msg-bubble ul { margin: 6px 0; padding-left: 18px; }
+  .aria-msg-bubble li { margin: 3px 0; }
+  .aria-msg-bubble strong { font-weight: 600; }
+
+  .aria-typing {
+    display: inline-flex; gap: 4px; padding: 14px 16px;
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 14px; border-top-left-radius: 4px;
+  }
+  .aria-typing-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+    animation: typing 1.4s ease-in-out infinite;
+  }
+  .aria-typing-dot:nth-child(2) { animation-delay: .15s; }
+  .aria-typing-dot:nth-child(3) { animation-delay: .3s; }
+  @keyframes typing {
+    0%, 60%, 100% { opacity: .3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  .aria-input-row {
+    display: flex; align-items: flex-end; gap: 6px;
+    background: var(--bg-page); border: 1px solid var(--border-strong);
+    border-radius: 14px; padding: 5px 5px 5px 14px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .aria-input-row:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
+  .aria-input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-family: inherit; font-size: 14px; padding: 9px 0;
+    resize: none; max-height: 120px; color: var(--text-primary);
+    line-height: 1.4;
+  }
+  .aria-input::placeholder { color: var(--text-faint); }
+  .aria-icon-btn {
+    width: 36px; height: 36px; display: grid; place-items: center;
+    border-radius: 10px; border: none; cursor: pointer;
+    transition: background .15s, color .15s; background: transparent;
+    color: var(--text-secondary); flex-shrink: 0;
+  }
+  .aria-icon-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+  .aria-send-btn { background: var(--brand); color: #F5F2E9; }
+  .aria-send-btn:hover { background: var(--brand-hover); color: #F5F2E9; }
+  .aria-send-btn:disabled { background: var(--bg-elevated); color: var(--text-faint); cursor: not-allowed; }
+
+  /* Sidebar nav */
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 12px; border-radius: 8px;
+    color: var(--text-secondary); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: background .12s, color .12s;
+    position: relative;
+  }
+  .nav-item:hover { background: rgba(31,61,46,.06); color: var(--text-primary); }
+  .nav-item.is-active {
+    background: var(--brand);
+    color: #F5F2E9;
+  }
+  .nav-item.is-active .nav-icon { color: #F5F2E9; }
+
+  .nav-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--text-muted); }
+  .nav-item:hover .nav-icon { color: var(--text-primary); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 22px;
+    border-radius: 8px;
+    font-weight: 500; font-size: 14px;
+    cursor: pointer; transition: all .15s;
+    border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: var(--brand); color: #F5F2E9;
+  }
+  .btn-primary:hover { background: var(--brand-hover); }
+  .btn-secondary {
+    background: transparent; color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+  .btn-secondary:hover { background: var(--bg-elevated); }
+  .btn-ghost {
+    background: transparent; color: var(--text-secondary);
+  }
+  .btn-ghost:hover { color: var(--text-primary); }
+
+  /* Top bar */
+  .topbar-link {
+    font-size: 13px; color: var(--text-secondary); font-weight: 500;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .topbar-link:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+  /* Wax-seal avatars */
+  .seal {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 30%, #2E5740, #1F3D2E 60%, #14291F);
+    display: grid; place-items: center;
+    color: #E8DDC0; font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px;
+    box-shadow: inset 0 0 0 2px rgba(232,221,192,.18), 0 1px 2px rgba(0,0,0,.18);
+    flex-shrink: 0;
+  }
+
+  /* Chips */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    background: var(--brand-tint); color: var(--brand);
+    border: 1px solid var(--brand-soft);
+  }
+  .chip-gold     { background: var(--gold-soft); color: var(--gold-deep); border-color: #E5D49A; }
+  .chip-success  { background: var(--success-soft); color: var(--success); border-color: #C8DCC8; }
+  .chip-warn     { background: var(--warn-soft); color: var(--warn); border-color: #E8C9A8; }
+  .chip-neutral  { background: var(--bg-elevated); color: var(--text-secondary); border-color: var(--border-strong); }
+
+  /* Status pill (larger, with dot) */
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 11px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .status-pill-action  { background: var(--gold-soft); color: var(--gold-deep); border: 1px solid #E5D49A; }
+  .status-pill-review  { background: var(--brand-tint); color: var(--brand); border: 1px solid var(--brand-soft); }
+  .status-pill-approved { background: var(--success-soft); color: var(--success); border: 1px solid #C8DCC8; }
+  .status-pill__dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  /* Document cards */
+  .doc-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    transition: all .18s ease;
+    display: flex; flex-direction: column; gap: 14px;
+    cursor: pointer;
+    box-shadow: 0 1px 0 rgba(31,61,46,.02);
+  }
+  .doc-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 1px 0 rgba(31,61,46,.04), 0 8px 24px -16px rgba(31,61,46,.18);
+    transform: translateY(-1px);
+  }
+  .doc-card--action {
+    border-color: #E5D49A;
+    background: linear-gradient(180deg, rgba(245,237,217,.42) 0%, var(--bg-surface) 24%);
+  }
+  .doc-card--action:hover {
+    border-color: var(--gold);
+  }
+
+  /* Upload zone (dashed) */
+  .upload-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: 12px;
+    padding: 22px;
+    display: flex; align-items: center; gap: 16px;
+    background: var(--bg-soft);
+    transition: all .18s ease;
+  }
+  .doc-card:hover .upload-zone {
+    border-color: var(--brand);
+    background: var(--brand-tint);
+  }
+  .upload-zone__icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .upload-zone__primary { font-size: 14px; color: var(--text-primary); font-weight: 600; margin: 0 0 2px; }
+  .upload-zone__hint { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+  /* AI hint chip */
+  .ai-hint {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--text-secondary);
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    padding: 7px 12px;
+    border-radius: 999px;
+    width: fit-content;
+  }
+  .ai-hint__spark {
+    width: 13px; height: 13px;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+  .ai-hint__action {
+    color: var(--brand);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: rgba(31,61,46,.25);
+    text-underline-offset: 2px;
+    background: none; border: none; padding: 0; font-family: inherit; font-size: inherit;
+  }
+  .ai-hint__action:hover { text-decoration-color: var(--brand); }
+
+  /* eSign panel */
+  .esign-panel {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+
+  .esign-doc-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+    margin: 14px 0 16px;
+  }
+  .esign-doc-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 6px 0;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .esign-doc-item svg { color: var(--text-faint); flex-shrink: 0; }
+
+  /* Extraction preview */
+  .extraction-preview {
+    background: var(--brand-tint);
+    border: 1px solid var(--brand-soft);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+  }
+  .extraction-preview__label {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--brand);
+    display: flex; align-items: center; gap: 6px;
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+  .extraction-preview__fields {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px 22px;
+  }
+  .extraction-preview__field { min-width: 0; }
+  .extraction-preview__field-key {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 3px;
+    font-weight: 500;
+  }
+  .extraction-preview__field-value {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .extraction-preview__check {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--success-soft);
+    color: var(--success);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+
+  /* Approved compact rows */
+  .approved-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 13px 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .15s;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+  .approved-row:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-soft);
+  }
+  .approved-row__icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--success-soft);
+    color: var(--success);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .approved-row__main { flex: 1; min-width: 0; }
+  .approved-row__title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .approved-row__sub {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+  }
+  .approved-row__cta {
+    color: var(--text-faint);
+    font-size: 11.5px;
+    flex-shrink: 0;
+    transition: color .15s;
+  }
+  .approved-row:hover .approved-row__cta { color: var(--brand); }
+
+  /* Reference Library cards */
+  .ref-card {
+    display: flex; gap: 14px; align-items: center;
+    padding: 16px 18px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+  .ref-card:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-soft);
+  }
+  .ref-card__icon {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    color: var(--brand);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .ref-card__title { font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0 0 3px; }
+  .ref-card__meta { font-size: 11.5px; color: var(--text-muted); margin: 0; font-family: 'Geist Mono', monospace; }
+  .ref-card__action { color: var(--text-faint); transition: color .15s; flex-shrink: 0; }
+  .ref-card:hover .ref-card__action { color: var(--brand); }
+
+  /* Stat cards */
+  .stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card__label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+    font-weight: 500;
+  }
+  .stat-card__value {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 38px;
+    font-weight: 500;
+    line-height: 1;
+    margin: 0;
+    letter-spacing: -0.02em;
+  }
+  .stat-card__sub {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin: 8px 0 0;
+  }
+  .stat-card__icon {
+    position: absolute;
+    top: 18px; right: 18px;
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    display: grid; place-items: center;
+  }
+  .stat-card--action  { border-color: #E5D49A; background: linear-gradient(160deg, var(--gold-soft) 0%, var(--bg-surface) 50%); }
+  .stat-card--action  .stat-card__value { color: var(--gold-deep); }
+  .stat-card--action  .stat-card__icon  { background: rgba(184,146,74,.18); color: var(--gold-deep); }
+  .stat-card--review  { border-color: var(--brand-soft); background: linear-gradient(160deg, var(--brand-tint) 0%, var(--bg-surface) 50%); }
+  .stat-card--review  .stat-card__value { color: var(--brand); }
+  .stat-card--review  .stat-card__icon  { background: var(--brand-soft); color: var(--brand); }
+  .stat-card--approved .stat-card__value { color: var(--success); }
+  .stat-card--approved .stat-card__icon  { background: var(--success-soft); color: var(--success); }
+  .stat-card__icon--neutral { background: var(--bg-elevated); color: var(--text-secondary); }
+
+  /* Banner (matches URLA gold banner pattern) */
+  .banner {
+    background: linear-gradient(180deg, #FBF6E8, #F8F0D8);
+    border: 1px solid #E5D49A;
+    border-radius: 14px;
+    padding: 18px 22px;
+    display: flex; align-items: flex-start; gap: 16px;
+    color: var(--gold-deep);
+  }
+
+  /* Filter pills */
+  .filter-tabs {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: fit-content;
+  }
+  .filter-tab {
+    padding: 8px 16px;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all .15s;
+    display: flex; align-items: center; gap: 8px;
+    border: none; background: transparent; cursor: pointer;
+    font-family: inherit;
+  }
+  .filter-tab:hover { color: var(--text-primary); }
+  .filter-tab.is-active {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(31,61,46,.08), 0 0 0 1px var(--border);
+  }
+  .filter-tab__count {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    background: var(--bg-elevated);
+    padding: 1px 7px;
+    border-radius: 999px;
+    color: var(--text-secondary);
+  }
+  .filter-tab.is-active .filter-tab__count {
+    background: var(--brand-tint);
+    color: var(--brand);
+  }
+  .filter-tab__pulse {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 0 0 rgba(184,146,74,.6);
+    animation: pulse 2.4s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(184,146,74,.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(184,146,74,0); }
+    100% { box-shadow: 0 0 0 0 rgba(184,146,74,0); }
+  }
+
+  /* Section header */
+  .doc-section-header {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 18px;
+  }
+  .doc-section-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 24px;
+    font-weight: 500;
+    margin: 0;
+    letter-spacing: -0.018em;
+    color: var(--text-primary);
+  }
+  .doc-section-line {
+    flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* Slide-over inner sections */
+  .so-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+
+  .preview-pane {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    color: var(--text-muted);
+  }
+  .preview-pane__filename {
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .preview-pane__size { font-size: 11px; color: var(--text-faint); }
+
+  .extraction-detail {
+    display: flex; flex-direction: column;
+    background: var(--brand-tint);
+    border: 1px solid var(--brand-soft);
+    border-radius: 12px;
+    padding: 4px 16px;
+  }
+  .extraction-detail__row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(31,61,46,.08);
+  }
+  .extraction-detail__row:last-child { border-bottom: none; }
+  .extraction-detail__key {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: 'Geist Mono', monospace;
+  }
+  .extraction-detail__value {
+    font-size: 13.5px;
+    color: var(--text-primary);
+    font-weight: 600;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .extraction-detail__check {
+    color: var(--success);
+  }
+
+  .timeline { display: flex; flex-direction: column; gap: 16px; }
+  .timeline__item { display: flex; gap: 12px; position: relative; }
+  .timeline__item:not(:last-child)::before {
+    content: ''; position: absolute;
+    left: 13px; top: 28px; bottom: -16px;
+    width: 1px; background: var(--border);
+  }
+  .timeline__dot {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--brand-tint);
+    color: var(--brand);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    z-index: 1;
+    border: 2px solid var(--bg-page);
+  }
+  .timeline__dot--gold { background: var(--gold-soft); color: var(--gold-deep); }
+  .timeline__dot--success { background: var(--success-soft); color: var(--success); }
+  .timeline__title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0; line-height: 1.4; }
+  .timeline__time {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 3px 0 0;
+  }
+
+  .ask-aria-cta {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, var(--brand-tint) 0%, var(--gold-soft) 100%);
+    border: 1px solid var(--brand-soft);
+    border-radius: 12px;
+    width: 100%;
+    transition: all .15s;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .ask-aria-cta:hover {
+    border-color: var(--brand);
+    box-shadow: 0 4px 14px -6px rgba(31,61,46,.22);
+  }
+
+  /* Page CTA buttons */
+  .upload-cta-btn {
+    padding: 9px 16px;
+    background: var(--brand);
+    color: #F5F2E9;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 13px;
+    border: none;
+    cursor: pointer;
+    transition: background .15s;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .upload-cta-btn:hover { background: var(--brand-hover); }
+
+  .hidden { display: none !important; }
+  .icon { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .approved-grid { grid-template-columns: 1fr !important; }
+    .ref-grid { grid-template-columns: 1fr !important; }
+  }
+  @media (max-width: 768px) {
+    aside.app-sidebar { display: none; }
+    .esign-doc-list { grid-template-columns: 1fr !important; }
+    .extraction-preview__fields { grid-template-columns: 1fr !important; }
+    .slide-panel { width: 100vw; }
+  }
+</style>
+</head>
+<body class="relative">
+
+<!-- ============================== TOP BAR ============================== -->
+<header class="relative z-10 bg-[var(--bg-sidebar)] border-b border-[var(--border)]">
+  <div class="flex items-center justify-between px-6 h-[60px]">
+    <div class="flex items-center gap-8">
+      <div class="flex items-center gap-2.5">
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+          <path d="M16 2 C 9 2 4 8 4 16 C 4 22 8 27 14 28 L 14 14 C 14 11 16 9 19 9 C 22 9 24 11 24 14 C 24 17 22 19 19 19 L 17 19 L 17 28 C 24 27 28 22 28 16 C 28 8 23 2 16 2 Z" fill="#1F3D2E"/>
+          <circle cx="19" cy="14" r="2.5" fill="#B8924A"/>
+        </svg>
+        <span class="font-display text-[20px] font-medium tracking-tight text-[var(--text-primary)]">Perennia</span>
+      </div>
+      <nav class="hidden md:flex items-center gap-1">
+        <span class="topbar-link">Dashboard</span>
+        <span class="topbar-link">Application</span>
+        <span class="topbar-link" style="color: var(--text-primary); background: var(--bg-elevated);">Documents</span>
+        <span class="topbar-link">Resources</span>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="hidden md:flex items-center gap-2 text-[12px] text-[var(--text-secondary)] font-mono">
+        <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+        <span>3 items need your attention</span>
+      </div>
+      <button class="btn btn-ghost text-[13px]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      </button>
+      <div class="seal" style="width:36px;height:36px;font-size:14px;">TL</div>
+    </div>
+  </div>
+</header>
+
+<div class="relative z-10 flex" style="min-height: calc(100vh - 60px);">
+
+  <!-- ============================== LEFT SIDEBAR ============================== -->
+  <aside class="app-sidebar w-[260px] flex-shrink-0 bg-[var(--bg-sidebar)] border-r border-[var(--border)] flex flex-col">
+    <div class="p-4">
+      <!-- Loan summary card -->
+      <div class="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl p-4 mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Loan File</span>
+          <span class="chip chip-gold text-[10.5px] py-0.5 px-2">In progress</span>
+        </div>
+        <div class="font-display text-[17px] font-medium leading-tight mb-0.5">Purchase · Primary</div>
+        <div class="font-mono text-[11px] text-[var(--text-muted)]">PRN-2026-04881</div>
+        <div class="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between text-[11.5px]">
+          <span class="text-[var(--text-secondary)]">Status</span>
+          <span class="font-mono text-[var(--brand)] font-medium">In Underwriting</span>
+        </div>
+
+        <button type="button" class="ask-aria-btn mt-3.5" data-aria-trigger>
+          <span class="ask-aria-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+          </span>
+          <span class="ask-aria-text">
+            <span class="ask-aria-title">Ask Aria a question</span>
+            <span class="ask-aria-sub">Instant answers, anytime</span>
+          </span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] px-3 mb-2">Your loan</div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Home</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+          <span>Application</span>
+        </div>
+        <div class="nav-item is-active">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Documents</span>
+          <span class="ml-auto chip chip-gold text-[10px] py-0 px-1.5" style="background:#F5EDD9; color:#6B4F1A; border-color:#E5D49A;">3</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span>Tasks</span>
+          <span class="ml-auto text-[11px] font-mono text-[var(--text-muted)]">5</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Messages</span>
+          <span class="ml-auto w-2 h-2 rounded-full bg-[var(--gold)]"></span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>Disclosures</span>
+        </div>
+      </nav>
+
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] px-3 mb-2 mt-6">Tools</div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
+          <span>Calculators</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span>Loan timeline</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          <span>Help & support</span>
+        </div>
+      </nav>
+    </div>
+
+    <!-- LO card pinned to bottom -->
+    <div class="mt-auto p-4 border-t border-[var(--border)]">
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] mb-2.5">Your loan officer</div>
+      <div class="flex items-center gap-3">
+        <div class="seal" style="width:38px;height:38px;font-size:13px;">SR</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[13.5px] font-medium leading-tight truncate">Sarah Reyes</div>
+          <div class="text-[11.5px] text-[var(--text-muted)] truncate">NMLS #2014872</div>
+        </div>
+        <button class="btn btn-secondary p-2 rounded-lg" title="Message Sarah">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+      </div>
+
+      <button type="button" class="ask-aria-btn mt-3" data-aria-trigger>
+        <span class="ask-aria-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+        </span>
+        <span class="ask-aria-text">
+          <span class="ask-aria-title">Or ask Aria</span>
+          <span class="ask-aria-sub">AI answers in seconds · 24/7</span>
+        </span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============================== MAIN CONTENT ============================== -->
+  <main class="flex-1 min-w-0 px-10 py-10 overflow-x-hidden">
+    <div class="max-w-[1180px] mx-auto">
+
+      <!-- Page header -->
+      <div class="flex items-end justify-between gap-6 mb-9">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="chip">Smart Docs</span>
+            <span class="text-[12px] text-[var(--text-muted)]">·</span>
+            <span class="text-[12px] text-[var(--text-muted)]">Last updated 2 minutes ago</span>
+          </div>
+          <h1 class="font-display text-[40px] leading-[1.05] font-medium tracking-tight mb-2">
+            Documents
+          </h1>
+          <p class="text-[16px] text-[var(--text-secondary)] max-w-[640px] leading-relaxed">
+            Everything Sarah and the underwriter need from you, all in one place. Drop a document and we'll handle the rest.
+          </p>
+        </div>
+        <button class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload a document
+        </button>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-8">
+        <div class="stat-card stat-card--action">
+          <p class="stat-card__label">Action Required</p>
+          <p class="stat-card__value">3</p>
+          <p class="stat-card__sub">2 uploads · 1 to sign</p>
+          <div class="stat-card__icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+        </div>
+        <div class="stat-card stat-card--review">
+          <p class="stat-card__label">In Review</p>
+          <p class="stat-card__value">2</p>
+          <p class="stat-card__sub">Submitted · awaiting Sarah</p>
+          <div class="stat-card__icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+        </div>
+        <div class="stat-card stat-card--approved">
+          <p class="stat-card__label">Approved</p>
+          <p class="stat-card__value">8</p>
+          <p class="stat-card__sub">Cleared by underwriting</p>
+          <div class="stat-card__icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+        <div class="stat-card">
+          <p class="stat-card__label">Reference Library</p>
+          <p class="stat-card__value">4</p>
+          <p class="stat-card__sub">Disclosures &amp; loan copies</p>
+          <div class="stat-card__icon stat-card__icon--neutral">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Smart Docs banner -->
+      <div class="banner mb-8">
+        <div class="seal flex-shrink-0" style="width:42px;height:42px;font-size:16px;font-family:'Fraunces',serif;">A</div>
+        <div class="flex-1">
+          <div class="font-display text-[18px] font-medium leading-tight mb-1" style="color: var(--gold-deep);">Aria reads your documents the moment they upload</div>
+          <p class="text-[13px] leading-relaxed">
+            Drop a paystub, tax return, or bank statement and Aria classifies it, extracts the key numbers, and cross-checks them against your application — usually within 30 seconds. If something looks off, she'll flag it before underwriting ever sees it.
+          </p>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-tabs mb-8" role="tablist">
+        <button class="filter-tab is-active" data-filter="all">
+          All Documents
+          <span class="filter-tab__count">17</span>
+        </button>
+        <button class="filter-tab" data-filter="action">
+          <span class="filter-tab__pulse" aria-hidden="true"></span>
+          Action Required
+          <span class="filter-tab__count">3</span>
+        </button>
+        <button class="filter-tab" data-filter="review">
+          In Review
+          <span class="filter-tab__count">2</span>
+        </button>
+        <button class="filter-tab" data-filter="approved">
+          Approved
+          <span class="filter-tab__count">8</span>
+        </button>
+        <button class="filter-tab" data-filter="reference">
+          Reference Library
+          <span class="filter-tab__count">4</span>
+        </button>
+      </div>
+
+      <!-- =========================================================
+           Action Required
+           ========================================================= -->
+      <section class="mb-10" data-section="action">
+        <div class="doc-section-header">
+          <h2 class="doc-section-title">Action Required</h2>
+          <span class="chip chip-gold text-[11px]">3 items</span>
+          <div class="doc-section-line"></div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3.5">
+
+          <!-- Paystubs upload -->
+          <article class="doc-card doc-card--action" data-doc="paystubs">
+            <div class="flex justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <h3 class="text-[16px] font-semibold mb-1">Upload your most recent paystubs</h3>
+                <p class="text-[13.5px] text-[var(--text-secondary)] leading-relaxed">
+                  We need your <strong>2 most recent paystubs</strong> from TL Development LLC, dated within the last 30 days. PDF or photo is fine.
+                </p>
+              </div>
+              <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                <span class="status-pill status-pill-action">
+                  <span class="status-pill__dot"></span> Action Required
+                </span>
+                <span class="font-mono text-[11px]" style="color: var(--gold-deep);">Due Apr 28 · in 3 days</span>
+              </div>
+            </div>
+
+            <div class="upload-zone">
+              <div class="upload-zone__icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <div class="flex-1">
+                <p class="upload-zone__primary">Drop your paystubs here</p>
+                <p class="upload-zone__hint">or click to browse · PDF, PNG, JPG up to 25 MB each</p>
+              </div>
+              <button class="upload-cta-btn">Browse files</button>
+            </div>
+
+            <div class="ai-hint">
+              <svg class="ai-hint__spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+              <span>Aria will check that gross pay matches your application — <button class="ai-hint__action" data-aria-trigger>ask about acceptable formats</button></span>
+            </div>
+          </article>
+
+          <!-- Bank statements upload -->
+          <article class="doc-card doc-card--action" data-doc="bankstmts">
+            <div class="flex justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <h3 class="text-[16px] font-semibold mb-1">Upload last 60 days of bank statements</h3>
+                <p class="text-[13.5px] text-[var(--text-secondary)] leading-relaxed">
+                  All pages from your <strong>Truist checking ending in 2841</strong>. Every page, even the blank ones — gaps will trigger an underwriter callback.
+                </p>
+              </div>
+              <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                <span class="status-pill status-pill-action">
+                  <span class="status-pill__dot"></span> Action Required
+                </span>
+                <span class="font-mono text-[11px] text-[var(--text-muted)]">Due Apr 30</span>
+              </div>
+            </div>
+
+            <div class="upload-zone">
+              <div class="upload-zone__icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <div class="flex-1">
+                <p class="upload-zone__primary">Drop your statements here</p>
+                <p class="upload-zone__hint">2 statements expected · Aria will detect missing months</p>
+              </div>
+              <button class="upload-cta-btn">Browse files</button>
+            </div>
+
+            <div class="ai-hint">
+              <svg class="ai-hint__spark" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+              <span>Aria can pull these directly from Truist if you connect your account — <button class="ai-hint__action">connect bank instead</button></span>
+            </div>
+          </article>
+
+          <!-- eSign disclosures -->
+          <article class="doc-card doc-card--action" data-doc="disclosures">
+            <div class="flex justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <h3 class="text-[16px] font-semibold mb-1">Sign your initial disclosure package</h3>
+                <p class="text-[13.5px] text-[var(--text-secondary)] leading-relaxed">
+                  9 documents bundled together. Should take about <strong>5 minutes</strong> to review and sign — your loan can't move forward until these are signed.
+                </p>
+              </div>
+              <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                <span class="status-pill status-pill-action">
+                  <span class="status-pill__dot"></span> Awaiting eSign
+                </span>
+                <span class="font-mono text-[11px]" style="color: var(--gold-deep);">Required to proceed</span>
+              </div>
+            </div>
+
+            <div class="esign-panel">
+              <div class="flex items-center justify-between">
+                <span class="font-mono text-[11.5px] text-[var(--text-secondary)]">9 documents · 0 of 9 signed</span>
+                <span class="ai-hint" style="padding: 4px 10px; font-size: 11px;">
+                  <svg class="ai-hint__spark" style="width: 12px; height: 12px;" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+                  Aria can summarize each one
+                </span>
+              </div>
+              <div class="esign-doc-list">
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Loan Estimate (LE)
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Intent to Proceed
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  ECOA Notice
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Settlement Service Providers
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Privacy Notice (GLBA)
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Borrower Certification
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  4506-C (IRS Tax Auth)
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  eConsent Disclosure
+                </div>
+                <div class="esign-doc-item">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Initial 1003 Application
+                </div>
+              </div>
+              <div class="flex items-center gap-3 pt-2 border-t border-[var(--border)]">
+                <button class="btn btn-primary">
+                  Review &amp; Sign
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+                <button class="btn btn-ghost text-[13px]">Download all as PDF</button>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- =========================================================
+           In Review
+           ========================================================= -->
+      <section class="mb-10" data-section="review">
+        <div class="doc-section-header">
+          <h2 class="doc-section-title">In Review</h2>
+          <span class="chip text-[11px]">2 items · awaiting Sarah</span>
+          <div class="doc-section-line"></div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3.5">
+
+          <!-- W-2 -->
+          <article class="doc-card" data-doc="w2-2023">
+            <div class="flex justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <h3 class="text-[16px] font-semibold mb-1">W-2 (2023)</h3>
+                <p class="text-[13px] text-[var(--text-secondary)]">
+                  Submitted Apr 24 · <span class="font-mono">w2_2023_tldev.pdf</span> · 318 KB
+                </p>
+              </div>
+              <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                <span class="status-pill status-pill-review">
+                  <span class="status-pill__dot"></span> In Review
+                </span>
+                <span class="font-mono text-[11px] text-[var(--text-muted)]">Reviewed by Aria · 2 min ago</span>
+              </div>
+            </div>
+
+            <div class="extraction-preview">
+              <div class="min-w-0">
+                <p class="extraction-preview__label">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="color: var(--gold);"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+                  Extracted by Aria
+                </p>
+                <div class="extraction-preview__fields">
+                  <div class="extraction-preview__field">
+                    <p class="extraction-preview__field-key">Employer</p>
+                    <p class="extraction-preview__field-value">TL Development</p>
+                  </div>
+                  <div class="extraction-preview__field">
+                    <p class="extraction-preview__field-key">Box 1 Wages</p>
+                    <p class="extraction-preview__field-value">$222,000.00</p>
+                  </div>
+                  <div class="extraction-preview__field">
+                    <p class="extraction-preview__field-key">Tax Year</p>
+                    <p class="extraction-preview__field-value">2023</p>
+                  </div>
+                </div>
+              </div>
+              <div class="extraction-preview__check" title="Cross-checked with application">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            </div>
+          </article>
+
+          <!-- Gift letter -->
+          <article class="doc-card" data-doc="gift-letter">
+            <div class="flex justify-between gap-4">
+              <div class="flex-1 min-w-0">
+                <h3 class="text-[16px] font-semibold mb-1">Gift letter from Robert &amp; Linda Loss</h3>
+                <p class="text-[13px] text-[var(--text-secondary)]">
+                  Submitted Apr 23 · <span class="font-mono">gift_letter_signed.pdf</span> · 124 KB
+                </p>
+              </div>
+              <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                <span class="status-pill status-pill-review">
+                  <span class="status-pill__dot"></span> In Review
+                </span>
+                <span class="font-mono text-[11px] text-[var(--text-muted)]">Awaiting Sarah · queued</span>
+              </div>
+            </div>
+
+            <div class="extraction-preview">
+              <div class="min-w-0">
+                <p class="extraction-preview__label">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="color: var(--gold);"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+                  Extracted by Aria
+                </p>
+                <div class="extraction-preview__fields">
+                  <div class="extraction-preview__field">
+                    <p class="extraction-preview__field-key">Donors</p>
+                    <p class="extraction-preview__field-value">R. &amp; L. Loss</p>
+                  </div>
+                  <div class="extraction-preview__field">
+                    <p class="extraction-preview__field-key">Amount</p>
+                    <p class="extraction-preview__field-value">$25,000.00</p>
+                  </div>
+                  <div class="extraction-preview__field">
+                    <p class="extraction-preview__field-key">Relationship</p>
+                    <p class="extraction-preview__field-value">Parents</p>
+                  </div>
+                </div>
+              </div>
+              <div class="extraction-preview__check" title="Cross-checked with application">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- =========================================================
+           Approved
+           ========================================================= -->
+      <section class="mb-10" data-section="approved">
+        <div class="doc-section-header">
+          <h2 class="doc-section-title">Approved</h2>
+          <span class="chip chip-success text-[11px]">8 items · cleared by underwriting</span>
+          <div class="doc-section-line"></div>
+        </div>
+
+        <div class="approved-grid grid grid-cols-2 gap-2.5">
+
+          <button class="approved-row" data-doc="tax-2022">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Tax returns — 2022</p>
+              <p class="approved-row__sub">Cleared Apr 22 · 1040 + Schedules</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+          <button class="approved-row" data-doc="tax-2023">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Tax returns — 2023</p>
+              <p class="approved-row__sub">Cleared Apr 22 · 1040 + Schedules</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+          <button class="approved-row" data-doc="dl">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Driver's license</p>
+              <p class="approved-row__sub">Cleared Apr 21 · SC · expires 2028</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+          <button class="approved-row" data-doc="app-1003">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Loan application (signed)</p>
+              <p class="approved-row__sub">Cleared Apr 22 · URLA 1003 · 9 sections</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+          <button class="approved-row" data-doc="voided-check">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Voided check</p>
+              <p class="approved-row__sub">Cleared Apr 21 · Truist · ACH verification</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+          <button class="approved-row" data-doc="ho-insurance">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Homeowners insurance quote</p>
+              <p class="approved-row__sub">Cleared Apr 23 · State Farm · $1,840/yr</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+          <button class="approved-row" data-doc="purchase-contract">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Purchase contract</p>
+              <p class="approved-row__sub">Cleared Apr 18 · fully executed · $950,000</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+          <button class="approved-row" data-doc="emd">
+            <div class="approved-row__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="approved-row__main">
+              <p class="approved-row__title">Earnest money deposit</p>
+              <p class="approved-row__sub">Cleared Apr 19 · $5,000 to escrow</p>
+            </div>
+            <span class="approved-row__cta">View →</span>
+          </button>
+
+        </div>
+      </section>
+
+      <!-- =========================================================
+           Reference Library
+           ========================================================= -->
+      <section class="mb-12" data-section="reference">
+        <div class="doc-section-header">
+          <h2 class="doc-section-title">Reference Library</h2>
+          <span class="chip chip-neutral text-[11px]">4 items · always available to download</span>
+          <div class="doc-section-line"></div>
+        </div>
+
+        <div class="ref-grid grid grid-cols-2 gap-3.5">
+          <button class="ref-card" data-doc="le">
+            <div class="ref-card__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="ref-card__title">Loan Estimate</p>
+              <p class="ref-card__meta">Issued Apr 22 · PDF · 6 pages</p>
+            </div>
+            <span class="ref-card__action">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </span>
+          </button>
+
+          <button class="ref-card" data-doc="preapproval">
+            <div class="ref-card__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="ref-card__title">Pre-approval letter</p>
+              <p class="ref-card__meta">Issued Apr 18 · PDF · valid 90 days</p>
+            </div>
+            <span class="ref-card__action">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </span>
+          </button>
+
+          <button class="ref-card" data-doc="initial-1003">
+            <div class="ref-card__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="ref-card__title">Initial 1003 application copy</p>
+              <p class="ref-card__meta">Filed Apr 22 · PDF · 12 pages</p>
+            </div>
+            <span class="ref-card__action">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </span>
+          </button>
+
+          <button class="ref-card" data-doc="rate-lock">
+            <div class="ref-card__icon">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="ref-card__title">Rate lock confirmation</p>
+              <p class="ref-card__meta">Locked Apr 22 · 6.625% · 30-day lock</p>
+            </div>
+            <span class="ref-card__action">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Footnote -->
+      <div class="flex items-center gap-3 text-[12px] text-[var(--text-muted)]">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span>Bank-grade encryption · We never sell your data · Equal Housing Lender</span>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============================== DOC DETAIL SLIDE-OVER ============================== -->
+<div class="slide-overlay" id="doc-overlay"></div>
+<aside class="slide-panel" id="doc-panel" role="dialog" aria-label="Document detail">
+  <header class="slide-header">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex-1 min-w-0">
+        <h2 class="font-display text-[22px] font-medium leading-tight" id="doc-title">W-2 (2023)</h2>
+        <p class="font-mono text-[11.5px] text-[var(--text-muted)] mt-1.5" id="doc-sub">w2_2023_tldev.pdf · 318 KB · uploaded Apr 24, 2026</p>
+      </div>
+      <button class="aria-icon-btn" id="doc-close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="slide-body">
+
+    <div class="mb-6">
+      <p class="so-label">Status</p>
+      <span class="status-pill status-pill-review">
+        <span class="status-pill__dot"></span> In Review · awaiting Sarah
+      </span>
+    </div>
+
+    <div class="mb-6">
+      <p class="so-label">Preview</p>
+      <div class="preview-pane">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-faint);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p class="preview-pane__filename" id="doc-preview-name">w2_2023_tldev.pdf</p>
+        <p class="preview-pane__size">318 KB · 1 page · click to open</p>
+      </div>
+    </div>
+
+    <div class="mb-6">
+      <p class="so-label flex items-center gap-1.5">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="color: var(--gold);"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+        Aria's Extraction
+      </p>
+      <div class="extraction-detail">
+        <div class="extraction-detail__row">
+          <span class="extraction-detail__key">Employer</span>
+          <span class="extraction-detail__value">TL Development LLC <svg class="icon extraction-detail__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        </div>
+        <div class="extraction-detail__row">
+          <span class="extraction-detail__key">EIN</span>
+          <span class="extraction-detail__value">XX-XXXXX42</span>
+        </div>
+        <div class="extraction-detail__row">
+          <span class="extraction-detail__key">Box 1 — Wages, tips</span>
+          <span class="extraction-detail__value">$222,000.00 <svg class="icon extraction-detail__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        </div>
+        <div class="extraction-detail__row">
+          <span class="extraction-detail__key">Box 2 — Federal income tax</span>
+          <span class="extraction-detail__value">$48,840.00</span>
+        </div>
+        <div class="extraction-detail__row">
+          <span class="extraction-detail__key">Box 3 — Social security wages</span>
+          <span class="extraction-detail__value">$168,600.00</span>
+        </div>
+        <div class="extraction-detail__row">
+          <span class="extraction-detail__key">Tax year</span>
+          <span class="extraction-detail__value">2023 <svg class="icon extraction-detail__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+        </div>
+        <div class="extraction-detail__row">
+          <span class="extraction-detail__key" style="font-size: 10.5px;">Cross-checked vs. application</span>
+          <span class="extraction-detail__value" style="color: var(--success); font-size: 12.5px;">All fields match</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="ask-aria-cta mb-6" data-aria-trigger>
+      <span class="ask-aria-icon" style="width:36px;height:36px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+      </span>
+      <div class="flex-1 min-w-0">
+        <p class="text-[13.5px] font-semibold leading-tight m-0">Ask Aria about this document</p>
+        <p class="text-[12px] text-[var(--text-secondary)] m-0 mt-0.5">"Why does my W-2 matter?" · "Is this format okay?"</p>
+      </div>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+
+    <div class="mb-4">
+      <p class="so-label">Activity</p>
+      <div class="timeline">
+        <div class="timeline__item">
+          <div class="timeline__dot timeline__dot--gold">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+          </div>
+          <div class="flex-1">
+            <p class="timeline__title">Aria extracted 6 fields and matched 3 to your application</p>
+            <p class="timeline__time">Apr 24, 2026 · 2:14 PM EDT</p>
+          </div>
+        </div>
+        <div class="timeline__item">
+          <div class="timeline__dot">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div class="flex-1">
+            <p class="timeline__title">You uploaded w2_2023_tldev.pdf</p>
+            <p class="timeline__time">Apr 24, 2026 · 2:13 PM EDT</p>
+          </div>
+        </div>
+        <div class="timeline__item">
+          <div class="timeline__dot timeline__dot--success">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="flex-1">
+            <p class="timeline__title">Sarah requested a 2023 W-2</p>
+            <p class="timeline__time">Apr 22, 2026 · 10:42 AM EDT</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+<!-- ============================== ARIA AI ASSISTANT ============================== -->
+<button type="button" class="aria-fab" id="aria-fab" data-aria-trigger aria-label="Ask Aria">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/>
+    <circle cx="19" cy="5" r="1.5" opacity="0.7"/>
+    <circle cx="5" cy="19" r="1" opacity="0.5"/>
+  </svg>
+  <span class="aria-fab-label">Ask Aria</span>
+</button>
+
+<div class="slide-overlay" id="aria-overlay"></div>
+
+<aside class="slide-panel slide-panel--aria" id="aria-panel" role="dialog" aria-label="Aria AI Assistant">
+  <header class="slide-header">
+    <div class="flex items-center gap-3">
+      <div class="seal" style="width:42px;height:42px;font-size:16px;font-family:'Fraunces',serif;">A</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-display text-[18px] font-medium leading-none">Aria</span>
+          <span class="chip text-[9.5px] py-0 px-2" style="background: var(--brand-soft); color: var(--brand); border-color: transparent;">
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+            Online
+          </span>
+        </div>
+        <div class="text-[11.5px] text-[var(--text-muted)] mt-1">AI loan assistant · Loan file + Agency guidelines</div>
+      </div>
+      <button type="button" id="aria-close" class="aria-icon-btn" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center gap-1.5 mt-3">
+      <span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        Your loan file
+      </span>
+      <span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        FNMA · FHLMC · FHA · VA
+      </span>
+    </div>
+  </header>
+
+  <div class="slide-body" id="aria-body"></div>
+
+  <footer class="slide-footer">
+    <div class="flex flex-wrap gap-1.5 mb-2.5" id="aria-suggestions"></div>
+    <form id="aria-form">
+      <div class="aria-input-row">
+        <textarea id="aria-input" class="aria-input" rows="1" placeholder="Ask anything about your documents..."></textarea>
+        <button type="button" class="aria-icon-btn" title="Voice input" aria-label="Voice">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button type="submit" id="aria-send" class="aria-icon-btn aria-send-btn" title="Send" aria-label="Send" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+    </form>
+    <div class="text-[10.5px] text-[var(--text-muted)] mt-2.5 text-center leading-relaxed">
+      Aria can make mistakes. For final decisions, Sarah is your source of truth.
+    </div>
+  </footer>
+</aside>
+
+<script>
+  /* ============================== Filter tabs ============================== */
+  const tabs = document.querySelectorAll('.filter-tab');
+  const sections = document.querySelectorAll('section[data-section]');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('is-active'));
+      tab.classList.add('is-active');
+      const filter = tab.dataset.filter;
+      sections.forEach(s => {
+        if (filter === 'all') s.classList.remove('hidden');
+        else s.classList.toggle('hidden', s.dataset.section !== filter);
+      });
+    });
+  });
+
+  /* ============================== Doc detail slide-over ============================== */
+  const docOverlay = document.getElementById('doc-overlay');
+  const docPanel = document.getElementById('doc-panel');
+  const docTitle = document.getElementById('doc-title');
+  const docSub = document.getElementById('doc-sub');
+  const docPreviewName = document.getElementById('doc-preview-name');
+  const docClose = document.getElementById('doc-close');
+
+  const DOC_INFO = {
+    'paystubs':         ['Paystubs (last 30 days)',          'Awaiting upload · 2 documents needed',                'paystubs_request.pdf'],
+    'bankstmts':        ['Bank statements (last 60 days)',   'Awaiting upload · Truist ending 2841',                'bank_statements_request.pdf'],
+    'disclosures':      ['Initial disclosure package',       '9 documents · 0 of 9 signed',                          'disclosure_packet.pdf'],
+    'w2-2023':          ['W-2 (2023)',                       'w2_2023_tldev.pdf · 318 KB · uploaded Apr 24, 2026',   'w2_2023_tldev.pdf'],
+    'gift-letter':      ['Gift letter from R. & L. Loss',    'gift_letter_signed.pdf · 124 KB · Apr 23, 2026',       'gift_letter_signed.pdf'],
+    'tax-2022':         ['Tax returns — 2022',               '1040 + Schedules · cleared Apr 22, 2026',              'taxes_2022.pdf'],
+    'tax-2023':         ['Tax returns — 2023',               '1040 + Schedules · cleared Apr 22, 2026',              'taxes_2023.pdf'],
+    'dl':               ["Driver's license",                 'SC issued · expires 2028 · cleared Apr 21, 2026',      'drivers_license.jpg'],
+    'app-1003':         ['Loan application (signed)',        'URLA 1003 · 9 sections · cleared Apr 22, 2026',        '1003_signed.pdf'],
+    'voided-check':     ['Voided check',                     'Truist · ACH verification · cleared Apr 21, 2026',     'voided_check.jpg'],
+    'ho-insurance':     ['Homeowners insurance quote',       'State Farm · $1,840/yr · cleared Apr 23, 2026',        'ho_insurance_quote.pdf'],
+    'purchase-contract':['Purchase contract',                'Fully executed · $950,000 · cleared Apr 18, 2026',     'purchase_contract.pdf'],
+    'emd':              ['Earnest money deposit',            '$5,000 held in escrow · cleared Apr 19, 2026',         'emd_receipt.pdf'],
+    'le':               ['Loan Estimate',                    'Issued Apr 22, 2026 · 6 pages',                        'loan_estimate.pdf'],
+    'preapproval':      ['Pre-approval letter',              'Issued Apr 18, 2026 · valid 90 days',                  'preapproval_letter.pdf'],
+    'initial-1003':     ['Initial 1003 application copy',    'Filed Apr 22, 2026 · 12 pages',                        '1003_initial.pdf'],
+    'rate-lock':        ['Rate lock confirmation',           'Locked Apr 22, 2026 · 6.625% · 30-day lock',           'rate_lock_confirmation.pdf'],
+  };
+
+  function openDocPanel(docId) {
+    const info = DOC_INFO[docId];
+    if (info) {
+      docTitle.textContent = info[0];
+      docSub.textContent   = info[1];
+      docPreviewName.textContent = info[2];
+    }
+    docOverlay.classList.add('is-open');
+    docPanel.classList.add('is-open');
+  }
+  function closeDocPanel() {
+    docOverlay.classList.remove('is-open');
+    docPanel.classList.remove('is-open');
+  }
+
+  document.querySelectorAll('[data-doc]').forEach(el => {
+    el.addEventListener('click', e => {
+      // Don't trigger when clicking interactive sub-elements
+      if (e.target.closest('.upload-cta-btn, .btn, .ai-hint__action, [data-aria-trigger]')) return;
+      openDocPanel(el.dataset.doc);
+    });
+  });
+  docClose.addEventListener('click', closeDocPanel);
+  docOverlay.addEventListener('click', closeDocPanel);
+
+  /* ============================== Drag-drop visual ============================== */
+  document.querySelectorAll('.upload-zone').forEach(zone => {
+    ['dragenter','dragover'].forEach(evt => {
+      zone.addEventListener(evt, e => { e.preventDefault(); zone.style.borderColor = 'var(--brand)'; zone.style.background = 'var(--brand-tint)'; });
+    });
+    ['dragleave','drop'].forEach(evt => {
+      zone.addEventListener(evt, e => { e.preventDefault(); zone.style.borderColor = ''; zone.style.background = ''; });
+    });
+  });
+
+  /* ============================== ARIA ============================== */
+  const ARIA_RESPONSES = {
+    paystub: {
+      html: `<p>Acceptable formats for your paystubs:</p>
+             <ul>
+               <li><strong>PDF download</strong> from your payroll portal — best option, fastest verification</li>
+               <li><strong>Photo or scan</strong> showing all four corners, no cropping</li>
+               <li><strong>Both stubs together</strong> if your portal exports them as one file</li>
+             </ul>
+             <p>What I'll check the moment you upload: gross YTD matches your W-2, employer name matches your application, and the dates are within the last 30 days. If anything's off, I'll tell you before Sarah sees it.</p>`,
+      sources: ['FNMA Selling Guide B3-3.1-02', 'Your loan file'],
+      followups: ['Can I upload a screenshot?', 'What if I just got paid but the stub isn\'t available yet?', 'Why two stubs?']
+    },
+    documents: {
+      html: `<p>Here's what's outstanding on your file right now:</p>
+             <ul>
+               <li><strong>Two most recent paystubs</strong> from TL Development</li>
+               <li><strong>2-month bank statements</strong> from your Truist checking</li>
+               <li><strong>Initial disclosure package</strong> — 9 docs, awaits your eSign</li>
+             </ul>
+             <p>Once those come in I'll auto-classify and extract every field, then queue them for Sarah's review. You're in great shape on everything else.</p>`,
+      sources: ['Your loan file', 'Perennia document checklist'],
+      followups: ['Why do you need 2 months of statements?', 'Can I connect Truist instead?', 'How long does verification take?']
+    },
+    extraction: {
+      html: `<p>When you upload a document I do four things in about 30 seconds:</p>
+             <ul>
+               <li><strong>Classify it</strong> — paystub, W-2, bank statement, etc.</li>
+               <li><strong>Extract every field</strong> — wages, employer, account numbers, balances</li>
+               <li><strong>Cross-check</strong> against your application — does the income match? Does the employer match?</li>
+               <li><strong>Flag discrepancies</strong> for you and Sarah before the underwriter sees them</li>
+             </ul>
+             <p>Everything is encrypted with AES-256. Your data never leaves Perennia's environment.</p>`,
+      sources: ['Perennia Smart Docs documentation', 'GLBA compliance'],
+      followups: ['What if Aria gets a number wrong?', 'Can I correct an extraction?', 'Is OCR ever wrong?']
+    },
+    default: {
+      html: `<p>I can help with anything about the documents on your file — what's needed, why it's needed, what format works, and what I'll do once you upload it.</p>
+             <p>Some of the things people ask most:</p>`,
+      sources: ['Your loan file'],
+      followups: ['What documents do I still owe?', 'How does Aria read my docs?', 'Why do you need a gift letter?']
+    }
+  };
+
+  function matchAriaResponse(text) {
+    const t = text.toLowerCase();
+    if (/paystub|pay stub|format|screenshot|acceptable/.test(t)) return ARIA_RESPONSES.paystub;
+    if (/document|upload|missing|owe|what.*need/.test(t)) return ARIA_RESPONSES.documents;
+    if (/aria.*read|extract|smart docs|ocr|classify/.test(t)) return ARIA_RESPONSES.extraction;
+    return ARIA_RESPONSES.default;
+  }
+
+  const ariaState = {
+    open: false,
+    thinking: false,
+    messages: [{
+      role: 'aria',
+      html: `<p>Hi Timothy. I'm <strong>Aria</strong> — your AI loan assistant.</p>
+             <p>I can answer questions about any document on your file: what's needed, why it's needed, and what format works best. I'll also tell you the moment something looks off after you upload.</p>
+             <p>What's on your mind?</p>`,
+      sources: ['Your loan file (PRN-2026-04881)']
+    }],
+    suggestions: ['What documents do I still owe?', 'How does Aria read my docs?', 'What format should my paystubs be in?']
+  };
+
+  function ariaSourceChip(s) {
+    return `<span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      ${s}
+    </span>`;
+  }
+
+  function renderAriaConversation() {
+    const body = document.getElementById('aria-body');
+    if (!body) return;
+    let html = ariaState.messages.map(m => {
+      if (m.role === 'aria') {
+        const sources = m.sources && m.sources.length
+          ? `<div class="mt-2.5 pt-2.5 border-t border-dashed border-[var(--border)] flex flex-wrap gap-1.5">
+               <div class="text-[9.5px] uppercase tracking-wider text-[var(--text-muted)] font-semibold w-full mb-0.5">Sources</div>
+               ${m.sources.map(ariaSourceChip).join('')}
+             </div>` : '';
+        return `<div class="aria-msg-row is-aria">
+          <div class="seal" style="width:28px;height:28px;font-size:11px;font-family:'Fraunces',serif;align-self:flex-start;">A</div>
+          <div class="aria-msg-bubble">${m.html}${sources}</div>
+        </div>`;
+      }
+      return `<div class="aria-msg-row is-user"><div class="aria-msg-bubble">${m.html}</div></div>`;
+    }).join('');
+
+    if (ariaState.thinking) {
+      html += `<div class="aria-msg-row is-aria">
+        <div class="seal" style="width:28px;height:28px;font-size:11px;font-family:'Fraunces',serif;align-self:flex-start;">A</div>
+        <div class="aria-typing"><span class="aria-typing-dot"></span><span class="aria-typing-dot"></span><span class="aria-typing-dot"></span></div>
+      </div>`;
+    }
+    body.innerHTML = html;
+    body.scrollTop = body.scrollHeight;
+
+    const sug = document.getElementById('aria-suggestions');
+    if (ariaState.suggestions && ariaState.suggestions.length && !ariaState.thinking) {
+      sug.style.display = 'flex';
+      sug.innerHTML = ariaState.suggestions.map(s => `
+        <button type="button" class="px-3 py-1.5 rounded-full text-[12px] font-medium bg-[var(--bg-page)] border border-[var(--border-strong)] text-[var(--text-primary)] hover:border-[var(--brand)] hover:bg-[var(--brand-tint)] transition" data-suggestion>${s}</button>
+      `).join('');
+      sug.querySelectorAll('[data-suggestion]').forEach((btn, i) => {
+        btn.addEventListener('click', () => sendAriaMessage(ariaState.suggestions[i]));
+      });
+    } else {
+      sug.style.display = 'none';
+      sug.innerHTML = '';
+    }
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function sendAriaMessage(text) {
+    const t = (text || '').trim();
+    if (!t || ariaState.thinking) return;
+    ariaState.messages.push({ role: 'user', html: escapeHtml(t) });
+    ariaState.suggestions = [];
+    ariaState.thinking = true;
+    const input = document.getElementById('aria-input');
+    if (input) { input.value = ''; input.style.height = 'auto'; }
+    document.getElementById('aria-send').disabled = true;
+    renderAriaConversation();
+
+    setTimeout(() => {
+      const resp = matchAriaResponse(t);
+      ariaState.messages.push({ role: 'aria', html: resp.html, sources: resp.sources });
+      ariaState.suggestions = resp.followups || [];
+      ariaState.thinking = false;
+      renderAriaConversation();
+    }, 900 + Math.random() * 700);
+  }
+
+  function openAria() {
+    if (ariaState.open) return;
+    ariaState.open = true;
+    document.getElementById('aria-overlay').classList.add('is-open');
+    document.getElementById('aria-panel').classList.add('is-open');
+    document.getElementById('aria-fab').classList.add('is-hidden');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => document.getElementById('aria-input')?.focus(), 380);
+  }
+  function closeAria() {
+    if (!ariaState.open) return;
+    ariaState.open = false;
+    document.getElementById('aria-overlay').classList.remove('is-open');
+    document.getElementById('aria-panel').classList.remove('is-open');
+    document.getElementById('aria-fab').classList.remove('is-hidden');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-aria-trigger]')) { e.preventDefault(); openAria(); }
+  });
+  document.getElementById('aria-overlay').addEventListener('click', closeAria);
+  document.getElementById('aria-close').addEventListener('click', closeAria);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (ariaState.open) closeAria();
+      else if (docPanel.classList.contains('is-open')) closeDocPanel();
+    }
+  });
+  document.getElementById('aria-form').addEventListener('submit', e => {
+    e.preventDefault();
+    sendAriaMessage(document.getElementById('aria-input').value);
+  });
+
+  const ariaInput = document.getElementById('aria-input');
+  const ariaSendBtn = document.getElementById('aria-send');
+  ariaInput.addEventListener('input', () => {
+    ariaSendBtn.disabled = !ariaInput.value.trim() || ariaState.thinking;
+    ariaInput.style.height = 'auto';
+    ariaInput.style.height = Math.min(ariaInput.scrollHeight, 120) + 'px';
+  });
+  ariaInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendAriaMessage(ariaInput.value);
+    }
+  });
+
+  renderAriaConversation();
+</script>
+
+</body>
+</html>

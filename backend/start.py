@@ -189,7 +189,7 @@ def main():
         "--port", port
     ])
 
-ALLOWED_WORKERS = {"team_chat_bot"}
+ALLOWED_WORKERS = {"team_chat_bot", "voice_agent"}
 
 if __name__ == "__main__":
     worker_mode = os.environ.get("WORKER_MODE", "")
@@ -199,6 +199,13 @@ if __name__ == "__main__":
                   f"allowed: {ALLOWED_WORKERS}", flush=True)
             sys.exit(1)
         print(f"START.PY: WORKER_MODE={worker_mode}", flush=True)
-        os.execvp(sys.executable, [sys.executable, "-m", f"workers.{worker_mode}"])
+        if worker_mode == "voice_agent":
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            os.chdir(script_dir)
+            env = os.environ.copy()
+            env["PYTHONPATH"] = script_dir + os.pathsep + env.get("PYTHONPATH", "")
+            os.execvpe(sys.executable, [sys.executable, "-m", "aria.voice_agent", "start"], env)
+        else:
+            os.execvp(sys.executable, [sys.executable, "-m", f"workers.{worker_mode}"])
     else:
         main()

@@ -133,11 +133,11 @@ class InMemoryRateLimiter:
 # Per-tenant rate limit quotas by subscription tier (PERF-004)
 # These define the TOTAL requests/min allowed for an entire organization
 TENANT_TIER_LIMITS = {
-    'lead_management': {'requests_per_min': 200, 'ai_per_min': 20, 'burst_multiplier': 1.5},
-    'lead_and_active': {'requests_per_min': 500, 'ai_per_min': 50, 'burst_multiplier': 1.5},
+    'lead_management': {'requests_per_min': 200, 'ai_per_min': 60, 'burst_multiplier': 1.5},
+    'lead_and_active': {'requests_per_min': 500, 'ai_per_min': 120, 'burst_multiplier': 1.5},
     'full_pipeline': {'requests_per_min': 2000, 'ai_per_min': 200, 'burst_multiplier': 2.0},
     # Fallback for orgs without a recognized tier
-    'default': {'requests_per_min': 120, 'ai_per_min': 10, 'burst_multiplier': 1.0},
+    'default': {'requests_per_min': 200, 'ai_per_min': 60, 'burst_multiplier': 1.0},
 }
 
 

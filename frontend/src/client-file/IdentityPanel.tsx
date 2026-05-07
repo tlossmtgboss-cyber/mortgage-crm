@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { Pill } from "./primitives/Pill";
+import { ClickablePhone } from "../components/ClickableContact";
 import { useSetLifecycleStage, useSetStickyNote } from "./hooks";
 import { LIFECYCLE_STAGE_LABEL, LIFECYCLE_STAGE_ORDER } from "./format";
 import type { ClientFile, LifecycleStage } from "./types";
@@ -49,7 +50,7 @@ export function IdentityPanel({ client }: Props) {
       <div className="pf-cf-identity__contact">
         {client.primary_phone && (
           <div className="pf-cf-identity__contact-row">
-            <a href={`tel:${client.primary_phone}`}>{formatPhone(client.primary_phone)}</a>
+            <ClickablePhone phone={client.primary_phone} />
           </div>
         )}
         {client.primary_email && (

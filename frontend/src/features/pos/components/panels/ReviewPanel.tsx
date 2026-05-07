@@ -102,8 +102,9 @@ export const ReviewPanel: React.FC<PanelProps> = ({
       return [{ path: '', message: 'Section not started', fieldName: 'Not started' }];
     }
     const result = validateSection(key, sectionData);
-    if (result.ok) return [];
-    return result.issues.map(issue => ({
+    if (result.ok === true) return [];
+    const { issues } = result;
+    return issues.map(issue => ({
       path: issue.path,
       message: issue.message,
       fieldName: friendlyFieldName(issue.path),

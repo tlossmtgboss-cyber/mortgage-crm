@@ -42,7 +42,7 @@ export function maskSSN(value) {
  * Mask a date of birth, showing only the year.
  * Accepts ISO ("1990-03-15"), US format ("03/15/1990"), or Date objects.
  * @param {string|Date|null|undefined} value
- * @returns {string} e.g. "**/**/1990"
+ * @returns {string} masked DOB showing only year
  */
 export function maskDOB(value) {
   if (value == null || value === '') return EMPTY;

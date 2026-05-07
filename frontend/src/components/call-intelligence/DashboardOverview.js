@@ -10,6 +10,108 @@
 
 import React from 'react';
 
+const CI_AGENTS = [
+  {
+    key: 'identity',
+    label: 'Identity',
+    icon: '\u{1F464}',
+    color: '#60A5FA',
+    model: 'haiku',
+    category: 'extraction',
+    fields: ['First Name', 'Last Name', 'SSN Last 4', 'DOB', 'Email', 'Phone', 'Marital Status', 'Citizenship'],
+  },
+  {
+    key: 'employment',
+    label: 'Employment',
+    icon: '\u{1F4BC}',
+    color: '#818CF8',
+    model: 'haiku',
+    category: 'extraction',
+    fields: ['Employer', 'Job Title', 'Years at Job', 'Type', 'Self-Employed', 'Industry', 'Previous Employer'],
+  },
+  {
+    key: 'property',
+    label: 'Property',
+    icon: '\u{1F3E0}',
+    color: '#34D399',
+    model: 'haiku',
+    category: 'extraction',
+    fields: ['Address', 'City', 'State', 'ZIP', 'Type', 'Purchase Price', 'Down Payment', 'Current Housing'],
+  },
+  {
+    key: 'financial',
+    label: 'Financial',
+    icon: '\u{1F4B0}',
+    color: '#FBBF24',
+    model: 'sonnet',
+    category: 'extraction',
+    fields: ['Salary', 'Bonus', 'Commission', 'Rental Income', 'Checking', 'Savings', 'Retirement', 'Debts'],
+  },
+  {
+    key: 'compliance',
+    label: 'Compliance',
+    icon: '\u{2696}\u{FE0F}',
+    color: '#F87171',
+    model: 'sonnet',
+    category: 'extraction',
+    fields: ['Bankruptcy', 'Foreclosure', 'Judgments', 'Alimony', 'Primary Residence', 'First-Time Buyer'],
+  },
+  {
+    key: 'intent',
+    label: 'Intent',
+    icon: '\u{1F3AF}',
+    color: '#FB923C',
+    model: 'haiku',
+    category: 'extraction',
+    fields: ['Loan Purpose', 'Loan Type', 'Rate Pref', 'Timeline', 'Urgency', 'Realtor', 'Call Outcome'],
+  },
+  {
+    key: 'transcription',
+    label: 'Live Transcription',
+    icon: '\u{1F399}\u{FE0F}',
+    color: '#94A3B8',
+    model: 'deepgram',
+    category: 'live',
+    fields: ['Real-time STT', 'Speaker Diarization', 'Timestamps'],
+  },
+  {
+    key: 'sentiment',
+    label: 'Sentiment',
+    icon: '\u{1F4CA}',
+    color: '#A78BFA',
+    model: 'sonnet',
+    category: 'live',
+    fields: ['Caller Mood', 'Engagement', 'Frustration', 'Rapport Score'],
+  },
+  {
+    key: 'objection',
+    label: 'Objection Detection',
+    icon: '\u{1F6A9}',
+    color: '#FB7185',
+    model: 'haiku',
+    category: 'live',
+    fields: ['Rate Objections', 'Fee Concerns', 'Timing Hesitation', 'Competitor Mention'],
+  },
+  {
+    key: 'compliance_monitor',
+    label: 'Compliance Monitor',
+    icon: '\u{1F6E1}\u{FE0F}',
+    color: '#F472B6',
+    model: 'sonnet',
+    category: 'live',
+    fields: ['TRID', 'Fair Lending', 'RESPA', 'Disclosure Triggers'],
+  },
+  {
+    key: 'coaching',
+    label: 'Coaching',
+    icon: '\u{1F4AC}',
+    color: '#2DD4BF',
+    model: 'sonnet',
+    category: 'live',
+    fields: ['Talk-Time Ratio', 'Question Prompts', 'Closing Techniques', 'Discovery Gaps'],
+  },
+];
+
 const DashboardOverview = ({
   metrics,
   pendingSessions,
@@ -132,6 +234,100 @@ const DashboardOverview = ({
             <div className="metric-value">{metrics.conversion_rate}%</div>
             <div className="metric-label">Conversion Rate</div>
           </div>
+        </div>
+      </div>
+
+      {/* AI Agent Grid */}
+      <div className="agent-quadrant-section">
+        <div className="section-header">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            AI Agents
+          </h3>
+          <span className="agent-quad-subtitle">
+            {activeSessions.length > 0
+              ? `${activeSessions.length} active session${activeSessions.length > 1 ? 's' : ''} \u{2014} 11 agents running`
+              : '11 agents ready'}
+          </span>
+        </div>
+
+        <div className="agent-category-label">Extraction Agents</div>
+        <div className="agent-quadrant-grid">
+          {CI_AGENTS.filter(a => a.category === 'extraction').map(agent => {
+            const isActive = activeSessions.length > 0;
+            return (
+              <div
+                className={`agent-quad ${isActive ? 'agent-quad--active' : ''}`}
+                key={agent.key}
+              >
+                <div className="agent-quad__header">
+                  <span className="agent-quad__icon">{agent.icon}</span>
+                  <span className="agent-quad__label" style={{ color: agent.color }}>{agent.label}</span>
+                  <span className={`agent-quad__status ${isActive ? 'agent-quad__status--active' : 'agent-quad__status--idle'}`} />
+                </div>
+                <div className="agent-quad__model">
+                  {agent.model}
+                </div>
+                <div className="agent-quad__fields">
+                  {agent.fields.map(field => (
+                    <span className="agent-quad__field" key={field}>{field}</span>
+                  ))}
+                </div>
+                <div className="agent-quad__footer">
+                  {isActive ? (
+                    <span className="agent-quad__live">
+                      <span className="agent-quad__live-dot" />
+                      Extracting
+                    </span>
+                  ) : (
+                    <span className="agent-quad__stat">{agent.fields.length} fields</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="agent-category-label">Live Analysis Agents</div>
+        <div className="agent-quadrant-grid">
+          {CI_AGENTS.filter(a => a.category === 'live').map(agent => {
+            const isActive = activeSessions.length > 0;
+            return (
+              <div
+                className={`agent-quad ${isActive ? 'agent-quad--active' : ''}`}
+                key={agent.key}
+              >
+                <div className="agent-quad__header">
+                  <span className="agent-quad__icon">{agent.icon}</span>
+                  <span className="agent-quad__label" style={{ color: agent.color }}>{agent.label}</span>
+                  <span className={`agent-quad__status ${isActive ? 'agent-quad__status--active' : 'agent-quad__status--idle'}`} />
+                </div>
+                <div className="agent-quad__model">
+                  {agent.model}
+                </div>
+                <div className="agent-quad__fields">
+                  {agent.fields.map(field => (
+                    <span className="agent-quad__field" key={field}>{field}</span>
+                  ))}
+                </div>
+                <div className="agent-quad__footer">
+                  {isActive ? (
+                    <span className="agent-quad__live">
+                      <span className="agent-quad__live-dot" />
+                      Monitoring
+                    </span>
+                  ) : (
+                    <span className="agent-quad__stat">Standby</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

@@ -133,6 +133,12 @@ export function streamMessage(message, sessionId = null, { onChunk, onDone, onEr
         }
       }
 
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '2', 10);
+        await new Promise(r => setTimeout(r, retryAfter * 1000));
+        res = await doFetch(token);
+      }
+
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.detail || `HTTP ${res.status}`);

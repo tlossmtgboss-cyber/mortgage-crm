@@ -13,6 +13,7 @@ import EscalationModal from '../components/EscalationModal';
 import EmploymentTab from '../components/EmploymentTab';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
+import { ClickablePhone } from '../components/ClickableContact';
 import CalendarSidebar from '../components/CalendarSidebar';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import SmartDocumentUpload from '../components/smart-docs/SmartDocumentUpload';
@@ -2767,7 +2768,7 @@ function LoanDetail() {
                     <div style={{ fontSize: '12px', color: '#666' }}>{member.role}</div>
                     {member.company && <div style={{ fontSize: '11px', color: '#888' }}>{member.company}</div>}
                     {member.email && <div style={{ fontSize: '12px', color: '#2563eb' }}>{member.email}</div>}
-                    {member.phone && <div style={{ fontSize: '12px', color: '#666' }}>{member.phone}</div>}
+                    {member.phone && <div style={{ fontSize: '12px' }}><ClickablePhone phone={member.phone} /></div>}
                   </div>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {!member.is_employee && member.referral_partner_id && (
@@ -3238,7 +3239,7 @@ function LoanDetail() {
                           <div style={{ fontSize: '13px', color: '#666' }}>
                             {contact.email && <span>{contact.email}</span>}
                             {contact.email && contact.phone && <span> • </span>}
-                            {contact.phone && <span>{contact.phone}</span>}
+                            {contact.phone && <ClickablePhone phone={contact.phone} />}
                           </div>
                           {contact.notes && <div style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>{contact.notes}</div>}
                         </div>
@@ -3341,7 +3342,7 @@ function LoanDetail() {
                                 <div style={{ fontSize: '12px', color: '#666' }}>
                                   {(result.borrower_email || result.email) && <span>{result.borrower_email || result.email}</span>}
                                   {(result.borrower_email || result.email) && (result.borrower_phone || result.phone) && <span> • </span>}
-                                  {(result.borrower_phone || result.phone) && <span>{result.borrower_phone || result.phone}</span>}
+                                  {(result.borrower_phone || result.phone) && <ClickablePhone phone={result.borrower_phone || result.phone} />}
                                 </div>
                               </div>
                             ))}
@@ -4078,7 +4079,7 @@ function LoanDetail() {
                       <div style={{ fontSize: '12px', color: '#666' }}>
                         {result.email && <span>{result.email}</span>}
                         {result.email && result.phone && <span> • </span>}
-                        {result.phone && <span>{result.phone}</span>}
+                        {result.phone && <ClickablePhone phone={result.phone} />}
                       </div>
                     </div>
                   ))}

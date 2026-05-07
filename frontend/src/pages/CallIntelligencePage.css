@@ -2173,4 +2173,176 @@
   .type-options {
     grid-template-columns: 1fr;
   }
+
+  .agent-quadrant-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* =============================================================================
+   AI Agent Grid — DashboardOverview
+   ============================================================================= */
+
+.agent-quadrant-section {
+  margin-bottom: 24px;
+}
+
+.agent-quadrant-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.agent-quad-subtitle {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.agent-category-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #6b7280;
+  margin: 16px 0 10px;
+  padding-left: 2px;
+}
+
+.agent-category-label:first-of-type {
+  margin-top: 0;
+}
+
+.agent-quadrant-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1200px) {
+  .agent-quadrant-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .agent-quadrant-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.agent-quad {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s;
+  min-height: 140px;
+}
+
+.agent-quad:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.agent-quad--active {
+  border-color: #a7f3d0;
+  background: linear-gradient(135deg, #f0fdf4 0%, #fff 60%);
+}
+
+.agent-quad__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-quad__icon {
+  font-size: 18px;
+}
+
+.agent-quad__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex: 1;
+}
+
+.agent-quad__status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-quad__status--active {
+  background: #22c55e;
+  animation: agent-quad-blink 1s ease-in-out infinite;
+}
+
+.agent-quad__status--idle {
+  background: #d1d5db;
+}
+
+@keyframes agent-quad-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.agent-quad__model {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+  margin-bottom: 4px;
+}
+
+.agent-quad__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.agent-quad__field {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  padding: 1px 6px;
+  border: 1px solid #f3f4f6;
+  border-radius: 3px;
+}
+
+.agent-quad__footer {
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.agent-quad__live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #16a34a;
+}
+
+.agent-quad__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: agent-quad-blink 1s ease-in-out infinite;
+}
+
+.agent-quad__stat {
+  font-size: 0.75rem;
+  color: #9ca3af;
 }

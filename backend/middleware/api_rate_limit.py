@@ -86,7 +86,7 @@ def _env_int(name: str, default: int) -> int:
 ENABLED = _env_bool("API_RL_ENABLED", True)
 AUTH_RPM = _env_int("API_RL_AUTH_RPM", 300)
 UNAUTH_RPM = _env_int("API_RL_UNAUTH_RPM", 30)
-AI_RPM = _env_int("API_RL_AI_RPM", 30)
+AI_RPM = _env_int("API_RL_AI_RPM", 120)
 SECURITY_RPM = _env_int("API_RL_SECURITY_RPM", 100)
 PIPELINE_RPM = _env_int("API_RL_PIPELINE_RPM", 120)
 MAX_KEYS = _env_int("API_RL_MAX_KEYS", 50_000)

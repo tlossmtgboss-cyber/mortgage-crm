@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ClickablePhone } from '../ClickableContact';
 import './CallDetailPanel.css';
 
 const CallDetailPanel = ({
@@ -90,7 +91,7 @@ const CallDetailPanel = ({
           <div className="detail-info-item">
             <span className="detail-label">Phone</span>
             <span className="detail-value phone-number">
-              <a href={`tel:${task.contact_phone}`}>{task.contact_phone}</a>
+              <ClickablePhone phone={task.contact_phone} />
             </span>
           </div>
           <div className="detail-info-item">

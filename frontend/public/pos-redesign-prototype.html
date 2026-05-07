@@ -1,0 +1,2281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Perennia — Your Loan Application</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-page: #FAF7F1;
+    --bg-surface: #FFFFFF;
+    --bg-sidebar: #F6F2EA;
+    --bg-elevated: #F2EDE2;
+    --bg-soft: #FBF8F2;
+    --border: #ECE6D8;
+    --border-strong: #D8D0BD;
+    --border-active: #1F3D2E;
+    --text-primary: #1A1F1B;
+    --text-secondary: #4F554E;
+    --text-muted: #8B8A7E;
+    --text-faint: #B5B2A4;
+    --brand: #1F3D2E;
+    --brand-hover: #2A4F3D;
+    --brand-soft: #E5EDE6;
+    --brand-tint: #EFF3EE;
+    --gold: #B8924A;
+    --gold-soft: #F5EDD9;
+    --success: #2D7A52;
+    --warn: #B25F18;
+    --danger: #9B2C2C;
+  }
+
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+  html, body {
+    font-family: 'Geist', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-feature-settings: 'ss01', 'cv01', 'cv11';
+    letter-spacing: -0.005em;
+  }
+
+  .font-display { font-family: 'Fraunces', Georgia, serif; font-feature-settings: 'ss01'; letter-spacing: -0.018em; }
+  .font-mono    { font-family: 'Geist Mono', ui-monospace, monospace; }
+
+  /* Subtle paper grain on page background */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: radial-gradient(rgba(31,61,46,.025) 1px, transparent 1px);
+    background-size: 4px 4px;
+    opacity: .6;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #DDD6C5; border-radius: 8px; border: 2px solid var(--bg-page); }
+  ::-webkit-scrollbar-thumb:hover { background: #C7BFA9; }
+
+  /* ================== ARIA AI ASSISTANT ================== */
+  .ask-aria-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 9px 12px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--brand-tint) 0%, #F5EDD9 100%);
+    border: 1px solid rgba(31,61,46,.12);
+    cursor: pointer; transition: all .2s; font-family: inherit;
+    text-align: left;
+  }
+  .ask-aria-btn:hover {
+    border-color: var(--brand);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px -6px rgba(31,61,46,.22);
+  }
+  .ask-aria-icon {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #2E5740, #1F3D2E 60%, #14291F);
+    display: grid; place-items: center; color: #E8DDC0;
+    flex-shrink: 0; box-shadow: inset 0 0 0 1.5px rgba(184,146,74,.4);
+  }
+  .ask-aria-text { flex: 1; min-width: 0; }
+  .ask-aria-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); line-height: 1.2; display:block; }
+  .ask-aria-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; display:block; }
+
+  /* FAB */
+  .aria-fab {
+    position: fixed; bottom: 26px; right: 26px; z-index: 60;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--brand); color: #F5F2E9;
+    display: grid; place-items: center; cursor: pointer; border: none;
+    box-shadow: 0 10px 28px -8px rgba(31,61,46,.45), 0 2px 6px rgba(0,0,0,.08);
+    transition: transform .25s cubic-bezier(.2,.7,.2,1), opacity .2s, background .15s;
+  }
+  .aria-fab:hover { background: var(--brand-hover); transform: scale(1.06); }
+  .aria-fab.is-hidden { transform: scale(0); opacity: 0; pointer-events: none; }
+  .aria-fab::after {
+    content: ''; position: absolute; inset: -2px;
+    border-radius: 50%; border: 2px solid var(--brand);
+    opacity: 0; animation: aria-pulse 2.6s ease-out infinite;
+  }
+  @keyframes aria-pulse {
+    0% { opacity: .55; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.35); }
+  }
+  .aria-fab-label {
+    position: absolute; right: 64px; top: 50%; transform: translateY(-50%);
+    background: var(--text-primary); color: var(--bg-page);
+    padding: 6px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 500;
+    white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity .15s, transform .15s;
+  }
+  .aria-fab:hover .aria-fab-label { opacity: 1; }
+
+  /* Slide-over */
+  .aria-overlay {
+    position: fixed; inset: 0; background: rgba(20,41,31,.22);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+    z-index: 70; opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .aria-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+  .aria-panel {
+    position: fixed; top: 0; right: 0; height: 100vh;
+    width: 460px; max-width: 92vw;
+    background: var(--bg-page); z-index: 80;
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform .4s cubic-bezier(.2,.7,.2,1);
+    box-shadow: -20px 0 60px -20px rgba(0,0,0,.22);
+    border-left: 1px solid var(--border);
+  }
+  .aria-panel.is-open { transform: translateX(0); }
+
+  .aria-panel-header { padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0; }
+  .aria-panel-body { flex: 1; overflow-y: auto; padding: 20px 18px 8px; }
+  .aria-panel-footer { flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg-surface); padding: 12px 16px 14px; }
+
+  .aria-msg-row { display: flex; gap: 10px; margin-bottom: 16px; animation: msgFade .35s cubic-bezier(.2,.7,.2,1); }
+  @keyframes msgFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .aria-msg-row.is-aria { justify-content: flex-start; }
+  .aria-msg-row.is-user { justify-content: flex-end; }
+
+  .aria-msg-bubble {
+    max-width: 84%; padding: 12px 14px;
+    border-radius: 14px; font-size: 13.5px; line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .is-aria .aria-msg-bubble {
+    background: var(--bg-surface); border: 1px solid var(--border);
+    color: var(--text-primary); border-top-left-radius: 4px;
+    position: relative; overflow: hidden;
+  }
+  .is-aria .aria-msg-bubble::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--brand), var(--gold) 75%, transparent);
+    opacity: .55;
+  }
+  .is-user .aria-msg-bubble {
+    background: var(--brand); color: #F5F2E9; border-top-right-radius: 4px;
+  }
+  .aria-msg-bubble p { margin: 0 0 8px; }
+  .aria-msg-bubble p:last-child { margin-bottom: 0; }
+  .aria-msg-bubble ul { margin: 6px 0; padding-left: 18px; }
+  .aria-msg-bubble li { margin: 3px 0; }
+  .aria-msg-bubble strong { font-weight: 600; }
+
+  .aria-sources {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .aria-sources-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); font-weight: 600; width: 100%; margin-bottom: 4px; }
+  .aria-source-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; background: var(--bg-elevated);
+    border-radius: 999px; color: var(--text-secondary);
+    font-size: 11px; font-weight: 500;
+  }
+
+  .aria-typing {
+    display: inline-flex; gap: 4px; padding: 14px 16px;
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: 14px; border-top-left-radius: 4px;
+  }
+  .aria-typing-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+    animation: typing 1.4s ease-in-out infinite;
+  }
+  .aria-typing-dot:nth-child(2) { animation-delay: .15s; }
+  .aria-typing-dot:nth-child(3) { animation-delay: .3s; }
+  @keyframes typing {
+    0%, 60%, 100% { opacity: .3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  .aria-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .aria-suggestion {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 500; font-family: inherit;
+    background: var(--bg-page); border: 1px solid var(--border-strong);
+    color: var(--text-primary); cursor: pointer; transition: all .15s;
+  }
+  .aria-suggestion:hover { border-color: var(--brand); background: var(--brand-tint); }
+
+  .aria-input-row {
+    display: flex; align-items: flex-end; gap: 6px;
+    background: var(--bg-page); border: 1px solid var(--border-strong);
+    border-radius: 14px; padding: 5px 5px 5px 14px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .aria-input-row:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
+  .aria-input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-family: inherit; font-size: 14px; padding: 9px 0;
+    resize: none; max-height: 120px; color: var(--text-primary);
+    line-height: 1.4;
+  }
+  .aria-input::placeholder { color: var(--text-faint); }
+  .aria-icon-btn {
+    width: 36px; height: 36px; display: grid; place-items: center;
+    border-radius: 10px; border: none; cursor: pointer;
+    transition: background .15s, color .15s; background: transparent;
+    color: var(--text-secondary); flex-shrink: 0;
+  }
+  .aria-icon-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+  .aria-send-btn { background: var(--brand); color: #F5F2E9; }
+  .aria-send-btn:hover { background: var(--brand-hover); color: #F5F2E9; }
+  .aria-send-btn:disabled { background: var(--bg-elevated); color: var(--text-faint); cursor: not-allowed; }
+
+  /* Inputs */
+  .field-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .field-input,
+  .field-select {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    font-size: 14.5px;
+    font-family: inherit;
+    color: var(--text-primary);
+    transition: border-color .15s, box-shadow .15s, background .15s;
+    outline: none;
+  }
+  .field-input:focus,
+  .field-select:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-tint);
+  }
+  .field-input::placeholder { color: var(--text-faint); }
+
+  .field-input.is-prefix { padding-left: 36px; }
+  .field-prefix {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); font-size: 14px; pointer-events: none;
+  }
+
+  /* Step rail */
+  .step-row {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .step-row:hover { background: var(--bg-elevated); }
+  .step-row.is-active { background: var(--brand-soft); }
+
+  .step-marker {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-weight: 600; font-size: 14px;
+    transition: all .2s;
+  }
+  .step-marker.is-todo {
+    background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border-strong);
+  }
+  .step-marker.is-active {
+    background: var(--gold-soft); color: #6B4F1A; border: 1px solid var(--gold); font-family: 'Fraunces', serif;
+  }
+  .step-marker.is-done {
+    background: var(--brand); color: white;
+  }
+
+  /* Sidebar nav */
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 12px; border-radius: 8px;
+    color: var(--text-secondary); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: background .12s, color .12s;
+    position: relative;
+  }
+  .nav-item:hover { background: rgba(31,61,46,.06); color: var(--text-primary); }
+  .nav-item.is-active {
+    background: var(--brand);
+    color: #F5F2E9;
+  }
+  .nav-item.is-active .nav-icon { color: #F5F2E9; }
+
+  .nav-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--text-muted); }
+  .nav-item:hover .nav-icon { color: var(--text-primary); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 22px;
+    border-radius: 8px;
+    font-weight: 500; font-size: 14px;
+    cursor: pointer; transition: all .15s;
+    border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: var(--brand); color: #F5F2E9;
+  }
+  .btn-primary:hover { background: var(--brand-hover); }
+  .btn-secondary {
+    background: transparent; color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+  .btn-secondary:hover { background: var(--bg-elevated); }
+  .btn-ghost {
+    background: transparent; color: var(--text-secondary);
+  }
+  .btn-ghost:hover { color: var(--text-primary); }
+
+  /* Summary card cells */
+  .summary-cell {
+    padding: 18px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary-cell:last-child { border-bottom: none; }
+  .summary-label {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 500; margin-bottom: 6px;
+  }
+  .summary-value { font-size: 15px; color: var(--text-primary); font-weight: 500; line-height: 1.45; }
+  .summary-value-muted { color: var(--text-secondary); font-weight: 400; }
+
+  /* Top bar */
+  .topbar-link {
+    font-size: 13px; color: var(--text-secondary); font-weight: 500;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .topbar-link:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+  /* Decorative wax-seal style accent */
+  .seal {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 30%, #2E5740, #1F3D2E 60%, #14291F);
+    display: grid; place-items: center;
+    color: #E8DDC0; font-family: 'Fraunces', serif; font-weight: 600; font-size: 18px;
+    box-shadow: inset 0 0 0 2px rgba(232,221,192,.18), 0 1px 2px rgba(0,0,0,.18);
+    flex-shrink: 0;
+  }
+
+  /* Pill chips */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    background: var(--brand-tint); color: var(--brand);
+    border: 1px solid var(--brand-soft);
+  }
+  .chip-gold { background: var(--gold-soft); color: #6B4F1A; border-color: #E5D4A8; }
+  .chip-neutral { background: var(--bg-elevated); color: var(--text-secondary); border-color: var(--border-strong); }
+
+  /* Step panel transitions */
+  .step-panel { animation: fadeUp .35s cubic-bezier(.2,.7,.2,1); }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Checkbox */
+  .check {
+    appearance: none; -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 4px;
+    background: var(--bg-surface);
+    cursor: pointer; position: relative;
+    transition: all .12s;
+    flex-shrink: 0;
+  }
+  .check:checked {
+    background: var(--brand); border-color: var(--brand);
+  }
+  .check:checked::after {
+    content: ""; position: absolute;
+    left: 5px; top: 1px; width: 5px; height: 10px;
+    border: solid white; border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  /* Radio */
+  .radio-card {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    cursor: pointer;
+    background: var(--bg-surface);
+    transition: all .15s;
+  }
+  .radio-card:hover { border-color: var(--brand); background: var(--brand-tint); }
+  .radio-card.is-selected {
+    border-color: var(--brand);
+    background: var(--brand-tint);
+    box-shadow: 0 0 0 1px var(--brand) inset;
+  }
+  .radio-dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid var(--border-strong);
+    flex-shrink: 0; margin-top: 2px;
+    display: grid; place-items: center;
+    background: var(--bg-surface);
+  }
+  .radio-card.is-selected .radio-dot {
+    border-color: var(--brand);
+  }
+  .radio-card.is-selected .radio-dot::after {
+    content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--brand);
+  }
+
+  /* Progress bar */
+  .progress-track {
+    height: 4px; background: var(--bg-elevated); border-radius: 999px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: var(--brand); border-radius: 999px;
+    transition: width .4s cubic-bezier(.2,.7,.2,1);
+  }
+
+  /* Hairline divider with label */
+  .hairline {
+    display: flex; align-items: center; gap: 16px;
+    color: var(--text-muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500;
+  }
+  .hairline::before, .hairline::after {
+    content: ""; flex: 1; height: 1px; background: var(--border);
+  }
+
+  /* Banner */
+  .banner {
+    background: linear-gradient(180deg, #FBF6E8, #F8F0D8);
+    border: 1px solid #E5D49A;
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex; align-items: flex-start; gap: 14px;
+    color: #6B4F1A;
+  }
+</style>
+</head>
+<body class="relative">
+
+<!-- ============================== TOP BAR ============================== -->
+<header class="relative z-10 bg-[var(--bg-sidebar)] border-b border-[var(--border)]">
+  <div class="flex items-center justify-between px-6 h-[60px]">
+    <div class="flex items-center gap-8">
+      <div class="flex items-center gap-2.5">
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
+          <path d="M16 2 C 9 2 4 8 4 16 C 4 22 8 27 14 28 L 14 14 C 14 11 16 9 19 9 C 22 9 24 11 24 14 C 24 17 22 19 19 19 L 17 19 L 17 28 C 24 27 28 22 28 16 C 28 8 23 2 16 2 Z" fill="#1F3D2E"/>
+          <circle cx="19" cy="14" r="2.5" fill="#B8924A"/>
+        </svg>
+        <span class="font-display text-[20px] font-medium tracking-tight text-[var(--text-primary)]">Perennia</span>
+      </div>
+      <nav class="hidden md:flex items-center gap-1">
+        <span class="topbar-link">Dashboard</span>
+        <span class="topbar-link" style="color: var(--text-primary); background: var(--bg-elevated);">Application</span>
+        <span class="topbar-link">Documents</span>
+        <span class="topbar-link">Resources</span>
+      </nav>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="hidden md:flex items-center gap-2 text-[12px] text-[var(--text-secondary)] font-mono">
+        <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+        <span>Saved · 2 min ago</span>
+      </div>
+      <button class="btn btn-ghost text-[13px]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/>
+        </svg>
+        <span>Save & exit</span>
+      </button>
+      <div class="seal" style="width:36px;height:36px;font-size:14px;">TL</div>
+    </div>
+  </div>
+</header>
+
+<div class="relative z-10 flex" style="min-height: calc(100vh - 60px);">
+
+  <!-- ============================== LEFT SIDEBAR ============================== -->
+  <aside class="w-[260px] flex-shrink-0 bg-[var(--bg-sidebar)] border-r border-[var(--border)] flex flex-col">
+    <div class="p-4">
+      <!-- Loan summary card -->
+      <div class="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl p-4 mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Loan File</span>
+          <span class="chip chip-gold text-[10.5px] py-0.5 px-2">In progress</span>
+        </div>
+        <div class="font-display text-[17px] font-medium leading-tight mb-0.5">Purchase · Primary</div>
+        <div class="font-mono text-[11px] text-[var(--text-muted)]">PRN-2026-04881</div>
+        <div class="mt-3">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] text-[var(--text-secondary)] font-medium">Application</span>
+            <span class="text-[11px] text-[var(--text-secondary)] font-mono" id="sb-progress-text">44%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="sb-progress-fill" style="width: 44%"></div>
+          </div>
+        </div>
+
+        <button type="button" class="ask-aria-btn mt-3.5" data-aria-trigger>
+          <span class="ask-aria-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+          </span>
+          <span class="ask-aria-text">
+            <span class="ask-aria-title">Ask Aria a question</span>
+            <span class="ask-aria-sub">Instant answers, anytime</span>
+          </span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] px-3 mb-2">Your loan</div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Home</span>
+        </div>
+        <div class="nav-item is-active">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+          <span>Application</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Documents</span>
+          <span class="ml-auto chip chip-gold text-[10px] py-0 px-1.5">3</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <span>Tasks</span>
+          <span class="ml-auto text-[11px] font-mono text-[var(--text-muted)]">5</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Messages</span>
+          <span class="ml-auto w-2 h-2 rounded-full bg-[var(--gold)]"></span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>Disclosures</span>
+        </div>
+      </nav>
+
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] px-3 mb-2 mt-6">Tools</div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
+          <span>Calculators</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span>Loan timeline</span>
+        </div>
+        <div class="nav-item">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          <span>Help & support</span>
+        </div>
+      </nav>
+    </div>
+
+    <!-- LO card pinned to bottom -->
+    <div class="mt-auto p-4 border-t border-[var(--border)]">
+      <div class="text-[10.5px] font-medium uppercase tracking-wider text-[var(--text-muted)] mb-2.5">Your loan officer</div>
+      <div class="flex items-center gap-3">
+        <div class="seal" style="width:38px;height:38px;font-size:13px;">SR</div>
+        <div class="min-w-0 flex-1">
+          <div class="text-[13.5px] font-medium leading-tight truncate">Sarah Reyes</div>
+          <div class="text-[11.5px] text-[var(--text-muted)] truncate">NMLS #2014872</div>
+        </div>
+        <button class="btn btn-secondary p-2 rounded-lg" title="Message Sarah">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
+      </div>
+
+      <button type="button" class="ask-aria-btn mt-3" data-aria-trigger>
+        <span class="ask-aria-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/></svg>
+        </span>
+        <span class="ask-aria-text">
+          <span class="ask-aria-title">Or ask Aria</span>
+          <span class="ask-aria-sub">AI answers in seconds · 24/7</span>
+        </span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); flex-shrink: 0;"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============================== MAIN CONTENT ============================== -->
+  <main class="flex-1 min-w-0 px-10 py-10 overflow-x-hidden">
+    <div class="max-w-[1180px] mx-auto">
+
+      <!-- Hero header -->
+      <div class="mb-9">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="chip">URLA · Form 1003</span>
+          <span class="text-[12px] text-[var(--text-muted)]">·</span>
+          <span class="text-[12px] text-[var(--text-muted)]">Estimated time remaining: ~14 minutes</span>
+        </div>
+        <h1 class="font-display text-[40px] leading-[1.05] font-medium tracking-tight mb-2">
+          Welcome back, Timothy.
+        </h1>
+        <p class="text-[16px] text-[var(--text-secondary)] max-w-[640px] leading-relaxed">
+          Let's finish your loan application. Your progress saves automatically — step away anytime and pick up right where you left off.
+        </p>
+      </div>
+
+      <!-- Two-column: step rail + active panel -->
+      <div class="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-8 items-start">
+
+        <!-- LEFT: Step rail -->
+        <div class="bg-[var(--bg-soft)] border border-[var(--border)] rounded-2xl p-3" id="step-rail">
+          <!-- Steps injected via JS -->
+        </div>
+
+        <!-- RIGHT: Active step panel -->
+        <div class="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl shadow-[0_1px_0_rgba(31,61,46,.04),0_8px_24px_-12px_rgba(31,61,46,.08)] overflow-hidden">
+          <div id="panel-host" class="step-panel"></div>
+
+          <!-- Footer actions -->
+          <div class="flex items-center justify-between px-8 py-5 border-t border-[var(--border)] bg-[var(--bg-soft)]">
+            <button class="btn btn-secondary" id="btn-back">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+              Back
+            </button>
+            <div class="flex items-center gap-3">
+              <button class="btn btn-ghost text-[13px]">Save & finish later</button>
+              <button class="btn btn-primary" id="btn-continue">
+                Continue
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footnote -->
+      <div class="mt-8 flex items-center gap-3 text-[12px] text-[var(--text-muted)]">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Bank-grade encryption · We never sell your data · Equal Housing Lender</span>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============================== ARIA AI ASSISTANT ============================== -->
+<button type="button" class="aria-fab" id="aria-fab" data-aria-trigger aria-label="Ask Aria">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2L13.5 8.5 20 10 13.5 11.5 12 18 10.5 11.5 4 10 10.5 8.5z"/>
+    <circle cx="19" cy="5" r="1.5" opacity="0.7"/>
+    <circle cx="5" cy="19" r="1" opacity="0.5"/>
+  </svg>
+  <span class="aria-fab-label">Ask Aria</span>
+</button>
+
+<div class="aria-overlay" id="aria-overlay"></div>
+
+<aside class="aria-panel" id="aria-panel" role="dialog" aria-label="Aria AI Assistant">
+  <header class="aria-panel-header">
+    <div class="flex items-center gap-3">
+      <div class="seal" style="width:42px;height:42px;font-size:16px;font-family:'Fraunces',serif;">A</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-display text-[18px] font-medium leading-none">Aria</span>
+          <span class="chip text-[9.5px] py-0 px-2" style="background: var(--brand-soft); color: var(--brand); border-color: transparent;">
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+            Online
+          </span>
+        </div>
+        <div class="text-[11.5px] text-[var(--text-muted)] mt-1">AI loan assistant · Loan file + Agency guidelines</div>
+      </div>
+      <button type="button" id="aria-close" class="aria-icon-btn" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="flex items-center gap-1.5 mt-3">
+      <span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        Your loan file
+      </span>
+      <span class="chip chip-neutral text-[10.5px] py-0.5 px-2">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        FNMA · FHLMC · FHA · VA
+      </span>
+    </div>
+  </header>
+
+  <div class="aria-panel-body" id="aria-body"></div>
+
+  <footer class="aria-panel-footer">
+    <div class="aria-suggestions" id="aria-suggestions"></div>
+    <form id="aria-form">
+      <div class="aria-input-row">
+        <textarea id="aria-input" class="aria-input" rows="1" placeholder="Ask anything about your loan..."></textarea>
+        <button type="button" class="aria-icon-btn" title="Voice input" aria-label="Voice">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button type="submit" id="aria-send" class="aria-icon-btn aria-send-btn" title="Send" aria-label="Send" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+    </form>
+    <div class="text-[10.5px] text-[var(--text-muted)] mt-2.5 text-center leading-relaxed">
+      Aria can make mistakes. For final decisions, Sarah is your source of truth.
+    </div>
+  </footer>
+</aside>
+
+<script>
+/* =====================================================================
+   PERENNIA POS — URLA 1003
+   Step state, summaries, and form panels.
+   ===================================================================== */
+
+const STEPS = [
+  { id: 'personal',   number: 1, title: 'Personal Information',  caption: 'Legal name, date of birth, ID' },
+  { id: 'residence',  number: 2, title: 'Address & Contact',     caption: 'Where you live and how to reach you' },
+  { id: 'employment', number: 3, title: 'Employment & Income',   caption: 'Current job, prior history, other income' },
+  { id: 'assets',     number: 4, title: 'Assets',                caption: 'Bank, retirement, gifts and credits' },
+  { id: 'liabilities',number: 5, title: 'Liabilities',           caption: 'Credit cards, loans, monthly obligations' },
+  { id: 'reo',        number: 6, title: 'Real Estate Owned',     caption: 'Properties you currently own' },
+  { id: 'loan',       number: 7, title: 'Loan & Property',       caption: 'Subject property and loan details' },
+  { id: 'declare',    number: 8, title: 'Declarations',          caption: '15 disclosure questions, HMDA' },
+  { id: 'review',     number: 9, title: 'Review & eSign',        caption: 'Final review and submission' },
+];
+
+/* Pre-filled sample data so the demo feels alive */
+const DATA = {
+  personal: {
+    legalName: 'Timothy R. Loss',
+    dob: 'October 24, 1974',
+    ssn: '••• – •• – 4997',
+    citizenship: 'U.S. Citizen',
+    marital: 'Married',
+    dependents: '2 (ages 14, 11)',
+  },
+  residence: {
+    current: '1829 S James Gregarie Rd, Mount Pleasant, SC 29466',
+    timeAt: '4 years, 8 months',
+    housing: 'Own — primary residence',
+    phone: '(843) 834-4997',
+    email: 'tim@example.com',
+  },
+  employment: {
+    employer: 'TL Development LLC',
+    title: 'Founder & CEO',
+    start: 'Mar 2022',
+    selfEmployed: 'Yes — 100% owner',
+    monthlyBase: '$18,500',
+    otherIncome: '— none disclosed —',
+  },
+  assets: {
+    checking: 'Truist · ••2841 · $42,180',
+    savings:  'Ally · ••7714 · $128,560',
+    retire:   'Fidelity 401(k) · $312,400',
+    gifts:    'No gift funds',
+  },
+  liabilities: {
+    cards: '3 revolving · $4,820 total · $185/mo',
+    auto:  'Toyota Financial · $18,300 · $612/mo',
+    student: 'No student loans',
+    other: 'No other obligations',
+  },
+  reo: { count: '1 property — current primary, to be sold pre-close' },
+  loan: { /* current step in demo */ },
+  declare: {},
+  review: {},
+};
+
+/* The "active" step in the demo. Anything before this index is "done" with summary; */
+/* after this index is "todo". The active one shows its form. */
+let activeIdx = 6; // Step 7: Loan & Property — matches the Alpaca-style "almost done" demo state
+
+/* =====================================================================
+   SMART CALENDAR — Pulled from Perennia CRM Smart Calendar
+   Sarah's availability, meeting types, and booking state.
+   ===================================================================== */
+const CAL_TODAY = new Date(2026, 3, 24); // April 24, 2026 (Friday)
+const CAL_LO = { name: 'Sarah Reyes', initials: 'SR', title: 'Senior Loan Officer', nmls: '#2014872' };
+const CAL_RECOMMEND = { date: '2026-04-28', time: '10:00 AM' };
+
+const MEETING_TYPES = {
+  checkin: { label: 'Quick check-in',     duration: 15, sub: 'Phone or video · 15 min' },
+  review:  { label: 'Application review', duration: 30, sub: 'Video · 30 min' },
+  consult: { label: 'Full consultation',  duration: 60, sub: 'Video or in-person · 60 min' },
+};
+
+let calState = {
+  meetingType: 'review',
+  viewYear: 2026,
+  viewMonth: 3, // 0-indexed: April
+  selectedDate: null,
+  selectedSlot: null,
+  confirmed: false,
+  notes: '',
+};
+
+const ALL_TIMES = ['9:00 AM','9:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
+                   '1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM','4:00 PM','4:30 PM'];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_NAMES = ['S','M','T','W','T','F','S'];
+
+function dateKey(y, m, d) {
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function dateHasSlots(year, month, day) {
+  const d = new Date(year, month, day);
+  const today = new Date(CAL_TODAY.getFullYear(), CAL_TODAY.getMonth(), CAL_TODAY.getDate());
+  if (d < today) return false;
+  const dow = d.getDay();
+  if (dow === 0 || dow === 6) return false; // weekends
+  if (year === 2026 && month === 4 && day === 25) return false; // Memorial Day 2026
+  // A few "fully booked" days for realism
+  const hash = (year * 372 + month * 31 + day);
+  if (hash % 17 === 0) return false;
+  return true;
+}
+
+function getSlotsForDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const seed = (y * 372 + m * 31 + d);
+  return ALL_TIMES.map((t, i) => ({
+    time: t,
+    booked: ((seed + i * 13) % 11) === 0 || ((seed + i * 7) % 13) === 0,
+    recommended: dateStr === CAL_RECOMMEND.date && t === CAL_RECOMMEND.time,
+  }));
+}
+
+function getCalendarMatrix(year, month) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const startOffset = new Date(year, month, 1).getDay();
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= lastDay; d++) cells.push(d);
+  while (cells.length < 42) cells.push(null);
+  return cells;
+}
+
+function formatLongDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(y, m-1, d).getDay()];
+  return `${dayName}, ${MONTH_NAMES[m-1]} ${d}`;
+}
+
+function countMonthAvailability(year, month) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= lastDay; d++) if (dateHasSlots(year, month, d)) count++;
+  return count;
+}
+
+/* =====================================================================
+   RENDER: Step rail (left)
+   ===================================================================== */
+function renderRail() {
+  const rail = document.getElementById('step-rail');
+  rail.innerHTML = STEPS.map((s, i) => {
+    const status = i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'todo';
+    const marker = status === 'done'
+      ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+      : s.number;
+    return `
+      <div class="step-row ${status === 'active' ? 'is-active' : ''}" data-idx="${i}">
+        <div class="step-marker is-${status}">${marker}</div>
+        <div class="min-w-0">
+          <div class="text-[14.5px] font-semibold leading-tight ${status === 'todo' ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}">${s.title}</div>
+          <div class="text-[12px] mt-0.5 ${status === 'todo' ? 'text-[var(--text-faint)]' : 'text-[var(--text-secondary)]'}">${s.caption}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  rail.querySelectorAll('.step-row').forEach(el => {
+    el.addEventListener('click', () => {
+      activeIdx = parseInt(el.dataset.idx);
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  // Update sidebar progress
+  const pct = Math.round((activeIdx / STEPS.length) * 100);
+  document.getElementById('sb-progress-fill').style.width = pct + '%';
+  document.getElementById('sb-progress-text').textContent = pct + '%';
+}
+
+/* =====================================================================
+   RENDER: Active panel (right) — step-specific forms
+   ===================================================================== */
+function renderPanel() {
+  const host = document.getElementById('panel-host');
+  const step = STEPS[activeIdx];
+  host.classList.remove('step-panel');
+  void host.offsetWidth; // restart animation
+  host.classList.add('step-panel');
+
+  // Each step has its own panel function
+  host.innerHTML = PANELS[step.id]();
+
+  // Wire up radio cards
+  host.querySelectorAll('[data-radio-group]').forEach(group => {
+    group.querySelectorAll('.radio-card').forEach(card => {
+      card.addEventListener('click', () => {
+        group.querySelectorAll('.radio-card').forEach(c => c.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+      });
+    });
+  });
+
+  // Wire up Smart Calendar on the review step
+  if (step.id === 'review') {
+    host.querySelectorAll('[data-meeting]').forEach(card => {
+      card.addEventListener('click', () => {
+        host.querySelectorAll('[data-meeting]').forEach(c => c.classList.remove('is-selected'));
+        card.classList.add('is-selected');
+        calState.meetingType = card.dataset.meeting;
+      });
+    });
+    renderSmartCalendar();
+  }
+}
+
+/* =====================================================================
+   PANEL HEADER helper
+   ===================================================================== */
+function panelHeader(step, eyebrow) {
+  return `
+    <div class="px-8 pt-7 pb-5 border-b border-[var(--border)]">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="font-mono text-[11px] text-[var(--text-muted)] tracking-wider">STEP ${step.number} OF ${STEPS.length}</span>
+        ${eyebrow ? `<span class="text-[var(--text-muted)]">·</span><span class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">${eyebrow}</span>` : ''}
+      </div>
+      <h2 class="font-display text-[28px] font-medium tracking-tight leading-tight">${step.title}</h2>
+    </div>
+  `;
+}
+
+/* =====================================================================
+   STEP PANELS
+   ===================================================================== */
+const PANELS = {
+
+  /* --- 1. Personal --- */
+  personal: () => `
+    ${panelHeader(STEPS[0], 'URLA Section 1a')}
+    <div class="px-8 py-7 space-y-6">
+      <p class="text-[14.5px] text-[var(--text-secondary)] leading-relaxed">
+        Tell us a bit about yourself. This information is used to verify your identity and pull credit when you're ready.
+      </p>
+
+      <div class="grid grid-cols-12 gap-4">
+        <div class="col-span-4">
+          <label class="field-label">First name</label>
+          <input class="field-input" placeholder="Timothy" value="Timothy" />
+        </div>
+        <div class="col-span-2">
+          <label class="field-label">Middle</label>
+          <input class="field-input" placeholder="R." value="R." />
+        </div>
+        <div class="col-span-4">
+          <label class="field-label">Last name</label>
+          <input class="field-input" placeholder="Loss" value="Loss" />
+        </div>
+        <div class="col-span-2">
+          <label class="field-label">Suffix</label>
+          <select class="field-select"><option>—</option><option>Jr</option><option>Sr</option><option>II</option><option>III</option></select>
+        </div>
+
+        <div class="col-span-4">
+          <label class="field-label">Date of birth</label>
+          <input class="field-input" type="text" placeholder="MM / DD / YYYY" value="10 / 24 / 1974" />
+        </div>
+        <div class="col-span-4">
+          <label class="field-label">Social Security #</label>
+          <input class="field-input font-mono" placeholder="•••-••-••••" value="•••-••-4997" />
+        </div>
+        <div class="col-span-4">
+          <label class="field-label">Marital status</label>
+          <select class="field-select"><option>Married</option><option>Unmarried</option><option>Separated</option></select>
+        </div>
+      </div>
+
+      <div>
+        <div class="field-label mb-2.5">Citizenship</div>
+        <div class="grid grid-cols-3 gap-3" data-radio-group>
+          <div class="radio-card is-selected">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">U.S. Citizen</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Born or naturalized</div>
+            </div>
+          </div>
+          <div class="radio-card">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Permanent Resident</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Hold a green card</div>
+            </div>
+          </div>
+          <div class="radio-card">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Non-Permanent Resident</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Visa or other status</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="field-label">Dependents</label>
+        <div class="grid grid-cols-2 gap-4">
+          <input class="field-input" placeholder="How many?" value="2" type="number" />
+          <input class="field-input" placeholder="Ages, separated by commas" value="14, 11" />
+        </div>
+      </div>
+
+      <div class="banner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <div class="text-[13px] leading-relaxed">
+          <strong>A note on your SSN.</strong> Your number is encrypted with AES-256 the moment you type it. We only use it to verify your identity and pull credit when you authorize.
+        </div>
+      </div>
+    </div>
+  `,
+
+  /* --- 2. Address & Contact --- */
+  residence: () => `
+    ${panelHeader(STEPS[1], 'URLA Section 1a · Residence')}
+    <div class="px-8 py-7 space-y-7">
+      <div>
+        <div class="hairline mb-4">Current address</div>
+        <div class="grid grid-cols-12 gap-4">
+          <div class="col-span-12">
+            <label class="field-label">Street address</label>
+            <input class="field-input" value="1829 S James Gregarie Rd" />
+          </div>
+          <div class="col-span-4">
+            <label class="field-label">Unit</label>
+            <input class="field-input" placeholder="Apt / Suite" />
+          </div>
+          <div class="col-span-4">
+            <label class="field-label">City</label>
+            <input class="field-input" value="Mount Pleasant" />
+          </div>
+          <div class="col-span-2">
+            <label class="field-label">State</label>
+            <input class="field-input" value="SC" />
+          </div>
+          <div class="col-span-2">
+            <label class="field-label">ZIP</label>
+            <input class="field-input" value="29466" />
+          </div>
+          <div class="col-span-6">
+            <label class="field-label">Time at this address</label>
+            <div class="grid grid-cols-2 gap-3">
+              <input class="field-input" placeholder="Years" value="4" />
+              <input class="field-input" placeholder="Months" value="8" />
+            </div>
+          </div>
+          <div class="col-span-6">
+            <label class="field-label">Housing status</label>
+            <select class="field-select">
+              <option>Own — primary residence</option>
+              <option>Rent</option>
+              <option>No primary housing expense</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="hairline mb-4">Contact</div>
+        <div class="grid grid-cols-12 gap-4">
+          <div class="col-span-6">
+            <label class="field-label">Mobile phone</label>
+            <input class="field-input" value="(843) 834-4997" />
+          </div>
+          <div class="col-span-6">
+            <label class="field-label">Email</label>
+            <input class="field-input" value="tim@example.com" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="hairline mb-4">Mailing address</div>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input type="checkbox" class="check" checked />
+          <span class="text-[14px]">Same as current address</span>
+        </label>
+      </div>
+    </div>
+  `,
+
+  /* --- 3. Employment & Income --- */
+  employment: () => `
+    ${panelHeader(STEPS[2], 'URLA Section 1b–1d')}
+    <div class="px-8 py-7 space-y-7">
+      <div>
+        <div class="hairline mb-4">Current employment</div>
+        <div class="grid grid-cols-12 gap-4">
+          <div class="col-span-7">
+            <label class="field-label">Employer name</label>
+            <input class="field-input" value="TL Development LLC" />
+          </div>
+          <div class="col-span-5">
+            <label class="field-label">Position / title</label>
+            <input class="field-input" value="Founder & CEO" />
+          </div>
+          <div class="col-span-5">
+            <label class="field-label">Start date</label>
+            <input class="field-input" value="03 / 2022" />
+          </div>
+          <div class="col-span-7">
+            <label class="field-label">Years in this line of work</label>
+            <input class="field-input" value="11" />
+          </div>
+        </div>
+        <label class="flex items-center gap-2.5 cursor-pointer mt-4">
+          <input type="checkbox" class="check" checked />
+          <span class="text-[14px]">I am self-employed or own ≥ 25% of this business</span>
+        </label>
+      </div>
+
+      <div>
+        <div class="hairline mb-4">Monthly income (gross)</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="relative">
+            <label class="field-label">Base</label>
+            <span class="field-prefix" style="top:64%">$</span>
+            <input class="field-input is-prefix" value="18,500" />
+          </div>
+          <div class="relative">
+            <label class="field-label">Overtime</label>
+            <span class="field-prefix" style="top:64%">$</span>
+            <input class="field-input is-prefix" placeholder="0" />
+          </div>
+          <div class="relative">
+            <label class="field-label">Bonus</label>
+            <span class="field-prefix" style="top:64%">$</span>
+            <input class="field-input is-prefix" placeholder="0" />
+          </div>
+          <div class="relative">
+            <label class="field-label">Commission</label>
+            <span class="field-prefix" style="top:64%">$</span>
+            <input class="field-input is-prefix" placeholder="0" />
+          </div>
+        </div>
+        <div class="mt-4 p-4 bg-[var(--bg-elevated)] rounded-lg flex items-center justify-between">
+          <span class="text-[13px] font-medium text-[var(--text-secondary)]">Total monthly gross income</span>
+          <span class="font-mono text-[18px] font-semibold">$18,500.00</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="hairline mb-4">Other income sources</div>
+        <button class="btn btn-secondary w-full justify-start text-[var(--text-secondary)]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add alimony, social security, dividends, rental income, etc.
+        </button>
+      </div>
+    </div>
+  `,
+
+  /* --- 4. Assets --- */
+  assets: () => `
+    ${panelHeader(STEPS[3], 'URLA Section 2a–2b')}
+    <div class="px-8 py-7 space-y-6">
+      <p class="text-[14.5px] text-[var(--text-secondary)] leading-relaxed">
+        Add the accounts and assets you'll use for your down payment, closing costs, and reserves. Connect your bank for a faster, more accurate verification.
+      </p>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="border border-[var(--border-strong)] rounded-xl p-5 bg-[var(--bg-soft)]">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-[var(--brand-soft)] grid place-items-center text-[var(--brand)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M3 10h18"/><path d="M5 6l7-3 7 3"/><path d="M4 10v11"/><path d="M20 10v11"/><path d="M8 14v3"/><path d="M12 14v3"/><path d="M16 14v3"/></svg>
+              </div>
+              <div>
+                <div class="text-[13.5px] font-semibold">Truist Checking</div>
+                <div class="font-mono text-[11px] text-[var(--text-muted)]">••••2841</div>
+              </div>
+            </div>
+            <span class="chip text-[10.5px]">Verified</span>
+          </div>
+          <div class="font-mono text-[20px] font-semibold">$42,180.00</div>
+        </div>
+
+        <div class="border border-[var(--border-strong)] rounded-xl p-5 bg-[var(--bg-soft)]">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-[var(--brand-soft)] grid place-items-center text-[var(--brand)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M3 10h18"/><path d="M5 6l7-3 7 3"/><path d="M4 10v11"/><path d="M20 10v11"/></svg>
+              </div>
+              <div>
+                <div class="text-[13.5px] font-semibold">Ally Savings</div>
+                <div class="font-mono text-[11px] text-[var(--text-muted)]">••••7714</div>
+              </div>
+            </div>
+            <span class="chip text-[10.5px]">Verified</span>
+          </div>
+          <div class="font-mono text-[20px] font-semibold">$128,560.00</div>
+        </div>
+
+        <div class="border border-[var(--border-strong)] rounded-xl p-5 bg-[var(--bg-soft)]">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-[var(--gold-soft)] grid place-items-center" style="color:#6B4F1A">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div>
+                <div class="text-[13.5px] font-semibold">Fidelity 401(k)</div>
+                <div class="font-mono text-[11px] text-[var(--text-muted)]">Retirement</div>
+              </div>
+            </div>
+            <span class="chip chip-gold text-[10.5px]">Manual</span>
+          </div>
+          <div class="font-mono text-[20px] font-semibold">$312,400.00</div>
+        </div>
+
+        <div class="border border-dashed border-[var(--border-strong)] rounded-xl p-5 grid place-items-center cursor-pointer hover:bg-[var(--bg-soft)] transition">
+          <div class="text-center">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-2 text-[var(--text-muted)]"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <div class="text-[13px] font-medium">Add another account</div>
+            <div class="text-[11.5px] text-[var(--text-muted)] mt-0.5">Connect via Plaid or enter manually</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-[var(--bg-elevated)] rounded-lg flex items-center justify-between">
+        <span class="text-[13px] font-medium text-[var(--text-secondary)]">Total assets</span>
+        <span class="font-mono text-[18px] font-semibold">$483,140.00</span>
+      </div>
+
+      <div>
+        <div class="hairline mb-4">Gifts or grants for this loan</div>
+        <div class="grid grid-cols-2 gap-3" data-radio-group>
+          <div class="radio-card is-selected">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">No gifts or grants</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">All funds are mine</div>
+            </div>
+          </div>
+          <div class="radio-card">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Yes, I'm receiving funds</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Gift letter required</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+
+  /* --- 5. Liabilities --- */
+  liabilities: () => `
+    ${panelHeader(STEPS[4], 'URLA Section 2c–2d')}
+    <div class="px-8 py-7 space-y-6">
+      <p class="text-[14.5px] text-[var(--text-secondary)] leading-relaxed">
+        We'll pull these from your credit report once you authorize. Review what we found and add anything that's missing.
+      </p>
+
+      <div class="border border-[var(--border)] rounded-xl overflow-hidden">
+        <div class="grid grid-cols-12 px-5 py-3 bg-[var(--bg-elevated)] border-b border-[var(--border)]">
+          <div class="col-span-5 text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Creditor</div>
+          <div class="col-span-3 text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Balance</div>
+          <div class="col-span-2 text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)]">Monthly</div>
+          <div class="col-span-2 text-[11px] font-medium uppercase tracking-wider text-[var(--text-muted)] text-right">Pay off?</div>
+        </div>
+
+        ${[
+          { name: 'Chase Sapphire', sub: 'Revolving · ••2204', bal: '$2,140', pmt: '$78', payoff: false },
+          { name: 'AmEx Platinum', sub: 'Revolving · ••8810', bal: '$1,890', pmt: '$72', payoff: false },
+          { name: 'Capital One Quicksilver', sub: 'Revolving · ••5519', bal: '$790', pmt: '$35', payoff: false },
+          { name: 'Toyota Financial', sub: 'Auto · ••3344 · 47 mo remaining', bal: '$18,300', pmt: '$612', payoff: false },
+        ].map(r => `
+          <div class="grid grid-cols-12 px-5 py-4 items-center border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-soft)] transition">
+            <div class="col-span-5">
+              <div class="text-[14px] font-semibold">${r.name}</div>
+              <div class="text-[12px] text-[var(--text-muted)] font-mono">${r.sub}</div>
+            </div>
+            <div class="col-span-3 font-mono text-[14px] font-medium">${r.bal}</div>
+            <div class="col-span-2 font-mono text-[14px]">${r.pmt}/mo</div>
+            <div class="col-span-2 flex justify-end">
+              <input type="checkbox" class="check" ${r.payoff ? 'checked' : ''} />
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="p-4 bg-[var(--bg-elevated)] rounded-lg flex items-center justify-between">
+          <span class="text-[12px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">Total balance</span>
+          <span class="font-mono text-[16px] font-semibold">$23,120</span>
+        </div>
+        <div class="p-4 bg-[var(--bg-elevated)] rounded-lg flex items-center justify-between">
+          <span class="text-[12px] font-medium text-[var(--text-secondary)] uppercase tracking-wider">Monthly debt</span>
+          <span class="font-mono text-[16px] font-semibold">$797</span>
+        </div>
+      </div>
+
+      <button class="btn btn-secondary w-full justify-start text-[var(--text-secondary)]">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add a debt that isn't shown (alimony, child support, etc.)
+      </button>
+    </div>
+  `,
+
+  /* --- 6. Real Estate Owned --- */
+  reo: () => `
+    ${panelHeader(STEPS[5], 'URLA Section 3a')}
+    <div class="px-8 py-7 space-y-6">
+      <p class="text-[14.5px] text-[var(--text-secondary)] leading-relaxed">
+        Tell us about real estate you currently own. We'll factor existing mortgages, taxes, and insurance into your qualification.
+      </p>
+
+      <div class="border border-[var(--border-strong)] rounded-xl overflow-hidden">
+        <div class="px-6 py-5 bg-[var(--bg-soft)] border-b border-[var(--border)] flex items-center justify-between">
+          <div>
+            <div class="text-[15px] font-semibold">1829 S James Gregarie Rd</div>
+            <div class="text-[12.5px] text-[var(--text-muted)] mt-0.5">Mount Pleasant, SC 29466 · Currently primary residence</div>
+          </div>
+          <span class="chip">Will be sold</span>
+        </div>
+        <div class="grid grid-cols-4 divide-x divide-[var(--border)]">
+          <div class="p-5">
+            <div class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium">Market value</div>
+            <div class="font-mono text-[16px] font-semibold mt-1">$685,000</div>
+          </div>
+          <div class="p-5">
+            <div class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium">1st mortgage</div>
+            <div class="font-mono text-[16px] font-semibold mt-1">$312,400</div>
+          </div>
+          <div class="p-5">
+            <div class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium">Monthly P&I</div>
+            <div class="font-mono text-[16px] font-semibold mt-1">$1,820</div>
+          </div>
+          <div class="p-5">
+            <div class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-medium">Status at close</div>
+            <div class="text-[14px] font-semibold mt-1">Sold pre-close</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-secondary w-full justify-center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add another property
+      </button>
+    </div>
+  `,
+
+  /* --- 7. Loan & Property — ACTIVE STEP IN DEMO --- */
+  loan: () => `
+    ${panelHeader(STEPS[6], 'URLA Section 4a–4d')}
+    <div class="px-8 py-7 space-y-7">
+      <div>
+        <div class="field-label mb-2.5">What are you doing with this loan?</div>
+        <div class="grid grid-cols-3 gap-3" data-radio-group>
+          <div class="radio-card is-selected">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Purchase</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Buying a home</div>
+            </div>
+          </div>
+          <div class="radio-card">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Refinance</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Replacing a loan</div>
+            </div>
+          </div>
+          <div class="radio-card">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Other</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Construction, etc.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="hairline mb-4">Subject property</div>
+        <div class="grid grid-cols-12 gap-4">
+          <div class="col-span-12">
+            <label class="field-label">Property address</label>
+            <input class="field-input" placeholder="123 Main St" />
+          </div>
+          <div class="col-span-5">
+            <label class="field-label">City</label>
+            <input class="field-input" placeholder="Charleston" />
+          </div>
+          <div class="col-span-2">
+            <label class="field-label">State</label>
+            <input class="field-input" placeholder="SC" />
+          </div>
+          <div class="col-span-3">
+            <label class="field-label">ZIP</label>
+            <input class="field-input" placeholder="29403" />
+          </div>
+          <div class="col-span-2">
+            <label class="field-label">Units</label>
+            <select class="field-select"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="field-label mb-2.5">Property will be your</div>
+        <div class="grid grid-cols-3 gap-3" data-radio-group>
+          <div class="radio-card is-selected">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Primary residence</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Where you'll live</div>
+            </div>
+          </div>
+          <div class="radio-card">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Second home</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Vacation property</div>
+            </div>
+          </div>
+          <div class="radio-card">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Investment</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Rental property</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="hairline mb-4">Numbers</div>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="relative">
+            <label class="field-label">Purchase price</label>
+            <span class="field-prefix" style="top:64%">$</span>
+            <input class="field-input is-prefix font-mono" placeholder="0" value="950,000" />
+          </div>
+          <div class="relative">
+            <label class="field-label">Down payment</label>
+            <span class="field-prefix" style="top:64%">$</span>
+            <input class="field-input is-prefix font-mono" placeholder="0" value="190,000" />
+          </div>
+          <div class="relative">
+            <label class="field-label">Loan amount</label>
+            <span class="field-prefix" style="top:64%">$</span>
+            <input class="field-input is-prefix font-mono" placeholder="0" value="760,000" />
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-4">
+          <div class="p-4 bg-[var(--brand-tint)] rounded-lg">
+            <div class="text-[11px] uppercase tracking-wider text-[var(--brand)] font-semibold">LTV</div>
+            <div class="font-mono text-[20px] font-semibold mt-1 text-[var(--brand)]">80.0%</div>
+          </div>
+          <div class="p-4 bg-[var(--bg-elevated)] rounded-lg">
+            <div class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Est. monthly payment</div>
+            <div class="font-mono text-[20px] font-semibold mt-1">$5,142</div>
+          </div>
+          <div class="p-4 bg-[var(--bg-elevated)] rounded-lg">
+            <div class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">Est. cash to close</div>
+            <div class="font-mono text-[20px] font-semibold mt-1">$216,500</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+
+  /* --- 8. Declarations --- */
+  declare: () => `
+    ${panelHeader(STEPS[7], 'URLA Section 5')}
+    <div class="px-8 py-7 space-y-5">
+      <p class="text-[14.5px] text-[var(--text-secondary)] leading-relaxed">
+        Federal regulation requires you to answer the following questions. Be honest — we'll help you address anything that needs explanation.
+      </p>
+
+      <div class="space-y-3">
+        ${[
+          'Will you occupy this property as your primary residence?',
+          'Have you had an ownership interest in another property in the last three years?',
+          'Are you borrowing or have you applied for credit not disclosed on this application?',
+          'Will the property be subject to a lien that could take priority over the new loan?',
+          'Are you a co-signer or guarantor on any debt or loan not yet disclosed?',
+          'Are there any outstanding judgments against you?',
+          'Are you currently delinquent or in default on a Federal debt?',
+          'Are you a party to a lawsuit in which you potentially have any personal financial liability?',
+          'Have you conveyed title to a property in lieu of foreclosure in the past 7 years?',
+          'Have you completed a pre-foreclosure sale or short sale in the past 7 years?',
+          'Have you had property foreclosed in the past 7 years?',
+          'Have you declared bankruptcy in the past 7 years?',
+        ].map((q, i) => `
+          <div class="flex items-center gap-4 p-4 border border-[var(--border)] rounded-lg hover:bg-[var(--bg-soft)] transition">
+            <span class="font-mono text-[11px] text-[var(--text-muted)] w-8 flex-shrink-0">${String(i+1).padStart(2,'0')}</span>
+            <span class="flex-1 text-[14px]">${q}</span>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button class="px-3.5 py-1.5 rounded-md text-[12.5px] font-medium ${i===0 ? 'bg-[var(--brand)] text-[#F5F2E9]' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--brand-tint)]'}">Yes</button>
+              <button class="px-3.5 py-1.5 rounded-md text-[12.5px] font-medium ${i!==0 ? 'bg-[var(--brand)] text-[#F5F2E9]' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--brand-tint)]'}">No</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `,
+
+  /* --- 9. Review & eSign --- */
+  review: () => `
+    ${panelHeader(STEPS[8], 'Final review')}
+    <div class="px-8 py-7 space-y-7">
+
+      <div class="banner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 mt-0.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <div class="text-[13px] leading-relaxed">
+          <strong>Almost done, Timothy.</strong> Take a moment to review everything below, schedule your sit-down with Sarah, then eSign to send your file to underwriting.
+        </div>
+      </div>
+
+      ${renderCumulativeSummary(STEPS.length)}
+
+      <!-- ========================= SMART CALENDAR ========================= -->
+      <div class="border-t border-[var(--border)] pt-7">
+        <div class="flex items-start justify-between gap-6 mb-5">
+          <div>
+            <h3 class="font-display text-[20px] font-medium leading-tight">Schedule your application review</h3>
+            <p class="text-[13.5px] text-[var(--text-secondary)] mt-1.5 max-w-[520px] leading-relaxed">
+              Walk through your file with Sarah before it goes to underwriting. She'll explain next steps, answer questions, and confirm what to upload next.
+            </p>
+          </div>
+          <div class="flex items-center gap-3 flex-shrink-0">
+            <div class="seal" style="width:38px;height:38px;font-size:13px;">${CAL_LO.initials}</div>
+            <div class="text-right">
+              <div class="text-[13.5px] font-semibold leading-tight">${CAL_LO.name}</div>
+              <div class="text-[11.5px] text-[var(--text-muted)]">${CAL_LO.title} · NMLS ${CAL_LO.nmls}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meeting type selector -->
+        <div class="grid grid-cols-3 gap-3 mb-5">
+          <div class="radio-card ${calState.meetingType === 'checkin' ? 'is-selected' : ''}" data-meeting="checkin">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Quick check-in</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Phone or video · 15 min</div>
+            </div>
+          </div>
+          <div class="radio-card ${calState.meetingType === 'review' ? 'is-selected' : ''}" data-meeting="review">
+            <span class="radio-dot"></span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-[14px] font-semibold">Application review</span>
+                <span class="chip chip-gold text-[9.5px] py-0 px-1.5">Recommended</span>
+              </div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Video · 30 min</div>
+            </div>
+          </div>
+          <div class="radio-card ${calState.meetingType === 'consult' ? 'is-selected' : ''}" data-meeting="consult">
+            <span class="radio-dot"></span>
+            <div>
+              <div class="text-[14px] font-semibold">Full consultation</div>
+              <div class="text-[12px] text-[var(--text-muted)] mt-0.5">Video or in-person · 60 min</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Calendar host (re-rendered by renderSmartCalendar) -->
+        <div id="smart-cal-host"></div>
+
+        <!-- Calendar footer -->
+        <div class="mt-3 flex items-center justify-between text-[11.5px] text-[var(--text-muted)]">
+          <div class="flex items-center gap-1.5">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            Times shown in Eastern Time · auto-detected from your location
+          </div>
+          <div class="flex items-center gap-2">
+            <span>Powered by Perennia Smart Calendar</span>
+            <span>·</span>
+            <span class="hover:text-[var(--brand)] cursor-pointer underline-offset-2 hover:underline">Schedule with someone else</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Acknowledgments & eSign -->
+      <div class="border-t border-[var(--border)] pt-7 space-y-4">
+        <h3 class="font-display text-[20px] font-medium">Acknowledgments & eSign</h3>
+        <label class="flex items-start gap-3 p-4 border border-[var(--border)] rounded-lg cursor-pointer hover:bg-[var(--bg-soft)] transition">
+          <input type="checkbox" class="check mt-0.5" />
+          <div class="text-[13.5px] leading-relaxed">I certify that the information I have provided in this application is true and correct as of the date opposite my signature, and acknowledge my understanding that any intentional or negligent misrepresentation may result in civil liability and criminal penalties under federal law.</div>
+        </label>
+        <label class="flex items-start gap-3 p-4 border border-[var(--border)] rounded-lg cursor-pointer hover:bg-[var(--bg-soft)] transition">
+          <input type="checkbox" class="check mt-0.5" />
+          <div class="text-[13.5px] leading-relaxed">I consent to electronic delivery of all loan documents, disclosures, and communications related to this application (E-Sign Act).</div>
+        </label>
+        <label class="flex items-start gap-3 p-4 border border-[var(--border)] rounded-lg cursor-pointer hover:bg-[var(--bg-soft)] transition">
+          <input type="checkbox" class="check mt-0.5" />
+          <div class="text-[13.5px] leading-relaxed">I authorize Perennia and its lending partners to obtain credit reports, verifications of employment, income, and assets in connection with this application.</div>
+        </label>
+      </div>
+    </div>
+  `,
+};
+
+/* =====================================================================
+   CUMULATIVE SUMMARY (Alpaca-style snapshot of completed sections)
+   Shown on the active panel for steps that don't render their own form summary.
+   ===================================================================== */
+function renderCumulativeSummary(uptoIdx) {
+  const blocks = [];
+
+  if (uptoIdx > 0) blocks.push(`
+    <div class="grid grid-cols-3 gap-x-8">
+      <div class="summary-cell">
+        <div class="summary-label">Name</div>
+        <div class="summary-value">${DATA.personal.legalName}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Date of birth</div>
+        <div class="summary-value">${DATA.personal.dob}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Citizenship</div>
+        <div class="summary-value">${DATA.personal.citizenship}</div>
+      </div>
+    </div>
+  `);
+
+  if (uptoIdx > 1) blocks.push(`
+    <div class="grid grid-cols-3 gap-x-8">
+      <div class="summary-cell">
+        <div class="summary-label">Address</div>
+        <div class="summary-value">${DATA.residence.current}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Phone</div>
+        <div class="summary-value font-mono">${DATA.residence.phone}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Email</div>
+        <div class="summary-value">${DATA.residence.email}</div>
+      </div>
+    </div>
+  `);
+
+  if (uptoIdx > 2) blocks.push(`
+    <div class="grid grid-cols-3 gap-x-8">
+      <div class="summary-cell">
+        <div class="summary-label">Employer</div>
+        <div class="summary-value">${DATA.employment.employer}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Title</div>
+        <div class="summary-value">${DATA.employment.title}</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Monthly income</div>
+        <div class="summary-value font-mono">${DATA.employment.monthlyBase}</div>
+      </div>
+    </div>
+  `);
+
+  if (uptoIdx > 3) blocks.push(`
+    <div class="grid grid-cols-2 gap-x-8">
+      <div class="summary-cell">
+        <div class="summary-label">Liquid assets</div>
+        <div class="summary-value font-mono">$170,740</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Retirement</div>
+        <div class="summary-value font-mono">$312,400</div>
+      </div>
+    </div>
+  `);
+
+  if (uptoIdx > 4) blocks.push(`
+    <div class="grid grid-cols-2 gap-x-8">
+      <div class="summary-cell">
+        <div class="summary-label">Total monthly debt</div>
+        <div class="summary-value font-mono">$797</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Liabilities</div>
+        <div class="summary-value font-mono">$23,120</div>
+      </div>
+    </div>
+  `);
+
+  if (uptoIdx > 5) blocks.push(`
+    <div class="summary-cell">
+      <div class="summary-label">Real estate owned</div>
+      <div class="summary-value">${DATA.reo.count}</div>
+    </div>
+  `);
+
+  if (uptoIdx > 6) blocks.push(`
+    <div class="grid grid-cols-3 gap-x-8">
+      <div class="summary-cell">
+        <div class="summary-label">Purchase price</div>
+        <div class="summary-value font-mono">$950,000</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">Loan amount</div>
+        <div class="summary-value font-mono">$760,000</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">LTV</div>
+        <div class="summary-value font-mono">80.0%</div>
+      </div>
+    </div>
+  `);
+
+  return blocks.join('');
+}
+
+/* =====================================================================
+   Buttons
+   ===================================================================== */
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (activeIdx > 0) { activeIdx--; render(); }
+});
+document.getElementById('btn-continue').addEventListener('click', () => {
+  if (activeIdx < STEPS.length - 1) { activeIdx++; render(); }
+});
+
+/* =====================================================================
+   SMART CALENDAR — Render functions
+   ===================================================================== */
+function renderSmartCalendar() {
+  const host = document.getElementById('smart-cal-host');
+  if (!host) return;
+  host.innerHTML = calState.confirmed ? renderCalConfirmation() : renderCalPicker();
+  setupSmartCalendarHandlers();
+}
+
+function renderCalPicker() {
+  const cells = getCalendarMatrix(calState.viewYear, calState.viewMonth);
+  const monthLabel = `${MONTH_NAMES[calState.viewMonth]} ${calState.viewYear}`;
+  const todayKey = dateKey(CAL_TODAY.getFullYear(), CAL_TODAY.getMonth(), CAL_TODAY.getDate());
+  const availableCount = countMonthAvailability(calState.viewYear, calState.viewMonth);
+  const canPrev = !(calState.viewYear === CAL_TODAY.getFullYear() && calState.viewMonth <= CAL_TODAY.getMonth());
+
+  return `
+    <div class="border border-[var(--border-strong)] rounded-xl overflow-hidden bg-[var(--bg-soft)]">
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_360px]">
+
+        <!-- Calendar grid -->
+        <div class="p-5 md:border-r border-[var(--border)]">
+          <div class="flex items-center justify-between mb-4">
+            <button id="cal-prev" class="p-2 rounded-md transition ${canPrev ? 'hover:bg-[var(--bg-elevated)] text-[var(--text-primary)]' : 'opacity-30 cursor-not-allowed text-[var(--text-muted)]'}" aria-label="Previous month" ${canPrev ? '' : 'disabled'}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="font-display text-[16px] font-medium">${monthLabel}</div>
+            <button id="cal-next" class="p-2 rounded-md hover:bg-[var(--bg-elevated)] transition" aria-label="Next month">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-7 mb-1.5">
+            ${DAY_NAMES.map(d => `<div class="text-center text-[10.5px] font-semibold text-[var(--text-muted)] uppercase tracking-wider py-1.5">${d}</div>`).join('')}
+          </div>
+
+          <div class="grid grid-cols-7 gap-1">
+            ${cells.map(d => {
+              if (d === null) return `<div></div>`;
+              const key = dateKey(calState.viewYear, calState.viewMonth, d);
+              const available = dateHasSlots(calState.viewYear, calState.viewMonth, d);
+              const isSelected = calState.selectedDate === key;
+              const isToday = key === todayKey;
+              const isRecommend = key === CAL_RECOMMEND.date;
+
+              let cls = 'h-10 w-10 mx-auto grid place-items-center text-[13.5px] font-medium rounded-lg relative transition ';
+              if (isSelected) {
+                cls += 'bg-[var(--brand)] text-[#F5F2E9] cursor-pointer shadow-sm';
+              } else if (available) {
+                cls += 'cursor-pointer hover:bg-[var(--brand-tint)] text-[var(--text-primary)]';
+                if (isToday) cls += ' ring-1 ring-[var(--gold)]';
+              } else {
+                cls += 'text-[var(--text-faint)] cursor-not-allowed';
+              }
+
+              const recDot = isRecommend && !isSelected
+                ? `<span class="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[var(--gold)]"></span>` : '';
+
+              return `
+                <div class="text-center">
+                  <div class="${cls}" ${available ? `data-date="${key}"` : ''}>
+                    ${d}${recDot}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+
+          <div class="mt-5 pt-4 border-t border-[var(--border)] flex items-center justify-between text-[11.5px]">
+            <div class="flex items-center gap-3 text-[var(--text-muted)]">
+              <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[var(--gold)]"></span> Recommended</span>
+              <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[var(--brand)]"></span> Selected</span>
+            </div>
+            <span class="text-[var(--text-muted)]">${availableCount} day${availableCount === 1 ? '' : 's'} available</span>
+          </div>
+        </div>
+
+        <!-- Slot picker / empty state -->
+        <div class="p-5 bg-[var(--bg-surface)] flex flex-col">
+          ${calState.selectedDate ? renderCalSlots() : renderCalEmpty()}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCalEmpty() {
+  return `
+    <div class="flex-1 grid place-items-center min-h-[360px]">
+      <div class="text-center px-4">
+        <div class="w-12 h-12 rounded-full bg-[var(--bg-elevated)] mx-auto mb-3 grid place-items-center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="text-[14px] font-semibold text-[var(--text-primary)] mb-1">Pick a date</div>
+        <div class="text-[12px] text-[var(--text-muted)] max-w-[240px] leading-relaxed">
+          The gold dot marks the time we recommend based on Sarah's calendar and your preferences.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCalSlots() {
+  const slots = getSlotsForDate(calState.selectedDate);
+  const available = slots.filter(s => !s.booked).length;
+  const meeting = MEETING_TYPES[calState.meetingType];
+
+  return `
+    <div class="flex-1 flex flex-col min-h-[360px]">
+      <div class="mb-4">
+        <div class="font-display text-[16px] font-medium">${formatLongDate(calState.selectedDate)}</div>
+        <div class="text-[11.5px] text-[var(--text-muted)] mt-0.5">${available} time${available === 1 ? '' : 's'} available · ${meeting.duration} min</div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 overflow-y-auto pr-1" style="max-height: 280px;">
+        ${slots.map(s => {
+          const isSelected = calState.selectedSlot === s.time;
+          let cls = 'px-2.5 py-2 rounded-lg text-[12.5px] font-medium border transition relative text-center ';
+          if (s.booked) {
+            cls += 'bg-[var(--bg-elevated)] border-transparent text-[var(--text-faint)] line-through cursor-not-allowed';
+          } else if (isSelected) {
+            cls += 'bg-[var(--brand)] border-[var(--brand)] text-[#F5F2E9] cursor-pointer';
+          } else if (s.recommended) {
+            cls += 'bg-[var(--gold-soft)] border-[var(--gold)] text-[#6B4F1A] hover:bg-[#F0E2BE] cursor-pointer';
+          } else {
+            cls += 'bg-[var(--bg-surface)] border-[var(--border-strong)] hover:border-[var(--brand)] hover:bg-[var(--brand-tint)] text-[var(--text-primary)] cursor-pointer';
+          }
+          return `<button class="${cls}" ${!s.booked ? `data-slot="${s.time}"` : 'disabled'}>
+            ${s.recommended && !isSelected ? '★ ' : ''}${s.time}
+          </button>`;
+        }).join('')}
+      </div>
+
+      ${calState.selectedSlot ? `
+        <div class="mt-4 pt-4 border-t border-[var(--border)]">
+          <label class="field-label">Anything specific you'd like to discuss? (optional)</label>
+          <textarea id="cal-notes" class="field-input text-[13px]" rows="2" placeholder="e.g., Questions about my self-employment income">${calState.notes}</textarea>
+          <button id="cal-confirm" class="btn btn-primary w-full mt-3">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Confirm ${calState.selectedSlot}
+          </button>
+        </div>
+      ` : `
+        <div class="mt-auto pt-4 text-[11.5px] text-[var(--text-muted)] flex items-center gap-1.5">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Times in gold are our smart suggestion based on Sarah's openings.
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderCalConfirmation() {
+  const meeting = MEETING_TYPES[calState.meetingType];
+  return `
+    <div class="border border-[var(--brand-soft)] rounded-xl overflow-hidden" style="background: linear-gradient(160deg, var(--brand-tint) 0%, var(--bg-soft) 60%);">
+      <div class="p-7">
+        <div class="flex items-start gap-4 mb-6">
+          <div class="w-12 h-12 rounded-full bg-[var(--brand)] grid place-items-center flex-shrink-0 shadow-sm">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F5F2E9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="text-[10.5px] uppercase tracking-[0.1em] text-[var(--brand)] font-semibold mb-1">Meeting confirmed</div>
+            <div class="font-display text-[22px] font-medium leading-tight">${formatLongDate(calState.selectedDate)} · ${calState.selectedSlot} ET</div>
+            <div class="text-[13.5px] text-[var(--text-secondary)] mt-1">
+              ${meeting.label} with ${CAL_LO.name} · ${meeting.duration} minutes
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6 pb-5 border-b border-[var(--border)]">
+          <div>
+            <div class="summary-label">Loan officer</div>
+            <div class="flex items-center gap-2.5 mt-2">
+              <div class="seal" style="width:32px;height:32px;font-size:11px;">${CAL_LO.initials}</div>
+              <div class="min-w-0">
+                <div class="text-[13.5px] font-semibold leading-tight truncate">${CAL_LO.name}</div>
+                <div class="text-[11px] text-[var(--text-muted)]">NMLS ${CAL_LO.nmls}</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="summary-label">Meeting link</div>
+            <div class="flex items-center gap-1.5 mt-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              <span class="text-[13px] font-mono text-[var(--brand)]">perennia.video/sarah-reyes</span>
+            </div>
+          </div>
+        </div>
+
+        ${calState.notes ? `
+          <div class="py-5 border-b border-[var(--border)]">
+            <div class="summary-label">Your note for Sarah</div>
+            <div class="text-[13.5px] mt-1.5 italic text-[var(--text-secondary)] leading-relaxed">"${calState.notes}"</div>
+          </div>
+        ` : ''}
+
+        <div class="flex flex-wrap items-center gap-2 mt-5">
+          <button class="btn btn-secondary text-[12.5px] px-3 py-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Google Calendar
+          </button>
+          <button class="btn btn-secondary text-[12.5px] px-3 py-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Apple Calendar
+          </button>
+          <button class="btn btn-secondary text-[12.5px] px-3 py-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Outlook
+          </button>
+          <button id="cal-reschedule" class="btn btn-ghost text-[12.5px] ml-auto">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Change time
+          </button>
+        </div>
+      </div>
+
+      <div class="px-7 py-3 bg-[var(--bg-soft)] border-t border-[var(--border)] flex items-center gap-2 text-[11.5px] text-[var(--text-muted)]">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+        Synced to Sarah's calendar · A task was created in your loan file · You'll receive reminders 24h and 1h before
+      </div>
+    </div>
+  `;
+}
+
+function setupSmartCalendarHandlers() {
+  document.getElementById('cal-prev')?.addEventListener('click', () => {
+    if (calState.viewYear === CAL_TODAY.getFullYear() && calState.viewMonth <= CAL_TODAY.getMonth()) return;
+    if (calState.viewMonth === 0) { calState.viewMonth = 11; calState.viewYear--; }
+    else { calState.viewMonth--; }
+    renderSmartCalendar();
+  });
+  document.getElementById('cal-next')?.addEventListener('click', () => {
+    if (calState.viewMonth === 11) { calState.viewMonth = 0; calState.viewYear++; }
+    else { calState.viewMonth++; }
+    renderSmartCalendar();
+  });
+
+  document.querySelectorAll('[data-date]').forEach(el => {
+    el.addEventListener('click', () => {
+      calState.selectedDate = el.dataset.date;
+      calState.selectedSlot = null;
+      renderSmartCalendar();
+    });
+  });
+
+  document.querySelectorAll('[data-slot]').forEach(el => {
+    el.addEventListener('click', () => {
+      calState.selectedSlot = el.dataset.slot;
+      renderSmartCalendar();
+    });
+  });
+
+  document.getElementById('cal-confirm')?.addEventListener('click', () => {
+    calState.notes = document.getElementById('cal-notes')?.value || '';
+    calState.confirmed = true;
+    renderSmartCalendar();
+  });
+
+  document.getElementById('cal-reschedule')?.addEventListener('click', () => {
+    calState.confirmed = false;
+    renderSmartCalendar();
+  });
+}
+
+/* =====================================================================
+   ARIA — AI Loan Assistant
+   ===================================================================== */
+const ARIA_RESPONSES = {
+  numbers: {
+    html: `<p>Your file is in great shape, Timothy. Here's how I read it:</p>
+           <ul>
+             <li><strong>Loan-to-value:</strong> 80.0% — right at the conventional sweet spot, no PMI required</li>
+             <li><strong>Debt-to-income:</strong> ~28% front / ~32% back — well inside Fannie Mae's 50% ceiling</li>
+             <li><strong>Reserves:</strong> $483K in liquid + retirement, ~33 months of PITI — very strong</li>
+             <li><strong>Credit:</strong> No issues flagged on the four trades you've disclosed</li>
+           </ul>
+           <p>I'd expect a smooth underwrite. Sarah will confirm at your review meeting.</p>`,
+    sources: ['Your loan file (PRN-2026-04881)', 'FNMA Selling Guide B3-6'],
+    followups: ['What rate could I qualify for?', 'How long until I close?', 'Will my self-employment hurt me?']
+  },
+  gift: {
+    html: `<p>Yes — gift funds are fully eligible for your loan.</p>
+           <p>You're applying for a Conventional loan on a primary residence at 80% LTV. Per Fannie Mae, that means:</p>
+           <ul>
+             <li>Gifts can cover <strong>100% of your down payment</strong> — no minimum borrower contribution required</li>
+             <li>Donor must be a relative, fiancé(e), domestic partner, or future in-law</li>
+             <li>You'll need a <strong>signed gift letter</strong> and proof the donor had the funds available</li>
+           </ul>
+           <p>Want me to add an expected gift to your application and queue the gift letter template for the donor?</p>`,
+    sources: ['FNMA Selling Guide B3-4.3-04', 'Your loan file'],
+    followups: ['Send the gift letter template', 'Is there a maximum gift amount?', 'Can the gift come from a friend?']
+  },
+  closing: {
+    html: `<p>Based on your $760,000 loan amount and Charleston, SC, here's a rough estimate:</p>
+           <ul>
+             <li><strong>Lender fees:</strong> ~$1,895 (origination, underwriting, appraisal)</li>
+             <li><strong>Title & settlement:</strong> ~$2,400</li>
+             <li><strong>Recording & transfer taxes:</strong> ~$1,140 (SC has no buyer-side state transfer tax)</li>
+             <li><strong>Prepaids & escrows:</strong> ~$8,200 (taxes, insurance, prepaid interest)</li>
+             <li><strong>Estimated total:</strong> ~$13,635</li>
+           </ul>
+           <p>You'll get the official Loan Estimate within 3 business days of submitting your application.</p>`,
+    sources: ['SC Department of Revenue', 'Your loan file', 'Perennia closing cost worksheet'],
+    followups: ['Can I roll closing costs into the loan?', 'What if I want to buy points?', 'What credits should I ask for?']
+  },
+  pmi: {
+    html: `<p>Good news — <strong>you won't need PMI</strong> on this loan.</p>
+           <p>PMI is required on conventional loans when LTV exceeds 80%. Yours is exactly 80% ($760K loan ÷ $950K purchase), so you're right at the cutoff.</p>
+           <p>If your appraisal comes in under $950K, your LTV could rise above 80% and PMI would kick in. Sarah and I will be watching for that — we have a few ways to keep you out of PMI if it happens (small price negotiation, lender-paid MI, or a small principal increase).</p>`,
+    sources: ['FNMA Selling Guide B7-1', 'Your loan file'],
+    followups: ['What if my appraisal comes in low?', 'How does lender-paid MI work?', 'When does PMI normally drop off?']
+  },
+  next: {
+    html: `<p>You're 89% done. Here's what's left:</p>
+           <ul>
+             <li><strong>Step 7 — Loan & Property:</strong> active. Confirm the property address.</li>
+             <li><strong>Step 8 — Declarations:</strong> 12 yes/no questions, ~3 minutes.</li>
+             <li><strong>Step 9 — Review & eSign:</strong> book your meeting with Sarah, sign, submit.</li>
+           </ul>
+           <p>After you submit, I'll start verifying your assets and pulling your credit. Loan Estimate within 3 business days, target close 30 days from there.</p>`,
+    sources: ['Your loan file', 'Perennia close-on-time calendar'],
+    followups: ['Can I close faster than 30 days?', 'What documents will you need next?', 'When does my rate lock?']
+  },
+  rate: {
+    html: `<p>Your rate locks when you and Sarah agree to lock — usually right after submission, once we have your appraisal scheduled.</p>
+           <p>Based on your profile (760+ credit, 80% LTV, primary residence, conforming loan size), today's market would put you in the <strong>6.625% – 6.875%</strong> range on a 30-year fixed conventional. Self-employed borrowers can see a small adjustment, but your reserves offset that.</p>
+           <p>Sarah can pull live pricing in your meeting — that'll be more precise than my estimate.</p>`,
+    sources: ['Perennia pricing engine', 'FNMA LLPA grid', 'Your loan file'],
+    followups: ['Should I lock or float?', 'How does buying points work?', 'What affects my rate the most?']
+  },
+  documents: {
+    html: `<p>Here's what's outstanding on your file right now:</p>
+           <ul>
+             <li><strong>Two most recent pay stubs</strong> (or P&L since you're self-employed)</li>
+             <li><strong>2-month bank statements</strong> for your Truist checking and Ally savings</li>
+             <li><strong>2 years of business tax returns</strong> (1120-S for TL Development LLC, K-1s, personal 1040s)</li>
+             <li><strong>Driver's license or passport</strong> for ID verification</li>
+           </ul>
+           <p>You can upload these from the <strong>Documents</strong> tab — I'll mark each one verified the moment you do.</p>`,
+    sources: ['Your loan file', 'Perennia document checklist'],
+    followups: ['Why do you need 2 years of returns?', 'Can I connect my bank instead?', 'How long does verification take?']
+  },
+  default: {
+    html: `<p>That's a good question. Let me think about it in the context of your loan.</p>
+           <p>To give you the best answer, can you share a bit more detail? Or if it's something complex, I can loop Sarah in directly.</p>
+           <p>In the meantime, here are some related things I can answer right now:</p>`,
+    sources: ['Your loan file'],
+    followups: ['What documents do I still owe?', 'When will I close?', 'Connect me with Sarah']
+  }
+};
+
+function matchAriaResponse(text) {
+  const t = text.toLowerCase();
+  if (/gift|relative|parent.*money|family.*money|in-law/.test(t)) return ARIA_RESPONSES.gift;
+  if (/closing cost|cash to close|fees|how much.*close/.test(t)) return ARIA_RESPONSES.closing;
+  if (/pmi|mortgage insurance|\bmi\b/.test(t)) return ARIA_RESPONSES.pmi;
+  if (/rate|interest|lock|float|points/.test(t)) return ARIA_RESPONSES.rate;
+  if (/document|upload|paystub|tax return|bank statement|missing|owe/.test(t)) return ARIA_RESPONSES.documents;
+  if (/next|how long|when.*close|timeline|left to do|what.*left/.test(t)) return ARIA_RESPONSES.next;
+  if (/numbers|how.*looking|qualify|approve|dti|ltv|shape/.test(t)) return ARIA_RESPONSES.numbers;
+  return ARIA_RESPONSES.default;
+}
+
+const ariaState = {
+  open: false,
+  thinking: false,
+  messages: [{
+    role: 'aria',
+    html: `<p>Hi Timothy. I'm <strong>Aria</strong> — your AI loan assistant.</p>
+           <p>I have access to your loan file and the latest agency guidelines (FNMA, FHLMC, FHA, VA), so I can give you specific answers, not generic ones.</p>
+           <p>You're on Step 7 of 9. What can I help you with?</p>`,
+    sources: ['Your loan file (PRN-2026-04881)']
+  }],
+  suggestions: ['How are my numbers looking?', 'Can I use gift funds?', "What's left to do?", 'Will I need PMI?']
+};
+
+function ariaSourceChip(s) {
+  return `<span class="aria-source-chip">
+    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    ${s}
+  </span>`;
+}
+
+function renderAriaConversation() {
+  const body = document.getElementById('aria-body');
+  if (!body) return;
+
+  let html = ariaState.messages.map(m => {
+    if (m.role === 'aria') {
+      const sources = m.sources && m.sources.length ? `
+        <div class="aria-sources">
+          <div class="aria-sources-label">Sources</div>
+          ${m.sources.map(ariaSourceChip).join('')}
+        </div>` : '';
+      return `
+        <div class="aria-msg-row is-aria">
+          <div class="seal" style="width:28px;height:28px;font-size:11px;font-family:'Fraunces',serif;align-self:flex-start;">A</div>
+          <div class="aria-msg-bubble">${m.html}${sources}</div>
+        </div>`;
+    }
+    return `
+      <div class="aria-msg-row is-user">
+        <div class="aria-msg-bubble">${m.html}</div>
+      </div>`;
+  }).join('');
+
+  if (ariaState.thinking) {
+    html += `
+      <div class="aria-msg-row is-aria">
+        <div class="seal" style="width:28px;height:28px;font-size:11px;font-family:'Fraunces',serif;align-self:flex-start;">A</div>
+        <div class="aria-typing"><span class="aria-typing-dot"></span><span class="aria-typing-dot"></span><span class="aria-typing-dot"></span></div>
+      </div>`;
+  }
+
+  body.innerHTML = html;
+  body.scrollTop = body.scrollHeight;
+
+  const sug = document.getElementById('aria-suggestions');
+  if (ariaState.suggestions && ariaState.suggestions.length && !ariaState.thinking) {
+    sug.style.display = 'flex';
+    sug.innerHTML = ariaState.suggestions.map(s => `<button type="button" class="aria-suggestion" data-suggestion>${s}</button>`).join('');
+    sug.querySelectorAll('.aria-suggestion').forEach((btn, i) => {
+      btn.addEventListener('click', () => sendAriaMessage(ariaState.suggestions[i]));
+    });
+  } else {
+    sug.style.display = 'none';
+    sug.innerHTML = '';
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function sendAriaMessage(text) {
+  const t = (text || '').trim();
+  if (!t || ariaState.thinking) return;
+
+  ariaState.messages.push({ role: 'user', html: escapeHtml(t) });
+  ariaState.suggestions = [];
+  ariaState.thinking = true;
+  const input = document.getElementById('aria-input');
+  if (input) { input.value = ''; input.style.height = 'auto'; }
+  document.getElementById('aria-send').disabled = true;
+  renderAriaConversation();
+
+  setTimeout(() => {
+    const resp = matchAriaResponse(t);
+    ariaState.messages.push({ role: 'aria', html: resp.html, sources: resp.sources });
+    ariaState.suggestions = resp.followups || [];
+    ariaState.thinking = false;
+    renderAriaConversation();
+  }, 900 + Math.random() * 700);
+}
+
+function openAria() {
+  if (ariaState.open) return;
+  ariaState.open = true;
+  document.getElementById('aria-overlay').classList.add('is-open');
+  document.getElementById('aria-panel').classList.add('is-open');
+  document.getElementById('aria-fab').classList.add('is-hidden');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('aria-input')?.focus(), 380);
+}
+
+function closeAria() {
+  if (!ariaState.open) return;
+  ariaState.open = false;
+  document.getElementById('aria-overlay').classList.remove('is-open');
+  document.getElementById('aria-panel').classList.remove('is-open');
+  document.getElementById('aria-fab').classList.remove('is-hidden');
+  document.body.style.overflow = '';
+}
+
+// Wire triggers (delegated so it works for dynamically rendered content too)
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-aria-trigger]')) {
+    e.preventDefault();
+    openAria();
+  }
+});
+
+document.getElementById('aria-overlay').addEventListener('click', closeAria);
+document.getElementById('aria-close').addEventListener('click', closeAria);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && ariaState.open) closeAria();
+});
+
+document.getElementById('aria-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  sendAriaMessage(document.getElementById('aria-input').value);
+});
+
+const ariaInput = document.getElementById('aria-input');
+const ariaSendBtn = document.getElementById('aria-send');
+ariaInput.addEventListener('input', () => {
+  ariaSendBtn.disabled = !ariaInput.value.trim() || ariaState.thinking;
+  ariaInput.style.height = 'auto';
+  ariaInput.style.height = Math.min(ariaInput.scrollHeight, 120) + 'px';
+});
+ariaInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendAriaMessage(ariaInput.value);
+  }
+});
+
+renderAriaConversation();
+
+/* =====================================================================
+   Render
+   ===================================================================== */
+function render() {
+  renderRail();
+  renderPanel();
+}
+render();
+</script>
+
+</body>
+</html>

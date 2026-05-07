@@ -380,8 +380,9 @@ export default function AriaVoiceHome() {
       setLkConnected(true);
     } catch (err) {
       console.error('[AriaVoiceHome] LiveKit token fetch failed:', err);
-      setLkError('Failed to connect to voice service');
+      setLkError('Voice service unavailable — using text mode');
       setLkConnected(false);
+      setLkAvailable(false);
     } finally {
       lkConnectingRef.current = false;
       setLkConnecting(false);
@@ -664,8 +665,9 @@ export default function AriaVoiceHome() {
         onDisconnected={disconnectLiveKit}
         onError={(err) => {
           console.error('[LiveKit] Room error:', err);
-          setLkError('Voice connection lost');
+          setLkError('Voice connection lost — switching to text mode');
           disconnectLiveKit();
+          setLkAvailable(false);
         }}
       >
         {innerContent}
