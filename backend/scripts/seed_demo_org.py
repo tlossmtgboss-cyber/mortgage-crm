@@ -166,12 +166,16 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     Returns a summary dict with counts of created entities.
     """
     from database.models.lead_loan import Lead, Loan
-    from database.models.communication import Activity
+    from database.models.communication import Activity, CalendarEvent
     from database.models.compliance import ComplianceAlert
     from database.models.document import Document
     from database.models.morning_briefing import MorningBriefing
     from database.models.demo_data import DemoDataRecord
     from database.models.scheduler import Appointment as SchedulerAppointment
+    from database.models.referral import MUMClient, ReferralPartner
+    from database.models.task import Task
+    from database.models.doc_notification import DocNotification
+    from database.models.sms_conversation import SMSAIConversation, SMSAIConversationMessage
     from database.enums import ActivityType, DocumentType, DocumentCategory
 
     counts: Dict[str, int] = {}
@@ -570,6 +574,354 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         counts["morning_briefings"] = 0
 
     # ------------------------------------------------------------------
+    # 8. MUM CLIENTS (15)
+    # ------------------------------------------------------------------
+    mum_ids: List[int] = []
+    try:
+        savepoint = db.begin_nested()
+        for i in range(15):
+            first = FIRST_NAMES[i]
+            last = LAST_NAMES[i]
+            city, state_code, zipcode = CITIES_STATES[i % len(CITIES_STATES)]
+            orig_amount = Decimal(random.randrange(200000, 700000, 25000))
+            rate = Decimal(str(round(random.uniform(3.5, 6.5), 3)))
+            appraisal = orig_amount + Decimal(random.randrange(10000, 60000, 5000))
+            current_value = appraisal + Decimal(random.randrange(-10000, 40000, 5000))
+            months_since = random.randint(6, 48)
+            principal_paid = orig_amount * Decimal("0.01") * months_since
+            current_balance = orig_amount - principal_paid
+            close_dt = datetime.now(timezone.utc) - timedelta(days=months_since * 30)
+            first_pmt = close_dt + timedelta(days=45)
+
+            mum = MUMClient(
+                organization_id=organization_id,
+                user_id=user_id,
+                client_name=f"{first} {last}",
+                email=_random_email(first, last),
+                phone=_random_phone(),
+                loan_number=f"SP-{year}-MUM-{i+1:03d}",
+                closing_date=close_dt,
+                first_payment_date=first_pmt,
+                interest_rate=rate,
+                original_loan_amount=orig_amount,
+                current_loan_amount=current_balance,
+                appraisal_value_at_closing=appraisal,
+                current_property_value=current_value,
+                original_rate=rate,
+                current_rate=rate,
+                loan_balance=current_balance,
+                term=360,
+                status="active",
+                property_state=state_code,
+                property_zip=zipcode,
+                engagement_score=random.randint(20, 95),
+                refinance_opportunity=rate > Decimal("5.5"),
+                last_contact=_past_date(30),
+                created_at=close_dt,
+            )
+            db.add(mum)
+            db.flush()
+            mum_ids.append(mum.id)
+            _track(db, organization_id, "mum_client", mum.id)
+        savepoint.commit()
+        counts["mum_clients"] = len(mum_ids)
+        logger.info("Seeded %d demo MUM clients", len(mum_ids))
+    except Exception:
+        logger.exception("Failed to seed MUM clients")
+        savepoint.rollback()
+        counts["mum_clients"] = 0
+
+    # ------------------------------------------------------------------
+    # 9. TASKS (30)
+    # ------------------------------------------------------------------
+    try:
+        savepoint = db.begin_nested()
+        task_count = 0
+        task_defs = [
+            ("Call back Sarah re: pre-approval docs", "high", "pending", 2),
+            ("Review appraisal report — 123 Oak Lane", "high", "pending", 1),
+            ("Submit conditions to underwriter", "high", "in_progress", 0),
+            ("Send rate lock confirmation to borrower", "medium", "pending", 3),
+            ("Follow up on title search delay", "medium", "pending", 2),
+            ("Update CRM notes from morning calls", "low", "completed", -1),
+            ("Order flood cert — Elm Street property", "medium", "pending", 4),
+            ("Prepare closing disclosure for review", "high", "in_progress", 1),
+            ("Check credit supplement results", "medium", "pending", 2),
+            ("Send welcome email to new lead", "low", "pending", 1),
+            ("Schedule discovery call — Quinn Sandford", "medium", "pending", 3),
+            ("Upload VOE letter to loan file", "high", "pending", 0),
+            ("Review DTI calculations before submission", "high", "in_progress", 1),
+            ("Confirm wire instructions with title company", "high", "pending", 2),
+            ("Set up borrower portal access", "low", "completed", -2),
+            ("Run AUS — check DU findings", "high", "pending", 1),
+            ("Request updated bank statements (60-day)", "medium", "pending", 3),
+            ("Review HOI declaration page", "medium", "pending", 2),
+            ("Follow up with realtor on contract extension", "medium", "pending", 4),
+            ("Send pre-qual letter to agent", "low", "pending", 1),
+            ("Verify income docs for self-employed borrower", "high", "in_progress", 0),
+            ("Schedule final walk-through", "medium", "pending", 5),
+            ("Confirm closing date with all parties", "high", "pending", 2),
+            ("Prepare loan comparison worksheet", "medium", "completed", -3),
+            ("Call borrower re: rate float-down option", "medium", "pending", 1),
+            ("Review compliance checklist pre-submission", "high", "pending", 0),
+            ("Send birthday card to past client", "low", "pending", 7),
+            ("Check lock expiration — DEMO-2026-0012", "high", "pending", 1),
+            ("Submit extension request for rate lock", "high", "in_progress", 0),
+            ("Update pipeline report for team meeting", "medium", "pending", 2),
+        ]
+        for i, (title, priority, status, due_offset) in enumerate(task_defs):
+            target_lead_id = lead_ids[i % len(lead_ids)] if lead_ids else None
+            target_loan_id = loan_ids[i % len(loan_ids)] if loan_ids and i < 20 else None
+            due = datetime.now(timezone.utc) + timedelta(days=due_offset) if due_offset >= 0 else None
+            completed_at = _past_date(abs(due_offset)) if status == "completed" else None
+
+            task = Task(
+                organization_id=organization_id,
+                title=title,
+                priority=priority,
+                status=status,
+                owner_id=user_id,
+                lead_id=target_lead_id,
+                loan_id=target_loan_id,
+                due_date=due,
+                completed_at=completed_at,
+                created_at=_past_date(7),
+            )
+            db.add(task)
+            db.flush()
+            _track(db, organization_id, "task", task.id)
+            task_count += 1
+        savepoint.commit()
+        counts["tasks"] = task_count
+        logger.info("Seeded %d demo tasks", task_count)
+    except Exception:
+        logger.exception("Failed to seed tasks")
+        savepoint.rollback()
+        counts["tasks"] = 0
+
+    # ------------------------------------------------------------------
+    # 10. CALENDAR EVENTS (12)
+    # ------------------------------------------------------------------
+    try:
+        savepoint = db.begin_nested()
+        cal_count = 0
+        cal_events = [
+            ("Discovery Call — Avery Demoworth", "call", 30, 1),
+            ("Pre-Approval Review — Jordan Sampleson", "meeting", 45, 1),
+            ("Application Walkthrough — Morgan Testfield", "meeting", 60, 2),
+            ("Rate Lock Discussion — Taylor Showcroft", "call", 30, 2),
+            ("Document Review — Casey Trialton", "meeting", 30, 3),
+            ("Closing Prep — Riley Demosky", "meeting", 45, 3),
+            ("Team Pipeline Review", "meeting", 60, 4),
+            ("Appraisal Follow-Up — Quinn Sandbox", "call", 15, 4),
+            ("Borrower Check-In — Harper Trialhaven", "call", 20, 5),
+            ("CD Review — Sage Demova", "meeting", 30, 5),
+            ("Weekly Office Meeting", "meeting", 60, 7),
+            ("Training: New Compliance Updates", "meeting", 90, 7),
+        ]
+        for i, (title, etype, duration, day_offset) in enumerate(cal_events):
+            hour = random.choice([9, 10, 11, 13, 14, 15, 16])
+            start = (datetime.now(timezone.utc) + timedelta(days=day_offset)).replace(
+                hour=hour, minute=0, second=0, microsecond=0
+            )
+            end = start + timedelta(minutes=duration)
+
+            event = CalendarEvent(
+                organization_id=organization_id,
+                user_id=user_id,
+                title=title,
+                description=f"Scheduled {etype} — {duration} min",
+                start_time=start,
+                end_time=end,
+                event_type=etype,
+                status="scheduled",
+                lead_id=lead_ids[i % len(lead_ids)] if lead_ids and i < 10 else None,
+                loan_id=loan_ids[i % len(loan_ids)] if loan_ids and i < 6 else None,
+            )
+            db.add(event)
+            db.flush()
+            _track(db, organization_id, "calendar_event", event.id)
+            cal_count += 1
+        savepoint.commit()
+        counts["calendar_events"] = cal_count
+        logger.info("Seeded %d demo calendar events", cal_count)
+    except Exception:
+        logger.exception("Failed to seed calendar events")
+        savepoint.rollback()
+        counts["calendar_events"] = 0
+
+    # ------------------------------------------------------------------
+    # 11. NOTIFICATIONS (10)
+    # ------------------------------------------------------------------
+    try:
+        savepoint = db.begin_nested()
+        notif_count = 0
+        notif_defs = [
+            ("DOC_UPLOADED", "New Document Uploaded", "urgent", "Paystubs uploaded by borrower — review needed.", True),
+            ("CONDITION_ADDED", "New Underwriting Condition", "critical", "Underwriter added condition: 60-day bank statements required.", True),
+            ("SLA_WARNING", "SLA Deadline Approaching", "warning", "Loan DEMO-2026-0003 approaching 48-hour disclosure deadline.", True),
+            ("DOC_APPROVED", "Document Approved", "info", "W-2 for Jordan Sampleson has been approved.", False),
+            ("FRAUD_ALERT", "Potential Fraud Flag", "critical", "Income document flagged — inconsistent employer name detected.", True),
+            ("DOC_EXPIRING", "Document Expiring Soon", "warning", "Credit report for Morgan Testfield expires in 5 days.", True),
+            ("CONDITION_CLEARED", "Condition Cleared", "info", "Appraisal condition cleared for DEMO-2026-0007.", False),
+            ("DOC_CLASSIFIED", "Auto-Classification Complete", "info", "3 uploaded documents automatically classified.", False),
+            ("SIGNATURE_COMPLETED", "E-Signature Completed", "info", "Initial disclosures signed by Taylor Showcroft.", False),
+            ("PACKAGE_READY", "Loan Package Ready", "info", "Submission package for DEMO-2026-0010 is complete.", False),
+        ]
+        for i, (ntype, title, severity, body, unread) in enumerate(notif_defs):
+            target_loan_id = loan_ids[i % len(loan_ids)] if loan_ids else None
+            notif = DocNotification(
+                organization_id=organization_id,
+                user_id=user_id,
+                loan_id=target_loan_id,
+                notification_type=ntype,
+                title=title,
+                severity=severity,
+                body=body,
+                is_read=not unread,
+                read_at=_past_date(2) if not unread else None,
+                delivery_channels=["in_app"],
+                created_at=_past_date(5),
+            )
+            db.add(notif)
+            db.flush()
+            _track(db, organization_id, "notification", notif.id)
+            notif_count += 1
+        savepoint.commit()
+        counts["notifications"] = notif_count
+        logger.info("Seeded %d demo notifications", notif_count)
+    except Exception:
+        logger.exception("Failed to seed notifications")
+        savepoint.rollback()
+        counts["notifications"] = 0
+
+    # ------------------------------------------------------------------
+    # 12. SMS CONVERSATIONS (5)
+    # ------------------------------------------------------------------
+    try:
+        savepoint = db.begin_nested()
+        sms_count = 0
+        sms_convos = [
+            ("+15551001001", "active", "qualifying", [
+                ("inbound", "Hi, I saw your ad about rates. What are current rates for a 30-year fixed?"),
+                ("outbound", "Hi! Thanks for reaching out. Current 30-year fixed rates are around 6.25-6.5% depending on credit and down payment. Would you like to discuss your specific situation?"),
+                ("inbound", "Yes, I have a 740 credit score and looking to put 20% down on a $400K home"),
+                ("outbound", "Great credit score! With 20% down on $400K, you'd qualify for excellent rates. Let me run some numbers — can we schedule a quick 15-min call this week?"),
+            ]),
+            ("+15551001002", "active", "scheduling", [
+                ("inbound", "I got your voicemail. Can we talk tomorrow?"),
+                ("outbound", "Absolutely! I have openings at 10am and 2pm tomorrow. Which works better for you?"),
+                ("inbound", "2pm works great"),
+                ("outbound", "Perfect, I've got you down for 2pm tomorrow. I'll send a calendar invite shortly. Talk then!"),
+            ]),
+            ("+15551001003", "active", "nurture", [
+                ("inbound", "Just checking — any changes in rates this week?"),
+                ("outbound", "Rates ticked down slightly — 30yr fixed around 6.375% today. Still a good time if you're ready to lock. Want me to send an updated comparison?"),
+                ("inbound", "Sure, send it over"),
+                ("outbound", "Done! Just emailed you an updated rate sheet with conventional, FHA, and VA options. Let me know if any questions come up."),
+            ]),
+            ("+15551001004", "closed", "greeting", [
+                ("outbound", "Hi! This is Demo from Summit Peak Mortgage. I wanted to follow up on your rate quote request. Do you have a few minutes?"),
+                ("inbound", "Sorry, not interested right now"),
+                ("outbound", "No problem at all! If your situation changes, feel free to reach out anytime. Have a great day!"),
+            ]),
+            ("+15551001005", "active", "qualifying", [
+                ("inbound", "My lease ends in 3 months and I want to buy. Where do I start?"),
+                ("outbound", "Great timing! First step is getting pre-approved so you know your budget. I'll need about 15 min to review your finances. Can you share your approximate income and any monthly debts?"),
+                ("inbound", "Income is about 85K, car payment $350/mo, student loans $200/mo"),
+                ("outbound", "That's a solid start! Based on those numbers, you'd likely qualify in the $280-320K range. Let's set up a pre-approval call — I'll need W-2s and bank statements. Want to do a quick Zoom this week?"),
+            ]),
+        ]
+        for i, (phone, status, stage, messages) in enumerate(sms_convos):
+            target_lead_id = lead_ids[i % len(lead_ids)] if lead_ids else None
+            convo = SMSAIConversation(
+                phone_number=phone,
+                organization_id=organization_id,
+                lead_id=target_lead_id,
+                status=status,
+                current_stage=stage,
+                message_count=len(messages),
+                last_message_at=_past_date(3),
+                created_at=_past_date(10),
+            )
+            db.add(convo)
+            db.flush()
+            _track(db, organization_id, "sms_conversation", convo.id)
+
+            for j, (direction, content) in enumerate(messages):
+                msg = SMSAIConversationMessage(
+                    conversation_id=convo.id,
+                    direction=direction,
+                    content=content,
+                    ai_generated=(direction == "outbound"),
+                    created_at=_past_date(10 - j),
+                )
+                db.add(msg)
+
+            sms_count += 1
+        db.flush()
+        savepoint.commit()
+        counts["sms_conversations"] = sms_count
+        logger.info("Seeded %d demo SMS conversations", sms_count)
+    except Exception:
+        logger.exception("Failed to seed SMS conversations")
+        savepoint.rollback()
+        counts["sms_conversations"] = 0
+
+    # ------------------------------------------------------------------
+    # 13. REFERRAL PARTNERS (8)
+    # ------------------------------------------------------------------
+    try:
+        savepoint = db.begin_nested()
+        partner_count = 0
+        partner_defs = [
+            ("Sarah Mitchell Realty", "Sarah Mitchell", "realtor", "broker", 12, 8, 5, Decimal("1250000")),
+            ("James Rivera — Keller Williams", "James Rivera", "realtor", "agent", 8, 5, 3, Decimal("750000")),
+            ("Chen & Associates CPA", "Michael Chen", "financial_advisor", "individual", 4, 2, 2, Decimal("500000")),
+            ("Peak Insurance Group", "Lisa Thompson", "insurance", "team", 6, 3, 2, Decimal("600000")),
+            ("David Park — RE/MAX", "David Park", "realtor", "agent", 10, 7, 4, Decimal("980000")),
+            ("Martinez Law — Real Estate", "Ana Martinez", "attorney", "individual", 3, 1, 1, Decimal("350000")),
+            ("NextGen Builders Inc.", "Tom Wheeler", "builder", "team", 5, 4, 3, Decimal("1100000")),
+            ("Coastal Title Services", "Jennifer Lee", "title_company", "individual", 7, 6, 4, Decimal("920000")),
+        ]
+        for i, (biz_name, contact, category, pcat, refs_in, refs_out, closed, vol) in enumerate(partner_defs):
+            city, state_code, zipcode = CITIES_STATES[i % len(CITIES_STATES)]
+            partner = ReferralPartner(
+                organization_id=organization_id,
+                owner_id=user_id,
+                name=biz_name,
+                business_name=biz_name,
+                contact_name=contact,
+                category=category,
+                partner_category=pcat,
+                phone=_random_phone(),
+                email=f"{contact.split()[0].lower()}@demo-partner.com",
+                referrals_in=refs_in,
+                referrals_out=refs_out,
+                closed_loans=closed,
+                volume=vol,
+                reciprocity_score=round(refs_out / max(refs_in, 1) * 100, 1),
+                status="active",
+                loyalty_tier="gold" if closed >= 4 else ("silver" if closed >= 2 else "bronze"),
+                city=city,
+                state=state_code,
+                zip_code=zipcode,
+                last_interaction=_past_date(14),
+                created_at=_past_date(90),
+            )
+            db.add(partner)
+            db.flush()
+            _track(db, organization_id, "referral_partner", partner.id)
+            partner_count += 1
+        savepoint.commit()
+        counts["referral_partners"] = partner_count
+        logger.info("Seeded %d demo referral partners", partner_count)
+    except Exception:
+        logger.exception("Failed to seed referral partners")
+        savepoint.rollback()
+        counts["referral_partners"] = 0
+
+    # ------------------------------------------------------------------
     # Commit everything
     # ------------------------------------------------------------------
     db.commit()
@@ -597,6 +949,12 @@ _ENTITY_MODEL_MAP = {
     "compliance_alert": ("database.models.compliance", "ComplianceAlert"),
     "document": ("database.models.document", "Document"),
     "morning_briefing": ("database.models.morning_briefing", "MorningBriefing"),
+    "mum_client": ("database.models.referral", "MUMClient"),
+    "task": ("database.models.task", "Task"),
+    "calendar_event": ("database.models.communication", "CalendarEvent"),
+    "notification": ("database.models.doc_notification", "DocNotification"),
+    "sms_conversation": ("database.models.sms_conversation", "SMSAIConversation"),
+    "referral_partner": ("database.models.referral", "ReferralPartner"),
 }
 
 
@@ -609,11 +967,15 @@ def clear_demo_data(db: Session, organization_id: int) -> Dict[str, Any]:
     """
     from database.models.demo_data import DemoDataRecord
     from database.models.lead_loan import Lead, Loan
-    from database.models.communication import Activity
+    from database.models.communication import Activity, CalendarEvent
     from database.models.compliance import ComplianceAlert
     from database.models.document import Document
     from database.models.morning_briefing import MorningBriefing
     from database.models.scheduler import Appointment as SchedulerAppointment
+    from database.models.referral import MUMClient, ReferralPartner
+    from database.models.task import Task
+    from database.models.doc_notification import DocNotification
+    from database.models.sms_conversation import SMSAIConversation
 
     model_map = {
         "lead": Lead,
@@ -623,6 +985,12 @@ def clear_demo_data(db: Session, organization_id: int) -> Dict[str, Any]:
         "compliance_alert": ComplianceAlert,
         "document": Document,
         "morning_briefing": MorningBriefing,
+        "mum_client": MUMClient,
+        "task": Task,
+        "calendar_event": CalendarEvent,
+        "notification": DocNotification,
+        "sms_conversation": SMSAIConversation,
+        "referral_partner": ReferralPartner,
     }
 
     # Get all tracking records for this org
@@ -649,8 +1017,10 @@ def clear_demo_data(db: Session, organization_id: int) -> Dict[str, Any]:
 
     # Delete in dependency order: documents/activities first, then loans/leads last
     delete_order = [
+        "notification", "sms_conversation", "calendar_event",
         "morning_briefing", "document", "compliance_alert",
-        "appointment", "activity", "loan", "lead",
+        "task", "appointment", "activity", "referral_partner",
+        "mum_client", "loan", "lead",
     ]
 
     for entity_type in delete_order:
