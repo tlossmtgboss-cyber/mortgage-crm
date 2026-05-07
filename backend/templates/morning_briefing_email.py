@@ -38,6 +38,7 @@ def render_briefing_email(
     conditions: List[Dict],
     yesterday: Dict[str, Any],
     team: Optional[Dict[str, Any]] = None,
+    dashboard_snapshot: Optional[Dict[str, Any]] = None,
     app_url: str = "https://app.perenniaai.com",
     # Branding params:
     company_name: str = "The Tim Loss Team",
@@ -72,6 +73,14 @@ def render_briefing_email(
         sections.append(_section_priorities_unavailable(brand_color=brand))
 
     sections.append(_divider())
+
+    # Dashboard snapshot (always included when present)
+    if dashboard_snapshot:
+        sections.append(_section_dashboard_snapshot(
+            dashboard_snapshot, briefing_date, level,
+            app_url=app_url, brand_color=brand,
+        ))
+        sections.append(_divider())
 
     # Personal pipeline (all levels)
     if active > 0 or level == "individual":
@@ -225,6 +234,131 @@ def _section_conditions(items: List[Dict]) -> str:
     return f"""
 <h2 style="margin:20px 0 8px;color:#8e44ad;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Pending Conditions ({len(items)})</h2>
 <ul style="margin:0;padding-left:20px;">{rows}</ul>"""
+
+
+def _section_dashboard_snapshot(
+    snapshot: Dict[str, Any],
+    briefing_date: date,
+    level: str,
+    app_url: str = "https://app.perenniaai.com",
+    brand_color: str = "#218d8d",
+) -> str:
+    """Render dashboard snapshot section with deep links to app."""
+    if not snapshot:
+        return ""
+
+    date_str = briefing_date.isoformat()
+    dash_link = f"{app_url}/dashboard?date={_esc(date_str)}"
+
+    sections = []
+
+    # Production
+    prod = snapshot.get("production", {})
+    if prod:
+        monthly = prod.get("monthlyActual", 0)
+        goal = prod.get("monthlyGoal", 0)
+        progress = prod.get("monthlyProgress", 0)
+        bar_width = min(progress, 100)
+        sections.append(f"""
+<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:#4a4a5a;text-transform:uppercase;">
+  <a href="{dash_link}" style="color:{brand_color};text-decoration:none;">Production</a>
+</h3>
+<p style="margin:0 0 6px;font-size:14px;color:#1a1a2a;">{_esc(monthly)} / {_esc(goal)} funded this month ({_esc(progress)}%)</p>
+<div style="background:#e8e8ed;border-radius:4px;height:8px;overflow:hidden;">
+  <div style="background:{brand_color};height:100%;width:{bar_width}%;border-radius:4px;"></div>
+</div>""")
+
+    # Pipeline
+    pipeline = snapshot.get("pipeline_stats", [])
+    if pipeline:
+        rows = ""
+        for s in pipeline:
+            if s.get("count", 0) > 0:
+                stage_link = f'{app_url}/pipeline?stage={_esc(s["id"])}' if s.get("id") not in ("new", "preapproved") else f"{app_url}/leads"
+                vol = f' &middot; ${s["volume"]:,.0f}' if s.get("volume") else ""
+                alert = f' <span style="color:#e74c3c;font-weight:600;">({s["alerts"]} {s["alert_text"]})</span>' if s.get("alerts", 0) > 0 else ""
+                rows += f'<tr><td style="padding:4px 8px;font-size:13px;border-bottom:1px solid #f0f0f4;"><a href="{stage_link}" style="color:{brand_color};text-decoration:none;">{_esc(s["name"])}</a></td><td style="padding:4px 8px;font-size:13px;border-bottom:1px solid #f0f0f4;text-align:right;font-weight:600;">{_esc(s["count"])}{vol}{alert}</td></tr>\n'
+        if rows:
+            sections.append(f"""
+<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:#4a4a5a;text-transform:uppercase;">Pipeline</h3>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border-radius:6px;overflow:hidden;">{rows}</table>""")
+
+    # Efficiency
+    eff = snapshot.get("efficiency", {})
+    if eff:
+        score = eff.get("overallScore", 0)
+        score_color = "#27ae60" if score >= 70 else ("#f39c12" if score >= 40 else "#e74c3c")
+        sections.append(f"""
+<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:#4a4a5a;text-transform:uppercase;">
+  <a href="{dash_link}" style="color:{brand_color};text-decoration:none;">Efficiency</a>
+</h3>
+<table width="100%" cellpadding="0" cellspacing="0">
+<tr>
+  <td style="font-size:28px;font-weight:700;color:{score_color};width:60px;">{_esc(score)}</td>
+  <td style="font-size:13px;color:#4a4a5a;padding-left:12px;">
+    Pull-through: {_esc(eff.get('pullThroughRate', 0))}% &middot;
+    Avg close: {_esc(eff.get('avgTimeToClose', 0))}d &middot;
+    Behind: {_esc(eff.get('loansFallingBehind', 0))}
+  </td>
+</tr>
+</table>""")
+
+    # Profitability
+    prof = snapshot.get("profitability", {})
+    if prof and prof.get("funded_ytd", 0) > 0:
+        sections.append(f"""
+<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:#4a4a5a;text-transform:uppercase;">
+  <a href="{dash_link}" style="color:{brand_color};text-decoration:none;">Profitability</a>
+</h3>
+<p style="margin:0;font-size:13px;color:#4a4a5a;">
+  {_esc(prof.get('funded_ytd', 0))} funded YTD &middot;
+  ${prof.get('total_volume', 0):,.0f} volume &middot;
+  Avg size ${prof.get('avg_loan_size', 0):,.0f} &middot;
+  {_esc(prof.get('gain_on_sale_display', '--'))} gain
+</p>""")
+
+    # Loan issues
+    issues = snapshot.get("loan_issues", [])
+    if issues:
+        rows = ""
+        for issue in issues[:5]:
+            loan_link = f'{app_url}/loans/{_esc(issue["id"])}'
+            rows += f'<li style="margin:3px 0;font-size:13px;color:#4a4a5a;"><a href="{loan_link}" style="color:{brand_color};text-decoration:none;">{_esc(issue["borrower_name"])}</a> — {_esc(issue["issue"])}</li>\n'
+        sections.append(f"""
+<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:#e74c3c;text-transform:uppercase;">Loan Issues ({len(issues)})</h3>
+<ul style="margin:0;padding-left:20px;">{rows}</ul>""")
+
+    # Bottlenecks
+    bns = snapshot.get("bottlenecks", [])
+    if bns:
+        rows = ""
+        for bn in bns:
+            stage_link = f'{app_url}/pipeline?stage={_esc(bn.get("stage", ""))}'
+            rows += f'<li style="margin:3px 0;font-size:13px;color:#4a4a5a;"><a href="{stage_link}" style="color:{brand_color};text-decoration:none;">{_esc(bn["issue"])}</a> — {_esc(bn["affectedLoans"])} affected, {_esc(bn["avgDelay"])}</li>\n'
+        sections.append(f"""
+<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:#f39c12;text-transform:uppercase;">Bottlenecks ({len(bns)})</h3>
+<ul style="margin:0;padding-left:20px;">{rows}</ul>""")
+
+    # Team stats (manager/leadership only)
+    ts = snapshot.get("team_stats")
+    if ts and ts.get("has_team"):
+        team_link = f"{app_url}/team"
+        sections.append(f"""
+<h3 style="margin:16px 0 8px;font-size:13px;font-weight:700;color:#4a4a5a;text-transform:uppercase;">
+  <a href="{team_link}" style="color:{brand_color};text-decoration:none;">Team Stats</a>
+</h3>
+<p style="margin:0;font-size:13px;color:#4a4a5a;">
+  Avg workload: {_esc(ts.get('avg_workload', 0))} &middot;
+  Backlog: {_esc(ts.get('backlog', 0))} &middot;
+  SLA missed: {_esc(ts.get('sla_missed', 0))}
+</p>""")
+
+    if not sections:
+        return ""
+
+    return f"""
+<h2 style="margin:20px 0 4px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">&#128202; Dashboard Snapshot</h2>
+{"".join(sections)}"""
 
 
 def _health_dot(health: str) -> str:
