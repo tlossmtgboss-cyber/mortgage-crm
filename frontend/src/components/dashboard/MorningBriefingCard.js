@@ -7,6 +7,11 @@ import './MorningBriefingCard.css';
 // Helpers
 // ---------------------------------------------------------------------------
 
+function getLocalDateString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function healthLabel(level) {
   if (level === 'red') return 'Needs Attention';
   if (level === 'yellow') return 'Monitor';
@@ -280,7 +285,7 @@ export default function MorningBriefingCard() {
   });
   const [dismissed, setDismissed] = useState(() => {
     const d = localStorage.getItem('briefing_dismissed_date');
-    return d === new Date().toISOString().split('T')[0];
+    return d === getLocalDateString();
   });
   const [narrativeExpanded, setNarrativeExpanded] = useState(false);
   const [openSections, setOpenSections] = useState({
@@ -330,7 +335,7 @@ export default function MorningBriefingCard() {
 
   const dismiss = () => {
     setDismissed(true);
-    localStorage.setItem('briefing_dismissed_date', new Date().toISOString().split('T')[0]);
+    localStorage.setItem('briefing_dismissed_date', getLocalDateString());
   };
 
   const toggleSection = (key) => {
