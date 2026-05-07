@@ -111,7 +111,7 @@ function SidebarError({ message, onRetry }) {
  * @param {Function} props.onSwitchTab - Callback(tabKey) to switch the active sidebar tab
  * @returns {React.ReactElement}
  */
-function TodayTab({ onSwitchTab }) {
+function TodayTab({ onSwitchTab, selectedDate }) {
   const [appointments, setAppointments] = useState([]);
   const [priorityAlerts, setPriorityAlerts] = useState({ tasks: [], leads: [], sla: [] });
   const [loading, setLoading] = useState(true);
@@ -121,14 +121,13 @@ function TodayTab({ onSwitchTab }) {
     setLoading(true);
     setError(null);
     try {
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-      const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
+      const targetDate = selectedDate || new Date();
+      const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+      const todayStr = new Date().toISOString().split('T')[0];
 
       // Fetch all four data sources in parallel
       const [scheduleData, tasksData, leadsData, loansData] = await Promise.allSettled([
-        schedulerAPI.getAppointments({ start_date: start, end_date: end }),
+        schedulerAPI.getAppointments({ start_date: dateStr, end_date: dateStr }),
         tasksAPI.getAll({ status: 'pending' }),
         leadsAPI.getAll(),
         loansAPI.getAll(),
@@ -136,9 +135,13 @@ function TodayTab({ onSwitchTab }) {
 
       // --- Appointments ---
       const appts = scheduleData.status === 'fulfilled' ? scheduleData.value : [];
-      const sorted = (Array.isArray(appts) ? appts : []).sort(
-        (a, b) => new Date(a.start_time || a.starts_at || 0) - new Date(b.start_time || b.starts_at || 0)
-      );
+      const sorted = (Array.isArray(appts) ? appts : [])
+        .map(a => ({
+          ...a,
+          start_time: a.start_time || a.scheduled_start || a.starts_at,
+          end_time: a.end_time || a.scheduled_end || a.ends_at,
+        }))
+        .sort((a, b) => new Date(a.start_time || 0) - new Date(b.start_time || 0));
       setAppointments(sorted);
 
       // --- Overdue tasks (up to 3) ---
@@ -229,7 +232,7 @@ function TodayTab({ onSwitchTab }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -251,11 +254,14 @@ function TodayTab({ onSwitchTab }) {
   if (loading) return <SidebarSkeleton rows={5} />;
   if (error) return <SidebarError message={error} onRetry={fetchAll} />;
 
+  const isToday = !selectedDate || new Date().toDateString() === selectedDate.toDateString();
+  const dateLabel = isToday ? 'today' : selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
   return (
     <div className="ops-today-container">
-      {/* --- Timeline section (existing) --- */}
+      {/* --- Timeline section --- */}
       {appointments.length === 0 ? (
-        <SidebarEmpty icon="&#128197;" title="No appointments today" subtitle="Your schedule is clear" />
+        <SidebarEmpty icon="&#128197;" title={`No appointments ${dateLabel}`} subtitle="Your schedule is clear" />
       ) : (
         <div className="ops-today-list">
           {appointments.map((appt, idx) => {
@@ -767,13 +773,18 @@ const OperationalSidebar = React.memo(function OperationalSidebar({
   formatEventTime,
   searchQuery,
   onSearchChange,
+  selectedDate,
 }) {
   const [activeTab, setActiveTab] = useState('today');
+
+  useEffect(() => {
+    if (selectedDate) setActiveTab('today');
+  }, [selectedDate]);
 
   const renderContent = () => {
     switch (activeTab) {
       case 'today':
-        return <TodayTab onSwitchTab={setActiveTab} />;
+        return <TodayTab onSwitchTab={setActiveTab} selectedDate={selectedDate} />;
       case 'events':
         return (
           <AppointmentsTab
@@ -796,12 +807,15 @@ const OperationalSidebar = React.memo(function OperationalSidebar({
     }
   };
 
-  const activeLabel = SIDEBAR_TABS.find(t => t.key === activeTab)?.label || 'Today';
+  const isSelectedToday = !selectedDate || new Date().toDateString() === selectedDate.toDateString();
+  const todayLabel = activeTab === 'today' && selectedDate && !isSelectedToday
+    ? selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : SIDEBAR_TABS.find(t => t.key === activeTab)?.label || 'Today';
 
   return (
     <div className="ops-sidebar" role="complementary" aria-label="Operations panel">
       <div className="ops-sidebar-header">
-        <h2 className="ops-sidebar-title">{activeLabel}</h2>
+        <h2 className="ops-sidebar-title">{todayLabel}</h2>
         <button className="ops-add-btn" onClick={onAddClick} title="Add appointment">+ Add</button>
       </div>
 

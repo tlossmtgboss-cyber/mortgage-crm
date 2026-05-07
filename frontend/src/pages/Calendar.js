@@ -178,12 +178,13 @@ function Calendar() {
     };
   });
 
+  // ── Selected day for sidebar (shows appointments for that day) ──
+  const [sidebarDate, setSidebarDate] = useState(null);
+
   // ── Click handlers for day/time slot selection ──
   const handleDayClick = useCallback((day, year, month) => {
-    actions.setSelectedDate(new Date(year, month, day));
-    actions.setSelectedTime(null);
-    actions.setShowAddModal(true);
-  }, [actions]);
+    setSidebarDate(new Date(year, month, day));
+  }, []);
 
   const handleTimeSlotClick = useCallback((date, hour) => {
     actions.setSelectedDate(date);
@@ -251,6 +252,7 @@ function Calendar() {
               formatEventTime={events.formatEventTime}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              selectedDate={sidebarDate}
             />
           )}
 
