@@ -98,6 +98,7 @@ from . import refinance
 
 # Analytics Tools
 from . import historical
+from . import trend_analysis
 
 # Aria Voice Tools (SMS, Documents, Outreach)
 from . import sms_tools
