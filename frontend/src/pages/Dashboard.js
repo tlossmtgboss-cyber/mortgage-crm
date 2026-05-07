@@ -9,6 +9,7 @@ import DealAlerts from '../components/DealAlerts';
 import api from '../services/api';
 import './Dashboard.css';
 import MorningBriefingCard from '../components/dashboard/MorningBriefingCard';
+import BriefingErrorBoundary from '../components/briefing/BriefingErrorBoundary';
 import { getUserData } from '../utils/tokenStore';
 
 function Dashboard() {
@@ -1082,7 +1083,7 @@ function Dashboard() {
         </div>
       )}
 
-      <MorningBriefingCard />
+      <BriefingErrorBoundary><MorningBriefingCard /></BriefingErrorBoundary>
 
       <div className="dashboard-header-compact">
         <h1>Today's Command Center</h1>
