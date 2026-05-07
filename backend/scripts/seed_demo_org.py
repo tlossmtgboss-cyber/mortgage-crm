@@ -179,6 +179,7 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     from database.enums import ActivityType, DocumentType, DocumentCategory
 
     counts: Dict[str, int] = {}
+    errors: Dict[str, str] = {}
     year = datetime.now().year
 
     # Ensure the demo_data_records table exists
@@ -227,8 +228,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["leads"] = len(lead_ids)
         logger.info("Seeded %d demo leads", len(lead_ids))
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed leads")
+        errors["leads"] = str(e)
         savepoint.rollback()
         counts["leads"] = 0
 
@@ -303,8 +305,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["loans"] = len(loan_ids)
         logger.info("Seeded %d demo loans", len(loan_ids))
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed loans")
+        errors["loans"] = str(e)
         savepoint.rollback()
         counts["loans"] = 0
 
@@ -341,8 +344,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["activities"] = activity_count
         logger.info("Seeded %d demo activities", activity_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed activities")
+        errors["activities"] = str(e)
         savepoint.rollback()
         counts["activities"] = 0
 
@@ -394,8 +398,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["appointments"] = appt_count
         logger.info("Seeded %d demo appointments", appt_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed appointments")
+        errors["appointments"] = str(e)
         savepoint.rollback()
         counts["appointments"] = 0
 
@@ -469,8 +474,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["compliance_alerts"] = alert_count
         logger.info("Seeded %d demo compliance alerts", alert_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed compliance alerts")
+        errors["compliance_alerts"] = str(e)
         savepoint.rollback()
         counts["compliance_alerts"] = 0
 
@@ -510,8 +516,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["documents"] = doc_count
         logger.info("Seeded %d demo documents", doc_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed documents")
+        errors["documents"] = str(e)
         savepoint.rollback()
         counts["documents"] = 0
 
@@ -568,8 +575,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["morning_briefings"] = 1
         logger.info("Seeded 1 demo morning briefing")
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed morning briefing")
+        errors["morning_briefings"] = str(e)
         savepoint.rollback()
         counts["morning_briefings"] = 0
 
@@ -626,8 +634,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["mum_clients"] = len(mum_ids)
         logger.info("Seeded %d demo MUM clients", len(mum_ids))
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed MUM clients")
+        errors["mum_clients"] = str(e)
         savepoint.rollback()
         counts["mum_clients"] = 0
 
@@ -694,8 +703,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["tasks"] = task_count
         logger.info("Seeded %d demo tasks", task_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed tasks")
+        errors["tasks"] = str(e)
         savepoint.rollback()
         counts["tasks"] = 0
 
@@ -745,8 +755,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["calendar_events"] = cal_count
         logger.info("Seeded %d demo calendar events", cal_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed calendar events")
+        errors["calendar_events"] = str(e)
         savepoint.rollback()
         counts["calendar_events"] = 0
 
@@ -790,8 +801,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["notifications"] = notif_count
         logger.info("Seeded %d demo notifications", notif_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed notifications")
+        errors["notifications"] = str(e)
         savepoint.rollback()
         counts["notifications"] = 0
 
@@ -863,8 +875,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["sms_conversations"] = sms_count
         logger.info("Seeded %d demo SMS conversations", sms_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed SMS conversations")
+        errors["sms_conversations"] = str(e)
         savepoint.rollback()
         counts["sms_conversations"] = 0
 
@@ -916,8 +929,9 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         savepoint.commit()
         counts["referral_partners"] = partner_count
         logger.info("Seeded %d demo referral partners", partner_count)
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to seed referral partners")
+        errors["referral_partners"] = str(e)
         savepoint.rollback()
         counts["referral_partners"] = 0
 
@@ -932,6 +946,7 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         "organization_id": organization_id,
         "seeded_by_user_id": user_id,
         "counts": counts,
+        "errors": errors,
         "total": total,
     }
 
