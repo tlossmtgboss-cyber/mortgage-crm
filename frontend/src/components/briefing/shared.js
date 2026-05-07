@@ -260,3 +260,157 @@ export function TeamSection({ team, level }) {
 
   return null;
 }
+
+export function DashboardSnapshotSection({ snapshot, maxIssues }) {
+  if (!snapshot) return null;
+
+  const { production, pipeline_stats, efficiency, profitability, loan_issues, bottlenecks, team_stats, stage_performance } = snapshot;
+
+  return (
+    <div className="section-content dashboard-snapshot">
+      {/* Production */}
+      {production && (
+        <div className="snapshot-subsection">
+          <h5 className="snapshot-label">Production</h5>
+          <div className="production-gauge">
+            <div className="gauge-main">
+              <span className="gauge-value">{production.monthlyActual || 0}</span>
+              <span className="gauge-separator">/</span>
+              <span className="gauge-goal">{production.monthlyGoal || 0}</span>
+              <span className="gauge-label">this month</span>
+            </div>
+            <div className="gauge-bar">
+              <div className="gauge-fill" style={{ width: `${Math.min(production.monthlyProgress || 0, 100)}%` }} />
+            </div>
+            <div className="gauge-secondary">
+              <span>Daily: {production.dailyActual || 0}/{production.dailyGoal || 0}</span>
+              <span>Weekly: {production.weeklyActual || 0}/{production.weeklyGoal || 0}</span>
+              <span>Annual: {production.annualActual || 0}/{production.annualGoal || 0}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline */}
+      {pipeline_stats && pipeline_stats.length > 0 && (
+        <div className="snapshot-subsection">
+          <h5 className="snapshot-label">Pipeline</h5>
+          <div className="pipeline-compact">
+            {pipeline_stats.filter(s => s.count > 0).map(s => (
+              <div key={s.id} className="pipeline-item">
+                <span className="pipeline-name">{s.name}</span>
+                <span className="pipeline-count">{s.count}</span>
+                {s.volume ? <span className="pipeline-vol">{formatVolume(s.volume)}</span> : null}
+                {s.alerts > 0 && <span className="pipeline-alert">{s.alerts} {s.alert_text}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Efficiency */}
+      {efficiency && (
+        <div className="snapshot-subsection">
+          <h5 className="snapshot-label">Efficiency</h5>
+          <div className="metric-row">
+            <div className="metric-item metric-score">
+              <span className={`metric-value score-${efficiency.overallScore >= 70 ? 'good' : efficiency.overallScore >= 40 ? 'warn' : 'bad'}`}>
+                {efficiency.overallScore}
+              </span>
+              <span className="metric-label">Score</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{efficiency.pullThroughRate}%</span>
+              <span className="metric-label">Pull-Through</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{efficiency.avgTimeToClose}d</span>
+              <span className="metric-label">Avg Close</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{efficiency.loansFallingBehind}</span>
+              <span className="metric-label">Behind</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profitability */}
+      {profitability && profitability.funded_ytd > 0 && (
+        <div className="snapshot-subsection">
+          <h5 className="snapshot-label">Profitability</h5>
+          <div className="metric-row">
+            <div className="metric-item">
+              <span className="metric-value">{profitability.funded_ytd}</span>
+              <span className="metric-label">Funded YTD</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{formatVolume(profitability.total_volume)}</span>
+              <span className="metric-label">Volume</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{formatVolume(profitability.avg_loan_size)}</span>
+              <span className="metric-label">Avg Size</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{profitability.gain_on_sale_display}</span>
+              <span className="metric-label">Gain on Sale</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loan Issues */}
+      {loan_issues && loan_issues.length > 0 && (
+        <div className="snapshot-subsection">
+          <h5 className="snapshot-label">Loan Issues ({loan_issues.length})</h5>
+          <ul className="briefing-list">
+            {loan_issues.slice(0, maxIssues || 10).map(issue => (
+              <li key={issue.id}>
+                <a href={`/loans/${issue.id}`} className="item-link"><strong>{issue.borrower_name}</strong></a>
+                <span className="item-detail">{issue.issue}</span>
+                <span className="item-badge warn">{issue.days_in_stage}d</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Bottlenecks */}
+      {bottlenecks && bottlenecks.length > 0 && (
+        <div className="snapshot-subsection">
+          <h5 className="snapshot-label">Bottlenecks ({bottlenecks.length})</h5>
+          <ul className="briefing-list">
+            {bottlenecks.map((bn, i) => (
+              <li key={i}>
+                <span className="item-text">{bn.issue}</span>
+                <span className="item-detail">{bn.affectedLoans} affected · {bn.avgDelay}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Team stats (manager/leadership) */}
+      {team_stats && team_stats.has_team && (
+        <div className="snapshot-subsection">
+          <h5 className="snapshot-label">Team</h5>
+          <div className="metric-row">
+            <div className="metric-item">
+              <span className="metric-value">{team_stats.avg_workload}</span>
+              <span className="metric-label">Avg Workload</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{team_stats.backlog}</span>
+              <span className="metric-label">Backlog</span>
+            </div>
+            <div className="metric-item">
+              <span className="metric-value">{team_stats.sla_missed}</span>
+              <span className="metric-label">SLA Missed</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
