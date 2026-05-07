@@ -88,13 +88,18 @@ export default function AriaTabNav({
   activeTab = 'home',
   showFab = false,
   onFabPress,
+  onCalendarPress,
 }) {
   const navigate = useNavigate();
 
   const handleTabPress = useCallback((tab) => {
     haptics.light();
+    if (tab.key === 'calendar' && onCalendarPress) {
+      onCalendarPress();
+      return;
+    }
     navigate(tab.path);
-  }, [navigate]);
+  }, [navigate, onCalendarPress]);
 
   const handleFabPress = useCallback(() => {
     haptics.medium();
