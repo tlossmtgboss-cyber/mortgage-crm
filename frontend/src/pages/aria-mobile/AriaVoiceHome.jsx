@@ -19,6 +19,7 @@ import api from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
 import CallIntelligenceSlidePanel from '../../components/aria/CallIntelligenceSlidePanel';
+import AriaCalendarSheet from './AriaCalendarSheet';
 import './AriaVoiceHome.css';
 
 // LiveKit + SSE imports — resolved dynamically to allow graceful fallback.
@@ -432,6 +433,7 @@ export default function AriaVoiceHome() {
 
   // Call Intelligence slide panel
   const [ciPanelOpen, setCiPanelOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // ---- Check LiveKit availability on mount ----
   useEffect(() => {
@@ -768,7 +770,15 @@ export default function AriaVoiceHome() {
         </div>
       )}
 
-      <AriaTabNav variant="dark" activeTab="home" />
+      <AriaTabNav
+        variant="dark"
+        activeTab={calendarOpen ? 'calendar' : 'home'}
+        onCalendarPress={() => setCalendarOpen(true)}
+      />
+      <AriaCalendarSheet
+        open={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+      />
     </div>
   );
 
