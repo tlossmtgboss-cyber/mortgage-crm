@@ -1,0 +1,265 @@
+.appt-detail-panel {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  height: 100%;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.appt-detail-panel--empty {
+  justify-content: center;
+  align-items: center;
+}
+
+.appt-detail-empty {
+  text-align: center;
+  padding: 60px 40px;
+}
+
+.appt-detail-empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.appt-detail-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.appt-detail-empty-sub {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.appt-detail-header {
+  padding: 24px 32px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+  flex-shrink: 0;
+}
+
+.appt-detail-header-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.appt-detail-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  text-transform: capitalize;
+}
+
+.appt-detail-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+}
+
+.appt-detail-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.appt-detail-attendee {
+  font-size: 15px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.appt-detail-attendee--link {
+  color: #218D8D;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.appt-detail-attendee--link:hover {
+  text-decoration: underline;
+}
+
+.appt-detail-attendee-arrow {
+  font-size: 14px;
+}
+
+.appt-detail-body {
+  padding: 24px 32px;
+  flex: 1;
+}
+
+.appt-detail-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.appt-detail-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appt-detail-info-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.appt-detail-info-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.appt-detail-duration {
+  font-size: 13px;
+  color: #9ca3af;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.appt-detail-link {
+  color: #218D8D;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.appt-detail-link:hover {
+  text-decoration: underline;
+}
+
+.appt-detail-section {
+  margin-bottom: 24px;
+}
+
+.appt-detail-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 8px 0;
+}
+
+.appt-detail-description {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: #f9fafb;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.appt-detail-reminder {
+  font-size: 14px;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.appt-detail-footer {
+  padding: 16px 32px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.appt-detail-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.appt-detail-btn--primary {
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  color: white;
+}
+
+.appt-detail-btn--primary:hover {
+  background: linear-gradient(135deg, #1a7070 0%, #155a5a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
+}
+
+.appt-detail-btn--secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.appt-detail-btn--secondary:hover {
+  background: #f3f4f6;
+}
+
+.appt-detail-btn--danger {
+  background: white;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.appt-detail-btn--danger:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+@media (max-width: 1024px) {
+  .appt-detail-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appt-detail-header {
+    padding: 20px 24px;
+  }
+
+  .appt-detail-body {
+    padding: 20px 24px;
+  }
+
+  .appt-detail-footer {
+    padding: 14px 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .appt-detail-panel {
+    max-height: none;
+  }
+
+  .appt-detail-title {
+    font-size: 18px;
+  }
+}

@@ -201,10 +201,9 @@ if __name__ == "__main__":
         print(f"START.PY: WORKER_MODE={worker_mode}", flush=True)
         if worker_mode == "voice_agent":
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            os.chdir(script_dir)
-            env = os.environ.copy()
-            env["PYTHONPATH"] = script_dir + os.pathsep + env.get("PYTHONPATH", "")
-            os.execvpe(sys.executable, [sys.executable, "-m", "aria.voice_agent", "start"], env)
+            aria_dir = os.path.join(script_dir, "aria")
+            os.chdir(aria_dir)
+            os.execvp(sys.executable, [sys.executable, "voice_agent.py", "start"])
         else:
             os.execvp(sys.executable, [sys.executable, "-m", f"workers.{worker_mode}"])
     else:

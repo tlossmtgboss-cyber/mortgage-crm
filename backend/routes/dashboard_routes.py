@@ -29,19 +29,28 @@ from sqlalchemy import func, extract, case, text
 from auth.dependencies import get_current_user
 from database import get_db
 from database.enums import LeadStage, LoanStage
-from database.models import User, Lead, Loan, Task, ReferralPartner, AIColleagueAction
+from database.models import User, Lead, Loan, Task, ReferralPartner, AIColleagueAction, Notification
 from performance_cache import get_cached, set_cached
+from services.dashboard_metrics_service import (
+    calculate_stage_performance,
+    calculate_team_performance,
+    calculate_bottlenecks,
+    calculate_efficiency_trends,
+    calculate_production_metrics,
+    calculate_pipeline_stats,
+    calculate_lead_metrics,
+    calculate_profitability,
+    calculate_loan_issues,
+    calculate_team_stats,
+    calculate_efficiency_summary,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["Dashboard"])
 
 
-# =============================================================================
-# DASHBOARD HELPER FUNCTIONS
-# =============================================================================
-
-def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago, org_id: Optional[int] = None, branch_user_ids: Optional[list] = None) -> list:
+def _DELETED_calculate_stage_performance(db: Session, user_id: int, thirty_days_ago, org_id: Optional[int] = None, branch_user_ids: Optional[list] = None) -> list:
     """
     Calculate real stage performance metrics based on actual loan data.
     Returns efficiency scores and status for each stage.
@@ -558,12 +567,12 @@ async def get_dashboard(
             {"id": "funded", "name": "Funded This Month", "count": 0, "alerts": 0, "alert_text": "", "volume": 0}
         ],
         "production": {
-            "annualGoal": 222, "annualActual": 0, "annualProgress": 0,
-            "monthlyGoal": 18.5, "monthlyActual": 0, "monthlyProgress": 0,
-            "weeklyGoal": 5, "weeklyActual": 0, "weeklyProgress": 0,
-            "dailyGoal": 1, "dailyActual": 0, "dailyProgress": 0
+            "annualGoal": 0, "annualActual": 0, "annualProgress": 0,
+            "monthlyGoal": 0, "monthlyActual": 0, "monthlyProgress": 0,
+            "weeklyGoal": 0, "weeklyActual": 0, "weeklyProgress": 0,
+            "dailyGoal": 0, "dailyActual": 0, "dailyProgress": 0
         },
-        "lead_metrics": {"new_today": 0, "avg_contact_time": 1.2, "conversion_rate": 0, "hot_leads": 0, "alerts": []},
+        "lead_metrics": {"new_today": 0, "avg_contact_time": 0, "conversion_rate": 0, "hot_leads": 0, "alerts": []},
         "loan_issues": [],
         "ai_tasks": {"pending": [], "waiting": []},
         "referral_stats": {"top_partners": [], "engagement": []},
@@ -670,11 +679,10 @@ async def get_dashboard(
         logger.warning(f"Dashboard: Error getting production metrics: {prod_err}")
         annual_actual = monthly_actual = weekly_actual = daily_actual = 0
 
-    # Use goals from Goal Tracker or defaults
-    annual_goal = goals.get('annualGoal', 222)
-    monthly_goal = goals.get('monthlyGoal', 18.5)
-    weekly_goal = goals.get('weeklyGoal', 5)
-    daily_goal = goals.get('dailyGoal', 1)
+    annual_goal = goals.get('annualGoal', 0)
+    monthly_goal = goals.get('monthlyGoal', 0)
+    weekly_goal = goals.get('weeklyGoal', 0)
+    daily_goal = goals.get('dailyGoal', 0)
 
     production = {
         "annualGoal": annual_goal,
@@ -964,13 +972,12 @@ async def get_dashboard(
             ).label('avg_hours')
         ).filter(*query_filters).scalar()
 
-        # Default to 1.2 hours if no data, otherwise round to 1 decimal
-        avg_contact_time = round(float(avg_contact_time_result), 1) if avg_contact_time_result else 1.2
+        avg_contact_time = round(float(avg_contact_time_result), 1) if avg_contact_time_result else 0
     except Exception as lead_metrics_err:
         logger.warning(f"Dashboard: Error getting lead metrics: {lead_metrics_err}")
         total_leads = 1
         new_today = hot_leads = high_intent_leads = applications = conversion_rate = 0
-        avg_contact_time = 1.2
+        avg_contact_time = 0
 
     # Generate AI alerts
     alerts = []
@@ -1060,17 +1067,23 @@ async def get_dashboard(
             lo_count = workload_result.lo_count or 1
             avg_workload = round(total_active / lo_count, 1)
 
-            backlog = db.query(func.count(Task.id)).filter(
+            backlog_filters = [
                 Task.organization_id == org_id,
                 Task.status == "pending",
                 Task.due_date < today
-            ).scalar() or 0
+            ]
+            if branch_user_ids is not None:
+                backlog_filters.append(Task.assigned_to_id.in_(branch_user_ids))
+            backlog = db.query(func.count(Task.id)).filter(*backlog_filters).scalar() or 0
 
-            sla_missed = db.query(func.count(Loan.id)).filter(
+            sla_filters = [
                 Loan.organization_id == org_id,
                 Loan.sla_status == "behind",
                 Loan.stage.notin_(TERMINAL_STAGES)
-            ).scalar() or 0
+            ]
+            if branch_user_ids is not None:
+                sla_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+            sla_missed = db.query(func.count(Loan.id)).filter(*sla_filters).scalar() or 0
 
             insights = []
             if backlog > 5:
@@ -1110,44 +1123,63 @@ async def get_dashboard(
             {"id": "closing", "name": "Closing & Docs", "stages": [LoanStage.CLOSING, LoanStage.DOCS, LoanStage.DOCS_OUT], "target_days": 5},
         ]
 
+        # Compute task counts once (not stage-specific) to avoid N+1 queries
+        task_due_filters = [
+            Task.status.in_(["pending", "in_progress"]),
+            Task.organization_id == org_id
+        ]
+        if branch_user_ids is not None:
+            task_due_filters.append(Task.owner_id.in_(branch_user_ids))
+        else:
+            task_due_filters.append(Task.owner_id == current_user.id)
+        wf_tasks_due = db.query(func.count(Task.id)).filter(*task_due_filters).scalar() or 0
+
+        task_completed_filters = [
+            Task.organization_id == org_id,
+            Task.status == "completed",
+            Task.completed_at >= thirty_days_ago
+        ]
+        if branch_user_ids is not None:
+            task_completed_filters.append(Task.owner_id.in_(branch_user_ids))
+        else:
+            task_completed_filters.append(Task.owner_id == current_user.id)
+        wf_tasks_completed = db.query(func.count(Task.id)).filter(*task_completed_filters).scalar() or 0
+
+        # Single aggregation query for all stage metrics
+        all_stages_flat = []
+        for cfg in workflow_stage_configs:
+            all_stages_flat.extend(cfg["stages"])
+
+        wf_base_filters = [Loan.stage.in_(all_stages_flat)]
+        if org_id:
+            wf_base_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            wf_base_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            wf_base_filters.append(Loan.loan_officer_id == current_user.id)
+
+        stage_agg_rows = db.query(
+            Loan.stage,
+            func.count(Loan.id).label('cnt'),
+            func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_days')
+        ).filter(*wf_base_filters).group_by(Loan.stage).all()
+
+        stage_agg = {}
+        for row in stage_agg_rows:
+            stage_agg[row.stage] = {"cnt": row.cnt or 0, "avg_days": row.avg_days or 0}
+
         workflow_statuses = []
         total_workflow_score = 0
 
         for wf_config in workflow_stage_configs:
-            wf_filters = [Loan.stage.in_(wf_config["stages"])]
-            if org_id:
-                wf_filters.append(Loan.organization_id == org_id)
-            if branch_user_ids is not None:
-                wf_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
-            else:
-                wf_filters.append(Loan.loan_officer_id == current_user.id)
-
-            wf_result = db.query(
-                func.count(Loan.id).label('active_loans'),
-                func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_days')
-            ).filter(*wf_filters).first()
-
-            active_loans = wf_result.active_loans or 0
-            avg_days = float(wf_result.avg_days or 0)
+            active_loans = sum(stage_agg.get(s, {}).get("cnt", 0) for s in wf_config["stages"])
+            total_days = sum(
+                stage_agg.get(s, {}).get("avg_days", 0) * stage_agg.get(s, {}).get("cnt", 0)
+                for s in wf_config["stages"]
+            )
+            avg_days = (total_days / active_loans) if active_loans > 0 else 0
 
             stage_score = max(0, min(100, int(100 - max(0, (avg_days - wf_config["target_days"]) * 10))))
-
-            task_filters = [
-                Task.status.in_(["pending", "in_progress"]),
-                Task.organization_id == org_id
-            ]
-            if branch_user_ids is not None:
-                task_filters.append(Task.owner_id.in_(branch_user_ids))
-            else:
-                task_filters.append(Task.owner_id == current_user.id)
-
-            tasks_due = db.query(func.count(Task.id)).filter(*task_filters).scalar() or 0
-            tasks_completed = db.query(func.count(Task.id)).filter(
-                Task.organization_id == org_id,
-                Task.status == "completed",
-                Task.completed_at >= thirty_days_ago
-            ).scalar() or 0
-
             health = "good" if stage_score >= 80 else ("warning" if stage_score >= 60 else "critical")
 
             workflow_statuses.append({
@@ -1156,8 +1188,8 @@ async def get_dashboard(
                 "score": stage_score,
                 "health": health,
                 "activeLoans": active_loans,
-                "tasksDue": tasks_due,
-                "tasksCompleted": tasks_completed
+                "tasksDue": wf_tasks_due,
+                "tasksCompleted": wf_tasks_completed
             })
             total_workflow_score += stage_score
 
@@ -1248,7 +1280,7 @@ async def get_dashboard(
             "issue": "Rate lock expiring" if (l.lock_expiration_date and l.lock_expiration_date <= datetime.now(timezone.utc) + timedelta(days=7))
                      else ("SLA behind" if l.sla_status == "behind"
                      else f"In stage {l.days_in_stage or 0} days"),
-            "amount": float(l.amount) if l.amount else 0
+            "amount": round(l.amount, 2) if l.amount else 0
         } for l in problem_loans]
     except Exception as issue_err:
         logger.warning(f"Dashboard: Error getting loan issues: {issue_err}")
@@ -1281,11 +1313,11 @@ async def get_dashboard(
         ).filter(*prof_filters).first()
 
         prof_funded = prof_result.funded_count or 0
-        prof_volume = float(prof_result.total_volume or 0)
-        prof_avg_size = float(prof_result.avg_loan_size or 0)
-        prof_total_orig = float(prof_result.total_origination or 0)
-        prof_avg_orig = float(prof_result.avg_origination or 0)
-        prof_avg_points = float(prof_result.avg_points or 0)
+        prof_volume = round(prof_result.total_volume or 0, 2)
+        prof_avg_size = round(prof_result.avg_loan_size or 0, 2)
+        prof_total_orig = round(prof_result.total_origination or 0, 2)
+        prof_avg_orig = round(prof_result.avg_origination or 0, 2)
+        prof_avg_points = round(prof_result.avg_points or 0, 4)
 
         gain_on_sale_bps = int((prof_avg_orig / prof_avg_size * 10000)) if prof_avg_size > 0 and prof_avg_orig > 0 else 0
         revenue_per_loan = prof_avg_orig if prof_avg_orig > 0 else 0
@@ -1295,12 +1327,12 @@ async def get_dashboard(
             "total_volume": prof_volume,
             "avg_loan_size": round(prof_avg_size, 2),
             "gain_on_sale": gain_on_sale_bps,
-            "gain_on_sale_display": f"{gain_on_sale_bps} bps" if gain_on_sale_bps > 0 else "--",
+            "gain_on_sale_display": f"{gain_on_sale_bps} bps" if gain_on_sale_bps > 0 else None,
             "revenue_per_loan": round(revenue_per_loan, 2),
-            "revenue_per_loan_display": f"${revenue_per_loan:,.0f}" if revenue_per_loan > 0 else "--",
+            "revenue_per_loan_display": f"${revenue_per_loan:,.0f}" if revenue_per_loan > 0 else None,
             "avg_points": round(prof_avg_points, 3),
-            "cost_per_loan": "--",
-            "net_margin": f"{gain_on_sale_bps} bps" if gain_on_sale_bps > 0 else "--",
+            "cost_per_loan": None,
+            "net_margin": f"{gain_on_sale_bps} bps" if gain_on_sale_bps > 0 else None,
             "insights": []
         }
 
@@ -1316,17 +1348,42 @@ async def get_dashboard(
         logger.warning(f"Dashboard: Error getting profitability: {prof_err}")
         profitability = {
             "funded_ytd": 0, "total_volume": 0, "avg_loan_size": 0,
-            "gain_on_sale": 0, "gain_on_sale_display": "--",
-            "revenue_per_loan": 0, "revenue_per_loan_display": "--",
-            "avg_points": 0, "cost_per_loan": "--", "net_margin": "--",
+            "gain_on_sale": 0, "gain_on_sale_display": None,
+            "revenue_per_loan": 0, "revenue_per_loan_display": None,
+            "avg_points": 0, "cost_per_loan": None, "net_margin": None,
             "insights": ["Fund loans to see profitability metrics"]
         }
 
     # ============================================================================
-    # MESSAGES (placeholder for now)
+    # MESSAGES (recent notifications for this user)
     # ============================================================================
 
-    messages = []
+    try:
+        notif_filters = [Notification.user_id == current_user.id]
+        if org_id:
+            notif_filters.append(
+                (Notification.organization_id == org_id) | (Notification.organization_id.is_(None))
+            )
+
+        recent_notifs = db.query(Notification).filter(
+            *notif_filters
+        ).order_by(Notification.created_at.desc()).limit(10).all()
+
+        messages = [
+            {
+                "id": n.id,
+                "type": n.type,
+                "title": n.title,
+                "message": n.message,
+                "link": n.link,
+                "read": n.is_read,
+                "created_at": n.created_at.isoformat() if n.created_at else None
+            }
+            for n in recent_notifs
+        ]
+    except Exception as msg_err:
+        logger.warning(f"Dashboard: Error getting messages: {msg_err}")
+        messages = []
 
     # ============================================================================
     # EFFICIENCY METRICS

@@ -111,14 +111,6 @@ export const useDashboard = (options = {}) => {
   });
 };
 
-export const useInvalidateDashboard = () => {
-  const queryClient = useQueryClient();
-  return () => {
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-    queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
-  };
-};
-
 export const useDashboardStats = (options = {}) => {
   return useQuery({
     queryKey: ['dashboardStats'],

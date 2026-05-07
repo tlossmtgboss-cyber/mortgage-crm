@@ -500,9 +500,12 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         current_user=Depends(get_current_user),
     ):
         """
-        Export a report as CSV.
+        Export a report as CSV using streaming response.
         Enterprise Readiness Check 9.10: Proper escaping and UTF-8 encoding.
+        Streams rows in batches to avoid buffering the entire report in memory.
         """
+        import csv
+
         from services.report_export_service import report_exporter
 
         org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
@@ -521,17 +524,57 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         elif not report_data:
             raise HTTPException(400, "report data required for this report type")
 
-        csv_bytes = report_exporter.generate_csv(report_data, body.report_type)
-        filename = f"{body.report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
-
         try:
             from utils.export_audit import log_export_event, _get_client_ip
             log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type=body.report_type, export_format="csv", ip_address=_get_client_ip(request), details={"title": body.title})
         except Exception:
             pass
 
-        encoding = _accept_gzip(request)
-        return _maybe_gzip_streaming(csv_bytes, "text/csv", filename, encoding)
+        filename = f"{body.report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+
+        def _stream_csv_rows():
+            """Yield CSV content in batches to avoid buffering the entire report."""
+            BATCH_SIZE = 500
+
+            # Find the primary list of dicts in the data
+            rows_key = None
+            for key, value in report_data.items():
+                if isinstance(value, list) and value and isinstance(value[0], dict):
+                    rows_key = key
+                    break
+
+            if rows_key:
+                items = report_data[rows_key]
+                headers = list(items[0].keys()) if items else []
+
+                # Yield UTF-8 BOM + header row
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                writer.writerow(headers)
+                yield "\xef\xbb\xbf" + buf.getvalue()
+
+                # Yield data rows in batches
+                for i in range(0, len(items), BATCH_SIZE):
+                    batch_buf = io.StringIO()
+                    batch_writer = csv.writer(batch_buf)
+                    for item in items[i:i + BATCH_SIZE]:
+                        batch_writer.writerow([str(item.get(h, "")) for h in headers])
+                    yield batch_buf.getvalue()
+            else:
+                # Flat key-value export
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                writer.writerow(["Key", "Value"])
+                for key, value in report_data.items():
+                    if not isinstance(value, (list, dict)):
+                        writer.writerow([key, str(value)])
+                yield "\xef\xbb\xbf" + buf.getvalue()
+
+        return StreamingResponse(
+            _stream_csv_rows(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     # =========================================================================
     # Scheduled Report Delivery (Check 9.11)
@@ -746,13 +789,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         if not org_id:
             raise HTTPException(status_code=403, detail="Organization context required")
 
-        stats = get_execution_stats(db)
-
-        # Filter overdue reports to current org
-        stats["overdue_reports"] = [
-            r for r in stats.get("overdue_reports", [])
-            if True  # get_execution_stats returns cross-org; filter if org_id present
-        ]
+        stats = get_execution_stats(db, org_id=org_id)
 
         return {"success": True, "stats": stats}
 

@@ -71,6 +71,14 @@ def _install_route_stubs():
     db_models_pkg.User = MagicMock(name="User_class")
 
 
+_STUBBED_MODULES = [
+    "tasks", "tasks.morning_briefing_tasks",
+    "services.morning_briefing_service",
+    "auth", "auth.dependencies",
+    "database", "database.models", "database.models.morning_briefing",
+]
+_saved_modules = {k: sys.modules.get(k) for k in _STUBBED_MODULES}
+
 _install_route_stubs()
 
 # Safe to import routes now.
@@ -87,6 +95,15 @@ from routes.briefing_routes import (
     BriefingSections,
     BriefingThresholds,
 )
+
+
+def teardown_module():
+    """Restore sys.modules so stubs don't leak into other test files."""
+    for key, original in _saved_modules.items():
+        if original is None:
+            sys.modules.pop(key, None)
+        else:
+            sys.modules[key] = original
 
 
 # ---------------------------------------------------------------------------

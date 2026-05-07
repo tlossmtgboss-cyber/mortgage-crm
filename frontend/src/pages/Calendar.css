@@ -317,7 +317,29 @@
   }
 }
 
-/* Calendar Content Layout */
+/* Master-Detail Layout (like Tasks page) */
+.calendar-master-detail {
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr);
+  gap: 0;
+  flex: 1;
+  min-height: calc(100vh - 220px);
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.calendar-master-detail > * {
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Calendar Content Layout (legacy, kept for other views) */
 .calendar-content {
   display: grid;
   grid-template-columns: minmax(400px, 700px) 1fr;
@@ -629,6 +651,10 @@
 }
 
 @media (max-width: 1200px) {
+  .calendar-master-detail {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
   .calendar-content {
     grid-template-columns: minmax(350px, 600px) 1fr;
   }
@@ -643,6 +669,11 @@
 }
 
 @media (max-width: 900px) {
+  .calendar-master-detail {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
   .calendar-content {
     grid-template-columns: 1fr;
   }

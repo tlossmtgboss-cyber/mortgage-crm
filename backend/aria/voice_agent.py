@@ -14,6 +14,16 @@ Run:
 """
 
 import os
+import sys
+
+# Ensure aria's own packages resolve before the main backend's identically-named
+# packages (e.g. aria/agents/ vs backend/agents/).
+_aria_dir = os.path.dirname(os.path.abspath(__file__))
+if _aria_dir not in sys.path or sys.path[0] != _aria_dir:
+    if _aria_dir in sys.path:
+        sys.path.remove(_aria_dir)
+    sys.path.insert(0, _aria_dir)
+
 import json
 import logging
 import asyncio
@@ -36,6 +46,7 @@ from livekit.agents import (
     AgentServer,
     TurnHandlingOptions,
 )
+from livekit.agents.tts import FallbackAdapter as TTSFallbackAdapter
 import anthropic as anthropic_sdk
 from livekit.plugins import cartesia, deepgram
 from livekit.plugins.anthropic import LLM as AnthropicLLM
@@ -58,7 +69,8 @@ CARTESIA_VOICE_ID = os.getenv(
     "ARIA_CARTESIA_VOICE_ID",
     "b7d50908-b17c-442d-ad8d-810c63997ed9",  # California Girl — enthusiastic, friendly
 )
-CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-5-20250414")
+DEEPGRAM_TTS_MODEL = os.getenv("ARIA_DEEPGRAM_TTS_MODEL", "aura-2-andromeda-en")
+CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-5")
 TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
 
 BRIDGE_PHRASES = [
@@ -1273,11 +1285,17 @@ def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
         endpointing_ms=25 if is_telephony else 50,
     )
 
-    tts = cartesia.TTS(
-        model="sonic-3",
-        voice=CARTESIA_VOICE_ID,
-        speed=1.0,
-        emotion="content",
+    tts = TTSFallbackAdapter(
+        [
+            cartesia.TTS(
+                model="sonic-3",
+                voice=CARTESIA_VOICE_ID,
+                speed=1.0,
+                emotion="content",
+            ),
+            deepgram.TTS(model=DEEPGRAM_TTS_MODEL, sample_rate=24000),
+        ],
+        sample_rate=24000,
     )
 
     anthropic_client = anthropic_sdk.AsyncClient(

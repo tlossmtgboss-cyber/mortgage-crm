@@ -135,6 +135,16 @@ function _cacheGet(url) {
   return entry.data;
 }
 
+// Debounced CRM mutation event — coalesces rapid-fire mutations (e.g. bulk ops)
+let _mutationTimer = null;
+function _dispatchMutationDebounced() {
+  if (_mutationTimer) clearTimeout(_mutationTimer);
+  _mutationTimer = setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('crm-mutation'));
+    _mutationTimer = null;
+  }, 300);
+}
+
 // Cache successful GET responses for offline fallback
 api.interceptors.response.use(
   (response) => {
@@ -143,7 +153,7 @@ api.interceptors.response.use(
       _cacheSet(response.config.url, response.data);
     }
     if (['post', 'put', 'patch', 'delete'].includes(method)) {
-      window.dispatchEvent(new CustomEvent('crm-mutation', { detail: { url: response.config?.url, method } }));
+      _dispatchMutationDebounced();
     }
     return response;
   },

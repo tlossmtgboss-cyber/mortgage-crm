@@ -27,9 +27,12 @@ from schemas.api_v2 import (
     CursorPage,
     ProblemDetail,
     V2Envelope,
+    V2LeadCreateRequest,
+    V2LeadUpdateRequest,
     V2Meta,
     apply_sparse_fields,
     build_link_header,
+    build_pagination_link_header,
     decode_cursor,
     encode_cursor,
     _parse_field_name,
@@ -119,6 +122,11 @@ def _lead_to_dict(lead) -> Dict[str, Any]:
         "created_at": _format_datetime(getattr(lead, "created_at", None)),
         "updated_at": _format_datetime(getattr(lead, "updated_at", None)),
     }
+
+
+def _get_request_id(request) -> Optional[str]:
+    """Extract request_id from request.state (set by RequestContextMiddleware)."""
+    return getattr(getattr(request, "state", None), "request_id", None)
 
 
 def _problem_response(problem: ProblemDetail) -> JSONResponse:
@@ -243,15 +251,36 @@ async def list_leads_v2(
         if has_more and leads:
             next_cursor = encode_cursor({"id": leads[-1].id})
 
-        return V2Envelope(
+        envelope = V2Envelope(
             data=items,
             meta=V2Meta(
                 api_version="2.0",
+                request_id=_get_request_id(request),
                 cursor=next_cursor,
                 has_more=has_more,
                 total=total,
             ),
         ).model_dump(exclude_none=True)
+
+        # Build pagination Link header (HATEOAS)
+        headers = {}
+        if next_cursor:
+            filter_params = {}
+            if stage:
+                filter_params["stage"] = stage
+            if source:
+                filter_params["source"] = source
+            if owner_id:
+                filter_params["owner_id"] = str(owner_id)
+            if q:
+                filter_params["q"] = q
+            if limit != 20:
+                filter_params["limit"] = str(limit)
+            link = build_pagination_link_header("/api/v2/leads", next_cursor, filter_params)
+            if link:
+                headers["Link"] = link
+
+        return JSONResponse(content=envelope, headers=headers) if headers else envelope
 
     except Exception as exc:
         logger.exception("V2 list_leads failed")
@@ -310,7 +339,10 @@ async def get_lead_v2(
 
         envelope = V2Envelope(
             data=item_dict,
-            meta=V2Meta(api_version="2.0"),
+            meta=V2Meta(
+                api_version="2.0",
+                request_id=_get_request_id(request),
+            ),
         ).model_dump(exclude_none=True)
 
         headers = {}
@@ -320,6 +352,215 @@ async def get_lead_v2(
 
     except Exception as exc:
         logger.exception("V2 get_lead failed")
+        return _problem_response(ProblemDetail.internal_error(str(exc)))
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v2/leads — Create a lead
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "",
+    summary="Create lead (V2)",
+    status_code=201,
+    response_description="Created lead in V2 envelope",
+)
+async def create_lead_v2(
+    request: Request,
+    body: V2LeadCreateRequest,
+):
+    """Create a new lead with V2 response envelope.
+
+    Uses the same validation and AI-scoring pipeline as V1 but returns
+    the response wrapped in a V2Envelope with RFC 7807 errors.
+    """
+    from db import get_db
+    from database.models import Lead
+    from auth.dependencies import get_current_user_flexible
+
+    db: Session = next(get_db())
+    try:
+        try:
+            current_user = await get_current_user_flexible(request)
+        except Exception:
+            return _problem_response(ProblemDetail(
+                type="https://api.perenniaai.com/problems/unauthorized",
+                title="Unauthorized",
+                status=401,
+                detail="Valid authentication required",
+            ))
+
+        # Validate at least one contact method
+        if not body.email and not body.phone:
+            return _problem_response(ProblemDetail.bad_request(
+                "At least one contact method is required: provide 'email' or 'phone' (or both)",
+                errors=[{"field": "email", "message": "email or phone required"}],
+            ))
+
+        # Build lead model data from V2 request body
+        lead_data = body.model_dump(exclude_unset=True)
+
+        # Map V2 fields to Lead model
+        db_lead = Lead(
+            name=lead_data.get("name"),
+            email=lead_data.get("email"),
+            phone=lead_data.get("phone"),
+            source=lead_data.get("source"),
+            stage=lead_data.get("stage", "New"),
+            loan_type=lead_data.get("loan_type"),
+            preapproval_amount=lead_data.get("preapproval_amount"),
+            credit_score=lead_data.get("credit_score"),
+            property_type=lead_data.get("property_type"),
+            property_value=lead_data.get("property_value"),
+            loan_amount=lead_data.get("loan_amount"),
+            interest_rate=lead_data.get("interest_rate"),
+            loan_term=lead_data.get("loan_term"),
+            notes=lead_data.get("notes"),
+            owner_id=current_user.id,
+            organization_id=getattr(current_user, "organization_id", None),
+        )
+
+        # Calculate AI score
+        try:
+            from utils.lead_scoring import calculate_lead_score
+            db_lead.ai_score = calculate_lead_score(db_lead)
+            db_lead.sentiment = (
+                "positive" if db_lead.ai_score >= 75
+                else "neutral" if db_lead.ai_score >= 50
+                else "needs-attention"
+            )
+        except Exception as e:
+            logger.warning(f"AI scoring failed for new V2 lead: {e}")
+
+        db.add(db_lead)
+        db.commit()
+        db.refresh(db_lead)
+
+        item_dict = _lead_to_dict(db_lead)
+        link_header = build_link_header("lead", item_dict)
+
+        envelope = V2Envelope(
+            data=item_dict,
+            meta=V2Meta(
+                api_version="2.0",
+                request_id=_get_request_id(request),
+            ),
+        ).model_dump(exclude_none=True)
+
+        headers = {}
+        if link_header:
+            headers["Link"] = link_header
+        return JSONResponse(status_code=201, content=envelope, headers=headers)
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("V2 create_lead failed")
+        return _problem_response(ProblemDetail.internal_error(str(exc)))
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v2/leads/{lead_id} — Partial update
+# ---------------------------------------------------------------------------
+
+@router.patch(
+    "/{lead_id}",
+    summary="Update lead (V2)",
+    response_description="Updated lead in V2 envelope",
+)
+async def update_lead_v2(
+    request: Request,
+    lead_id: int,
+    body: V2LeadUpdateRequest,
+):
+    """Partially update a lead.
+
+    Uses PATCH semantics: only provided fields are updated.
+    Returns RFC 7807 errors on validation failure.
+    """
+    from db import get_db
+    from database.models import Lead
+    from auth.dependencies import get_current_user_flexible
+
+    db: Session = next(get_db())
+    try:
+        try:
+            current_user = await get_current_user_flexible(request)
+        except Exception:
+            return _problem_response(ProblemDetail(
+                type="https://api.perenniaai.com/problems/unauthorized",
+                title="Unauthorized",
+                status=401,
+                detail="Valid authentication required",
+            ))
+
+        query = db.query(Lead).filter(Lead.id == lead_id, Lead.deleted_at.is_(None))
+        if hasattr(current_user, "organization_id") and current_user.organization_id:
+            query = query.filter(Lead.organization_id == current_user.organization_id)
+
+        lead = query.first()
+        if not lead:
+            return _problem_response(ProblemDetail.not_found(
+                f"Lead with id '{lead_id}' not found",
+                instance=f"/api/v2/leads/{lead_id}",
+            ))
+
+        update_data = body.model_dump(exclude_unset=True)
+        if not update_data:
+            return _problem_response(ProblemDetail.bad_request(
+                "No fields provided for update"
+            ))
+
+        # Prevent clearing both contact methods
+        resulting_email = update_data.get("email", lead.email)
+        resulting_phone = update_data.get("phone", lead.phone)
+        if not resulting_email and not resulting_phone:
+            return _problem_response(ProblemDetail.bad_request(
+                "At least one contact method is required: cannot clear both email and phone",
+                errors=[{"field": "email", "message": "email or phone required"}],
+            ))
+
+        # Apply updates (protect immutable fields)
+        _protected = {"id", "organization_id", "created_at", "owner_id"}
+        for key, value in update_data.items():
+            if key not in _protected and hasattr(lead, key):
+                setattr(lead, key, value)
+
+        from datetime import datetime as _dt, timezone as _tz
+        lead.updated_at = _dt.now(_tz.utc)
+
+        # Recalculate AI score
+        try:
+            from utils.lead_scoring import calculate_lead_score
+            lead.ai_score = calculate_lead_score(lead)
+        except Exception as e:
+            logger.warning(f"AI scoring recalculation failed for V2 lead update: {e}")
+
+        db.commit()
+        db.refresh(lead)
+
+        item_dict = _lead_to_dict(lead)
+        link_header = build_link_header("lead", item_dict)
+
+        envelope = V2Envelope(
+            data=item_dict,
+            meta=V2Meta(
+                api_version="2.0",
+                request_id=_get_request_id(request),
+            ),
+        ).model_dump(exclude_none=True)
+
+        headers = {}
+        if link_header:
+            headers["Link"] = link_header
+        return JSONResponse(content=envelope, headers=headers)
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("V2 update_lead failed")
         return _problem_response(ProblemDetail.internal_error(str(exc)))
     finally:
         db.close()

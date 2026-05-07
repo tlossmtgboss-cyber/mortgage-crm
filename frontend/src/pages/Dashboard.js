@@ -482,7 +482,7 @@ function Dashboard() {
                 onClick={() => navigate('/profitability?metric=gain_on_sale')}
               >
                 <div className="metric-label">Gain on Sale</div>
-                <div className="metric-value">{profitability.gain_on_sale_display || '--'}</div>
+                <div className="metric-value">{profitability.gain_on_sale_display || 'No data yet'}</div>
                 <div className={`metric-change ${profitability.gain_on_sale > 0 ? 'positive' : 'neutral'}`}>
                   {profitability.gain_on_sale > 0 ? `${profitability.funded_ytd} loans YTD` : 'No data yet'}
                 </div>
@@ -492,7 +492,7 @@ function Dashboard() {
                 onClick={() => navigate('/profitability?metric=cost_per_loan')}
               >
                 <div className="metric-label">Revenue / Loan</div>
-                <div className="metric-value">{profitability.revenue_per_loan_display || '--'}</div>
+                <div className="metric-value">{profitability.revenue_per_loan_display || 'No data yet'}</div>
                 <div className={`metric-change ${profitability.revenue_per_loan > 0 ? 'positive' : 'neutral'}`}>
                   {profitability.avg_loan_size > 0 ? `Avg size: $${(profitability.avg_loan_size / 1000).toFixed(0)}K` : 'No data yet'}
                 </div>
@@ -502,9 +502,9 @@ function Dashboard() {
                 onClick={() => navigate('/profitability?metric=net_margin')}
               >
                 <div className="metric-label">Net Margin</div>
-                <div className="metric-value">{profitability.net_margin || '--'}</div>
+                <div className="metric-value">{profitability.net_margin || 'No data yet'}</div>
                 <div className={`metric-change ${profitability.avg_points > 0 ? 'positive' : 'neutral'}`}>
-                  {profitability.avg_points > 0 ? `Avg points: ${profitability.avg_points}` : 'No data yet'}
+                  {profitability.avg_points > 0 ? `Avg points: ${profitability.avg_points}` : ''}
                 </div>
               </div>
               <div
@@ -515,7 +515,7 @@ function Dashboard() {
                 <div className="metric-value">
                   {profitability.total_volume > 0
                     ? `$${(profitability.total_volume / 1000000).toFixed(1)}M`
-                    : '--'}
+                    : 'No data yet'}
                 </div>
                 <div className={`metric-change ${profitability.funded_ytd > 0 ? 'positive' : 'neutral'}`}>
                   {profitability.funded_ytd > 0 ? `${profitability.funded_ytd} funded YTD` : 'No data yet'}
@@ -605,13 +605,15 @@ function Dashboard() {
                   {(efficiency.automationRateChange || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.automationRateChange || 0)}%
                 </div>
               </div>
-              <div className="efficiency-metric-card">
-                <div className="metric-label">Customer Satisfaction Score</div>
-                <div className="metric-value">{efficiency.customerSatisfaction || 0}%</div>
-                <div className={`metric-change ${(efficiency.customerSatisfactionChange || 0) >= 0 ? 'positive' : 'negative'}`}>
-                  {(efficiency.customerSatisfactionChange || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.customerSatisfactionChange || 0)}%
+              {efficiency.customerSatisfaction != null && (
+                <div className="efficiency-metric-card">
+                  <div className="metric-label">Customer Satisfaction Score</div>
+                  <div className="metric-value">{efficiency.customerSatisfaction}%</div>
+                  <div className={`metric-change ${(efficiency.customerSatisfactionChange || 0) >= 0 ? 'positive' : 'negative'}`}>
+                    {(efficiency.customerSatisfactionChange || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.customerSatisfactionChange || 0)}%
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -1071,7 +1073,7 @@ function Dashboard() {
                 <span>⏱️</span>
               </div>
               <div className="metric-content">
-                <div className="metric-value">{itTicketMetrics?.turn_time_display || '--'}</div>
+                <div className="metric-value">{itTicketMetrics?.turn_time_display || '0h'}</div>
                 <div className="metric-label">Avg Turn Time</div>
               </div>
             </div>

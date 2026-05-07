@@ -35,9 +35,79 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["SSO - Single Sign-On"])
 
-# In-memory OIDC state store (production should use Redis)
+# OIDC state store — Redis-backed with in-memory fallback.
 # Maps state -> {org_id, nonce, created_at}
 _oidc_state_store: dict = {}
+_OIDC_STATE_TTL_SECONDS = 600  # 10 minutes
+
+# Redis client for sharing OIDC state across replicas
+_oidc_redis = None
+_oidc_redis_available = False
+
+
+def _init_oidc_redis():
+    """Initialize Redis client for OIDC state store.
+
+    Uses the same REDIS_URL env var as auth/tokens.py.
+    Falls back to in-memory dict when Redis is unavailable.
+    """
+    global _oidc_redis, _oidc_redis_available
+    if _oidc_redis is not None:
+        return
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        logger.debug("REDIS_URL not set -- OIDC state store using in-memory fallback")
+        return
+    try:
+        import redis
+        _oidc_redis = redis.from_url(redis_url, socket_timeout=5)
+        _oidc_redis.ping()
+        _oidc_redis_available = True
+        logger.info("OIDC state store initialized with Redis")
+    except Exception as e:
+        logger.warning(
+            f"Redis connection failed for OIDC state store: {e}. "
+            "Using in-memory fallback (NOT shared across replicas)."
+        )
+        _oidc_redis = None
+        _oidc_redis_available = False
+
+
+def _store_oidc_state(state: str, data: dict):
+    """Store OIDC state for callback validation, using Redis with in-memory fallback."""
+    import json as _json
+    _init_oidc_redis()
+
+    # Always store locally as fallback
+    _oidc_state_store[state] = data
+
+    if _oidc_redis_available and _oidc_redis:
+        try:
+            key = f"oidc_state:{state}"
+            _oidc_redis.setex(key, _OIDC_STATE_TTL_SECONDS, _json.dumps(data))
+        except Exception as e:
+            logger.warning(f"Redis store failed for OIDC state: {e}")
+
+
+def _pop_oidc_state(state: str) -> Optional[dict]:
+    """Retrieve and remove OIDC state. Returns the state data dict or None."""
+    import json as _json
+    _init_oidc_redis()
+
+    if _oidc_redis_available and _oidc_redis:
+        try:
+            key = f"oidc_state:{state}"
+            raw = _oidc_redis.get(key)
+            if raw:
+                _oidc_redis.delete(key)
+                # Also clean local copy
+                _oidc_state_store.pop(state, None)
+                return _json.loads(raw)
+        except Exception as e:
+            logger.warning(f"Redis pop failed for OIDC state: {e}")
+
+    # Fallback to in-memory
+    return _oidc_state_store.pop(state, None)
 
 
 # =============================================================================
@@ -107,19 +177,80 @@ def _get_auth_functions():
     }
 
 
+class _SSOConfigAdapter:
+    """Compatibility adapter that exposes SSOConfiguration fields with the
+    column names used by sso_routes.py (originally from the SSOConfig model).
+
+    This resolves the dual-model inconsistency: auth/sso.py uses
+    SSOConfiguration (table: sso_configurations) while sso_routes.py
+    historically used SSOConfig (table: sso_configs). The adapter maps
+    SSOConfiguration columns to the names sso_routes.py expects, so
+    all SSO code reads from the same canonical table.
+    """
+
+    def __init__(self, cfg):
+        self._cfg = cfg
+
+    def __getattr__(self, name):
+        # Map old SSOConfig column names to SSOConfiguration column names
+        _COLUMN_MAP = {
+            "idp_entity_id": "entity_id",
+            "idp_sso_url": "sso_url",
+            "idp_slo_url": "slo_url",
+            "idp_certificate": "x509_cert",
+            "enabled": "is_active",
+            "provider_type": "provider",  # 'okta' etc. -> used as provider_type in routes
+        }
+        mapped = _COLUMN_MAP.get(name)
+        if mapped:
+            return getattr(self._cfg, mapped)
+        return getattr(self._cfg, name)
+
+    def __bool__(self):
+        return self._cfg is not None
+
+
 def _get_sso_config(db: Session, organization_id: int):
-    """Load SSO config for an organization."""
-    from database.models.sso import SSOConfig
-    return db.query(SSOConfig).filter(
-        SSOConfig.organization_id == organization_id,
-        SSOConfig.enabled == True,
+    """Load SSO config for an organization.
+
+    Queries the canonical SSOConfiguration model (table: sso_configurations)
+    and wraps the result in an adapter for backward-compatible column names.
+    Falls back to legacy SSOConfig (table: sso_configs) if the canonical
+    table has no data for this org.
+    """
+    from database.models.sso_config import SSOConfiguration
+    cfg = db.query(SSOConfiguration).filter(
+        SSOConfiguration.organization_id == organization_id,
+        SSOConfiguration.is_active == True,
     ).first()
+    if cfg:
+        return _SSOConfigAdapter(cfg)
+
+    # Fallback to legacy table for backward compat
+    try:
+        from database.models.sso import SSOConfig
+        legacy = db.query(SSOConfig).filter(
+            SSOConfig.organization_id == organization_id,
+            SSOConfig.enabled == True,
+        ).first()
+        if legacy:
+            logger.warning(
+                f"SSO config for org {organization_id} found in legacy sso_configs table. "
+                "Migrate to sso_configurations for consistency."
+            )
+            return legacy
+    except Exception:
+        pass
+
+    return None
 
 
 def _get_sso_config_by_domain(db: Session, email_domain: str):
-    """Load SSO config by email domain."""
+    """Load SSO config by email domain.
+
+    Uses the canonical SSOConfiguration model with adapter wrapper.
+    """
     from database.models.core import Organization
-    from database.models.sso import SSOConfig
 
     org = db.query(Organization).filter(
         Organization.domain == email_domain,
@@ -129,11 +260,7 @@ def _get_sso_config_by_domain(db: Session, email_domain: str):
     if not org:
         return None, None
 
-    config = db.query(SSOConfig).filter(
-        SSOConfig.organization_id == org.id,
-        SSOConfig.enabled == True,
-    ).first()
-
+    config = _get_sso_config(db, org.id)
     return org, config
 
 
@@ -651,14 +778,14 @@ async def oidc_login(
             detail="Failed to create OIDC authorization URL. Check IdP configuration.",
         )
 
-    # Store state for callback validation
-    _oidc_state_store[state] = {
+    # Store state for callback validation (Redis-backed with in-memory fallback)
+    _store_oidc_state(state, {
         "org_id": organization.id,
         "nonce": nonce,
         "created_at": datetime.now(timezone.utc).isoformat(),
-    }
+    })
 
-    # Clean up old states (older than 10 minutes)
+    # Clean up old states from in-memory fallback (Redis entries expire via TTL)
     _cleanup_oidc_states()
 
     return RedirectResponse(url=auth_url, status_code=302)
@@ -698,8 +825,8 @@ async def oidc_callback(
             detail="Missing code or state parameter.",
         )
 
-    # Validate state
-    state_data = _oidc_state_store.pop(state, None)
+    # Validate state (Redis-backed with in-memory fallback)
+    state_data = _pop_oidc_state(state)
     if not state_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -939,7 +1066,11 @@ async def update_sso_config(
 # =============================================================================
 
 def _cleanup_oidc_states():
-    """Remove OIDC states older than 10 minutes."""
+    """Remove expired OIDC states from the in-memory fallback.
+
+    Redis entries expire automatically via TTL (setex), so only the
+    in-memory dict needs manual cleanup.
+    """
     from datetime import timedelta
 
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
@@ -958,4 +1089,4 @@ def _cleanup_oidc_states():
         _oidc_state_store.pop(key, None)
 
     if expired_keys:
-        logger.debug(f"Cleaned up {len(expired_keys)} expired OIDC states")
+        logger.debug(f"Cleaned up {len(expired_keys)} expired OIDC states (in-memory)")

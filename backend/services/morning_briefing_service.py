@@ -246,6 +246,7 @@ class MorningBriefingService:
             }
         except Exception as e:
             logger.error("Pipeline snapshot query failed: %s", e)
+            db.rollback()
             return {"active_count": 0, "total_volume": 0, "closing_soon": 0, "by_stage": {}}
 
     def _query_at_risk_loans(
@@ -298,6 +299,7 @@ class MorningBriefingService:
             return results
         except Exception as e:
             logger.error("At-risk query failed: %s", e)
+            db.rollback()
             return []
 
     def _query_stale_leads(
@@ -332,6 +334,7 @@ class MorningBriefingService:
             ]
         except Exception as e:
             logger.error("Stale leads query failed: %s", e)
+            db.rollback()
             return []
 
     def _query_todays_appointments(
@@ -361,6 +364,7 @@ class MorningBriefingService:
             ]
         except Exception as e:
             logger.error("Appointments query failed: %s", e)
+            db.rollback()
             return []
 
     def _query_pending_conditions(self, db: Session, user_id: int, org_id: int, today: date) -> List[Dict]:
@@ -390,6 +394,7 @@ class MorningBriefingService:
             ]
         except Exception as e:
             logger.error("Conditions query failed: %s", e)
+            db.rollback()
             return []
 
     def _query_yesterday_activity(self, db: Session, user_id: int, org_id: int, yesterday: date) -> Dict:
@@ -416,6 +421,7 @@ class MorningBriefingService:
             }
         except Exception as e:
             logger.error("Yesterday activity query failed: %s", e)
+            db.rollback()
             return {"funded": 0, "new_loans": 0, "conversions": 0}
 
     # ------------------------------------------------------------------
@@ -564,6 +570,7 @@ class MorningBriefingService:
 
         except Exception as e:
             logger.error("Manager data gathering failed: %s", e)
+            db.rollback()
             return {"members": [], "attention_items": []}
 
     # ------------------------------------------------------------------
@@ -696,6 +703,7 @@ class MorningBriefingService:
 
         except Exception as e:
             logger.error("Leadership data gathering failed: %s", e)
+            db.rollback()
             return {"org_snapshot": {}, "branches": [], "top_risks": []}
 
     # ------------------------------------------------------------------

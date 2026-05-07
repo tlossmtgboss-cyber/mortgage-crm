@@ -501,3 +501,109 @@ class V2AppointmentUpdateRequest(BaseModel):
                 "scheduled_start must include timezone offset"
             )
         return v
+
+
+# =============================================================================
+# V2 LEAD SCHEMAS
+# =============================================================================
+
+class V2LeadCreateRequest(BaseModel):
+    """V2 lead creation request with strict validation."""
+    name: str = Field(..., min_length=1, max_length=200)
+    email: Optional[str] = None
+    phone: Optional[str] = Field(None, max_length=20)
+    source: Optional[str] = Field(None, max_length=100)
+    stage: Optional[str] = Field(None, max_length=50)
+    loan_type: Optional[str] = Field(None, max_length=100)
+    preapproval_amount: Optional[float] = Field(None, ge=0)
+    credit_score: Optional[int] = Field(None, ge=300, le=850)
+    property_type: Optional[str] = Field(None, max_length=100)
+    property_value: Optional[float] = Field(None, ge=0)
+    loan_amount: Optional[float] = Field(None, ge=0)
+    interest_rate: Optional[float] = Field(None, ge=0, le=30)
+    loan_term: Optional[int] = Field(None, ge=1, le=600)
+    notes: Optional[str] = Field(None, max_length=10000)
+
+
+class V2LeadUpdateRequest(BaseModel):
+    """V2 lead partial update request."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    email: Optional[str] = None
+    phone: Optional[str] = Field(None, max_length=20)
+    stage: Optional[str] = Field(None, max_length=50)
+    source: Optional[str] = Field(None, max_length=100)
+    loan_type: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = Field(None, max_length=10000)
+
+
+# =============================================================================
+# V2 LOAN SCHEMAS
+# =============================================================================
+
+class V2LoanCreateRequest(BaseModel):
+    """V2 loan creation request with strict validation."""
+    loan_number: Optional[str] = Field(None, max_length=50)
+    borrower_name: Optional[str] = Field(None, max_length=200)
+    borrower_email: Optional[str] = None
+    stage: Optional[str] = Field(None, max_length=50)
+    program: Optional[str] = Field(None, max_length=100)
+    loan_type: Optional[str] = Field(None, max_length=100)
+    amount: Optional[float] = Field(None, ge=0)
+    purchase_price: Optional[float] = Field(None, ge=0)
+    down_payment: Optional[float] = Field(None, ge=0)
+    rate: Optional[float] = Field(None, ge=0, le=30)
+    term: Optional[int] = Field(None, ge=1, le=600)
+    property_address: Optional[str] = Field(None, max_length=500)
+    property_city: Optional[str] = Field(None, max_length=200)
+    property_state: Optional[str] = Field(None, max_length=2)
+    property_zip: Optional[str] = Field(None, max_length=10)
+
+
+class V2LoanUpdateRequest(BaseModel):
+    """V2 loan partial update request."""
+    borrower_name: Optional[str] = Field(None, max_length=200)
+    borrower_email: Optional[str] = None
+    stage: Optional[str] = Field(None, max_length=50)
+    program: Optional[str] = Field(None, max_length=100)
+    loan_type: Optional[str] = Field(None, max_length=100)
+    amount: Optional[float] = Field(None, ge=0)
+    purchase_price: Optional[float] = Field(None, ge=0)
+    down_payment: Optional[float] = Field(None, ge=0)
+    rate: Optional[float] = Field(None, ge=0, le=30)
+    term: Optional[int] = Field(None, ge=1, le=600)
+    property_address: Optional[str] = Field(None, max_length=500)
+    property_city: Optional[str] = Field(None, max_length=200)
+    property_state: Optional[str] = Field(None, max_length=2)
+    property_zip: Optional[str] = Field(None, max_length=10)
+    force_stage: bool = Field(False, description="Override stage transition validation (admin only)")
+
+
+# =============================================================================
+# PAGINATION LINK HEADER BUILDER
+# =============================================================================
+
+def build_pagination_link_header(
+    base_path: str,
+    next_cursor: Optional[str] = None,
+    query_params: Optional[Dict[str, str]] = None,
+) -> Optional[str]:
+    """Build RFC 8288 Link header for paginated list responses.
+
+    Args:
+        base_path: The endpoint path (e.g. ``/api/v2/leads``).
+        next_cursor: The opaque cursor for the next page, or None.
+        query_params: Additional query parameters to preserve (filters, etc.).
+
+    Returns:
+        A Link header value like ``</api/v2/leads?cursor=xxx>; rel="next"``
+        or None if there is no next page.
+    """
+    if not next_cursor:
+        return None
+
+    params = dict(query_params or {})
+    params["cursor"] = next_cursor
+    qs = "&".join(f"{k}={v}" for k, v in params.items() if v is not None)
+    return f'<{base_path}?{qs}>; rel="next"'

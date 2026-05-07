@@ -231,6 +231,10 @@ async def generate_now(
         logger.warning("Celery unavailable (%s), generating briefing synchronously", celery_err)
 
     # Synchronous fallback — generate inline when Celery/Redis isn't running
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="User has no organization")
+
     try:
         service = MorningBriefingService()
         prefs = service.load_preferences(current_user)
@@ -239,7 +243,7 @@ async def generate_now(
         narrative = service.generate_narrative(ctx, prefs.ai_tone, prefs)
 
         briefing = MorningBriefing(
-            organization_id=getattr(current_user, 'organization_id', None),
+            organization_id=org_id,
             user_id=current_user.id,
             briefing_date=today,
             briefing_level=level,
@@ -258,7 +262,13 @@ async def generate_now(
         db.add(briefing)
         db.commit()
         return JSONResponse(status_code=201, content={"status": "generated", "message": "Briefing generated"})
+    except HTTPException:
+        raise
     except Exception as sync_err:
+        db.rollback()
+        from sqlalchemy.exc import IntegrityError
+        if isinstance(sync_err, IntegrityError):
+            raise HTTPException(status_code=409, detail="Briefing already exists for today")
         logger.exception("Synchronous briefing generation failed: %s", sync_err)
         raise HTTPException(status_code=500, detail="Briefing generation failed")
 

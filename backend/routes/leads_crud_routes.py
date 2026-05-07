@@ -157,8 +157,8 @@ async def create_lead(
         try:
             from performance_cache import invalidate_dashboard
             invalidate_dashboard(current_user.id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Dashboard cache invalidation failed: {e}")
 
         # Post-commit operations - these must not affect the response
         # SLA tracking

@@ -681,6 +681,9 @@ from .gdpr import ErasureRequest
 # Loan Officer License (multi-state SAFE Act compliance)
 from .lo_license import LoanOfficerLicense, LicenseStatus, LicenseType
 
+# Briefing Thread models (morning briefing reply state machine + audit chain)
+from .briefing_thread import BriefingThread, BriefingTask, BriefingAuditLog
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1397,4 +1400,11 @@ __all__ = [
     "LoanOfficerLicense",
     "LicenseStatus",
     "LicenseType",
+
+    # =====================
+    # Briefing Thread (morning briefing reply state machine)
+    # =====================
+    "BriefingThread",
+    "BriefingTask",
+    "BriefingAuditLog",
 ]

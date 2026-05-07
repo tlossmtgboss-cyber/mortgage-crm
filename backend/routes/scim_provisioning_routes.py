@@ -198,6 +198,7 @@ def _write_audit_log(
 # SCIM 2.0 schema URIs
 SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
 SCIM_ENTERPRISE_SCHEMA = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group"
 SCIM_LIST_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse"
 SCIM_ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error"
 SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
@@ -1547,6 +1548,365 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         # 204 No Content per RFC 7644
         from starlette.responses import Response
         return Response(status_code=204)
+
+    # ========================================================================
+    # SCIM 2.0 GROUPS ENDPOINTS (RFC 7644 Section 3 — Groups)
+    # ========================================================================
+    # Maps SCIM Groups to the existing permission_role system.
+    # Each unique permission_role within an org is exposed as a SCIM Group.
+    # Group membership changes update the user's permission_role.
+
+    def _role_to_scim_group(role: str, org_id: int, members: list, base_url: str = "") -> dict:
+        """Convert a permission_role + member list to a SCIM 2.0 Group resource."""
+        # Stable group ID: org_id:role (encoded to avoid special chars)
+        group_id = f"{org_id}_{role}"
+        return {
+            "schemas": [SCIM_GROUP_SCHEMA],
+            "id": group_id,
+            "displayName": role,
+            "members": [
+                {
+                    "value": str(m["id"]),
+                    "display": m["display"],
+                    "$ref": f"{base_url}/scim/v2/Users/{m['id']}",
+                }
+                for m in members
+            ],
+            "meta": {
+                "resourceType": "Group",
+                "location": f"{base_url}/scim/v2/Groups/{group_id}",
+            },
+        }
+
+    def _parse_group_id(group_id: str) -> Optional[tuple]:
+        """Parse a group ID of the form '{org_id}_{role}' into (org_id, role)."""
+        parts = group_id.split("_", 1)
+        if len(parts) != 2:
+            return None
+        try:
+            org_id = int(parts[0])
+            role = parts[1]
+            return (org_id, role)
+        except (ValueError, TypeError):
+            return None
+
+    @app.get("/scim/v2/Groups", tags=["SCIM"])
+    @SCIM_LIST_LIMIT
+    async def scim_list_groups(
+        request: Request,
+        startIndex: int = Query(1, ge=1, alias="startIndex"),
+        count: int = Query(100, ge=1, le=500, alias="count"),
+        filter: Optional[str] = Query(None),
+        db: Session = Depends(get_db),
+    ):
+        """
+        SCIM 2.0 - List groups (RFC 7644 Section 3.4.2).
+
+        Groups are mapped from the permission_role system. Each unique
+        permission_role within the org is a SCIM Group, with users
+        holding that role as members.
+
+        Supports filter: displayName eq "admin"
+        """
+        _token, token_hash = _validate_scim_token(request)
+        org_id = _get_scim_org_id(db, request)
+        base_url = str(request.base_url).rstrip("/")
+
+        # Determine which roles to return
+        role_filter = None
+        if filter:
+            parsed = _parse_scim_filter(filter)
+            if parsed:
+                attr, op, value = parsed
+                if attr == "displayName" and op == "eq":
+                    role_filter = value
+
+        # Get distinct roles in this org
+        if role_filter:
+            roles_sql = (
+                "SELECT DISTINCT permission_role FROM users"
+                " WHERE organization_id = :org_id AND permission_role = :role"
+                " AND permission_role IS NOT NULL"
+                " ORDER BY permission_role"
+            )
+            roles_rows = db.execute(
+                text(roles_sql), {"org_id": org_id, "role": role_filter}
+            ).fetchall()
+        else:
+            roles_sql = (
+                "SELECT DISTINCT permission_role FROM users"
+                " WHERE organization_id = :org_id"
+                " AND permission_role IS NOT NULL"
+                " ORDER BY permission_role"
+            )
+            roles_rows = db.execute(text(roles_sql), {"org_id": org_id}).fetchall()
+
+        all_roles = [r.permission_role for r in roles_rows if r.permission_role]
+        total_count = len(all_roles)
+
+        # Paginate
+        offset = startIndex - 1
+        page_roles = all_roles[offset:offset + count]
+
+        # Fetch members for each role in the page
+        resources = []
+        for role in page_roles:
+            members_sql = (
+                "SELECT id, email, first_name, last_name FROM users"
+                " WHERE organization_id = :org_id AND permission_role = :role"
+                " AND is_active = true"
+                " ORDER BY id"
+            )
+            member_rows = db.execute(
+                text(members_sql), {"org_id": org_id, "role": role}
+            ).fetchall()
+
+            members = [
+                {
+                    "id": m.id,
+                    "display": f"{m.first_name or ''} {m.last_name or ''}".strip() or m.email,
+                }
+                for m in member_rows
+            ]
+            resources.append(_role_to_scim_group(role, org_id, members, base_url))
+
+        return {
+            "schemas": [SCIM_LIST_SCHEMA],
+            "totalResults": total_count,
+            "startIndex": startIndex,
+            "itemsPerPage": count,
+            "Resources": resources,
+        }
+
+    @app.get("/scim/v2/Groups/{group_id}", tags=["SCIM"])
+    @SCIM_OP_LIMIT
+    async def scim_get_group(
+        group_id: str,
+        request: Request,
+        db: Session = Depends(get_db),
+    ):
+        """
+        SCIM 2.0 - Get group by ID (RFC 7644 Section 3.4.1).
+
+        Group ID format: {org_id}_{permission_role}
+        """
+        _token, token_hash = _validate_scim_token(request)
+        base_url = str(request.base_url).rstrip("/")
+
+        parsed = _parse_group_id(group_id)
+        if not parsed:
+            raise HTTPException(
+                status_code=404,
+                detail=_scim_error(404, f"Group {group_id} not found"),
+            )
+
+        org_id, role = parsed
+
+        # Verify the role exists in this org
+        check_sql = (
+            "SELECT COUNT(*) as cnt FROM users"
+            " WHERE organization_id = :org_id AND permission_role = :role"
+        )
+        check_row = db.execute(text(check_sql), {"org_id": org_id, "role": role}).fetchone()
+        if not check_row or check_row.cnt == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=_scim_error(404, f"Group {group_id} not found"),
+            )
+
+        # Fetch members
+        members_sql = (
+            "SELECT id, email, first_name, last_name FROM users"
+            " WHERE organization_id = :org_id AND permission_role = :role"
+            " AND is_active = true"
+            " ORDER BY id"
+        )
+        member_rows = db.execute(
+            text(members_sql), {"org_id": org_id, "role": role}
+        ).fetchall()
+
+        members = [
+            {
+                "id": m.id,
+                "display": f"{m.first_name or ''} {m.last_name or ''}".strip() or m.email,
+            }
+            for m in member_rows
+        ]
+
+        return _role_to_scim_group(role, org_id, members, base_url)
+
+    @app.patch("/scim/v2/Groups/{group_id}", tags=["SCIM"])
+    @SCIM_OP_LIMIT
+    async def scim_patch_group(
+        group_id: str,
+        request: Request,
+        db: Session = Depends(get_db),
+    ):
+        """
+        SCIM 2.0 - Update group membership (RFC 7644 Section 3.5.2).
+
+        Supports PatchOp operations:
+          - add members: Add users to this role/group
+          - remove members: Remove users from this role/group (sets role to 'sales' default)
+          - replace members: Replace all group members
+
+        Group ID format: {org_id}_{permission_role}
+        """
+        _token, token_hash = _validate_scim_token(request)
+        base_url = str(request.base_url).rstrip("/")
+
+        parsed = _parse_group_id(group_id)
+        if not parsed:
+            raise HTTPException(
+                status_code=404,
+                detail=_scim_error(404, f"Group {group_id} not found"),
+            )
+
+        org_id, role = parsed
+
+        try:
+            body = await request.json()
+        except Exception as e:
+            logger.error(f"Error parsing SCIM patch group JSON body: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail=_scim_error(400, "Invalid JSON body"),
+            )
+
+        schemas = body.get("schemas", [])
+        if SCIM_PATCH_SCHEMA not in schemas:
+            raise HTTPException(
+                status_code=400,
+                detail=_scim_error(400, f"Request must include schema {SCIM_PATCH_SCHEMA}", "invalidValue"),
+            )
+
+        operations = body.get("Operations", body.get("operations", []))
+        if not operations:
+            raise HTTPException(
+                status_code=400,
+                detail=_scim_error(400, "No operations provided", "invalidValue"),
+            )
+
+        for op in operations:
+            op_type = op.get("op", "").lower()
+            path = op.get("path", "")
+            value = op.get("value")
+
+            if op_type == "add" and path == "members":
+                # Add users to this role
+                member_list = value if isinstance(value, list) else [value]
+                for member in member_list:
+                    user_id = member.get("value") if isinstance(member, dict) else member
+                    if user_id:
+                        try:
+                            db.execute(
+                                text(
+                                    "UPDATE users SET permission_role = :role, role = :role"
+                                    " WHERE id = :user_id AND organization_id = :org_id"
+                                ),
+                                {"role": role, "user_id": int(user_id), "org_id": org_id},
+                            )
+                        except (ValueError, TypeError):
+                            logger.warning(f"SCIM Groups PATCH: invalid user_id {user_id}")
+
+            elif op_type == "remove" and path and path.startswith("members"):
+                # Remove users from this role (reset to 'sales' default)
+                # Path format: members[value eq "123"]
+                member_match = re.search(r'value\s+eq\s+"(\d+)"', path)
+                if member_match:
+                    user_id = int(member_match.group(1))
+                    db.execute(
+                        text(
+                            "UPDATE users SET permission_role = 'sales', role = 'sales'"
+                            " WHERE id = :user_id AND organization_id = :org_id"
+                            " AND permission_role = :role"
+                        ),
+                        {"user_id": user_id, "org_id": org_id, "role": role},
+                    )
+                elif isinstance(value, list):
+                    # Alternate format: value is a list of member objects
+                    for member in value:
+                        user_id = member.get("value") if isinstance(member, dict) else member
+                        if user_id:
+                            try:
+                                db.execute(
+                                    text(
+                                        "UPDATE users SET permission_role = 'sales', role = 'sales'"
+                                        " WHERE id = :user_id AND organization_id = :org_id"
+                                        " AND permission_role = :role"
+                                    ),
+                                    {"user_id": int(user_id), "org_id": org_id, "role": role},
+                                )
+                            except (ValueError, TypeError):
+                                logger.warning(f"SCIM Groups PATCH remove: invalid user_id {user_id}")
+
+            elif op_type == "replace" and (path == "members" or not path):
+                # Replace all members: remove all current, add new
+                # First, reset current members of this role to 'sales'
+                db.execute(
+                    text(
+                        "UPDATE users SET permission_role = 'sales', role = 'sales'"
+                        " WHERE organization_id = :org_id AND permission_role = :role"
+                    ),
+                    {"org_id": org_id, "role": role},
+                )
+                # Then set new members
+                member_list = value if isinstance(value, list) else ([value] if value else [])
+                for member in member_list:
+                    user_id = member.get("value") if isinstance(member, dict) else member
+                    if user_id:
+                        try:
+                            db.execute(
+                                text(
+                                    "UPDATE users SET permission_role = :role, role = :role"
+                                    " WHERE id = :user_id AND organization_id = :org_id"
+                                ),
+                                {"role": role, "user_id": int(user_id), "org_id": org_id},
+                            )
+                        except (ValueError, TypeError):
+                            logger.warning(f"SCIM Groups PATCH replace: invalid user_id {user_id}")
+
+        db.commit()
+
+        # Audit
+        _write_audit_log(
+            db=db,
+            user_id=0,
+            changed_by_id=0,
+            change_type="scim_patch_group",
+            entity_type="scim_provisioning",
+            after_state={
+                "group_id": group_id,
+                "role": role,
+                "org_id": org_id,
+                "operations_count": len(operations),
+            },
+            ip_address=request.client.host if request.client else None,
+            reason="SCIM 2.0 group membership update (PATCH, IdP-initiated)",
+            scim_token_hash=token_hash,
+        )
+        db.commit()
+
+        # Return updated group
+        members_sql = (
+            "SELECT id, email, first_name, last_name FROM users"
+            " WHERE organization_id = :org_id AND permission_role = :role"
+            " AND is_active = true"
+            " ORDER BY id"
+        )
+        member_rows = db.execute(
+            text(members_sql), {"org_id": org_id, "role": role}
+        ).fetchall()
+
+        members = [
+            {
+                "id": m.id,
+                "display": f"{m.first_name or ''} {m.last_name or ''}".strip() or m.email,
+            }
+            for m in member_rows
+        ]
+
+        return _role_to_scim_group(role, org_id, members, base_url)
 
     # ========================================================================
     # CSV BULK USER IMPORT (Check 5.12)

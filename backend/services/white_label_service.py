@@ -195,6 +195,13 @@ def update_tenant_branding(
     if "font_family" in valid_updates and valid_updates["font_family"] is not None:
         _validate_font_family(str(valid_updates["font_family"]))
 
+    # Custom CSS sanitization (XSS, data exfiltration prevention)
+    if "custom_css" in valid_updates and valid_updates["custom_css"] is not None:
+        from input_validation import sanitize_custom_css
+        valid_updates["custom_css"] = sanitize_custom_css(
+            str(valid_updates["custom_css"]), max_length=50000
+        )
+
     # ----- Apply updates ------------------------------------------------------
 
     config = _get_config(db, org_id)
@@ -529,7 +536,10 @@ def check_ssl_expiry_alerts(db) -> Dict:
     """
     Proactively check all custom domains for upcoming SSL certificate expiry.
 
-    Queries all WhiteLabelConfig rows that have a custom domain with an
+    First, for any domain with a custom_domain but NULL ssl_expires_at, performs
+    a proactive SSL check via Vercel/TLS to populate the expiry date.
+
+    Then queries all WhiteLabelConfig rows that have a custom domain with an
     ssl_expires_at value within the next 30 days. Logs warnings at escalating
     severity levels:
       - 14-30 days: WARNING
@@ -537,17 +547,51 @@ def check_ssl_expiry_alerts(db) -> Dict:
       - 0-7 days: CRITICAL
       - expired: CRITICAL
 
+    For critical alerts (<=7 days or expired), sends an email notification
+    to the org admin so they can take immediate action.
+
     Returns:
         Dict with:
           - domains_checked: total domains with ssl_expires_at set
           - alerts: list of domain alert dicts with severity, days_remaining, etc.
           - summary: counts by severity level
+          - notifications_sent: count of email notifications sent for critical alerts
     """
     from database.models.white_label_config import WhiteLabelConfig
 
     now = datetime.now(timezone.utc)
 
-    # Query all configs with custom domains that have SSL expiry data
+    # ---- Phase 1: Proactive SSL check for domains with NULL ssl_expires_at ----
+    unchecked_configs = (
+        db.query(WhiteLabelConfig)
+        .filter(
+            WhiteLabelConfig.custom_domain.isnot(None),
+            WhiteLabelConfig.ssl_expires_at.is_(None),
+            WhiteLabelConfig.setting_type.is_(None),
+        )
+        .all()
+    )
+
+    proactively_checked = 0
+    for config in unchecked_configs:
+        try:
+            from services import vercel_domain_service
+            expiry = vercel_domain_service.get_ssl_expiry(config.custom_domain)
+            if expiry:
+                config.ssl_expires_at = expiry
+                db.commit()
+                proactively_checked += 1
+                logger.info(
+                    "Proactively populated ssl_expires_at for domain '%s' (org %s): %s",
+                    config.custom_domain, config.organization_id, expiry.isoformat(),
+                )
+        except Exception as e:
+            logger.warning(
+                "Proactive SSL check failed for domain '%s' (org %s): %s",
+                config.custom_domain, config.organization_id, e,
+            )
+
+    # ---- Phase 2: Check all domains with SSL expiry data --------------------
     configs = (
         db.query(WhiteLabelConfig)
         .filter(
@@ -630,13 +674,149 @@ def check_ssl_expiry_alerts(db) -> Dict:
     # Sort alerts by urgency (fewest days remaining first)
     alerts.sort(key=lambda a: a["days_remaining"])
 
+    # ---- Phase 3: Email notification for critical SSL alerts ----------------
+    notifications_sent = 0
+    critical_alerts = [a for a in alerts if a["severity"] == "critical"]
+
+    if critical_alerts:
+        notifications_sent = _send_ssl_alert_notifications(db, critical_alerts)
+
     return {
         "domains_checked": len(configs),
+        "proactively_checked": proactively_checked,
         "alerts_count": len(alerts),
         "alerts": alerts,
         "summary": summary,
+        "notifications_sent": notifications_sent,
         "checked_at": now.isoformat(),
     }
+
+
+def _send_ssl_alert_notifications(db, critical_alerts: List[Dict]) -> int:
+    """
+    Send email notifications to org admins for critical SSL alerts.
+
+    Groups alerts by organization_id, looks up the admin email for each org,
+    and sends a single notification per org listing all affected domains.
+
+    Returns the count of notifications successfully sent.
+    """
+    from sqlalchemy import text as sa_text
+
+    # Group alerts by org
+    org_alerts: Dict[int, List[Dict]] = {}
+    for alert in critical_alerts:
+        org_id = alert["organization_id"]
+        org_alerts.setdefault(org_id, []).append(alert)
+
+    sent = 0
+    for org_id, alerts_for_org in org_alerts.items():
+        # Look up admin email for this org (user with admin role, or org owner)
+        try:
+            row = db.execute(sa_text("""
+                SELECT u.email, u.first_name
+                FROM users u
+                WHERE u.organization_id = :org_id
+                  AND u.role IN ('platform_admin', 'site_admin', 'admin', 'owner')
+                  AND u.email IS NOT NULL
+                ORDER BY
+                    CASE u.role
+                        WHEN 'owner' THEN 1
+                        WHEN 'platform_admin' THEN 2
+                        WHEN 'site_admin' THEN 3
+                        WHEN 'admin' THEN 4
+                    END
+                LIMIT 1
+            """), {"org_id": org_id}).fetchone()
+
+            if not row or not row[0]:
+                logger.warning(
+                    "SSL alert: no admin email found for org %s — cannot send notification",
+                    org_id,
+                )
+                continue
+
+            admin_email = row[0]
+            admin_name = row[1] or "Admin"
+
+            # Build alert summary
+            domain_lines = []
+            for a in alerts_for_org:
+                if a["days_remaining"] <= 0:
+                    domain_lines.append(
+                        f"  - {a['domain']}: EXPIRED ({abs(a['days_remaining'])} days ago)"
+                    )
+                else:
+                    domain_lines.append(
+                        f"  - {a['domain']}: expires in {a['days_remaining']} days "
+                        f"({a['ssl_expires_at'][:10]})"
+                    )
+
+            subject = (
+                f"URGENT: SSL Certificate {'Expired' if any(a['days_remaining'] <= 0 for a in alerts_for_org) else 'Expiring Soon'} "
+                f"— Action Required"
+            )
+            body = (
+                f"Hi {admin_name},\n\n"
+                f"The following custom domain(s) for your organization have critical SSL issues:\n\n"
+                + "\n".join(domain_lines) +
+                "\n\n"
+                "Vercel auto-renews SSL certificates, but renewal can fail if DNS records are "
+                "misconfigured. Please verify your DNS settings and domain configuration.\n\n"
+                "If you need assistance, contact support@perenniaai.com.\n\n"
+                "— Perennia AI Platform"
+            )
+
+            _send_ssl_notification_email(admin_email, subject, body)
+            sent += 1
+            logger.info(
+                "SSL alert notification sent to %s for org %s (%d domain(s))",
+                admin_email, org_id, len(alerts_for_org),
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Failed to send SSL alert notification for org %s: %s", org_id, e,
+            )
+
+    return sent
+
+
+def _send_ssl_notification_email(to_email: str, subject: str, body: str) -> None:
+    """
+    Send an SSL alert notification email using the best available transport.
+
+    Delivery strategy (tried in order):
+      1. EmailService (SendGrid + SMTP fallback)
+      2. Stub logging if no transport is available
+    """
+    # Strategy 1: EmailService
+    try:
+        from email_service import EmailService
+
+        svc = EmailService()
+        html_body = (
+            "<div style='font-family: Arial, sans-serif; max-width: 600px;'>"
+            + body.replace("\n", "<br>")
+            + "</div>"
+        )
+        svc.send_html_email(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            plain_text_body=body,
+        )
+        return
+    except ImportError:
+        logger.debug("EmailService not available for SSL alert notification")
+    except Exception as e:
+        logger.warning("EmailService failed for SSL alert notification: %s", e)
+
+    # Strategy 2: Stub
+    logger.info(
+        "STUB SSL ALERT EMAIL: To=%s Subject='%s' Body=%s",
+        to_email, subject, body[:200],
+    )
 
 
 # =============================================================================

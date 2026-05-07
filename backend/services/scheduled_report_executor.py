@@ -233,7 +233,7 @@ def get_due_reports(db: Session) -> List[Dict[str, Any]]:
     return due
 
 
-def get_execution_stats(db: Session) -> Dict[str, Any]:
+def get_execution_stats(db: Session, org_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Return execution monitoring statistics for scheduled reports.
 
@@ -247,42 +247,52 @@ def get_execution_stats(db: Session) -> Dict[str, Any]:
 
     Args:
         db: SQLAlchemy session.
+        org_id: If provided, scopes all queries to this organization only.
+                Required for user-facing endpoints to prevent cross-org data leak.
 
     Returns:
         Dict with the stats described above.
     """
     now = datetime.now(timezone.utc)
 
+    org_filter = ""
+    params: Dict[str, Any] = {}
+    if org_id is not None:
+        org_filter = " AND organization_id = :org_id"
+        params["org_id"] = org_id
+
     # Total active scheduled reports
-    total_row = db.execute(sa_text("""
-        SELECT COUNT(*) FROM scheduled_reports WHERE is_active = true
-    """)).fetchone()
+    total_row = db.execute(sa_text(f"""
+        SELECT COUNT(*) FROM scheduled_reports WHERE is_active = true{org_filter}
+    """), params).fetchone()
     total_scheduled = total_row[0] if total_row else 0
 
     # Failed (retry_count > 0)
-    failed_row = db.execute(sa_text("""
+    failed_row = db.execute(sa_text(f"""
         SELECT COUNT(*) FROM scheduled_reports
-        WHERE is_active = true AND retry_count > 0
-    """)).fetchone()
+        WHERE is_active = true AND retry_count > 0{org_filter}
+    """), params).fetchone()
     failed_count = failed_row[0] if failed_row else 0
 
     # Average generation time
-    avg_row = db.execute(sa_text("""
+    avg_row = db.execute(sa_text(f"""
         SELECT AVG(last_generation_ms) FROM scheduled_reports
-        WHERE is_active = true AND last_generation_ms IS NOT NULL
-    """)).fetchone()
+        WHERE is_active = true AND last_generation_ms IS NOT NULL{org_filter}
+    """), params).fetchone()
     avg_generation_ms = round(float(avg_row[0]), 1) if avg_row and avg_row[0] is not None else None
 
     # Success rate: schedules with status='active' (never failed or cleared) / total
-    success_row = db.execute(sa_text("""
+    success_row = db.execute(sa_text(f"""
         SELECT COUNT(*) FROM scheduled_reports
-        WHERE is_active = true AND status = 'active'
-    """)).fetchone()
+        WHERE is_active = true AND status = 'active'{org_filter}
+    """), params).fetchone()
     success_count = success_row[0] if success_row else 0
     success_rate = round((success_count / total_scheduled) * 100, 1) if total_scheduled > 0 else 100.0
 
     # Due now (use the existing logic)
     all_due = get_due_reports(db)
+    if org_id is not None:
+        all_due = [r for r in all_due if r["organization_id"] == org_id]
 
     # Overdue: reports that are due but last_sent_at is stale
     overdue_reports = []

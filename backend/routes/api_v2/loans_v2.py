@@ -27,9 +27,12 @@ from schemas.api_v2 import (
     CursorPage,
     ProblemDetail,
     V2Envelope,
+    V2LoanCreateRequest,
+    V2LoanUpdateRequest,
     V2Meta,
     apply_sparse_fields,
     build_link_header,
+    build_pagination_link_header,
     decode_cursor,
     encode_cursor,
     _parse_field_name,
@@ -122,6 +125,11 @@ def _loan_to_dict(loan) -> Dict[str, Any]:
         "created_at": _format_datetime(getattr(loan, "created_at", None)),
         "updated_at": _format_datetime(getattr(loan, "updated_at", None)),
     }
+
+
+def _get_request_id(request) -> Optional[str]:
+    """Extract request_id from request.state (set by RequestContextMiddleware)."""
+    return getattr(getattr(request, "state", None), "request_id", None)
 
 
 def _problem_response(problem: ProblemDetail) -> JSONResponse:
@@ -245,15 +253,36 @@ async def list_loans_v2(
         if has_more and loans:
             next_cursor = encode_cursor({"id": loans[-1].id})
 
-        return V2Envelope(
+        envelope = V2Envelope(
             data=items,
             meta=V2Meta(
                 api_version="2.0",
+                request_id=_get_request_id(request),
                 cursor=next_cursor,
                 has_more=has_more,
                 total=total,
             ),
         ).model_dump(exclude_none=True)
+
+        # Build pagination Link header (HATEOAS)
+        headers = {}
+        if next_cursor:
+            filter_params = {}
+            if stage:
+                filter_params["stage"] = stage
+            if loan_type:
+                filter_params["loan_type"] = loan_type
+            if loan_officer_id:
+                filter_params["loan_officer_id"] = str(loan_officer_id)
+            if q:
+                filter_params["q"] = q
+            if limit != 20:
+                filter_params["limit"] = str(limit)
+            link = build_pagination_link_header("/api/v2/loans", next_cursor, filter_params)
+            if link:
+                headers["Link"] = link
+
+        return JSONResponse(content=envelope, headers=headers) if headers else envelope
 
     except Exception as exc:
         logger.exception("V2 list_loans failed")
@@ -312,7 +341,10 @@ async def get_loan_v2(
 
         envelope = V2Envelope(
             data=item_dict,
-            meta=V2Meta(api_version="2.0"),
+            meta=V2Meta(
+                api_version="2.0",
+                request_id=_get_request_id(request),
+            ),
         ).model_dump(exclude_none=True)
 
         headers = {}
@@ -322,6 +354,240 @@ async def get_loan_v2(
 
     except Exception as exc:
         logger.exception("V2 get_loan failed")
+        return _problem_response(ProblemDetail.internal_error(str(exc)))
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v2/loans — Create a loan
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "",
+    summary="Create loan (V2)",
+    status_code=201,
+    response_description="Created loan in V2 envelope",
+)
+async def create_loan_v2(
+    request: Request,
+    body: V2LoanCreateRequest,
+):
+    """Create a new loan with V2 response envelope.
+
+    Uses the same validation pipeline as V1 but returns the response
+    wrapped in a V2Envelope with RFC 7807 errors.
+    """
+    from db import get_db
+    from database.models import Loan
+    from auth.dependencies import get_current_user_flexible
+
+    db: Session = next(get_db())
+    try:
+        try:
+            current_user = await get_current_user_flexible(request)
+        except Exception:
+            return _problem_response(ProblemDetail(
+                type="https://api.perenniaai.com/problems/unauthorized",
+                title="Unauthorized",
+                status=401,
+                detail="Valid authentication required",
+            ))
+
+        create_data = body.model_dump(exclude_unset=True)
+
+        # Generate loan number if not provided
+        loan_number = create_data.get("loan_number")
+        if not loan_number:
+            import uuid
+            loan_number = f"LOAN-{uuid.uuid4().hex[:8].upper()}"
+
+        # Check for duplicate loan number
+        if create_data.get("loan_number"):
+            existing = db.query(Loan).filter(
+                Loan.loan_number == loan_number
+            ).first()
+            if existing:
+                return _problem_response(ProblemDetail.bad_request(
+                    f"Loan with number '{loan_number}' already exists",
+                    errors=[{"field": "loan_number", "message": "duplicate loan number"}],
+                ))
+
+        # Build loan fields
+        loan_fields = {
+            "loan_number": loan_number,
+            "borrower_name": create_data.get("borrower_name") or "Unknown Borrower",
+            "borrower_email": create_data.get("borrower_email"),
+            "stage": create_data.get("stage") or "APPLICATION",
+            "loan_officer_id": current_user.id,
+            "organization_id": getattr(current_user, "organization_id", None),
+        }
+
+        # Set loan officer name
+        lo_name = getattr(current_user, "full_name", "") or ""
+        if not lo_name:
+            first = getattr(current_user, "first_name", "") or ""
+            last = getattr(current_user, "last_name", "") or ""
+            lo_name = f"{first} {last}".strip()
+        if lo_name:
+            loan_fields["loan_officer_name"] = lo_name
+
+        # Optional fields
+        for field in ("program", "loan_type", "amount", "purchase_price",
+                       "down_payment", "rate", "term",
+                       "property_address", "property_city",
+                       "property_state", "property_zip"):
+            if field in create_data and create_data[field] is not None:
+                loan_fields[field] = create_data[field]
+
+        # Default amount to 1.0 if not provided (conversion loans)
+        if "amount" not in loan_fields or not loan_fields.get("amount"):
+            loan_fields["amount"] = 1.0
+
+        db_loan = Loan(**loan_fields)
+        db.add(db_loan)
+        db.commit()
+        db.refresh(db_loan)
+
+        logger.info(f"V2 loan created: {db_loan.loan_number} (ID: {db_loan.id})")
+
+        item_dict = _loan_to_dict(db_loan)
+        link_header = build_link_header("loan", item_dict)
+
+        envelope = V2Envelope(
+            data=item_dict,
+            meta=V2Meta(
+                api_version="2.0",
+                request_id=_get_request_id(request),
+            ),
+        ).model_dump(exclude_none=True)
+
+        headers = {}
+        if link_header:
+            headers["Link"] = link_header
+        return JSONResponse(status_code=201, content=envelope, headers=headers)
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("V2 create_loan failed")
+        return _problem_response(ProblemDetail.internal_error(str(exc)))
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v2/loans/{loan_id} — Partial update
+# ---------------------------------------------------------------------------
+
+@router.patch(
+    "/{loan_id}",
+    summary="Update loan (V2)",
+    response_description="Updated loan in V2 envelope",
+)
+async def update_loan_v2(
+    request: Request,
+    loan_id: int,
+    body: V2LoanUpdateRequest,
+):
+    """Partially update a loan.
+
+    Uses PATCH semantics: only provided fields are updated.
+    Stage transitions are validated against the loan state machine.
+    Use ``force_stage: true`` in the request body (admin only) to override.
+    Returns RFC 7807 errors.
+    """
+    from db import get_db
+    from database.models import Loan
+    from auth.dependencies import get_current_user_flexible
+
+    db: Session = next(get_db())
+    try:
+        try:
+            current_user = await get_current_user_flexible(request)
+        except Exception:
+            return _problem_response(ProblemDetail(
+                type="https://api.perenniaai.com/problems/unauthorized",
+                title="Unauthorized",
+                status=401,
+                detail="Valid authentication required",
+            ))
+
+        query = db.query(Loan).filter(Loan.id == loan_id, Loan.deleted_at.is_(None))
+        if hasattr(current_user, "organization_id") and current_user.organization_id:
+            query = query.filter(Loan.organization_id == current_user.organization_id)
+
+        loan = query.first()
+        if not loan:
+            return _problem_response(ProblemDetail.not_found(
+                f"Loan with id '{loan_id}' not found",
+                instance=f"/api/v2/loans/{loan_id}",
+            ))
+
+        update_data = body.model_dump(exclude_unset=True)
+        force_stage = update_data.pop("force_stage", False)
+
+        if not update_data:
+            return _problem_response(ProblemDetail.bad_request(
+                "No fields provided for update"
+            ))
+
+        # Validate stage transition if stage is being changed
+        if "stage" in update_data and update_data["stage"]:
+            old_stage = getattr(loan, "stage", "") or ""
+            if hasattr(old_stage, "value"):
+                old_stage = old_stage.value
+            new_stage = update_data["stage"]
+
+            try:
+                from routes.loans_crud_routes import _validate_stage_transition
+                user_role = getattr(current_user, "permission_role", None) or getattr(current_user, "role", None)
+                transition_error = _validate_stage_transition(
+                    current_stage=old_stage,
+                    new_stage=new_stage,
+                    user_role=user_role,
+                    force=force_stage,
+                )
+                if transition_error:
+                    return _problem_response(ProblemDetail.bad_request(
+                        transition_error,
+                        errors=[{"field": "stage", "message": transition_error}],
+                    ))
+            except ImportError:
+                # Stage validation not available, allow the transition
+                logger.warning("Could not import stage validation; allowing transition")
+
+        # Apply updates (protect immutable fields)
+        _protected = {"id", "organization_id", "created_at", "loan_officer_id", "loan_number"}
+        for key, value in update_data.items():
+            if key not in _protected and hasattr(loan, key):
+                setattr(loan, key, value)
+
+        loan.updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(loan)
+
+        logger.info(f"V2 loan updated: {loan.loan_number} (ID: {loan.id})")
+
+        item_dict = _loan_to_dict(loan)
+        link_header = build_link_header("loan", item_dict)
+
+        envelope = V2Envelope(
+            data=item_dict,
+            meta=V2Meta(
+                api_version="2.0",
+                request_id=_get_request_id(request),
+            ),
+        ).model_dump(exclude_none=True)
+
+        headers = {}
+        if link_header:
+            headers["Link"] = link_header
+        return JSONResponse(content=envelope, headers=headers)
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("V2 update_loan failed")
         return _problem_response(ProblemDetail.internal_error(str(exc)))
     finally:
         db.close()

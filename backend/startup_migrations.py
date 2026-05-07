@@ -249,6 +249,12 @@ def run_all_startup_migrations(engine: Any) -> None:
         logger.warning(f"Morning briefings migration: {e}")
 
     try:
+        from migrations.create_briefing_thread_tables import run_migration as _run_briefing_threads
+        _run_briefing_threads()
+    except Exception as e:
+        logger.warning(f"Briefing thread tables migration: {e}")
+
+    try:
         from migrations.add_ai_benchmark_tables import run_migration as _run_ai_bench
         if run_tracked:
             run_tracked(engine, "add_ai_benchmark_tables", _run_ai_bench)

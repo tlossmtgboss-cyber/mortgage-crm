@@ -111,13 +111,17 @@ export default function MorningBriefingCard() {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await api.post('/api/v1/briefing/generate-now?force=true');
-      toast.success('Briefing refresh started -- it may take a moment.');
-      // Poll briefly for the new briefing (generation is async via Celery)
-      setTimeout(async () => {
+      const res = await api.post('/api/v1/briefing/generate-now?force=true');
+      if (res.status === 201) {
+        toast.success('Briefing generated.');
         await fetchBriefing();
         setRefreshing(false);
-      }, 4000);
+      } else {
+        toast.success('Briefing generation started — check back in a moment.');
+        setTimeout(() => {
+          fetchBriefing().finally(() => setRefreshing(false));
+        }, 5000);
+      }
     } catch (err) {
       const detail = err?.response?.data?.detail;
       toast.error(detail || 'Could not refresh briefing');

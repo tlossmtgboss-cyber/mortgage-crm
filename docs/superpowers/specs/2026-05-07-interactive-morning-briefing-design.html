@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Morning Briefing — Design Spec</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-2: #232733;
+    --border: #2e3345;
+    --text: #e4e7ef;
+    --text-muted: #8b90a0;
+    --accent: #6c8cff;
+    --accent-dim: #4a6ad4;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --orange: #fb923c;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+
+  .hero {
+    background: linear-gradient(135deg, #1e2538 0%, #162040 50%, #1a1d27 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 12px;
+  }
+
+  .hero .subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .meta {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-top: 24px;
+  }
+
+  .meta span {
+    background: var(--surface-2);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .meta .status {
+    color: var(--green);
+    border-color: rgba(52, 211, 153, 0.3);
+    background: rgba(52, 211, 153, 0.08);
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 40px 80px;
+  }
+
+  section {
+    margin-bottom: 48px;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+  }
+
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 28px 0 12px;
+    color: var(--text);
+  }
+
+  p { margin-bottom: 14px; }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 24px 0;
+  }
+
+  .flow-step {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    position: relative;
+    padding: 20px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 0;
+  }
+
+  .flow-step:not(:last-child) {
+    border-radius: 12px 12px 0 0;
+    border-bottom: none;
+  }
+
+  .flow-step:not(:first-child):not(:last-child) {
+    border-radius: 0;
+    border-bottom: none;
+  }
+
+  .flow-step:last-child {
+    border-radius: 0 0 12px 12px;
+  }
+
+  .flow-step:only-child {
+    border-radius: 12px;
+  }
+
+  .step-num {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+
+  .step-content { flex: 1; }
+
+  .step-title {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 4px;
+  }
+
+  .step-dir {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    padding: 2px 10px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  .step-desc {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  .arrow-down {
+    text-align: center;
+    color: var(--accent-dim);
+    font-size: 1.2rem;
+    padding: 4px 0;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  /* Priority list */
+  .priority-list {
+    list-style: none;
+    margin: 16px 0;
+    counter-reset: priority;
+  }
+
+  .priority-list li {
+    counter-increment: priority;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+
+  .priority-list li::before {
+    content: counter(priority);
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    margin-top: 1px;
+  }
+
+  .priority-list li:nth-child(1)::before,
+  .priority-list li:nth-child(2)::before { background: rgba(248, 113, 113, 0.2); color: var(--red); }
+  .priority-list li:nth-child(3)::before,
+  .priority-list li:nth-child(4)::before { background: rgba(251, 191, 36, 0.2); color: var(--yellow); }
+  .priority-list li:nth-child(5)::before,
+  .priority-list li:nth-child(6)::before { background: rgba(108, 140, 255, 0.2); color: var(--accent); }
+
+  .priority-label {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .priority-desc {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    margin-top: 2px;
+  }
+
+  /* Email mockup */
+  .email-mock {
+    background: #ffffff;
+    color: #1a1a2e;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 20px 0;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    font-size: 0.9rem;
+  }
+
+  .email-header {
+    background: #f4f5f7;
+    padding: 16px 20px;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .email-header .from { font-weight: 600; color: #1a1a2e; }
+  .email-header .subject { color: #555; font-size: 0.85rem; margin-top: 4px; }
+
+  .email-body {
+    padding: 24px;
+    line-height: 1.8;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  .email-body .task-item {
+    padding: 12px 16px;
+    background: #f8f9fc;
+    border-left: 3px solid #6c8cff;
+    border-radius: 0 8px 8px 0;
+    margin: 10px 0;
+  }
+
+  .email-body .task-item.success {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+  }
+
+  .email-body .task-item.warning {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+  }
+
+  .email-body .task-detail {
+    color: #666;
+    font-size: 0.85rem;
+    margin-top: 4px;
+  }
+
+  .email-body .cta {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #eee;
+    color: #666;
+    font-style: italic;
+  }
+
+  /* State machine */
+  .state-machine {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 16px 0;
+    padding: 20px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  .state {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    white-space: nowrap;
+  }
+
+  .state.active { background: rgba(108, 140, 255, 0.15); color: var(--accent); border: 1px solid rgba(108, 140, 255, 0.3); }
+  .state.terminal { background: rgba(52, 211, 153, 0.1); color: var(--green); border: 1px solid rgba(52, 211, 153, 0.3); }
+  .state.error { background: rgba(248, 113, 113, 0.1); color: var(--red); border: 1px solid rgba(248, 113, 113, 0.3); }
+
+  .state-arrow {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+
+  th, td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    background: var(--surface);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  td { color: var(--text); }
+
+  tr:hover td { background: var(--surface); }
+
+  code {
+    background: var(--surface-2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--accent);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .tag-new { background: rgba(108, 140, 255, 0.15); color: var(--accent); }
+  .tag-existing { background: rgba(139, 144, 160, 0.15); color: var(--text-muted); }
+
+  /* Cleanup checklist */
+  .checklist {
+    list-style: none;
+    margin: 16px 0;
+  }
+
+  .checklist li {
+    padding: 10px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 0.92rem;
+  }
+
+  .checklist li::before {
+    content: "~";
+    color: var(--red);
+    font-weight: 700;
+    margin-right: 10px;
+  }
+
+  .checklist li.fix::before {
+    content: "+";
+    color: var(--green);
+  }
+
+  /* Reply examples */
+  .reply-examples {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .reply-example {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 0.88rem;
+    font-style: italic;
+    color: var(--text-muted);
+  }
+
+  .reply-example::before {
+    content: "LO reply:";
+    display: block;
+    font-style: normal;
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .section-note {
+    background: rgba(108, 140, 255, 0.06);
+    border: 1px solid rgba(108, 140, 255, 0.2);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  .section-note strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Interactive Morning Briefing</h1>
+  <p class="subtitle">Aria sends your daily priorities. You reply with what to handle. AI executes and reports back. All via email.</p>
+  <div class="meta">
+    <span class="status">Approved</span>
+    <span>2026-05-07</span>
+    <span>Tim Loss + Claude</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- CONVERSATION LOOP -->
+  <section>
+    <h2>The Conversation Loop</h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Briefing</div>
+          <div class="step-dir">Aria &rarr; LO &bull; Daily at briefing_hour</div>
+          <div class="step-desc">Prioritized action-item email with numbered tasks, context, and suggested actions. Sent from aria@perenniaai.com.</div>
+        </div>
+      </div>
+      <div class="arrow-down">&darr;</div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">LO Reply</div>
+          <div class="step-dir">LO &rarr; Aria &bull; Natural language</div>
+          <div class="step-desc">LO replies to the email with instructions. System polls inbox every 60s, matches reply to thread.</div>
+        </div>
+      </div>
+      <div class="arrow-down">&darr;</div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Confirmation</div>
+          <div class="step-dir">Aria &rarr; LO &bull; Structured task list</div>
+          <div class="step-desc">AI parses the reply, sends back a specific plan. "Here's what I'll do: [list]. Reply 'approved' to proceed."</div>
+        </div>
+      </div>
+      <div class="arrow-down">&darr;</div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Approval</div>
+          <div class="step-dir">LO &rarr; Aria &bull; Approve / modify / cancel</div>
+          <div class="step-desc">LO approves or requests changes. If changes, loops back to Step 3. If approved, execution begins.</div>
+        </div>
+      </div>
+      <div class="arrow-down">&darr;</div>
+      <div class="flow-step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <div class="step-title">Results</div>
+          <div class="step-dir">Aria &rarr; LO &bull; Single summary</div>
+          <div class="step-desc">One email after all tasks complete: what succeeded, what failed, what needs manual attention.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIORITY ORDER -->
+  <section>
+    <h2>Briefing Priority Order</h2>
+    <p>Pipeline-first. Items ordered by urgency and impact on active deals.</p>
+
+    <ol class="priority-list">
+      <li>
+        <div>
+          <div class="priority-label">At-risk loans needing action today</div>
+          <div class="priority-desc">Days stalled, missing docs, compliance issues</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="priority-label">Expiring rate locks</div>
+          <div class="priority-desc">Within lock_expiring_days threshold</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="priority-label">Conditions &amp; docs due</div>
+          <div class="priority-desc">Outstanding underwriting conditions, pending documents</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="priority-label">Stale leads to follow up</div>
+          <div class="priority-desc">No contact in stale_lead_days</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="priority-label">Today's appointments</div>
+          <div class="priority-desc">Calendar items with borrower context</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="priority-label">New leads to contact</div>
+          <div class="priority-desc">Unworked inbound leads</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- EMAIL MOCKUPS -->
+  <section>
+    <h2>Email Examples</h2>
+
+    <h3>Step 1 &mdash; Morning Briefing</h3>
+    <div class="email-mock">
+      <div class="email-header">
+        <div class="from">From: Aria &lt;aria@perenniaai.com&gt;</div>
+        <div class="subject">Subject: Your Morning Briefing &mdash; 6 items need attention</div>
+      </div>
+      <div class="email-body">
+        <p style="color:#333;font-weight:600;font-size:1.05rem;margin-bottom:16px;">Good morning, Tim. Here's your pipeline for today:</p>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">#1 &nbsp; At-Risk: Johnson loan stalled 8 days in underwriting</strong>
+          <div class="task-detail">Loan #2024-1847 &bull; $425,000 &bull; 3 outstanding conditions (bank statements, VOE, appraisal)<br>Suggested: Create condition checklist and email borrower for docs</div>
+        </div>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">#2 &nbsp; Rate Lock: James Wilson expires May 9 (2 days)</strong>
+          <div class="task-detail">Loan #2024-2103 &bull; $380,000 &bull; 4.875% locked Mar 15<br>Suggested: Schedule call to discuss extension or closing timeline</div>
+        </div>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">#3 &nbsp; Stale Lead: Maria Torres &mdash; 12 days no contact</strong>
+          <div class="task-detail">Pre-approved $350K &bull; Source: Zillow &bull; Last: voicemail Apr 25<br>Suggested: Send follow-up email with rate update</div>
+        </div>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">#4 &nbsp; Stale Lead: David Park &mdash; 9 days no contact</strong>
+          <div class="task-detail">New inquiry &bull; Source: Website &bull; Last: initial call Apr 28<br>Suggested: Send pre-approval checklist email</div>
+        </div>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">#5 &nbsp; Appointment: Call with Sarah Kim at 10:00 AM</strong>
+          <div class="task-detail">Processor check-in &bull; Re: Johnson and Wilson files<br>Suggested: No action needed &mdash; calendar reminder set</div>
+        </div>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">#6 &nbsp; New Lead: Robert Chen &mdash; submitted inquiry yesterday</strong>
+          <div class="task-detail">$500K purchase &bull; 780 FICO &bull; Source: Realtor referral<br>Suggested: Send welcome email and schedule intro call</div>
+        </div>
+
+        <div class="cta">Reply to this email with which items you'd like me to handle.</div>
+      </div>
+    </div>
+
+    <h3>LO Reply Examples</h3>
+    <div class="reply-examples">
+      <div class="reply-example">"Handle 1, 3, and 6. Skip the rest."</div>
+      <div class="reply-example">"Do everything except 5."</div>
+      <div class="reply-example">"Send the follow-up to Torres and check on Johnson conditions."</div>
+      <div class="reply-example">"For item 2, call instead of email. Handle 1 and 3 as suggested."</div>
+    </div>
+
+    <h3>Step 3 &mdash; Confirmation</h3>
+    <div class="email-mock">
+      <div class="email-header">
+        <div class="from">From: Aria &lt;aria@perenniaai.com&gt;</div>
+        <div class="subject">Re: Your Morning Briefing &mdash; 6 items need attention</div>
+      </div>
+      <div class="email-body">
+        <p style="color:#333;font-weight:600;margin-bottom:16px;">Here's what I'll do:</p>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">1. &#x1F4CB; Create condition checklist for Johnson loan (#2024-1847)</strong>
+          <div class="task-detail">&rarr; 3 items: bank statements, VOE, appraisal. Email borrower requesting docs.</div>
+        </div>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">2. &#x2709;&#xFE0F; Send follow-up email to Maria Torres</strong>
+          <div class="task-detail">&rarr; Using your pre-approval follow-up template with current rate update.</div>
+        </div>
+
+        <div class="task-item">
+          <strong style="color:#1a1a2e;">3. &#x2709;&#xFE0F; Send welcome email to Robert Chen + schedule intro call</strong>
+          <div class="task-detail">&rarr; Welcome email with pre-approval checklist. Adding 30-min call to your calendar for tomorrow at 9 AM.</div>
+        </div>
+
+        <div class="cta">Reply "approved" to proceed, or tell me what to change.</div>
+      </div>
+    </div>
+
+    <h3>Step 5 &mdash; Results</h3>
+    <div class="email-mock">
+      <div class="email-header">
+        <div class="from">From: Aria &lt;aria@perenniaai.com&gt;</div>
+        <div class="subject">Re: Your Morning Briefing &mdash; All tasks completed</div>
+      </div>
+      <div class="email-body">
+        <p style="color:#333;font-weight:600;margin-bottom:16px;">&#x2705; All 3 tasks completed:</p>
+
+        <div class="task-item success">
+          <strong style="color:#065f46;">1. &#x2705; Condition checklist created for Johnson loan</strong>
+          <div class="task-detail">&rarr; 3 items added, assigned to processor Sarah Kim. Borrower emailed at 8:32 AM.</div>
+        </div>
+
+        <div class="task-item success">
+          <strong style="color:#065f46;">2. &#x2705; Email sent to Maria Torres at 8:47 AM</strong>
+          <div class="task-detail">&rarr; Subject: "Quick update on your pre-approval, Maria"</div>
+        </div>
+
+        <div class="task-item warning">
+          <strong style="color:#92400e;">3. &#x26A0;&#xFE0F; Welcome email sent, but call needs attention</strong>
+          <div class="task-detail">&rarr; Welcome email sent to Robert Chen. Calendar slot added for tomorrow 9 AM, but no phone number on file. Added task to your queue.</div>
+        </div>
+
+        <p style="color:#666;margin-top:20px;border-top:1px solid #eee;padding-top:16px;">No further action needed unless noted above.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATE MACHINE -->
+  <section>
+    <h2>Thread State Machine</h2>
+
+    <div class="state-machine">
+      <span class="state active">BRIEFING_SENT</span>
+      <span class="state-arrow">&rarr;</span>
+      <span class="state active">AWAITING_REPLY</span>
+      <span class="state-arrow">&rarr;</span>
+      <span class="state active">PARSING_INSTRUCTIONS</span>
+      <span class="state-arrow">&rarr;</span>
+      <span class="state active">CONFIRMATION_SENT</span>
+      <span class="state-arrow">&rarr;</span>
+      <span class="state active">AWAITING_APPROVAL</span>
+      <span class="state-arrow">&rarr;</span>
+      <span class="state active">EXECUTING</span>
+      <span class="state-arrow">&rarr;</span>
+      <span class="state terminal">RESULTS_SENT</span>
+    </div>
+
+    <div class="section-note">
+      <strong>Loops:</strong> AWAITING_APPROVAL &rarr; CONFIRMATION_SENT (LO requests changes)<br>
+      <strong>Terminal states:</strong> RESULTS_SENT, EXPIRED (no reply in 4h), CANCELLED (LO cancels), FAILED (unrecoverable error)
+    </div>
+  </section>
+
+  <!-- DATA MODEL -->
+  <section>
+    <h2>Data Model</h2>
+
+    <h3>BriefingThread</h3>
+    <table>
+      <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>Integer PK</td><td></td></tr>
+        <tr><td><code>organization_id</code></td><td>Integer FK</td><td>Tenant isolation</td></tr>
+        <tr><td><code>user_id</code></td><td>Integer FK &rarr; users</td><td>The LO</td></tr>
+        <tr><td><code>morning_briefing_id</code></td><td>Integer FK &rarr; morning_briefings</td><td>Link to source briefing</td></tr>
+        <tr><td><code>thread_token</code></td><td>UUID</td><td>Unique, indexed</td></tr>
+        <tr><td><code>outbound_message_id</code></td><td>String</td><td>Graph Message-ID for threading</td></tr>
+        <tr><td><code>state</code></td><td>String</td><td>State machine value</td></tr>
+        <tr><td><code>briefing_items</code></td><td>JSONB</td><td>Prioritized items sent</td></tr>
+        <tr><td><code>extracted_tasks</code></td><td>JSONB</td><td>Parsed from LO reply</td></tr>
+        <tr><td><code>lo_reply_raw</code></td><td>Text</td><td>Raw reply email body</td></tr>
+        <tr><td><code>lo_approval_raw</code></td><td>Text</td><td>Raw approval email body</td></tr>
+        <tr><td><code>expires_at</code></td><td>TimestampTZ</td><td>4 hours after briefing sent</td></tr>
+      </tbody>
+    </table>
+
+    <h3>BriefingTask</h3>
+    <table>
+      <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>Integer PK</td><td></td></tr>
+        <tr><td><code>thread_id</code></td><td>Integer FK &rarr; briefing_threads</td><td></td></tr>
+        <tr><td><code>organization_id</code></td><td>Integer FK</td><td>Tenant isolation</td></tr>
+        <tr><td><code>briefing_item_number</code></td><td>Integer</td><td>Reference to item # in briefing</td></tr>
+        <tr><td><code>briefing_item_summary</code></td><td>Text</td><td>"Follow up with Maria Torres"</td></tr>
+        <tr><td><code>action_type</code></td><td>String</td><td>send_email, create_task, schedule_call, etc.</td></tr>
+        <tr><td><code>action_params</code></td><td>JSONB</td><td>Tool-specific parameters</td></tr>
+        <tr><td><code>tool_name</code></td><td>String</td><td>@mortgage_tool function name</td></tr>
+        <tr><td><code>lo_override_notes</code></td><td>Text</td><td>"Call instead of email"</td></tr>
+        <tr><td><code>status</code></td><td>String</td><td>pending / approved / executing / completed / failed</td></tr>
+        <tr><td><code>result_data</code></td><td>JSONB</td><td>Execution result</td></tr>
+        <tr><td><code>error_message</code></td><td>Text</td><td>If failed</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- CELERY TASKS -->
+  <section>
+    <h2>Celery Tasks</h2>
+
+    <table>
+      <thead><tr><th>Task</th><th>Schedule</th><th>Purpose</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><code>dispatch_briefings</code></td><td>Every 15 min</td><td>Generates briefings by timezone</td><td><span class="tag tag-existing">Existing</span></td></tr>
+        <tr><td><code>poll_briefing_replies</code></td><td>Every 60 sec</td><td>Polls inbox, matches replies to threads</td><td><span class="tag tag-new">New</span></td></tr>
+        <tr><td><code>process_briefing_reply</code></td><td>On-demand</td><td>Parses reply, extracts tasks, sends confirmation</td><td><span class="tag tag-new">New</span></td></tr>
+        <tr><td><code>execute_briefing_tasks</code></td><td>On-demand</td><td>Runs approved tasks, sends results</td><td><span class="tag tag-new">New</span></td></tr>
+        <tr><td><code>expire_stale_threads</code></td><td>Every 30 min</td><td>Moves threads past 4h to EXPIRED</td><td><span class="tag tag-new">New</span></td></tr>
+        <tr><td><code>cleanup_old_briefings</code></td><td>Daily</td><td>Deletes briefings older than 90 days</td><td><span class="tag tag-existing">Existing</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- THREAD MATCHING -->
+  <section>
+    <h2>Reply Matching</h2>
+
+    <p>When a reply arrives at <code>aria@perenniaai.com</code>, the system matches it to a briefing thread using three strategies in priority order:</p>
+
+    <ol class="priority-list">
+      <li>
+        <div>
+          <div class="priority-label">In-Reply-To / References headers</div>
+          <div class="priority-desc">Standard email threading. Match outbound_message_id to the original briefing email.</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="priority-label">X-Perennia-Thread-Id header</div>
+          <div class="priority-desc">Custom header with UUID thread token. Preserved by most email clients on reply.</div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <div class="priority-label">Sender email + briefing date</div>
+          <div class="priority-desc">Last resort fallback. Match sender to user, find most recent active thread from today.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- AUDIT CLEANUP -->
+  <section>
+    <h2>Audit Cleanup (Bundled)</h2>
+    <p>Fixes from the morning briefing audit, included in this work:</p>
+
+    <ul class="checklist">
+      <li>Delete <code>agents/autonomous/morning_briefing.py</code> &mdash; dead divergent code with zero tenant isolation</li>
+      <li class="fix">Add <code>html.escape()</code> to all interpolated values in email template</li>
+      <li class="fix">Fix DB session leaks in <code>morning_briefing_tasks.py</code> &mdash; use context managers</li>
+      <li class="fix">Extract shared components from BriefingPage.js + MorningBriefingCard.js</li>
+      <li class="fix">Fix UTC dismiss date &rarr; local timezone</li>
+      <li class="fix">Add error boundary around MorningBriefingCard on Dashboard</li>
+      <li class="fix">Unify status filtering between card and page</li>
+    </ul>
+  </section>
+
+  <!-- OUT OF SCOPE -->
+  <section>
+    <h2>Out of Scope (v1)</h2>
+    <div class="section-note">
+      <strong>In-app approval flow</strong> &mdash; email-only for v1<br>
+      <strong>Manager reply workflow</strong> &mdash; managers receive briefings but reply flow is per-LO only<br>
+      <strong>Attachments</strong> &mdash; no attachment handling in reply emails<br>
+      <strong>Voice/SMS channels</strong> &mdash; conversation loop is email-only
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

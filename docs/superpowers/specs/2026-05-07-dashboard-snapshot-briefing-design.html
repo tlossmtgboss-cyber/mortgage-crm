@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Snapshot in Morning Briefing — Design Spec</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222633;
+    --border: #2d3245;
+    --text: #e1e4ed;
+    --text-dim: #8b90a0;
+    --accent: #6c8cff;
+    --accent-dim: rgba(108,140,255,0.12);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  /* Header */
+  .spec-header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .spec-header h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .spec-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .badge-green { background: var(--green-dim); color: var(--green); }
+  .badge-accent { background: var(--accent-dim); color: var(--accent); }
+  .badge-purple { background: var(--purple-dim); color: var(--purple); }
+  .badge-amber { background: var(--amber-dim); color: var(--amber); }
+  .date { color: var(--text-dim); font-size: 0.85rem; }
+
+  /* Sections */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .section h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .section h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 1rem 0 0.5rem;
+    color: var(--accent);
+  }
+  p, li { font-size: 0.9rem; color: var(--text); }
+  p { margin-bottom: 0.75rem; }
+  ul { padding-left: 1.25rem; margin-bottom: 0.75rem; }
+  li { margin-bottom: 0.3rem; }
+
+  /* Code */
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    background: var(--surface2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    color: var(--accent);
+  }
+  pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+  }
+  .kw { color: var(--purple); }
+  .fn { color: var(--accent); }
+  .str { color: var(--green); }
+  .cmt { color: var(--text-dim); font-style: italic; }
+  .type { color: var(--amber); }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    font-size: 0.85rem;
+  }
+  th {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    background: var(--surface2);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+  }
+  td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(108,140,255,0.04); }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0.75rem 0;
+  }
+  .flow-step {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  .flow-arrow { color: var(--text-dim); font-size: 1rem; }
+
+  /* Architecture diagram */
+  .arch-diagram {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1rem;
+    align-items: center;
+    margin: 1rem 0;
+  }
+  .arch-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .arch-box.shared {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    grid-column: 1 / -1;
+  }
+  .arch-arrow {
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    text-align: center;
+  }
+
+  /* Visibility matrix */
+  .check { color: var(--green); font-weight: 700; }
+  .dash { color: var(--text-dim); }
+
+  /* Callout */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-dim);
+    padding: 0.75rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 0.75rem 0;
+    font-size: 0.88rem;
+  }
+  .callout-amber {
+    border-left-color: var(--amber);
+    background: var(--amber-dim);
+  }
+
+  /* File list */
+  .file-list {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.25rem 1rem;
+    font-size: 0.85rem;
+  }
+  .file-path { font-family: 'SF Mono', monospace; color: var(--accent); font-size: 0.82rem; }
+  .file-change { color: var(--text-dim); }
+  .file-new { color: var(--green); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="spec-header">
+    <h1>Dashboard Snapshot in Morning Briefing</h1>
+    <div class="spec-meta">
+      <span class="badge badge-green">Approved</span>
+      <span class="badge badge-accent">Design Spec</span>
+      <span class="date">2026-05-07</span>
+    </div>
+    <p style="margin-top:0.75rem; color: var(--text-dim);">
+      Add a full dashboard snapshot to the morning briefing so opening the briefing replaces the need to visit the dashboard. Always included, scope matches briefing level.
+    </p>
+  </div>
+
+  <!-- Architecture -->
+  <div class="section">
+    <h2>Architecture</h2>
+    <p>A new shared metrics service that both the dashboard route and the briefing service call. Single source of truth&mdash;metrics never drift.</p>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.25rem 0;">
+      <div class="arch-box">
+        <div style="font-weight:600; margin-bottom:0.25rem;">Dashboard Route</div>
+        <div style="font-size:0.8rem; color:var(--text-dim);">dashboard_routes.py</div>
+        <div style="font-size:0.8rem; color:var(--text-dim);">Auth + Cache + Format</div>
+      </div>
+      <div class="arch-box">
+        <div style="font-weight:600; margin-bottom:0.25rem;">Briefing Service</div>
+        <div style="font-size:0.8rem; color:var(--text-dim);">morning_briefing_service.py</div>
+        <div style="font-size:0.8rem; color:var(--text-dim);">Level-scoped snapshot</div>
+      </div>
+    </div>
+    <div style="text-align:center; color:var(--text-dim); margin:-0.5rem 0 0.5rem; font-size:1.25rem;">&darr;&ensp;&ensp;&ensp;&ensp;&ensp;&darr;</div>
+    <div class="arch-box shared">
+      <div style="font-weight:700; font-size:1rem; margin-bottom:0.25rem;">Shared Metrics Service</div>
+      <div style="font-size:0.82rem;"><code>services/dashboard_metrics_service.py</code></div>
+      <div style="font-size:0.82rem; color:var(--text-dim); margin-top:0.25rem;">11 query functions &bull; consistent interface &bull; resilient error handling</div>
+    </div>
+
+    <h3>Interface Pattern</h3>
+    <pre><code><span class="kw">def</span> <span class="fn">calculate_X</span>(
+    db: <span class="type">Session</span>,
+    user_id: <span class="type">int</span>,
+    org_id: <span class="type">int</span>,
+    branch_user_ids: <span class="type">Optional[list]</span> = <span class="kw">None</span>,
+    lookback_days: <span class="type">int</span> = <span class="str">30</span>
+) -> <span class="type">dict | list</span>:</code></pre>
+
+    <h3>Scoping Convention</h3>
+    <table>
+      <tr><th>Scope</th><th>branch_user_ids</th><th>Who sees it</th></tr>
+      <tr><td>Individual</td><td><code>[user_id]</code></td><td>Own data only</td></tr>
+      <tr><td>Branch / Team</td><td><code>[id1, id2, ...]</code></td><td>Manager + direct reports</td></tr>
+      <tr><td>Org-wide</td><td><code>None</code></td><td>Leadership sees everything</td></tr>
+    </table>
+  </div>
+
+  <!-- Functions -->
+  <div class="section">
+    <h2>Shared Service Functions</h2>
+
+    <h3>Extracted from dashboard_routes.py (move as-is)</h3>
+    <table>
+      <tr><th>Function</th><th>Returns</th></tr>
+      <tr><td><code>calculate_stage_performance()</code></td><td>Stage name, efficiency %, status</td></tr>
+      <tr><td><code>calculate_team_performance()</code></td><td>Role name, performance score</td></tr>
+      <tr><td><code>calculate_bottlenecks()</code></td><td>Issue, stage, affected count, avg delay</td></tr>
+      <tr><td><code>calculate_efficiency_trends()</code></td><td>Overall/pull-through/time-to-close changes</td></tr>
+    </table>
+
+    <h3>New functions (refactored from inline route code)</h3>
+    <table>
+      <tr><th>Function</th><th>Returns</th></tr>
+      <tr><td><code>calculate_production_metrics()</code></td><td>Annual/monthly/weekly/daily goal vs actual</td></tr>
+      <tr><td><code>calculate_pipeline_stats()</code></td><td>Stage id, name, count, alerts, volume</td></tr>
+      <tr><td><code>calculate_lead_metrics()</code></td><td>new_today, conversion_rate, hot_leads, avg_contact_time</td></tr>
+      <tr><td><code>calculate_profitability()</code></td><td>funded_ytd, total_volume, avg_loan_size, gain_on_sale</td></tr>
+      <tr><td><code>calculate_loan_issues()</code></td><td>Top 10 stuck loans with stage, days, SLA, issue</td></tr>
+      <tr><td><code>calculate_team_stats()</code></td><td>has_team, avg_workload, backlog, sla_missed</td></tr>
+      <tr><td><code>calculate_efficiency_summary()</code></td><td>overall_score, avg_time_to_close, pull_through_rate, loans_behind</td></tr>
+    </table>
+
+    <div class="callout">
+      Each function has its own <code>try/except</code> with <code>db.rollback()</code> and returns a safe default on failure &mdash; matching the briefing service resilience pattern.
+    </div>
+  </div>
+
+  <!-- Dashboard Route Changes -->
+  <div class="section">
+    <h2>Dashboard Route Refactor</h2>
+    <p>The route handler becomes a thin orchestrator. Same API response shape &mdash; zero frontend dashboard impact.</p>
+    <div class="flow">
+      <span class="flow-step">Auth</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-step">Date Parse</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-step">Scope Detect</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-step">Cache Check</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-step" style="border-color:var(--accent); color:var(--accent);">Call Shared Service</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-step">Format Response</span>
+      <span class="flow-arrow">&rarr;</span>
+      <span class="flow-step">Cache Set</span>
+    </div>
+    <p style="color:var(--text-dim); font-size:0.85rem;">~1,540 lines &rarr; ~300 lines</p>
+  </div>
+
+  <!-- Briefing Service Changes -->
+  <div class="section">
+    <h2>Briefing Service Integration</h2>
+
+    <h3>New method: _query_dashboard_snapshot()</h3>
+    <pre><code><span class="kw">def</span> <span class="fn">_query_dashboard_snapshot</span>(
+    self, db: <span class="type">Session</span>, user_id: <span class="type">int</span>, org_id: <span class="type">int</span>, level: <span class="type">str</span>
+) -> <span class="type">dict</span>:</code></pre>
+
+    <h3>Level-based scoping</h3>
+    <table>
+      <tr><th>Level</th><th>Scoping</th></tr>
+      <tr><td><code>"individual"</code></td><td><code>branch_user_ids = [user_id]</code></td></tr>
+      <tr><td><code>"manager"</code></td><td>Query direct reports + self</td></tr>
+      <tr><td><code>"leadership"</code></td><td><code>branch_user_ids = None</code> (org-wide)</td></tr>
+    </table>
+
+    <h3>Integration point</h3>
+    <p>
+      In <code>build_context()</code> (line 713), after existing individual/manager/leadership data gathering,
+      call <code>_query_dashboard_snapshot()</code> and store on <code>ctx.dashboard_snapshot</code>.
+      The <code>BriefingContext</code> dataclass gets a new <code>dashboard_snapshot: dict</code> field.
+      Persisted into <code>briefing_data["dashboard_snapshot"]</code> (existing JSONB column &mdash; no migration needed).
+    </p>
+
+    <h3>Return shape</h3>
+    <pre><code>{
+    <span class="str">"production"</span>: { ... },
+    <span class="str">"pipeline_stats"</span>: [ ... ],
+    <span class="str">"lead_metrics"</span>: { ... },
+    <span class="str">"efficiency"</span>: { ... },
+    <span class="str">"profitability"</span>: { ... },
+    <span class="str">"loan_issues"</span>: [ ... ],
+    <span class="str">"bottlenecks"</span>: [ ... ],
+    <span class="str">"stage_performance"</span>: [ ... ],
+    <span class="str">"team_stats"</span>: { ... },        <span class="cmt">// manager/leadership only</span>
+    <span class="str">"team_performance"</span>: [ ... ],   <span class="cmt">// manager/leadership only</span>
+}</code></pre>
+  </div>
+
+  <!-- AI Narrative -->
+  <div class="section">
+    <h2>AI Narrative Enhancement</h2>
+    <p>The <code>generate_narrative()</code> prompt gets dashboard context so the AI can reference metrics naturally:</p>
+    <pre><code>Dashboard snapshot:
+- Production: 12/18.5 funded this month (65%)
+- Efficiency score: 74/100
+- Pull-through rate: 68%
+- Avg time to close: 32.4 days
+- Loans falling behind: 3
+- Bottlenecks: 2 active
+- Profitability: 47 funded YTD, $14,100,000 volume</code></pre>
+    <div class="callout">
+      <strong>Example narrative output:</strong> "You're at 12 of 18.5 for the month &mdash; on pace if you close 2 more this week. Your pull-through rate dipped 4% &mdash; check the 3 loans stuck in processing."
+    </div>
+  </div>
+
+  <!-- Frontend -->
+  <div class="section">
+    <h2>Frontend: DashboardSnapshotSection</h2>
+    <p>New component in <code>frontend/src/components/briefing/shared.js</code>. Always shown, no toggle. Placed first after AI narrative.</p>
+
+    <h3>Renders</h3>
+    <table>
+      <tr><th>Sub-section</th><th>Display</th></tr>
+      <tr><td>Production gauges</td><td>Monthly goal vs actual with progress bar; daily/weekly/annual as secondary</td></tr>
+      <tr><td>Pipeline summary</td><td>Compact table of stage counts + volumes</td></tr>
+      <tr><td>Efficiency score</td><td>Large number with trend arrow</td></tr>
+      <tr><td>Key metrics row</td><td>Pull-through, avg time to close, loans behind, automation rate (trend arrows)</td></tr>
+      <tr><td>Profitability</td><td>Funded YTD, avg loan size, gain on sale</td></tr>
+      <tr><td>Loan issues</td><td>Compact list (5 in card, 10 in full page)</td></tr>
+      <tr><td>Bottlenecks</td><td>Compact list with affected count and delay</td></tr>
+    </table>
+
+    <h3>Both views</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:0.75rem 0;">
+      <div class="arch-box">
+        <div style="font-weight:600;">MorningBriefingCard.js</div>
+        <div style="font-size:0.82rem; color:var(--text-dim);">Dashboard card on home page</div>
+        <div style="font-size:0.82rem; color:var(--text-dim);">Max 5 items (compact)</div>
+      </div>
+      <div class="arch-box">
+        <div style="font-weight:600;">BriefingPage.js</div>
+        <div style="font-size:0.82rem; color:var(--text-dim);">Full briefing page</div>
+        <div style="font-size:0.82rem; color:var(--text-dim);">Max 10 items (detail)</div>
+      </div>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-dim);">Data source: <code>briefing.dashboard_snapshot</code> from existing <code>/api/v1/briefing/today</code> response. No API route changes.</p>
+  </div>
+
+  <!-- Visibility Matrix -->
+  <div class="section">
+    <h2>Briefing Level Visibility Matrix</h2>
+    <table>
+      <tr><th>Data</th><th>Individual</th><th>Manager</th><th>Leadership</th></tr>
+      <tr><td>Production metrics</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Pipeline stats</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Lead metrics</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Efficiency</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Profitability</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Loan issues</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Bottlenecks</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Stage performance</td><td class="check">Own</td><td class="check">Team</td><td class="check">Org</td></tr>
+      <tr><td>Team stats</td><td class="dash">&mdash;</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+      <tr><td>Team performance</td><td class="dash">&mdash;</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+    </table>
+  </div>
+
+  <!-- Testing -->
+  <div class="section">
+    <h2>Testing</h2>
+    <ul>
+      <li>Unit tests for each shared service function (mock db, verify query filters per scope)</li>
+      <li>Integration test: briefing generation includes <code>dashboard_snapshot</code> in <code>briefing_data</code></li>
+      <li>Frontend: verify DashboardSnapshotSection renders for each briefing level</li>
+      <li>Regression: dashboard endpoint returns identical JSON shape after refactor</li>
+    </ul>
+  </div>
+
+  <!-- Files Changed -->
+  <div class="section">
+    <h2>Files Changed</h2>
+    <table>
+      <tr><th>File</th><th>Change</th></tr>
+      <tr>
+        <td><code>services/dashboard_metrics_service.py</code></td>
+        <td><span class="badge badge-green">NEW</span> Shared metrics functions</td>
+      </tr>
+      <tr>
+        <td><code>routes/dashboard_routes.py</code></td>
+        <td><span class="badge badge-amber">REFACTOR</span> Call shared service (same API)</td>
+      </tr>
+      <tr>
+        <td><code>services/morning_briefing_service.py</code></td>
+        <td><span class="badge badge-accent">MODIFY</span> Add _query_dashboard_snapshot()</td>
+      </tr>
+      <tr>
+        <td><code>components/briefing/shared.js</code></td>
+        <td><span class="badge badge-accent">MODIFY</span> Add DashboardSnapshotSection</td>
+      </tr>
+      <tr>
+        <td><code>pages/BriefingPage.js</code></td>
+        <td><span class="badge badge-accent">MODIFY</span> Render snapshot section</td>
+      </tr>
+      <tr>
+        <td><code>components/dashboard/MorningBriefingCard.js</code></td>
+        <td><span class="badge badge-accent">MODIFY</span> Render snapshot section</td>
+      </tr>
+      <tr>
+        <td><code>tests/test_dashboard_metrics_service.py</code></td>
+        <td><span class="badge badge-green">NEW</span> Unit tests for shared service</td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

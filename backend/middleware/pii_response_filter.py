@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -320,6 +320,20 @@ class PIIResponseFilterMiddleware(BaseHTTPMiddleware):
             logger.error("PII filter: inner middleware exception on %s %s: %s",
                          request.method, request.url.path, exc, exc_info=True)
             raise
+
+        # Streaming responses cannot be reliably filtered without buffering
+        # the entire stream, which would defeat the purpose of streaming.
+        # Log a warning so this is visible in audit and monitoring.
+        if isinstance(response, StreamingResponse):
+            content_type = response.headers.get("content-type", "")
+            if "application/json" in content_type:
+                logger.warning(
+                    "PII filter: StreamingResponse with JSON content-type on "
+                    "%s %s — PII masking is bypassed for streaming responses. "
+                    "Ensure the producing endpoint does not emit PII in streamed data.",
+                    request.method, request.url.path,
+                )
+            return response
 
         # Only inspect JSON-like responses
         content_type = response.headers.get("content-type", "")

@@ -7,8 +7,8 @@ import useCalendarActions from '../hooks/useCalendarActions';
 import useCalendarNavigation from '../hooks/useCalendarNavigation';
 import CommandCenterHeader from '../components/calendar/CommandCenterHeader';
 import CalendarToolbar from '../components/calendar/CalendarToolbar';
-import OperationalSidebar from '../components/calendar/OperationalSidebar';
-import CalendarMainView from '../components/calendar/CalendarMainView';
+import AppointmentListPanel from '../components/calendar/AppointmentListPanel';
+import AppointmentDetailPanel from '../components/calendar/AppointmentDetailPanel';
 import MobileCalendarView from '../components/calendar/MobileCalendarView';
 import CalendarModals from '../components/calendar/CalendarModals';
 import SetupBanner from '../components/calendar/SetupBanner';
@@ -165,7 +165,10 @@ function Calendar() {
       const el = document.querySelector(`[data-event-index="${clampedSelectedIndex}"]`);
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       const event = sortedEvents[clampedSelectedIndex];
-      if (event) { announceToScreenReader(`Selected: ${event.title || 'event'}`); }
+      if (event) {
+        announceToScreenReader(`Selected: ${event.title || 'event'}`);
+        setSelectedEvent(event);
+      }
     }
   }, [clampedSelectedIndex, sortedEvents, announceToScreenReader]);
 
@@ -178,19 +181,12 @@ function Calendar() {
     };
   });
 
-  // ── Selected day for sidebar (shows appointments for that day) ──
-  const [sidebarDate, setSidebarDate] = useState(null);
+  // ── Selected event for detail panel ──
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
-  // ── Click handlers for day/time slot selection ──
-  const handleDayClick = useCallback((day, year, month) => {
-    setSidebarDate(new Date(year, month, day));
+  const handleEventSelect = useCallback((event) => {
+    setSelectedEvent(event);
   }, []);
-
-  const handleTimeSlotClick = useCallback((date, hour) => {
-    actions.setSelectedDate(date);
-    actions.setSelectedTime(hour);
-    actions.setShowAddModal(true);
-  }, [actions]);
 
   // ── Render ──
   return (
@@ -242,40 +238,21 @@ function Calendar() {
           loading={events.loading}
         />
       ) : (
-        <div className="calendar-content">
-          {!nav.isDashboardView && (
-            <OperationalSidebar
-              sortedEvents={sortedEvents}
-              onAddClick={actions.openAddModal}
-              onEventClick={actions.handleEditAppointment}
-              onDeleteEvent={actions.handleDeleteEvent}
-              formatEventTime={events.formatEventTime}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              selectedDate={sidebarDate}
-            />
-          )}
-
-          <div className={nav.isDashboardView ? 'calendar-main calendar-main--full-width' : 'calendar-main'}>
-            <CalendarMainView
-              view={nav.view}
-              loading={events.loading}
-              currentDate={nav.currentDate}
-              viewHours={events.viewHours}
-              getEventsForDateObj={events.getEventsForDateObj}
-              getEventsForDateAndHour={events.getEventsForDateAndHour}
-              getEventsForDate={events.getEventsForDate}
-              onTimeSlotClick={handleTimeSlotClick}
-              onEventClick={actions.handleEditAppointment}
-              onDayHeaderClick={nav.handleDayHeaderClick}
-              weekDates={nav.weekDates}
-              currentMonthData={nav.currentMonthData}
-              nextMonthData={nav.nextMonthData}
-              onDayClick={handleDayClick}
-              onScrollUp={nav.handleScrollUp}
-              onScrollDown={nav.handleScrollDown}
-            />
-          </div>
+        <div className="calendar-master-detail">
+          <AppointmentListPanel
+            events={sortedEvents}
+            selectedId={selectedEvent?.id}
+            onSelect={handleEventSelect}
+            onAddClick={actions.openAddModal}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+          <AppointmentDetailPanel
+            event={selectedEvent}
+            onEdit={actions.handleEditAppointment}
+            onDelete={actions.handleDeleteEvent}
+            onClose={() => setSelectedEvent(null)}
+          />
         </div>
       )}
 

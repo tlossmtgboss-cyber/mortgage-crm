@@ -323,8 +323,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             try:
                 from performance_cache import invalidate_dashboard
                 invalidate_dashboard(current_user.id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Dashboard cache invalidation failed: {e}")
 
             # Event-driven workflow enrollment for all updated leads (post-commit)
             try:
@@ -644,8 +644,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         try:
             from performance_cache import invalidate_dashboard
             invalidate_dashboard(current_user.id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Dashboard cache invalidation failed: {e}")
 
         if stage_changed:
             logger.info(f"Stage changed for lead {lead.id}: {old_status} -> {new_status}, stage_changed_at + SLA dates committed")

@@ -2086,6 +2086,24 @@ except Exception as e:
     logger.warning(f"Aria chat routes not loaded: {e}")
 
 # ============================================================================
+# ARIA INTERNAL ROUTES — Voice agent → backend tool calls (no user JWT, uses
+# X-Internal-API-Key header for auth)
+# ============================================================================
+for _mod, _label in [
+    ("routes.internal.aria_tool_routes", "Aria internal tool"),
+    ("routes.internal.aria_call_routes", "Aria internal call"),
+    ("routes.internal.aria_memory_routes", "Aria internal memory"),
+    ("routes.internal.aria_workflow_routes", "Aria internal workflow"),
+]:
+    try:
+        import importlib as _il
+        _m = _il.import_module(_mod)
+        app.include_router(_m.router)
+        logger.info(f"{_label} routes loaded")
+    except Exception as e:
+        logger.warning(f"{_label} routes not loaded: {e}")
+
+# ============================================================================
 # SCHEDULER ENHANCEMENT ROUTES (March 2026 sprint)
 # ============================================================================
 

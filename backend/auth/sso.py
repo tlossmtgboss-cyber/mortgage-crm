@@ -78,11 +78,96 @@ _DEFAULT_ATTRIBUTE_MAPS = {
     },
 }
 
-# In-memory request ID store for replay protection
+# SAML replay protection store — Redis-backed with in-memory fallback.
 # Maps request_id -> (created_at_timestamp, org_id)
-# In production, this should use Redis for multi-process safety
 _pending_requests: Dict[str, Tuple[float, int]] = {}
 _REQUEST_TTL_SECONDS = 600  # 10 minute window for SAML response
+
+# Redis client for sharing SAML state across replicas
+_saml_redis = None
+_saml_redis_available = False
+
+
+def _init_saml_redis():
+    """Initialize Redis client for SAML state store.
+
+    Uses the same REDIS_URL env var as auth/tokens.py.
+    Falls back to in-memory dict when Redis is unavailable.
+    """
+    global _saml_redis, _saml_redis_available
+    if _saml_redis is not None:
+        return
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        logger.debug("REDIS_URL not set — SAML state store using in-memory fallback")
+        return
+    try:
+        import redis
+        _saml_redis = redis.from_url(redis_url, socket_timeout=5)
+        _saml_redis.ping()
+        _saml_redis_available = True
+        logger.info("SAML state store initialized with Redis")
+    except Exception as e:
+        logger.warning(
+            f"Redis connection failed for SAML state store: {e}. "
+            "Using in-memory fallback (NOT shared across replicas)."
+        )
+        _saml_redis = None
+        _saml_redis_available = False
+
+
+def _store_pending_request(request_id: str, org_id: int):
+    """Store a SAML request ID for replay protection, using Redis with in-memory fallback."""
+    _init_saml_redis()
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    # Always store locally as fallback
+    _pending_requests[request_id] = (now_ts, org_id)
+
+    if _saml_redis_available and _saml_redis:
+        try:
+            import json as _json
+            key = f"saml_request:{request_id}"
+            value = _json.dumps({"created_at": now_ts, "org_id": org_id})
+            _saml_redis.setex(key, _REQUEST_TTL_SECONDS, value)
+        except Exception as e:
+            logger.warning(f"Redis store failed for SAML request {request_id[:20]}...: {e}")
+
+
+def _pop_pending_request(request_id: str) -> Optional[Tuple[float, int]]:
+    """Retrieve and remove a SAML request ID. Returns (created_at, org_id) or None."""
+    _init_saml_redis()
+
+    if _saml_redis_available and _saml_redis:
+        try:
+            import json as _json
+            key = f"saml_request:{request_id}"
+            raw = _saml_redis.get(key)
+            if raw:
+                _saml_redis.delete(key)
+                data = _json.loads(raw)
+                # Also clean local copy
+                _pending_requests.pop(request_id, None)
+                return (data["created_at"], data["org_id"])
+        except Exception as e:
+            logger.warning(f"Redis pop failed for SAML request {request_id[:20]}...: {e}")
+
+    # Fallback to in-memory
+    return _pending_requests.pop(request_id, None)
+
+
+def _is_request_pending(request_id: str) -> bool:
+    """Check if a SAML request ID is pending (for replay protection)."""
+    _init_saml_redis()
+
+    if _saml_redis_available and _saml_redis:
+        try:
+            key = f"saml_request:{request_id}"
+            return _saml_redis.exists(key) > 0
+        except Exception as e:
+            logger.warning(f"Redis exists check failed for SAML request: {e}")
+
+    return request_id in _pending_requests
 
 
 # =============================================================================
@@ -309,8 +394,8 @@ def create_saml_auth_request(
 
     redirect_url = f"{config.sso_url}?{urlencode(params)}"
 
-    # Store request ID for replay protection
-    _pending_requests[request_id] = (datetime.now(timezone.utc).timestamp(), config.organization_id)
+    # Store request ID for replay protection (Redis-backed with in-memory fallback)
+    _store_pending_request(request_id, config.organization_id)
     _cleanup_expired_requests()
 
     logger.info(
@@ -866,7 +951,11 @@ def _resolve_groups(raw_attributes: Dict, mapping_key: Optional[str]) -> List[st
 
 
 def _cleanup_expired_requests():
-    """Remove expired pending SAML request IDs."""
+    """Remove expired pending SAML request IDs from the in-memory fallback.
+
+    Redis entries expire automatically via TTL (setex), so only the
+    in-memory dict needs manual cleanup.
+    """
     now = datetime.now(timezone.utc).timestamp()
     expired = [
         rid for rid, (created, _) in _pending_requests.items()
@@ -875,7 +964,7 @@ def _cleanup_expired_requests():
     for rid in expired:
         _pending_requests.pop(rid, None)
     if expired:
-        logger.debug(f"Cleaned up {len(expired)} expired SAML request IDs")
+        logger.debug(f"Cleaned up {len(expired)} expired SAML request IDs (in-memory)")
 
 
 __all__ = [
