@@ -903,7 +903,7 @@ export const aiAPI = {
   // Attempts true SSE streaming via /orchestrator-chat-stream first
   // (tokens appear as they are generated), then falls back to the
   // non-streaming /langgraph-chat endpoint with simulated chunking.
-  processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null, sessionId = null) => {
+  processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null, sessionId = null, leadId = null, loanId = null, abortSignal = null) => {
     let token = getToken();
 
     try {
@@ -917,10 +917,16 @@ export const aiAPI = {
       if (sessionId) {
         body.session_id = sessionId;
       }
+      if (leadId) { body.lead_id = leadId; }
+      if (loanId) { body.loan_id = loanId; }
 
       // --- Attempt true SSE streaming first ---
       const controller = new AbortController();
       const streamTimeout = setTimeout(() => controller.abort(), 120000);
+      // If caller provided an external signal, listen for it too
+      if (abortSignal) {
+        abortSignal.addEventListener('abort', () => controller.abort());
+      }
       try {
         let sseResponse = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
           method: 'POST',
@@ -993,6 +999,20 @@ export const aiAPI = {
           }
 
           clearTimeout(streamTimeout);
+
+          // Flush any remaining buffer content
+          if (buffer.trim().startsWith('data: ')) {
+            try {
+              const payload = JSON.parse(buffer.trim().slice(6));
+              if (payload.content && onContent) {
+                fullResponse += payload.content;
+                onContent(payload.content);
+              }
+              if (payload.done) {
+                metadata = { session_id: payload.session_id, engine: payload.engine || 'langgraph' };
+              }
+            } catch (_) {}
+          }
 
           // Signal completion
           if (onDone) {

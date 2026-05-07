@@ -78,6 +78,11 @@ AGENT_CONFIGS = {
             "get_data_availability",
             # Trend analysis
             "analyze_trends",
+            # CRM write tools
+            "update_lead_fields",
+            "update_loan_fields",
+            "create_note",
+            "create_referral_partner",
         ],
         max_concurrent_tools=5,
         recommended_model="sonnet",  # Complex analytical reasoning
@@ -95,6 +100,11 @@ AGENT_CONFIGS = {
             "get_disclosure_timeline",
             "check_tolerance_violations",
             "get_compliance_history",
+            # Outbound contact compliance
+            "validate_outbound_contact",
+            "check_calling_window",
+            "check_dnc_status",
+            "check_tcpa_consent",
         ],
         requires_approval_for=["override_compliance_flag"],
         recommended_model="sonnet",  # Regulatory compliance needs precise reasoning
@@ -115,6 +125,16 @@ AGENT_CONFIGS = {
             "get_optimal_contact_time",
             "get_stale_leads",
             "get_top_leads",
+            # Outreach tools
+            "find_clients_for_outreach",
+            "send_bulk_sms_outreach",
+            "send_mortgage_review_outreach",
+            "send_calendar_invite_email",
+            "send_bulk_email_outreach",
+            # SMS tools
+            "send_sms_message",
+            "get_sms_conversation_history",
+            "start_scheduling_sms",
         ],
         requires_approval_for=["send_email", "send_sms", "make_call"],
         recommended_model="sonnet",  # Lead recommendations need contextual analysis
@@ -132,6 +152,17 @@ AGENT_CONFIGS = {
             "get_document_timeline",
             "check_document_expiration",
             "get_third_party_status",
+            # Smart document tools
+            "get_smart_doc_status",
+            "check_document_freshness",
+            "get_document_decisions",
+            "get_needs_list",
+            "check_document_sla",
+            "get_screenshot_flags",
+            "get_document_extraction",
+            "track_portal_activity",
+            "get_followup_campaign_status",
+            "get_policy_events",
         ],
         requires_approval_for=["send_document_reminder"],
         recommended_model="haiku",  # Checklist/status lookups, tool-heavy
@@ -165,6 +196,24 @@ AGENT_CONFIGS = {
             "get_extension_pricing",
             "compare_rate_scenarios",
             "get_market_events",
+            # Home valuation tools
+            "calculate_home_value",
+            "get_appreciation_rates",
+            "calculate_equity_position",
+            "calculate_amortization",
+            "get_maturity_date",
+            "batch_update_valuations",
+            "get_value_history",
+            "compare_market_appreciation",
+            # Refinance tools
+            "score_refi_opportunity",
+            "calculate_refi_savings",
+            "get_refi_candidates",
+            "analyze_breakeven",
+            "compare_refi_scenarios",
+            "get_refi_portfolio_summary",
+            "recommend_refi_action",
+            "batch_update_refi_scores",
         ],
         requires_approval_for=["lock_rate"],
         recommended_model="sonnet",  # Rate advisory needs analytical reasoning for lock/float decisions
@@ -186,6 +235,13 @@ AGENT_CONFIGS = {
             "get_performance_by_period",
             "compare_periods",
             "get_data_availability",
+            # Escalation tools
+            "create_escalation",
+            "evaluate_escalation",
+            "resolve_escalation",
+            "get_escalation_analytics",
+            "get_escalation_status",
+            "execute_warm_handoff",
         ],
         recommended_model="sonnet",  # Coaching advice requires nuanced analysis
     ),
@@ -254,6 +310,14 @@ AGENT_CONFIGS = {
             "categorize_email_attachments",
             "match_email_to_loan",
             "analyze_email_engagement",
+            # Extended email tools
+            "search_email_inbox",
+            "find_contact_email",
+            "find_contact_phone",
+            "get_emails_needing_response",
+            "analyze_tone",
+            "get_thread_tone_trends",
+            "compare_tone_to_baseline",
         ],
         requires_approval_for=["send_email"],
         recommended_model="sonnet",  # Email drafting/analysis needs quality
@@ -291,6 +355,11 @@ AGENT_CONFIGS = {
             "send_appointment_reminder",
             "sync_external_calendar",
             "optimize_schedule",
+            # Extended scheduler tools
+            "get_scheduler_metrics",
+            "get_appointment_history",
+            "get_best_booking_times",
+            "get_no_show_analysis",
         ],
         recommended_model="haiku",  # Calendar CRUD is tool-driven
     ),
@@ -341,6 +410,13 @@ AGENT_CONFIGS = {
             "order_title",
             "get_pricing_engine_quote",
             "send_for_esign",
+            # LOS integration tools
+            "trigger_sync",
+            "resolve_sync_conflict",
+            "update_field_mapping",
+            "get_field_mappings",
+            "get_sync_status",
+            "get_sync_health",
         ],
         requires_approval_for=["trigger_credit_pull", "submit_to_aus"],
         recommended_model="sonnet",  # Complex diagnostic reasoning, conflict resolution, migration planning
@@ -521,6 +597,14 @@ AGENT_CONFIGS = {
             "schedule_outreach",
             "get_upcoming_appointments",
             "send_notification",
+            # Borrower application tools
+            "get_application_state",
+            "get_loan_status",
+            "book_lo_meeting",
+            "propose_alternate_window",
+            "prompt_document_upload",
+            "emit_crm_event",
+            "recall_borrower_context",
         ],
         recommended_model="sonnet",
     ),
@@ -537,6 +621,8 @@ AGENT_CONFIGS = {
             "get_current_rates",
             "draft_message",
             "create_task",
+            # Document generation
+            "generate_pre_approval_letter",
         ],
         recommended_model="sonnet",
     ),

@@ -17,7 +17,6 @@ function AILandingPage() {
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [actionContext, setActionContext] = useState({});
   const [taskListData, setTaskListData] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
   const [tasksCompleted, setTasksCompleted] = useState(false);
@@ -25,7 +24,6 @@ function AILandingPage() {
   const [editingMessage, setEditingMessage] = useState(false);
   const [editedMessage, setEditedMessage] = useState('');
   const [parsedLeadData, setParsedLeadData] = useState(null);
-  const [isParsingImage, setIsParsingImage] = useState(false);
   const [generatingMessageType, setGeneratingMessageType] = useState(null);
   const [generatedFullMessage, setGeneratedFullMessage] = useState('');
 
@@ -86,7 +84,6 @@ function AILandingPage() {
   const [emailSending, setEmailSending] = useState(false);
 
   // Streaming state
-  const [streamingContent, setStreamingContent] = useState('');
   const [streamingStatus, setStreamingStatus] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
@@ -103,6 +100,7 @@ function AILandingPage() {
   const [messageFeedback, setMessageFeedback] = useState({}); // Track feedback per message: { messageId: 'positive' | 'negative' | 'submitted' }
 
   const chatAreaRef = useRef(null);
+  const scrollAnchorRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -152,15 +150,39 @@ function AILandingPage() {
 
   // Persist to localStorage
   useEffect(() => {
-    localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
+    try {
+      localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
+    } catch (e) {
+      // localStorage quota exceeded — trim oldest entries
+      if (chatHistory.length > 20) {
+        const trimmed = chatHistory.slice(-20);
+        setChatHistory(trimmed);
+      }
+    }
   }, [chatHistory]);
 
   useEffect(() => {
-    localStorage.setItem('ai_reports', JSON.stringify(reports));
+    try {
+      localStorage.setItem('ai_reports', JSON.stringify(reports));
+    } catch (e) {
+      // localStorage quota exceeded — trim oldest entries
+      if (reports.length > 20) {
+        const trimmed = reports.slice(-20);
+        setReports(trimmed);
+      }
+    }
   }, [reports]);
 
   useEffect(() => {
-    localStorage.setItem('ai_projects', JSON.stringify(projects));
+    try {
+      localStorage.setItem('ai_projects', JSON.stringify(projects));
+    } catch (e) {
+      // localStorage quota exceeded — trim oldest entries
+      if (projects.length > 20) {
+        const trimmed = projects.slice(-20);
+        setProjects(trimmed);
+      }
+    }
   }, [projects]);
 
   useEffect(() => {
@@ -180,8 +202,8 @@ function AILandingPage() {
   }, [navigate]);
 
   useEffect(() => {
-    if (chatAreaRef.current) {
-      chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
+    if (scrollAnchorRef.current) {
+      scrollAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
@@ -272,7 +294,6 @@ function AILandingPage() {
     setTaskListData(null);
     setSelectedTask(null);
     setConversationHistory([]);
-    setActionContext({});
   };
 
   const handleDeleteMessage = (messageId) => {
@@ -881,7 +902,6 @@ function AILandingPage() {
     setTaskListData(null);
     setSelectedTask(null);
     setConversationHistory([]);
-    setActionContext({});
   };
 
   const handleLoadChat = (chat) => {
@@ -1075,13 +1095,12 @@ function AILandingPage() {
     setTaskListData(null);
     setSelectedTask(null);
     setConversationHistory([]);
-    setActionContext({});
     setStructuredContent(null);
     setShowRightSidebar(false);
 
     // Clear inputValue and send directly with the prompt
     setInputValue('');
-    setTimeout(() => sendMessage(prompt), 100);
+    setTimeout(() => sendMessage(prompt, newId), 0);
   };
 
   const filteredChats = chatHistory.filter(chat =>
@@ -1089,7 +1108,7 @@ function AILandingPage() {
     chat.messages?.some(m => m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const sendMessage = async (overrideMessage = null) => {
+  const sendMessage = async (overrideMessage = null, sessionIdOverride = null) => {
     const message = overrideMessage || inputValue.trim();
     if (!message || loading || isStreaming) return;
 
@@ -1100,7 +1119,6 @@ function AILandingPage() {
     setInputValue('');
     setAttachedDocument(null);
     setIsStreaming(true);
-    setStreamingContent('');
     setStreamingStatus('');
 
     // Create a placeholder message for streaming content
@@ -1121,7 +1139,6 @@ function AILandingPage() {
         message,
         // onContent - called for each chunk of content
         (content) => {
-          setStreamingContent(prev => prev + content);
           // Update the streaming message in place
           setMessages(prev => prev.map(msg =>
             msg.id === streamMsgId
@@ -1264,6 +1281,7 @@ function AILandingPage() {
           console.error('Streaming error:', error);
           setIsStreaming(false);
           setStreamingStatus('');
+          setStreamingMessageId(null);
 
           // Update message to show error
           setMessages(prev => prev.map(msg =>
@@ -1275,7 +1293,7 @@ function AILandingPage() {
         // documentContext - text from uploaded document (6th param)
         docContext,
         // sessionId - for conversation memory continuity (7th param)
-        sessionId
+        sessionIdOverride || sessionId
       );
     } catch (error) {
       console.error('AI processing error:', error);
@@ -2347,7 +2365,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
             });
 
             return uniqueMessages.length > 0 ? (
-              <div className="ai-conversation-area">
+              <div className="ai-conversation-area" ref={chatAreaRef}>
                 <div className="ai-conversation-messages">
                   {uniqueMessages.map((msg) => (
                     <div key={msg.id} className={`ai-conv-message ${msg.type}`}>
@@ -2407,7 +2425,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                       </div>
                     </div>
                   ))}
-                  <div ref={containerRef} />
+                  <div ref={scrollAnchorRef} />
                 </div>
               </div>
             ) : null;
@@ -2533,9 +2551,9 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                 ref={textareaRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyPress}
                 placeholder="Ask me to do something..."
-                disabled={loading}
+                disabled={isStreaming}
                 rows={1}
               />
 
@@ -2554,7 +2572,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
               <button
                 className="ai-send-btn-new"
                 onClick={() => sendMessage()}
-                disabled={!inputValue.trim() || loading}
+                disabled={!inputValue.trim() || isStreaming}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
