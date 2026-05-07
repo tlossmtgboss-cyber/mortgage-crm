@@ -56,6 +56,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+MAX_CONCURRENT_TOOLS = 5
+MAX_TOOLS_PER_REQUEST = 8
+
+
+async def _execute_with_semaphore(sem: asyncio.Semaphore, coro) -> Any:
+    async with sem:
+        return await coro
+
 
 class ToolRegistry:
     """
@@ -760,11 +768,25 @@ async def gather_data(
             tasks.append(execute_tool(tool_name, args, tool_functions, user_id, organization_id))
             task_tool_names.append(tool_name)
 
-        # Execute ALL tools in parallel for maximum speed
-        # This is the key optimization: 15s sequential -> 3-5s parallel
+        # Cap tool fan-out to prevent DB pool exhaustion (pool_size=3, max_overflow=5)
+        if len(tasks) > MAX_TOOLS_PER_REQUEST:
+            logger.warning(
+                f"[GATHER] Tool fan-out capped: {len(tasks)} tools requested, "
+                f"limiting to {MAX_TOOLS_PER_REQUEST}"
+            )
+            tasks = tasks[:MAX_TOOLS_PER_REQUEST]
+            task_tool_names = task_tool_names[:MAX_TOOLS_PER_REQUEST]
+
+        # Execute tools in parallel with a concurrency semaphore to bound
+        # simultaneous DB connections (Railway pool_size=3, max_overflow=5 = 8 total).
+        # Without this cap, 16 parallel tool calls can exhaust the pool.
         if tasks:
-            logger.info(f"[GATHER] Executing {len(tasks)} tools in parallel...")
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info(f"[GATHER] Executing {len(tasks)} tools in parallel (max_concurrent={MAX_CONCURRENT_TOOLS})...")
+            sem = asyncio.Semaphore(MAX_CONCURRENT_TOOLS)
+            results = await asyncio.gather(
+                *[_execute_with_semaphore(sem, task) for task in tasks],
+                return_exceptions=True,
+            )
 
             # Process results
             for i, result in enumerate(results):
@@ -787,7 +809,10 @@ async def gather_data(
 
         # Assess data quality
         total_tools = len(required_tools)
-        successful_tools = len([tc for tc in tool_calls if tc.result is not None])
+        successful_tools = len([
+            tc for tc in tool_calls
+            if tc.result is not None and not (isinstance(tc.result, dict) and "error" in tc.result)
+        ])
 
         if successful_tools == 0:
             data_quality = "insufficient"

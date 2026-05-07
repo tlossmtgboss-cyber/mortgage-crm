@@ -456,19 +456,79 @@ class AIAgentService:
                     "content": tool_results_content
                 })
 
-                # Stream final response after tool execution
-                async with self.async_anthropic_client.messages.stream(
-                    model=self.model,
-                    max_tokens=1500,  # Reduced from 4000 — concise responses stream faster
-                    system=full_system_prompt,
-                    messages=messages
-                ) as final_stream:
-                    async for text in final_stream.text_stream:
-                        full_response += text
+                # Stream follow-up response(s) after tool execution.
+                # Loop to support multi-hop tool chains (e.g., search_leads -> click_to_dial).
+                max_tool_rounds = 3
+                for _round in range(max_tool_rounds):
+                    async with self.async_anthropic_client.messages.stream(
+                        model=self.model,
+                        max_tokens=1500,
+                        system=full_system_prompt,
+                        messages=messages,
+                        tools=tools if tools else None
+                    ) as followup_stream:
+                        async for text in followup_stream.text_stream:
+                            full_response += text
+                            yield {
+                                "type": "content",
+                                "content": text
+                            }
+
+                        followup_message = await followup_stream.get_final_message()
+
+                    # If the model doesn't need another tool call, we're done
+                    if followup_message.stop_reason != "tool_use":
+                        break
+
+                    # Extract and execute tool calls for this round
+                    round_tool_uses = [
+                        block for block in followup_message.content
+                        if block.type == "tool_use"
+                    ]
+
+                    round_cached: Dict[str, Any] = {}
+                    for tool_use in round_tool_uses:
                         yield {
-                            "type": "content",
-                            "content": text
+                            "type": "tool_use",
+                            "tool": tool_use.name,
+                            "tool_id": tool_use.id,
+                            "input": tool_use.input
                         }
+
+                        tool_result = await self._execute_tool(
+                            tool_use.name,
+                            tool_use.input
+                        )
+                        round_cached[tool_use.id] = (tool_use.name, tool_result)
+
+                        yield {
+                            "type": "tool_result",
+                            "tool": tool_use.name,
+                            "result": tool_result
+                        }
+
+                    # Build tool results for the next LLM turn
+                    round_results_content = []
+                    for tool_use in round_tool_uses:
+                        t_name, t_result = round_cached[tool_use.id]
+                        if voice_mode:
+                            content = _summarize_tool_result_for_voice(t_name, t_result)
+                        else:
+                            content = json.dumps(t_result)
+                        round_results_content.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_use.id,
+                            "content": content
+                        })
+
+                    messages.append({
+                        "role": "assistant",
+                        "content": followup_message.content
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": round_results_content
+                    })
 
             # Final done message
             yield {
@@ -547,7 +607,8 @@ class AIAgentService:
                 user_id=user_id,
                 user_email=user_email,
                 user_role=user_role,
-                conversation_id=session_id
+                conversation_id=session_id,
+                organization_id=getattr(self.current_user, 'organization_id', None)
             )
 
             # Add context if provided
@@ -2628,8 +2689,6 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             db.rollback()
             logger.error(f"Error in bulk_lead_outreach: {e}")
             return {"success": False, "error": "Internal server error"}
-        finally:
-            db.close()
 
     tools["bulk_lead_outreach"] = execute_bulk_lead_outreach
 

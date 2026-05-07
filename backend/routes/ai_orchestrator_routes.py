@@ -347,11 +347,11 @@ async def orchestrator_chat(
         )
 
         # Save to conversation memory (non-fatal on failure)
-        try:
-            ConvMemory.save_message(db, current_user.id, session_id, "user", message)
-            ConvMemory.save_message(db, current_user.id, session_id, "assistant", result.get("response", ""))
-        except Exception as save_err:
-            logger.warning(f"Failed to save conversation: {save_err}")
+        for role, content in [("user", message), ("assistant", result.get("response", ""))]:
+            try:
+                ConvMemory.save_message(db, current_user.id, session_id, role, content, organization_id=org_id)
+            except Exception as save_err:
+                logger.warning(f"Failed to save {role} message for session {session_id}: {save_err}")
 
         response_time = time.time() - request_start_time
 
@@ -475,11 +475,11 @@ async def orchestrator_chat_stream(
             yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'engine': 'langgraph', 'follow_up_suggestions': follow_up_suggestions})}\n\n"
 
             # Save conversation (non-fatal on failure)
-            try:
-                ConvMemory.save_message(db, current_user.id, session_id, "user", message)
-                ConvMemory.save_message(db, current_user.id, session_id, "assistant", full_response)
-            except Exception as e:
-                logger.warning(f"Failed to save conversation in stream: {e}")
+            for role, content in [("user", message), ("assistant", full_response)]:
+                try:
+                    ConvMemory.save_message(db, current_user.id, session_id, role, content, organization_id=org_id)
+                except Exception as e:
+                    logger.warning(f"Failed to save {role} message for session {session_id}: {e}")
 
         except Exception as e:
             logger.error(f"Stream error: {e}", exc_info=True)

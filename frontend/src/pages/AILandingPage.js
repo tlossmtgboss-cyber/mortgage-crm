@@ -106,12 +106,12 @@ function AILandingPage() {
   const recognitionRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Session ID for permanent memory
+  // Session ID for permanent memory — use sessionStorage so each tab gets its own session
   const [sessionId, setSessionId] = useState(() => {
-    const stored = localStorage.getItem('ai_session_id');
+    const stored = sessionStorage.getItem('ai_session_id');
     if (stored) return stored;
     const newId = crypto.randomUUID();
-    localStorage.setItem('ai_session_id', newId);
+    sessionStorage.setItem('ai_session_id', newId);
     return newId;
   });
 
@@ -290,6 +290,9 @@ function AILandingPage() {
   };
 
   const handleClearContent = () => {
+    const newId = crypto.randomUUID();
+    setSessionId(newId);
+    sessionStorage.setItem('ai_session_id', newId);
     setMessages([]);
     setTaskListData(null);
     setSelectedTask(null);
@@ -897,7 +900,7 @@ function AILandingPage() {
   const handleNewChat = () => {
     const newId = crypto.randomUUID();
     setSessionId(newId);
-    localStorage.setItem('ai_session_id', newId);
+    sessionStorage.setItem('ai_session_id', newId);
     setMessages([]);
     setTaskListData(null);
     setSelectedTask(null);
@@ -906,7 +909,7 @@ function AILandingPage() {
 
   const handleLoadChat = (chat) => {
     setSessionId(chat.id);
-    localStorage.setItem('ai_session_id', chat.id);
+    sessionStorage.setItem('ai_session_id', chat.id);
     setMessages(chat.messages || []);
   };
 
@@ -1090,7 +1093,7 @@ function AILandingPage() {
     // Start a new chat for each preset question
     const newId = crypto.randomUUID();
     setSessionId(newId);
-    localStorage.setItem('ai_session_id', newId);
+    sessionStorage.setItem('ai_session_id', newId);
     setMessages([]);
     setTaskListData(null);
     setSelectedTask(null);

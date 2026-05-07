@@ -399,7 +399,7 @@ class ConversationMemory:
             summary_text = ConversationMemory._generate_summary(old_messages)
             # Cache the summary (non-fatal on failure)
             ConversationMemory._cache_summary(
-                db, session_id, summary_text, len(old_messages)
+                db, session_id, user_id, summary_text, len(old_messages)
             )
 
         # Build the output: summary + recent messages
@@ -482,7 +482,7 @@ class ConversationMemory:
         return None
 
     @staticmethod
-    def _cache_summary(db: Session, session_id: str, summary: str, message_count: int):
+    def _cache_summary(db: Session, session_id: str, user_id: int, summary: str, message_count: int):
         """Cache conversation summary in database.
 
         Uses role='summary' rows in ai_conversation_memory. If the table
@@ -500,10 +500,10 @@ class ConversationMemory:
             # Insert new summary — use message_index -1 so it sorts before real messages
             db.execute(text("""
                 INSERT INTO ai_conversation_memory
-                    (id, session_id, message_index, role, content, created_at)
+                    (id, session_id, user_id, message_index, role, content, created_at)
                 VALUES
-                    (gen_random_uuid(), CAST(:session_id AS uuid), -1, 'summary', :content, NOW())
-            """), {"session_id": session_id, "content": content})
+                    (gen_random_uuid(), CAST(:session_id AS uuid), :user_id, -1, 'summary', :content, NOW())
+            """), {"session_id": session_id, "user_id": user_id, "content": content})
             db.commit()
         except Exception as e:
             logger.warning(f"Failed to cache conversation summary: {e}")

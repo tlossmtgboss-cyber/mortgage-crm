@@ -955,6 +955,22 @@ export const aiAPI = {
           }
         }
 
+        // Bug 1 fix: surface non-2xx errors instead of silently falling through to fallback
+        if (!sseResponse.ok) {
+          clearTimeout(streamTimeout);
+          let errorMsg = `Request failed (${sseResponse.status})`;
+          try {
+            const errData = await sseResponse.json();
+            errorMsg = errData.detail || errData.error || errorMsg;
+          } catch (_) {}
+          if (sseResponse.status === 429) {
+            const retryAfter = sseResponse.headers.get('Retry-After');
+            errorMsg = `Rate limit exceeded.${retryAfter ? ` Try again in ${retryAfter}s.` : ' Please wait.'}`;
+          }
+          if (onError) onError(errorMsg);
+          return;
+        }
+
         if (sseResponse.ok && sseResponse.headers.get('content-type')?.includes('text/event-stream')) {
           // True SSE stream available — read tokens in real-time
           const reader = sseResponse.body.getReader();
@@ -962,6 +978,7 @@ export const aiAPI = {
           let fullResponse = '';
           let buffer = '';
           let metadata = {};
+          let doneSignaled = false; // Bug 3 fix: track whether done event was received
 
           while (true) {
             const { done, value } = await reader.read();
@@ -984,9 +1001,11 @@ export const aiAPI = {
                 } else if (payload.tool_use && onStatus) {
                   onStatus(`Using tool: ${payload.tool_use}...`);
                 } else if (payload.error && onError) {
+                  clearTimeout(streamTimeout); // Bug 2 fix: clear timer before returning on error
                   onError(payload.error);
                   return;
                 } else if (payload.done) {
+                  doneSignaled = true; // Bug 3 fix: mark done received
                   metadata = {
                     session_id: payload.session_id,
                     engine: payload.engine || 'langgraph',
@@ -1009,6 +1028,7 @@ export const aiAPI = {
                 onContent(payload.content);
               }
               if (payload.done) {
+                doneSignaled = true; // Bug 3 fix: mark done received from buffer flush
                 metadata = { session_id: payload.session_id, engine: payload.engine || 'langgraph' };
               }
             } catch (_) {}
@@ -1020,6 +1040,8 @@ export const aiAPI = {
               full_response: fullResponse,
               engine: metadata.engine || 'langgraph',
               ...metadata,
+              // Bug 3 fix: flag incomplete streams so callers can handle gracefully
+              ...(doneSignaled ? {} : { incomplete: true }),
             });
           }
           return; // SSE path succeeded — skip fallback
@@ -1061,8 +1083,20 @@ export const aiAPI = {
         }
       }
 
+      // Bug 4 fix: surface structured error messages instead of throwing raw status
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        clearTimeout(streamTimeout);
+        let errorMsg = `Request failed (${response.status})`;
+        try {
+          const errData = await response.json();
+          errorMsg = errData.detail || errData.error || errorMsg;
+        } catch (_) {}
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After');
+          errorMsg = `Rate limit exceeded.${retryAfter ? ` Try again in ${retryAfter}s.` : ' Please wait.'}`;
+        }
+        if (onError) onError(errorMsg);
+        return;
       }
 
       const data = await response.json();
