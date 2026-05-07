@@ -231,7 +231,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed leads")
         errors["leads"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["leads"] = 0
 
     # ------------------------------------------------------------------
@@ -280,7 +283,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed loans")
         errors["loans"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["loans"] = 0
 
     # ------------------------------------------------------------------
@@ -319,7 +325,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed activities")
         errors["activities"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["activities"] = 0
 
     # ------------------------------------------------------------------
@@ -373,7 +382,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed appointments")
         errors["appointments"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["appointments"] = 0
 
     # ------------------------------------------------------------------
@@ -455,7 +467,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed compliance alerts")
         errors["compliance_alerts"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["compliance_alerts"] = 0
 
     # ------------------------------------------------------------------
@@ -497,7 +512,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed documents")
         errors["documents"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["documents"] = 0
 
     # ------------------------------------------------------------------
@@ -619,7 +637,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed MUM clients")
         errors["mum_clients"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["mum_clients"] = 0
 
     # ------------------------------------------------------------------
@@ -688,7 +709,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed tasks")
         errors["tasks"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["tasks"] = 0
 
     # ------------------------------------------------------------------
@@ -740,7 +764,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed calendar events")
         errors["calendar_events"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["calendar_events"] = 0
 
     # ------------------------------------------------------------------
@@ -792,7 +819,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed notifications")
         errors["notifications"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["notifications"] = 0
 
     # ------------------------------------------------------------------
@@ -868,7 +898,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed SMS conversations")
         errors["sms_conversations"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["sms_conversations"] = 0
 
     # ------------------------------------------------------------------
@@ -922,7 +955,10 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     except Exception as e:
         logger.exception("Failed to seed referral partners")
         errors["referral_partners"] = str(e)
-        savepoint.rollback()
+        try:
+            savepoint.rollback()
+        except Exception:
+            db.rollback()
         counts["referral_partners"] = 0
 
     # ------------------------------------------------------------------
