@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -17,16 +18,21 @@ from tasks.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-def _get_db_session():
-    """Create a fresh DB session for background tasks (no RLS tenant context)."""
+@contextmanager
+def _get_scoped_session(org_id=None):
+    """Yield a DB session that always closes, with optional tenant scoping."""
     from db import SessionLocal
-    return SessionLocal()
-
-
-def _get_tenant_db_session(org_id: int):
-    """Create a tenant-scoped DB session for background tasks (RLS enforced)."""
-    from tasks.base import tenant_task_session
-    return tenant_task_session(org_id)
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        if org_id is not None:
+            db.execute(text("SET app.current_tenant = :org_id"), {"org_id": str(org_id)})
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _get_all_briefing_candidates(db):
@@ -49,12 +55,11 @@ def dispatch_briefings():
     """
     from sqlalchemy import text as sa_text
 
-    db = _get_db_session()
     try:
         now_utc = datetime.now(timezone.utc)
-        candidates = _get_all_briefing_candidates(db)
-        db.close()
-        db = None
+
+        with _get_scoped_session() as db:
+            candidates = _get_all_briefing_candidates(db)
 
         enqueued = 0
         individual_idx = 0
@@ -78,19 +83,17 @@ def dispatch_briefings():
                 continue
 
             # Check if briefing already exists for today
-            check_db = _get_db_session()
             try:
-                exists = check_db.execute(sa_text("""
-                    SELECT 1 FROM morning_briefings
-                    WHERE user_id = :uid AND briefing_date = :bdate
-                    LIMIT 1
-                """), {"uid": user_id, "bdate": local_date}).fetchone()
-                check_db.close()
+                with _get_scoped_session() as check_db:
+                    exists = check_db.execute(sa_text("""
+                        SELECT 1 FROM morning_briefings
+                        WHERE user_id = :uid AND briefing_date = :bdate
+                        LIMIT 1
+                    """), {"uid": user_id, "bdate": local_date}).fetchone()
 
                 if exists:
                     continue
             except Exception:
-                check_db.close()
                 continue
 
             # Determine level
@@ -101,17 +104,15 @@ def dispatch_briefings():
                 level = "leadership"
             elif is_manager:
                 # Check if they have direct reports
-                rpt_db = _get_db_session()
                 try:
-                    has_reports = rpt_db.execute(sa_text("""
-                        SELECT 1 FROM users
-                        WHERE manager_id = :uid AND is_active = TRUE
-                        LIMIT 1
-                    """), {"uid": user_id}).fetchone()
-                    rpt_db.close()
+                    with _get_scoped_session() as rpt_db:
+                        has_reports = rpt_db.execute(sa_text("""
+                            SELECT 1 FROM users
+                            WHERE manager_id = :uid AND is_active = TRUE
+                            LIMIT 1
+                        """), {"uid": user_id}).fetchone()
                     level = "manager" if has_reports else "individual"
                 except Exception:
-                    rpt_db.close()
                     level = "individual"
             else:
                 level = "individual"
@@ -136,9 +137,6 @@ def dispatch_briefings():
     except Exception as e:
         logger.error("Briefing dispatch failed: %s", e)
         return {"error": str(e)}
-    finally:
-        if db:
-            db.close()
 
 
 @celery_app.task(
@@ -151,7 +149,6 @@ def dispatch_briefings():
 def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_level: str):
     """Generate and deliver a single user's morning briefing."""
     import time
-    from sqlalchemy import text as sa_text
     from database.models.morning_briefing import MorningBriefing
     from services.morning_briefing_service import MorningBriefingService
     from templates.morning_briefing_email import render_briefing_email
@@ -161,9 +158,8 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
 
     # First, look up the user's org_id to establish tenant context.
     # This initial query is un-scoped (users table may not have RLS).
-    lookup_db = _get_db_session()
-    try:
-        from database.models import User
+    with _get_scoped_session() as lookup_db:
+        from sqlalchemy import text as sa_text
         user_row = lookup_db.execute(
             sa_text("SELECT id, organization_id FROM users WHERE id = :uid"),
             {"uid": user_id},
@@ -172,15 +168,13 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
             logger.warning("Briefing: user %d not found", user_id)
             return {"error": "user_not_found"}
         org_id = user_row[1]
-    finally:
-        lookup_db.close()
 
     if not org_id:
         logger.warning("Briefing: user %d has no organization_id", user_id)
         return {"error": "no_organization"}
 
     # Use tenant-scoped session for all data queries (RLS enforced)
-    with _get_tenant_db_session(org_id) as db:
+    with _get_scoped_session(org_id) as db:
         try:
             from database.models import User
             user = db.query(User).filter(User.id == user_id).first()
@@ -384,19 +378,16 @@ def cleanup_old_briefings(retention_days: int = 90):
     """Delete briefings older than retention_days."""
     from sqlalchemy import text as sa_text
 
-    db = _get_db_session()
     try:
         cutoff = date.today() - timedelta(days=retention_days)
-        result = db.execute(sa_text("""
-            DELETE FROM morning_briefings WHERE briefing_date < :cutoff
-        """), {"cutoff": cutoff})
-        db.commit()
-        deleted = result.rowcount
+        with _get_scoped_session() as db:
+            result = db.execute(sa_text("""
+                DELETE FROM morning_briefings WHERE briefing_date < :cutoff
+            """), {"cutoff": cutoff})
+            db.commit()
+            deleted = result.rowcount
         logger.info("Briefing cleanup: deleted %d rows older than %s", deleted, cutoff)
         return {"deleted": deleted}
     except Exception as e:
-        db.rollback()
         logger.error("Briefing cleanup failed: %s", e)
         return {"error": str(e)}
-    finally:
-        db.close()
