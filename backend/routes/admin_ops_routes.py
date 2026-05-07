@@ -3085,15 +3085,37 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         leads_count = db.execute(text(
             "SELECT COUNT(*) FROM leads WHERE organization_id = :oid AND owner_id = :uid AND deleted_at IS NULL",
         ), {"oid": oid, "uid": uid}).scalar()
-        leads_sample = db.execute(text(
-            "SELECT id, name, stage, owner_id, organization_id, deleted_at FROM leads "
-            "WHERE organization_id = :oid LIMIT 5"
-        ), {"oid": oid}).fetchall()
+
+        orm_result = "not tested"
+        orm_error = None
+        try:
+            from database.models.lead_loan import Lead
+            from sqlalchemy.orm import joinedload, selectinload
+            from sqlalchemy import cast, String
+            q = db.query(Lead).filter(
+                Lead.organization_id == oid,
+                Lead.owner_id == uid,
+                Lead.deleted_at.is_(None),
+            )
+            excluded = ['Closed', 'AMR', 'Referral Source', 'Funded',
+                        'Application', 'Disclosed', 'Processing', 'Submitted',
+                        'Underwriting', 'UW Received', 'Conditional Approval', 'Approved',
+                        'Suspended', 'CTC', 'Clear to Close', 'Closing', 'Docs', 'Docs Out',
+                        'Cancelled', 'Denied', 'Dead', 'Withdrawn', 'Does Not Qualify']
+            q = q.filter(or_(cast(Lead.stage, String).notin_(excluded), Lead.stage == None))
+            orm_count = q.count()
+            orm_leads = q.limit(3).all()
+            orm_result = {
+                "count": orm_count,
+                "sample": [{"id": l.id, "name": l.name, "stage": str(l.stage)} for l in orm_leads],
+            }
+        except Exception as e:
+            import traceback
+            orm_error = traceback.format_exc()
+
         return {
             "user": {"id": uid, "org_id": oid, "role": role, "email": email},
             "leads_owned_not_deleted": leads_count,
-            "sample_leads": [
-                {"id": r[0], "name": r[1], "stage": r[2], "owner_id": r[3], "org_id": r[4], "deleted_at": str(r[5])}
-                for r in leads_sample
-            ],
+            "orm_query_result": orm_result,
+            "orm_error": orm_error,
         }
