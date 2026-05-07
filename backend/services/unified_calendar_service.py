@@ -50,51 +50,35 @@ class UnifiedCalendarService:
         warnings = []
         sources_queried = []
 
-        # Fetch from each source with individual error handling
-        calendar_events, calendar_warning = self._fetch_calendar_events(
-            start_date, end_date, include_cancelled
-        )
-        if calendar_warning:
-            warnings.append(calendar_warning)
-        else:
-            sources_queried.append("calendar")
-        events.extend(calendar_events)
+        # Each source runs in a savepoint so one failure doesn't poison the session
+        fetchers = [
+            ("calendar", lambda: self._fetch_calendar_events(start_date, end_date, include_cancelled)),
+            ("scheduler_v1", lambda: self._fetch_appointments(start_date, end_date, include_cancelled)),
+            ("scheduler_v2", lambda: self._fetch_v2_appointments(start_date, end_date, include_cancelled)),
+            ("crm", lambda: self._fetch_crm_events(start_date, end_date, include_cancelled)),
+            ("outlook", lambda: self._fetch_outlook_events(start_date, end_date)),
+        ]
 
-        appointment_events, appointment_warning = self._fetch_appointments(
-            start_date, end_date, include_cancelled
-        )
-        if appointment_warning:
-            warnings.append(appointment_warning)
-        else:
-            sources_queried.append("scheduler_v1")
-        events.extend(appointment_events)
-
-        v2_events, v2_warning = self._fetch_v2_appointments(
-            start_date, end_date, include_cancelled
-        )
-        if v2_warning:
-            warnings.append(v2_warning)
-        else:
-            sources_queried.append("scheduler_v2")
-        events.extend(v2_events)
-
-        crm_events, crm_warning = self._fetch_crm_events(
-            start_date, end_date, include_cancelled
-        )
-        if crm_warning:
-            warnings.append(crm_warning)
-        else:
-            sources_queried.append("crm")
-        events.extend(crm_events)
-
-        outlook_events, outlook_warning = self._fetch_outlook_events(
-            start_date, end_date
-        )
-        if outlook_warning:
-            warnings.append(outlook_warning)
-        else:
-            sources_queried.append("outlook")
-        events.extend(outlook_events)
+        for source_name, fetcher in fetchers:
+            try:
+                sp = self.db.begin_nested()
+                source_events, source_warning = fetcher()
+                sp.commit()
+                if source_warning:
+                    warnings.append(source_warning)
+                else:
+                    sources_queried.append(source_name)
+                events.extend(source_events)
+            except Exception as e:
+                try:
+                    sp.rollback()
+                except Exception:
+                    try:
+                        self.db.rollback()
+                    except Exception:
+                        pass
+                warnings.append(f"{source_name}: {str(e)}")
+                logger.warning(f"Unified calendar source '{source_name}' failed: {e}")
 
         # Sort by start_time
         events.sort(key=lambda e: e.get("start_time") or "")
@@ -115,34 +99,52 @@ class UnifiedCalendarService:
     def _fetch_calendar_events(
         self, start_date: datetime, end_date: datetime, include_cancelled: bool
     ) -> tuple[List[Dict], Optional[str]]:
-        """Fetch events from CalendarEvent table."""
+        """Fetch events from CalendarEvent table using raw SQL to avoid missing-column errors."""
         try:
-            import main
-            CalendarEvent = main.CalendarEvent
+            from sqlalchemy import text
 
-            base_filters = [
-                CalendarEvent.user_id == self.user_id,
-                CalendarEvent.start_time >= start_date,
-                CalendarEvent.start_time <= end_date,
-            ]
+            sql = """
+                SELECT id, title, description, start_time, end_time, all_day,
+                       location, event_type, lead_id, loan_id, user_id,
+                       attendees, reminder_minutes, status, created_at
+                FROM calendar_events
+                WHERE user_id = :user_id
+                  AND start_time >= :start_date
+                  AND start_time <= :end_date
+            """
+            params = {
+                "user_id": self.user_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            }
             if not include_cancelled:
-                base_filters.append(CalendarEvent.status != "cancelled")
+                sql += " AND (status IS NULL OR status != 'cancelled')"
+            sql += " ORDER BY start_time"
 
-            # Try with org filter first; fall back without it if column missing
-            try:
-                query = self.db.query(CalendarEvent).filter(
-                    *base_filters,
-                    CalendarEvent.organization_id == self.organization_id,
-                ).order_by(CalendarEvent.start_time)
-                events = query.all()
-            except Exception:
-                self.db.rollback()
-                query = self.db.query(CalendarEvent).filter(
-                    *base_filters,
-                ).order_by(CalendarEvent.start_time)
-                events = query.all()
+            rows = self.db.execute(text(sql), params).fetchall()
 
-            return [self._transform_calendar_event(e) for e in events], None
+            events = []
+            for r in rows:
+                events.append({
+                    "id": f"event-{r.id}",
+                    "title": r.title or "",
+                    "description": r.description or "",
+                    "start_time": r.start_time.isoformat() if r.start_time else None,
+                    "end_time": r.end_time.isoformat() if r.end_time else None,
+                    "event_type": r.event_type or "meeting",
+                    "location": r.location or "",
+                    "source": "calendar",
+                    "related_lead_id": r.lead_id,
+                    "related_loan_id": r.loan_id,
+                    "attendee_name": None,
+                    "status": r.status or "scheduled",
+                    "is_appointment": False,
+                    "is_crm_event": False,
+                    "all_day": r.all_day or False,
+                    "attendees": [],
+                })
+
+            return events, None
 
         except Exception as e:
             logger.warning(f"Failed to fetch calendar events: {e}")
