@@ -239,6 +239,7 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     # ------------------------------------------------------------------
     loan_ids: List[int] = []
     try:
+        from sqlalchemy import text as _text
         savepoint = db.begin_nested()
         loan_seq = 0
         for stage, count in LOAN_STAGE_DISTRIBUTION:
@@ -250,58 +251,29 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
                 amount = Decimal(random.randrange(200000, 800000, 25000))
                 rate = Decimal(str(round(random.uniform(5.5, 7.5), 3)))
                 loan_type = random.choice(LOAN_TYPES)
-
-                # Calculate SLA dates based on stage progression
                 app_date = _past_date(45)
-                sla_dates: Dict[str, Any] = {"application_date": app_date}
+                loan_num = f"DEMO-{year}-{loan_seq:04d}"
 
-                stage_order = [
-                    "APPLICATION", "PROCESSING", "SUBMITTED",
-                    "UNDERWRITING", "APPROVED", "CTC",
-                    "CLEAR_TO_CLOSE", "DOCS_OUT",
-                ]
-                current_idx = stage_order.index(stage)
-
-                if current_idx >= 1:  # PROCESSING
-                    sla_dates["initial_disclosures_sent_date"] = app_date + timedelta(days=2)
-                    sla_dates["initial_disclosures_signed_date"] = app_date + timedelta(days=4)
-                if current_idx >= 2:  # SUBMITTED
-                    sla_dates["uw_received_date"] = app_date + timedelta(days=10)
-                if current_idx >= 4:  # APPROVED
-                    sla_dates["loan_approved_date"] = app_date + timedelta(days=18)
-                if current_idx >= 6:  # CLEAR_TO_CLOSE
-                    sla_dates["clear_to_close_date"] = app_date + timedelta(days=22)
-                    sla_dates["cd_sent_to_borrower_date"] = app_date + timedelta(days=21)
-                if current_idx >= 7:  # DOCS_OUT
-                    sla_dates["docs_out_date"] = app_date + timedelta(days=25)
-
-                loan = Loan(
-                    organization_id=organization_id,
-                    loan_number=f"DEMO-{year}-{loan_seq:04d}",
-                    borrower_name=f"{first} {last}",
-                    borrower_email=_random_email(first, last),
-                    borrower_phone=_random_phone(),
-                    amount=amount,
-                    rate=rate,
-                    loan_type=loan_type,
-                    stage=stage,
-                    property_address=f"{random.choice(STREETS)}, {city}, {state_code} {zipcode}",
-                    property_city=city,
-                    property_state=state_code,
-                    property_zip=zipcode,
-                    loan_officer_id=user_id,
-                    loan_purpose=random.choice(LOAN_PURPOSES),
-                    property_type=random.choice(PROPERTY_TYPES),
-                    stage_changed_at=_past_date(5),
-                    closing_date=datetime.now(timezone.utc) + timedelta(days=random.randint(10, 45)),
-                    lock_expiration_date=datetime.now(timezone.utc) + timedelta(days=random.randint(15, 60)),
-                    created_at=app_date,
-                    **sla_dates,
-                )
-                db.add(loan)
-                db.flush()
-                loan_ids.append(loan.id)
-                _track(db, organization_id, "loan", loan.id)
+                result = db.execute(_text("""
+                    INSERT INTO loans (organization_id, loan_number, borrower_name,
+                        borrower_email, borrower_phone, amount, rate, loan_type,
+                        stage, property_city, property_state, property_zip,
+                        loan_officer_id, created_at)
+                    VALUES (:org, :ln, :bn, :be, :bp, :amt, :rate, :lt,
+                        :stage, :city, :state, :zip, :lo, :ca)
+                    ON CONFLICT (loan_number) DO UPDATE SET stage = :stage
+                    RETURNING id
+                """), {
+                    "org": organization_id, "ln": loan_num,
+                    "bn": f"{first} {last}", "be": _random_email(first, last),
+                    "bp": _random_phone(), "amt": float(amount), "rate": float(rate),
+                    "lt": loan_type, "stage": stage, "city": city,
+                    "state": state_code, "zip": zipcode, "lo": user_id,
+                    "ca": app_date,
+                })
+                loan_id = result.fetchone()[0]
+                loan_ids.append(loan_id)
+                _track(db, organization_id, "loan", loan_id)
         savepoint.commit()
         counts["loans"] = len(loan_ids)
         logger.info("Seeded %d demo loans", len(loan_ids))
@@ -460,6 +432,12 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
             },
         ]
 
+        from sqlalchemy import text as _text
+        table_exists = db.execute(_text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'compliance_alerts')"
+        )).scalar()
+        if not table_exists:
+            raise RuntimeError("compliance_alerts table does not exist — skipping")
         for i, adef in enumerate(alert_defs):
             target_loan_id = loan_ids[i] if i < len(loan_ids) else (loan_ids[0] if loan_ids else None)
             alert = ComplianceAlert(
@@ -552,10 +530,18 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
                 "hot_leads": 2,
             },
         }
+        from sqlalchemy import text as _text
+        existing = db.execute(_text(
+            "SELECT id FROM morning_briefings WHERE user_id = :uid AND briefing_date = :d"
+        ), {"uid": user_id, "d": date.today()}).fetchone()
+        if existing:
+            savepoint.commit()
+            counts["morning_briefings"] = 1
+            logger.info("Morning briefing already exists for today — reusing")
         briefing = MorningBriefing(
             organization_id=organization_id,
             user_id=user_id,
-            briefing_date=date.today(),
+            briefing_date=date.today() + timedelta(days=1) if existing else date.today(),
             briefing_level="individual",
             status="delivered",
             briefing_data=briefing_data,
@@ -736,21 +722,21 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
             )
             end = start + timedelta(minutes=duration)
 
-            event = CalendarEvent(
-                organization_id=organization_id,
-                user_id=user_id,
-                title=title,
-                description=f"Scheduled {etype} — {duration} min",
-                start_time=start,
-                end_time=end,
-                event_type=etype,
-                status="scheduled",
-                lead_id=lead_ids[i % len(lead_ids)] if lead_ids and i < 10 else None,
-                loan_id=loan_ids[i % len(loan_ids)] if loan_ids and i < 6 else None,
-            )
-            db.add(event)
-            db.flush()
-            _track(db, organization_id, "calendar_event", event.id)
+            from sqlalchemy import text as _text
+            result = db.execute(_text("""
+                INSERT INTO calendar_events (user_id, title, description, start_time,
+                    end_time, event_type, status, lead_id, loan_id)
+                VALUES (:uid, :title, :desc, :st, :et, :etype, :status, :lid, :loid)
+                RETURNING id
+            """), {
+                "uid": user_id, "title": title,
+                "desc": f"Scheduled {etype} — {duration} min",
+                "st": start, "et": end, "etype": etype, "status": "scheduled",
+                "lid": lead_ids[i % len(lead_ids)] if lead_ids and i < 10 else None,
+                "loid": loan_ids[i % len(loan_ids)] if loan_ids and i < 6 else None,
+            })
+            event_id = result.fetchone()[0]
+            _track(db, organization_id, "calendar_event", event_id)
             cal_count += 1
         savepoint.commit()
         counts["calendar_events"] = cal_count
@@ -779,6 +765,12 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
             ("SIGNATURE_COMPLETED", "E-Signature Completed", "info", "Initial disclosures signed by Taylor Showcroft.", False),
             ("PACKAGE_READY", "Loan Package Ready", "info", "Submission package for DEMO-2026-0010 is complete.", False),
         ]
+        from sqlalchemy import text as _text
+        table_exists = db.execute(_text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'smart_docs_notifications')"
+        )).scalar()
+        if not table_exists:
+            raise RuntimeError("smart_docs_notifications table does not exist — skipping")
         for i, (ntype, title, severity, body, unread) in enumerate(notif_defs):
             target_loan_id = loan_ids[i % len(loan_ids)] if loan_ids else None
             notif = DocNotification(
@@ -844,31 +836,33 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
                 ("outbound", "That's a solid start! Based on those numbers, you'd likely qualify in the $280-320K range. Let's set up a pre-approval call — I'll need W-2s and bank statements. Want to do a quick Zoom this week?"),
             ]),
         ]
+        from sqlalchemy import text as _text
         for i, (phone, status, stage, messages) in enumerate(sms_convos):
             target_lead_id = lead_ids[i % len(lead_ids)] if lead_ids else None
-            convo = SMSAIConversation(
-                phone_number=phone,
-                organization_id=organization_id,
-                lead_id=target_lead_id,
-                status=status,
-                current_stage=stage,
-                message_count=len(messages),
-                last_message_at=_past_date(3),
-                created_at=_past_date(10),
-            )
-            db.add(convo)
-            db.flush()
-            _track(db, organization_id, "sms_conversation", convo.id)
+            result = db.execute(_text("""
+                INSERT INTO sms_ai_conversations (id, phone_number, organization_id,
+                    lead_id, status, current_stage, message_count, last_message_at, created_at)
+                VALUES (:id, :phone, :org, :lid, :status, :stage, :mc, :lm, :ca)
+                RETURNING id
+            """), {
+                "id": str(random.randint(100000, 999999)),
+                "phone": phone, "org": organization_id, "lid": target_lead_id,
+                "status": status, "stage": stage, "mc": len(messages),
+                "lm": _past_date(3), "ca": _past_date(10),
+            })
+            convo_id = result.fetchone()[0]
+            _track(db, organization_id, "sms_conversation", convo_id)
 
             for j, (direction, content) in enumerate(messages):
-                msg = SMSAIConversationMessage(
-                    conversation_id=convo.id,
-                    direction=direction,
-                    content=content,
-                    ai_generated=(direction == "outbound"),
-                    created_at=_past_date(10 - j),
-                )
-                db.add(msg)
+                db.execute(_text("""
+                    INSERT INTO sms_ai_conversation_messages (id, conversation_id,
+                        direction, content, ai_generated, created_at)
+                    VALUES (:id, :cid, :dir, :content, :ai, :ca)
+                """), {
+                    "id": str(random.randint(100000, 999999)),
+                    "cid": convo_id, "dir": direction, "content": content,
+                    "ai": direction == "outbound", "ca": _past_date(10 - j),
+                })
 
             sms_count += 1
         db.flush()
