@@ -63,10 +63,14 @@ class UnifiedCalendarService:
             try:
                 sp = self.db.begin_nested()
                 source_events, source_warning = fetcher()
-                sp.commit()
                 if source_warning:
+                    try:
+                        sp.rollback()
+                    except Exception:
+                        self.db.rollback()
                     warnings.append(source_warning)
                 else:
+                    sp.commit()
                     sources_queried.append(source_name)
                 events.extend(source_events)
             except Exception as e:
