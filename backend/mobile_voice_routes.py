@@ -13,6 +13,7 @@ import json
 import asyncio
 import base64
 import os
+import re
 import time
 import httpx
 from typing import Optional, Dict, Any, AsyncGenerator, List, TYPE_CHECKING
@@ -233,7 +234,7 @@ class ElevenLabsTTSClient:
                 if response.status_code != 200:
                     error_text = await response.aread()
                     logger.error(f"[ElevenLabsTTS] Error: {response.status_code} - {error_text}")
-                    return
+                    raise RuntimeError(f"ElevenLabs returned {response.status_code}")
 
                 async for chunk in response.aiter_bytes(chunk_size=4096):
                     yield chunk
@@ -274,8 +275,8 @@ class OpenAITTSClient:
             response = await client.post(url, json=payload, headers=headers, timeout=30.0)
 
             if response.status_code != 200:
-                logger.error(f"[OpenAITTS] Error: {response.status_code}")
-                return b""
+                logger.error(f"[OpenAITTS] Error: {response.status_code} - {response.text[:200]}")
+                raise RuntimeError(f"OpenAI TTS returned {response.status_code}")
 
             return response.content
 
@@ -1078,16 +1079,29 @@ async def synthesize_text(request: Request, db: Session = Depends(get_db)):
     try:
         audio = await tts.synthesize(text)
 
-        logger.info(f"[TTS] Synthesized with provider={provider}, voice_id={voice_id}")
+        if not audio:
+            logger.error(f"[TTS] Provider returned empty audio (provider={type(tts).__name__})")
+            raise HTTPException(502, "TTS provider returned empty audio")
+
+        # Sanitize user-supplied values before logging to avoid log injection
+        # (CodeQL: log entries should not contain unescaped user input).
+        safe_provider = re.sub(r"[^A-Za-z0-9_\-]", "", str(provider))[:32] if provider else "auto"
+        safe_voice_id = re.sub(r"[^A-Za-z0-9_\-]", "", str(voice_id))[:64] if voice_id else "default"
+        logger.info(
+            "[TTS] Synthesized %d bytes (client=%s, provider_param=%s, voice_id=%s)",
+            len(audio), type(tts).__name__, safe_provider, safe_voice_id,
+        )
 
         return {
             "audio": base64.b64encode(audio).decode("utf-8"),
             "format": "mp3"
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"[TTS] Error: {e}")
-        raise HTTPException(500, "TTS synthesis failed")
+        logger.error(f"[TTS] Error: {e}", exc_info=True)
+        raise HTTPException(502, f"TTS synthesis failed: {type(e).__name__}")
 
 
 @router.get("/voices")
