@@ -538,29 +538,30 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
             savepoint.commit()
             counts["morning_briefings"] = 1
             logger.info("Morning briefing already exists for today — reusing")
-        briefing = MorningBriefing(
-            organization_id=organization_id,
-            user_id=user_id,
-            briefing_date=date.today() + timedelta(days=1) if existing else date.today(),
-            briefing_level="individual",
-            status="delivered",
-            briefing_data=briefing_data,
-            ai_narrative=(
-                "Good morning! You have 15 active loans in your pipeline totaling $4.25M. "
-                "Two loans are approaching closing this week. A rate lock on DEMO-2026-0012 "
-                "expires in 2 days — consider discussing extension options with the borrower. "
-                "You have 2 appointments today and 5 follow-up calls due. "
-                "There is 1 critical compliance alert requiring immediate attention: "
-                "an LE delivery deadline on a recent application."
-            ),
-            created_at=datetime.now(timezone.utc),
-        )
-        db.add(briefing)
-        db.flush()
-        _track(db, organization_id, "morning_briefing", briefing.id)
-        savepoint.commit()
-        counts["morning_briefings"] = 1
-        logger.info("Seeded 1 demo morning briefing")
+        else:
+            briefing = MorningBriefing(
+                organization_id=organization_id,
+                user_id=user_id,
+                briefing_date=date.today(),
+                briefing_level="individual",
+                status="delivered",
+                briefing_data=briefing_data,
+                ai_narrative=(
+                    "Good morning! You have 15 active loans in your pipeline totaling $4.25M. "
+                    "Two loans are approaching closing this week. A rate lock on DEMO-2026-0012 "
+                    "expires in 2 days — consider discussing extension options with the borrower. "
+                    "You have 2 appointments today and 5 follow-up calls due. "
+                    "There is 1 critical compliance alert requiring immediate attention: "
+                    "an LE delivery deadline on a recent application."
+                ),
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(briefing)
+            db.flush()
+            _track(db, organization_id, "morning_briefing", briefing.id)
+            savepoint.commit()
+            counts["morning_briefings"] = 1
+            logger.info("Seeded 1 demo morning briefing")
     except Exception as e:
         logger.exception("Failed to seed morning briefing")
         errors["morning_briefings"] = str(e)
@@ -932,7 +933,16 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     # ------------------------------------------------------------------
     # Commit everything
     # ------------------------------------------------------------------
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("Final commit failed — rolling back and retrying")
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("Second commit attempt also failed")
 
     total = sum(counts.values())
     logger.info("Demo data seeding complete: %d total entities for org %d", total, organization_id)
