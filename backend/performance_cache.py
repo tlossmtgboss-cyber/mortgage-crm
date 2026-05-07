@@ -71,6 +71,12 @@ def invalidate_cache(prefix: str = None) -> int:
     return count
 
 
+def invalidate_dashboard(user_id: int = None) -> int:
+    """Invalidate dashboard cache entries. If user_id given, only that user's cache."""
+    prefix = f"dashboard:{user_id}" if user_id else "dashboard"
+    return invalidate_cache(prefix)
+
+
 def cached(ttl: int = DEFAULT_TTL, key_prefix: str = None):
     """
     Decorator to cache function results

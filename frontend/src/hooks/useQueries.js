@@ -105,9 +105,18 @@ export const useDashboard = (options = {}) => {
   return useQuery({
     queryKey: ['dashboard'],
     queryFn: () => fetchWithAuth('/api/v1/dashboard'),
-    staleTime: 1000 * 60 * 2, // 2 minutes for dashboard
+    staleTime: 1000 * 30, // 30 seconds — dashboard should reflect recent CRM actions
+    refetchOnWindowFocus: true,
     ...options,
   });
+};
+
+export const useInvalidateDashboard = () => {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+  };
 };
 
 export const useDashboardStats = (options = {}) => {

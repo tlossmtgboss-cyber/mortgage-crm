@@ -1318,12 +1318,13 @@ async def apply_disposition_task(
         except Exception as e:
             logger.warning(f"Workflow evaluation trigger failed for loan {loan.id} disposition: {e}")
 
-        # Invalidate unified-tasks cache
+        # Invalidate unified-tasks + dashboard cache
         try:
-            from performance_cache import cache_key, invalidate_cache
+            from performance_cache import cache_key, invalidate_cache, invalidate_dashboard
             invalidate_cache(cache_key("unified_tasks", current_user.id))
+            invalidate_dashboard(current_user.id)
         except Exception as e:
-            logger.warning(f"Error invalidating unified_tasks cache after apply: {e}")
+            logger.warning(f"Error invalidating cache after apply: {e}")
 
         return {
             "status": "applied",
@@ -1398,12 +1399,13 @@ async def dismiss_disposition_task(
 
         db.commit()
 
-        # Invalidate unified-tasks cache
+        # Invalidate unified-tasks + dashboard cache
         try:
-            from performance_cache import cache_key, invalidate_cache
+            from performance_cache import cache_key, invalidate_cache, invalidate_dashboard
             invalidate_cache(cache_key("unified_tasks", current_user.id))
+            invalidate_dashboard(current_user.id)
         except Exception as e:
-            logger.warning(f"Error invalidating unified_tasks cache after dismiss: {e}")
+            logger.warning(f"Error invalidating cache after dismiss: {e}")
 
         return {
             "status": "dismissed",

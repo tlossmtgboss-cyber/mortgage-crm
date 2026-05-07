@@ -142,6 +142,9 @@ api.interceptors.response.use(
     if (method === 'get' && response.config?.url) {
       _cacheSet(response.config.url, response.data);
     }
+    if (['post', 'put', 'patch', 'delete'].includes(method)) {
+      window.dispatchEvent(new CustomEvent('crm-mutation', { detail: { url: response.config?.url, method } }));
+    }
     return response;
   },
   (error) => Promise.reject(error)

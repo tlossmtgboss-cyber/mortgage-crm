@@ -153,6 +153,13 @@ async def create_lead(
 
         logger.info(f"Lead created: {response['name']} (ID: {lead_id}, Score: {response['ai_score']})")
 
+        # Invalidate dashboard cache so numbers update immediately
+        try:
+            from performance_cache import invalidate_dashboard
+            invalidate_dashboard(current_user.id)
+        except Exception:
+            pass
+
         # Post-commit operations - these must not affect the response
         # SLA tracking
         try:

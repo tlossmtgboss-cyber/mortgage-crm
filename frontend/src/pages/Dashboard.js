@@ -41,6 +41,15 @@ function Dashboard() {
   // Use React Query for cached dashboard data - instant on revisit!
   const { data: dashboardData, isLoading: loading, refetch: refetchDashboard } = useDashboard();
 
+  // Auto-refetch dashboard when any CRM mutation occurs (lead/loan/task changes)
+  useEffect(() => {
+    const handleMutation = () => {
+      refetchDashboard();
+    };
+    window.addEventListener('crm-mutation', handleMutation);
+    return () => window.removeEventListener('crm-mutation', handleMutation);
+  }, [refetchDashboard]);
+
   // Check if current user is demo user
   const isDemoUser = () => {
     try {

@@ -319,6 +319,13 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             db.commit()
             logger.info(f"[bulk-update-status] Successfully committed. Updated {updated_count}, errors: {len(errors)}")
 
+            # Invalidate dashboard cache so numbers update immediately
+            try:
+                from performance_cache import invalidate_dashboard
+                invalidate_dashboard(current_user.id)
+            except Exception:
+                pass
+
             # Event-driven workflow enrollment for all updated leads (post-commit)
             try:
                 from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
@@ -632,6 +639,14 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
         db.commit()
         db.refresh(lead)
+
+        # Invalidate dashboard cache so numbers update immediately
+        try:
+            from performance_cache import invalidate_dashboard
+            invalidate_dashboard(current_user.id)
+        except Exception:
+            pass
+
         if stage_changed:
             logger.info(f"Stage changed for lead {lead.id}: {old_status} -> {new_status}, stage_changed_at + SLA dates committed")
         else:

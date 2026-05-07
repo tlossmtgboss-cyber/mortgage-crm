@@ -666,14 +666,16 @@ async def create_loan(
 
         logger.info(f"Loan created: {db_loan.loan_number} (ID: {db_loan.id}, Stage: {db_loan.stage})")
 
-        # Invalidate pipeline cache for this org
+        # Invalidate pipeline + dashboard cache for this org
         try:
             from services.cache_service import cache_delete_pattern
             _org = getattr(db_loan, "organization_id", None)
             if _org:
                 cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+            from performance_cache import invalidate_dashboard
+            invalidate_dashboard(current_user.id)
         except Exception as e:
-            logger.debug(f"Pipeline cache invalidation after create: {e}")
+            logger.debug(f"Cache invalidation after create: {e}")
 
         # Build response dict BEFORE post-commit operations so a sync failure
         # cannot corrupt the ORM object or prevent returning the result (DATA-008)
@@ -990,14 +992,16 @@ async def update_loan(
         db.refresh(loan)
         logger.info(f"Loan updated: {loan.loan_number} (ID: {loan.id})")
 
-        # Invalidate pipeline cache for this org
+        # Invalidate pipeline + dashboard cache for this org
         try:
             from services.cache_service import cache_delete_pattern
             _org = getattr(loan, "organization_id", None)
             if _org:
                 cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+            from performance_cache import invalidate_dashboard
+            invalidate_dashboard(current_user.id)
         except Exception as e:
-            logger.debug(f"Pipeline cache invalidation after update: {e}")
+            logger.debug(f"Cache invalidation after update: {e}")
 
         # Wire to SLA tracking — detect stage changes
         if "stage" in update_data:
@@ -1146,13 +1150,15 @@ async def delete_loan(
         db.commit()
         logger.info(f"Loan soft-deleted: {loan.loan_number} (ID: {loan_id})")
 
-        # Invalidate pipeline cache for this org
+        # Invalidate pipeline + dashboard cache for this org
         try:
             from services.cache_service import cache_delete_pattern
             if _org:
                 cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+            from performance_cache import invalidate_dashboard
+            invalidate_dashboard(current_user.id)
         except Exception as e:
-            logger.debug(f"Pipeline cache invalidation after delete: {e}")
+            logger.debug(f"Cache invalidation after delete: {e}")
 
         return {"message": "Loan deleted successfully"}
     except Exception as e:
@@ -1192,15 +1198,17 @@ async def bulk_delete_loans(
         db.commit()
         logger.info(f"Bulk soft-deleted {deleted} loans")
 
-        # Invalidate pipeline cache for this org
+        # Invalidate pipeline + dashboard cache for this org
         if deleted:
             try:
                 from services.cache_service import cache_delete_pattern
                 _org = getattr(current_user, "organization_id", None)
                 if _org:
                     cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+                from performance_cache import invalidate_dashboard
+                invalidate_dashboard(current_user.id)
             except Exception as e:
-                logger.debug(f"Pipeline cache invalidation after bulk delete: {e}")
+                logger.debug(f"Cache invalidation after bulk delete: {e}")
 
         return {"deleted": deleted}
     except Exception as e:
