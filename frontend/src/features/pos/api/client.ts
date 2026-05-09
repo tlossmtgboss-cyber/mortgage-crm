@@ -29,10 +29,12 @@ import type {
   TeamResponse,
 } from '../types';
 
+import { API_BASE_URL } from '../../../services/api';
+
 const API_BASE =
   (typeof window !== 'undefined' && (window as any).__PERENNIA_API_BASE__) ||
   process.env.REACT_APP_PERENNIA_API_BASE ||
-  '';
+  API_BASE_URL;
 
 function getPurlToken(): string {
   if (typeof window === 'undefined') return '';

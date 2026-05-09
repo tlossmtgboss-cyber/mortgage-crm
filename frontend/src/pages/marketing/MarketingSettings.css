@@ -592,6 +592,283 @@
   color: #78350f;
 }
 
+/* ========================================================================
+   POS Settings
+   ======================================================================== */
+
+.pos-settings {
+  padding: 24px;
+  max-width: 900px;
+}
+
+.pos-settings__section {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.pos-settings__section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pos-settings__heading {
+  font-size: 17px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 6px 0;
+}
+
+.pos-settings__desc {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+/* Application link box */
+.pos-settings__link-box {
+  display: flex;
+  gap: 8px;
+}
+
+.pos-settings__link-input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #374151;
+  cursor: text;
+}
+
+.pos-settings__link-input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.pos-settings__copy-btn {
+  padding: 10px 20px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.pos-settings__copy-btn:hover {
+  background: #1a7070;
+}
+
+/* Inline link button */
+.pos-settings__link-btn {
+  background: none;
+  border: none;
+  color: #218D8D;
+  font-size: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.pos-settings__link-btn:hover {
+  color: #1a7070;
+}
+
+/* Team grid */
+.pos-settings__team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.pos-settings__member-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.pos-settings__member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #218D8D;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.pos-settings__member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pos-settings__member-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pos-settings__member-roles {
+  font-size: 12px;
+  color: #218D8D;
+  font-weight: 500;
+}
+
+.pos-settings__member-email {
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Calendar association */
+.pos-settings__calendar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pos-settings__calendar-row {
+  display: flex;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.pos-settings__calendar-row:last-child {
+  border-bottom: none;
+}
+
+.pos-settings__calendar-label {
+  width: 160px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.pos-settings__calendar-value {
+  font-size: 13px;
+  color: #111827;
+}
+
+.pos-settings__calendar-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.pos-settings__calendar-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #218D8D;
+}
+
+/* How-it-works flow */
+.pos-settings__flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pos-settings__flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.pos-settings__flow-step:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.pos-settings__flow-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #218D8D;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.pos-settings__flow-step strong {
+  font-size: 14px;
+  color: #111827;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.pos-settings__flow-step p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Loading & empty */
+.pos-settings__loading {
+  text-align: center;
+  padding: 40px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.pos-settings__empty {
+  text-align: center;
+  padding: 32px 20px;
+  background: #f9fafb;
+  border-radius: 10px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.pos-settings__empty p {
+  margin: 0 0 8px 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .marketing-settings-page {
@@ -621,5 +898,26 @@
 
   .info-icon {
     margin: 0 auto;
+  }
+
+  .pos-settings {
+    padding: 16px;
+  }
+
+  .pos-settings__link-box {
+    flex-direction: column;
+  }
+
+  .pos-settings__team-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-settings__calendar-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pos-settings__calendar-label {
+    width: auto;
   }
 }

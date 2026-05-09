@@ -7,12 +7,14 @@ import type { SectionKey } from '../types';
 import { SECTION_ORDER, SECTION_LABELS, SECTION_CAPTIONS } from '../types';
 import { TopNav } from './TopNav';
 import { POSSidebar } from './POSSidebar';
+import type { PosNavKey } from './POSSidebar';
 import { StepRail } from './StepRail';
 import { AriaPanel } from './AriaPanel';
 import { DocumentsPage } from './DocumentsPage';
 import { MessagesPage } from './MessagesPage';
 import { TasksPage } from './TasksPage';
 import { TeamContactPanel } from './TeamContactPanel';
+import { HomePage } from './HomePage';
 import { IntakePanel, EMPTY_INTAKE } from './IntakePanel';
 import type { IntakeData } from './IntakePanel';
 
@@ -70,7 +72,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
-  const [view, setView] = useState<'application' | 'documents' | 'tasks' | 'messages' | 'team'>('application');
+  const [view, setView] = useState<PosNavKey>('home');
   const [taskCount, setTaskCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
 
@@ -204,38 +206,49 @@ export const POSContainer: React.FC<POSContainerProps> = ({
           documentCount={detectedDocs.length}
           taskCount={taskCount}
           messageCount={messageCount}
-          onDocumentsClick={() => setView('documents')}
-          onTasksClick={() => setView('tasks')}
-          onMessagesClick={() => setView('messages')}
-          onTeamClick={() => setView('team')}
+          onNavigate={setView}
           activeNav={view}
         />
 
         <main className="pos-main">
-          {view === 'team' ? (
+          {view === 'home' ? (
+            <HomePage
+              application={application}
+              onAskAria={() => setAriaOpen(true)}
+              onNavigate={(v) => setView(v as PosNavKey)}
+            />
+          ) : view === 'team' ? (
             <TeamContactPanel
               applicationId={application.id}
-              onBack={() => setView('application')}
+              onBack={() => setView('home')}
             />
           ) : view === 'documents' ? (
             <DocumentsPage
               loanId={application?.loan_id}
               detectedDocs={detectedDocs}
               onAskAria={() => setAriaOpen(true)}
-              onBack={() => setView('application')}
+              onBack={() => setView('home')}
             />
           ) : view === 'tasks' ? (
             <TasksPage
               applicationId={application.id}
               onAskAria={() => setAriaOpen(true)}
-              onBack={() => setView('application')}
+              onBack={() => setView('home')}
             />
           ) : view === 'messages' ? (
             <MessagesPage
               applicationId={application.id}
               onAskAria={() => setAriaOpen(true)}
-              onBack={() => setView('application')}
+              onBack={() => setView('home')}
             />
+          ) : view === 'disclosures' ? (
+            <PlaceholderPage title="Disclosures" description="Your disclosure documents will appear here once they're ready for review." onBack={() => setView('home')} />
+          ) : view === 'calculators' ? (
+            <PlaceholderPage title="Calculators" description="Mortgage calculators to help you estimate payments, compare rates, and plan your budget." onBack={() => setView('home')} />
+          ) : view === 'timeline' ? (
+            <PlaceholderPage title="Loan Timeline" description="Track the progress of your loan from application to closing." onBack={() => setView('home')} />
+          ) : view === 'help' ? (
+            <PlaceholderPage title="Help & Support" description="Have questions? Reach out to your loan team or ask Aria for instant answers." onBack={() => setView('home')} onAskAria={() => setAriaOpen(true)} />
           ) : (
             <>
               <div className="pos-main__welcome">
@@ -305,3 +318,45 @@ export const POSContainer: React.FC<POSContainerProps> = ({
     </div>
   );
 };
+
+const PlaceholderPage: React.FC<{
+  title: string;
+  description: string;
+  onBack: () => void;
+  onAskAria?: () => void;
+}> = ({ title, description, onBack, onAskAria }) => (
+  <div style={{ maxWidth: 640, margin: '0 auto', padding: '48px 0', textAlign: 'center' }}>
+    <h2 style={{ fontFamily: 'var(--bt-font-display)', fontSize: 24, fontWeight: 600, color: 'var(--bt-text-primary)', marginBottom: 12 }}>
+      {title}
+    </h2>
+    <p style={{ fontSize: 15, color: 'var(--bt-text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
+      {description}
+    </p>
+    <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          fontFamily: 'var(--bt-font-body)', fontSize: 14, fontWeight: 600,
+          color: 'var(--bt-text-secondary)', background: 'var(--bt-bg-elevated)',
+          border: '1px solid var(--bt-border)', borderRadius: 8, padding: '10px 20px', cursor: 'pointer',
+        }}
+      >
+        ← Back to Home
+      </button>
+      {onAskAria && (
+        <button
+          type="button"
+          onClick={onAskAria}
+          style={{
+            fontFamily: 'var(--bt-font-body)', fontSize: 14, fontWeight: 600,
+            color: '#fff', background: 'var(--bt-primary)',
+            border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer',
+          }}
+        >
+          Ask Aria
+        </button>
+      )}
+    </div>
+  </div>
+);

@@ -1,18 +1,16 @@
-"""Public POS start + SMS verification endpoints.
+"""Public POS start + email verification endpoints.
 
 Flow:
-1. POST /pos/start  — collect info, send 6-digit SMS code, return session_id
+1. POST /pos/start  — collect info, send 6-digit email code, return session_id
 2. POST /pos/verify — validate code, create workspace/contact/token
 3. POST /pos/resend — resend code with rate limiting
 
 Enterprise hardening:
-- Phone normalization to E.164 before send
 - IP-based rate limiting (5 starts / 10 min per IP)
 - Per-session rate limiting on resend (60s cooldown)
-- Duplicate email+phone dedup within 5 min (reuse existing session)
+- Duplicate email dedup within 5 min (reuse existing session)
 - HMAC-SHA256 code hashing with SECRET_KEY
 - Code expiry (10 min), max attempts (5)
-- TCPA consent timestamp stored
 """
 from __future__ import annotations
 
@@ -42,7 +40,6 @@ from models.purl import (
     WorkspaceStatus,
 )
 from services.purl_token_service import PURLTokenService
-from telephony.phone_utils import normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -238,29 +235,13 @@ class StartRequest(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
-    phone: str = Field(..., min_length=10, max_length=20)
-    sms_consent: bool = Field(..., description="User consented to receive SMS")
+    phone: str = Field("", max_length=20, description="Optional phone for contact records")
     lo_slug: Optional[str] = Field(None, max_length=200, description="Loan officer slug from PURL")
-
-    @field_validator("phone")
-    @classmethod
-    def validate_phone(cls, v: str) -> str:
-        normalized = normalize_phone(v.strip())
-        if not normalized:
-            raise ValueError("Please enter a valid 10-digit US phone number.")
-        return v.strip()
-
-    @field_validator("sms_consent")
-    @classmethod
-    def require_consent(cls, v: bool) -> bool:
-        if not v:
-            raise ValueError("SMS consent is required to proceed.")
-        return v
 
 
 class StartResponse(BaseModel):
     session_id: str
-    phone_masked: str
+    email_masked: str
     expires_at: str
     message: str
 
@@ -296,28 +277,12 @@ class ResendResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    phone: str = Field(..., min_length=10, max_length=20)
-    sms_consent: bool = Field(..., description="User consented to receive SMS")
-
-    @field_validator("phone")
-    @classmethod
-    def validate_phone(cls, v: str) -> str:
-        normalized = normalize_phone(v.strip())
-        if not normalized:
-            raise ValueError("Please enter a valid 10-digit US phone number.")
-        return v.strip()
-
-    @field_validator("sms_consent")
-    @classmethod
-    def require_consent(cls, v: bool) -> bool:
-        if not v:
-            raise ValueError("SMS consent is required to proceed.")
-        return v
+    email: EmailStr
 
 
 class LoginResponse(BaseModel):
     session_id: str = ""
-    phone_masked: str = ""
+    email_masked: str = ""
     expires_at: str = ""
     message: str = ""
     trusted_device: bool = False
@@ -331,34 +296,50 @@ class TokenCheckResponse(BaseModel):
     borrower_name: str = ""
 
 
-# ── SMS helper ─────────────────────────────────────────────────────
+# ── Email helper ──────────────────────────────────────────────────
 
-def _send_verification_sms(phone_e164: str, code: str):
+def _send_verification_email(email_addr: str, code: str):
     try:
-        from telephony.sms import send_sms
-        send_sms(
-            to=phone_e164,
-            text=(
+        from services.notification_service import NotificationService
+        svc = NotificationService()
+        svc.send_email(
+            to_email=email_addr,
+            subject="Your Perennia Verification Code",
+            html_content=(
+                f"<div style='font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px'>"
+                f"<h2 style='color:#1F3D2E;margin:0 0 8px'>Verification Code</h2>"
+                f"<p style='color:#6B7B75;margin:0 0 24px'>Use the code below to verify your identity.</p>"
+                f"<div style='background:#f0fdf4;border:1px solid #86efac;border-radius:12px;"
+                f"padding:24px;text-align:center;margin:0 0 24px'>"
+                f"<span style='font-size:36px;font-weight:700;letter-spacing:8px;color:#1F3D2E'>{code}</span>"
+                f"</div>"
+                f"<p style='color:#6B7B75;font-size:13px;margin:0'>"
+                f"This code expires in {CODE_TTL_MINUTES} minutes. Do not share this code with anyone.</p>"
+                f"</div>"
+            ),
+            plain_content=(
                 f"Your Perennia verification code is: {code}\n\n"
                 f"This code expires in {CODE_TTL_MINUTES} minutes. "
                 f"Do not share this code with anyone."
             ),
-            bypass_compliance=True,
         )
     except Exception as e:
-        logger.error("Failed to send verification SMS to %s: %s", phone_e164, e)
+        logger.error("Failed to send verification email to %s: %s", email_addr, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Could not send verification code. Please try again.",
         )
 
 
-def _mask_phone(phone: str) -> str:
-    digits = "".join(c for c in phone if c.isdigit())
-    if len(digits) >= 10:
-        last4 = digits[-4:]
-        return f"(***) ***-{last4}"
-    return "***"
+def _mask_email(email_addr: str) -> str:
+    if "@" not in email_addr:
+        return "***"
+    local, domain = email_addr.rsplit("@", 1)
+    if len(local) <= 1:
+        masked_local = local[0] + "***"
+    else:
+        masked_local = local[0] + "***" + local[-1]
+    return f"{masked_local}@{domain}"
 
 
 # ── Endpoints ──────────────────────────────────────────────────────
@@ -367,7 +348,7 @@ def _mask_phone(phone: str) -> str:
     "/start",
     response_model=StartResponse,
     status_code=status.HTTP_200_OK,
-    summary="Start application — sends SMS verification code",
+    summary="Start application — sends email verification code",
 )
 def start_application(body: StartRequest, request: Request, db: Session = Depends(get_db)):
     _ensure_table(db)
@@ -375,42 +356,51 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
     ip = _client_ip(request)
     _check_ip_rate_limit(ip)
 
-    # Resolve organization from LO slug (tenant isolation)
-    org_id = _resolve_organization_id(db, body.lo_slug)
-
-    phone_e164 = normalize_phone(body.phone)
-    if not phone_e164:
-        raise HTTPException(status_code=422, detail="Invalid phone number format.")
+    try:
+        org_id = _resolve_organization_id(db, body.lo_slug)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("POS start: failed to resolve organization: %s", e)
+        raise HTTPException(status_code=500, detail=f"Organization lookup failed: {type(e).__name__}")
 
     email_lower = body.email.strip().lower()
     dedup_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
-    existing = (
-        db.query(POSVerification)
-        .filter(
-            POSVerification.email == email_lower,
-            POSVerification.phone == phone_e164,
-            POSVerification.verified_at == None,
-            POSVerification.created_at > dedup_cutoff,
+
+    try:
+        existing = (
+            db.query(POSVerification)
+            .filter(
+                POSVerification.email == email_lower,
+                POSVerification.verified_at == None,
+                POSVerification.created_at > dedup_cutoff,
+            )
+            .first()
         )
-        .first()
-    )
+    except Exception as e:
+        logger.exception("POS start: dedup query failed: %s", e)
+        db.rollback()
+        existing = None
+
     if existing:
         expires = existing.created_at.replace(tzinfo=timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)
         return StartResponse(
             session_id=existing.session_id,
-            phone_masked=_mask_phone(phone_e164),
+            email_masked=_mask_email(email_lower),
             expires_at=expires.isoformat(),
-            message="Verification code already sent. Check your phone.",
+            message="Verification code already sent. Check your email.",
         )
 
     session_id = f"pos_sess_{secrets.token_hex(16)}"
     code = f"{secrets.randbelow(900000) + 100000}"
     now = datetime.now(timezone.utc)
 
+    phone_raw = body.phone.strip() if body.phone else ""
+
     verification = POSVerification(
         session_id=session_id,
-        phone=phone_e164,
-        phone_raw=body.phone.strip(),
+        phone=phone_raw,
+        phone_raw=phone_raw,
         code_hash=_hash_code(code),
         first_name=body.first_name.strip(),
         last_name=body.last_name.strip(),
@@ -420,15 +410,24 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
         consent_at=now,
         created_at=now,
     )
-    db.add(verification)
-    db.commit()
 
-    _send_verification_sms(phone_e164, code)
+    try:
+        db.add(verification)
+        db.commit()
+    except Exception as e:
+        logger.exception("POS start: failed to save verification record: %s", e)
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not create verification session: {type(e).__name__}",
+        )
+
+    _send_verification_email(email_lower, code)
 
     expires = now + timedelta(minutes=CODE_TTL_MINUTES)
     return StartResponse(
         session_id=session_id,
-        phone_masked=_mask_phone(phone_e164),
+        email_masked=_mask_email(email_lower),
         expires_at=expires.isoformat(),
         message="Verification code sent",
     )
@@ -438,7 +437,7 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
     "/verify",
     response_model=VerifyResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Verify SMS code and create application",
+    summary="Verify email code and create application",
 )
 def verify_code(body: VerifyRequest, request: Request, db: Session = Depends(get_db)):
     _ensure_table(db)
@@ -595,7 +594,7 @@ def resend_code(body: ResendRequest, request: Request, db: Session = Depends(get
     verification.last_resend_at = now
     db.commit()
 
-    _send_verification_sms(verification.phone, code)
+    _send_verification_email(verification.email, code)
 
     expires = now + timedelta(minutes=CODE_TTL_MINUTES)
     return ResendResponse(
@@ -609,7 +608,7 @@ def resend_code(body: ResendRequest, request: Request, db: Session = Depends(get
     "/login",
     response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
-    summary="Sign in with phone — sends SMS verification code",
+    summary="Sign in with email — sends email verification code",
 )
 def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     _ensure_table(db)
@@ -617,20 +616,18 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
     ip = _client_ip(request)
     _check_ip_rate_limit(ip)
 
-    phone_e164 = normalize_phone(body.phone)
-    if not phone_e164:
-        raise HTTPException(status_code=422, detail="Invalid phone number format.")
+    email_lower = body.email.strip().lower()
 
     contact = (
         db.query(PURLContact)
-        .filter(PURLContact.phone == phone_e164)
+        .filter(PURLContact.email == email_lower)
         .order_by(PURLContact.id.desc())
         .first()
     )
     if not contact:
         raise HTTPException(
             status_code=404,
-            detail="No account found with this phone number. Please create a new account.",
+            detail="No account found with this email address. Please create a new account.",
         )
 
     now = datetime.now(timezone.utc)
@@ -669,7 +666,7 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
     existing = (
         db.query(POSVerification)
         .filter(
-            POSVerification.phone == phone_e164,
+            POSVerification.email == email_lower,
             POSVerification.flow_type == "login",
             POSVerification.verified_at == None,
             POSVerification.created_at > dedup_cutoff,
@@ -680,9 +677,9 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
         expires = existing.created_at.replace(tzinfo=timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)
         return LoginResponse(
             session_id=existing.session_id,
-            phone_masked=_mask_phone(phone_e164),
+            email_masked=_mask_email(email_lower),
             expires_at=expires.isoformat(),
-            message="Verification code already sent. Check your phone.",
+            message="Verification code already sent. Check your email.",
         )
 
     session_id = f"pos_sess_{secrets.token_hex(16)}"
@@ -690,12 +687,12 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
 
     verification = POSVerification(
         session_id=session_id,
-        phone=phone_e164,
-        phone_raw=body.phone.strip(),
+        phone=contact.phone or "",
+        phone_raw=contact.phone or "",
         code_hash=_hash_code(code),
         first_name=contact.first_name or "",
         last_name=contact.last_name or "",
-        email=contact.email or "",
+        email=email_lower,
         organization_id=contact.organization_id,
         flow_type="login",
         contact_id=contact.id,
@@ -706,12 +703,12 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
     db.add(verification)
     db.commit()
 
-    _send_verification_sms(phone_e164, code)
+    _send_verification_email(email_lower, code)
 
     expires = now + timedelta(minutes=CODE_TTL_MINUTES)
     return LoginResponse(
         session_id=session_id,
-        phone_masked=_mask_phone(phone_e164),
+        email_masked=_mask_email(email_lower),
         expires_at=expires.isoformat(),
         message="Verification code sent",
     )

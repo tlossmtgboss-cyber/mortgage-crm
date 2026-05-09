@@ -3,14 +3,16 @@ import { useSearchParams } from 'react-router-dom';
 
 import { POSContainer } from '../../features/pos';
 
-const API_BASE = '';
+import { API_BASE_URL } from '../../services/api';
+
+const API_BASE = API_BASE_URL;
 
 type FlowStep = 'checking' | 'auth' | 'verify' | 'app';
 type AuthTab = 'signup' | 'login';
 
 interface VerifySession {
   sessionId: string;
-  phoneMasked: string;
+  emailMasked: string;
   expiresAt: string;
   flowType: AuthTab;
 }
@@ -266,12 +268,10 @@ function SignupForm({
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const phoneDigits = unformatPhone(phone);
-  const isValid = firstName.trim() && lastName.trim() && email.trim() && phoneDigits.length === 10 && consent;
+  const isValid = firstName.trim() && lastName.trim() && email.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,6 +280,7 @@ function SignupForm({
     setSubmitting(true);
 
     try {
+      const phoneDigits = unformatPhone(phone);
       const resp = await fetch(`${API_BASE}/api/v1/pos/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -287,8 +288,7 @@ function SignupForm({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
           email: email.trim(),
-          phone: phoneDigits,
-          sms_consent: true,
+          phone: phoneDigits || '',
         }),
       });
 
@@ -299,7 +299,7 @@ function SignupForm({
 
       onStarted({
         sessionId: data.session_id,
-        phoneMasked: data.phone_masked,
+        emailMasked: data.email_masked,
         expiresAt: data.expires_at,
         flowType: 'signup',
       });
@@ -314,8 +314,8 @@ function SignupForm({
     <>
       <h1 className="pos-start__title">Start Your Application</h1>
       <p className="pos-start__subtitle">
-        Begin your mortgage application in minutes. Your progress saves
-        automatically — step away anytime.
+        Begin your mortgage application in minutes. We'll send a verification
+        code to your email. Your progress saves automatically.
       </p>
 
       {error && <div className="pos-start__error">{error}</div>}
@@ -361,31 +361,17 @@ function SignupForm({
         </div>
 
         <div className="pos-start__field">
-          <label className="pos-start__label" htmlFor="pos-phone">Mobile phone number</label>
+          <label className="pos-start__label" htmlFor="pos-phone">Mobile phone number <span style={{ color: '#9CA8A2', fontWeight: 400 }}>(optional)</span></label>
           <input
             id="pos-phone"
             className="pos-start__input"
             type="tel"
             value={phone}
             onChange={e => setPhone(formatPhone(e.target.value))}
-            required
             placeholder="(555) 123-4567"
             autoComplete="tel"
           />
         </div>
-
-        <label className="pos-start__consent">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={e => setConsent(e.target.checked)}
-            className="pos-start__checkbox"
-          />
-          <span className="pos-start__consent-text">
-            I agree to receive a one-time SMS verification code at the number
-            provided. Message and data rates may apply.
-          </span>
-        </label>
 
         <button
           className="pos-start__btn"
@@ -426,13 +412,11 @@ function LoginForm({
   onVerified: (token: string, name?: string) => void;
   onSwitchToSignup: () => void;
 }) {
-  const [phone, setPhone] = useState('');
-  const [consent, setConsent] = useState(false);
+  const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const phoneDigits = unformatPhone(phone);
-  const isValid = phoneDigits.length === 10 && consent;
+  const isValid = email.trim().length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -444,16 +428,13 @@ function LoginForm({
       const resp = await fetch(`${API_BASE}/api/v1/pos/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: phoneDigits,
-          sms_consent: true,
-        }),
+        body: JSON.stringify({ email: email.trim() }),
       });
 
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         if (resp.status === 404) {
-          throw new Error('No account found with this phone number. Please create a new account.');
+          throw new Error('No account found with this email address. Please create a new account.');
         }
         throw new Error(data.detail || 'Failed to sign in');
       }
@@ -465,7 +446,7 @@ function LoginForm({
 
       onStarted({
         sessionId: data.session_id,
-        phoneMasked: data.phone_masked,
+        emailMasked: data.email_masked,
         expiresAt: data.expires_at,
         flowType: 'login',
       });
@@ -480,7 +461,7 @@ function LoginForm({
     <>
       <h1 className="pos-start__title">Welcome Back</h1>
       <p className="pos-start__subtitle">
-        Enter the phone number associated with your application. We'll send a
+        Enter the email address associated with your application. We'll send a
         verification code to confirm your identity.
       </p>
 
@@ -488,32 +469,19 @@ function LoginForm({
 
       <form onSubmit={handleSubmit}>
         <div className="pos-start__field">
-          <label className="pos-start__label" htmlFor="pos-login-phone">Mobile phone number</label>
+          <label className="pos-start__label" htmlFor="pos-login-email">Email address</label>
           <input
-            id="pos-login-phone"
+            id="pos-login-email"
             className="pos-start__input"
-            type="tel"
-            value={phone}
-            onChange={e => setPhone(formatPhone(e.target.value))}
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
             required
             autoFocus
-            placeholder="(555) 123-4567"
-            autoComplete="tel"
+            placeholder="you@example.com"
+            autoComplete="email"
           />
         </div>
-
-        <label className="pos-start__consent">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={e => setConsent(e.target.checked)}
-            className="pos-start__checkbox"
-          />
-          <span className="pos-start__consent-text">
-            I agree to receive a one-time SMS verification code at the number
-            provided. Message and data rates may apply.
-          </span>
-        </label>
 
         <button
           className="pos-start__btn"
@@ -684,9 +652,9 @@ function VerifyCodeForm({
           <PeLogoIcon />
         </div>
 
-        <h1 className="pos-start__title">Verify Your Phone</h1>
+        <h1 className="pos-start__title">Verify Your Email</h1>
         <p className="pos-start__subtitle">
-          We sent a 6-digit code to <strong>{session.phoneMasked}</strong>.
+          We sent a 6-digit code to <strong>{session.emailMasked}</strong>.
         </p>
 
         {countdown.expired ? (

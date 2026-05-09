@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Cache version — increment on any change to intent mappings, patterns, or LLM prompt.
 # This prefix is added to all cache keys so stale entries from previous deployments
 # are automatically bypassed without waiting for TTL expiration.
-INTENT_CACHE_VERSION = "v7"
+INTENT_CACHE_VERSION = "v8"
 
 
 # =============================================================================
@@ -76,6 +76,7 @@ class Intent(str, Enum):
     VIDEO = "video"                # Video meetings
     REPORTS = "reports"            # Reporting
     BILLING = "billing"            # Subscription/billing
+    TEAM = "team"                  # Team members, org info, role assignments
     COACHING = "coaching"          # Team performance coaching
     CUSTOMER = "customer"          # Customer intelligence
     INTEGRATIONS = "integrations"  # LOS/vendor integrations
@@ -94,6 +95,7 @@ HAIKU_INTENTS = {
     "greeting",          # Greetings - no data needed
     "simple",            # Simple lookups, yes/no, thanks
     "schedule",          # Calendar scheduling - tools do the work
+    "team",              # Team members, org info - database-driven
     "coaching",          # Team coaching - database-driven metrics
     "video",             # Video meeting management - tool-based
     "calls",             # Phone call management - tool-based routing
@@ -163,6 +165,7 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "video": ["uvip"],
     "reports": ["reporting_engine"],
     "billing": ["subscription_manager"],
+    "team": ["team_coach"],
     "coaching": ["team_coach", "training_specialist"],
     "customer": ["customer_intelligence", "borrower_concierge"],
     "integrations": ["integrations", "migration_assistant"],
@@ -422,6 +425,21 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"payment",
         r"invoice",
         r"plan|pricing|upgrade",
+    ],
+    "team": [
+        r"(who|what|list|show|tell).{0,20}(team|members?|staff|people|employees?)",
+        r"team (member|roster|list|structure|info|directory)",
+        r"(my|our|the) team\b",
+        r"who (is|are) on (my|our|the) team",
+        r"who works (here|with me|for us)",
+        r"(how many|number of) (people|team|members|staff|employees)",
+        r"org(anization)? (info|structure|details?|chart)",
+        r"(role|workflow) assign",
+        r"who is (the|our|my) (loan officer|processor|underwriter|closer|assistant|manager)",
+        r"who (handles?|does?|is responsible)",
+        r"(tell|show) me about .{0,20}(team|org|staff|company)",
+        r"crm (summary|overview|data)",
+        r"(state|overview|summary) of (the|our) (business|crm|data)",
     ],
     "coaching": [
         r"coach(ing)?",

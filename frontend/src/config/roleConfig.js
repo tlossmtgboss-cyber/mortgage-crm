@@ -342,8 +342,6 @@ export const ROLE_NAVIGATION = {
   // Admin - Platform developer with full access to everything across all orgs
   // Includes ALL features for full visibility and testing
   admin: [
-    'adminPanel',           // Admin Panel link - admin only
-    'enterpriseDocs',       // Enterprise Documentation Portal - admin only
     'dashboard',
     'leads',
     'activeLoans',
@@ -365,9 +363,7 @@ export const ROLE_NAVIGATION = {
     'profitability',
     'usageIntelligence',    // Owner-only: Usage costs & pricing
     'opsManager',           // Ops Manager: Pipeline health & impediments
-    'accounting',           // Accounting System
     'capacity',
-    'integrations',         // Integrations
     'productionPredictor',
     'dealAlerts'
   ],
@@ -375,8 +371,6 @@ export const ROLE_NAVIGATION = {
   // Site Administrator - Licensee who manages their organization's users
   // Has access to admin panel (org-scoped) + LO features, but NOT platform-level features
   site_admin: [
-    'adminPanel',           // Admin Panel link - manages their org users only
-    'enterpriseDocs',       // Enterprise Documentation Portal - admin access
     'dashboard',
     'leads',
     'activeLoans',
@@ -395,7 +389,6 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    'integrations',
     'opsManager'            // Ops Manager: Pipeline health & impediments
   ],
 
@@ -509,7 +502,6 @@ export const ROLE_NAVIGATION = {
     'goalTracker',      // Goal Tracker for production goals
     'aiUnderwriter',
     'market',
-    'accounting',       // Accounting System
   ],
 
   // Executive - Minimal high-level navigation
@@ -520,7 +512,6 @@ export const ROLE_NAVIGATION = {
     'reconciliation',
     'calendar',
     'briefing',         // Morning Briefing page
-    'accounting',       // Accounting System
   ]
 };
 
@@ -911,12 +902,6 @@ export const MASTER_ADMIN_NAVIGATION = [
     isStandalone: true
   },
   {
-    key: 'integrations',
-    label: 'Integrations',
-    path: '/settings/integrations',
-    isStandalone: true
-  },
-  {
     key: 'itTickets',
     label: 'IT Tickets',
     path: '/support',
@@ -959,24 +944,10 @@ export const MASTER_ADMIN_NAVIGATION = [
     key: 'management',
     label: 'Management',
     path: '/accounting',
-    matchPaths: ['/accounting', '/master-manager', '/usage-intelligence', '/integrations', '/voice', '/dialer', '/conversation-intelligence'],
+    matchPaths: ['/master-manager', '/usage-intelligence', '/voice', '/dialer', '/conversation-intelligence'],
     children: [
-      {
-        label: 'Accounting',
-        icon: 'fa-calculator',
-        children: [
-          { path: '/accounting', label: 'Dashboard' },
-          { path: '/accounting/accounts', label: 'Chart of Accounts' },
-          { path: '/accounting/journal-entries', label: 'Journal Entries' },
-          { path: '/accounting/ar/invoices', label: 'AR Invoices' },
-          { path: '/accounting/ap/bills', label: 'AP Bills' },
-          { path: '/accounting/banking/accounts', label: 'Banking' },
-          { path: '/accounting/reports/profit-loss', label: 'Reports' },
-        ]
-      },
       { path: '/master-manager', label: 'Capacity', icon: 'fa-chart-pie' },
       { path: '/usage-intelligence', label: 'Usage Intelligence', icon: 'fa-chart-bar' },
-      { path: '/integrations', label: 'Integrations', icon: 'fa-plug' },
       {
         label: 'Voice & Calls',
         icon: 'fa-phone-volume',

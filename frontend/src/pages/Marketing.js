@@ -33,6 +33,9 @@ const CarouselBuilder = lazy(() => import('./CarouselBuilder/CarouselBuilderPage
 // Content Marketing component
 const ContentMarketing = lazy(() => import('./ContentMarketing'));
 
+// POS settings
+const POSSettings = lazy(() => import('./marketing/POSSettings'));
+
 // Marketing settings components
 const LandingPagesSettings = lazy(() => import('./marketing/LandingPagesSettings'));
 const EmailMarketingSettings = lazy(() => import('./marketing/EmailMarketingSettings'));
@@ -91,6 +94,14 @@ const MARKETING_CATEGORIES = {
       { id: 'ai-blog', name: 'AI Blog', description: 'AI-generated blog content' },
       { id: 'carousel-builder', name: 'Carousel Builder', description: 'Create engaging social media carousels' },
       { id: 'content-marketing', name: 'Content Marketing', description: 'Brand voice, calendars, briefs, and SEO keywords' },
+    ]
+  },
+  'pos': {
+    id: 'pos',
+    name: 'POS',
+    icon: '📝',
+    tools: [
+      { id: 'pos-settings', name: 'Application Portal', description: 'Borrower application link, team, and calendar settings' },
     ]
   },
   'lead-generation': {
@@ -229,6 +240,10 @@ function Marketing() {
         return <CarouselBuilder embedded={true} />;
       case 'content-marketing':
         return <ContentMarketing embedded={true} />;
+
+      // POS
+      case 'pos-settings':
+        return <POSSettings />;
 
       // Lead Generation
       case 'acquisition':

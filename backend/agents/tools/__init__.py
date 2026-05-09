@@ -105,6 +105,9 @@ from . import sms_tools
 from . import document_tools
 from . import outreach_tools
 
+# Team & Organization Tools
+from . import team_org
+
 # Smart Docs Bridge Tools
 from . import smart_documents
 
@@ -134,6 +137,8 @@ AGENT_MODULES = {
     "task_automation": tasks,
     "sla_tracker": sla,
     "integrations": integrations,
+    # Team & Organization
+    "team_org": team_org,
     # Valuation & Refinance Agents
     "home_valuation": home_valuation,
     "refinance_advisor": refinance,
@@ -420,6 +425,14 @@ SMART_DOCUMENT_TOOLS = [
 ]
 
 # Analytics Tools
+TEAM_ORG_TOOLS = [
+    "get_team_members",
+    "get_user_profile",
+    "get_workflow_role_assignments",
+    "get_organization_info",
+    "get_crm_summary",
+]
+
 HISTORICAL_TOOLS = [
     "get_performance_by_period",
     "compare_periods",
@@ -463,6 +476,8 @@ ALL_TOOLS = {
     "outreach": OUTREACH_TOOLS,
     # Smart Documents Bridge
     "smart_documents": SMART_DOCUMENT_TOOLS,
+    # Team & Organization
+    "team_org": TEAM_ORG_TOOLS,
     # Analytics
     "historical": HISTORICAL_TOOLS,
 }
@@ -505,8 +520,8 @@ AGENT_CONFIGS = {
         "category": "crm",
     },
     "team_coach": {
-        "description": "Tracks LO performance, provides coaching, and identifies training needs",
-        "tools": COACHING_TOOLS,
+        "description": "Tracks LO performance, provides coaching, identifies training needs, and reports on team members and org structure",
+        "tools": COACHING_TOOLS + TEAM_ORG_TOOLS,
         "category": "crm",
     },
     "customer_intelligence": {
@@ -716,6 +731,9 @@ __all__ = [
     "home_valuation",
     "refinance",
 
+    # Team & Organization Module
+    "team_org",
+
     # Outreach Modules
     "outreach_tools",
 
@@ -767,6 +785,9 @@ __all__ = [
 
     # Smart Documents Bridge Tool Lists
     "SMART_DOCUMENT_TOOLS",
+
+    # Team & Organization Tool Lists
+    "TEAM_ORG_TOOLS",
 
     # Analytics Tool Lists
     "HISTORICAL_TOOLS",

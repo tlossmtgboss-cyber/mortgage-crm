@@ -3,20 +3,30 @@ import React from 'react';
 import type { ApplicationResponse } from '../types';
 import { AskAriaButton } from './AskAriaButton';
 
+export type PosNavKey =
+  | 'home'
+  | 'application'
+  | 'documents'
+  | 'tasks'
+  | 'messages'
+  | 'team'
+  | 'disclosures'
+  | 'calculators'
+  | 'timeline'
+  | 'help';
+
 export interface POSSidebarProps {
   application: ApplicationResponse | null;
   onAskAria: () => void;
   documentCount?: number;
   taskCount?: number;
   messageCount?: number;
-  onDocumentsClick?: () => void;
-  onTasksClick?: () => void;
-  onMessagesClick?: () => void;
-  onTeamClick?: () => void;
-  activeNav?: 'application' | 'documents' | 'tasks' | 'messages' | 'team';
+  onNavigate?: (key: PosNavKey) => void;
+  activeNav?: PosNavKey;
 }
 
-export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, taskCount = 0, messageCount = 0, onDocumentsClick, onTasksClick, onMessagesClick, onTeamClick, activeNav = 'application' }) => {
+export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, taskCount = 0, messageCount = 0, onNavigate, activeNav = 'home' }) => {
+  const nav = (key: PosNavKey) => () => onNavigate?.(key);
   const pct = application?.completion_pct ?? 0;
 
   return (
@@ -53,18 +63,18 @@ export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, 
         {/* Navigation */}
         <nav className="pos-nav">
           <span className="pos-nav__section-title">Your Loan</span>
-          <NavItem icon={<HomeIcon />} label="Home" />
-          <NavItem icon={<FormIcon />} label="Application" active={activeNav === 'application'} />
-          <NavItem icon={<UploadIcon />} label="Documents" badge={documentCount || undefined} onClick={onDocumentsClick} active={activeNav === 'documents'} />
-          <NavItem icon={<ChecklistIcon />} label="Tasks" badge={taskCount || undefined} onClick={onTasksClick} active={activeNav === 'tasks'} />
-          <NavItem icon={<ChatIcon />} label="Messages" badge={messageCount || undefined} dot={messageCount > 0} onClick={onMessagesClick} active={activeNav === 'messages'} />
-          <NavItem icon={<TeamIcon />} label="Your Team" onClick={onTeamClick} active={activeNav === 'team'} />
-          <NavItem icon={<BookIcon />} label="Disclosures" />
+          <NavItem icon={<HomeIcon />} label="Home" active={activeNav === 'home'} onClick={nav('home')} />
+          <NavItem icon={<FormIcon />} label="Application" active={activeNav === 'application'} onClick={nav('application')} />
+          <NavItem icon={<UploadIcon />} label="Documents" badge={documentCount || undefined} active={activeNav === 'documents'} onClick={nav('documents')} />
+          <NavItem icon={<ChecklistIcon />} label="Tasks" badge={taskCount || undefined} active={activeNav === 'tasks'} onClick={nav('tasks')} />
+          <NavItem icon={<ChatIcon />} label="Messages" badge={messageCount || undefined} dot={messageCount > 0} active={activeNav === 'messages'} onClick={nav('messages')} />
+          <NavItem icon={<TeamIcon />} label="Your Team" active={activeNav === 'team'} onClick={nav('team')} />
+          <NavItem icon={<BookIcon />} label="Disclosures" active={activeNav === 'disclosures'} onClick={nav('disclosures')} />
 
           <span className="pos-nav__section-title">Tools</span>
-          <NavItem icon={<CalcIcon />} label="Calculators" />
-          <NavItem icon={<TimelineIcon />} label="Loan timeline" />
-          <NavItem icon={<HelpIcon />} label="Help & support" />
+          <NavItem icon={<CalcIcon />} label="Calculators" active={activeNav === 'calculators'} onClick={nav('calculators')} />
+          <NavItem icon={<TimelineIcon />} label="Loan timeline" active={activeNav === 'timeline'} onClick={nav('timeline')} />
+          <NavItem icon={<HelpIcon />} label="Help & support" active={activeNav === 'help'} onClick={nav('help')} />
         </nav>
       </div>
     </aside>

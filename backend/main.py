@@ -3556,6 +3556,12 @@ for _pos_name, (_pos_mod, _pos_attr) in _pos_routers.items():
         logger.error(f"POS route '{_pos_name}' failed to load: {e}", exc_info=True)
 
 try:
+    from routes.pos_settings_routes import router as pos_settings_router
+    app.include_router(pos_settings_router, tags=["POS Settings"])
+except Exception as e:
+    logger.error(f"POS settings route failed to load: {e}", exc_info=True)
+
+try:
     from database.models.pos import POSBorrowerMessage
     POSBorrowerMessage.__table__.create(engine, checkfirst=True)
 except Exception as _tbl_err:
