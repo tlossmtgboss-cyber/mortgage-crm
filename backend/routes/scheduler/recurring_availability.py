@@ -67,6 +67,19 @@ from services.recurring_availability_service import RecurringAvailabilityService
 
 logger = logging.getLogger(__name__)
 
+try:
+    from database.models.recurring_availability import (
+        RecurringAvailability as _RA,
+        AvailabilityException as _AE,
+        AvailabilityTemplate as _AT,
+    )
+    from db import engine as _engine
+    _RA.__table__.create(_engine, checkfirst=True)
+    _AE.__table__.create(_engine, checkfirst=True)
+    _AT.__table__.create(_engine, checkfirst=True)
+except Exception as _e:
+    logger.warning(f"Could not create recurring availability tables: {_e}")
+
 router = APIRouter()
 
 
