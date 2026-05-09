@@ -28,14 +28,11 @@ from sqlalchemy.exc import SQLAlchemyError
 logger = logging.getLogger(__name__)
 
 def _get_current_user():
-    """Lazy import auth dependency for router-level protection."""
+    """Lazy import auth dependency."""
     from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
-router = APIRouter(
-    prefix="/api/v1/settings", tags=["Settings"],
-    dependencies=[Depends(_get_current_user())],
-)
+router = APIRouter(prefix="/api/v1/settings", tags=["Settings"])
 
 
 # Database Model
@@ -140,9 +137,13 @@ def serialize_conditions(conditions: List[str]) -> str:
 
 # Routes
 @router.get("/pre-approval-letter")
-async def get_pre_approval_letter_settings(db: Session = Depends(get_db)):
+async def get_pre_approval_letter_settings(
+    user=Depends(_get_current_user()),
+    db: Session = Depends(get_db),
+):
     """Get current pre-approval letter settings"""
-    settings = get_or_create_settings(db)
+    org_id = getattr(user, "organization_id", None) if user else None
+    settings = get_or_create_settings(db, organization_id=org_id)
 
     return {
         "id": settings.id,
@@ -166,10 +167,12 @@ async def get_pre_approval_letter_settings(db: Session = Depends(get_db)):
 @router.post("/pre-approval-letter")
 async def update_pre_approval_letter_settings(
     updates: PreApprovalLetterSettingsUpdate,
-    db: Session = Depends(get_db)
+    user=Depends(_get_current_user()),
+    db: Session = Depends(get_db),
 ):
     """Update pre-approval letter settings"""
-    settings = get_or_create_settings(db)
+    org_id = getattr(user, "organization_id", None) if user else None
+    settings = get_or_create_settings(db, organization_id=org_id)
 
     update_data = updates.dict(exclude_unset=True)
     _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
@@ -673,12 +676,14 @@ class TestEmailRequest(BaseModel):
 @router.post("/pre-approval-letter/send-test")
 async def send_test_pre_approval_letter(
     request: TestEmailRequest,
-    db: Session = Depends(get_db)
+    user=Depends(_get_current_user()),
+    db: Session = Depends(get_db),
 ):
     """Send a test pre-approval letter PDF attachment to the specified email"""
     from email_service import EmailService
 
-    settings = get_or_create_settings(db)
+    org_id = getattr(user, "organization_id", None) if user else None
+    settings = get_or_create_settings(db, organization_id=org_id)
 
     sample_data = {
         "borrower_names": request.borrower_names,
