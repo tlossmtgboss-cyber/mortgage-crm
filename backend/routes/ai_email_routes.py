@@ -857,3 +857,85 @@ async def list_email_templates(
         ))
 
     return templates
+
+
+# ============================================================================
+# AI Text Generation — lightweight endpoint for generating field content
+# ============================================================================
+
+class AIGenerateTextRequest(BaseModel):
+    field_type: str = Field(..., description="Type of field (e.g., 'appointment_description', 'lead_notes')")
+    context: Dict = Field(default_factory=dict, description="Contextual data for generation")
+    current_value: Optional[str] = Field(None, description="Current value to improve/replace")
+
+
+class AIGenerateTextResponse(BaseModel):
+    text: str
+    field_type: str
+
+
+FIELD_PROMPTS = {
+    "appointment_description": (
+        "Write a brief, professional description for a mortgage appointment type. "
+        "It should be 1-2 sentences that clearly explain what the meeting covers and "
+        "who it's for. Use a warm, approachable tone suitable for borrowers."
+    ),
+    "lead_notes": (
+        "Write a concise internal note for a mortgage lead based on the provided context. "
+        "Keep it factual and useful for the loan officer."
+    ),
+    "task_description": (
+        "Write a clear, actionable task description for a mortgage workflow step. "
+        "Be specific about what needs to be done."
+    ),
+    "marketing_description": (
+        "Write a compelling marketing description for the given context. "
+        "Keep it professional, concise, and focused on value to the reader."
+    ),
+}
+
+
+@router.post("/ai-generate-text", response_model=AIGenerateTextResponse)
+async def ai_generate_text(
+    request: AIGenerateTextRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Generate text content for a CRM field using AI."""
+    field_prompt = FIELD_PROMPTS.get(request.field_type, FIELD_PROMPTS.get("marketing_description"))
+
+    context_parts = []
+    for key, val in request.context.items():
+        if val:
+            context_parts.append(f"{key}: {val}")
+    context_str = "\n".join(context_parts) if context_parts else "No additional context provided."
+
+    user_prompt = f"Context:\n{context_str}"
+    if request.current_value:
+        user_prompt += f"\n\nCurrent text (improve or replace):\n{request.current_value}"
+
+    try:
+        import anthropic
+
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="AI service not configured")
+
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=256,
+            system=f"{field_prompt}\nRespond with ONLY the generated text, no quotes or formatting.",
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+
+        generated = response.content[0].text.strip()
+        generated = generated.strip('"\'')
+
+        return AIGenerateTextResponse(text=generated, field_type=request.field_type)
+
+    except ImportError:
+        raise HTTPException(status_code=500, detail="AI service not installed")
+    except Exception as e:
+        logger.exception("AI text generation failed: %s", e)
+        raise HTTPException(status_code=500, detail="AI text generation failed")

@@ -4,8 +4,9 @@
  * Handles listing, creating, editing, reordering, and deleting appointment types.
  */
 import React, { useState } from 'react';
-import { calendarSettingsAPI } from '../../services/api';
-import { toast } from '../../utils/toast';
+import { calendarSettingsAPI } from '../../services/api.js';
+import { toast } from '../../utils/toast.js';
+import AIGenerateButton from '../../components/common/AIGenerateButton.js';
 
 const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
 
@@ -43,7 +44,15 @@ function EditTypeForm({ type, onSave, onCancel }) {
           </select>
         </div>
         <div className="form-field full-width">
-          <label>Description</label>
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            Description
+            <AIGenerateButton
+              fieldType="appointment_description"
+              context={{ name: form.type_name, duration: `${form.duration_minutes} minutes` }}
+              currentValue={form.description}
+              onGenerated={(text) => setForm(prev => ({ ...prev, description: text }))}
+            />
+          </label>
           <textarea
             value={form.description}
             onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
@@ -192,7 +201,15 @@ export default function AppointmentTypesSection({
               </select>
             </div>
             <div className="form-field full-width">
-              <label>Description</label>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                Description
+                <AIGenerateButton
+                  fieldType="appointment_description"
+                  context={{ name: newType.type_name, duration: `${newType.duration_minutes} minutes` }}
+                  currentValue={newType.description}
+                  onGenerated={(text) => setNewType(prev => ({ ...prev, description: text }))}
+                />
+              </label>
               <textarea
                 value={newType.description || ''}
                 onChange={(e) => setNewType(prev => ({ ...prev, description: e.target.value }))}

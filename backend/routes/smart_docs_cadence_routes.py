@@ -19,6 +19,18 @@ from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
+# Explicit table creation for production (Base.metadata.create_all is skipped)
+try:
+    from database.models.followup_cadence import (
+        FollowupCadence as _FC,
+        FollowupExecution as _FE,
+    )
+    from db import engine as _engine
+    _FC.__table__.create(_engine, checkfirst=True)
+    _FE.__table__.create(_engine, checkfirst=True)
+except Exception as _e:
+    logger.warning("Could not create followup cadence tables: %s", _e)
+
 router = APIRouter(prefix="/cadence", tags=["smart-docs-cadence"])
 
 

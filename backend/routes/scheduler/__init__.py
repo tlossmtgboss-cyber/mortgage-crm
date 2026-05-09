@@ -148,6 +148,99 @@ from .error_responses import (  # noqa: F401 — re-export for other modules
 )
 
 # ============================================================================
+# EXPLICIT TABLE CREATION FOR PRODUCTION
+# ============================================================================
+# Production skips Base.metadata.create_all(), so every scheduler table that
+# doesn't have its own explicit creation must be created here with
+# checkfirst=True.  Tables already handled elsewhere:
+#   - recurring_availability / availability_exceptions / availability_templates
+#     → created in recurring_availability.py (lines 70-81)
+#
+# The try/except mirrors the pattern established in recurring_availability.py.
+# ============================================================================
+
+import logging as _logging
+
+_init_logger = _logging.getLogger(__name__)
+
+try:
+    from db import engine as _engine
+
+    # --- Core scheduler tables (database/models/scheduler.py) ---
+    from database.models.scheduler import (
+        SchedulerConfig as _SchedulerConfig,
+        AvailabilitySlot as _AvailabilitySlot,
+        SchedulerAppointmentType as _SchedulerAppointmentType,
+        Appointment as _Appointment,
+        SchedulerRoutingRule as _SchedulerRoutingRule,
+        BlockedTime as _BlockedTime,
+        BookingLink as _BookingLink,
+        AppointmentReminder as _AppointmentReminder,
+        AppointmentStatusHistory as _AppointmentStatusHistory,
+        SchedulerAuditLog as _SchedulerAuditLog,
+        SlotHold as _SlotHold,
+    )
+    _SchedulerConfig.__table__.create(_engine, checkfirst=True)
+    _AvailabilitySlot.__table__.create(_engine, checkfirst=True)
+    _SchedulerAppointmentType.__table__.create(_engine, checkfirst=True)
+    _Appointment.__table__.create(_engine, checkfirst=True)
+    _SchedulerRoutingRule.__table__.create(_engine, checkfirst=True)
+    _BlockedTime.__table__.create(_engine, checkfirst=True)
+    _BookingLink.__table__.create(_engine, checkfirst=True)
+    _AppointmentReminder.__table__.create(_engine, checkfirst=True)
+    _AppointmentStatusHistory.__table__.create(_engine, checkfirst=True)
+    _SchedulerAuditLog.__table__.create(_engine, checkfirst=True)
+    _SlotHold.__table__.create(_engine, checkfirst=True)
+
+    # --- Cancellation policy (database/models/cancellation_policy.py) ---
+    from database.models.cancellation_policy import CancellationPolicy as _CancellationPolicy
+    _CancellationPolicy.__table__.create(_engine, checkfirst=True)
+
+    # --- Reminder templates & logs (database/models/reminder_config.py) ---
+    from database.models.reminder_config import (
+        ReminderTemplate as _ReminderTemplate,
+        ReminderLog as _ReminderLog,
+    )
+    _ReminderTemplate.__table__.create(_engine, checkfirst=True)
+    _ReminderLog.__table__.create(_engine, checkfirst=True)
+
+    # --- Calendar feed tokens (database/models/calendar_feed.py) ---
+    from database.models.calendar_feed import CalendarFeedToken as _CalendarFeedToken
+    _CalendarFeedToken.__table__.create(_engine, checkfirst=True)
+
+    # --- Appointment locations (database/models/appointment_location.py) ---
+    from database.models.appointment_location import AppointmentLocation as _AppointmentLocation
+    _AppointmentLocation.__table__.create(_engine, checkfirst=True)
+
+    # --- Appointment templates (database/models/appointment_template.py) ---
+    from database.models.appointment_template import AppointmentTemplate as _AppointmentTemplate
+    _AppointmentTemplate.__table__.create(_engine, checkfirst=True)
+
+    # --- Appointment surveys (database/models/appointment_survey.py) ---
+    from database.models.appointment_survey import AppointmentSurvey as _AppointmentSurvey
+    _AppointmentSurvey.__table__.create(_engine, checkfirst=True)
+
+    # --- Waitlist entries (database/models/waiting_room.py) ---
+    from database.models.waiting_room import WaitlistEntry as _WaitlistEntry
+    _WaitlistEntry.__table__.create(_engine, checkfirst=True)
+
+    # --- Calendar labels & appointment-label junction (database/models/calendar_label.py) ---
+    from database.models.calendar_label import (
+        CalendarLabel as _CalendarLabel,
+        AppointmentLabel as _AppointmentLabel,
+    )
+    _CalendarLabel.__table__.create(_engine, checkfirst=True)
+    _AppointmentLabel.__table__.create(_engine, checkfirst=True)
+
+    # --- Calendar event maps (database/models/calendar_event_map.py) ---
+    from database.models.calendar_event_map import CalendarEventMap as _CalendarEventMap
+    _CalendarEventMap.__table__.create(_engine, checkfirst=True)
+
+except Exception as _e:
+    _init_logger.warning("Could not create scheduler tables at import time: %s", _e)
+
+
+# ============================================================================
 # API VERSION INTROSPECTION ENDPOINT
 # ============================================================================
 

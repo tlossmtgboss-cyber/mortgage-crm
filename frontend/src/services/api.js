@@ -1,10 +1,10 @@
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
-import { ensureArray } from '../utils/arrayHelpers';
-import { getCSRFTokenFromCookie } from '../utils/security';
-import { pinnedAdapter } from '../utils/pinnedFetch';
-import { getItem, setItem, removeItem, STORAGE_KEYS, clearAllAuthTokens } from '../utils/storage';
-import { getToken, getRefreshToken, setTokens, clearTokens } from '../utils/tokenStore';
+import { ensureArray } from '../utils/arrayHelpers.js';
+import { getCSRFTokenFromCookie } from '../utils/security.js';
+import { pinnedAdapter } from '../utils/pinnedFetch.js';
+import { getItem, setItem, removeItem, STORAGE_KEYS, clearAllAuthTokens } from '../utils/storage.js';
+import { getToken, getRefreshToken, setTokens, clearTokens } from '../utils/tokenStore.js';
 
 // Detect native mobile app FIRST — Capacitor serves from localhost,
 // so we must check isNativePlatform() before the hostname check.
@@ -455,7 +455,7 @@ api.interceptors.response.use(
 );
 
 // Certificate pinning interceptors (native only — no-op on web)
-import certificatePinning from './certificatePinning';
+import certificatePinning from './certificatePinning.js';
 const pinRequestInterceptor = certificatePinning.createAxiosInterceptor();
 api.interceptors.request.use(pinRequestInterceptor);
 const pinResponseInterceptor = certificatePinning.createAxiosResponseInterceptor();
@@ -465,7 +465,7 @@ api.interceptors.response.use(pinResponseInterceptor.onFulfilled, pinResponseInt
 // Per-request timeout — callers can pass { timeout: 60000 } in the axios
 // config to override the default 30s.  This helper makes it explicit:
 //
-//   import { apiRequest } from './api';
+//   import { apiRequest } from './api.js';
 //   const data = await apiRequest('/api/v1/slow-endpoint', { timeout: 120000 });
 //
 // It also wraps the response in a consistent shape and catches structured errors.
@@ -1596,10 +1596,14 @@ export const calendarSettingsAPI = {
     const response = await api.post('/api/v1/calendar-settings/team/invite', data);
     return response.data;
   },
-  // Labels — delegate to scheduler labels routes (the real backend)
   getLabels: async () => {
-    const response = await api.get('/api/v1/scheduler/labels');
-    return response.data;
+    try {
+      const response = await api.get('/api/v1/scheduler/settings/all');
+      const labels = response.data?.data?.labels || [];
+      return { data: { labels, auto_assign_enabled: false, label_mappings: [], default_label_id: null } };
+    } catch {
+      return { data: { labels: [] } };
+    }
   },
   createLabel: async (data) => {
     const response = await api.post('/api/v1/scheduler/labels', data);

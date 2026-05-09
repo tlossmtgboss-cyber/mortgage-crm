@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getToken } from '../../utils/tokenStore';
+import { getToken } from '../../utils/tokenStore.js';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -465,7 +465,7 @@ function LocationManager() {
     try {
       setLoading(true);
       const data = await apiFetch(
-        `/api/scheduling/locations?include_inactive=${showInactive}`
+        `/api/v1/scheduler/locations?include_inactive=${showInactive}`
       );
       setLocations(data.locations || []);
       setError(null);
@@ -484,12 +484,12 @@ function LocationManager() {
     setSaving(true);
     try {
       if (locationId) {
-        await apiFetch(`/api/scheduling/locations/${locationId}`, {
+        await apiFetch(`/api/v1/scheduler/locations/${locationId}`, {
           method: 'PUT',
           body: JSON.stringify(formData),
         });
       } else {
-        await apiFetch('/api/scheduling/locations', {
+        await apiFetch('/api/v1/scheduler/locations', {
           method: 'POST',
           body: JSON.stringify(formData),
         });
@@ -516,7 +516,7 @@ function LocationManager() {
 
   const handleSetDefault = useCallback(async (locationId) => {
     try {
-      await apiFetch(`/api/scheduling/locations/${locationId}/default`, {
+      await apiFetch(`/api/v1/scheduler/locations/${locationId}/default`, {
         method: 'PUT',
       });
       await loadLocations();
@@ -529,12 +529,12 @@ function LocationManager() {
     try {
       if (location.is_active) {
         // Deactivate
-        await apiFetch(`/api/scheduling/locations/${location.id}`, {
+        await apiFetch(`/api/v1/scheduler/locations/${location.id}`, {
           method: 'DELETE',
         });
       } else {
         // Reactivate
-        await apiFetch(`/api/scheduling/locations/${location.id}`, {
+        await apiFetch(`/api/v1/scheduler/locations/${location.id}`, {
           method: 'PUT',
           body: JSON.stringify({ is_active: true }),
         });

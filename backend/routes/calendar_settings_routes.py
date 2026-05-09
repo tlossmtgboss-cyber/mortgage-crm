@@ -1020,6 +1020,9 @@ async def get_team_settings(
                 u.first_name,
                 u.last_name,
                 u.email,
+                u.role,
+                u.title,
+                u.phone,
                 u.is_active,
                 sc.max_meetings_per_day,
                 sc.is_active as scheduler_active,
@@ -1033,7 +1036,7 @@ async def get_team_settings(
             LEFT JOIN scheduler_configs sc ON sc.user_id = u.id AND sc.organization_id = :org_id
             WHERE u.organization_id = :org_id
               AND u.is_active = true
-              AND u.role IN ('lo', 'loan_officer', 'admin', 'manager', 'site_admin')
+              AND u.email != 'admin@perenniaai.com'
             ORDER BY u.first_name, u.last_name
         """), {"org_id": org_id}).fetchall()
 
@@ -1043,6 +1046,9 @@ async def get_team_settings(
                 "user_id": m.id,
                 "name": f"{m.first_name or ''} {m.last_name or ''}".strip(),
                 "email": m.email,
+                "role": m.role or "employee",
+                "title": m.title or "",
+                "phone": m.phone or "",
                 "is_active": m.is_active,
                 "max_daily_appointments": m.max_meetings_per_day or 8,
                 "is_accepting_appointments": m.scheduler_active if m.scheduler_active is not None else True,

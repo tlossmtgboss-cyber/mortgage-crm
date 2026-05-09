@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getToken } from '../../utils/tokenStore';
+import { getToken } from '../../utils/tokenStore.js';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -57,7 +57,7 @@ function LocationPicker({ value, onChange, meetingMode, style }) {
     let cancelled = false;
     async function load() {
       try {
-        const data = await apiFetch('/api/scheduling/locations');
+        const data = await apiFetch('/api/v1/scheduler/locations');
         if (!cancelled) {
           setLocations(data.locations || []);
         }
@@ -121,7 +121,7 @@ function LocationPicker({ value, onChange, meetingMode, style }) {
 
     setQuickAddSaving(true);
     try {
-      const data = await apiFetch('/api/scheduling/locations', {
+      const data = await apiFetch('/api/v1/scheduler/locations', {
         method: 'POST',
         body: JSON.stringify({
           name: quickAddName.trim(),
