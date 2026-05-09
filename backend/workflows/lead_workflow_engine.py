@@ -523,7 +523,21 @@ class LeadWorkflowEngine:
                 }
             })
 
-        # 3. Create underwriting submission task
+        # 3. Send team contact card via MMS
+        if sc.lead_phone:
+            actions.append({
+                "action_type": "team_contact_card",
+                "target": "lead",
+                "template": "team_vcard",
+                "data": {
+                    "to": sc.lead_phone,
+                    "lead_id": sc.lead_id,
+                    "loan_officer_name": sc.loan_officer_name,
+                },
+                "priority": "normal"
+            })
+
+        # 4. Create underwriting submission task
         actions.append({
             "action_type": "task",
             "target": "loan_officer",

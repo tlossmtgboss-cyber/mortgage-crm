@@ -38,9 +38,6 @@ interface DocItem {
 }
 
 export interface DocumentsPageProps {
-  loName: string;
-  loNmls?: string;
-  loInitials: string;
   loanId?: number | null;
   detectedDocs: DetectedDocument[];
   onAskAria?: () => void;
@@ -60,8 +57,6 @@ const FILTERS: { key: FilterKey; label: string; pulse?: boolean }[] = [
 // ---------- component ----------
 
 export const DocumentsPage: React.FC<DocumentsPageProps> = ({
-  loName,
-  loInitials,
   loanId,
   detectedDocs,
   onAskAria,
@@ -211,7 +206,7 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
           </div>
           <h1 className="docs-page__title">Documents</h1>
           <p className="docs-page__subtitle">
-            Everything {loName} and the underwriter need from you, all in one place.
+            Everything your lending team and the underwriter need from you, all in one place.
             Drop a document and we'll handle the rest.
           </p>
         </div>
@@ -221,14 +216,14 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
       {/* Stats */}
       <div className="docs-stats">
         <StatCard label="Action Required" value={counts.action || 0} sub={`${counts.action || 0} items need attention`} variant="action" />
-        <StatCard label="In Review" value={counts.review || 0} sub={`Awaiting ${loName}`} variant="review" />
+        <StatCard label="In Review" value={counts.review || 0} sub="Awaiting your team" variant="review" />
         <StatCard label="Approved" value={counts.approved || 0} sub="Cleared by underwriting" variant="approved" />
         <StatCard label="Reference Library" value={counts.reference || 0} sub="Always available to download" />
       </div>
 
       {/* Aria banner */}
       <div className="docs-banner">
-        <span className="docs-banner__seal">{loInitials.charAt(0) || 'A'}</span>
+        <span className="docs-banner__seal">A</span>
         <div className="docs-banner__content">
           <div className="docs-banner__title">Aria reads your documents the moment they upload</div>
           <p className="docs-banner__desc">

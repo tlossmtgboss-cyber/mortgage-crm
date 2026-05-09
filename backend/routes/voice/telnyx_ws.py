@@ -335,8 +335,12 @@ async def save_call_summary(call_context: dict, db: Session):
 
             if not lead:
                 # Create new lead — include organization_id for tenant isolation
+                raw_name = call_context['lead_data'].get('name', 'Phone Inquiry')
+                name_parts = raw_name.strip().split(None, 1) if raw_name else []
                 lead = Lead(
-                    name=call_context['lead_data'].get('name', 'Phone Inquiry'),
+                    name=raw_name,
+                    first_name=name_parts[0] if name_parts else None,
+                    last_name=name_parts[1] if len(name_parts) > 1 else None,
                     phone=phone,
                     source="Phone Call",
                     stage="NEW",

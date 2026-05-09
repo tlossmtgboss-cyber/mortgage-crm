@@ -1,9 +1,9 @@
 """Borrower-facing message routes for the POS portal.
 
-Messages are sent from the lending team (LO, processor, UW) and displayed
-in the borrower's portal inbox. Borrowers can read messages and mark them
-read, but cannot compose new messages from this endpoint (replies go through
-the CRM-side team chat).
+Two-way internal chat between the lending team and the borrower. Team
+members send messages from the CRM side; borrowers compose messages from
+the POS portal. All messages for an application are returned in a single
+timeline.
 
 Auth: PURL token — borrower must own the application.
 """
@@ -14,13 +14,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from database import get_db
 from database.models.pos import POSApplication, POSBorrowerMessage
-from middleware.purl_auth import check_purl_rate_limit
+from middleware.purl_auth import PURLAuthContext, check_purl_rate_limit, require_purl_write_scope
+from models.purl import PURLContact
 
 from ._helpers import (
     resolve_application_for_borrower,
@@ -47,6 +48,7 @@ class BorrowerMessageResponse(BaseModel):
     sender_role: str
     content: str
     is_read: bool
+    is_from_borrower: bool = False
     created_at: datetime
     read_at: Optional[datetime] = None
 
@@ -65,6 +67,10 @@ class BorrowerMessageListResponse(BaseModel):
     counts: BorrowerMessageCounts
 
 
+class SendMessageRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -77,6 +83,7 @@ def _msg_to_response(msg: POSBorrowerMessage) -> BorrowerMessageResponse:
         sender_role=msg.sender_role or "Loan Officer",
         content=msg.content,
         is_read=msg.read_at is not None,
+        is_from_borrower=(msg.sender_role == "Borrower"),
         created_at=msg.created_at,
         read_at=msg.read_at,
     )
@@ -178,3 +185,38 @@ def mark_all_read(
         messages=[_msg_to_response(m) for m in messages],
         counts=BorrowerMessageCounts(total=len(messages), unread=0),
     )
+
+
+@router.post(
+    "/{application_id}/messages",
+    response_model=BorrowerMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Send a message from the borrower to the lending team",
+)
+def send_message(
+    body: SendMessageRequest,
+    application: POSApplication = Depends(resolve_application_for_borrower_write),
+    purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
+    db: Session = Depends(get_db),
+) -> BorrowerMessageResponse:
+    borrower_name = "Borrower"
+    if purl_ctx.contact_id:
+        contact = db.query(PURLContact).filter(PURLContact.id == purl_ctx.contact_id).first()
+        if contact:
+            parts = [contact.first_name or "", contact.last_name or ""]
+            borrower_name = " ".join(p for p in parts if p).strip() or "Borrower"
+
+    msg = POSBorrowerMessage(
+        application_id=application.id,
+        organization_id=application.organization_id,
+        sender_user_id=None,
+        sender_name=borrower_name,
+        sender_role="Borrower",
+        content=body.content.strip(),
+        read_at=None,
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+
+    return _msg_to_response(msg)

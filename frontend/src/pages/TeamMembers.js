@@ -163,19 +163,10 @@ function TeamMembers() {
     }
   };
 
-  // Add a role to a member (multi-role: doesn't remove existing roles)
+  // Add a role to a member (multi-role: multiple users can hold the same role)
   const handleAddRole = async (memberId, roleId) => {
     if (!roleId) return;
     roleId = parseInt(roleId);
-
-    // Check if this role is already assigned to someone else
-    const existingRole = workflowRoles.find(r => r.role_id === roleId);
-    if (existingRole && existingRole.user_id && existingRole.user_id !== memberId) {
-      const confirmMessage = `"${existingRole.role_name}" is currently assigned to ${existingRole.user_name}.\n\nDo you want to reassign this role?`;
-      if (!window.confirm(confirmMessage)) {
-        return;
-      }
-    }
 
     setSavingWorkflowRole(prev => ({ ...prev, [memberId]: true }));
 
@@ -208,7 +199,7 @@ function TeamMembers() {
     setSavingWorkflowRole(prev => ({ ...prev, [memberId]: true }));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}?user_id=${memberId}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -405,10 +396,16 @@ function TeamMembers() {
     }).filter(Boolean);
   };
 
-  // Get roles NOT yet assigned to this member (for "Add Role" dropdown)
+  // Get roles NOT yet assigned to this member (for "Add Role" dropdown), deduplicated
   const getAvailableRolesForMember = (memberId) => {
     const assignedIds = roleAssignments[memberId] || [];
-    return workflowRoles.filter(r => !assignedIds.includes(r.role_id));
+    const seen = new Set();
+    return workflowRoles.filter(r => {
+      if (assignedIds.includes(r.role_id)) return false;
+      if (seen.has(r.role_id)) return false;
+      seen.add(r.role_id);
+      return true;
+    });
   };
 
   if (loading) {
@@ -625,16 +622,11 @@ function TeamMembers() {
                             }}
                           >
                             <option value="">Select role...</option>
-                            {availableRoles.map(role => {
-                              const isAssignedToOther = role.user_id && role.user_id !== member.id;
-                              const assignedToName = isAssignedToOther ? role.user_name : null;
-                              return (
-                                <option key={role.role_id} value={role.role_id}>
-                                  {role.role_name}
-                                  {assignedToName ? ` (${assignedToName})` : ''}
-                                </option>
-                              );
-                            })}
+                            {availableRoles.map(role => (
+                              <option key={role.role_id} value={role.role_id}>
+                                {role.role_name}
+                              </option>
+                            ))}
                           </select>
                         ) : (
                           availableRoles.length > 0 && (
@@ -874,7 +866,6 @@ function TeamMembers() {
                           {getAvailableRolesForMember(editingMember.id).map(role => (
                             <option key={role.role_id} value={role.role_id}>
                               {role.role_name}
-                              {role.user_id && role.user_id !== editingMember.id ? ` (${role.user_name})` : ''}
                             </option>
                           ))}
                         </select>
@@ -892,12 +883,13 @@ function TeamMembers() {
                         }}
                       >
                         <option value="">-- Select Role --</option>
-                        {workflowRoles.map(role => (
-                          <option key={role.role_id} value={role.role_id}>
-                            {role.role_name}
-                            {role.user_id ? ` (${role.user_name})` : ''}
-                          </option>
-                        ))}
+                        {workflowRoles
+                          .filter((role, idx, arr) => arr.findIndex(r => r.role_id === role.role_id) === idx)
+                          .map(role => (
+                            <option key={role.role_id} value={role.role_id}>
+                              {role.role_name}
+                            </option>
+                          ))}
                       </select>
                     )}
                   </div>

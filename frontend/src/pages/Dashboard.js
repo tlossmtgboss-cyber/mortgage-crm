@@ -75,6 +75,7 @@ function Dashboard() {
   const teamStats = dashboardData?.team_stats || {};
   const messages = dashboardData?.messages || [];
   const efficiency = dashboardData?.efficiency || {};
+  const mumSummary = dashboardData?.mum_summary || {};
 
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -962,6 +963,63 @@ function Dashboard() {
               </div>
             </div>
           </div>
+        </div>
+      );
+    }
+
+    if (containerId === 'mum') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block mum-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
+          <div className="block-header clickable-block" onClick={() => navigate('/portfolio')}>
+            <h2>Mortgages Under Management</h2>
+          </div>
+          <div className="mum-metrics-grid">
+            <div className="mum-metric" onClick={() => navigate('/portfolio')}>
+              <div className="metric-label">Loans Managed</div>
+              <div className="metric-value">{mumSummary.loan_count || 0}</div>
+            </div>
+            <div className="mum-metric" onClick={() => navigate('/portfolio')}>
+              <div className="metric-label">Total Volume</div>
+              <div className="metric-value">
+                {mumSummary.total_volume > 0
+                  ? `$${(mumSummary.total_volume / 1000000).toFixed(1)}M`
+                  : 'No data yet'}
+              </div>
+            </div>
+            <div className="mum-metric" onClick={() => navigate('/portfolio')}>
+              <div className="metric-label">Annual Commission</div>
+              <div className="metric-value">
+                {mumSummary.annual_commission > 0
+                  ? `$${mumSummary.annual_commission.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                  : 'No data yet'}
+              </div>
+            </div>
+            <div className="mum-metric" onClick={() => navigate('/portfolio')}>
+              <div className="metric-label">Annual Return</div>
+              <div className="metric-value">
+                {mumSummary.annual_return_pct > 0
+                  ? `${mumSummary.annual_return_pct}%`
+                  : 'No data yet'}
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn-view-portfolio"
+            onClick={() => navigate('/portfolio')}
+          >
+            View Full Portfolio →
+          </button>
         </div>
       );
     }

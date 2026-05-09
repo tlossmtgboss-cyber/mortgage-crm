@@ -266,13 +266,13 @@ def _build_confirmation_number(app: POSApplication) -> str:
 
 def _next_steps_for_borrower(app: POSApplication) -> list[str]:
     return [
-        "Sarah will email you a copy of your application within the hour",
+        "Your loan officer will email you a copy of your application within the hour",
         "You'll receive your Loan Estimate within 3 business days",
         "We'll begin verifying your assets and pulling your credit report",
         (
             f"Your review meeting is confirmed — see calendar invite "
             f"(appointment #{app.submitted_appointment_id})"
             if app.submitted_appointment_id
-            else "Schedule your application review with Sarah from the Documents tab"
+            else "Schedule your application review from the Team tab"
         ),
     ]

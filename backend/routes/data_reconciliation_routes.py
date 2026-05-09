@@ -1214,8 +1214,11 @@ async def approve_reconciliation(
                 stage_upper = stage_str.upper()
                 if stage_upper in lead_stage_map:
                     lead_stage_enum = lead_stage_map[stage_upper]
+                    bname_parts = borrower_name.strip().split(None, 1) if borrower_name else []
                     new_lead = Lead(
                         name=borrower_name,
+                        first_name=bname_parts[0] if bname_parts else None,
+                        last_name=bname_parts[1] if len(bname_parts) > 1 else None,
                         email=borrower_email,
                         phone=borrower_phone,
                         source="reconciliation",
@@ -2013,8 +2016,11 @@ async def create_lead_from_extracted(
         if not phone and "phone" in fields:
             phone = fields["phone"].get("value")
 
+        fn_parts = full_name.strip().split(None, 1) if full_name else []
         new_lead = Lead(
             name=full_name,
+            first_name=fn_parts[0] if fn_parts else None,
+            last_name=fn_parts[1] if len(fn_parts) > 1 else None,
             email=email,
             phone=phone,
             stage=LeadStage.NEW,

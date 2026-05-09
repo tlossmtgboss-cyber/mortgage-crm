@@ -32,6 +32,7 @@ class NotificationType(str, Enum):
     COMPLIANCE_ALERT = "compliance_alert"
     TASK_ASSIGNED = "task_assigned"
     ESIGN_COMPLETED = "esign_completed"
+    SMS_ESCALATION = "sms_escalation"
     GENERAL = "general"
 
 
@@ -72,6 +73,10 @@ NOTIFICATION_TEMPLATES = {
         "title": "eSign Complete",
         "body": "{borrower_name} signed {document_name}",
     },
+    "sms_escalation": {
+        "title": "Aria needs your help",
+        "body": "{contact_name}: {reason}",
+    },
     "general": {
         "title": "{title}",
         "body": "{body}",
@@ -89,6 +94,7 @@ DEFAULT_CATEGORIES = {
     "compliance_alert": True,
     "task_assigned": True,
     "esign_completed": True,
+    "sms_escalation": True,
     "general": True,
 }
 

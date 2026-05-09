@@ -1219,6 +1219,61 @@
   background: #1a7070;
 }
 
+.mum-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.mum-metric {
+  text-align: center;
+  padding: 16px 12px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mum-metric:hover {
+  background: #eef1f5;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.mum-metric .metric-label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mum-metric .metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #218D8D;
+}
+
+.btn-view-portfolio {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 8px;
+}
+
+.btn-view-portfolio:hover {
+  background: #1a7070;
+}
+
 /* BLOCK 9: Team Operations */
 .team-block {
   grid-column: 1 / 7;
@@ -2934,4 +2989,16 @@
 /* Efficiency score badge */
 [data-theme="dark"] .efficiency-score-display .score-change {
   background: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .mum-metric {
+  background: var(--color-bg-hover);
+}
+
+[data-theme="dark"] .mum-metric .metric-value {
+  color: #2dd4bf;
+}
+
+[data-theme="dark"] .btn-view-portfolio {
+  background: var(--brand-primary);
 }

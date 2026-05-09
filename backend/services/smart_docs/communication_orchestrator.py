@@ -302,6 +302,57 @@ def generate_vcard(
     return "\r\n".join(lines)
 
 
+def generate_team_vcard(
+    team_members: list[dict],
+    company_name: str,
+    card_label: str | None = None,
+) -> str:
+    """Generate a single combined VCF with all team members as labeled entries.
+
+    Each team member dict should have:
+        - name (str): Full name
+        - role (str): Job title / role label (e.g. "Loan Officer")
+        - phone (str | None): E.164 phone number
+        - email (str | None): Email address
+
+    The resulting vCard has one FN (the card_label or company + "Your Team"),
+    the company ORG, and multiple TEL/EMAIL fields labeled by role so the
+    borrower saves a single contact and sees who to call for what.
+    """
+    if not team_members:
+        return ""
+
+    label = card_label or f"{company_name} - Your Team"
+
+    lines = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        f"FN:{label}",
+        f"ORG:{company_name}",
+    ]
+
+    for member in team_members:
+        role = member.get("role", "Team Member")
+        name = member.get("name", "")
+        phone = (member.get("phone") or "").strip()
+        email = (member.get("email") or "").strip()
+
+        if phone:
+            if not phone.startswith("+"):
+                phone = f"+1{phone.lstrip('+')}"
+            lines.append(f"TEL;TYPE=WORK;X-ABLabel={role} ({name}):{phone}")
+
+        if email:
+            lines.append(f"EMAIL;TYPE=WORK;X-ABLabel={role} ({name}):{email}")
+
+    lines.extend([
+        f"REV:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+        "END:VCARD",
+    ])
+
+    return "\r\n".join(lines)
+
+
 # =============================================================================
 # COMMUNICATION LOGGER (mixin)
 # =============================================================================

@@ -292,6 +292,7 @@ export interface BorrowerMessage {
   sender_role: string;
   content: string;
   is_read: boolean;
+  is_from_borrower: boolean;
   created_at: string;
   read_at: string | null;
 }
@@ -303,4 +304,22 @@ export interface BorrowerMessagesResponse {
     total: number;
     unread: number;
   };
+}
+
+// ---------- Team ----------
+
+export interface TeamMember {
+  user_id: number;
+  name: string;
+  role: string;
+  email: string | null;
+  phone: string | null;
+  title: string | null;
+  avatar_url: string | null;
+  nmls: string | null;
+}
+
+export interface TeamResponse {
+  application_id: string;
+  members: TeamMember[];
 }

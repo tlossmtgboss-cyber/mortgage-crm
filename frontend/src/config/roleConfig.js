@@ -542,6 +542,7 @@ export const ROLE_DASHBOARD_CONTAINERS = {
     'ai-tasks',           // AI Prioritized Tasks
     'pipeline',           // Live Loan Pipeline
     'referrals',          // Referral Scoreboard
+    'mum',                // Mortgages Under Management
     'team',               // Team Performance
     'it-tickets'          // IT Support Tickets KPIs
   ],
@@ -558,6 +559,7 @@ export const ROLE_DASHBOARD_CONTAINERS = {
     'ai-tasks',           // AI Prioritized Tasks
     'pipeline',           // Live Loan Pipeline
     'referrals',          // Referral Scoreboard
+    'mum',                // Mortgages Under Management
     'team',               // Team Performance
     'it-tickets'          // IT Support Tickets KPIs
   ],
@@ -573,7 +575,8 @@ export const ROLE_DASHBOARD_CONTAINERS = {
     'workflow-scorecards', // Workflow Scorecards (acts as scorecard)
     'ai-tasks',           // AI Prioritized Tasks
     'pipeline',           // Live Loan Pipeline
-    'referrals'           // Referral Scoreboard
+    'referrals',          // Referral Scoreboard
+    'mum'                 // Mortgages Under Management
   ],
 
   // Production Assistant Dashboard - Support role view

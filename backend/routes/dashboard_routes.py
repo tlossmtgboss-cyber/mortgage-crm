@@ -43,6 +43,7 @@ from services.dashboard_metrics_service import (
     calculate_loan_issues,
     calculate_team_stats,
     calculate_efficiency_summary,
+    calculate_mum_summary,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ async def get_dashboard(
         "referral_stats": {"top_partners": [], "engagement": []},
         "team_stats": {"has_team": False, "avg_workload": 0, "backlog": 0, "sla_missed": 0, "insights": []},
         "messages": [],
+        "mum_summary": {"loan_count": 0, "total_volume": 0, "annual_commission": 0, "annual_return_pct": 0, "avg_rate": 0},
         "efficiency": {
             "overallScore": 0, "trend": "stable",
             "avgTimeToClose": 0, "avgTimeToCloseChange": 0,
@@ -429,6 +431,12 @@ async def get_dashboard(
     profitability = calculate_profitability(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
 
     # ============================================================================
+    # MORTGAGES UNDER MANAGEMENT (MUM portfolio)
+    # ============================================================================
+
+    mum_summary = calculate_mum_summary(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
+
+    # ============================================================================
     # MESSAGES (recent notifications for this user)
     # ============================================================================
 
@@ -532,7 +540,8 @@ async def get_dashboard(
         "messages": messages,
         "efficiency": efficiency,
         "workflow_scores": workflow_scores,
-        "profitability": profitability
+        "profitability": profitability,
+        "mum_summary": mum_summary
     }
 
     # Cache for blazing fast retrieval on subsequent requests

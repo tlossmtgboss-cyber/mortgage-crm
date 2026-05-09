@@ -46,6 +46,8 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [composeText, setComposeText] = useState('');
+  const [sending, setSending] = useState(false);
 
   const loadMessages = useCallback(async () => {
     try {
@@ -92,6 +94,20 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
       setMarkingAll(false);
     }
   }, [applicationId]);
+
+  const handleSend = useCallback(async () => {
+    if (!composeText.trim()) return;
+    setSending(true);
+    try {
+      const newMsg = await posApi.sendMessage(applicationId, composeText.trim());
+      setMessages(prev => [newMsg, ...prev]);
+      setComposeText('');
+    } catch {
+      // keep text for retry
+    } finally {
+      setSending(false);
+    }
+  }, [applicationId, composeText]);
 
   if (loading) {
     return (
@@ -168,27 +184,40 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
         </div>
       )}
 
-      <div className="messages-page__footer">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-          <line x1="12" y1="17" x2="12.01" y2="17" />
-        </svg>
-        <span>
-          Need to reply?{' '}
-          {onAskAria ? (
+      <div className="messages-compose">
+        <textarea
+          className="messages-compose__input"
+          placeholder="Type a message to your team…"
+          value={composeText}
+          onChange={e => setComposeText(e.target.value)}
+          rows={2}
+          maxLength={2000}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+        />
+        <div className="messages-compose__actions">
+          {onAskAria && (
             <button
               type="button"
-              style={{ background: 'none', border: 'none', font: 'inherit', fontSize: 12, color: 'var(--bt-primary)', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+              className="messages-compose__aria"
               onClick={onAskAria}
             >
-              Ask Aria
+              Ask Aria instead
             </button>
-          ) : (
-            'Ask Aria'
-          )}{' '}
-          or contact your loan officer directly.
-        </span>
+          )}
+          <button
+            type="button"
+            className="messages-compose__send"
+            onClick={handleSend}
+            disabled={sending || !composeText.trim()}
+          >
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -206,6 +235,7 @@ const MessageCard: React.FC<{
     'messages-card',
     isUnread && 'messages-card--unread',
     expanded && 'messages-card--expanded',
+    message.is_from_borrower && 'messages-card--sent',
   ].filter(Boolean).join(' ');
 
   return (

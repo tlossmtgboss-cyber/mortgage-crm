@@ -12,10 +12,11 @@ export interface POSSidebarProps {
   onDocumentsClick?: () => void;
   onTasksClick?: () => void;
   onMessagesClick?: () => void;
-  activeNav?: 'application' | 'documents' | 'tasks' | 'messages';
+  onTeamClick?: () => void;
+  activeNav?: 'application' | 'documents' | 'tasks' | 'messages' | 'team';
 }
 
-export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, taskCount = 0, messageCount = 0, onDocumentsClick, onTasksClick, onMessagesClick, activeNav = 'application' }) => {
+export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, taskCount = 0, messageCount = 0, onDocumentsClick, onTasksClick, onMessagesClick, onTeamClick, activeNav = 'application' }) => {
   const pct = application?.completion_pct ?? 0;
 
   return (
@@ -57,6 +58,7 @@ export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, 
           <NavItem icon={<UploadIcon />} label="Documents" badge={documentCount || undefined} onClick={onDocumentsClick} active={activeNav === 'documents'} />
           <NavItem icon={<ChecklistIcon />} label="Tasks" badge={taskCount || undefined} onClick={onTasksClick} active={activeNav === 'tasks'} />
           <NavItem icon={<ChatIcon />} label="Messages" badge={messageCount || undefined} dot={messageCount > 0} onClick={onMessagesClick} active={activeNav === 'messages'} />
+          <NavItem icon={<TeamIcon />} label="Your Team" onClick={onTeamClick} active={activeNav === 'team'} />
           <NavItem icon={<BookIcon />} label="Disclosures" />
 
           <span className="pos-nav__section-title">Tools</span>
@@ -151,6 +153,15 @@ const TimelineIcon: React.FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const TeamIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
 

@@ -124,6 +124,24 @@ def handle_inbound_sms(
 
     db.commit()
 
+    if not auto_responded and assigned_user_id:
+        try:
+            from services.push_notification_service import PushNotificationService
+            push_svc = PushNotificationService()
+            display_name = contact_name or phone_number
+            preview = message_text[:80] + ("..." if len(message_text) > 80 else "")
+            push_svc.send_to_user(
+                db,
+                user_id=assigned_user_id,
+                title="",
+                body="",
+                notification_type="sms_escalation",
+                template_data={"contact_name": display_name, "reason": preview},
+                extra_data={"task_id": task_id, "phone": phone_number, "lead_id": lead_id},
+            )
+        except Exception as e:
+            logger.warning("Push notification failed for escalation task=%s: %s", task_id, e)
+
     return {
         "task_id": task_id,
         "status": "auto_responded" if auto_responded else "pending",

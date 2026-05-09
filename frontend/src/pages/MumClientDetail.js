@@ -3029,9 +3029,6 @@ function MumClientDetail() {
       <div className="actions-card">
         <h3>QUICK ACTIONS</h3>
         <div className="action-buttons">
-          <button className="action-btn call" onClick={() => handleAction('call')} disabled={!client.phone} title="Click to call">
-            <span>Call</span>
-          </button>
           <button className="action-btn sms" onClick={() => handleAction('sms')} disabled={!client.phone} title="Send SMS">
             <span>SMS Text</span>
           </button>

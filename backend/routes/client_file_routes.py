@@ -115,9 +115,9 @@ def _to_response(cf: Any, lo_name: Optional[str] = None, loan: Any = None) -> di
         last_name=cf.last_name,
         primary_email=cf.primary_email,
         primary_phone=cf.primary_phone,
-        property_address=cf.property_address,
+        property_address=cf.property_address if isinstance(cf.property_address, dict) else None,
         sticky_note=cf.sticky_note,
-        lifecycle_stage=cf.lifecycle_stage,
+        lifecycle_stage=cf.lifecycle_stage or "new_lead",
         source=cf.source,
         preferred_channel=cf.preferred_channel,
         assigned_loan_officer_id=str(cf.assigned_loan_officer_id) if cf.assigned_loan_officer_id else None,
@@ -139,8 +139,8 @@ def _to_response(cf: Any, lo_name: Optional[str] = None, loan: Any = None) -> di
         active_loan_purchase_price=_loan_attr('purchase_price', float),
         active_loan_interest_rate=_loan_attr('rate', float),
         lead_id=cf.lead_id,
-        created_at=cf.created_at.isoformat(),
-        updated_at=cf.updated_at.isoformat(),
+        created_at=cf.created_at.isoformat() if cf.created_at else datetime.now(timezone.utc).isoformat(),
+        updated_at=cf.updated_at.isoformat() if cf.updated_at else datetime.now(timezone.utc).isoformat(),
     ).model_dump()
 
 
@@ -194,7 +194,26 @@ def get_client_file(
     except Exception as e:
         logger.exception("Failed to resolve LO name for client file %s", client_file_id)
         lo_name = None
-    return _to_response(cf, lo_name, loan=loan)
+    try:
+        return _to_response(cf, lo_name, loan=loan)
+    except Exception as e:
+        logger.exception("Failed to serialize client file %s: %s", client_file_id, e)
+        return {
+            "id": str(cf.id),
+            "org_id": str(cf.organization_id),
+            "first_name": cf.first_name,
+            "last_name": cf.last_name,
+            "primary_email": cf.primary_email,
+            "primary_phone": cf.primary_phone,
+            "lifecycle_stage": cf.lifecycle_stage or "new_lead",
+            "lead_id": cf.lead_id,
+            "tags": cf.tags or [],
+            "custom_fields": {},
+            "unread_thread_count": 0,
+            "open_doc_request_count": 0,
+            "created_at": cf.created_at.isoformat() if cf.created_at else datetime.now(timezone.utc).isoformat(),
+            "updated_at": cf.updated_at.isoformat() if cf.updated_at else datetime.now(timezone.utc).isoformat(),
+        }
 
 
 class ClientFilePatch(BaseModel):

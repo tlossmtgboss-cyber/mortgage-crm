@@ -400,7 +400,7 @@ async def get_default_role_assignments(
                     assigned_by_id INTEGER,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(organization_id, role_id)
+                    UNIQUE(organization_id, role_id, user_id)
                 )
             """))
             for role in WORKFLOW_ROLES:
@@ -412,14 +412,33 @@ async def get_default_role_assignments(
             db.commit()
             logger.info(f"Auto-seeded {len(WORKFLOW_ROLES)} workflow roles")
 
+        # Migrate: replace old 1:1 constraint with multi-user constraint
+        try:
+            db.execute(text("""
+                ALTER TABLE default_role_assignments
+                DROP CONSTRAINT IF EXISTS default_role_assignments_organization_id_role_id_key
+            """))
+            db.execute(text("""
+                DO $$ BEGIN
+                    ALTER TABLE default_role_assignments
+                    ADD CONSTRAINT default_role_assignments_org_role_user_key
+                    UNIQUE (organization_id, role_id, user_id);
+                EXCEPTION WHEN duplicate_table THEN NULL;
+                END $$
+            """))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"Constraint migration already applied or not needed: {e}")
+
         # Get all roles with their default assignments
+        # Step 1: raw SQL for roles + assignment IDs (no encrypted columns)
         result = db.execute(text("""
             SELECT
                 r.id as role_id,
                 r.name as role_name,
                 r.description as role_description,
                 dra.user_id,
-                COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as user_name,
                 u.email as user_email
             FROM roles r
             LEFT JOIN default_role_assignments dra ON dra.role_id = r.id
@@ -429,6 +448,17 @@ async def get_default_role_assignments(
             ORDER BY r.name
         """), {"org_id": _org_id}).fetchall()
 
+        # Step 2: resolve user names via ORM (decrypts EncryptedString fields)
+        User = get_user_model()
+        assigned_user_ids = {row[3] for row in result if row[3] is not None}
+        user_names = {}
+        if assigned_user_ids:
+            users = db.query(User).filter(User.id.in_(assigned_user_ids)).all()
+            for u in users:
+                first = getattr(u, "first_name", "") or ""
+                last = getattr(u, "last_name", "") or ""
+                user_names[u.id] = f"{first} {last}".strip()
+
         assignments = []
         for row in result:
             assignments.append({
@@ -436,8 +466,8 @@ async def get_default_role_assignments(
                 "role_name": row[1],
                 "role_description": row[2],
                 "user_id": row[3],
-                "user_name": row[4],
-                "user_email": row[5]
+                "user_name": user_names.get(row[3], "") if row[3] else "",
+                "user_email": row[4]
             })
 
         return {
@@ -477,33 +507,33 @@ async def set_default_role_assignment(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Upsert the default assignment for this role
-        # First try to update (in case someone else was assigned to this role)
-        result = db.execute(text("""
-            UPDATE default_role_assignments
-            SET user_id = :user_id,
-                assigned_by_id = :assigned_by_id,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE organization_id = :org_id AND role_id = :role_id
+        # Check if this user already holds this role
+        existing = db.execute(text("""
+            SELECT id FROM default_role_assignments
+            WHERE organization_id = :org_id AND role_id = :role_id AND user_id = :user_id
+        """), {"org_id": org_id, "role_id": role_id, "user_id": user_id}).fetchone()
+
+        if existing:
+            return {
+                "success": True,
+                "message": f"{user.full_name} already has the {role[1]} role",
+                "role_id": role_id,
+                "role_name": role[1],
+                "user_id": user_id,
+                "user_name": user.full_name
+            }
+
+        # Insert new assignment (multiple users can hold the same role)
+        db.execute(text("""
+            INSERT INTO default_role_assignments
+            (organization_id, role_id, user_id, assigned_by_id)
+            VALUES (:org_id, :role_id, :user_id, :assigned_by_id)
         """), {
             "org_id": org_id,
             "role_id": role_id,
             "user_id": user_id,
             "assigned_by_id": current_user.id
         })
-
-        if result.rowcount == 0:
-            # Insert new
-            db.execute(text("""
-                INSERT INTO default_role_assignments
-                (organization_id, role_id, user_id, assigned_by_id)
-                VALUES (:org_id, :role_id, :user_id, :assigned_by_id)
-            """), {
-                "org_id": org_id,
-                "role_id": role_id,
-                "user_id": user_id,
-                "assigned_by_id": current_user.id
-            })
 
         db.commit()
 
@@ -526,27 +556,34 @@ async def set_default_role_assignment(
 @router.delete("/settings/team-roles/{role_id}")
 async def remove_default_role_assignment(
     role_id: int,
+    user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_dep())
 ):
-    """Remove default user assignment for a role."""
-
+    """Remove a user from a role. If user_id is provided, removes that specific
+    user's assignment. Otherwise removes all assignments for the role."""
 
     try:
         org_id = current_user.organization_id
         if not org_id:
             raise HTTPException(status_code=403, detail="Organization context required")
 
-        db.execute(text("""
-            DELETE FROM default_role_assignments
-            WHERE organization_id = :org_id AND role_id = :role_id
-        """), {"org_id": org_id, "role_id": role_id})
+        if user_id:
+            db.execute(text("""
+                DELETE FROM default_role_assignments
+                WHERE organization_id = :org_id AND role_id = :role_id AND user_id = :user_id
+            """), {"org_id": org_id, "role_id": role_id, "user_id": user_id})
+        else:
+            db.execute(text("""
+                DELETE FROM default_role_assignments
+                WHERE organization_id = :org_id AND role_id = :role_id
+            """), {"org_id": org_id, "role_id": role_id})
 
         db.commit()
 
         return {
             "success": True,
-            "message": "Default role assignment removed"
+            "message": "Role assignment removed"
         }
     except Exception as e:
         db.rollback()
@@ -590,7 +627,7 @@ async def seed_workflow_roles(
                 assigned_by_id INTEGER,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(organization_id, role_id)
+                UNIQUE(organization_id, role_id, user_id)
             )
         """))
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useLead } from '../hooks/useQueries';
 import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, borrowerApplicationAPI, purlAPI, partnersAPI, API_BASE_URL } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
@@ -39,6 +39,7 @@ import { getToken } from '../utils/tokenStore';
 function LeadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Use React Query for cached lead fetching - instant on revisit!
   const { data: leadQueryData, isLoading: leadQueryLoading, error: leadQueryError, refetch: refetchLead } = useLead(id);
@@ -415,6 +416,15 @@ function LeadDetail() {
       setLoading(false);
     }
   }, [leadQueryData, leadQueryError, leadQueryLoading]);
+
+  useEffect(() => {
+    const action = location.state?.openAction;
+    if (lead && action) {
+      navigate(location.pathname, { replace: true, state: {} });
+      setTimeout(() => handleAction(action), 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead, location.state?.openAction]);
 
   // Load auxiliary data when id changes
   useEffect(() => {
@@ -5046,9 +5056,6 @@ function LeadDetail() {
       <div className="actions-card">
         <h3>QUICK ACTIONS</h3>
         <div className="action-buttons">
-          <button className="action-btn call" onClick={() => handleAction('call')} disabled={!lead.phone} title="Click to call">
-            <span>Call</span>
-          </button>
           <button className="action-btn sms" onClick={() => handleAction('sms')} disabled={!lead.phone} title="Send SMS">
             <span>SMS Text</span>
           </button>

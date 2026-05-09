@@ -95,6 +95,8 @@ class WorkflowActionExecutor:
             return await self._log_activity(data)
         elif action_type == "tag":
             return await self._add_tags(data)
+        elif action_type == "team_contact_card":
+            return await self._send_team_contact_card(data)
         else:
             logger.warning(f"Unknown action type: {action_type}")
             return {"success": False, "error": f"Unknown action type: {action_type}"}
@@ -436,3 +438,43 @@ class WorkflowActionExecutor:
             logger.error(f"Tag addition error: {e}")
             self.db.rollback()
             return {"success": True, "skipped": True, "reason": str(e)}
+
+    async def _send_team_contact_card(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Send a combined team vCard via MMS to the borrower."""
+        to_number = data.get("to")
+        lead_id = data.get("lead_id")
+        lo_name = data.get("loan_officer_name", "your loan team")
+
+        if not to_number or not lead_id:
+            return {"success": False, "error": "Missing phone or lead_id"}
+
+        if not self.sms_client or not self.sms_client.enabled:
+            logger.info("Team contact card skipped (SMS not configured)")
+            return {"success": True, "skipped": True, "reason": "SMS not configured"}
+
+        try:
+            from routes.vcard_routes import _sign_vcard_token
+            token = _sign_vcard_token(lead_id)
+            api_base = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
+            vcard_url = f"{api_base}/api/v1/vcard/team/{token}"
+
+            caption = (
+                f"Here's the contact card for {lo_name}'s team — "
+                f"save it to your phone so you always know who to call!"
+            )
+
+            send_result = self.sms_client.send_sms(
+                to_phone=to_number,
+                message=caption,
+                media_urls=[vcard_url],
+            )
+
+            if send_result.get("success"):
+                logger.info(f"Team contact card sent to {to_number} for lead {lead_id}")
+                return {"success": True, "message_id": send_result.get("message_id", "")}
+            else:
+                return {"success": False, "error": send_result.get("error", "MMS send failed")}
+
+        except Exception as e:
+            logger.error(f"Team contact card error: {e}")
+            return {"success": False, "error": str(e)}

@@ -72,7 +72,7 @@ const CSRF_METHODS = ['post', 'put', 'patch', 'delete'];
 // Add token, impersonation, and CSRF headers to requests
 api.interceptors.request.use(
   async (config) => {
-    const token = await getItem(STORAGE_KEYS.TOKEN);
+    const token = getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

@@ -12,6 +12,7 @@ import { AriaPanel } from './AriaPanel';
 import { DocumentsPage } from './DocumentsPage';
 import { MessagesPage } from './MessagesPage';
 import { TasksPage } from './TasksPage';
+import { TeamContactPanel } from './TeamContactPanel';
 import { IntakePanel, EMPTY_INTAKE } from './IntakePanel';
 import type { IntakeData } from './IntakePanel';
 
@@ -69,7 +70,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
-  const [view, setView] = useState<'application' | 'documents' | 'tasks' | 'messages'>('application');
+  const [view, setView] = useState<'application' | 'documents' | 'tasks' | 'messages' | 'team'>('application');
   const [taskCount, setTaskCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
 
@@ -140,8 +141,11 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   }
 
   if (error || !application) {
-    const isAuthError = error && (error.includes('401') || error.includes('404') || error.includes('Not Found') || error.includes('Unauthorized'));
-    if (isAuthError && onAuthError) {
+    const isSessionError = error && (
+      error.includes('401') || error.includes('403') || error.includes('400') ||
+      error.includes('404') || error.includes('Not Found') || error.includes('Unauthorized')
+    );
+    if (isSessionError && onAuthError) {
       onAuthError();
       return null;
     }
@@ -150,7 +154,14 @@ export const POSContainer: React.FC<POSContainerProps> = ({
         <div className="pos-error">
           <h2>We couldn't load your application</h2>
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Try again</button>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
+            <button onClick={() => window.location.reload()}>Try again</button>
+            {onAuthError && (
+              <button onClick={onAuthError} style={{ background: 'transparent', border: '1px solid #d4d9d6', color: '#6B7B75' }}>
+                Start over
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -196,14 +207,18 @@ export const POSContainer: React.FC<POSContainerProps> = ({
           onDocumentsClick={() => setView('documents')}
           onTasksClick={() => setView('tasks')}
           onMessagesClick={() => setView('messages')}
+          onTeamClick={() => setView('team')}
           activeNav={view}
         />
 
         <main className="pos-main">
-          {view === 'documents' ? (
+          {view === 'team' ? (
+            <TeamContactPanel
+              applicationId={application.id}
+              onBack={() => setView('application')}
+            />
+          ) : view === 'documents' ? (
             <DocumentsPage
-              loName="your loan officer"
-              loInitials="A"
               loanId={application?.loan_id}
               detectedDocs={detectedDocs}
               onAskAria={() => setAriaOpen(true)}
@@ -212,8 +227,6 @@ export const POSContainer: React.FC<POSContainerProps> = ({
           ) : view === 'tasks' ? (
             <TasksPage
               applicationId={application.id}
-              loName="your loan officer"
-              loInitials="A"
               onAskAria={() => setAriaOpen(true)}
               onBack={() => setView('application')}
             />

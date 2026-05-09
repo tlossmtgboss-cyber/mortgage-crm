@@ -1589,8 +1589,11 @@ async def submit_mortgage_planner_questionnaire(
         else:
             # Create new lead
             from database.enums import LeadStage
+            name_parts = submission.name.strip().split(None, 1) if submission.name else []
             lead = Lead(
                 name=submission.name,
+                first_name=name_parts[0] if name_parts else None,
+                last_name=name_parts[1] if len(name_parts) > 1 else None,
                 email=submission.email,
                 phone=submission.phone,
                 owner_id=loan_officer_id,

@@ -285,14 +285,14 @@ async def get_leads(
         total = query.count()
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 
-        # Resolve org-wide Production Assistant 1 name (single query for all leads)
+        # Resolve org-wide Production Assistant 1 name via ORM (EncryptedString fields)
         pa_name = None
         try:
             org_id = current_user.organization_id
             if not org_id:
                 raise HTTPException(status_code=403, detail="Organization context required")
             pa_row = db.execute(text("""
-                SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
+                SELECT u.id
                 FROM default_role_assignments dra
                 JOIN roles r ON r.id = dra.role_id
                 JOIN users u ON u.id = dra.user_id
@@ -300,7 +300,13 @@ async def get_leads(
                 LIMIT 1
             """), {"org_id": org_id}).fetchone()
             if pa_row:
-                pa_name = pa_row[0] if pa_row[0] and pa_row[0].strip() else None
+                from database.models.core import User as UserModel
+                pa_user = db.get(UserModel, pa_row[0])
+                if pa_user:
+                    first = getattr(pa_user, "first_name", "") or ""
+                    last = getattr(pa_user, "last_name", "") or ""
+                    name = f"{first} {last}".strip()
+                    pa_name = name if name else None
         except Exception as e:
             logger.debug(f"Production assistant lookup: {e}")
 

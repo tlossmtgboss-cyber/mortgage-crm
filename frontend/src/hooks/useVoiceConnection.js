@@ -142,8 +142,8 @@ const useVoiceConnection = ({
         return;
       }
 
-      const wsUrl = `${WS_BASE_URL}/api/v1/voice/ws/browser-voice`;
-      console.log(`[${assistantName}] Connecting to:`, wsUrl);
+      const wsUrl = `${WS_BASE_URL}/api/v1/voice/ws/browser-voice?token=${encodeURIComponent(token)}`;
+      console.log(`[${assistantName}] Connecting to:`, wsUrl.replace(/token=[^&]+/, 'token=***'));
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -153,8 +153,6 @@ const useVoiceConnection = ({
         setReconnectAttempt(0);
         wasConnectedRef.current = true;
 
-        // Send auth token as first message
-        ws.send(JSON.stringify({ type: 'auth', token }));
         // Send initial config with CRM context
         ws.send(
           JSON.stringify({

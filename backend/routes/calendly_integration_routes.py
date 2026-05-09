@@ -407,8 +407,11 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
                 logger.info(f"Lead {lead.id} updated with Calendly appointment (org={organization_id})")
             else:
                 # Create new lead from Calendly booking (with org isolation)
+                inv_parts = invitee_name.strip().split(None, 1) if invitee_name else []
                 new_lead = Lead(
                     name=invitee_name,
+                    first_name=inv_parts[0] if inv_parts else None,
+                    last_name=inv_parts[1] if len(inv_parts) > 1 else None,
                     email=invitee_email,
                     stage="meeting_scheduled",
                     source="Calendly",

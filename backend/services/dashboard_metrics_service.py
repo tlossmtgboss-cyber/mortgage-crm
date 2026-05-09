@@ -19,7 +19,7 @@ from sqlalchemy import case, func, extract
 from sqlalchemy.orm import Session
 
 from database.enums import LeadStage, LoanStage
-from database.models import User, Lead, Loan, Task, AIColleagueAction
+from database.models import User, Lead, Loan, Task, AIColleagueAction, MUMClient
 
 logger = logging.getLogger(__name__)
 
@@ -710,3 +710,48 @@ def calculate_efficiency_trends(
         logger.error("calculate_efficiency_trends failed: %s", e)
         db.rollback()
         return {"overall_trend": 0, "pull_through_change": 0, "time_to_close_change": 0, "loans_behind_change": 0, "automation_change": 0}
+
+
+# =============================================================================
+# 12. Mortgages Under Management (MUM) Summary
+# =============================================================================
+
+def calculate_mum_summary(
+    db: Session, user_id: int, org_id: int,
+    branch_user_ids: Optional[list] = None,
+) -> dict:
+    """MUM portfolio: loan count, total volume, commission, annual return."""
+    try:
+        mum_filters = []
+        _apply_scope(mum_filters, MUMClient.user_id, user_id, org_id, branch_user_ids, MUMClient.organization_id)
+
+        result = db.query(
+            func.count(MUMClient.id).label('loan_count'),
+            func.sum(MUMClient.current_loan_amount).label('total_volume'),
+            func.sum(MUMClient.original_loan_amount).label('total_original'),
+            func.avg(MUMClient.interest_rate).label('avg_rate'),
+        ).filter(*mum_filters).first()
+
+        loan_count = result.loan_count or 0
+        total_volume = round(result.total_volume or 0, 2)
+        total_original = round(result.total_original or 0, 2)
+        avg_rate = round(float(result.avg_rate or 0), 4)
+
+        # Commission estimate: industry standard ~25 bps annually on servicing
+        commission_bps = 25
+        annual_commission = round(total_volume * commission_bps / 10000, 2) if total_volume > 0 else 0
+
+        # Annual return: commission as % of original volume
+        annual_return_pct = round(annual_commission / total_original * 100, 2) if total_original > 0 else 0
+
+        return {
+            "loan_count": loan_count,
+            "total_volume": total_volume,
+            "annual_commission": annual_commission,
+            "annual_return_pct": annual_return_pct,
+            "avg_rate": avg_rate,
+        }
+    except Exception as e:
+        logger.error("calculate_mum_summary failed: %s", e)
+        db.rollback()
+        return {"loan_count": 0, "total_volume": 0, "annual_commission": 0, "annual_return_pct": 0, "avg_rate": 0}

@@ -26,6 +26,7 @@ import type {
   SectionResponse,
   SectionUpdateRequest,
   SlotHoldResponse,
+  TeamResponse,
 } from '../types';
 
 const API_BASE =
@@ -246,6 +247,21 @@ export const posApi = {
     request<BorrowerMessagesResponse>(
       'PATCH',
       `/api/v1/pos/applications/${applicationId}/messages/read-all`,
+    ),
+
+  sendMessage: (applicationId: string, content: string) =>
+    request<BorrowerMessage>(
+      'POST',
+      `/api/v1/pos/applications/${applicationId}/messages`,
+      { content },
+    ),
+
+  // ---------- Team ----------
+
+  getTeam: (applicationId: string) =>
+    request<TeamResponse>(
+      'GET',
+      `/api/v1/pos/applications/${applicationId}/team`,
     ),
 };
 

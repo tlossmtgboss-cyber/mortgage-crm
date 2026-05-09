@@ -16,6 +16,7 @@ import AIEmailTraining from '../components/AIEmailTraining';
 import AIEmailSetup from '../components/AIEmailSetup';
 import AIDailyBlog from './AIDailyBlog';
 import PreApprovalLetterSettings from '../components/PreApprovalLetterSettings';
+import ContactCardSettings from '../components/ContactCardSettings';
 import ApplicationSlidesEditor from '../components/ApplicationSlidesEditor';
 import BusinessOpsDashboard from './BusinessOpsDashboard';
 import IntegrationSettings from './IntegrationSettings';
@@ -361,6 +362,7 @@ function Settings() {
     { id: 'client-portal-settings', label: 'Client Portal Settings', type: 'standalone', section: 'client-portal-settings', navigate: '/settings/client-portal', adminOnly: true },
     { id: 'lead-capture', label: 'Lead Capture', type: 'standalone', section: 'lead-capture', navigate: '/settings/lead-capture', adminOnly: true },
     { id: 'communication-preferences', label: 'Communication Preferences', type: 'standalone', section: 'communication-preferences', navigate: '/settings/communication', adminOnly: true },
+    { id: 'contact-card-team', label: 'Contact Card Team', type: 'standalone', section: 'contact-card-team' },
     { id: 'integration-settings', label: 'Integrations', type: 'standalone', section: 'integration-settings' },
     { id: 'api-keys-settings', label: 'API Keys & Webhooks', type: 'standalone', section: 'api-keys-settings', navigate: '/settings/api-keys', adminOnly: true },
     { id: 'company-branding', label: 'Company & Branding', type: 'standalone', section: 'company-branding', navigate: '/settings/company-branding', adminOnly: true },
@@ -4816,6 +4818,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'integration-settings' && (
             <IntegrationSettings />
+          )}
+
+          {activeSection === 'contact-card-team' && (
+            <ContactCardSettings />
           )}
 
           {/* User Profile Sections */}

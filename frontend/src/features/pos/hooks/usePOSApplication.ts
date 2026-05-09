@@ -76,6 +76,9 @@ export function usePOSApplication(loanId?: number) {
         return section;
       } catch (e) {
         console.error('Failed to load section', sectionKey, e);
+        if (e instanceof APIError && [400, 401, 403].includes(e.status)) {
+          setError(e.message);
+        }
       }
     },
     [application],

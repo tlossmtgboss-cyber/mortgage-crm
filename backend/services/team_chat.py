@@ -620,8 +620,8 @@ class TeamChatService:
         organization_id: int,
         client_file_id: uuid.UUID,
     ) -> list[dict]:
-        """Resolve channel membership from the ClientFile's collaborators
-        plus the assigned LO/LOA/processor/UW.
+        """Resolve channel membership from the ClientFile's collaborators,
+        assigned LO/LOA/processor/UW, and all active org team members.
 
         Returns serialized member dicts ordered by role.
         """
@@ -640,7 +640,6 @@ class TeamChatService:
             if uid:
                 member_user_ids.add(uid)
 
-        # Pull collaborators from ClientFileCollaborator model
         from database.models.client_file import ClientFileCollaborator
         collabs = list(
             self.session.execute(
@@ -656,10 +655,24 @@ class TeamChatService:
             if c.user_id:
                 member_user_ids.add(c.user_id)
 
+        # Include all active org team members so the full team is visible
+        org_users = list(
+            self.session.execute(
+                select(User).where(
+                    and_(
+                        User.organization_id == organization_id,
+                        User.is_active.is_(True),
+                    )
+                )
+            ).scalars().all()
+        )
+        for u in org_users:
+            member_user_ids.add(u.id)
+
         if not member_user_ids:
             return []
 
-        users = list(
+        users = org_users if len(org_users) == len(member_user_ids) else list(
             self.session.execute(
                 select(User).where(User.id.in_(member_user_ids))
             ).scalars().all()

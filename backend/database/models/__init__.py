@@ -683,6 +683,7 @@ from .lo_license import LoanOfficerLicense, LicenseStatus, LicenseType
 
 # Briefing Thread models (morning briefing reply state machine + audit chain)
 from .briefing_thread import BriefingThread, BriefingTask, BriefingAuditLog
+from .contact_card import ContactCardMember
 
 __all__ = [
     # =====================
@@ -1407,4 +1408,9 @@ __all__ = [
     "BriefingThread",
     "BriefingTask",
     "BriefingAuditLog",
+
+    # =====================
+    # Contact Card
+    # =====================
+    "ContactCardMember",
 ]

@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActivityPane } from "./ActivityPane";
 import { Avatar, deriveInitials } from "./primitives/Avatar";
@@ -7,6 +8,7 @@ import { QuickActionsRail } from "./QuickActionsRail";
 import { ToolsRail } from "./ToolsRail";
 import { useClientFile } from "./hooks";
 import { LIFECYCLE_STAGE_LABEL } from "./format";
+import { toast } from "../utils/toast";
 import type { ClientFile } from "./types";
 import "./styles.css";
 
@@ -42,7 +44,7 @@ function formatPropertyLine(client: ClientFile): string {
 
 function ClientFileHeader({ client }: { client: ClientFile }) {
   const navigate = useNavigate();
-  const fullName = `${client.first_name} ${client.last_name}`;
+  const fullName = [client.first_name, client.last_name].filter(Boolean).join(" ") || "Unknown";
   return (
     <header className="pf-cf-header">
       <div className="pf-cf-header__identity">
@@ -78,6 +80,17 @@ function ClientFileHeader({ client }: { client: ClientFile }) {
 
 export function ClientFileView({ clientFileId, currentUserId }: Props) {
   const { data: client, isLoading, error } = useClientFile(clientFileId);
+  const navigate = useNavigate();
+
+  const handleQuickAction = useCallback((key: string) => {
+    if (!client) return;
+    const leadId = client.lead_id;
+    if (!leadId) {
+      toast.error("No linked lead — open Lead Details first");
+      return;
+    }
+    navigate(`/leads/${leadId}`, { state: { openAction: key } });
+  }, [client, navigate]);
 
   if (isLoading) {
     return (
@@ -112,7 +125,7 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
           />
         </main>
         <aside className="pf-cf__pane" aria-label="Quick Actions">
-          <QuickActionsRail clientFileId={clientFileId} client={client} />
+          <QuickActionsRail clientFileId={clientFileId} client={client} onAction={handleQuickAction} />
         </aside>
       </div>
     </div>

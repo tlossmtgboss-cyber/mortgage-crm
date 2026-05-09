@@ -698,7 +698,7 @@ async def email_daily_report(
         db.query(
             func.upper(Loan.stage).label("stage"),
             func.count(Loan.id).label("cnt"),
-            func.coalesce(func.sum(Loan.loan_amount), 0).label("volume"),
+            func.coalesce(func.sum(Loan.amount), 0).label("volume"),
         )
         .filter(
             func.upper(Loan.stage).in_(active_stages),

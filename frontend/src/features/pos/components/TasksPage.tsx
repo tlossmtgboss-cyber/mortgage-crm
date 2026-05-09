@@ -9,8 +9,6 @@ type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
 
 interface TasksPageProps {
   applicationId: string;
-  loName?: string;
-  loInitials?: string;
   onAskAria?: () => void;
   onBack: () => void;
 }
@@ -57,8 +55,6 @@ function formatDueDate(iso: string | null): { label: string; urgent: boolean } {
 
 export const TasksPage: React.FC<TasksPageProps> = ({
   applicationId,
-  loName = 'your loan officer',
-  loInitials = 'P',
   onAskAria,
   onBack,
 }) => {
@@ -143,7 +139,7 @@ export const TasksPage: React.FC<TasksPageProps> = ({
         </div>
         <h1 className="tasks-page__title">Your To-Do List</h1>
         <p className="tasks-page__subtitle">
-          Items {loName} or the underwriter need you to complete.
+          Items your lending team or the underwriter need you to complete.
           Finish these to keep your loan moving forward.
         </p>
       </div>
@@ -157,7 +153,7 @@ export const TasksPage: React.FC<TasksPageProps> = ({
 
       {/* Aria banner */}
       <div className="tasks-banner">
-        <span className="tasks-banner__seal">{loInitials.charAt(0) || 'A'}</span>
+        <span className="tasks-banner__seal">A</span>
         <div className="tasks-banner__content">
           <div className="tasks-banner__title">Aria tracks your tasks automatically</div>
           <p className="tasks-banner__desc">

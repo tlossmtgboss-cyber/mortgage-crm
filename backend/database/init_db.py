@@ -2021,6 +2021,21 @@ def init_db():
         except Exception as e:
             logger.debug("structured_output column migration: %s", e)
 
+        # Ensure tloss@cmgfi.com has full admin permissions
+        try:
+            with _engine.connect() as conn:
+                result = conn.execute(text("""
+                    UPDATE users
+                    SET permission_role = 'admin', role = 'admin'
+                    WHERE email = 'tloss@cmgfi.com'
+                      AND (permission_role != 'admin' OR role != 'admin')
+                """))
+                conn.commit()
+                if result.rowcount > 0:
+                    logger.info("✅ Updated tloss@cmgfi.com to admin permissions")
+        except Exception as e:
+            logger.warning(f"⚠️ Admin permission fix note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
@@ -2046,6 +2061,17 @@ def create_sample_data(db: Session):
             logger.info("Sample data already exists")
             return
 
+        # Create demo organization (required for multi-tenant isolation)
+        from database.models import Organization
+        org = Organization(
+            name="Demo Mortgage Company",
+            slug="demo-mortgage",
+            domain="perenniaai.com",
+            subscription_tier="premium",
+        )
+        db.add(org)
+        db.commit()
+
         # Create demo branch
         branch = Branch(
             name="Main Office",
@@ -2064,7 +2090,8 @@ def create_sample_data(db: Session):
             hashed_password=get_password_hash(_demo_pw),
             full_name="Demo User",
             role="loan_officer",
-            branch_id=branch.id
+            branch_id=branch.id,
+            organization_id=org.id,
         )
         db.add(demo_user)
         db.commit()
@@ -2082,6 +2109,7 @@ def create_sample_data(db: Session):
                 credit_score=750,
                 debt_to_income=0.35,
                 owner_id=demo_user.id,
+                organization_id=org.id,
                 ai_score=85,
                 sentiment="positive",
                 next_action="Schedule initial consultation"
@@ -2097,6 +2125,7 @@ def create_sample_data(db: Session):
                 credit_score=720,
                 debt_to_income=0.40,
                 owner_id=demo_user.id,
+                organization_id=org.id,
                 ai_score=78,
                 sentiment="positive",
                 next_action="Send pre-qualification letter"
@@ -2105,13 +2134,14 @@ def create_sample_data(db: Session):
                 name="Mike Williams",
                 email="mike.w@email.com",
                 phone="555-0103",
-                stage=LeadStage.Application,
+                stage=LeadStage.APPLICATION,
                 source="Zillow",
                 loan_type="Purchase",
                 preapproval_amount=525000,
                 credit_score=680,
                 debt_to_income=0.42,
                 owner_id=demo_user.id,
+                organization_id=org.id,
                 ai_score=65,
                 sentiment="neutral",
                 next_action="Collect additional documentation"
@@ -2136,6 +2166,7 @@ def create_sample_data(db: Session):
                 property_address="123 Main St, Anytown, CA",
                 closing_date=datetime.now(timezone.utc) + timedelta(days=25),
                 loan_officer_id=demo_user.id,
+                organization_id=org.id,
                 processor="Jane Processor",
                 days_in_stage=5,
                 sla_status="on-track"
@@ -2152,6 +2183,7 @@ def create_sample_data(db: Session):
                 property_address="456 Oak Ave, Somewhere, CA",
                 closing_date=datetime.now(timezone.utc) + timedelta(days=18),
                 loan_officer_id=demo_user.id,
+                organization_id=org.id,
                 processor="John Processor",
                 underwriter="Sarah UW",
                 days_in_stage=3,
@@ -2231,16 +2263,25 @@ def create_sample_data(db: Session):
         # Create sample MUM clients
         sample_mum = [
             MUMClient(
-                name="Previous Borrower 1",
+                client_name="Previous Borrower 1",
                 loan_number="L2023-045",
                 original_close_date=datetime.now(timezone.utc) - timedelta(days=365),
+                closing_date=datetime.now(timezone.utc) - timedelta(days=365),
+                first_payment_date=datetime.now(timezone.utc) - timedelta(days=335),
                 days_since_funding=365,
                 original_rate=7.5,
                 current_rate=6.875,
+                interest_rate=6.875,
+                original_loan_amount=400000,
+                current_loan_amount=380000,
+                appraisal_value_at_closing=450000,
+                current_property_value=465000,
                 loan_balance=380000,
                 refinance_opportunity=True,
                 estimated_savings=2375,
-                status="opportunity"
+                status="opportunity",
+                user_id=demo_user.id,
+                organization_id=org.id,
             )
         ]
 

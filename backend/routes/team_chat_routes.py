@@ -110,6 +110,10 @@ def list_messages(
         )
     except PermissionError as e:
         raise HTTPException(403, str(e))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("team_chat.list_messages failed: %s", e)
+        return []
 
 
 @router.post(
@@ -228,11 +232,16 @@ def get_pinned(
     redis: Any = Depends(get_redis),
 ) -> Optional[dict]:
     svc = _svc(db, redis)
-    return svc.get_pinned(
-        organization_id=user.organization_id,
-        client_file_id=client_file_id,
-        actor_user_id=user.id,
-    )
+    try:
+        return svc.get_pinned(
+            organization_id=user.organization_id,
+            client_file_id=client_file_id,
+            actor_user_id=user.id,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("team_chat.get_pinned failed: %s", e)
+        return None
 
 
 @router.post(
@@ -289,7 +298,12 @@ def list_members(
     redis: Any = Depends(get_redis),
 ) -> list[dict]:
     svc = _svc(db, redis)
-    return svc.list_members(organization_id=user.organization_id, client_file_id=client_file_id)
+    try:
+        return svc.list_members(organization_id=user.organization_id, client_file_id=client_file_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("team_chat.list_members failed: %s", e)
+        return []
 
 
 @router.post("/clients/{client_file_id}/team-chat/read")
@@ -301,14 +315,20 @@ def mark_read(
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
-    result = svc.mark_read(
-        organization_id=user.organization_id,
-        client_file_id=client_file_id,
-        user_id=user.id,
-        last_read_message_id=payload.last_read_message_id,
-    )
-    db.commit()
-    return result
+    try:
+        result = svc.mark_read(
+            organization_id=user.organization_id,
+            client_file_id=client_file_id,
+            user_id=user.id,
+            last_read_message_id=payload.last_read_message_id,
+        )
+        db.commit()
+        return result
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("team_chat.mark_read failed: %s", e)
+        db.rollback()
+        return {"channel_id": "", "user_id": str(user.id), "last_read_message_id": str(payload.last_read_message_id)}
 
 
 @router.get("/clients/{client_file_id}/team-chat/unread")
@@ -319,11 +339,16 @@ def unread_count(
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
-    return svc.unread_count(
-        organization_id=user.organization_id,
-        client_file_id=client_file_id,
-        user_id=user.id,
-    )
+    try:
+        return svc.unread_count(
+            organization_id=user.organization_id,
+            client_file_id=client_file_id,
+            user_id=user.id,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("team_chat.unread_count failed: %s", e)
+        return {"unread": 0, "mentions": 0}
 
 
 @router.post(
@@ -337,9 +362,13 @@ def set_typing(
     redis: Any = Depends(get_redis),
 ) -> None:
     svc = _svc(db, redis)
-    svc.set_typing(
-        organization_id=user.organization_id, client_file_id=client_file_id, user_id=user.id
-    )
+    try:
+        svc.set_typing(
+            organization_id=user.organization_id, client_file_id=client_file_id, user_id=user.id
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("team_chat.set_typing failed: %s", e)
 
 
 @router.get("/clients/{client_file_id}/team-chat/typing")
@@ -350,6 +379,11 @@ def get_typing(
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
-    return svc.get_typing(
-        organization_id=user.organization_id, client_file_id=client_file_id
-    )
+    try:
+        return svc.get_typing(
+            organization_id=user.organization_id, client_file_id=client_file_id
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("team_chat.get_typing failed: %s", e)
+        return {"typing_user_ids": []}

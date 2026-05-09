@@ -5,35 +5,19 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getToken } from '../utils/tokenStore';
+import api from '../services/api';
 
-// API Base URL
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
-
-// Helper to get auth headers
-const getAuthHeaders = () => ({
-  'Authorization': `Bearer ${getToken()}`,
-  'Content-Type': 'application/json',
-});
-
-// Generic fetch function with error handling
+// Use the shared axios instance so auth refresh, CSRF, and interceptors all apply
 const fetchWithAuth = async (endpoint, options = {}) => {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      ...getAuthHeaders(),
-      ...options.headers,
-    },
-  });
+  const method = (options.method || 'GET').toLowerCase();
+  const config = { url: endpoint };
 
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+  if (options.body) {
+    config.data = JSON.parse(options.body);
   }
 
-  return response.json();
+  const response = await api.request({ ...config, method });
+  return response.data;
 };
 
 // ============================================================================
@@ -42,12 +26,14 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
 export const useLeads = (options = {}) => {
   return useQuery({
-    queryKey: ['leads', options],
+    queryKey: ['leads'],
     queryFn: async () => {
       const data = await fetchWithAuth('/api/v1/leads/');
       return Array.isArray(data) ? data : (data?.items ?? []);
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    refetchOnMount: 'always',
+    retry: 2,
     ...options,
   });
 };
@@ -77,12 +63,14 @@ export const useLeadStats = (options = {}) => {
 
 export const useLoans = (options = {}) => {
   return useQuery({
-    queryKey: ['loans', options],
+    queryKey: ['loans'],
     queryFn: async () => {
       const data = await fetchWithAuth('/api/v1/loans/');
       return Array.isArray(data) ? data : (data?.items ?? []);
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 2,
+    refetchOnMount: 'always',
+    retry: 2,
     ...options,
   });
 };
@@ -126,9 +114,11 @@ export const useDashboardStats = (options = {}) => {
 
 export const useTasks = (options = {}) => {
   return useQuery({
-    queryKey: ['tasks', options],
+    queryKey: ['tasks'],
     queryFn: () => fetchWithAuth('/api/v1/tasks'),
     staleTime: 1000 * 60 * 2,
+    refetchOnMount: 'always',
+    retry: 2,
     ...options,
   });
 };
@@ -149,9 +139,11 @@ export const useTask = (taskId, options = {}) => {
 
 export const usePortfolio = (options = {}) => {
   return useQuery({
-    queryKey: ['portfolio', options],
+    queryKey: ['portfolio'],
     queryFn: () => fetchWithAuth('/api/v1/mum-clients/'),
     staleTime: 1000 * 60 * 5,
+    refetchOnMount: 'always',
+    retry: 2,
     ...options,
   });
 };
@@ -172,9 +164,11 @@ export const useClient = (clientId, options = {}) => {
 
 export const useReferralPartners = (options = {}) => {
   return useQuery({
-    queryKey: ['referralPartners', options],
+    queryKey: ['referralPartners'],
     queryFn: () => fetchWithAuth('/api/v1/referral-partners'),
     staleTime: 1000 * 60 * 5,
+    refetchOnMount: 'always',
+    retry: 2,
     ...options,
   });
 };
@@ -195,9 +189,9 @@ export const useReferralPartner = (partnerId, options = {}) => {
 
 export const useTeamMembers = (options = {}) => {
   return useQuery({
-    queryKey: ['teamMembers', options],
+    queryKey: ['teamMembers'],
     queryFn: () => fetchWithAuth('/api/v1/team/members'),
-    staleTime: 1000 * 60 * 10, // 10 minutes for team data
+    staleTime: 1000 * 60 * 10,
     ...options,
   });
 };
@@ -215,17 +209,23 @@ export const usePrefetch = () => {
 
   const prefetchLeads = () => {
     queryClient.prefetchQuery({
-      queryKey: ['leads', {}],
-      queryFn: () => fetchWithAuth('/api/v1/leads/'),
-      staleTime: 1000 * 60 * 5,
+      queryKey: ['leads'],
+      queryFn: async () => {
+        const data = await fetchWithAuth('/api/v1/leads/');
+        return Array.isArray(data) ? data : (data?.items ?? []);
+      },
+      staleTime: 1000 * 60 * 2,
     });
   };
 
   const prefetchLoans = () => {
     queryClient.prefetchQuery({
-      queryKey: ['loans', {}],
-      queryFn: () => fetchWithAuth('/api/v1/loans/'),
-      staleTime: 1000 * 60 * 5,
+      queryKey: ['loans'],
+      queryFn: async () => {
+        const data = await fetchWithAuth('/api/v1/loans/');
+        return Array.isArray(data) ? data : (data?.items ?? []);
+      },
+      staleTime: 1000 * 60 * 2,
     });
   };
 
@@ -239,7 +239,7 @@ export const usePrefetch = () => {
 
   const prefetchTasks = () => {
     queryClient.prefetchQuery({
-      queryKey: ['tasks', {}],
+      queryKey: ['tasks'],
       queryFn: () => fetchWithAuth('/api/v1/tasks'),
       staleTime: 1000 * 60 * 2,
     });
@@ -247,7 +247,7 @@ export const usePrefetch = () => {
 
   const prefetchPortfolio = () => {
     queryClient.prefetchQuery({
-      queryKey: ['portfolio', {}],
+      queryKey: ['portfolio'],
       queryFn: () => fetchWithAuth('/api/v1/mum-clients/'),
       staleTime: 1000 * 60 * 5,
     });
@@ -255,7 +255,7 @@ export const usePrefetch = () => {
 
   const prefetchPartners = () => {
     queryClient.prefetchQuery({
-      queryKey: ['referralPartners', {}],
+      queryKey: ['referralPartners'],
       queryFn: () => fetchWithAuth('/api/v1/referral-partners'),
       staleTime: 1000 * 60 * 5,
     });

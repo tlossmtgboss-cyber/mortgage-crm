@@ -3238,6 +3238,23 @@ try:
 except Exception as e:
     logger.warning(f"Data quality routes skipped: {e}")
 
+# VCard routes — public team contact card serving for MMS delivery
+try:
+    from routes.vcard_routes import router as vcard_router, set_dependencies as vcard_set_deps
+    vcard_set_deps(get_db=get_db)
+    app.include_router(vcard_router, tags=["VCard"])
+    logger.info("VCard routes loaded")
+except Exception as e:
+    logger.warning(f"VCard routes skipped: {e}")
+
+# Contact Card team CRUD — settings UI for managing card roster
+try:
+    from routes.contact_card_routes import router as cc_router
+    app.include_router(cc_router, tags=["Contact Card"])
+    logger.info("Contact card settings routes loaded")
+except Exception as e:
+    logger.warning(f"Contact card routes skipped: {e}")
+
 # ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
 # ============================================================================
@@ -3528,6 +3545,7 @@ _pos_routers = {
     "resolve_lo": ("routes.pos.resolve_lo", "router"),
     "start": ("routes.pos.start", "router"),
     "tasks": ("routes.pos.tasks", "router"),
+    "team": ("routes.pos.team", "router"),
 }
 for _pos_name, (_pos_mod, _pos_attr) in _pos_routers.items():
     try:
@@ -3624,6 +3642,11 @@ try:
                       TeamChatReaction, TeamChatRead]:
         _cf_model.__table__.create(engine, checkfirst=True)
     logger.info("Client File + Team Chat tables verified/created (6 tables)")
+
+    # Contact Card Members table
+    from database.models.contact_card import ContactCardMember
+    ContactCardMember.__table__.create(engine, checkfirst=True)
+    logger.info("Contact Card Members table verified/created")
 
     # Ensure all ClientFile columns exist (checkfirst only checks table, not columns)
     try:
