@@ -16,27 +16,14 @@ function Dashboard() {
   const navigate = useNavigate();
   const { hasPermission, userRole, effectiveRole, isRolePreview, rolePreview, exitRolePreview } = usePermissions();
 
-  // Redirect admin users to /admin page (unless in role preview mode)
-  useEffect(() => {
-    // Check if we're in role preview mode - if so, don't redirect
-    const rolePreview = localStorage.getItem('role_preview');
-    if (rolePreview) {
-      console.log('Role preview mode active - staying on dashboard');
-      return; // Don't redirect when previewing a role
-    }
+  // Dashboard view toggle for manager/admin roles
+  const isManagerOrAdmin = ['admin', 'site_admin', 'manager', 'executive', 'management'].includes(userRole) ||
+    ['admin', 'site_admin', 'manager', 'executive', 'management'].includes(effectiveRole);
 
-    // Check both userRole and localStorage for admin status
-    const isAdmin = userRole === 'admin' || (() => {
-      try {
-        const user = getUserData() || {};
-        return user.role === 'admin' || user.permission_role === 'admin';
-      } catch { return false; }
-    })();
-
-    if (isAdmin) {
-      navigate('/admin', { replace: true });
-    }
-  }, [userRole, navigate]);
+  const [dashboardView, setDashboardView] = useState(() => {
+    if (!isManagerOrAdmin) return 'personal';
+    return localStorage.getItem('dashboardView') || 'personal';
+  });
 
   // Use React Query for cached dashboard data - instant on revisit!
   const { data: dashboardData, isLoading: loading, refetch: refetchDashboard } = useDashboard();
@@ -104,33 +91,36 @@ function Dashboard() {
     fetchItTicketMetrics();
   }, [userRole, effectiveRole]);
 
-  // Get allowed containers for the current role
+  // Get allowed containers based on view toggle
+  const activeRole = useMemo(() => {
+    if (!isManagerOrAdmin) return effectiveRole;
+    return dashboardView === 'manager' ? 'manager' : 'loan_officer';
+  }, [effectiveRole, dashboardView, isManagerOrAdmin]);
+
   const allowedContainers = useMemo(() => {
-    return getDashboardContainersForRole(effectiveRole);
-  }, [effectiveRole]);
+    return getDashboardContainersForRole(activeRole);
+  }, [activeRole]);
 
   // Container order filtered by role
   const [containerOrder, setContainerOrder] = useState(() => {
-    // Start with role-specific allowed containers
-    return getDashboardContainersForRole(effectiveRole || 'loan_officer');
+    return getDashboardContainersForRole(activeRole || 'loan_officer');
   });
   const workflowScores = dashboardData?.workflow_scores || { statuses: [], overallScore: 0 };
   const profitability = dashboardData?.profitability || {};
   const loanIssuesList = dashboardData?.loan_issues || [];
 
-  // Reload container order when role changes
+  // Reload container order when role or view changes
   useEffect(() => {
     loadContainerOrder();
-  }, [effectiveRole]);
+  }, [activeRole]);
 
   // React Query handles data fetching automatically - no useEffect needed!
 
-  // Load saved container order for the current role
+  // Load saved container order for the current view
   const loadContainerOrder = () => {
     try {
-      // Get the allowed containers for this role
-      const roleContainers = getDashboardContainersForRole(effectiveRole);
-      const storageKey = `dashboardOrder_${effectiveRole}`;
+      const roleContainers = getDashboardContainersForRole(activeRole);
+      const storageKey = `dashboardOrder_${activeRole}`;
 
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -148,14 +138,19 @@ function Dashboard() {
     } catch (error) {
       console.error('Failed to load container order:', error);
       // Fallback to role defaults
-      setContainerOrder(getDashboardContainersForRole(effectiveRole));
+      setContainerOrder(getDashboardContainersForRole(activeRole));
     }
   };
 
-  // Save container order for the current role
+  const handleViewToggle = (view) => {
+    setDashboardView(view);
+    localStorage.setItem('dashboardView', view);
+  };
+
+  // Save container order for the current view
   const saveContainerOrder = (order) => {
     try {
-      const storageKey = `dashboardOrder_${effectiveRole}`;
+      const storageKey = `dashboardOrder_${activeRole}`;
       localStorage.setItem(storageKey, JSON.stringify(order));
     } catch (error) {
       console.error('Failed to save container order:', error);
@@ -1225,8 +1220,24 @@ function Dashboard() {
       <BriefingErrorBoundary><MorningBriefingCard /></BriefingErrorBoundary>
 
       <div className="dashboard-header-compact">
-        <h1>Today's Command Center</h1>
+        <h1>{dashboardView === 'manager' ? 'Manager Command Center' : "Today's Command Center"}</h1>
         <div className="header-actions">
+          {isManagerOrAdmin && (
+            <div className="dashboard-view-toggle">
+              <button
+                className={`view-toggle-btn ${dashboardView === 'personal' ? 'active' : ''}`}
+                onClick={() => handleViewToggle('personal')}
+              >
+                My Dashboard
+              </button>
+              <button
+                className={`view-toggle-btn ${dashboardView === 'manager' ? 'active' : ''}`}
+                onClick={() => handleViewToggle('manager')}
+              >
+                Manager Dashboard
+              </button>
+            </div>
+          )}
           <div className="header-date">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>

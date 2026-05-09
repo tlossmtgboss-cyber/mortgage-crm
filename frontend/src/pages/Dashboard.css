@@ -2144,6 +2144,40 @@
   gap: 16px;
 }
 
+/* Dashboard View Toggle */
+.dashboard-view-toggle {
+  display: flex;
+  background: #f1f3f5;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.view-toggle-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: #6b7280;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.view-toggle-btn:hover {
+  color: #374151;
+  background: rgba(255,255,255,0.5);
+}
+
+.view-toggle-btn.active {
+  background: #fff;
+  color: #1a1a2e;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-weight: 600;
+}
+
 /* Role Dashboard Container */
 .role-dashboard-container {
   margin-top: 24px;

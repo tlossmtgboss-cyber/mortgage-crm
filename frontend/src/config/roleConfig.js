@@ -632,8 +632,8 @@ export const ROLE_DASHBOARD_CONTAINERS = {
 // =============================================================================
 
 export const ROLE_DEFAULT_ROUTES = {
-  admin: '/admin',
-  site_admin: '/admin',     // Site Administrator lands on Admin Panel (org-scoped)
+  admin: '/dashboard',
+  site_admin: '/dashboard',
   loan_officer: '/dashboard',
   production_assistant: '/dashboard',
   concierge: '/dashboard',  // Same as Production Assistant
