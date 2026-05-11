@@ -168,7 +168,7 @@ const POSEntryPage: React.FC = () => {
 
 /* ─── Auth Gate (Signup / Login tabs) — 4 design variants ─────────── */
 
-type DesignVariant = 'split' | 'personal' | 'journey' | 'luxe';
+type DesignVariant = 'split' | 'personal' | 'journey' | 'luxe' | 'coastal' | 'warm' | 'slate' | 'classic';
 
 function AuthGate({
   onStarted,
@@ -214,10 +214,23 @@ function AuthGate({
     </div>
   );
 
+  const VARIANT_NAMES: Record<DesignVariant, string> = {
+    split: 'Split Hero',
+    personal: 'Personal',
+    journey: 'Journey',
+    luxe: 'Premium',
+    coastal: 'Coastal',
+    warm: 'Warm',
+    slate: 'Slate',
+    classic: 'Classic',
+  };
+
+  const ALL_VARIANTS: DesignVariant[] = ['split', 'personal', 'journey', 'luxe', 'coastal', 'warm', 'slate', 'classic'];
+
   const picker = (
     <div className="pos-picker">
       <span className="pos-picker__label">Design</span>
-      {(['split', 'personal', 'journey', 'luxe'] as const).map((v, i) => (
+      {ALL_VARIANTS.map((v, i) => (
         <button
           key={v}
           className={`pos-picker__btn${variant === v ? ' active' : ''}`}
@@ -225,9 +238,7 @@ function AuthGate({
           type="button"
         >
           {String.fromCharCode(65 + i)}
-          <span className="pos-picker__name">
-            {v === 'split' ? 'Split Hero' : v === 'personal' ? 'Personal' : v === 'journey' ? 'Journey' : 'Premium'}
-          </span>
+          <span className="pos-picker__name">{VARIANT_NAMES[v]}</span>
         </button>
       ))}
     </div>
@@ -331,6 +342,177 @@ function AuthGate({
               <TimerIcon /> Most applicants complete this in under 10 minutes
             </div>
             {trustBadge}
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── E: Coastal / ocean theme ── */
+  if (variant === 'coastal') {
+    return (
+      <div className="pos-start pos-start--coastal">
+        <style>{styles}</style>
+        <div className="pos-coastal">
+          <div className="pos-coastal__header">
+            <div className="pos-coastal__wave" />
+            <div className="pos-coastal__badge">Begin Your Journey Home</div>
+            <h1 className="pos-coastal__title">Mortgage Made<br />Simple</h1>
+            <p className="pos-coastal__text">
+              Clear waters, clear process. Apply in minutes with
+              guidance every step of the way.
+            </p>
+          </div>
+          <div className="pos-start__card">
+            {tabButtons}
+            {formContent}
+            {trustBadge}
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── F: Warm / terracotta ── */
+  if (variant === 'warm') {
+    return (
+      <div className="pos-start pos-start--warm">
+        <style>{styles}</style>
+        <div className="pos-warm">
+          <div className="pos-warm__hero">
+            <div className="pos-warm__content">
+              <div className="pos-warm__icon">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+              </div>
+              <h1 className="pos-warm__title">Welcome Home</h1>
+              <p className="pos-warm__text">
+                Your path to homeownership starts with a simple, guided application.
+                We'll walk through everything together.
+              </p>
+              <div className="pos-warm__stats">
+                <div className="pos-warm__stat">
+                  <span className="pos-warm__stat-num">10</span>
+                  <span className="pos-warm__stat-label">Min to apply</span>
+                </div>
+                <div className="pos-warm__stat-divider" />
+                <div className="pos-warm__stat">
+                  <span className="pos-warm__stat-num">24/7</span>
+                  <span className="pos-warm__stat-label">AI support</span>
+                </div>
+                <div className="pos-warm__stat-divider" />
+                <div className="pos-warm__stat">
+                  <span className="pos-warm__stat-num">100%</span>
+                  <span className="pos-warm__stat-label">Secure</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="pos-warm__form-side">
+            <div className="pos-start__card">
+              <div className="pos-start__logo"><PeLogoIcon /></div>
+              {tabButtons}
+              {formContent}
+              {trustBadge}
+            </div>
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── G: Slate / professional ── */
+  if (variant === 'slate') {
+    return (
+      <div className="pos-start pos-start--slate">
+        <style>{styles}</style>
+        <div className="pos-slate">
+          <div className="pos-slate__topbar">
+            <div className="pos-start__logo"><PeLogoIcon /></div>
+            <span className="pos-slate__topbar-text">Perennia Mortgage</span>
+          </div>
+          <div className="pos-slate__body">
+            <div className="pos-start__card">
+              {tabButtons}
+              {formContent}
+              {trustBadge}
+            </div>
+            <div className="pos-slate__sidebar">
+              <h3 className="pos-slate__sidebar-title">Why apply with us?</h3>
+              <div className="pos-slate__sidebar-items">
+                <div className="pos-slate__sidebar-item">
+                  <div className="pos-slate__sidebar-icon"><CheckCircleIcon /></div>
+                  <div>
+                    <strong>Competitive Rates</strong>
+                    <p>Access to a wide range of loan products and pricing.</p>
+                  </div>
+                </div>
+                <div className="pos-slate__sidebar-item">
+                  <div className="pos-slate__sidebar-icon"><CheckCircleIcon /></div>
+                  <div>
+                    <strong>Fast Pre-Approval</strong>
+                    <p>Get your pre-approval letter in as little as 24 hours.</p>
+                  </div>
+                </div>
+                <div className="pos-slate__sidebar-item">
+                  <div className="pos-slate__sidebar-icon"><CheckCircleIcon /></div>
+                  <div>
+                    <strong>Dedicated Support</strong>
+                    <p>Your loan officer and AI assistant are always available.</p>
+                  </div>
+                </div>
+                <div className="pos-slate__sidebar-item">
+                  <div className="pos-slate__sidebar-icon"><ShieldIcon /></div>
+                  <div>
+                    <strong>Bank-Level Security</strong>
+                    <p>256-bit encryption protects your information.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── H: Classic / navy traditional ── */
+  if (variant === 'classic') {
+    return (
+      <div className="pos-start pos-start--classic">
+        <style>{styles}</style>
+        <div className="pos-classic">
+          <div className="pos-classic__header">
+            <div className="pos-classic__logo-row">
+              <div className="pos-start__logo"><PeLogoIcon /></div>
+              <span className="pos-classic__brand">Perennia</span>
+            </div>
+            <div className="pos-classic__headline">
+              <h1 className="pos-classic__title">Apply for Your Mortgage</h1>
+              <p className="pos-classic__subtitle">
+                Trusted by borrowers nationwide. Complete your application securely in minutes.
+              </p>
+            </div>
+          </div>
+          <div className="pos-classic__card-wrap">
+            <div className="pos-start__card">
+              {tabButtons}
+              {formContent}
+            </div>
+          </div>
+          <div className="pos-classic__footer">
+            <div className="pos-classic__footer-items">
+              <span><TrustIcon /> NMLS Licensed</span>
+              <span className="pos-classic__footer-dot">&middot;</span>
+              <span><ShieldIcon /> 256-bit Encrypted</span>
+              <span className="pos-classic__footer-dot">&middot;</span>
+              <span>Equal Housing Lender</span>
+            </div>
           </div>
         </div>
         {picker}
@@ -1531,6 +1713,408 @@ const styles = `
   }
 
 
+  /* ═══════ E: COASTAL / OCEAN ═══════ */
+
+  .pos-start--coastal {
+    background: linear-gradient(180deg, #0C4A6E 0%, #0C4A6E 220px, #f0f9ff 220px);
+    flex-direction: column;
+    padding-top: 0;
+    gap: 0;
+  }
+  .pos-coastal {
+    max-width: 520px;
+    width: 100%;
+  }
+  .pos-coastal__header {
+    text-align: center;
+    padding: 48px 20px 56px;
+    position: relative;
+  }
+  .pos-coastal__wave {
+    position: absolute;
+    bottom: -2px;
+    left: -40vw;
+    right: -40vw;
+    height: 60px;
+    background: #f0f9ff;
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  }
+  .pos-coastal__badge {
+    display: inline-block;
+    padding: 6px 18px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.12);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #7DD3FC;
+    margin-bottom: 20px;
+    border: 1px solid rgba(125,211,252,0.2);
+  }
+  .pos-coastal__title {
+    font-size: 38px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 14px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+  .pos-coastal__text {
+    font-size: 16px;
+    color: rgba(255,255,255,0.65);
+    margin: 0;
+    line-height: 1.6;
+    position: relative;
+  }
+  .pos-start--coastal .pos-start__card {
+    max-width: 520px;
+    margin: 0 auto;
+    border-radius: 20px;
+    box-shadow: 0 16px 56px rgba(12,74,110,0.1), 0 2px 8px rgba(12,74,110,0.04);
+    position: relative;
+  }
+  .pos-start--coastal .pos-start__logo { background: #0C4A6E; }
+  .pos-start--coastal .pos-start__tab.active { background: #0C4A6E; }
+  .pos-start--coastal .pos-start__btn { background: #0C4A6E; }
+  .pos-start--coastal .pos-start__btn:hover:not(:disabled) { background: #0E5A84; }
+  .pos-start--coastal .pos-start__input:focus {
+    border-color: #0C4A6E;
+    box-shadow: 0 0 0 3px rgba(12,74,110,0.08);
+  }
+  .pos-start--coastal .pos-start__label { color: #0C4A6E; }
+  .pos-start--coastal .pos-start__title { color: #0C4A6E; }
+  .pos-start--coastal .pos-start__link-btn { color: #0C4A6E; }
+
+
+  /* ═══════ F: WARM / TERRACOTTA ═══════ */
+
+  .pos-start--warm {
+    background: #FDF6F0;
+    padding: 0;
+  }
+  .pos-warm {
+    display: flex;
+    width: 100%;
+    min-height: 100vh;
+  }
+  .pos-warm__hero {
+    flex: 1;
+    background: linear-gradient(160deg, #92400E 0%, #B45309 40%, #D97706 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .pos-warm__hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 70% 30%, rgba(255,255,255,0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .pos-warm__content {
+    position: relative;
+    max-width: 400px;
+    color: #fff;
+    text-align: center;
+  }
+  .pos-warm__icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 28px;
+    color: #FDE68A;
+  }
+  .pos-warm__title {
+    font-size: 40px;
+    font-weight: 700;
+    margin: 0 0 16px;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+  .pos-warm__text {
+    font-size: 16px;
+    line-height: 1.65;
+    color: rgba(255,255,255,0.75);
+    margin: 0 0 40px;
+  }
+  .pos-warm__stats {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 20px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 16px;
+    backdrop-filter: blur(8px);
+  }
+  .pos-warm__stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 0 24px;
+  }
+  .pos-warm__stat-num {
+    font-size: 26px;
+    font-weight: 800;
+    color: #FDE68A;
+  }
+  .pos-warm__stat-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .pos-warm__stat-divider {
+    width: 1px;
+    height: 36px;
+    background: rgba(255,255,255,0.15);
+  }
+  .pos-warm__form-side {
+    flex: 0 0 520px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 48px;
+    background: #FDF6F0;
+  }
+  .pos-start--warm .pos-start__card {
+    box-shadow: none;
+    max-width: 420px;
+    padding: 0;
+    background: transparent;
+  }
+  .pos-start--warm .pos-start__logo { background: #92400E; }
+  .pos-start--warm .pos-start__tab.active { background: #92400E; }
+  .pos-start--warm .pos-start__btn { background: #92400E; }
+  .pos-start--warm .pos-start__btn:hover:not(:disabled) { background: #A34F10; }
+  .pos-start--warm .pos-start__input:focus {
+    border-color: #92400E;
+    box-shadow: 0 0 0 3px rgba(146,64,14,0.08);
+  }
+  .pos-start--warm .pos-start__label { color: #78350F; }
+  .pos-start--warm .pos-start__title { color: #78350F; }
+  .pos-start--warm .pos-start__link-btn { color: #92400E; }
+
+
+  /* ═══════ G: SLATE / PROFESSIONAL ═══════ */
+
+  .pos-start--slate {
+    background: #F8FAFC;
+    padding: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pos-slate {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .pos-slate__topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 32px;
+    background: #1E293B;
+    border-bottom: 1px solid #334155;
+  }
+  .pos-slate__topbar .pos-start__logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #334155;
+    margin: 0;
+  }
+  .pos-slate__topbar-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: #F1F5F9;
+    letter-spacing: -0.01em;
+  }
+  .pos-slate__body {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 48px;
+    padding: 56px 40px;
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .pos-start--slate .pos-start__card {
+    max-width: 440px;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(15,23,42,0.08);
+    position: sticky;
+    top: 32px;
+  }
+  .pos-start--slate .pos-start__logo { display: none; }
+  .pos-start--slate .pos-start__tab.active { background: #1E293B; }
+  .pos-start--slate .pos-start__btn { background: #1E293B; }
+  .pos-start--slate .pos-start__btn:hover:not(:disabled) { background: #334155; }
+  .pos-start--slate .pos-start__input:focus {
+    border-color: #1E293B;
+    box-shadow: 0 0 0 3px rgba(30,41,59,0.08);
+  }
+  .pos-start--slate .pos-start__label { color: #1E293B; }
+  .pos-start--slate .pos-start__title { color: #1E293B; }
+  .pos-start--slate .pos-start__link-btn { color: #1E293B; }
+  .pos-slate__sidebar {
+    max-width: 340px;
+    padding-top: 16px;
+  }
+  .pos-slate__sidebar-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1E293B;
+    margin: 0 0 24px;
+    letter-spacing: -0.01em;
+  }
+  .pos-slate__sidebar-items {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .pos-slate__sidebar-item {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .pos-slate__sidebar-icon {
+    flex-shrink: 0;
+    color: #1E293B;
+    margin-top: 2px;
+  }
+  .pos-slate__sidebar-item strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1E293B;
+    margin-bottom: 4px;
+  }
+  .pos-slate__sidebar-item p {
+    margin: 0;
+    font-size: 13px;
+    color: #64748B;
+    line-height: 1.5;
+  }
+
+
+  /* ═══════ H: CLASSIC / NAVY ═══════ */
+
+  .pos-start--classic {
+    background: #fff;
+    padding: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pos-classic {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .pos-classic__header {
+    background: linear-gradient(135deg, #1E3A5F 0%, #1B2E4A 50%, #162642 100%);
+    padding: 32px 40px 52px;
+    text-align: center;
+    position: relative;
+  }
+  .pos-classic__logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .pos-classic__logo-row .pos-start__logo {
+    background: rgba(255,255,255,0.12);
+    margin: 0;
+  }
+  .pos-classic__brand {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.01em;
+  }
+  .pos-classic__title {
+    font-size: 36px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+  .pos-classic__subtitle {
+    font-size: 16px;
+    color: rgba(255,255,255,0.6);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .pos-classic__card-wrap {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0 24px;
+    margin-top: -28px;
+    position: relative;
+  }
+  .pos-start--classic .pos-start__card {
+    max-width: 480px;
+    border-radius: 16px;
+    box-shadow: 0 16px 48px rgba(30,58,95,0.12), 0 2px 8px rgba(0,0,0,0.06);
+    padding: 40px;
+  }
+  .pos-start--classic .pos-start__logo { display: none; }
+  .pos-start--classic .pos-start__tab.active { background: #1E3A5F; }
+  .pos-start--classic .pos-start__btn { background: #1E3A5F; }
+  .pos-start--classic .pos-start__btn:hover:not(:disabled) { background: #2A4E7A; }
+  .pos-start--classic .pos-start__input:focus {
+    border-color: #1E3A5F;
+    box-shadow: 0 0 0 3px rgba(30,58,95,0.08);
+  }
+  .pos-start--classic .pos-start__label { color: #1E3A5F; }
+  .pos-start--classic .pos-start__title { color: #1E3A5F; }
+  .pos-start--classic .pos-start__link-btn { color: #1E3A5F; }
+  .pos-classic__footer {
+    padding: 20px 40px;
+    background: #F8FAFC;
+    border-top: 1px solid #E2E8F0;
+    text-align: center;
+  }
+  .pos-classic__footer-items {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 12px;
+    color: #94A3B8;
+    font-weight: 500;
+  }
+  .pos-classic__footer-items span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pos-classic__footer-items svg {
+    width: 13px;
+    height: 13px;
+  }
+  .pos-classic__footer-dot {
+    color: #CBD5E1;
+  }
+
+
   /* ═══════ DESIGN PICKER ═══════ */
 
   .pos-picker {
@@ -1594,24 +2178,32 @@ const styles = `
   /* ═══════ RESPONSIVE ═══════ */
 
   @media (max-width: 960px) {
-    .pos-split {
+    .pos-split, .pos-warm {
       flex-direction: column;
     }
-    .pos-split__hero {
+    .pos-split__hero, .pos-warm__hero {
       padding: 48px 32px;
       min-height: auto;
     }
     .pos-split__title { font-size: 32px; }
-    .pos-split__form-side {
+    .pos-split__form-side, .pos-warm__form-side {
       flex: none;
       padding: 32px 24px;
     }
     .pos-split__testimonial { display: none; }
+    .pos-warm__title { font-size: 32px; }
+    .pos-slate__body {
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      padding: 32px 20px;
+    }
+    .pos-slate__sidebar { max-width: 440px; padding-top: 0; }
   }
   @media (max-width: 480px) {
     .pos-split__features { display: none; }
     .pos-split__title { font-size: 28px; }
-    .pos-split__form-side { padding: 24px 16px; }
+    .pos-split__form-side, .pos-warm__form-side { padding: 24px 16px; }
     .pos-journey__steps { padding: 28px 8px 40px; }
     .pos-journey__line { width: 20px; margin: 22px 4px 0; }
     .pos-journey__label { font-size: 10px; }
@@ -1621,9 +2213,18 @@ const styles = `
     .pos-luxe__feat { padding: 0 16px; }
     .pos-personal__quote { padding: 0; font-size: 14px; }
     .pos-personal__avatar { width: 72px; height: 72px; font-size: 24px; }
-    .pos-picker { bottom: 12px; padding: 6px 10px; gap: 4px; }
-    .pos-picker__btn { padding: 8px 12px; font-size: 15px; }
-    .pos-picker__name { font-size: 8px; }
+    .pos-warm__stats { flex-direction: column; gap: 12px; }
+    .pos-warm__stat-divider { width: 40px; height: 1px; }
+    .pos-warm__title { font-size: 28px; }
+    .pos-warm__icon { width: 60px; height: 60px; margin-bottom: 20px; }
+    .pos-coastal__title { font-size: 28px; }
+    .pos-classic__title { font-size: 26px; }
+    .pos-classic__header { padding: 24px 20px 44px; }
+    .pos-classic__footer-items { flex-wrap: wrap; gap: 8px; }
+    .pos-classic__footer-dot { display: none; }
+    .pos-picker { bottom: 12px; padding: 6px 10px; gap: 3px; }
+    .pos-picker__btn { padding: 6px 10px; font-size: 14px; }
+    .pos-picker__name { font-size: 7px; }
     .pos-picker__label { display: none; }
   }
 `;

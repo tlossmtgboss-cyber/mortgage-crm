@@ -19,13 +19,16 @@ import { IntakePanel, EMPTY_INTAKE } from './IntakePanel';
 import type { IntakeData } from './IntakePanel';
 
 import { PersonalPanel } from './panels/PersonalPanel';
+import { CoBorrowerPanel } from './panels/CoBorrowerPanel';
 import { ResidencePanel } from './panels/ResidencePanel';
 import { EmploymentPanel } from './panels/EmploymentPanel';
 import { AssetsPanel } from './panels/AssetsPanel';
 import { LiabilitiesPanel } from './panels/LiabilitiesPanel';
 import { REOPanel } from './panels/REOPanel';
 import { LoanPanel } from './panels/LoanPanel';
+import { DocumentsUploadPanel } from './panels/DocumentsUploadPanel';
 import { DeclarationsPanel } from './panels/DeclarationsPanel';
+import { CreditAuthPanel } from './panels/CreditAuthPanel';
 import { SchedulePanel } from './panels/SchedulePanel';
 import { ReviewPanel } from './panels/ReviewPanel';
 
@@ -41,13 +44,16 @@ export interface POSContainerProps {
 
 const PANEL_COMPONENTS: Record<SectionKey, React.ComponentType<any>> = {
   personal: PersonalPanel,
+  coborrower: CoBorrowerPanel,
   residence: ResidencePanel,
   employment: EmploymentPanel,
   assets: AssetsPanel,
   liabilities: LiabilitiesPanel,
   reo: REOPanel,
   loan: LoanPanel,
+  documents_upload: DocumentsUploadPanel,
   declarations: DeclarationsPanel,
+  credit_auth: CreditAuthPanel,
   schedule: SchedulePanel,
   review: ReviewPanel,
 };

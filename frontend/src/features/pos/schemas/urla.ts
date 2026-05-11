@@ -166,13 +166,16 @@ export const declarationsSchema = z.object({
 
 export const SECTION_SCHEMAS: Record<SectionKey, z.ZodTypeAny> = {
   personal: personalSchema,
+  coborrower: z.object({}).passthrough(),
   residence: residenceSchema,
   employment: employmentSchema,
   assets: assetsSchema,
   liabilities: liabilitiesSchema,
   reo: reoSchema,
   loan: loanSchema,
+  documents_upload: z.object({}).passthrough(),
   declarations: declarationsSchema,
+  credit_auth: z.object({}).passthrough(),
   schedule: z.object({}).passthrough(),
   review: z.object({}).passthrough(),
 };

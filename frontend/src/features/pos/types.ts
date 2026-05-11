@@ -2,51 +2,63 @@
 
 export type SectionKey =
   | 'personal'
+  | 'coborrower'
   | 'residence'
   | 'employment'
   | 'assets'
   | 'liabilities'
   | 'reo'
   | 'loan'
+  | 'documents_upload'
   | 'declarations'
+  | 'credit_auth'
   | 'schedule'
   | 'review';
 
 export const SECTION_ORDER: SectionKey[] = [
   'personal',
+  'coborrower',
   'residence',
   'employment',
   'assets',
   'liabilities',
   'reo',
   'loan',
+  'documents_upload',
   'declarations',
+  'credit_auth',
   'schedule',
   'review',
 ];
 
 export const SECTION_LABELS: Record<SectionKey, string> = {
   personal: 'Personal Information',
+  coborrower: 'Co-Borrower',
   residence: 'Address & Contact',
   employment: 'Employment & Income',
   assets: 'Assets',
   liabilities: 'Liabilities',
   reo: 'Real Estate Owned',
   loan: 'Loan & Property',
+  documents_upload: 'Upload Documents',
   declarations: 'Declarations',
+  credit_auth: 'Credit Authorization',
   schedule: 'Schedule a Call',
   review: 'Review & Sign',
 };
 
 export const SECTION_CAPTIONS: Record<SectionKey, string> = {
   personal: 'Legal name, date of birth, ID',
+  coborrower: 'Co-borrower name, SSN, and contact info',
   residence: 'Where you live and how to reach you',
   employment: 'Current job, prior history, other income',
   assets: 'Bank, retirement, gifts and credits',
   liabilities: 'Credit cards, loans, monthly obligations',
   reo: 'Properties you currently own',
   loan: 'Subject property and loan details',
+  documents_upload: 'Pay stubs, tax returns, bank statements',
   declarations: 'Disclosure questions and HMDA',
+  credit_auth: 'Authorize a credit check to proceed',
   schedule: 'Book a time with your loan officer',
   review: 'Final review and submission',
 };
