@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { usePermissions } from '../../contexts/PermissionContext';
-import api from '../../services/api';
-import { toast } from '../../utils/toast';
+import { usePermissions } from '../../contexts/PermissionContext.js';
+import api from '../../services/api.js';
+import { toast } from '../../utils/toast.js';
 import './MarketingSettings.css';
 
 function POSSettings() {
@@ -15,6 +15,9 @@ function POSSettings() {
   const [orgSlug, setOrgSlug] = useState('');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [calendarUsers, setCalendarUsers] = useState([]);
+  const [selectedCalendarUser, setSelectedCalendarUser] = useState(null);
+  const [calendarSaving, setCalendarSaving] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -23,9 +26,10 @@ function POSSettings() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [teamRes, settingsRes] = await Promise.allSettled([
+      const [teamRes, settingsRes, calTeamRes] = await Promise.allSettled([
         api.get('/api/v1/settings/team-roles'),
         api.get('/api/v1/pos/settings'),
+        api.get('/api/v1/calendar-settings/team'),
       ]);
 
       if (teamRes.status === 'fulfilled') {
@@ -51,8 +55,17 @@ function POSSettings() {
 
       if (settingsRes.status === 'fulfilled') {
         const data = settingsRes.value?.data;
-        if (data?.org_slug) setOrgSlug(data.org_slug);
-        if (data?.calendar_user) setCalendarAssignment(data.calendar_user);
+        if (data?.user_slug) setOrgSlug(data.user_slug);
+        else if (data?.org_slug) setOrgSlug(data.org_slug);
+        if (data?.calendar_user) {
+          setCalendarAssignment(data.calendar_user);
+          setSelectedCalendarUser(data.calendar_user.user_id || null);
+        }
+      }
+
+      if (calTeamRes.status === 'fulfilled') {
+        const members = calTeamRes.value?.data?.data?.members || [];
+        setCalendarUsers(members);
       }
     } catch {
       // individual failures handled above via allSettled
@@ -64,6 +77,20 @@ function POSSettings() {
   const posUrl = orgSlug
     ? `${window.location.origin}/apply/v3/purchase?lo=${orgSlug}`
     : `${window.location.origin}/apply/v3/purchase`;
+
+  const handleCalendarUserChange = async (userId) => {
+    setCalendarSaving(true);
+    try {
+      await api.put('/api/v1/pos/settings/calendar-user', {
+        calendar_user_id: userId,
+      });
+      toast.success(userId ? 'Calendar assignment updated' : 'Set to auto-assign');
+    } catch (error) {
+      toast.error('Failed to update calendar assignment');
+    } finally {
+      setCalendarSaving(false);
+    }
+  };
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(posUrl).then(() => {
@@ -93,7 +120,7 @@ function POSSettings() {
       <section className="pos-settings__section">
         <h2 className="pos-settings__heading">Application Link</h2>
         <p className="pos-settings__desc">
-          Share this link with borrowers to start a loan application. The application is associated with your team.
+          Share this link with borrowers to start a loan application. This link is unique to you — applications will be attributed to your account.
         </p>
         <div className="pos-settings__link-box">
           <input
@@ -166,19 +193,58 @@ function POSSettings() {
       <section className="pos-settings__section">
         <h2 className="pos-settings__heading">Calendar Association</h2>
         <p className="pos-settings__desc">
-          When a borrower schedules a call through the application, the appointment is booked on the assigned loan officer's calendar.
-          The loan officer is determined by the lead/loan assignment at the time of application.
+          Choose whose calendar borrowers see when scheduling a call through the application.
         </p>
 
-        <div className="pos-settings__calendar-info">
-          <div className="pos-settings__calendar-row">
-            <span className="pos-settings__calendar-label">Scheduling for</span>
-            <span className="pos-settings__calendar-value">
-              {calendarAssignment
-                ? `${calendarAssignment.name} (${calendarAssignment.email})`
-                : 'Primary Loan Officer assigned to the lead'}
-            </span>
+        {/* Calendar user picker */}
+        <div className="pos-settings__calendar-picker">
+          <label className="pos-settings__picker-label">Schedule appointments on:</label>
+          <div className="pos-settings__picker-grid">
+            <div
+              className={`pos-settings__picker-option ${!selectedCalendarUser ? 'selected' : ''}`}
+              onClick={() => {
+                setSelectedCalendarUser(null);
+                handleCalendarUserChange(null);
+              }}
+            >
+              <div className="pos-settings__picker-radio">
+                {!selectedCalendarUser && <div className="pos-settings__picker-dot" />}
+              </div>
+              <div>
+                <div className="pos-settings__picker-name">Auto-assign (Default)</div>
+                <div className="pos-settings__picker-desc">
+                  Calendar determined by the loan officer assigned to the lead
+                </div>
+              </div>
+            </div>
+            {calendarUsers.map(cu => (
+              <div
+                key={cu.user_id}
+                className={`pos-settings__picker-option ${selectedCalendarUser === cu.user_id ? 'selected' : ''}`}
+                onClick={() => {
+                  setSelectedCalendarUser(cu.user_id);
+                  handleCalendarUserChange(cu.user_id);
+                }}
+              >
+                <div className="pos-settings__picker-radio">
+                  {selectedCalendarUser === cu.user_id && <div className="pos-settings__picker-dot" />}
+                </div>
+                <div className="pos-settings__picker-avatar">
+                  {getInitials(cu.name || cu.email)}
+                </div>
+                <div>
+                  <div className="pos-settings__picker-name">{cu.name || cu.email}</div>
+                  <div className="pos-settings__picker-desc">{cu.email}</div>
+                </div>
+              </div>
+            ))}
           </div>
+          {calendarSaving && (
+            <div style={{ fontSize: 12, color: '#218D8D', marginTop: 8 }}>Saving...</div>
+          )}
+        </div>
+
+        <div className="pos-settings__calendar-info" style={{ marginTop: 16 }}>
           <div className="pos-settings__calendar-row">
             <span className="pos-settings__calendar-label">Calendar source</span>
             <span className="pos-settings__calendar-value">
