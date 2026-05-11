@@ -9,18 +9,16 @@
  * - Completed clients (finished financing)
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useDebounce } from '../hooks/useDebounce';
+import { useDebounce } from '../hooks/useDebounce.js';
 import { useNavigate } from 'react-router-dom';
-import { smartDocsAPI } from '../services/smartDocsApi';
-import { API_BASE_URL } from '../services/api';
-import { usePermissions } from '../contexts/PermissionContext';
-import { isMasterAdmin } from '../config/roleConfig';
-import AdminContracts from '../components/AdminContracts';
-import BatchReminderModal from '../components/smart-docs/BatchReminderModal';
-import SectionErrorBoundary from '../components/SectionErrorBoundary';
+import { smartDocsAPI } from '../services/smartDocsApi.js';
+import { API_BASE_URL } from '../services/api.js';
+import { usePermissions } from '../contexts/PermissionContext.js';
+import BatchReminderModal from '../components/smart-docs/BatchReminderModal.jsx';
+import SectionErrorBoundary from '../components/SectionErrorBoundary.jsx';
 import './SmartDocs.css';
-import { toast } from '../utils/toast';
-import { getToken, getUserData } from '../utils/tokenStore';
+import { toast } from '../utils/toast.js';
+import { getToken } from '../utils/tokenStore.js';
 
 function SmartDocs() {
   const navigate = useNavigate();
@@ -477,14 +475,6 @@ function SmartDocs() {
       toast.error('Failed to create duplicate tasks');
     }
   };
-
-  // Platform admin sees contracts dashboard instead of loan documents
-  const userEmail = (() => {
-    try { return getUserData()?.email; } catch { return null; }
-  })();
-  if (isPlatformAdmin || isMasterAdmin(userEmail)) {
-    return <AdminContracts />;
-  }
 
   // Access denied if user doesn't have documents permissions
   if (!canAccessSmartDocs) {
