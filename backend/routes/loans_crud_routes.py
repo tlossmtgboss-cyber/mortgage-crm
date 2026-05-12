@@ -536,6 +536,13 @@ async def create_loan(
         logger.error(f"Failed to import models: {e}")
         return JSONResponse(status_code=422, content={"detail": "Model import error"})
 
+    has_permission = get_has_permission()
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not is_platform_admin:
+        has_create_perm = has_permission(current_user.id, 'loans.create', db)
+        if not has_create_perm:
+            raise HTTPException(status_code=403, detail="Permission denied: loans.create")
+
     # ---- Input validation (contact info, amounts, rates) ----
     try:
         from validation.common import (
@@ -821,6 +828,16 @@ async def update_loan(
     """
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
+    has_permission = get_has_permission()
+
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not is_platform_admin:
+        has_update_perm = (
+            has_permission(current_user.id, 'loans.update', db)
+            or has_permission(current_user.id, 'loans.update_all', db)
+        )
+        if not has_update_perm:
+            raise HTTPException(status_code=403, detail="Permission denied: loans.update")
 
     loan = filter_loans_by_permissions(
         db.query(Loan), current_user, db

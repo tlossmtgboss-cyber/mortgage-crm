@@ -212,6 +212,13 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             except Exception:
                 pass  # Encompass table may not exist
 
+        try:
+            from workflows.lead_workflow_engine import VALID_TRANSITIONS as _LEAD_VALID_TRANSITIONS
+        except ImportError:
+            _LEAD_VALID_TRANSITIONS = {}
+
+        rejected_ids = []
+
         for lead_id in lead_ids:
             try:
                 lead = bulk_leads_map.get(lead_id)
@@ -222,6 +229,13 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
                 # Update the stage
                 old_lead_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
+
+                allowed = _LEAD_VALID_TRANSITIONS.get(old_lead_status, [])
+                if allowed and new_status not in allowed:
+                    rejected_ids.append(lead_id)
+                    errors.append(f"Lead {lead_id}: invalid transition '{old_lead_status}' -> '{new_status}'")
+                    continue
+
                 lead.stage = new_status
                 now = datetime.now(timezone.utc)
                 lead.updated_at = now
@@ -254,6 +268,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 # Record stage change in history
                 try:
                     stage_history = StageHistory(
+                        organization_id=getattr(lead, 'organization_id', None),
                         entity_type='lead',
                         entity_id=lead.id,
                         lead_id=lead.id,
@@ -353,6 +368,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             "updated_count": updated_count,
             "new_status": new_status,
             "errors": errors,
+            "rejected_ids": rejected_ids,
             "message": f"Successfully updated {updated_count} leads to '{new_status}'" + (f" with {len(errors)} errors" if errors else "") + cascade_msg,
             "cascade_summary": cascade_totals,
         }
@@ -626,6 +642,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
             # Record stage change in history
             stage_history = StageHistory(
+                organization_id=getattr(lead, 'organization_id', None),
                 entity_type='lead',
                 entity_id=lead.id,
                 lead_id=lead.id,
@@ -828,47 +845,49 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         Uses SELECT ... FOR UPDATE SKIP LOCKED to prevent concurrent requests from
         double-claiming the same leads/loans.
         """
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
+
         try:
-            # Lock and claim orphan leads atomically using FOR UPDATE SKIP LOCKED
-            # This prevents concurrent requests from claiming the same leads
             result = db.execute(
                 text("""
                     UPDATE leads SET owner_id = :user_id
                     WHERE id IN (
                         SELECT id FROM leads
                         WHERE owner_id IS NULL
+                          AND organization_id = :org_id
                         FOR UPDATE SKIP LOCKED
                     )
                 """),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             )
             leads_claimed = result.rowcount
 
-            # Lock and claim orphan loans atomically using FOR UPDATE SKIP LOCKED
             result = db.execute(
                 text("""
                     UPDATE loans SET loan_officer_id = :user_id
                     WHERE id IN (
                         SELECT id FROM loans
-                        WHERE loan_officer_id IS NULL
-                           OR loan_officer_id NOT IN (SELECT id FROM users)
+                        WHERE (loan_officer_id IS NULL
+                           OR loan_officer_id NOT IN (SELECT id FROM users))
+                          AND organization_id = :org_id
                         FOR UPDATE SKIP LOCKED
                     )
                 """),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             )
             loans_claimed = result.rowcount
 
             db.commit()
 
-            # Get totals
             result = db.execute(
                 text("""
                     SELECT
-                        (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id) as leads,
-                        (SELECT COUNT(*) FROM loans WHERE loan_officer_id = :user_id) as loans
+                        (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id AND organization_id = :org_id) as leads,
+                        (SELECT COUNT(*) FROM loans WHERE loan_officer_id = :user_id AND organization_id = :org_id) as loans
                 """),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             )
             totals = result.fetchone()
 

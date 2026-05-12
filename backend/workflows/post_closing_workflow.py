@@ -9,12 +9,15 @@ Automatically processes loans when they close and triggers:
 - Strategic employer identification
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import json
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 HIGH_REFERRAL_SCORE = 80
@@ -33,6 +36,7 @@ class WorkflowTrigger(BaseModel):
     loan_status: str
     closed_date: datetime
     loan_officer_id: int
+    organization_id: Optional[int] = None
 
 
 class LeadWorkflowData(BaseModel):
@@ -65,7 +69,7 @@ class PostClosingWorkflowEngine:
         # WORKFLOW 1: HIGH REFERRAL SOURCE (Score >= 80)
         # ================================================================
         if lead.referral_source_score >= HIGH_REFERRAL_SCORE:
-            print(f"🌟 HIGH REFERRAL: {lead.first_name} (Score: {lead.referral_source_score})")
+            logger.info(f"HIGH REFERRAL: {lead.first_name} (Score: {lead.referral_source_score})")
             results.append({
                 "workflow": "high_referral",
                 "action": "add_tags",
@@ -83,7 +87,7 @@ class PostClosingWorkflowEngine:
         # WORKFLOW 2: MEDIUM REFERRAL SOURCE (Score 50-79)
         # ================================================================
         elif lead.referral_source_score >= MEDIUM_REFERRAL_SCORE:
-            print(f"💙 MEDIUM REFERRAL: {lead.first_name} (Score: {lead.referral_source_score})")
+            logger.info(f"MEDIUM REFERRAL: {lead.first_name} (Score: {lead.referral_source_score})")
             results.append({
                 "workflow": "medium_referral",
                 "action": "add_tags",
@@ -101,7 +105,7 @@ class PostClosingWorkflowEngine:
         # WORKFLOW 3: LOW REFERRAL SOURCE (Score < 50)
         # ================================================================
         else:
-            print(f"⚪ LOW REFERRAL: {lead.first_name} (Score: {lead.referral_source_score})")
+            logger.info(f"LOW REFERRAL: {lead.first_name} (Score: {lead.referral_source_score})")
             results.append({
                 "workflow": "low_referral",
                 "action": "add_tags",
@@ -113,7 +117,7 @@ class PostClosingWorkflowEngine:
         # ================================================================
         is_manager = lead.employees_managed >= 5 or lead.leadership_level in ["Executive", "Manager", "Team Lead", "Director", "VP"]
         if is_manager:
-            print(f"💼 WORKPLACE OPPORTUNITY: {lead.first_name} manages {lead.employees_managed} people")
+            logger.info(f"WORKPLACE OPPORTUNITY: {lead.first_name} manages {lead.employees_managed} people")
             results.append({
                 "workflow": "workplace_opportunity",
                 "action": "add_tags",
@@ -139,7 +143,7 @@ class PostClosingWorkflowEngine:
         # WORKFLOW 5: HIGH-REFERRAL INDUSTRY
         # ================================================================
         if lead.industry and lead.industry in HIGH_REFERRAL_INDUSTRIES:
-            print(f"🏢 HIGH-REFERRAL INDUSTRY: {lead.first_name} works in {lead.industry}")
+            logger.info(f"HIGH-REFERRAL INDUSTRY: {lead.first_name} works in {lead.industry}")
             results.append({
                 "workflow": "high_referral_industry",
                 "action": "add_tags",
@@ -160,7 +164,7 @@ class PostClosingWorkflowEngine:
         is_strategic = (lead.company_size and lead.company_size >= 200) or (lead.employees_managed >= 20)
         if is_strategic:
             company = lead.employer_name or "Unknown Company"
-            print(f"🎯 STRATEGIC EMPLOYER: {company} ({lead.company_size or lead.employees_managed} employees)")
+            logger.info(f"STRATEGIC EMPLOYER: {company} ({lead.company_size or lead.employees_managed} employees)")
             results.append({
                 "workflow": "strategic_employer",
                 "action": "add_tags",
@@ -188,8 +192,8 @@ class PostClosingWorkflowEngine:
         try:
             self.db.execute(text("""
                 INSERT INTO workflow_executions
-                (workflow_id, workflow_name, lead_id, loan_id, trigger_event, execution_status, actions_completed)
-                VALUES (:workflow_id, :workflow_name, :lead_id, :loan_id, :trigger_event, :status, :actions)
+                (workflow_id, workflow_name, lead_id, loan_id, trigger_event, execution_status, actions_completed, organization_id)
+                VALUES (:workflow_id, :workflow_name, :lead_id, :loan_id, :trigger_event, :status, :actions, :org_id)
             """), {
                 "workflow_id": "post_closing_referral",
                 "workflow_name": "Post-Closing Referral Automation",
@@ -197,11 +201,12 @@ class PostClosingWorkflowEngine:
                 "loan_id": trigger.loan_id,
                 "trigger_event": "loan_closed",
                 "status": "success",
-                "actions": json.dumps(results)
+                "actions": json.dumps(results),
+                "org_id": trigger.organization_id,
             })
             self.db.commit()
         except Exception as e:
-            print(f"Warning: Could not log workflow execution: {e}")
+            logger.warning(f"Could not log workflow execution: {e}")
 
         return {
             "success": True,

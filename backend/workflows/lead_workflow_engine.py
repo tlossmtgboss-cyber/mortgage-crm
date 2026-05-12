@@ -84,6 +84,7 @@ class LeadStatusChange(BaseModel):
     loan_type: Optional[str] = None
     loan_amount: Optional[float] = None
     changed_at: datetime = None
+    organization_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -104,14 +105,19 @@ class LeadWorkflowEngine:
     def __init__(self, db: Session):
         self.db = db
 
-    def _check_active_sla_workflow(self, lead_id: int) -> bool:
+    def _check_active_sla_workflow(self, lead_id: int, organization_id: int = None) -> bool:
         """Check if lead has an active SLA-driven workflow instance."""
         try:
-            existing = self.db.execute(text("""
+            query = """
                 SELECT id FROM workflow_instances
                 WHERE lead_id = :lid AND status = 'active'
-                LIMIT 1
-            """), {"lid": lead_id}).fetchone()
+            """
+            params = {"lid": lead_id}
+            if organization_id:
+                query += " AND organization_id = :org_id"
+                params["org_id"] = organization_id
+            query += " LIMIT 1"
+            existing = self.db.execute(text(query), params).fetchone()
             return existing is not None
         except Exception as e:
             logger.warning(f"Error checking active SLA workflow for lead {lead_id}: {e}")
@@ -638,7 +644,7 @@ class LeadWorkflowEngine:
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # Defer to SLA workflow if active
-        if self._check_active_sla_workflow(sc.lead_id):
+        if self._check_active_sla_workflow(sc.lead_id, sc.organization_id):
             logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy under_contract actions")
             return actions
 
@@ -689,7 +695,7 @@ class LeadWorkflowEngine:
         actions = []
 
         # Defer to SLA workflow if active
-        if self._check_active_sla_workflow(sc.lead_id):
+        if self._check_active_sla_workflow(sc.lead_id, sc.organization_id):
             logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy nurture actions")
             return actions
 
@@ -726,7 +732,7 @@ class LeadWorkflowEngine:
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # Defer to SLA workflow if active
-        if self._check_active_sla_workflow(sc.lead_id):
+        if self._check_active_sla_workflow(sc.lead_id, sc.organization_id):
             logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy DNQ actions")
             return actions
 
@@ -811,7 +817,7 @@ class LeadWorkflowEngine:
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # Defer to SLA workflow if active
-        if self._check_active_sla_workflow(sc.lead_id):
+        if self._check_active_sla_workflow(sc.lead_id, sc.organization_id):
             logger.info(f"Lead {sc.lead_id} in SLA workflow, skipping legacy disclosed actions")
             return actions
 
@@ -857,14 +863,19 @@ class LeadWorkflowEngine:
 
         # 4. Auto-enroll the linked loan in the SLA workflow
         try:
-            loan_row = self.db.execute(text("""
+            disclosed_query = """
                 SELECT lo.id AS loan_id
                 FROM leads ld
                 JOIN loans lo ON lo.loan_number = ld.loan_number
                 WHERE ld.id = :lead_id
                   AND ld.loan_number IS NOT NULL
-                LIMIT 1
-            """), {"lead_id": sc.lead_id}).fetchone()
+            """
+            disclosed_params = {"lead_id": sc.lead_id}
+            if sc.organization_id:
+                disclosed_query += " AND ld.organization_id = :org_id AND lo.organization_id = :org_id"
+                disclosed_params["org_id"] = sc.organization_id
+            disclosed_query += " LIMIT 1"
+            loan_row = self.db.execute(text(disclosed_query), disclosed_params).fetchone()
 
             if loan_row:
                 from services.workflow_sla_service import WorkflowSLAService
@@ -965,15 +976,16 @@ class LeadWorkflowEngine:
         try:
             self.db.execute(text("""
                 INSERT INTO workflow_executions
-                (workflow_id, workflow_name, lead_id, trigger_event, execution_status, actions_completed)
-                VALUES (:workflow_id, :workflow_name, :lead_id, :trigger_event, :status, :actions)
+                (workflow_id, workflow_name, lead_id, trigger_event, execution_status, actions_completed, organization_id)
+                VALUES (:workflow_id, :workflow_name, :lead_id, :trigger_event, :status, :actions, :org_id)
             """), {
                 "workflow_id": f"lead_status_{sc.old_status}_{sc.new_status}".lower().replace(" ", "_"),
                 "workflow_name": f"Lead Status Change: {sc.old_status} → {sc.new_status}",
                 "lead_id": sc.lead_id,
                 "trigger_event": "lead_status_change",
                 "status": "success",
-                "actions": json.dumps(actions)
+                "actions": json.dumps(actions),
+                "org_id": sc.organization_id,
             })
             self.db.commit()
         except Exception as e:
@@ -987,26 +999,32 @@ class TimeBasedWorkflowEngine:
     def __init__(self, db: Session):
         self.db = db
 
-    async def check_stale_leads(self) -> List[Dict]:
-        """Check for leads that need time-based actions"""
+    async def check_stale_leads(self, organization_id: int = None) -> List[Dict]:
+        """Check for leads that need time-based actions.
+
+        Args:
+            organization_id: Required tenant filter. When None, queries all orgs
+                             grouped by organization_id (backward-compatible but
+                             each sub-query still filters per-org).
+        """
         actions = []
         now = datetime.now(timezone.utc)
 
         # Check for New leads not contacted within 1 hour
-        actions.extend(await self._check_new_no_contact(now))
+        actions.extend(await self._check_new_no_contact(now, organization_id))
 
         # Check for Attempted Contact leads needing re-engagement
-        actions.extend(await self._check_attempted_reengagement(now))
+        actions.extend(await self._check_attempted_reengagement(now, organization_id))
 
         # Check for stalled Prospects
-        actions.extend(await self._check_stalled_prospects(now))
+        actions.extend(await self._check_stalled_prospects(now, organization_id))
 
         # Check for incomplete applications
-        actions.extend(await self._check_incomplete_applications(now))
+        actions.extend(await self._check_incomplete_applications(now, organization_id))
 
         return actions
 
-    async def _check_new_no_contact(self, now: datetime) -> List[Dict]:
+    async def _check_new_no_contact(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find New leads without contact attempt after threshold"""
         actions = []
         threshold = now - timedelta(hours=TIME_RULES["new_no_contact"])
@@ -1014,17 +1032,22 @@ class TimeBasedWorkflowEngine:
 
         try:
             # Find stale new leads
-            result = self.db.execute(text("""
+            query = """
                 SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.full_name as owner_name, l.created_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'New'
                 AND l.created_at < :threshold
                 AND l.created_at > :max_age
-            """), {
+            """
+            params = {
                 "threshold": threshold,
-                "max_age": now - timedelta(hours=24)  # Don't process very old leads
-            })
+                "max_age": now - timedelta(hours=24),  # Don't process very old leads
+            }
+            if organization_id:
+                query += " AND l.organization_id = :org_id"
+                params["org_id"] = organization_id
+            result = self.db.execute(text(query), params)
 
             for row in result.fetchall():
                 lead_age_hours = (now - row.created_at).total_seconds() / 3600
@@ -1062,19 +1085,24 @@ class TimeBasedWorkflowEngine:
 
         return actions
 
-    async def _check_attempted_reengagement(self, now: datetime) -> List[Dict]:
+    async def _check_attempted_reengagement(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find Attempted Contact leads needing re-engagement"""
         actions = []
         threshold = now - timedelta(hours=TIME_RULES["attempted_reengagement"])
 
         try:
-            result = self.db.execute(text("""
+            query = """
                 SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.full_name as owner_name, l.updated_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'Attempted Contact'
                 AND l.updated_at < :threshold
-            """), {"threshold": threshold})
+            """
+            params = {"threshold": threshold}
+            if organization_id:
+                query += " AND l.organization_id = :org_id"
+                params["org_id"] = organization_id
+            result = self.db.execute(text(query), params)
 
             for row in result.fetchall():
                 first_name = row.name.split()[0] if row.name else "there"
@@ -1099,19 +1127,24 @@ class TimeBasedWorkflowEngine:
 
         return actions
 
-    async def _check_stalled_prospects(self, now: datetime) -> List[Dict]:
+    async def _check_stalled_prospects(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find Prospects stalled without progression"""
         actions = []
         threshold = now - timedelta(hours=TIME_RULES["prospect_stalled"])
 
         try:
-            result = self.db.execute(text("""
+            query = """
                 SELECT l.id, l.name, l.email, l.owner_id, u.full_name as owner_name, l.updated_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'Prospect'
                 AND l.updated_at < :threshold
-            """), {"threshold": threshold})
+            """
+            params = {"threshold": threshold}
+            if organization_id:
+                query += " AND l.organization_id = :org_id"
+                params["org_id"] = organization_id
+            result = self.db.execute(text(query), params)
 
             for row in result.fetchall():
                 first_name = row.name.split()[0] if row.name else "there"
@@ -1136,19 +1169,24 @@ class TimeBasedWorkflowEngine:
 
         return actions
 
-    async def _check_incomplete_applications(self, now: datetime) -> List[Dict]:
+    async def _check_incomplete_applications(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find incomplete applications needing follow-up"""
         actions = []
         threshold = now - timedelta(hours=TIME_RULES["application_incomplete"])
 
         try:
-            result = self.db.execute(text("""
+            query = """
                 SELECT l.id, l.name, l.email, l.phone, l.owner_id, u.full_name as owner_name, l.updated_at
                 FROM leads l
                 LEFT JOIN users u ON l.owner_id = u.id
                 WHERE l.stage = 'Application Started'
                 AND l.updated_at < :threshold
-            """), {"threshold": threshold})
+            """
+            params = {"threshold": threshold}
+            if organization_id:
+                query += " AND l.organization_id = :org_id"
+                params["org_id"] = organization_id
+            result = self.db.execute(text(query), params)
 
             for row in result.fetchall():
                 first_name = row.name.split()[0] if row.name else "there"

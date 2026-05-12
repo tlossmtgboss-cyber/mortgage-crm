@@ -17,6 +17,47 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+SCHEDULER_ADVISORY_LOCK_ID = 728372
+
+_advisory_lock_conn = None
+
+
+def _try_acquire_scheduler_lock() -> bool:
+    """Attempt to acquire a PostgreSQL session-level advisory lock.
+
+    Returns True if this process should run the scheduler, False if another
+    replica already holds the lock.  The lock is held for the lifetime of the
+    connection (session-level), so it is released automatically when the
+    process exits.
+    """
+    global _advisory_lock_conn
+
+    database_url = os.environ.get("DATABASE_URL", "")
+    if not database_url or "sqlite" in database_url:
+        return True
+
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+    try:
+        import psycopg2
+        conn = psycopg2.connect(database_url, connect_timeout=10)
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("SELECT pg_try_advisory_lock(%s)", (SCHEDULER_ADVISORY_LOCK_ID,))
+        got_lock = cur.fetchone()[0]
+        cur.close()
+
+        if got_lock:
+            _advisory_lock_conn = conn
+            return True
+        else:
+            conn.close()
+            return False
+    except Exception as e:
+        logger.warning("Failed to acquire scheduler advisory lock, starting scheduler anyway: %s", e)
+        return True
+
 # Reminder configuration (global defaults; orgs can override via scheduler_configs.notification_settings)
 REMINDER_INTERVALS = {
     "first": 24,      # Hours after last activity
@@ -1744,6 +1785,19 @@ scheduler_service = SchedulerService()
 
 
 def init_scheduler():
-    """Initialize and start the scheduler. Call this from main.py on startup."""
+    """Initialize and start the scheduler. Call this from main.py on startup.
+
+    Uses a PostgreSQL advisory lock to ensure only one replica runs the
+    scheduler when multiple replicas are deployed (e.g. numReplicas=2 on
+    Railway).  If the lock cannot be acquired, the scheduler is skipped
+    entirely on this replica.
+    """
+    if not _try_acquire_scheduler_lock():
+        logger.warning(
+            "Another replica holds the scheduler advisory lock (%s). "
+            "Skipping scheduler startup on this replica.",
+            SCHEDULER_ADVISORY_LOCK_ID,
+        )
+        return scheduler_service
     scheduler_service.start()
     return scheduler_service

@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 class WorkflowActionExecutor:
     """Executes workflow actions from the engine"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, organization_id: int = None):
         self.db = db
+        self.organization_id = organization_id
         self._init_services()
 
     def _init_services(self):
@@ -266,6 +267,19 @@ class WorkflowActionExecutor:
 
         return templates.get(template, templates.get("welcome_new_lead"))
 
+    def _resolve_organization_id(self, lead_id) -> int:
+        """Look up the organization_id for a lead, falling back to self.organization_id."""
+        if lead_id:
+            try:
+                row = self.db.execute(text(
+                    "SELECT organization_id FROM leads WHERE id = :lid LIMIT 1"
+                ), {"lid": lead_id}).fetchone()
+                if row and row[0]:
+                    return row[0]
+            except Exception as e:
+                logger.warning(f"Could not resolve organization_id for lead {lead_id}: {e}")
+        return self.organization_id
+
     async def _create_task(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a task for loan officer"""
         try:
@@ -274,18 +288,21 @@ class WorkflowActionExecutor:
             due_hours = data.get("due_hours", 24)
             priority = data.get("priority", "medium")
             lead_id = data.get("lead_id")
-            assigned_to = data.get("assigned_to")
+            owner_id = data.get("assigned_to")
 
-            if not title or not assigned_to:
+            if not title or not owner_id:
                 return {"success": False, "error": "Missing title or assigned_to"}
+
+            organization_id = data.get("organization_id") or self._resolve_organization_id(lead_id)
+            if not organization_id:
+                return {"success": False, "error": "Could not determine organization_id for task"}
 
             due_date = datetime.now(timezone.utc) + timedelta(hours=due_hours)
 
-            # Try to insert task into database
             try:
                 result = self.db.execute(text("""
-                    INSERT INTO tasks (title, description, due_date, priority, status, lead_id, assigned_to, created_at)
-                    VALUES (:title, :description, :due_date, :priority, 'pending', :lead_id, :assigned_to, :created_at)
+                    INSERT INTO tasks (title, description, due_date, priority, status, lead_id, owner_id, organization_id, created_at)
+                    VALUES (:title, :description, :due_date, :priority, 'pending', :lead_id, :owner_id, :organization_id, :created_at)
                     RETURNING id
                 """), {
                     "title": title,
@@ -293,7 +310,8 @@ class WorkflowActionExecutor:
                     "due_date": due_date,
                     "priority": priority,
                     "lead_id": lead_id,
-                    "assigned_to": assigned_to,
+                    "owner_id": owner_id,
+                    "organization_id": organization_id,
                     "created_at": datetime.now(timezone.utc)
                 })
 
@@ -304,7 +322,6 @@ class WorkflowActionExecutor:
                 return {"success": True, "task_id": task_id}
             except Exception as table_error:
                 self.db.rollback()
-                # Table might not exist - log the task info instead
                 logger.info(f"Task logged (table not available): {title} - {description}")
                 return {"success": True, "skipped": True, "reason": f"Task table not available: {str(table_error)[:100]}"}
 
@@ -319,20 +336,20 @@ class WorkflowActionExecutor:
             target = data.get("loan_officer_id") or data.get("user_id")
             message = data.get("message")
             lead_id = data.get("lead_id")
-            priority = data.get("priority", "normal")
 
             if not message:
                 return {"success": False, "error": "Missing message"}
 
-            # Insert notification into database
+            organization_id = data.get("organization_id") or self._resolve_organization_id(lead_id)
+
             self.db.execute(text("""
-                INSERT INTO notifications (user_id, message, type, priority, lead_id, read, created_at)
-                VALUES (:user_id, :message, 'workflow_alert', :priority, :lead_id, false, :created_at)
+                INSERT INTO notifications (user_id, title, message, type, is_read, organization_id, created_at)
+                VALUES (:user_id, :title, :message, 'workflow_alert', false, :organization_id, :created_at)
             """), {
                 "user_id": target,
+                "title": "Workflow Alert",
                 "message": message,
-                "priority": priority,
-                "lead_id": lead_id,
+                "organization_id": organization_id,
                 "created_at": datetime.now(timezone.utc)
             })
             self.db.commit()
@@ -343,7 +360,6 @@ class WorkflowActionExecutor:
         except Exception as e:
             logger.error(f"Alert creation error: {e}")
             self.db.rollback()
-            # Don't fail the workflow if notifications table doesn't exist
             return {"success": True, "skipped": True, "reason": str(e)}
 
     async def _manage_drip(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -352,29 +368,36 @@ class WorkflowActionExecutor:
             lead_id = data.get("lead_id")
             campaign = data.get("campaign")
             stop_campaign = data.get("stop_campaign")
+            organization_id = data.get("organization_id") or self._resolve_organization_id(lead_id)
 
             # Stop previous campaign if specified
             if stop_campaign:
-                self.db.execute(text("""
+                stop_query = """
                     UPDATE drip_enrollments
                     SET status = 'stopped', stopped_at = :now
                     WHERE lead_id = :lead_id AND campaign_name = :campaign AND status = 'active'
-                """), {
+                """
+                stop_params = {
                     "lead_id": lead_id,
                     "campaign": stop_campaign,
-                    "now": datetime.now(timezone.utc)
-                })
+                    "now": datetime.now(timezone.utc),
+                }
+                if organization_id:
+                    stop_query += " AND organization_id = :org_id"
+                    stop_params["org_id"] = organization_id
+                self.db.execute(text(stop_query), stop_params)
 
             # Enroll in new campaign
             if campaign:
                 self.db.execute(text("""
-                    INSERT INTO drip_enrollments (lead_id, campaign_name, status, enrolled_at)
-                    VALUES (:lead_id, :campaign, 'active', :now)
+                    INSERT INTO drip_enrollments (lead_id, campaign_name, status, enrolled_at, organization_id)
+                    VALUES (:lead_id, :campaign, 'active', :now, :org_id)
                     ON CONFLICT (lead_id, campaign_name) DO UPDATE SET status = 'active', enrolled_at = :now
                 """), {
                     "lead_id": lead_id,
                     "campaign": campaign,
-                    "now": datetime.now(timezone.utc)
+                    "now": datetime.now(timezone.utc),
+                    "org_id": organization_id,
                 })
 
             self.db.commit()
@@ -393,15 +416,17 @@ class WorkflowActionExecutor:
             lead_id = data.get("lead_id")
             activity_type = data.get("activity_type", "note")
             note = data.get("note", "")
+            organization_id = data.get("organization_id") or self._resolve_organization_id(lead_id)
 
             self.db.execute(text("""
-                INSERT INTO lead_activities (lead_id, activity_type, note, created_at)
-                VALUES (:lead_id, :activity_type, :note, :created_at)
+                INSERT INTO lead_activities (lead_id, activity_type, note, created_at, organization_id)
+                VALUES (:lead_id, :activity_type, :note, :created_at, :org_id)
             """), {
                 "lead_id": lead_id,
                 "activity_type": activity_type,
                 "note": note,
-                "created_at": datetime.now(timezone.utc)
+                "created_at": datetime.now(timezone.utc),
+                "org_id": organization_id,
             })
             self.db.commit()
 
@@ -418,16 +443,18 @@ class WorkflowActionExecutor:
         try:
             lead_id = data.get("lead_id")
             tags = data.get("tags", [])
+            organization_id = data.get("organization_id") or self._resolve_organization_id(lead_id)
 
             for tag in tags:
                 self.db.execute(text("""
-                    INSERT INTO lead_tags (lead_id, tag, created_at)
-                    VALUES (:lead_id, :tag, :created_at)
+                    INSERT INTO lead_tags (lead_id, tag, created_at, organization_id)
+                    VALUES (:lead_id, :tag, :created_at, :org_id)
                     ON CONFLICT (lead_id, tag) DO NOTHING
                 """), {
                     "lead_id": lead_id,
                     "tag": tag,
-                    "created_at": datetime.now(timezone.utc)
+                    "created_at": datetime.now(timezone.utc),
+                    "org_id": organization_id,
                 })
 
             self.db.commit()

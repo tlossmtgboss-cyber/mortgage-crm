@@ -176,7 +176,7 @@ def run_parallel_sync(*functions_with_args):
 
     results = [None] * len(functions_with_args)
 
-    with ThreadPoolExecutor(max_workers=min(len(functions_with_args), 10)) as executor:
+    with ThreadPoolExecutor(max_workers=min(len(functions_with_args), 3)) as executor:
         future_to_idx = {}
         for idx, (func, args) in enumerate(functions_with_args):
             future = executor.submit(func, *args)

@@ -30,7 +30,7 @@ from auth.dependencies import get_current_user
 from database import get_db
 from database.enums import LeadStage, LoanStage
 from database.models import User, Lead, Loan, Task, ReferralPartner, AIColleagueAction, Notification
-from performance_cache import get_cached, set_cached, run_parallel_sync
+from performance_cache import get_cached, set_cached, run_parallel_sync, DASHBOARD_TTL
 from database import SessionLocal
 from services.dashboard_metrics_service import (
     calculate_stage_performance,
@@ -549,5 +549,5 @@ async def get_dashboard(
     }
 
     # Cache for blazing fast retrieval on subsequent requests
-    set_cached(cache_key, result)
+    set_cached(cache_key, result, ttl=DASHBOARD_TTL)
     return result
