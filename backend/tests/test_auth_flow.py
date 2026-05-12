@@ -393,8 +393,9 @@ class TestTokenBlacklist:
         assert mem.get("k") is None
 
     def test_disabled_blacklist_always_passes(self):
-        """When blacklist is not enabled, is_blacklisted always returns False."""
-        bl = TokenBlacklist()  # _enabled defaults to False
+        """When blacklist is explicitly disabled, is_blacklisted always returns False."""
+        bl = TokenBlacklist()
+        bl._enabled = False  # Explicitly disable
         token = _make_access_token()
         assert bl.is_blacklisted(token) is False
         assert bl.add(token, reason="test") is False
@@ -534,30 +535,27 @@ class TestPasswordHashing:
 
     def test_password_hash_verification(self):
         """A hashed password verifies correctly with bcrypt."""
-        from passlib.context import CryptContext
-        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        import bcrypt
 
         raw = "SuperSecret123!"
-        hashed = ctx.hash(raw)
+        hashed = bcrypt.hashpw(raw.encode(), bcrypt.gensalt()).decode()
 
-        assert ctx.verify(raw, hashed) is True
-        assert ctx.verify("WrongPassword", hashed) is False
+        assert bcrypt.checkpw(raw.encode(), hashed.encode()) is True
+        assert bcrypt.checkpw("WrongPassword".encode(), hashed.encode()) is False
 
     def test_password_hash_is_not_plaintext(self):
         """get_password_hash never returns the plaintext password."""
-        from passlib.context import CryptContext
-        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        import bcrypt
         raw = "MyPassword"
-        hashed = ctx.hash(raw)
+        hashed = bcrypt.hashpw(raw.encode(), bcrypt.gensalt()).decode()
         assert hashed != raw
         assert hashed.startswith("$2b$") or hashed.startswith("$2a$")
 
     def test_different_passwords_produce_different_hashes(self):
         """Two different passwords produce different bcrypt hashes."""
-        from passlib.context import CryptContext
-        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        h1 = ctx.hash("Password1")
-        h2 = ctx.hash("Password2")
+        import bcrypt
+        h1 = bcrypt.hashpw("Password1".encode(), bcrypt.gensalt()).decode()
+        h2 = bcrypt.hashpw("Password2".encode(), bcrypt.gensalt()).decode()
         assert h1 != h2
 
     @requires_db
@@ -576,7 +574,45 @@ class TestPasswordHashing:
 
 @pytest.mark.integration
 class TestTokenRefresh:
-    """Tests for the /token/refresh endpoint."""
+    """Tests for the /token/refresh endpoint.
+
+    Covers the critical refresh flow that LOs hit multiple times per day
+    (15-minute access token expiry). Tests both the secure-token path
+    (production) and edge cases: expired, blacklisted, missing, and
+    wrong-type tokens.
+    """
+
+    def _mock_refresh_deps(self, mock_models, mock_funcs, mock_config, user,
+                           use_secure=True, blacklist=None):
+        """Wire up runtime-import helpers used by refresh_access_token."""
+        mock_user_cls = MagicMock()
+        mock_user_cls.filter.return_value.first.return_value = user
+        mock_models.return_value = {
+            "User": mock_user_cls,
+            "Organization": MagicMock(),
+            "PromoCode": MagicMock(),
+            "Subscription": MagicMock(),
+            "SubscriptionPlan": MagicMock(),
+        }
+        mock_funcs.return_value = {
+            "create_access_token": lambda data=None, user_id=None, tenant_id=None, **kw: _make_access_token(
+                sub=data.get("sub", "user@test.com") if data else "user@test.com",
+                user_id=user_id or 1,
+                tenant_id=tenant_id or "1",
+            ),
+            "create_refresh_token": lambda data=None, user_id=None, **kw: _make_refresh_token(),
+            "verify_password": lambda plain, hashed: True,
+            "get_password_hash": lambda p: "hashed",
+        }
+        mock_config.return_value = {
+            "SECRET_KEY": _TEST_SECRET,
+            "ALGORITHM": "HS256",
+            "ACCESS_TOKEN_EXPIRE_MINUTES": 15,
+            "_USE_SECURE_TOKENS": use_secure,
+            "token_blacklist": blacklist,
+            "_verify_secure_token": verify_token if use_secure else None,
+            "TokenType": TokenType if use_secure else None,
+        }
 
     @requires_db
     def test_refresh_with_invalid_token(self, client):
@@ -590,3 +626,178 @@ class TestTokenRefresh:
         expired = _make_expired_token(token_type="refresh")
         resp = client.post("/token/refresh", json={"refresh_token": expired})
         assert resp.status_code in (401, 422, 500)
+
+    @requires_db
+    @patch("routes.auth_routes.get_models")
+    @patch("routes.auth_routes.get_auth_functions")
+    @patch("routes.auth_routes.get_auth_config")
+    def test_refresh_valid_token_returns_new_access_token(
+        self, mock_config, mock_funcs, mock_models, client
+    ):
+        """Valid refresh token returns a new access token and bearer type.
+
+        This is the happy-path flow LOs hit every 15 minutes.
+        """
+        user = MagicMock(
+            id=1, email="lo@example.com", organization_id=1,
+        )
+        bl = _make_blacklist()
+        self._mock_refresh_deps(mock_models, mock_funcs, mock_config, user,
+                                use_secure=True, blacklist=bl)
+
+        refresh = _make_refresh_token(sub="lo@example.com", user_id=1)
+        resp = client.post("/token/refresh", json={"refresh_token": refresh})
+
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        body = resp.json()
+        assert "access_token" in body, "Response must include access_token"
+        assert body["token_type"] == "bearer"
+        assert body["expires_in"] == 15 * 60, "Expiry should be 15 minutes in seconds"
+
+        # The new access token should be a valid JWT
+        new_access = body["access_token"]
+        parts = new_access.split(".")
+        assert len(parts) == 3, "New access token should be valid JWT format"
+
+    @requires_db
+    @patch("routes.auth_routes.get_models")
+    @patch("routes.auth_routes.get_auth_functions")
+    @patch("routes.auth_routes.get_auth_config")
+    def test_refresh_valid_token_blacklists_used_refresh(
+        self, mock_config, mock_funcs, mock_models, client
+    ):
+        """After successful refresh, the used refresh token is blacklisted (rotation)."""
+        user = MagicMock(
+            id=1, email="lo@example.com", organization_id=1,
+        )
+        bl = _make_blacklist()
+        self._mock_refresh_deps(mock_models, mock_funcs, mock_config, user,
+                                use_secure=True, blacklist=bl)
+
+        refresh = _make_refresh_token(sub="lo@example.com", user_id=1)
+        resp = client.post("/token/refresh", json={"refresh_token": refresh})
+        assert resp.status_code == 200
+
+        # The used refresh token should now be blacklisted
+        assert bl.is_blacklisted(refresh) is True, (
+            "Used refresh token must be blacklisted to prevent replay"
+        )
+
+    @requires_db
+    @patch("routes.auth_routes.get_models")
+    @patch("routes.auth_routes.get_auth_functions")
+    @patch("routes.auth_routes.get_auth_config")
+    def test_refresh_blacklisted_token_returns_401(
+        self, mock_config, mock_funcs, mock_models, client
+    ):
+        """A blacklisted (already-used) refresh token is rejected with 401."""
+        user = MagicMock(
+            id=1, email="lo@example.com", organization_id=1,
+        )
+        bl = _make_blacklist()
+        self._mock_refresh_deps(mock_models, mock_funcs, mock_config, user,
+                                use_secure=True, blacklist=bl)
+
+        refresh = _make_refresh_token(sub="lo@example.com", user_id=1)
+
+        # Pre-blacklist the token (simulates it was already used)
+        bl.add(refresh, reason="token_rotation")
+
+        # _verify_secure_token checks the global token_blacklist, so we need
+        # to patch it to use our test blacklist instance
+        with patch("auth.tokens.token_blacklist", bl):
+            resp = client.post("/token/refresh", json={"refresh_token": refresh})
+
+        assert resp.status_code == 401, (
+            f"Blacklisted refresh token should return 401, got {resp.status_code}: {resp.text}"
+        )
+
+    @requires_db
+    def test_refresh_missing_token_returns_422(self, client):
+        """Missing refresh_token field in the body returns 422 (validation error)."""
+        resp = client.post("/token/refresh", json={})
+        assert resp.status_code == 422, (
+            f"Missing refresh_token should return 422, got {resp.status_code}"
+        )
+
+    @requires_db
+    def test_refresh_empty_body_returns_422(self, client):
+        """Empty request body returns 422."""
+        resp = client.post("/token/refresh", content=b"", headers={"Content-Type": "application/json"})
+        assert resp.status_code == 422, (
+            f"Empty body should return 422, got {resp.status_code}"
+        )
+
+    @requires_db
+    @patch("routes.auth_routes.get_models")
+    @patch("routes.auth_routes.get_auth_functions")
+    @patch("routes.auth_routes.get_auth_config")
+    def test_refresh_with_access_token_returns_401(
+        self, mock_config, mock_funcs, mock_models, client
+    ):
+        """Using an access token instead of a refresh token returns 401.
+
+        This verifies the token type check (expected_type=TokenType.REFRESH)
+        rejects access tokens, preventing token confusion attacks.
+        """
+        user = MagicMock(
+            id=1, email="lo@example.com", organization_id=1,
+        )
+        bl = _make_blacklist()
+        self._mock_refresh_deps(mock_models, mock_funcs, mock_config, user,
+                                use_secure=True, blacklist=bl)
+
+        # Create an ACCESS token (not refresh)
+        access_token = _make_access_token(sub="lo@example.com", user_id=1)
+
+        resp = client.post("/token/refresh", json={"refresh_token": access_token})
+        assert resp.status_code == 401, (
+            f"Access token used as refresh should return 401, got {resp.status_code}: {resp.text}"
+        )
+
+    @requires_db
+    @patch("routes.auth_routes.get_models")
+    @patch("routes.auth_routes.get_auth_functions")
+    @patch("routes.auth_routes.get_auth_config")
+    def test_refresh_for_deleted_user_returns_401(
+        self, mock_config, mock_funcs, mock_models, client
+    ):
+        """Refresh token for a user that no longer exists in the DB returns 401."""
+        # User query returns None (user deleted)
+        self._mock_refresh_deps(mock_models, mock_funcs, mock_config, None,
+                                use_secure=True, blacklist=_make_blacklist())
+
+        refresh = _make_refresh_token(sub="deleted@example.com", user_id=999)
+
+        resp = client.post("/token/refresh", json={"refresh_token": refresh})
+        assert resp.status_code == 401, (
+            f"Refresh for deleted user should return 401, got {resp.status_code}: {resp.text}"
+        )
+
+    @requires_db
+    @patch("routes.auth_routes.get_models")
+    @patch("routes.auth_routes.get_auth_functions")
+    @patch("routes.auth_routes.get_auth_config")
+    def test_refresh_after_revoke_all_returns_401(
+        self, mock_config, mock_funcs, mock_models, client
+    ):
+        """After revoke_all_for_user (password change), refresh token is rejected."""
+        user = MagicMock(
+            id=1, email="lo@example.com", organization_id=1,
+        )
+        bl = _make_blacklist()
+        self._mock_refresh_deps(mock_models, mock_funcs, mock_config, user,
+                                use_secure=True, blacklist=bl)
+
+        refresh = _make_refresh_token(sub="lo@example.com", user_id=1)
+
+        # Simulate global revocation (e.g., password change)
+        bl.revoke_all_for_user(1)
+
+        # Patch the global blacklist so verify_token sees the revocation
+        with patch("auth.tokens.token_blacklist", bl):
+            resp = client.post("/token/refresh", json={"refresh_token": refresh})
+
+        assert resp.status_code == 401, (
+            f"Refresh after revoke_all should return 401, got {resp.status_code}: {resp.text}"
+        )

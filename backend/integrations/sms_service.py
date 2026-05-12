@@ -174,6 +174,31 @@ class SMSClient:
 
         except Exception as e:
             logger.error(f"Transmission error to ...{normalized_phone[-4:] if normalized_phone else '????'}: {e}", exc_info=True)
+
+            # Queue for retry on transient transmission errors
+            if self.db:
+                try:
+                    from .sms_retry_queue import enqueue_sms
+                    queue_id = enqueue_sms(
+                        self.db,
+                        to_phone=normalized_phone,
+                        message_body=message,
+                        from_phone=self.from_number,
+                        lead_id=lead_id,
+                        user_id=user_id,
+                        consent_record_id=consent_record_id,
+                        consent_verified_at=consent_verified_at,
+                        consent_method=consent_method,
+                    )
+                    if queue_id:
+                        logger.info(
+                            "SMS queued for retry (id=%s) after transmission error to ...%s",
+                            queue_id, normalized_phone[-4:] if normalized_phone else "????",
+                        )
+                        return {"success": False, "error": f"SMS transmission error: {e}", "queued_for_retry": True, "queue_id": queue_id}
+                except Exception as q_err:
+                    logger.warning("Failed to enqueue SMS for retry: %s", q_err)
+
             return {"success": False, "error": f"SMS transmission error: {e}"}
 
     def send_templated_sms(

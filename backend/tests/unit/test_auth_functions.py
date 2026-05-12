@@ -2,7 +2,7 @@
 Authentication Utility Function Unit Tests
 
 Tests for core authentication functions:
-- Password hashing (bcrypt via passlib)
+- Password hashing (bcrypt)
 - Password verification
 - Access token creation
 - Refresh token creation

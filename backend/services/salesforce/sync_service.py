@@ -2011,7 +2011,13 @@ class SalesforceSyncService:
         'Funded', 'Closed', 'Closed Won', 'Closed - Converted',
         'Loan Funded', 'Completed', 'Purchased', 'File Complete',
         'Post-Closing', 'Post-Funding', 'Loan Sold', 'Settled',
+        'Shipped', 'Loan Shipped',
     }
+
+    # CRM stages that are terminal/funded — used when the stage_map transform
+    # has already converted the SF status to an UPPERCASE CRM stage.
+    _CRM_FUNDED_STAGES = {'FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY'}
+    _CRM_MUM_STAGES = {'FUNDED'}
 
     def _classify_record_bucket(self, data: Dict[str, Any]) -> str:
         """
@@ -2039,11 +2045,18 @@ class SalesforceSyncService:
                 return 'loan'
             return 'lead'
 
-        # Check lead statuses first (exact match)
+        # The stage value might already be a CRM stage (UPPERCASE) if
+        # the field mapping used a stage_map transform. Check that first.
+        if sf_status in self._CRM_MUM_STAGES:
+            return 'loan_funded'
+        if sf_status in self._CRM_FUNDED_STAGES:
+            return 'loan'
+
+        # Check lead statuses first (exact match on raw SF values)
         if sf_status in self.LEAD_STATUSES:
             return 'lead'
 
-        # Check funded statuses
+        # Check funded statuses (raw SF values)
         if sf_status in self.FUNDED_STATUSES:
             return 'loan_funded'
 
@@ -2051,8 +2064,8 @@ class SalesforceSyncService:
         mapped_stage = self._map_salesforce_stage(sf_status)
         if mapped_stage == 'FUNDED':
             return 'loan_funded'
-        if mapped_stage == 'CANCELLED':
-            return 'loan'  # Keep cancelled loans in loans table
+        if mapped_stage in ('CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY'):
+            return 'loan'
 
         # Everything else with a recognized loan stage goes to loans
         # (APPLICATION, PROCESSING, SUBMITTED, UNDERWRITING, CTC, etc.)
@@ -2139,6 +2152,16 @@ class SalesforceSyncService:
             """), {"email": email, "user_id": user_id}).fetchone()
             if row:
                 return {"table": "loans", "id": row[0], "stage": row[1]}
+
+        # 6. Fallback: mum_clients by email (scoped to user)
+        if email:
+            row = db.execute(sa_text("""
+                SELECT id FROM mum_clients
+                WHERE LOWER(email) = LOWER(:email) AND user_id = :user_id
+                LIMIT 1
+            """), {"email": email, "user_id": user_id}).fetchone()
+            if row:
+                return {"table": "mum_clients", "id": row[0], "stage": None}
 
         return None
 
@@ -2720,6 +2743,26 @@ class SalesforceSyncService:
         if not sf_id:
             return False
 
+        # --- Status gate: skip records that belong in MUM, not leads ---
+        sf_status = (
+            sf_record.get('MtgPlanner_CRM__Status__c')
+            or sf_record.get('Status')
+            or ''
+        )
+        if sf_status in self.FUNDED_STATUSES:
+            logger.info(
+                f"Skipping lead creation for SF {sf_type} {sf_id}: "
+                f"status '{sf_status}' is funded/closed — belongs in MUM, not leads"
+            )
+            return False
+        mapped = self._map_salesforce_stage(sf_status)
+        if mapped == 'FUNDED':
+            logger.info(
+                f"Skipping lead creation for SF {sf_type} {sf_id}: "
+                f"status '{sf_status}' maps to FUNDED — belongs in MUM, not leads"
+            )
+            return False
+
         # Check if already exists by salesforce_id
         existing = db.execute(text("""
             SELECT id FROM leads
@@ -2731,8 +2774,6 @@ class SalesforceSyncService:
             return False
 
         # Cross-entity dedup: check if a LOAN already exists with this SF ID.
-        # This prevents creating a duplicate lead when the legacy webhook
-        # already created a loan from the same Salesforce record.
         existing_loan = db.execute(text("""
             SELECT id, stage FROM loans
             WHERE salesforce_id = :sf_id AND loan_officer_id = :user_id
@@ -2743,6 +2784,20 @@ class SalesforceSyncService:
             logger.info(
                 f"Skipping lead creation for SF {sf_type} {sf_id}: "
                 f"already exists as loan {existing_loan[0]} (stage={existing_loan[1]})"
+            )
+            return False
+
+        # Cross-entity dedup: check if a MUM CLIENT already exists with this SF ID.
+        existing_mum = db.execute(text("""
+            SELECT id FROM mum_clients
+            WHERE salesforce_id = :sf_id
+            LIMIT 1
+        """), {"sf_id": sf_id}).fetchone()
+
+        if existing_mum:
+            logger.info(
+                f"Skipping lead creation for SF {sf_type} {sf_id}: "
+                f"already exists as MUM client {existing_mum[0]}"
             )
             return False
 
@@ -2777,6 +2832,20 @@ class SalesforceSyncService:
                 logger.info(
                     f"Skipping lead creation for SF {sf_type} {sf_id}: "
                     f"loan {existing_loan_by_email[0]} already exists with matching email"
+                )
+                return False
+
+            # Cross-entity dedup by email: check if a MUM CLIENT exists with this email
+            existing_mum_by_email = db.execute(text("""
+                SELECT id FROM mum_clients
+                WHERE LOWER(email) = LOWER(:email) AND user_id = :user_id
+                LIMIT 1
+            """), {"email": email, "user_id": user_id}).fetchone()
+
+            if existing_mum_by_email:
+                logger.info(
+                    f"Skipping lead creation for SF {sf_type} {sf_id}: "
+                    f"MUM client {existing_mum_by_email[0]} already exists with matching email"
                 )
                 return False
 
@@ -2896,6 +2965,21 @@ class SalesforceSyncService:
         """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
 
         if existing:
+            return False
+
+        # Cross-entity dedup: check MUM clients by salesforce_id.
+        # If a record is already in MUM, don't create a duplicate loan.
+        existing_mum = db.execute(text("""
+            SELECT id FROM mum_clients
+            WHERE salesforce_id = :sf_id
+            LIMIT 1
+        """), {"sf_id": sf_id}).fetchone()
+
+        if existing_mum:
+            logger.info(
+                f"Skipping loan creation for SF Opportunity {sf_id}: "
+                f"already exists as MUM client {existing_mum[0]}"
+            )
             return False
 
         # Cross-entity dedup: check if a LEAD already exists with this SF ID.

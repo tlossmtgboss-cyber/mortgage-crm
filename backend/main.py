@@ -866,6 +866,15 @@ except Exception as e:
     logger.warning(f"⚠️ Request context middleware not loaded: {e}")
 
 # ============================================================================
+# GZIP COMPRESSION — Compress responses >= 1 KB to reduce bandwidth
+# Added as outermost middleware so it compresses the final response body
+# after all other middleware has processed.
+# ============================================================================
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+logger.info("✅ GZip compression middleware enabled (minimum_size=1000)")
+
+# ============================================================================
 # SIGNAL HANDLERS — Cooperative shutdown with uvicorn
 # ============================================================================
 # Sets the shutdown flag on SIGTERM/SIGINT so health checks return 503 immediately.
@@ -924,19 +933,19 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 def verify_password(plain: str, hashed: str) -> bool:
     """Verify a plaintext password against a bcrypt hash.
 
-    Backward-compatible with hashes created by passlib's CryptContext(bcrypt).
+    Backward-compatible with existing bcrypt hashes.
     """
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password using bcrypt (direct, no passlib wrapper)."""
+    """Hash a password using bcrypt."""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 # Backward-compat shim: many route files receive pwd_context and call .hash()/.verify()
 class _BcryptCompat:
-    """Drop-in replacement for passlib CryptContext with bcrypt scheme."""
+    """Drop-in replacement providing .hash()/.verify() over raw bcrypt."""
     def hash(self, password: str) -> str:
         return get_password_hash(password)
 

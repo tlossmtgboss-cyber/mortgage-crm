@@ -30,7 +30,8 @@ from auth.dependencies import get_current_user
 from database import get_db
 from database.enums import LeadStage, LoanStage
 from database.models import User, Lead, Loan, Task, ReferralPartner, AIColleagueAction, Notification
-from performance_cache import get_cached, set_cached
+from performance_cache import get_cached, set_cached, run_parallel_sync
+from database import SessionLocal
 from services.dashboard_metrics_service import (
     calculate_stage_performance,
     calculate_team_performance,
@@ -171,21 +172,67 @@ async def get_dashboard(
     start_of_year = today.replace(month=1, day=1)
 
     # ============================================================================
-    # PRODUCTION METRICS (Goals vs Actuals)
+    # PARALLEL METRIC CALCULATIONS
+    # Each function gets its own DB session for thread safety.
     # ============================================================================
 
     user_metadata = current_user.user_metadata or {}
-    production = calculate_production_metrics(
-        db, current_user.id, org_id,
-        branch_user_ids=branch_user_ids,
-        user_metadata=user_metadata,
+    uid = current_user.id
+
+    def _with_session(func, *args, **kwargs):
+        """Run a metric function with a fresh DB session, closing it after."""
+        session = SessionLocal()
+        try:
+            return func(session, *args, **kwargs)
+        finally:
+            session.close()
+
+    (
+        production,
+        pipeline_stats,
+        lead_metrics,
+        team_stats,
+        loan_issues,
+        profitability,
+        mum_summary,
+        eff_summary,
+        trends,
+        bottleneck_list,
+    ) = run_parallel_sync(
+        (lambda: _with_session(calculate_production_metrics, uid, org_id, branch_user_ids=branch_user_ids, user_metadata=user_metadata), ()),
+        (lambda: _with_session(calculate_pipeline_stats, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_lead_metrics, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_team_stats, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_loan_issues, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_profitability, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_mum_summary, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_efficiency_summary, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_efficiency_trends, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        (lambda: _with_session(calculate_bottlenecks, uid, org_id, branch_user_ids=branch_user_ids), ()),
     )
 
-    # ============================================================================
-    # PIPELINE STATS (Real loan counts per stage)
-    # ============================================================================
+    # Handle errors from parallel execution (run_parallel_sync returns {"error": ...} on failure)
+    if isinstance(production, dict) and "error" in production:
+        production = {"annualGoal": 0, "annualActual": 0, "annualProgress": 0, "monthlyGoal": 0, "monthlyActual": 0, "monthlyProgress": 0, "weeklyGoal": 0, "weeklyActual": 0, "weeklyProgress": 0, "dailyGoal": 0, "dailyActual": 0, "dailyProgress": 0}
+    if isinstance(pipeline_stats, dict) and "error" in pipeline_stats:
+        pipeline_stats = default_dashboard["pipeline_stats"]
+    if isinstance(lead_metrics, dict) and "error" in lead_metrics:
+        lead_metrics = default_dashboard["lead_metrics"]
+    if isinstance(team_stats, dict) and "error" in team_stats:
+        team_stats = default_dashboard["team_stats"]
+    if isinstance(loan_issues, dict) and "error" in loan_issues:
+        loan_issues = []
+    if isinstance(profitability, dict) and "error" in profitability:
+        profitability = {"funded_ytd": 0, "total_volume": 0, "avg_loan_size": 0, "gain_on_sale": 0, "revenue_per_loan": 0, "insights": []}
+    if isinstance(mum_summary, dict) and "error" in mum_summary:
+        mum_summary = default_dashboard["mum_summary"]
+    if isinstance(eff_summary, dict) and "error" in eff_summary:
+        eff_summary = {"overallScore": 0, "avgTimeToClose": 0, "pullThroughRate": 0, "loansFallingBehind": 0, "automationRate": 0}
+    if isinstance(trends, dict) and "error" in trends:
+        trends = {"overall_trend": 0, "time_to_close_change": 0, "pull_through_change": 0, "loans_behind_change": 0, "automation_change": 0}
+    if isinstance(bottleneck_list, dict) and "error" in bottleneck_list:
+        bottleneck_list = []
 
-    pipeline_stats = calculate_pipeline_stats(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
     total_loan_count_from_pipeline = sum(s.get("count", 0) for s in pipeline_stats if s["id"] not in ("new", "preapproved", "funded"))
 
     # ============================================================================
@@ -216,12 +263,6 @@ async def get_dashboard(
     except Exception as task_err:
         logger.warning(f"Dashboard: Error getting tasks: {task_err}")
         prioritized_tasks = []
-
-    # ============================================================================
-    # LEAD METRICS & ALERTS
-    # ============================================================================
-
-    lead_metrics = calculate_lead_metrics(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
 
     # ============================================================================
     # REFERRAL PARTNER STATS
@@ -267,12 +308,6 @@ async def get_dashboard(
     except Exception as referral_err:
         logger.warning(f"Dashboard: Error getting referral stats: {referral_err}")
         referral_stats = {"top_partners": [], "engagement": []}
-
-    # ============================================================================
-    # TEAM STATS (real computation from org users)
-    # ============================================================================
-
-    team_stats = calculate_team_stats(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
 
     # ============================================================================
     # WORKFLOW SCORES (real loan stage health)
@@ -419,24 +454,6 @@ async def get_dashboard(
         ai_tasks_data = {"pending": [], "waiting": []}
 
     # ============================================================================
-    # LOAN ISSUES (problematic loans needing attention)
-    # ============================================================================
-
-    loan_issues = calculate_loan_issues(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
-
-    # ============================================================================
-    # PROFITABILITY SUMMARY (computed from funded loans)
-    # ============================================================================
-
-    profitability = calculate_profitability(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
-
-    # ============================================================================
-    # MORTGAGES UNDER MANAGEMENT (MUM portfolio)
-    # ============================================================================
-
-    mum_summary = calculate_mum_summary(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
-
-    # ============================================================================
     # MESSAGES (recent notifications for this user)
     # ============================================================================
 
@@ -468,36 +485,23 @@ async def get_dashboard(
         messages = []
 
     # ============================================================================
-    # EFFICIENCY METRICS
+    # EFFICIENCY METRICS (stage_perf / team_perf depend on total_loan_count)
     # ============================================================================
 
     total_loan_count = total_loan_count_from_pipeline
 
-    eff_summary = calculate_efficiency_summary(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
-
-    try:
-        trends = calculate_efficiency_trends(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
-    except Exception as e:
-        logger.error("Error in get_dashboard (efficiency_trends): %s", e)
-        trends = {"overall_trend": 0, "time_to_close_change": 0, "pull_through_change": 0, "loans_behind_change": 0, "automation_change": 0}
-
-    try:
-        stage_perf = calculate_stage_performance(db, current_user.id, org_id, branch_user_ids=branch_user_ids) if total_loan_count > 0 else []
-    except Exception as e:
-        logger.error("Error in get_dashboard (stage_performance): %s", e)
+    if total_loan_count > 0:
+        (stage_perf, team_perf) = run_parallel_sync(
+            (lambda: _with_session(calculate_stage_performance, uid, org_id, branch_user_ids=branch_user_ids), ()),
+            (lambda: _with_session(calculate_team_performance, uid, org_id, branch_user_ids=branch_user_ids), ()),
+        )
+        if isinstance(stage_perf, dict) and "error" in stage_perf:
+            stage_perf = []
+        if isinstance(team_perf, dict) and "error" in team_perf:
+            team_perf = []
+    else:
         stage_perf = []
-
-    try:
-        team_perf = calculate_team_performance(db, current_user.id, org_id, branch_user_ids=branch_user_ids) if total_loan_count > 0 else []
-    except Exception as e:
-        logger.error("Error in get_dashboard (team_performance): %s", e)
         team_perf = []
-
-    try:
-        bottleneck_list = calculate_bottlenecks(db, current_user.id, org_id, branch_user_ids=branch_user_ids)
-    except Exception as e:
-        logger.error("Error in get_dashboard (bottlenecks): %s", e)
-        bottleneck_list = []
 
     efficiency = {
         "overallScore": eff_summary["overallScore"],

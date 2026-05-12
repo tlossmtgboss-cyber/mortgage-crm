@@ -103,8 +103,9 @@ class RealtorConnectionManager:
         loan_ids: List[int],
         metadata: Optional[Dict] = None
     ):
-        """Connect a realtor to their loan subscriptions."""
-        await websocket.accept()
+        """Connect a realtor to their loan subscriptions.
+        Note: caller must accept() the WebSocket before calling this method.
+        """
 
         async with self._lock:
             # Store connection

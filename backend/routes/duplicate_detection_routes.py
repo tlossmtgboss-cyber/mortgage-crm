@@ -713,12 +713,11 @@ async def seed_demo_people(
     Creates realistic placeholder people across all CRM categories.
     """
     try:
-        from passlib.context import CryptContext
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        import bcrypt as _bcrypt
 
         results = {}
         import secrets as _secrets
-        default_password = pwd_context.hash(_secrets.token_urlsafe(24))
+        default_password = _bcrypt.hashpw(_secrets.token_urlsafe(24).encode(), _bcrypt.gensalt()).decode()
 
         # TEAM MEMBERS
         team_members = [

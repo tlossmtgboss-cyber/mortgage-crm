@@ -481,8 +481,23 @@ async def update_credit_item(
 
     ensure_tables()
 
-    # Check item exists
-    item = db.execute(text("SELECT id, status, notes FROM credit_items WHERE id = :id"), {"id": item_id}).fetchone()
+    # Check item exists with org scoping via loan/lead relationship (defense-in-depth)
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
+    if not is_platform_admin and org_id:
+        # Verify the credit item belongs to a loan or lead in the user's org
+        item = db.execute(text("""
+            SELECT ci.id, ci.status, ci.notes
+            FROM credit_items ci
+            LEFT JOIN loans l ON ci.loan_id = l.id
+            LEFT JOIN leads ld ON ci.lead_id = ld.id
+            WHERE ci.id = :id
+              AND (l.organization_id = :org_id OR ld.organization_id = :org_id)
+        """), {"id": item_id, "org_id": org_id}).fetchone()
+    else:
+        item = db.execute(text("SELECT id, status, notes FROM credit_items WHERE id = :id"), {"id": item_id}).fetchone()
+
     if not item:
         raise HTTPException(status_code=404, detail="Credit item not found")
 
@@ -532,8 +547,13 @@ async def analyze_credit_report(
 
     ensure_tables()
 
-    # Get the document
-    document = db.query(Document).filter(Document.id == request.document_id).first()
+    # Get the document with org scoping (defense-in-depth)
+    doc_query = db.query(Document).filter(Document.id == request.document_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not is_platform_admin and org_id:
+        doc_query = doc_query.filter(Document.organization_id == org_id)
+    document = doc_query.first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 

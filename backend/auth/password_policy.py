@@ -45,7 +45,7 @@ PASSWORD_EXPIRY_DAYS = 90   # Default; overridable per-org in the future
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 30
 
-# Direct bcrypt usage (replaces passlib CryptContext)
+# Direct bcrypt usage for password hashing
 
 # ---------------------------------------------------------------------------
 # Common password list

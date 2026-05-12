@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 
 # Import models
 from database import Base
@@ -44,7 +44,14 @@ from database.enums import (
 from database.models import User, Lead, Loan, MUMClient, Task, AITask, Activity
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+class _BcryptCompat:
+    """Drop-in replacement providing .hash() over raw bcrypt."""
+    def hash(self, password: str) -> str:
+        return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+pwd_context = _BcryptCompat()
 
 # Database URL
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")

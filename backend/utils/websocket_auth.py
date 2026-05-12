@@ -1,7 +1,14 @@
 """
 WebSocket Authentication Utilities
 Extracts and validates user authentication from WebSocket connections.
+
+Security: Prefer authenticate_websocket_post_connect() over authenticate_websocket()
+for new code. The post-connect variant reads the JWT from the first WebSocket message
+instead of the URL query string, which avoids leaking tokens into server access logs,
+proxy logs, and browser history.
 """
+import asyncio
+import json
 import os
 import logging
 from typing import Optional, Tuple, Any
@@ -12,6 +19,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
+
+# Timeout (seconds) for the client to send the auth message after connect
+WS_AUTH_TIMEOUT = 5.0
 
 
 @dataclass
@@ -259,3 +269,82 @@ def get_authenticated_user_or_raise(websocket: WebSocket, db: Session) -> Authen
     if not user:
         raise ValueError(error or "Authentication required")
     return user
+
+
+async def authenticate_websocket_post_connect(
+    websocket: WebSocket,
+    db: Session,
+    timeout: float = WS_AUTH_TIMEOUT,
+) -> Tuple[Optional[AuthenticatedUser], Optional[str]]:
+    """
+    Authenticate a WebSocket connection using a post-connect auth message.
+
+    Security: This avoids putting the JWT in the URL query string, which would
+    leak it into server access logs, proxy logs, and browser history.
+
+    Protocol:
+    1. Server accepts the WebSocket connection (caller must do this first)
+    2. Client sends a JSON message: {"type": "auth", "token": "<JWT>"}
+    3. Server validates the token and looks up the user
+
+    Also supports backwards compatibility: if the URL still contains a ?token=
+    query param (e.g. from older clients), it will be used as a fallback. This
+    allows a rolling upgrade where old frontend builds still work.
+
+    Args:
+        websocket: Already-accepted FastAPI WebSocket connection
+        db: SQLAlchemy database session
+        timeout: Seconds to wait for the auth message (default 5s)
+
+    Returns:
+        Tuple of (AuthenticatedUser or None, error_message or None)
+    """
+    # Backwards compat: check query params first for old clients
+    token = websocket.query_params.get("token")
+
+    if not token:
+        # Wait for the first message to carry the auth token
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return None, "Authentication timeout — no auth message received"
+        except Exception as e:
+            logger.warning(f"[WebSocketAuth] Error receiving auth message: {e}")
+            return None, "Connection error during authentication"
+
+        try:
+            msg = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None, "Invalid auth message format (expected JSON)"
+
+        if not isinstance(msg, dict) or msg.get("type") != "auth":
+            return None, "First message must be {\"type\": \"auth\", \"token\": \"...\"}"
+
+        token = msg.get("token")
+        if not token or not isinstance(token, str):
+            return None, "Auth message missing 'token' field"
+
+    # Decode and validate token
+    payload = decode_jwt_token(token)
+    if not payload:
+        return None, "Invalid authentication token"
+
+    # Look up user
+    user_id = payload.get("user_id")
+    email = payload.get("sub")
+    user = None
+
+    if user_id:
+        try:
+            user = lookup_user_by_id(db, int(user_id))
+        except (ValueError, TypeError):
+            pass
+
+    if not user and email:
+        user = lookup_user_by_email(db, email)
+
+    if not user:
+        return None, "User not found"
+
+    logger.info(f"[WebSocketAuth] Post-connect authenticated user ID: {user.id}")
+    return user, None

@@ -98,6 +98,7 @@ SALESFORCE_STAGE_MAPPING = {
     "File Complete": "FUNDED",
     "Loan Sold": "FUNDED",
     "Settled": "FUNDED",
+    "Shipped": "FUNDED",
     # --- Terminal / Special ---
     "Cancelled": "CANCELLED",
     "Withdrawn": "WITHDRAWN",
@@ -213,6 +214,7 @@ _SF_LEAD_ONLY_STATUSES = {
     "Closed Lost": "Withdrawn",
     "Shipped": "Closed",
     "Complete": "Closed",
+    "Loan Shipped": "Closed",
 }
 
 

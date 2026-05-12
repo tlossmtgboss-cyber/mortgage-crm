@@ -1839,9 +1839,8 @@ async def setup_admin_user(
         raise HTTPException(status_code=500, detail="ADMIN_SETUP_PASSWORD env var not set")
 
     try:
-        from passlib.context import CryptContext
-        _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        new_hash = _pwd_context.hash(admin_setup_password)
+        import bcrypt as _bcrypt
+        new_hash = _bcrypt.hashpw(admin_setup_password.encode(), _bcrypt.gensalt()).decode()
 
         # Use raw SQL to update password directly to avoid ORM issues
         result = db.execute(

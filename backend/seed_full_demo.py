@@ -27,14 +27,20 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from sqlalchemy import create_engine, text
 
 # ---------------------------------------------------------------------------
 # Password hashing
 # ---------------------------------------------------------------------------
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class _BcryptCompat:
+    """Drop-in replacement providing .hash() over raw bcrypt."""
+    def hash(self, password: str) -> str:
+        return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+pwd_context = _BcryptCompat()
 
 # ---------------------------------------------------------------------------
 # Config constants

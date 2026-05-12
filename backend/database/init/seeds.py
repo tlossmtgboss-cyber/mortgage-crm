@@ -46,7 +46,7 @@ def create_sample_data(db: Session):
     from database.models import User, Branch, Lead, Loan, AITask, MUMClient
     from database.models.referral import ReferralPartner
     from database.enums import LeadStage, LoanStage, TaskType
-    from passlib.context import CryptContext
+    import bcrypt as _bcrypt
 
     # Import generate_ai_insights from DRE helpers
     try:
@@ -55,10 +55,8 @@ def create_sample_data(db: Session):
         def generate_ai_insights(loan):
             return f"AI insights for loan {getattr(loan, 'loan_number', 'unknown')}"
 
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
     def get_password_hash(password):
-        return pwd_context.hash(password)
+        return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
 
     try:
         # Check if data already exists

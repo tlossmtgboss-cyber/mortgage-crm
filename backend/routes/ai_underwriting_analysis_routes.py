@@ -70,7 +70,12 @@ async def ai_underwriting_analyze(
         # Get loan data
         loan_data = None
         if loan_id:
-            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            loan_query = db.query(Loan).filter(Loan.id == loan_id)
+            # Defense-in-depth: org_id filter to prevent cross-tenant access
+            org_id = getattr(current_user, 'organization_id', None)
+            if org_id:
+                loan_query = loan_query.filter(Loan.organization_id == org_id)
+            loan = loan_query.first()
             if loan:
                 loan_data = {
                     "loan_amount": float(loan.loan_amount) if loan.loan_amount else 0,

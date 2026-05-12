@@ -280,6 +280,27 @@ def _send_response(
         )
     except Exception as e:
         logger.exception("SMS send failed to=%s: %s", to_phone, e)
+
+        # Queue for retry on transient transmission errors
+        try:
+            from db import SessionLocal
+            _retry_db = SessionLocal()
+            try:
+                from integrations.sms_retry_queue import enqueue_sms
+                queue_id = enqueue_sms(
+                    _retry_db,
+                    to_phone=to_phone,
+                    message_body=message,
+                    lead_id=lead_id,
+                    user_id=user_id,
+                )
+                if queue_id:
+                    logger.info("Auto-responder SMS queued for retry (id=%s) to=%s", queue_id, to_phone)
+            finally:
+                _retry_db.close()
+        except Exception as q_err:
+            logger.warning("Failed to enqueue auto-responder SMS for retry: %s", q_err)
+
         return {"id": None, "status": "failed", "error": str(e)}
 
 

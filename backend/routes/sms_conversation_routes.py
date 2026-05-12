@@ -772,16 +772,18 @@ async def upload_media(
 async def sms_websocket(websocket: WebSocket, phone: str):
     """
     Authenticated WebSocket for real-time SMS push.
-    Token passed via query param: /ws/sms/{phone}?token=JWT
+    Security: Token sent as first message after connect (not in URL query string)
+    to avoid leaking JWT into server/proxy access logs and browser history.
+    Backwards compatible: old clients with ?token= query param still work.
     Tenant-isolated: only receives messages for the user's organization.
     """
-    # Authenticate before accepting
+    await websocket.accept()
+
     auth_db = next(get_db())
     try:
-        from utils.websocket_auth import authenticate_websocket
-        user, auth_error = authenticate_websocket(websocket, auth_db)
+        from utils.websocket_auth import authenticate_websocket_post_connect
+        user, auth_error = await authenticate_websocket_post_connect(websocket, auth_db)
         if not user:
-            await websocket.accept()
             await websocket.send_json({"type": "error", "message": auth_error or "Authentication required"})
             await websocket.close(code=4001, reason="Authentication required")
             return

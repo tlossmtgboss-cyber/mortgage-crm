@@ -2047,10 +2047,9 @@ def create_sample_data(db: Session):
     from database.models import User, Branch, Lead, Loan, AITask, MUMClient, ReferralPartner
     from database.enums import LeadStage, LoanStage, TaskType
     from services.dre_helpers import generate_ai_insights
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    import bcrypt as _bcrypt
     def get_password_hash(password):
-        return pwd_context.hash(password)
+        return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
 
     try:
         # Check if data already exists - check for both demo and admin users

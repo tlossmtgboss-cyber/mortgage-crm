@@ -597,7 +597,7 @@ class VapiService:
         **kwargs
     ) -> Dict[str, Any]:
         """Create a new Vapi assistant"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             payload = {
                 "name": name,
                 "model": {
@@ -628,7 +628,7 @@ class VapiService:
 
     async def get_call(self, call_id: str) -> Dict[str, Any]:
         """Retrieve call details from Vapi"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
                 f"{self.base_url}/call/{call_id}",
                 headers=self.headers
@@ -642,7 +642,7 @@ class VapiService:
         assistant_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """List all calls"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             params = {"limit": limit}
             if assistant_id:
                 params["assistantId"] = assistant_id
@@ -663,7 +663,7 @@ class VapiService:
         **kwargs
     ) -> Dict[str, Any]:
         """Initiate outbound call"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             payload = {
                 "assistantId": assistant_id,
                 "customer": {
@@ -693,7 +693,7 @@ class VapiService:
         Transfer an active call to another phone number
         Uses Vapi's transfer functionality with optional whisper
         """
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             payload = {
                 "destinationNumber": destination_number,
             }

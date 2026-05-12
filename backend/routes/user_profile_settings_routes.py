@@ -732,9 +732,10 @@ async def get_current_user_profile(
             "daily_hours": business_hours.get('daily_hours', {}),
             "blocked_times": business_hours.get('blocked_times', []),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching user profile: {e}")
-        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -799,10 +800,11 @@ async def update_current_user_profile(
             "blocked_times": business_hours.get('blocked_times', []),
             "message": "Profile updated successfully",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating user profile: {e}")
         db.rollback()
-        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -825,10 +827,9 @@ async def change_user_password(
 
         logger.info(f"Password changed for user {current_user.email}")
         return {"message": "Password changed successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
-        if "400" in str(type(e)):
-            raise
         logger.error(f"Error changing password: {e}")
         db.rollback()
-        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -154,10 +154,10 @@ class LoanOfficerUser(HttpUser):
     @tag("dashboard", "read")
     @task(20)
     def dashboard_metrics(self) -> None:
-        """GET /api/v1/dashboard/metrics — main dashboard KPIs."""
+        """GET /api/v1/dashboard — main dashboard KPIs."""
         with self.client.get(
-            "/api/v1/dashboard/metrics",
-            name="GET /api/v1/dashboard/metrics",
+            "/api/v1/dashboard",
+            name="GET /api/v1/dashboard",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 304, 401, 403):
@@ -310,8 +310,8 @@ class LoanPipelineUser(HttpUser):
     @task(2)
     def dashboard(self) -> None:
         with self.client.get(
-            "/api/v1/dashboard/metrics",
-            name="GET /api/v1/dashboard/metrics",
+            "/api/v1/dashboard",
+            name="GET /api/v1/dashboard",
             catch_response=True,
         ) as resp:
             if resp.status_code in (200, 304, 401, 403):

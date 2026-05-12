@@ -4,12 +4,19 @@ import os
 import sys
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 
 load_dotenv()
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+class _BcryptCompat:
+    """Drop-in replacement providing .hash() over raw bcrypt."""
+    def hash(self, password: str) -> str:
+        return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+pwd_context = _BcryptCompat()
 
 database_url = os.getenv("DATABASE_URL")
 if not database_url:

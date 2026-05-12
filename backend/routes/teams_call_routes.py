@@ -33,7 +33,7 @@ from sqlalchemy import text
 
 from database import get_db
 from routes.auth_deps import current_user_flexible_dep
-from utils.websocket_auth import authenticate_websocket
+from utils.websocket_auth import authenticate_websocket_post_connect
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,9 @@ call_manager = CallConnectionManager()
 
 
 # ---------------------------------------------------------------------------
-# C2 FIX: WebSocket uses manual session, released after auth
+# Security: Token sent as first message after connect (not in URL query string)
+# to avoid leaking JWT into server/proxy access logs and browser history.
+# Backwards compatible: old clients with ?token= query param still work.
 # ---------------------------------------------------------------------------
 @router.websocket("/ws/calls/inbound")
 async def ws_inbound_calls(websocket: WebSocket):
@@ -170,7 +172,7 @@ async def ws_inbound_calls(websocket: WebSocket):
     gen = get_db()
     auth_db = next(gen)
     try:
-        user, error = authenticate_websocket(websocket, auth_db)
+        user, error = await authenticate_websocket_post_connect(websocket, auth_db)
     finally:
         try:
             next(gen)

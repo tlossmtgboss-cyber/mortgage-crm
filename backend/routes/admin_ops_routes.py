@@ -1754,8 +1754,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
     ):
         """Create a new user (admin only)"""
         import secrets
-        from passlib.context import CryptContext
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        import bcrypt as _bcrypt
 
         email = user_data.get('email')
         password = user_data.get('password')
@@ -1785,7 +1784,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             password = secrets.token_urlsafe(12)
 
         # Hash the password
-        hashed_password = pwd_context.hash(password)
+        hashed_password = _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
 
         # Create the user — split full_name into first/last columns
         _name_parts = (full_name or '').strip().split(' ', 1)
@@ -1837,9 +1836,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
         import random
         import string
-        from passlib.context import CryptContext
-
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        import bcrypt as _bcrypt
 
         # Generate unique email and secure random password
         random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
@@ -1851,7 +1848,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             email=test_email,
             first_name="Test",
             last_name=f"User {random_suffix}",
-            hashed_password=pwd_context.hash(generated_password),
+            hashed_password=_bcrypt.hashpw(generated_password.encode(), _bcrypt.gensalt()).decode(),
             role="loan_officer",
             is_active=True
         )
@@ -2997,8 +2994,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         _verify_admin_key(admin_key)
 
         try:
-            from passlib.context import CryptContext
-            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+            import bcrypt as _bcrypt
 
             demo_email = "demo@perenniaai.com"
             demo_password = os.getenv("DEMO_USER_PASSWORD", "")
@@ -3016,7 +3012,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 user_exists = db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
                 if user_exists:
                     # Update password and ensure correct role
-                    hashed = pwd_context.hash(demo_password)
+                    hashed = _bcrypt.hashpw(demo_password.encode(), _bcrypt.gensalt()).decode()
                     db.execute(text(
                         "UPDATE users SET hashed_password = :h, role = 'loan_officer', permission_role = 'sales' WHERE email = :e"
                     ), {"h": hashed, "e": demo_email})
@@ -3032,7 +3028,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 org_id = db.execute(text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).scalar()
 
             # Create or update demo user
-            hashed = pwd_context.hash(demo_password)
+            hashed = _bcrypt.hashpw(demo_password.encode(), _bcrypt.gensalt()).decode()
             user_exists = db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
             if user_exists:
                 db.execute(text(

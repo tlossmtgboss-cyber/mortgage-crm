@@ -63,7 +63,7 @@ def _get_client(api_key: Optional[str] = None):
             return _client
         try:
             import telnyx
-            _client = telnyx.Telnyx(api_key=key)
+            _client = telnyx.Telnyx(api_key=key, timeout=10.0)
             return _client
         except Exception:
             logger.exception("Failed to initialise Telnyx client")

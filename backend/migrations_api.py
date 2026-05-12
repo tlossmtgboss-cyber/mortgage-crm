@@ -4,6 +4,7 @@ This allows running migrations on production via HTTP request
 """
 from fastapi import APIRouter, HTTPException, Depends, Header
 from typing import Any, Optional
+import hmac
 import logging
 import os
 import secrets
@@ -3246,7 +3247,7 @@ async def run_survey_migration_simple(
     expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
     provided_key = re.sub(r'\s+', '', secret_key or "")
 
-    if not expected_key or provided_key != expected_key:
+    if not expected_key or not hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid secret key")
 
     try:
@@ -3290,7 +3291,7 @@ async def run_survey_seed_simple(
     expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
     provided_key = re.sub(r'\s+', '', secret_key or "")
 
-    if not expected_key or provided_key != expected_key:
+    if not expected_key or not hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid secret key")
 
     try:
@@ -3380,7 +3381,7 @@ async def run_content_marketing_migration(
     expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
     provided_key = re.sub(r'\s+', '', secret_key or "")
 
-    if not expected_key or provided_key != expected_key:
+    if not expected_key or not hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid secret key")
 
     try:

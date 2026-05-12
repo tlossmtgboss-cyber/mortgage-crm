@@ -27,10 +27,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
 from main import logger
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from sqlalchemy import text
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class _BcryptCompat:
+    """Drop-in replacement providing .hash() over raw bcrypt."""
+    def hash(self, password: str) -> str:
+        return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+pwd_context = _BcryptCompat()
 
 # =============================================================================
 # TEST ACCOUNT CREDENTIALS

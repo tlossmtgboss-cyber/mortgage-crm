@@ -22,11 +22,17 @@ from decimal import Decimal
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class _BcryptCompat:
+    """Drop-in replacement providing .hash() over raw bcrypt."""
+    def hash(self, password: str) -> str:
+        return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+pwd_context = _BcryptCompat()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:

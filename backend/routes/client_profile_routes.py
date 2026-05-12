@@ -1496,7 +1496,12 @@ async def approve_unified_task(
 
             # Update lead milestone dates when workflow task is completed
             if task.lead_id:
-                lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+                # Defense-in-depth: org_id filter to prevent cross-tenant access
+                lead_query = db.query(Lead).filter(Lead.id == task.lead_id)
+                _org_id = getattr(current_user, 'organization_id', None)
+                if _org_id:
+                    lead_query = lead_query.filter(Lead.organization_id == _org_id)
+                lead = lead_query.first()
                 if lead:
                     now = datetime.now(timezone.utc)
 

@@ -200,19 +200,18 @@ async def realtor_login(
 
         # Verify password
         if result[4] and request.password:
-            from passlib.context import CryptContext
-            _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+            import bcrypt as _bcrypt
             # Support legacy SHA-256 hashes (64-char hex) and bcrypt
             if len(result[4]) == 64:
                 import hashlib
                 if hashlib.sha256(request.password.encode()).hexdigest() != result[4]:
                     return RealtorLoginResponse(success=False, error="Invalid credentials")
                 # Upgrade to bcrypt on successful login
-                new_hash = _pwd_ctx.hash(request.password)
+                new_hash = _bcrypt.hashpw(request.password.encode(), _bcrypt.gensalt()).decode()
                 db.execute(text("UPDATE realtor_portal_users SET password_hash = :h WHERE id = :id"),
                            {"h": new_hash, "id": result[0]})
             else:
-                if not _pwd_ctx.verify(request.password, result[4]):
+                if not _bcrypt.checkpw(request.password.encode(), result[4].encode()):
                     return RealtorLoginResponse(success=False, error="Invalid credentials")
 
     # Create session token
@@ -1793,18 +1792,42 @@ async def handle_crm_webhook(
 # =============================================================================
 
 @router.websocket("/ws/{token}")
+@router.websocket("/ws")
 async def realtor_websocket(
     websocket: WebSocket,
-    token: str,
+    token: str = "",
     db: Session = Depends(get_db)
 ):
     """
     WebSocket endpoint for real-time loan updates.
 
-    Connect with: ws://host/api/v1/realtor-portal/ws/{session_token}
+    Security: Token sent as first message after connect (not in URL path)
+    to avoid leaking session token into server/proxy access logs.
+    Backwards compatible: old clients with /ws/{token} path still work.
     """
+    import json as _json
     from services.realtor_crm_sync_service import realtor_sync_manager
     from services.realtor_permission_service import RealtorAccessValidator
+
+    await websocket.accept()
+
+    # If token not in path, wait for auth message
+    if not token:
+        import asyncio
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            msg = _json.loads(raw)
+            if isinstance(msg, dict) and msg.get("type") == "auth":
+                token = msg.get("token", "")
+        except (asyncio.TimeoutError, Exception):
+            await websocket.send_json({"type": "error", "message": "Authentication timeout"})
+            await websocket.close(code=4001, reason="Authentication timeout")
+            return
+
+    if not token:
+        await websocket.send_json({"type": "error", "message": "No token provided"})
+        await websocket.close(code=4001, reason="No token provided")
+        return
 
     # Validate token
     result = db.execute(text("""
@@ -1813,6 +1836,7 @@ async def realtor_websocket(
     """), {"token": token}).fetchone()
 
     if not result:
+        await websocket.send_json({"type": "error", "message": "Invalid or expired session"})
         await websocket.close(code=4001, reason="Invalid or expired session")
         return
 
