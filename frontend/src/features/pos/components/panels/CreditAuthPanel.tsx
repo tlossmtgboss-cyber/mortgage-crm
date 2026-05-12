@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { ContinueButton, FormSection, PanelProps, usePanelData } from './_shared';
 import { posApi } from '../../api';
@@ -11,6 +11,10 @@ export const CreditAuthPanel: React.FC<PanelProps> = ({
 }) => {
   const { data, updateField } = usePanelData(section, onChange);
   const [agreed, setAgreed] = useState((data.credit_auth_agreed as boolean) || false);
+
+  useEffect(() => {
+    if (data.credit_auth_agreed != null) setAgreed(Boolean(data.credit_auth_agreed));
+  }, [data.credit_auth_agreed]);
 
   const handleContinue = async () => {
     if (!application || !agreed) return;

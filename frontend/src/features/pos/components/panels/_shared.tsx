@@ -151,6 +151,7 @@ export const YesNoField: React.FC<YesNoFieldProps> = ({
         type="button"
         className={`urla-yesno__btn${value === true ? ' is-selected' : ''}`}
         onClick={() => onChange(name, true)}
+        aria-pressed={value === true}
       >
         Yes
       </button>
@@ -158,6 +159,7 @@ export const YesNoField: React.FC<YesNoFieldProps> = ({
         type="button"
         className={`urla-yesno__btn${value === false ? ' is-selected' : ''}`}
         onClick={() => onChange(name, false)}
+        aria-pressed={value === false}
       >
         No
       </button>
