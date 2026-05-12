@@ -44,7 +44,7 @@ class AITask(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
     title = Column(String, nullable=False)
     description = Column(Text)
     type = Column(SQLEnum(TaskType), default=TaskType.IN_PROGRESS)
@@ -55,9 +55,9 @@ class AITask(Base):
     suggested_action = Column(Text)
     completed_action = Column(Text)
     borrower_name = Column(String)
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
-    assigned_to_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"))
+    assigned_to_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     due_date = Column(DateTime)
     completed_at = Column(DateTime)
     estimated_time = Column(String)
@@ -97,15 +97,15 @@ class Task(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text)
     status = Column(String, default="pending")  # pending, in_progress, completed
     priority = Column(String, default="medium")  # low, medium, high
     due_date = Column(DateTime)
-    owner_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), nullable=True)
     related_contact_name = Column(String)
     related_type = Column(String)
     completed_at = Column(DateTime)
@@ -125,7 +125,7 @@ class Task(Base):
     loan = relationship("Loan", backref="user_tasks")
 
     # Document intake classification task relationship
-    email_intake_id = Column(Integer, ForeignKey("email_intakes.id"), nullable=True)
+    email_intake_id = Column(Integer, ForeignKey("email_intakes.id", ondelete="SET NULL"), nullable=True)
     email_intake = relationship("EmailIntake", back_populates="classification_task")
 
     # Workflow task linkage
@@ -160,19 +160,19 @@ class EscalationRecord(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=True)
 
     # Escalation details
     escalation_level = Column(Integer, default=1)  # 1=agent-to-agent, 2=agent-to-human, 3=emergency
     escalation_type = Column(String, nullable=False)  # compliance, sla_breach, borrower_distress, tool_failure, domain_mismatch
 
     # Routing
-    original_owner_id = Column(Integer, ForeignKey("users.id"))
+    original_owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     original_agent = Column(String)  # AI agent that escalated
-    escalated_to_id = Column(Integer, ForeignKey("users.id"))
+    escalated_to_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     escalated_to_agent = Column(String)  # Target AI agent (for level 1)
     escalated_to_role = Column(String)  # compliance_officer, branch_manager, processor
 
@@ -188,19 +188,19 @@ class EscalationRecord(Base):
     # SLA
     sla_deadline = Column(DateTime)  # When this escalation must be resolved
     acknowledged_at = Column(DateTime)
-    acknowledged_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    acknowledged_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Resolution
     status = Column(String, default="open")  # open, acknowledged, in_progress, resolved, expired
     resolved_at = Column(DateTime)
-    resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     resolution_notes = Column(Text)
     resolution_action = Column(String)  # handled, re_routed, false_alarm
 
     # Re-escalation
     re_escalated = Column(Boolean, default=False)
     re_escalation_count = Column(Integer, default=0)
-    parent_escalation_id = Column(Integer, ForeignKey("escalation_records.id"), nullable=True)
+    parent_escalation_id = Column(Integer, ForeignKey("escalation_records.id", ondelete="SET NULL"), nullable=True)
 
     escalated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -220,14 +220,14 @@ class HandoffLog(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     session_id = Column(String, index=True)  # Conversation session UUID
 
     # Participants
     from_agent = Column(String, nullable=False)  # AI agent name or "human:user_id"
     to_agent = Column(String, nullable=False)
-    from_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    to_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    from_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    to_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Handoff reason
     handoff_reason = Column(String, nullable=False)  # domain_mismatch, escalation, user_request, multi_domain

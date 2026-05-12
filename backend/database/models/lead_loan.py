@@ -70,7 +70,7 @@ class Lead(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)  # Multi-tenant isolation
     name = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups.
     first_name = Column(String)  # NOTE: Not encrypted — used with name index for search.
     last_name = Column(String)  # NOTE: Not encrypted — used with name index for search.
@@ -89,7 +89,7 @@ class Lead(Base):
     stage = Column(String, default="New")
     source = Column(String)
     organization_code = Column(String)  # Branch/organization identifier
-    referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"))
+    referral_partner_id = Column(Integer, ForeignKey("referral_partners.id", ondelete="SET NULL"))
 
     # AI scoring
     ai_score = Column(Integer, default=50)
@@ -103,7 +103,7 @@ class Lead(Base):
     debt_to_income = Column(Numeric(8, 4))
 
     # Assignment
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     last_contact = Column(DateTime)
     loan_number = Column(String)
     notes = Column(Text)
@@ -319,7 +319,7 @@ class Loan(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     loan_number = Column(String, unique=True, index=True, nullable=False)
 
     # Borrower info
@@ -355,7 +355,7 @@ class Loan(Base):
     funded_date = Column(DateTime)
 
     # Team
-    loan_officer_id = Column(Integer, ForeignKey("users.id"))
+    loan_officer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     processor = Column(String)
     underwriter = Column(String)
     realtor_agent = Column(String)

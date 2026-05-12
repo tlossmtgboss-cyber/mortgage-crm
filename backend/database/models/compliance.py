@@ -81,8 +81,8 @@ class LoanFee(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), nullable=False)
 
     fee_name = Column(String, nullable=False)
     fee_category = Column(String)  # origination, title, government, prepaids, etc.
@@ -128,8 +128,8 @@ class DisclosureEvent(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), nullable=False)
 
     disclosure_type = Column(SQLEnum(DisclosureType), nullable=False)
 
@@ -149,10 +149,10 @@ class DisclosureEvent(Base):
     change_description = Column(Text)
 
     # Document reference
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
 
     # Audit
-    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -179,9 +179,9 @@ class AdverseActionNotice(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=False)
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=True)
 
     # Denial info
     denial_date = Column(Date, nullable=False)
@@ -207,7 +207,7 @@ class AdverseActionNotice(Base):
     # Status
     status = Column(String, default="pending")  # pending, sent, acknowledged
 
-    created_by_id = Column(Integer, ForeignKey("users.id"))
+    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -241,9 +241,9 @@ class ComplianceAlert(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=True)
 
     alert_type = Column(String, nullable=False)  # trid_le_deadline, trid_cd_deadline, adverse_action_deadline, tolerance_violation, etc.
     severity = Column(String, nullable=False)  # critical, high, medium
@@ -257,7 +257,7 @@ class ComplianceAlert(Base):
     # Resolution
     status = Column(String, default="open")  # open, acknowledged, resolved, expired
     resolved_at = Column(DateTime)
-    resolved_by_id = Column(Integer, ForeignKey("users.id"))
+    resolved_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     resolution_notes = Column(Text)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

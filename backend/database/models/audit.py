@@ -56,9 +56,9 @@ class MobileAuditEvent(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(
-        Integer, ForeignKey("organizations.id"), nullable=True, index=True
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Event classification
     event_type = Column(String, nullable=False, index=True)  # e.g. "auth.success"

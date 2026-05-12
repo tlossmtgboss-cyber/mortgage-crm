@@ -49,13 +49,13 @@ class Activity(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
     type = Column(SQLEnum(ActivityType), nullable=False)
     content = Column(Text)
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
-    mum_client_id = Column(Integer, ForeignKey("mum_clients.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"))
+    mum_client_id = Column(Integer, ForeignKey("mum_clients.id", ondelete="CASCADE"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     duration = Column(String)
     sentiment = Column(String)
     user_metadata = Column(JSON)
@@ -81,15 +81,15 @@ class StageHistory(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
     entity_type = Column(String, nullable=False)  # 'lead' or 'loan'
     entity_id = Column(Integer, nullable=False)  # The lead_id or loan_id
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"))
     from_stage = Column(String)  # Previous stage (null for initial)
     to_stage = Column(String, nullable=False)  # New stage
     changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    changed_by_id = Column(Integer, ForeignKey("users.id"))  # User who made the change
+    changed_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))  # User who made the change
     notes = Column(Text)  # Optional notes about the change
     duration_in_previous_stage = Column(Integer)  # Days spent in previous stage
 
@@ -108,10 +108,10 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"))
     message = Column(Text, nullable=False)
     response = Column(Text)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
@@ -127,10 +127,10 @@ class ConversationMemory(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), index=True)
     conversation_summary = Column(Text, nullable=False)  # Summary of the conversation
     key_points = Column(JSON)  # Extracted entities, preferences, issues
     sentiment = Column(String)  # positive, neutral, negative
@@ -158,11 +158,11 @@ class SMSMessage(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
-    conversation_id = Column(Integer, ForeignKey("sms_conversations.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"))
+    conversation_id = Column(Integer, ForeignKey("sms_conversations.id", ondelete="SET NULL"))
     to_number = Column(EncryptedString, nullable=False)  # PII: phone number
     from_number = Column(EncryptedString, nullable=False)  # PII: phone number
     message = Column(Text, nullable=False)
@@ -196,11 +196,11 @@ class SMSConversation(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
     phone_number = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups.
-    user_id = Column(Integer, ForeignKey("users.id"))  # The LO managing this conversation
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))  # The LO managing this conversation
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"))
     contact_id = Column(Integer)  # No FK - contacts table may not exist in all deployments
     contact_name = Column(EncryptedString)  # PII: name (cached for display)
     is_active = Column(Boolean, default=True)
@@ -230,10 +230,10 @@ class EmailMessage(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"))
     to_email = Column(EncryptedString, nullable=False)  # PII: email address
     from_email = Column(EncryptedString, nullable=False)  # PII: email address
     subject = Column(String)
@@ -264,10 +264,10 @@ class Email(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # Multi-tenant isolation
     message_id = Column(String, unique=True, index=True)  # Microsoft Graph message ID
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"))  # Linked lead if identified
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"))  # Linked lead if identified
     sender_email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
     sender_name = Column(EncryptedString)  # PII: name
     recipient_emails = Column(JSON)  # Array of recipient emails
@@ -294,10 +294,10 @@ class EmailDraft(Base):
     __tablename__ = "email_drafts"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"), index=True)
 
     # Email content
     recipient_email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
@@ -330,7 +330,7 @@ class EmailVerificationToken(Base):
     __tablename__ = "email_verification_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     email = Column(EncryptedString, nullable=False)  # PII: email address
     token = Column(String, unique=True, nullable=False)
     expires_at = Column(DateTime, nullable=False)
@@ -347,10 +347,10 @@ class TeamsMessage(Base):
     __tablename__ = "teams_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"))
     to_user = Column(EncryptedString)  # PII: email or Teams user ID
     from_user = Column(EncryptedString)  # PII: email or Teams user ID
     message = Column(Text, nullable=False)
@@ -372,12 +372,12 @@ class VoicemailDrop(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
-    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    campaign_id = Column(Integer, ForeignKey("voicemail_campaigns.id"), index=True)
-    template_id = Column(Integer, ForeignKey("voicemail_templates.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("voicemail_campaigns.id", ondelete="SET NULL"), index=True)
+    template_id = Column(Integer, ForeignKey("voicemail_templates.id", ondelete="SET NULL"), index=True)
 
     # Contact info
     contact_name = Column(EncryptedString)  # PII: name
@@ -438,8 +438,8 @@ class VoicemailTemplate(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True)
 
     name = Column(String(255), nullable=False)
     category = Column(String(100), index=True)  # closing, follow_up, urgent, scheduling, status_update
@@ -474,12 +474,12 @@ class VoicemailCampaign(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True)
 
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    template_id = Column(Integer, ForeignKey("voicemail_templates.id"))
+    template_id = Column(Integer, ForeignKey("voicemail_templates.id", ondelete="SET NULL"))
 
     # Target contacts
     contact_filter = Column(JSON)  # {"stage": "closing", "tags": ["hot_lead"]}
@@ -514,7 +514,7 @@ class VoicemailEvent(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    voicemail_drop_id = Column(Integer, ForeignKey("voicemail_drops.id"), nullable=False, index=True)
+    voicemail_drop_id = Column(Integer, ForeignKey("voicemail_drops.id", ondelete="CASCADE"), nullable=False, index=True)
 
     event_type = Column(String(50), nullable=False, index=True)  # queued, calling, delivered, failed, listened, callback, deleted
     event_data = Column(JSON)
@@ -538,7 +538,7 @@ class CalendarEvent(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)  # Multi-tenant isolation
     title = Column(String, nullable=False)
     description = Column(Text)
     start_time = Column(DateTime, nullable=False)
@@ -546,9 +546,9 @@ class CalendarEvent(Base):
     all_day = Column(Boolean, default=False)
     location = Column(String)
     event_type = Column(String)  # meeting, call, appraisal, closing, etc
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     attendees = Column(JSON)
     reminder_minutes = Column(Integer)
     status = Column(String, default="scheduled")  # scheduled, completed, cancelled
@@ -566,16 +566,16 @@ class IntegrationLog(Base):
     __tablename__ = "integration_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # Multi-tenant isolation
     integration_type = Column(String, nullable=False)  # sms, email, teams, calendar
     action = Column(String, nullable=False)  # send, receive, sync, webhook
     status = Column(String, nullable=False)  # success, failed, pending
     request_data = Column(JSON)
     response_data = Column(JSON)
     error_message = Column(Text)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"))
-    loan_id = Column(Integer, ForeignKey("loans.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"))
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -584,8 +584,8 @@ class IntegrationCredential(Base):
     __tablename__ = "integration_credentials"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)  # Multi-tenant isolation
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     integration_type = Column(String, nullable=False)  # calendly, zoom, docusign, etc.
     api_key = Column(EncryptedString, nullable=False)  # Encrypted at-rest: API key
     refresh_token = Column(EncryptedString)  # Encrypted at-rest: OAuth refresh token
@@ -615,11 +615,11 @@ class ConversationSession(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     session_uuid = Column(String, unique=True, nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"), nullable=True)
 
     # Session state
     is_active = Column(Boolean, default=True)
@@ -663,9 +663,9 @@ class EntityExtraction(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    session_id = Column(Integer, ForeignKey("conversation_sessions.id"), nullable=False)
-    conversation_memory_id = Column(Integer, ForeignKey("conversation_memory.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    session_id = Column(Integer, ForeignKey("conversation_sessions.id", ondelete="CASCADE"), nullable=False)
+    conversation_memory_id = Column(Integer, ForeignKey("conversation_memory.id", ondelete="SET NULL"), nullable=True)
 
     # Entity details
     entity_type = Column(String, nullable=False)  # lead, loan, borrower, partner, document, rate, date, amount
@@ -705,9 +705,9 @@ class ChannelPreference(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=True)
 
     # Preferred channels (ordered by preference)
     preferred_channels = Column(JSON, default=["email", "sms", "call"])  # ["email", "sms", "call", "teams"]
@@ -761,8 +761,8 @@ class MessageTemplate(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
-    created_by_id = Column(Integer, ForeignKey("users.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
 
     name = Column(String, nullable=False)
     channel = Column(String, nullable=False)  # email, sms, voicemail, push, in_app

@@ -35,7 +35,7 @@ class BorrowerProfile(Base):
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), index=True)  # Multi-tenant isolation
 
     # Identity from social provider
     email = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
@@ -126,13 +126,13 @@ class BorrowerApplication(Base):
     public_token = Column(String(64), unique=True, nullable=False, index=True)
 
     # Link to borrower profile
-    borrower_profile_id = Column(String(36), ForeignKey("borrower_profiles.id"), nullable=True)
+    borrower_profile_id = Column(String(36), ForeignKey("borrower_profiles.id", ondelete="SET NULL"), nullable=True)
 
     # Link to internal records
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"), nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
 
     # Application status and progress
     status = Column(SQLEnum(ApplicationStatus), default=ApplicationStatus.DRAFT)
@@ -174,7 +174,7 @@ class BorrowerApplication(Base):
     # Submission tracking
     submitted_at = Column(DateTime)
     reviewed_at = Column(DateTime)
-    reviewed_by_id = Column(Integer, ForeignKey("users.id"))
+    reviewed_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
 
     # Token expiration
     expires_at = Column(DateTime)
@@ -260,7 +260,7 @@ class ApplicationDocument(Base):
     # Verification
     is_verified = Column(Boolean, default=False)
     verified_at = Column(DateTime)
-    verified_by_id = Column(Integer, ForeignKey("users.id"))
+    verified_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     verification_notes = Column(Text)
 
     # AI classification and analysis

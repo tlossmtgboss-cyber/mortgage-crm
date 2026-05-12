@@ -85,7 +85,7 @@ class Branch(Base):
     name = Column(String, nullable=False)
     company = Column(String)
     nmls_id = Column(String)
-    organization_id = Column(Integer, ForeignKey("organizations.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
@@ -117,12 +117,12 @@ class User(Base):
 
     # Phase 2: permission roles
     permission_role = Column(String, default="sales")  # 'admin', 'site_admin', 'leadership', 'management', 'sales', 'processing', 'operations'
-    branch_id = Column(Integer, ForeignKey("branches.id"))
-    organization_id = Column(Integer, ForeignKey("organizations.id"))  # Multi-tenant: user's organization
+    branch_id = Column(Integer, ForeignKey("branches.id", ondelete="SET NULL"))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"))  # Multi-tenant: user's organization
     is_active = Column(Boolean, default=True)
 
     # Organizational hierarchy
-    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    manager_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Briefing preferences
     briefing_enabled = Column(Boolean, default=True)
@@ -199,8 +199,8 @@ class ApiKey(Base):
     key_hash = Column(String(64), nullable=True, index=True)  # SHA-256 hex digest of the raw key
     key_prefix = Column(String(12), nullable=True)  # First 8 chars for display/identification
     name = Column(String, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_used_at = Column(DateTime, nullable=True)
@@ -217,7 +217,7 @@ class UserSettings(Base):
     __table_args__ = (UniqueConstraint('user_id', 'setting_key', name='uix_user_setting'),)
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     setting_key = Column(String, nullable=False)
     setting_value = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -234,10 +234,10 @@ class CalendarAssignment(Base):
     __table_args__ = (UniqueConstraint('organization_id', 'purpose', name='uix_org_calendar_purpose'),)
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
     purpose = Column(String, nullable=False, index=True)  # e.g., 'purchase_application', 'refinance_application'
     purpose_label = Column(String, nullable=True)  # Human-readable label
-    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     calendly_url = Column(String, nullable=True)
     booking_link_id = Column(Integer, nullable=True)  # Smart Scheduler booking link ID
     is_active = Column(Boolean, default=True)
@@ -257,7 +257,7 @@ class EmailSignature(Base):
     __tablename__ = "email_signatures"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
 
     # Personal info
     full_name = Column(String, nullable=True)
@@ -313,8 +313,8 @@ class ImpersonationSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     session_token = Column(String, unique=True, index=True, nullable=False)
-    manager_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    impersonated_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    manager_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    impersonated_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     mode = Column(String, nullable=False)  # 'read_only' or 'full_access'
     reason = Column(String, nullable=False)
     duration_minutes = Column(Integer, nullable=False)
