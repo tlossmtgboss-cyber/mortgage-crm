@@ -52,6 +52,13 @@ function Login() {
       throw new Error('No token received from server');
     }
 
+    if (data.mfa_required && data.mfa_setup_required) {
+      throw new Error('MFA setup is required for your account. Please contact your administrator.');
+    }
+    if (data.mfa_required && !data.mfa_setup_required) {
+      throw new Error('MFA verification is required. Please contact your administrator.');
+    }
+
     await setAuth(data.access_token, data.user, data.refresh_token);
 
     const authenticated = await isAuthenticated();

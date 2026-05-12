@@ -694,7 +694,12 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         # but user hasn't set it up yet, issue a restricted MFA-setup-only token.
         # This token allows ONLY /api/v1/auth/mfa/* endpoints so the user can
         # complete setup. Full access is blocked until MFA is enabled.
-        if mfa_setup_required:
+        #
+        # EXCEPTION: If no MFA setup UI exists in the frontend, issuing a
+        # restricted token creates an unresolvable redirect loop. Fall through
+        # to full-token issuance with a warning until the MFA setup flow is built.
+        _MFA_SETUP_UI_EXISTS = False  # flip when frontend MFA setup page is shipped
+        if mfa_setup_required and _MFA_SETUP_UI_EXISTS:
             mfa_setup_token_data = {
                 "sub": user_email,
                 "scope": "mfa_setup",
@@ -730,6 +735,13 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
                     "onboarding_completed": user_onboarding
                 }
             }
+
+        if mfa_setup_required and not _MFA_SETUP_UI_EXISTS:
+            logger.warning(
+                f"MFA setup required but no UI available — issuing full token for {user_email} "
+                f"(org_enforced={org_mfa_required}, admin_enforced={admin_mfa_required}). "
+                f"BUILD THE MFA SETUP PAGE to enforce properly."
+            )
 
         # Full token issuance (no MFA required)
         access_token = auth_funcs['create_access_token'](

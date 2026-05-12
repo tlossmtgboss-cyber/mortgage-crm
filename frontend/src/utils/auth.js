@@ -1,4 +1,5 @@
 import { getItem, setItem, removeItem, getJSON, setJSON, STORAGE_KEYS, clearAllAuthTokens, migrateTokensToSecureStorage } from './storage';
+import { setTokens } from './tokenStore';
 
 export const setAuth = async (token, user, refreshToken) => {
   await setItem(STORAGE_KEYS.TOKEN, token);
@@ -6,6 +7,13 @@ export const setAuth = async (token, user, refreshToken) => {
     await setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
   }
   await setJSON(STORAGE_KEYS.USER, user);
+  // Keep tokenStore in-memory cache in sync so getToken() returns the fresh
+  // token immediately (otherwise the stale cached value wins over localStorage).
+  await setTokens({
+    access_token: token,
+    ...(refreshToken ? { refresh_token: refreshToken } : {}),
+    user_data: user,
+  });
   // Dispatch custom event to notify contexts of auth change
   window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'login', user } }));
 };
