@@ -2323,6 +2323,13 @@ class DataExportImportService:
                     "error": f"Unknown configuration section: {section_name}",
                 })
                 continue
+            # Defense-in-depth: even whitelisted table names must be safe identifiers
+            if not _SAFE_IDENTIFIER_RE.fullmatch(table_name):
+                errors.append({
+                    "section": section_name,
+                    "error": f"Invalid table name in whitelist: {table_name}",
+                })
+                continue
 
             total_count += len(section_data)
 

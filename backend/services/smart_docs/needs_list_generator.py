@@ -483,6 +483,12 @@ class NeedsListGenerator:
 
         return requests
 
+    def _get_loan_org_id(self, loan_id: int) -> Optional[int]:
+        """Look up organization_id for a loan."""
+        from sqlalchemy import text as sa_text
+        row = self.db.execute(sa_text("SELECT organization_id FROM loans WHERE id = :id"), {"id": loan_id}).first()
+        return row[0] if row else None
+
     def _create_request(
         self,
         loan_id: int,
@@ -498,6 +504,7 @@ class NeedsListGenerator:
         auto_renew: bool = False,
         due_date: Optional[datetime] = None,
         requires_esign: bool = False,
+        organization_id: Optional[int] = None,
     ) -> DocumentRequest:
         """Create a single document request."""
         # Use default freshness if not specified
@@ -508,7 +515,14 @@ class NeedsListGenerator:
         if auto_renew and doc_type not in self.AUTO_RENEW_ELIGIBLE:
             auto_renew = False
 
+        # Resolve organization_id from loan if not provided
+        if not organization_id:
+            organization_id = self._get_loan_org_id(loan_id)
+        if not organization_id:
+            logger.warning("Could not determine organization_id for loan %s", loan_id)
+
         return DocumentRequest(
+            organization_id=organization_id,
             loan_id=loan_id,
             borrower_id=borrower_id,
             doc_type=doc_type,

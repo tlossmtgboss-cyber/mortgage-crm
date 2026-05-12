@@ -92,25 +92,84 @@ class QueueService:
 
         loan_ids = [row.loan_id for row in loan_ids_query.all()]
 
-        # Build queue items
+        if not loan_ids:
+            return {
+                "queue": [],
+                "total": 0,
+                "page": page,
+                "limit": limit,
+                "total_pages": 1,
+                "summary": {"total_clients": 0, "with_breaches": 0, "at_risk": 0},
+            }
+
+        # PERF FIX: Batch-load all data needed for queue items in a few queries
+        # instead of N+1 per-loan queries.
+        loan_info_map = self._batch_load_loan_info(loan_ids)
+        request_stats_map = self._batch_load_request_stats(loan_ids)
+        last_activity_map = self._batch_load_last_activity(loan_ids)
+        reminder_map = self._batch_load_reminder_settings(loan_ids)
+        sla_map = self._batch_load_sla_summaries(loan_ids)
+
+        # Build queue items from batch-loaded data
         queue_items = []
         for loan_id in loan_ids:
-            item = self._build_queue_item(loan_id)
-            if item:
-                # Apply SLA filter if specified
-                if filter_sla_status and item['sla_status'] != filter_sla_status:
+            stats = request_stats_map.get(loan_id)
+            if not stats or stats['total'] == 0:
+                continue
+
+            loan_info = loan_info_map.get(loan_id, {
+                'id': loan_id,
+                'loan_number': None,
+                'borrower_name': f"Loan {loan_id}",
+                'borrower_email': None,
+                'stage': None,
+            })
+
+            total_requested = stats['total']
+            received_valid = stats['accepted']
+            completion_pct = (received_valid / total_requested * 100) if total_requested > 0 else 0
+
+            sla_summary = sla_map.get(loan_id, {
+                'sla_status': 'GOOD', 'has_breach': False,
+                'breached_count': 0, 'at_risk_count': 0,
+            })
+
+            last_activity = last_activity_map.get(loan_id)
+            reminder_settings = reminder_map.get(loan_id)
+
+            item = {
+                "loan_id": loan_id,
+                "loan_number": loan_info.get('loan_number'),
+                "borrower_name": loan_info.get('borrower_name') or f"Loan {loan_id}",
+                "borrower_email": loan_info.get('borrower_email'),
+                "stage": loan_info.get('stage'),
+                "total_requested": total_requested,
+                "received_valid": received_valid,
+                "completion_percentage": round(completion_pct, 1),
+                "sla_status": sla_summary['sla_status'],
+                "has_sla_breach": sla_summary['has_breach'],
+                "breached_count": sla_summary['breached_count'],
+                "at_risk_count": sla_summary['at_risk_count'],
+                "last_activity": last_activity.isoformat() if last_activity else None,
+                "last_activity_ts": last_activity.timestamp() if last_activity else 0,
+                "reminders_enabled": reminder_settings['reminders_enabled'] if reminder_settings else True,
+                "last_reminder_sent": reminder_settings['last_reminder_sent'] if reminder_settings else None,
+            }
+
+            # Apply SLA filter if specified
+            if filter_sla_status and item['sla_status'] != filter_sla_status:
+                continue
+
+            # Apply search filter
+            if search_query:
+                query_lower = search_query.lower()
+                name_match = item['borrower_name'] and query_lower in item['borrower_name'].lower()
+                loan_match = item['loan_number'] and query_lower in str(item['loan_number']).lower()
+                id_match = query_lower in str(item['loan_id'])
+                if not (name_match or loan_match or id_match):
                     continue
 
-                # Apply search filter
-                if search_query:
-                    query_lower = search_query.lower()
-                    name_match = item['borrower_name'] and query_lower in item['borrower_name'].lower()
-                    loan_match = item['loan_number'] and query_lower in str(item['loan_number']).lower()
-                    id_match = query_lower in str(item['loan_id'])
-                    if not (name_match or loan_match or id_match):
-                        continue
-
-                queue_items.append(item)
+            queue_items.append(item)
 
         # Sort: breaches first, then by completion (lowest first), then by activity (most recent first)
         queue_items.sort(key=lambda x: (
@@ -145,8 +204,158 @@ class QueueService:
             }
         }
 
+    # ---- Batch-loading helpers to eliminate N+1 queries ----
+
+    def _batch_load_loan_info(self, loan_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """Load loan info for all loan IDs in a single query."""
+        result_map: Dict[int, Dict[str, Any]] = {}
+        if not loan_ids:
+            return result_map
+
+        try:
+            placeholders = ", ".join(f":id_{i}" for i in range(len(loan_ids)))
+            params = {f"id_{i}": lid for i, lid in enumerate(loan_ids)}
+            rows = self.db.execute(text(f"""
+                SELECT id, loan_number, borrower_name, borrower_email, stage, created_at
+                FROM loans WHERE id IN ({placeholders})
+            """), params).fetchall()
+            for row in rows:
+                row_dict = dict(row._mapping)
+                result_map[row_dict['id']] = row_dict
+        except Exception as e:
+            logger.error("Batch loan info load failed: %s", e)
+
+        return result_map
+
+    def _batch_load_request_stats(self, loan_ids: List[int]) -> Dict[int, Dict[str, int]]:
+        """Load request counts (total active, accepted) per loan in a single query."""
+        result_map: Dict[int, Dict[str, int]] = {}
+        if not loan_ids:
+            return result_map
+
+        try:
+            placeholders = ", ".join(f":id_{i}" for i in range(len(loan_ids)))
+            params = {f"id_{i}": lid for i, lid in enumerate(loan_ids)}
+            rows = self.db.execute(text(f"""
+                SELECT
+                    loan_id,
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE status = 'ACCEPTED') as accepted
+                FROM document_requests
+                WHERE loan_id IN ({placeholders})
+                    AND is_active = true
+                GROUP BY loan_id
+            """), params).fetchall()
+            for row in rows:
+                row_dict = dict(row._mapping)
+                result_map[row_dict['loan_id']] = {
+                    'total': row_dict['total'],
+                    'accepted': row_dict['accepted'],
+                }
+        except Exception as e:
+            logger.error("Batch request stats load failed: %s", e)
+        return result_map
+
+    def _batch_load_last_activity(self, loan_ids: List[int]) -> Dict[int, Optional[datetime]]:
+        """Load most recent document upload per loan in a single query."""
+        result_map: Dict[int, Optional[datetime]] = {}
+        if not loan_ids:
+            return result_map
+
+        try:
+            placeholders = ", ".join(f":id_{i}" for i in range(len(loan_ids)))
+            params = {f"id_{i}": lid for i, lid in enumerate(loan_ids)}
+            rows = self.db.execute(text(f"""
+                SELECT loan_id, MAX(created_at) as last_upload
+                FROM smart_documents
+                WHERE loan_id IN ({placeholders})
+                GROUP BY loan_id
+            """), params).fetchall()
+            for row in rows:
+                row_dict = dict(row._mapping)
+                result_map[row_dict['loan_id']] = row_dict['last_upload']
+        except Exception as e:
+            logger.error("Batch last activity load failed: %s", e)
+        return result_map
+
+    def _batch_load_reminder_settings(self, loan_ids: List[int]) -> Dict[int, Optional[Dict[str, Any]]]:
+        """Load reminder settings for all loans in a single query."""
+        result_map: Dict[int, Optional[Dict[str, Any]]] = {}
+        if not loan_ids:
+            return result_map
+
+        try:
+            all_settings = self.db.query(ClientReminderSettings).filter(
+                ClientReminderSettings.loan_id.in_(loan_ids)
+            ).all()
+            for settings in all_settings:
+                result_map[settings.loan_id] = {
+                    'reminders_enabled': settings.reminders_enabled,
+                    'last_reminder_sent': (
+                        settings.last_reminder_sent_at.isoformat()
+                        if settings.last_reminder_sent_at else None
+                    ),
+                }
+        except Exception as e:
+            logger.error("Batch reminder settings load failed: %s", e)
+        return result_map
+
+    def _batch_load_sla_summaries(self, loan_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """Load SLA summaries for all loans using a single query for requests,
+        then compute SLA status in-memory instead of per-loan DB round-trips."""
+        result_map: Dict[int, Dict[str, Any]] = {}
+        if not loan_ids:
+            return result_map
+
+        try:
+            # Load all active requests for all loans in one query
+            all_requests = self.db.query(DocumentRequest).filter(
+                DocumentRequest.loan_id.in_(loan_ids),
+                DocumentRequest.is_active == True,
+                DocumentRequest.status.in_([RequestStatus.OPEN, RequestStatus.PENDING_REVIEW])
+            ).all()
+
+            # Group by loan_id
+            requests_by_loan: Dict[int, List] = {}
+            for req in all_requests:
+                requests_by_loan.setdefault(req.loan_id, []).append(req)
+
+            # Compute SLA summary per loan using in-memory data
+            for loan_id in loan_ids:
+                reqs = requests_by_loan.get(loan_id, [])
+                breached_count = 0
+                at_risk_count = 0
+                for req in reqs:
+                    status = self.sla_service.get_sla_status(req)
+                    if status == SLAStatus.BREACHED:
+                        breached_count += 1
+                    elif status == SLAStatus.AT_RISK:
+                        at_risk_count += 1
+
+                if breached_count > 0:
+                    overall_status = SLAStatus.BREACHED
+                elif at_risk_count > 0:
+                    overall_status = SLAStatus.AT_RISK
+                else:
+                    overall_status = SLAStatus.GOOD
+
+                result_map[loan_id] = {
+                    'has_breach': breached_count > 0,
+                    'sla_status': overall_status.value,
+                    'breached_count': breached_count,
+                    'at_risk_count': at_risk_count,
+                }
+        except Exception as e:
+            logger.error("Batch SLA summary load failed: %s", e)
+        return result_map
+
     def _build_queue_item(self, loan_id: int) -> Optional[Dict[str, Any]]:
-        """Build a single queue item for a loan."""
+        """Build a single queue item for a loan.
+
+        NOTE: This method is retained for get_client_queue_detail() which
+        needs to build a single item. The main get_queue() now uses batch
+        loading instead.
+        """
 
         # Get loan info from loans table
         loan_info = None
@@ -280,12 +489,23 @@ class QueueService:
             DocumentRequest.loan_id.in_(tenant_loan_ids),
         ).distinct().all()
 
+        loan_ids = [row[0] for row in all_loan_ids]
+        if not loan_ids:
+            return {
+                "total_clients_in_queue": 0,
+                "by_sla_status": {"breached": 0, "at_risk": 0, "good": 0},
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+        # PERF FIX: Use batch SLA loading instead of per-loan queries
+        sla_map = self._batch_load_sla_summaries(loan_ids)
+
         breached = 0
         at_risk = 0
         good = 0
 
-        for (loan_id,) in all_loan_ids:
-            summary = self.sla_service.get_client_sla_summary(loan_id)
+        for loan_id in loan_ids:
+            summary = sla_map.get(loan_id, {'sla_status': 'GOOD'})
             if summary['sla_status'] == SLAStatus.BREACHED.value:
                 breached += 1
             elif summary['sla_status'] == SLAStatus.AT_RISK.value:
@@ -294,7 +514,7 @@ class QueueService:
                 good += 1
 
         return {
-            "total_clients_in_queue": len(all_loan_ids),
+            "total_clients_in_queue": len(loan_ids),
             "by_sla_status": {
                 "breached": breached,
                 "at_risk": at_risk,

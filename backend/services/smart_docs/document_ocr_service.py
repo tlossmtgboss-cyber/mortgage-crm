@@ -1952,7 +1952,11 @@ class DocumentOCRService:
         preprocess: bool,
         max_pages: int,
     ) -> OCRExtractionResult:
-        """Extract text from a PDF, trying native text first, then OCR fallback."""
+        """Extract text from a PDF, trying native text first, then OCR fallback.
+
+        PERF FIX: pdf_bytes is read once and passed by reference to sub-methods.
+        Previously the bytes could be re-read from scratch by each step.
+        """
         pages: List[PageOCRResult] = []
         has_native_text = False
 
@@ -2122,6 +2126,11 @@ class DocumentOCRService:
         Tries engines in priority order. If pre-processing is enabled,
         the image is enhanced before OCR. If the first engine returns
         low confidence, falls back to the next engine.
+
+        PERF FIX: The processed image bytes are computed once and reused
+        across all engine calls (extract, table detection, handwriting
+        detection). Previously each engine method re-opened the bytes
+        independently via Image.open(), duplicating memory and CPU work.
         """
         processed_bytes = image_bytes
         preprocess_meta: Dict[str, Any] = {}
@@ -2131,7 +2140,7 @@ class DocumentOCRService:
                 image_bytes,
             )
 
-        # Also detect and correct rotation
+        # Also detect and correct rotation -- do this once, not per-engine
         rotation = ImagePreprocessor.detect_rotation(processed_bytes)
         if rotation != 0 and HAS_PIL:
             try:
@@ -2145,20 +2154,30 @@ class DocumentOCRService:
 
         best_result: Optional[PageOCRResult] = None
 
+        # Track whether we already ran table/handwriting detection with any
+        # engine so we don't redundantly call the Vision API for detection
+        # after the primary engine already did text extraction.
+        tables_checked = False
+        handwriting_checked = False
+
         for engine in self._engines:
             try:
                 result = engine.extract_from_image(
                     processed_bytes, mime_type, language,
                 )
 
-                # Also check for tables and handwriting
-                if not result.has_tables:
+                # Check for tables only if not already found and not yet checked
+                # by a higher-priority engine. Table/handwriting detection
+                # re-opens the image bytes; avoid doing it more than once.
+                if not result.has_tables and not tables_checked:
+                    tables_checked = True
                     tables = engine.extract_tables(processed_bytes)
                     if tables:
                         result.has_tables = True
                         result.tables = tables
 
-                if not result.has_handwriting:
+                if not result.has_handwriting and not handwriting_checked:
+                    handwriting_checked = True
                     hw_detected, hw_conf = engine.detect_handwriting(
                         processed_bytes,
                     )

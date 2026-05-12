@@ -682,53 +682,59 @@ class AIDocumentReviewService:
             doc_type_filter = " AND UPPER(sd.doc_type) = :doc_type"
             params["doc_type"] = doc_type.upper()
 
-        # Safe: where_clause is composed entirely of static SQL fragments and
-        # parameterized placeholders (:org_id, :needs_review, :doc_type).
+        # SECURITY: where_clause is composed entirely of static SQL fragments
+        # and parameterized placeholders (:org_id, :needs_review, :doc_type).
+        # No user-supplied values are interpolated into the SQL text.
         where_clause = base_where + priority_filter + doc_type_filter
+        # Defense-in-depth: assert no unparameterized single-quotes leaked in
+        assert "'" not in priority_filter and "'" not in doc_type_filter, \
+            "SQL fragment must not contain literal string values"
 
-        total = self.db.execute(text(f"""
-            SELECT COUNT(*)
-            FROM smart_documents sd
-            JOIN loans l ON l.id = sd.loan_id
-            WHERE {where_clause}
-        """), params).scalar() or 0
+        count_sql = text(
+            "SELECT COUNT(*) "
+            "FROM smart_documents sd "
+            "JOIN loans l ON l.id = sd.loan_id "
+            f"WHERE {where_clause}"
+        )
+        total = self.db.execute(count_sql, params).scalar() or 0
 
         params["limit"] = limit
         params["offset"] = offset
 
-        rows = self.db.execute(text(f"""
-            SELECT
-                sd.id AS document_id,
-                sd.file_name,
-                sd.doc_type,
-                sd.status,
-                sd.decision,
-                sd.decision_reasons,
-                sd.rejection_reason,
-                sd.rejection_category,
-                sd.fix_instructions,
-                sd.detected_is_screenshot,
-                sd.screenshot_confidence,
-                sd.is_expired,
-                sd.loan_id,
-                sd.borrower_id,
-                sd.uploaded_at,
-                sd.reviewed_at,
-                l.loan_number,
-                l.borrower_name
-            FROM smart_documents sd
-            JOIN loans l ON l.id = sd.loan_id
-            WHERE {where_clause}
-            ORDER BY
-                CASE
-                    WHEN sd.detected_is_screenshot = true THEN 1
-                    WHEN sd.is_expired = true THEN 2
-                    WHEN sd.screenshot_confidence > 0.4 THEN 3
-                    ELSE 4
-                END ASC,
-                sd.uploaded_at ASC
-            LIMIT :limit OFFSET :offset
-        """), params).fetchall()
+        select_sql = text(
+            "SELECT "
+            "sd.id AS document_id, "
+            "sd.file_name, "
+            "sd.doc_type, "
+            "sd.status, "
+            "sd.decision, "
+            "sd.decision_reasons, "
+            "sd.rejection_reason, "
+            "sd.rejection_category, "
+            "sd.fix_instructions, "
+            "sd.detected_is_screenshot, "
+            "sd.screenshot_confidence, "
+            "sd.is_expired, "
+            "sd.loan_id, "
+            "sd.borrower_id, "
+            "sd.uploaded_at, "
+            "sd.reviewed_at, "
+            "l.loan_number, "
+            "l.borrower_name "
+            "FROM smart_documents sd "
+            "JOIN loans l ON l.id = sd.loan_id "
+            f"WHERE {where_clause} "
+            "ORDER BY "
+            "CASE "
+            "WHEN sd.detected_is_screenshot = true THEN 1 "
+            "WHEN sd.is_expired = true THEN 2 "
+            "WHEN sd.screenshot_confidence > 0.4 THEN 3 "
+            "ELSE 4 "
+            "END ASC, "
+            "sd.uploaded_at ASC "
+            "LIMIT :limit OFFSET :offset"
+        )
+        rows = self.db.execute(select_sql, params).fetchall()
 
         queue_items: List[Dict] = []
         columns = [

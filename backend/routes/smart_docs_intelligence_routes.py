@@ -515,6 +515,9 @@ async def create_requests_from_analysis(
 
     _verify_loan_tenant(db, loan_id, current_user)
 
+    # Resolve organization_id for tenant isolation
+    org_id = _get_loan_org_id(db, loan_id) or getattr(current_user, 'organization_id', None)
+
     created_ids = []
     errors = []
 
@@ -537,6 +540,7 @@ async def create_requests_from_analysis(
                 priority_enum = RequestPriority.NORMAL
 
             request = DocumentRequest(
+                organization_id=org_id,
                 loan_id=loan_id,
                 doc_type=doc_type_enum,
                 title=req_data.get("title", doc_type_str.replace("_", " ").title()),
@@ -668,7 +672,12 @@ async def create_requests_from_call(
             except ValueError:
                 priority_enum = RequestPriority.NORMAL
 
+            # Resolve organization_id for tenant isolation
+            _need_org_id = _get_loan_org_id(db, loan_id) if loan_id else None
+            _need_org_id = _need_org_id or getattr(current_user, 'organization_id', None)
+
             request = DocumentRequest(
+                organization_id=_need_org_id,
                 loan_id=loan_id,
                 doc_type=doc_type_enum,
                 title=need_data.get("title", f"{doc_type_str.replace('_', ' ').title()} (from call)"),
@@ -809,7 +818,12 @@ async def confirm_call_need(
     except ValueError:
         doc_type_enum = DocType.OTHER
 
+    # Resolve organization_id for tenant isolation
+    _confirm_org_id = _get_loan_org_id(db, need.loan_id) if need.loan_id else None
+    _confirm_org_id = _confirm_org_id or getattr(current_user, 'organization_id', None)
+
     request = DocumentRequest(
+        organization_id=_confirm_org_id,
         loan_id=need.loan_id,
         doc_type=doc_type_enum,
         title=f"{need.detected_doc_type.replace('_', ' ').title()} (from call)",

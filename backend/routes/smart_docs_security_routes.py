@@ -472,6 +472,8 @@ async def batch_integrity_check(
 
     from models.smart_docs_models import SmartDocument as _SD
 
+    org_id = _get_user_org_id(current_user)
+
     if body.loan_id:
         # Verify tenant access to the loan
         from routes.smart_docs_models import _verify_loan_tenant
@@ -488,7 +490,12 @@ async def batch_integrity_check(
 
     for doc_id in document_ids:
         try:
-            doc = db.query(_SD).filter(_SD.id == doc_id).first()
+            # SECURITY: filter by organization_id to prevent IDOR —
+            # callers must not access documents outside their tenant.
+            query = db.query(_SD).filter(_SD.id == doc_id)
+            if org_id and not _is_platform_admin(current_user):
+                query = query.filter(_SD.organization_id == org_id)
+            doc = query.first()
             if not doc:
                 results.append({"document_id": doc_id, "status": "not_found"})
                 error_count += 1

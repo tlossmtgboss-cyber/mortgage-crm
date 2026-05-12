@@ -295,6 +295,12 @@ async def sync_documents_from_application(
     """
     try:
         _verify_loan_tenant(db, request.loan_id, current_user)
+
+        # Get organization_id for tenant isolation
+        org_id = _get_loan_org_id(db, request.loan_id) or getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="Cannot determine organization for this loan")
+
         created_requests = []
         skipped_count = 0
 
@@ -331,6 +337,7 @@ async def sync_documents_from_application(
 
             # Create the document request
             doc_request = DocumentRequest(
+                organization_id=org_id,
                 loan_id=request.loan_id,
                 doc_type=doc_type,
                 title=doc.name,

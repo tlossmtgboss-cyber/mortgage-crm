@@ -16,6 +16,7 @@ This replaces the previous slug-only access pattern, which was vulnerable to
 slug enumeration attacks exposing PII.
 """
 
+import hashlib
 import logging
 import os
 import time
@@ -53,6 +54,15 @@ MAX_TOKEN_GENERATIONS_PER_HOUR = 5
 # Rate limiting is per-worker (SD-SEC-11: Redis migration needed for cross-worker limits)
 # Memory-safe: auto-cleans entries older than 1 hour
 _token_generation_timestamps: Dict[str, list] = defaultdict(list)
+
+# ---------------------------------------------------------------------------
+# Token Revocation (in-memory; SD-SEC-11: migrate to Redis for cross-worker)
+# ---------------------------------------------------------------------------
+# Stores (token_jti_or_hash, expiry_timestamp) so we can auto-prune expired
+# entries and keep the set from growing without bound.
+_revoked_tokens: Dict[str, float] = {}  # token_hash -> exp timestamp
+_REVOCATION_CLEANUP_INTERVAL = 600  # 10 minutes
+_last_revocation_cleanup: float = 0.0
 
 # Periodic cleanup state — shared across both token-gen and upload stores
 _RATE_LIMIT_CLEANUP_INTERVAL = 300  # 5 minutes
@@ -163,6 +173,13 @@ def verify_portal_access_token(token: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=401,
             detail="Portal access token is required",
+        )
+
+    # Check revocation list before expensive decode
+    if is_portal_token_revoked(token):
+        raise HTTPException(
+            status_code=401,
+            detail="Portal access token has been revoked.",
         )
 
     try:
@@ -378,8 +395,69 @@ def check_upload_rate_limit(borrower_email: str) -> None:
 # Internal Helpers
 # ---------------------------------------------------------------------------
 
+def _token_hash(token: str) -> str:
+    """Compute a SHA-256 hash of the raw JWT for revocation lookups.
+
+    We store hashes rather than raw tokens to limit exposure if the
+    revocation set is ever serialized or logged.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _cleanup_revoked_tokens() -> None:
+    """Prune expired entries from the revocation set."""
+    global _last_revocation_cleanup
+    now = time.time()
+    if now - _last_revocation_cleanup < _REVOCATION_CLEANUP_INTERVAL:
+        return
+    _last_revocation_cleanup = now
+    expired_keys = [k for k, exp in _revoked_tokens.items() if exp < now]
+    for k in expired_keys:
+        del _revoked_tokens[k]
+
+
+def revoke_portal_token(token: str) -> bool:
+    """Revoke a portal token so it can no longer be used.
+
+    The token's expiry is extracted so the revocation entry can be
+    auto-pruned after the token would have expired anyway.
+
+    Returns True if the token was successfully revoked (valid JWT that
+    was added to the revocation set), False otherwise.
+    """
+    _cleanup_revoked_tokens()
+    try:
+        # Decode without verification just to get exp claim for pruning
+        payload = jwt.decode(
+            token,
+            PORTAL_JWT_SECRET,
+            algorithms=[PORTAL_TOKEN_ALGORITHM],
+            options={"verify_exp": False, "verify_iss": False},
+        )
+        exp = payload.get("exp", time.time() + 86400)  # Default 24h if missing
+        th = _token_hash(token)
+        _revoked_tokens[th] = float(exp)
+        logger.info("Portal token revoked: hash=%s...%s", th[:8], th[-4:])
+        return True
+    except Exception as e:
+        logger.warning("Failed to revoke portal token: %s", e)
+        return False
+
+
+def is_portal_token_revoked(token: str) -> bool:
+    """Check whether a token has been revoked."""
+    _cleanup_revoked_tokens()
+    return _token_hash(token) in _revoked_tokens
+
+
 def _extract_portal_token(request: Request) -> Optional[str]:
-    """Extract portal token from header, auth header, or query param."""
+    """Extract portal token from header, auth header, or query param.
+
+    Preferred sources (in order):
+      1. X-Portal-Token header  (recommended)
+      2. Authorization: Bearer header
+      3. ?token= query parameter  (DEPRECATED — logged for monitoring)
+    """
     # 1. X-Portal-Token header (preferred)
     token = request.headers.get("X-Portal-Token")
     if token:
@@ -395,9 +473,17 @@ def _extract_portal_token(request: Request) -> Optional[str]:
         if bearer_token:
             return bearer_token
 
-    # 3. Query parameter
+    # 3. Query parameter (DEPRECATED — tokens in URLs leak via referrer
+    #    headers, server logs, and browser history)
     token = request.query_params.get("token")
     if token:
+        logger.warning(
+            "DEPRECATED: Portal token received via URL query parameter. "
+            "Client should migrate to X-Portal-Token header. "
+            "path=%s remote=%s",
+            request.url.path,
+            request.client.host if request.client else "unknown",
+        )
         return token.strip()
 
     return None
@@ -505,6 +591,7 @@ def _mask_email(email: str) -> str:
 # ---------------------------------------------------------------------------
 
 def reset_rate_limits() -> None:
-    """Reset all rate limit counters. For testing only."""
+    """Reset all rate limit counters and revocation set. For testing only."""
     _token_generation_timestamps.clear()
     _upload_timestamps.clear()
+    _revoked_tokens.clear()

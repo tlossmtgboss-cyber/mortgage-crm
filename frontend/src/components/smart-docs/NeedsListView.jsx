@@ -32,6 +32,7 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
   const [docuSignType, setDocuSignType] = useState('signature'); // 'signature' or 'loe'
   const [loeSubject, setLoeSubject] = useState('');
   const [loeInstructions, setLoeInstructions] = useState('');
+  const [statusAnnouncement, setStatusAnnouncement] = useState('');
 
   if (loading && !needsList) {
     return (
@@ -76,6 +77,7 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
 
   const handleUploadComplete = async (result) => {
     setShowUploadModal(false);
+    setStatusAnnouncement(`Document "${selectedRequest?.title}" uploaded successfully and is now pending review.`);
     setSelectedRequest(null);
     if (onDocumentUploaded) {
       onDocumentUploaded(result);
@@ -125,7 +127,17 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
   };
 
   return (
-    <div className="needs-list-view">
+    <div className="needs-list-view" aria-label="Document requirements for this loan">
+      {/* Live region for status change announcements */}
+      <div
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+        role="status"
+      >
+        {statusAnnouncement}
+      </div>
+
       {/* Header with Progress */}
       <div className="needs-list-header">
         <div className="header-title">
@@ -135,7 +147,14 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
 
         {stats && (
           <div className="progress-summary">
-            <div className="progress-bar">
+            <div
+              className="progress-bar"
+              role="progressbar"
+              aria-valuenow={stats.completionPercentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Document completion: ${stats.acceptedCount} of ${stats.totalRequests} complete`}
+            >
               <div
                 className="progress-fill"
                 style={{ width: `${stats.completionPercentage}%` }}
@@ -149,46 +168,57 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
       </div>
 
       {/* Status Tabs */}
-      <div className="status-tabs">
+      <div className="status-tabs" role="tablist" aria-label="Document status categories">
         {tabs.map(tab => (
           <button
             key={tab.key}
             className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.key)}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`tabpanel-${tab.key}`}
+            id={`tab-${tab.key}`}
           >
             {tab.label}
-            {tab.count > 0 && <span className="tab-count">{tab.count}</span>}
+            {tab.count > 0 && <span className="tab-count" aria-label={`${tab.count} items`}>{tab.count}</span>}
           </button>
         ))}
       </div>
 
       {/* Request Cards */}
-      <div className="requests-container">
+      <div
+        className="requests-container"
+        role="tabpanel"
+        id={`tabpanel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+      >
         {(requestsByStatus[activeTab] || []).length === 0 ? (
           <div className="no-requests">
             <p>No documents in this category</p>
           </div>
         ) : (
-          (requestsByStatus[activeTab] || []).map(request => (
-            <DocumentRequestCard
-              key={request.id}
-              request={request}
-              onUpload={() => handleUploadClick(request)}
-              onWaive={(reason) => handleWaive(request, reason)}
-              onDocuSign={() => handleDocuSignClick(request)}
-              showActions={activeTab === 'open'}
-            />
-          ))
+          <div role="list" aria-label={`${tabs.find(t => t.key === activeTab)?.label || ''} documents`}>
+            {(requestsByStatus[activeTab] || []).map(request => (
+              <DocumentRequestCard
+                key={request.id}
+                request={request}
+                onUpload={() => handleUploadClick(request)}
+                onWaive={(reason) => handleWaive(request, reason)}
+                onDocuSign={() => handleDocuSignClick(request)}
+                showActions={activeTab === 'open'}
+              />
+            ))}
+          </div>
         )}
       </div>
 
       {/* Upload Modal */}
       {showUploadModal && selectedRequest && (
-        <div className="upload-modal-overlay" onClick={() => setShowUploadModal(false)}>
+        <div className="upload-modal-overlay" onClick={() => setShowUploadModal(false)} role="dialog" aria-modal="true" aria-label={`Upload ${selectedRequest.title}`}>
           <div className="upload-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Upload {selectedRequest.title}</h3>
-              <button className="close-btn" onClick={() => setShowUploadModal(false)}>×</button>
+              <button className="close-btn" onClick={() => setShowUploadModal(false)} aria-label="Close upload dialog">×</button>
             </div>
             <div className="modal-body">
               {selectedRequest.instructions && (
@@ -211,11 +241,11 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
 
       {/* DocuSign / Send to Portal Modal */}
       {showDocuSignModal && selectedRequest && (
-        <div className="upload-modal-overlay" onClick={() => setShowDocuSignModal(false)}>
+        <div className="upload-modal-overlay" onClick={() => setShowDocuSignModal(false)} role="dialog" aria-modal="true" aria-label={`Send ${selectedRequest.title} to client portal`}>
           <div className="upload-modal docusign-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Send to Client Portal</h3>
-              <button className="close-btn" onClick={() => setShowDocuSignModal(false)}>×</button>
+              <button className="close-btn" onClick={() => setShowDocuSignModal(false)} aria-label="Close portal dialog">×</button>
             </div>
             <div className="modal-body">
               <p className="docusign-description">
@@ -327,10 +357,14 @@ const DocumentRequestCard = ({ request, onUpload, onWaive, onDocuSign, showActio
   };
 
   return (
-    <div className={`request-card priority-${request.priority?.toLowerCase()}`}>
+    <div
+      className={`request-card priority-${request.priority?.toLowerCase()}`}
+      role="listitem"
+      aria-label={`${request.title} — priority: ${request.priority || 'Normal'}`}
+    >
       <div className="request-header">
         <div className="request-type">
-          <span className="doc-icon">{getDocIcon(request.doc_type)}</span>
+          <span className="doc-icon" aria-hidden="true">{getDocIcon(request.doc_type)}</span>
           <div>
             <h4>{request.title}</h4>
             <span className="doc-type">{request.doc_type}</span>
@@ -339,6 +373,7 @@ const DocumentRequestCard = ({ request, onUpload, onWaive, onDocuSign, showActio
         <span
           className="priority-badge"
           style={{ backgroundColor: priorityColors[request.priority] || '#6c757d' }}
+          aria-label={`Priority: ${request.priority || 'Normal'}`}
         >
           {request.priority}
         </span>
@@ -350,28 +385,48 @@ const DocumentRequestCard = ({ request, onUpload, onWaive, onDocuSign, showActio
 
       <div className="request-meta">
         {request.required_count > 1 && (
-          <span className="meta-item">📄 {request.required_count} required</span>
+          <span className="meta-item" aria-label={`${request.required_count} documents required`}>
+            <span aria-hidden="true">📄</span> {request.required_count} required
+          </span>
         )}
         {request.freshness_days && (
-          <span className="meta-item">⏱️ {request.freshness_days} day freshness</span>
+          <span className="meta-item" aria-label={`Must be within ${request.freshness_days} day freshness period`}>
+            <span aria-hidden="true">⏱️</span> {request.freshness_days} day freshness
+          </span>
         )}
         {request.auto_renew && (
-          <span className="meta-item auto-renew">🔄 Auto-renewal</span>
+          <span className="meta-item auto-renew" aria-label="Auto-renewal enabled">
+            <span aria-hidden="true">🔄</span> Auto-renewal
+          </span>
         )}
         {request.due_date && (
-          <span className="meta-item due-date">📅 Due: {formatDate(request.due_date)}</span>
+          <span className="meta-item due-date" aria-label={`Due date: ${formatDate(request.due_date)}`}>
+            <span aria-hidden="true">📅</span> Due: {formatDate(request.due_date)}
+          </span>
         )}
       </div>
 
       {showActions && (
         <div className="request-actions">
-          <button className="upload-btn" onClick={onUpload}>
-            <span>📤</span> Upload
+          <button
+            className="upload-btn"
+            onClick={onUpload}
+            aria-label={`Upload ${request.title}`}
+          >
+            <span aria-hidden="true">📤</span> Upload
           </button>
-          <button className="docusign-btn" onClick={onDocuSign}>
-            <span>✍️</span> Send to Portal
+          <button
+            className="docusign-btn"
+            onClick={onDocuSign}
+            aria-label={`Send ${request.title} to client portal for signature`}
+          >
+            <span aria-hidden="true">✍️</span> Send to Portal
           </button>
-          <button className="waive-btn" onClick={() => setShowWaiveModal(true)}>
+          <button
+            className="waive-btn"
+            onClick={() => setShowWaiveModal(true)}
+            aria-label={`Waive requirement for ${request.title}`}
+          >
             Waive
           </button>
         </div>

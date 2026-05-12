@@ -94,6 +94,7 @@ function ReviewQueueItem({
     <div className="rqi__col rqi__col--priority">
       <span
         className={`rqi__priority ${getPriorityMod(priority)}`}
+        role="status"
         aria-label={`Priority: ${(priority || 'NORMAL').toUpperCase()}`}
       >
         {(priority || 'NORMAL').toUpperCase()}

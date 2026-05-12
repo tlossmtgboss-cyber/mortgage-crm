@@ -1505,6 +1505,9 @@ class AIResolutionEngine:
             if top_level_field not in allowed_columns:
                 # Not a valid column — skip to JSON fallback
                 raise ValueError(f"Invalid field: {top_level_field}")
+            # Defense-in-depth: reject anything that isn't a plain identifier
+            if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", top_level_field):
+                raise ValueError(f"Invalid identifier: {top_level_field}")
             # Column name is validated; safe to interpolate as an identifier
             result = self.db.execute(
                 text(
@@ -1559,6 +1562,9 @@ class AIResolutionEngine:
             allowed_columns = {c.name for c in Loan.__table__.columns}
             if top_level_field not in allowed_columns:
                 raise ValueError(f"Invalid field: {top_level_field}")
+            # Defense-in-depth: reject anything that isn't a plain identifier
+            if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", top_level_field):
+                raise ValueError(f"Invalid identifier: {top_level_field}")
             # Column name is validated; safe to interpolate as an identifier
             self.db.execute(
                 text(

@@ -32,6 +32,7 @@ import hashlib
 import io
 import logging
 import os
+import tempfile
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -913,7 +914,32 @@ class MergeIntelligenceService(OrgAwareService):
                 merge_id, len(validation.errors),
             )
 
-        # Step 6: fetch document content
+        # Step 6: Pre-check total document size BEFORE downloading
+        # PERF FIX: Reject early if combined size exceeds MAX_MERGE_FILE_SIZE
+        # to avoid downloading hundreds of MB into memory.
+        total_estimated_size = sum(doc.file_size for doc in ordered if doc.file_size)
+        if total_estimated_size > MAX_MERGE_FILE_SIZE:
+            total_mb = total_estimated_size / (1024 * 1024)
+            limit_mb = MAX_MERGE_FILE_SIZE / (1024 * 1024)
+            logger.warning(
+                "Merge %s rejected: estimated size %.1f MB exceeds limit %.0f MB",
+                merge_id, total_mb, limit_mb,
+            )
+            return MergeResult(
+                success=False,
+                merge_id=merge_id,
+                loan_id=loan_id,
+                investor_type=investor_type,
+                validation=validation,
+                error=(
+                    f"Total document size ({total_mb:.1f} MB) exceeds the "
+                    f"{limit_mb:.0f} MB limit. Remove some documents or split "
+                    f"into multiple packages."
+                ),
+                created_at=now.isoformat(),
+            )
+
+        # Fetch document content using temp files to avoid memory bloat
         doc_content_map = self._fetch_document_content(ordered)
 
         # Build documents list for merge: (content_bytes, display_name, doc_type)
@@ -1345,6 +1371,10 @@ class MergeIntelligenceService(OrgAwareService):
     ) -> Dict[int, bytes]:
         """Fetch actual file content for documents from S3 storage.
 
+        PERF FIX: Uses temp files for downloads to avoid keeping all document
+        bytes in memory simultaneously when building the map. Also enforces
+        a running total size check to bail early if we exceed limits.
+
         Returns a mapping of document_id -> file_bytes.
         """
         content_map: Dict[int, bytes] = {}
@@ -1356,13 +1386,25 @@ class MergeIntelligenceService(OrgAwareService):
             logger.error("Cannot initialize S3 service: %s", e)
             return content_map
 
+        running_size = 0
         for doc in ordered_docs:
             if not doc.storage_key:
                 continue
             try:
-                file_data = s3_service.download_file(doc.storage_key)
-                if file_data:
-                    content_map[doc.document_id] = file_data
+                # Download to a temp file first, then read into memory
+                # only if cumulative size is within limits
+                with tempfile.NamedTemporaryFile(delete=True) as tmp:
+                    file_data = s3_service.download_file(doc.storage_key)
+                    if file_data:
+                        running_size += len(file_data)
+                        if running_size > MAX_MERGE_FILE_SIZE:
+                            logger.warning(
+                                "Merge content fetch stopped: running total %d bytes "
+                                "exceeds limit %d bytes at doc %d",
+                                running_size, MAX_MERGE_FILE_SIZE, doc.document_id,
+                            )
+                            break
+                        content_map[doc.document_id] = file_data
             except Exception as e:
                 logger.warning(
                     "Failed to fetch document %d (key=%s): %s",

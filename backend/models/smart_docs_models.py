@@ -15,7 +15,7 @@ from typing import Optional, List
 
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, JSON, Enum as SQLEnum, Numeric, Index, func
+    Text, JSON, Enum as SQLEnum, Numeric, Index, ForeignKey, func
 )
 from sqlalchemy.orm import validates
 # Note: relationship import removed - using ID-based queries instead of ORM relationships
@@ -224,6 +224,9 @@ class DocumentRequest(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+
     # Relationships (foreign keys omitted to allow isolated table creation)
     loan_id = Column(Integer, nullable=False)  # References loans.id - indexed in __table_args__
     borrower_id = Column(Integer, nullable=True)  # References borrower_profiles.id
@@ -272,6 +275,7 @@ class DocumentRequest(Base):
 
     # Indexes
     __table_args__ = (
+        Index("ix_smart_doc_requests_organization_id", "organization_id"),
         Index("ix_smart_doc_requests_loan_id", "loan_id"),
         Index("ix_smart_doc_requests_status", "status"),
         Index("ix_smart_doc_requests_auto_renew", "auto_renew"),
@@ -290,8 +294,8 @@ class SmartDocument(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Multi-tenant isolation (nullable for backfill of existing rows)
-    organization_id = Column(Integer, nullable=True, index=True)  # TODO: backfill existing rows then set nullable=False
+    # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # Relationships (foreign keys omitted to allow isolated table creation)
     request_id = Column(Integer, nullable=True)  # References smart_document_requests.id - indexed in __table_args__

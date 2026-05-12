@@ -1,13 +1,64 @@
 import React, { useState, useRef } from 'react';
+import { API_BASE_URL } from '../../services/api';
+import { getToken } from '../../utils/tokenStore';
 import { smartDocsAPI } from '../../services/smartDocsApi';
 import './SmartDocumentUpload.css';
 
+const SMART_DOCS_API = `${API_BASE_URL}/api/v1/smart-docs`;
+
+/**
+ * Upload a single file with real XHR progress tracking.
+ */
+function uploadWithProgress(file, loanId, borrowerId, docType, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('loan_id', loanId);
+    formData.append('borrower_id', borrowerId);
+    if (docType) formData.append('doc_type', docType);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(data);
+        } else {
+          const detail = data.detail;
+          let message;
+          if (typeof detail === 'string') message = detail;
+          else if (Array.isArray(detail)) message = detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+          else message = detail?.msg || 'Upload failed';
+          reject(new Error(message));
+        }
+      } catch {
+        reject(new Error('Upload failed: invalid response'));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+
+    xhr.open('POST', `${SMART_DOCS_API}/upload`);
+    const token = getToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.send(formData);
+  });
+}
+
 function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [documentCategory, setDocumentCategory] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({}); // { [fileName]: percent }
   const [error, setError] = useState(null);
-  const [uploadResult, setUploadResult] = useState(null);
+  const [uploadResults, setUploadResults] = useState([]);
+  const [statusAnnouncement, setStatusAnnouncement] = useState('');
   const fileInputRef = useRef(null);
 
   const documentCategories = [
@@ -24,21 +75,23 @@ function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
   ];
 
   const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles(files);
       setError(null);
-      setUploadResult(null);
+      setUploadResults([]);
+      setUploadProgress({});
     }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      setSelectedFiles(files);
       setError(null);
-      setUploadResult(null);
+      setUploadResults([]);
+      setUploadProgress({});
     }
   };
 
@@ -46,9 +99,20 @@ function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
     e.preventDefault();
   };
 
+  const handleDropzoneKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fileInputRef.current?.click();
+    }
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleUpload = async () => {
-    if (!selectedFile) {
-      setError('Please select a file to upload');
+    if (selectedFiles.length === 0) {
+      setError('Please select at least one file to upload');
       return;
     }
     if (!documentCategory) {
@@ -59,24 +123,37 @@ function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
     try {
       setUploading(true);
       setError(null);
+      setStatusAnnouncement(`Uploading ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}...`);
 
-      const result = await smartDocsAPI.uploadDocument(
-        selectedFile,
-        loanId,
-        borrowerId,
-        null, // requestId
-        documentCategory
-      );
+      const results = [];
+      for (const file of selectedFiles) {
+        try {
+          const result = await uploadWithProgress(
+            file, loanId, borrowerId, documentCategory,
+            (pct) => {
+              setUploadProgress(prev => ({ ...prev, [file.name]: pct }));
+            }
+          );
+          results.push({ file: file.name, success: true, data: result });
+          setStatusAnnouncement(`${file.name} uploaded successfully.`);
+        } catch (err) {
+          results.push({ file: file.name, success: false, error: err.message });
+          setStatusAnnouncement(`${file.name} upload failed.`);
+        }
+      }
 
-      setUploadResult(result);
-      setSelectedFile(null);
+      setUploadResults(results);
+      setSelectedFiles([]);
       setDocumentCategory('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
 
+      const successCount = results.filter(r => r.success).length;
+      setStatusAnnouncement(`Upload complete: ${successCount} of ${results.length} succeeded.`);
+
       if (onUploadComplete) {
-        onUploadComplete(result);
+        results.filter(r => r.success).forEach(r => onUploadComplete(r.data));
       }
     } catch (err) {
       console.error('Upload error:', err);
@@ -93,46 +170,75 @@ function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
   };
 
   return (
-    <div className="smart-document-upload">
+    <div className="smart-document-upload" aria-busy={uploading}>
       <h3>Upload Document</h3>
 
+      {/* Live region for status announcements */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true" role="status">
+        {statusAnnouncement}
+      </div>
+
       <div
-        className={`drop-zone ${selectedFile ? 'has-file' : ''}`}
+        className={`drop-zone ${selectedFiles.length > 0 ? 'has-file' : ''}`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onClick={() => fileInputRef.current?.click()}
+        onKeyDown={handleDropzoneKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label="Upload documents. Drag and drop files here or click to browse."
       >
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           onChange={handleFileSelect}
           accept=".pdf,.png,.jpg,.jpeg,.gif,.tiff"
           style={{ display: 'none' }}
+          aria-hidden="true"
         />
 
-        {selectedFile ? (
-          <div className="selected-file">
-            <span className="file-icon">📄</span>
-            <div className="file-info">
-              <span className="file-name">{selectedFile.name}</span>
-              <span className="file-size">{formatFileSize(selectedFile.size)}</span>
-            </div>
-            <button
-              className="remove-file"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedFile(null);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-              }}
-            >
-              ×
-            </button>
+        {selectedFiles.length > 0 ? (
+          <div className="selected-files-list">
+            {selectedFiles.map((file, idx) => (
+              <div key={idx} className="selected-file">
+                <span className="file-icon" aria-hidden="true">📄</span>
+                <div className="file-info">
+                  <span className="file-name">{file.name}</span>
+                  <span className="file-size">{formatFileSize(file.size)}</span>
+                </div>
+                {uploading && uploadProgress[file.name] != null && (
+                  <div
+                    className="progress-bar-track"
+                    role="progressbar"
+                    aria-valuenow={uploadProgress[file.name]}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`Upload progress for ${file.name}: ${uploadProgress[file.name]}%`}
+                  >
+                    <div className="progress-bar-fill" style={{ width: `${uploadProgress[file.name]}%` }} />
+                  </div>
+                )}
+                {!uploading && (
+                  <button
+                    className="remove-file"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFile(idx);
+                    }}
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         ) : (
           <div className="drop-zone-content">
-            <span className="upload-icon">📁</span>
-            <p>Drag and drop a file here, or click to browse</p>
-            <p className="file-types">Supported: PDF, PNG, JPG, TIFF</p>
+            <span className="upload-icon" aria-hidden="true">📁</span>
+            <p>Drag and drop files here, or click to browse</p>
+            <p className="file-types">Supported: PDF, PNG, JPG, TIFF (multiple files supported)</p>
           </div>
         )}
       </div>
@@ -153,20 +259,21 @@ function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
         </select>
       </div>
 
-      {error && <div className="upload-error">{error}</div>}
+      {error && <div className="upload-error" role="alert">{error}</div>}
 
-      {uploadResult && (
-        <div className="upload-success">
-          <strong>Document uploaded successfully!</strong>
+      {uploadResults.length > 0 && (
+        <div className="upload-success" aria-live="polite">
+          <strong>{uploadResults.filter(r => r.success).length} of {uploadResults.length} uploaded successfully!</strong>
           <div className="result-details">
-            <p>Document ID: {uploadResult.document?.id}</p>
-            <p>Status: {uploadResult.document?.status}</p>
-            {uploadResult.validation && (
-              <>
-                <p>Screenshot Detection: {uploadResult.validation.is_screenshot ? 'Yes (flagged)' : 'No'}</p>
-                <p>Freshness: {uploadResult.validation.freshness_status}</p>
-              </>
-            )}
+            {uploadResults.map((r, idx) => (
+              <p key={idx}>
+                {r.file}: {r.success ? (
+                  <>ID: {r.data?.document?.id} — Status: {r.data?.document?.status}</>
+                ) : (
+                  <span style={{ color: '#dc2626' }}>Failed — {r.error}</span>
+                )}
+              </p>
+            ))}
           </div>
         </div>
       )}
@@ -174,9 +281,10 @@ function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
       <button
         className="upload-btn"
         onClick={handleUpload}
-        disabled={uploading || !selectedFile || !documentCategory}
+        disabled={uploading || selectedFiles.length === 0 || !documentCategory}
+        aria-label={uploading ? 'Upload in progress' : `Upload ${selectedFiles.length} document${selectedFiles.length !== 1 ? 's' : ''}`}
       >
-        {uploading ? 'Uploading...' : 'Upload Document'}
+        {uploading ? 'Uploading...' : `Upload Document${selectedFiles.length > 1 ? 's' : ''}`}
       </button>
     </div>
   );

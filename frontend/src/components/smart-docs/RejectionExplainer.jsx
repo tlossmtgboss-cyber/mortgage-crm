@@ -14,6 +14,7 @@ const RejectionExplainer = ({
   fixInstructions,
   onDismiss,
   showDismiss = false,
+  onReupload,
 }) => {
   const categoryConfig = {
     SCREENSHOT: {
@@ -76,9 +77,11 @@ const RejectionExplainer = ({
         backgroundColor: config.bgColor,
         borderColor: config.borderColor,
       }}
+      role="alert"
+      aria-label={`Document rejected: ${config.title}`}
     >
       {showDismiss && onDismiss && (
-        <button className="dismiss-btn" onClick={onDismiss}>×</button>
+        <button className="dismiss-btn" onClick={onDismiss} aria-label="Dismiss rejection explanation">×</button>
       )}
 
       <div className="explainer-header">
@@ -140,6 +143,15 @@ const RejectionExplainer = ({
       </div>
 
       <div className="explainer-footer">
+        {onReupload && (
+          <button
+            className="reupload-btn"
+            onClick={onReupload}
+            aria-label={`Re-upload document to resolve: ${config.title}`}
+          >
+            Re-upload Document
+          </button>
+        )}
         <p className="help-text">
           Need help? Contact your loan officer for assistance.
         </p>
@@ -162,8 +174,8 @@ export const RejectionBadge = ({ category, reason }) => {
   };
 
   return (
-    <div className="rejection-badge" title={reason}>
-      <span className="badge-icon">{icons[category] || '⚠️'}</span>
+    <div className="rejection-badge" title={reason} role="status" aria-label={`Rejected: ${formatCategory(category)}${reason ? '. ' + reason : ''}`}>
+      <span className="badge-icon" aria-hidden="true">{icons[category] || '⚠️'}</span>
       <span className="badge-text">{formatCategory(category)}</span>
     </div>
   );
@@ -179,20 +191,20 @@ export const RejectionAlert = ({
   onContact,
 }) => {
   return (
-    <div className="rejection-alert">
-      <div className="alert-icon">⚠️</div>
+    <div className="rejection-alert" role="alert" aria-label={`Document rejected: ${formatCategory(category)}`}>
+      <div className="alert-icon" aria-hidden="true">⚠️</div>
       <div className="alert-content">
         <strong>Document Rejected: {formatCategory(category)}</strong>
         {reason && <p>{reason}</p>}
       </div>
       <div className="alert-actions">
         {onRetry && (
-          <button className="retry-btn" onClick={onRetry}>
+          <button className="retry-btn" onClick={onRetry} aria-label="Upload the document again">
             Upload Again
           </button>
         )}
         {onContact && (
-          <button className="contact-btn" onClick={onContact}>
+          <button className="contact-btn" onClick={onContact} aria-label="Contact loan officer for help">
             Get Help
           </button>
         )}

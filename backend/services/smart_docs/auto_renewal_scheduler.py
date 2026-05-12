@@ -242,6 +242,7 @@ class AutoRenewalScheduler:
         )
 
         renewal = DocumentRequest(
+            organization_id=original_request.organization_id,
             loan_id=original_request.loan_id,
             borrower_id=original_request.borrower_id,
             doc_type=original_request.doc_type,
@@ -750,6 +751,7 @@ class AutoRenewalScheduler:
 
         # Create immediate renewal request
         renewal = DocumentRequest(
+            organization_id=original.organization_id,
             loan_id=loan_id,
             borrower_id=borrower_id,
             doc_type=doc_type,

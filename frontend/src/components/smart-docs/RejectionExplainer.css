@@ -123,6 +123,32 @@
   padding: 12px 16px;
   background: rgba(0, 0, 0, 0.03);
   border-top: 1px solid rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.reupload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-bottom: 8px;
+}
+
+.reupload-btn:hover {
+  background: #1d4ed8;
+}
+
+.reupload-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .help-text {

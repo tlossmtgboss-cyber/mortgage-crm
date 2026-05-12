@@ -336,9 +336,10 @@ async def send_to_portal_for_signature(
 
     # Create or update the document request
     if body.request_id:
-        # Update existing request
+        # Update existing request — verify it belongs to the correct loan
         request = db.query(DocumentRequest).filter(
-            DocumentRequest.id == body.request_id
+            DocumentRequest.id == body.request_id,
+            DocumentRequest.loan_id == smart_docs_loan_id,
         ).first()
 
         if request:
@@ -363,7 +364,11 @@ async def send_to_portal_for_signature(
             raise HTTPException(status_code=404, detail=f"Request {body.request_id} not found")
     else:
         # Create new document request
+        org_id = _get_loan_org_id(db, smart_docs_loan_id) or getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(status_code=400, detail="Cannot determine organization for this loan")
         request = DocumentRequest(
+            organization_id=org_id,
             loan_id=smart_docs_loan_id,
             doc_type=doc_type_enum,
             title=title,

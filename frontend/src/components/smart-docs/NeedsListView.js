@@ -186,13 +186,14 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
   }
 
   return (
-    <div className="needs-list-view">
+    <div className="needs-list-view" aria-label="Document needs list">
       <div className="needs-list-header">
         <h3>Document Needs List</h3>
         <div className="needs-list-actions">
           <button
             className="add-request-btn"
             onClick={() => setShowAddModal(true)}
+            aria-label="Add a custom document request"
           >
             + Add Request
           </button>
@@ -200,21 +201,22 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
             className="generate-btn"
             onClick={handleGenerateNeedsList}
             disabled={generating}
+            aria-label={generating ? 'Generating needs list' : 'Generate or refresh the document needs list'}
           >
             {generating ? 'Generating...' : 'Generate/Refresh List'}
           </button>
         </div>
       </div>
 
-      {error && <div className="needs-list-error">{error}</div>}
+      {error && <div className="needs-list-error" role="alert">{error}</div>}
 
       {/* Add Custom Request Modal */}
       {showAddModal && (
-        <div className="modal-overlay" onClick={handleCloseModal}>
+        <div className="modal-overlay" onClick={handleCloseModal} role="dialog" aria-modal="true" aria-label="Add document request">
           <div className="modal-content add-request-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Request Document{documents.length > 1 ? 's' : ''}</h3>
-              <button className="modal-close" onClick={handleCloseModal}>×</button>
+              <button className="modal-close" onClick={handleCloseModal} aria-label="Close dialog">×</button>
             </div>
             <form onSubmit={handleAddCustomRequest}>
               <div className="document-entries">
@@ -386,17 +388,30 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
           <p>Click "Generate/Refresh List" to create a needs list based on loan requirements.</p>
         </div>
       ) : (
-        <div className="needs-list-items">
+        <div className="needs-list-items" role="list" aria-label="Document requirements">
           {needsList.map((request) => {
             const priority = getPriorityLabel(request.priority);
             // Map backend status values (OPEN, PENDING_REVIEW, ACCEPTED, etc.) to display
             const statusDisplay = (request.status || 'OPEN').toLowerCase().replace('_', '-');
             const isOpen = ['open', 'pending_review'].includes((request.status || '').toLowerCase());
             return (
-              <div key={request.id} className={`needs-item status-${statusDisplay}`}>
+              <div
+                key={request.id}
+                className={`needs-item status-${statusDisplay}`}
+                role="listitem"
+                aria-label={`${request.title || request.doc_type} — ${priority.label} priority, status: ${(request.status || 'OPEN').replace('_', ' ')}`}
+              >
                 <div className="needs-item-header">
-                  <span className={`priority-badge ${priority.class}`}>{priority.label}</span>
-                  <span className={`status-badge ${statusDisplay}`}>
+                  <span
+                    className={`priority-badge ${priority.class}`}
+                    aria-label={`Priority: ${priority.label}`}
+                  >
+                    {priority.label}
+                  </span>
+                  <span
+                    className={`status-badge ${statusDisplay}`}
+                    aria-label={`Status: ${(request.status || 'OPEN').replace('_', ' ')}`}
+                  >
                     {(request.status || 'OPEN').replace('_', ' ')}
                   </span>
                 </div>
@@ -424,6 +439,7 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
                     <button
                       className="btn-small btn-fulfill"
                       onClick={() => handleMarkFulfilled(request.id)}
+                      aria-label={`Mark ${request.title || request.doc_type} as fulfilled`}
                     >
                       Mark Fulfilled
                     </button>

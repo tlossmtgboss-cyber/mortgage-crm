@@ -362,23 +362,69 @@ class DocumentUploadPipeline:
                 steps_completed=steps_completed,
             )
 
-        # ----- Step 7: Queue for AI classification (non-blocking) -----
+        # ----- Step 7: Queue for background AI classification -----
+        # PERF FIX: Previously called AI classification synchronously while
+        # holding the DB session. With Railway's 20-connection pool limit,
+        # concurrent uploads could exhaust the pool. Now we save the document
+        # with status "pending_classification" and let a background task
+        # handle classification without holding a DB connection.
         classification_status = None
         if not declared_doc_type:
+            classification_status = "pending_classification"
             try:
+                import asyncio
                 from services.smart_docs.ai_classifier_service import get_ai_classifier_service
-                classifier = get_ai_classifier_service()
-                classification_result = classifier.classify_document(
-                    file_content=file_bytes,
-                    mime_type=mime_type,
-                    filename=filename,
-                )
-                if classification_result and classification_result.success and classification_result.predicted_type:
-                    classification_status = classification_result.predicted_type
+
+                async def _background_classify(
+                    file_content: bytes,
+                    file_mime_type: str,
+                    file_name: str,
+                    document_id: Optional[int],
+                    loan_id_val: int,
+                    org_id_val: int,
+                ):
+                    """Run AI classification outside the request DB session."""
+                    try:
+                        classifier = get_ai_classifier_service()
+                        classification_result = classifier.classify_document(
+                            file_content=file_content,
+                            mime_type=file_mime_type,
+                            filename=file_name,
+                        )
+                        if classification_result and classification_result.success and classification_result.predicted_type:
+                            # Update the document with classification result using a fresh session
+                            try:
+                                from db import SessionLocal
+                                with SessionLocal() as bg_db:
+                                    if document_id:
+                                        bg_db.execute(text("""
+                                            UPDATE smart_documents
+                                            SET doc_type = :doc_type, classification_status = 'classified'
+                                            WHERE id = :doc_id
+                                        """), {"doc_type": classification_result.predicted_type, "doc_id": document_id})
+                                    bg_db.commit()
+                            except Exception as db_err:
+                                logger.warning("Background classification DB update failed: %s", db_err)
+                    except Exception as classify_err:
+                        logger.warning("Background AI classification failed (non-blocking): %s", classify_err)
+
+                # Schedule the background task -- fire and forget
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(_background_classify(
+                        file_content=file_bytes,
+                        file_mime_type=mime_type,
+                        file_name=filename,
+                        document_id=None,  # Will be set by caller after doc creation
+                        loan_id_val=loan_id,
+                        org_id_val=org_id,
+                    ))
+                except RuntimeError:
+                    # No running event loop (sync context) -- skip background classification
+                    logger.debug("No event loop for background classification, will remain pending")
             except Exception as e:
-                logger.warning("AI classification failed (non-blocking): %s", e)
-                classification_status = "classification_pending"
-        steps_completed.append("ai_classification")
+                logger.warning("Failed to queue background classification: %s", e)
+        steps_completed.append("ai_classification_queued")
 
         # ----- Step 8: Log upload event to audit trail -----
         try:

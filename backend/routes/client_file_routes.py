@@ -1145,6 +1145,7 @@ def create_document_request(
         due = datetime.fromisoformat(body.due_date)
 
     req = DocumentRequest(
+        organization_id=current_user.organization_id,
         loan_id=loan_ids[0],
         doc_type=doc_type,
         title=body.title,

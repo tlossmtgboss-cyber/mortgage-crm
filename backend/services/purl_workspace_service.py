@@ -598,6 +598,7 @@ class PURLWorkspaceService:
                         doc_type = _map_app_id_to_doc_type(req_data.get("id", ""))
                         applies_to_val = "CO_BORROWER" if "coborrower" in req_data.get("id", "") else "BORROWER"
                         new_req = DocumentRequest(
+                            organization_id=current_loan.organization_id,
                             loan_id=current_loan.id,
                             doc_type=doc_type,
                             title=req_data.get("name", req_data.get("id", "Document")),

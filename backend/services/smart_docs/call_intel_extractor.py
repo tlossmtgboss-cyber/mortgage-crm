@@ -494,7 +494,15 @@ class CallIntelDocumentExtractor:
                     except ValueError:
                         priority_enum = RequestPriority.NORMAL
 
+                    # Resolve organization_id from loan
+                    _org_row = self.db.execute(
+                        text("SELECT organization_id FROM loans WHERE id = :id"),
+                        {"id": analysis.loan_id}
+                    ).first()
+                    _org_id = _org_row[0] if _org_row else None
+
                     request = DocumentRequest(
+                        organization_id=_org_id,
                         loan_id=analysis.loan_id,
                         doc_type=doc_type_enum,
                         title=f"{need.doc_type.replace('_', ' ').title()} (from call)",
