@@ -480,7 +480,11 @@ async def get_available_roles(
 # =============================================================================
 
 def run_scheduled_workflow_tasks_background():
-    """Wrapper that creates its own db session for background execution"""
+    """Wrapper that creates its own db session for background execution.
+
+    Note: This is a system-wide scheduler that processes all orgs.
+    RLS is not set because the scheduler iterates across tenants.
+    """
     from database import SessionLocal
     db = SessionLocal()
     try:

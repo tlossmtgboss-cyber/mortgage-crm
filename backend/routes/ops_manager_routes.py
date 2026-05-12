@@ -113,6 +113,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     """Register operations manager routes."""
 
     # Verify ops_sweep_results table exists (created by migrations/create_ops_sweep_results.py)
+    # Note: Startup table existence check -- system-level, no tenant scope
     try:
         from database import SessionLocal
         db = SessionLocal()

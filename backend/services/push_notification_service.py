@@ -680,6 +680,8 @@ def send_push_to_user(
             from db import SessionLocal
             db = SessionLocal()
             _owns_session = True
+            # TENANT-017: No org_id available for send_push_to_user;
+            # push tokens are user-scoped, not tenant-scoped
         else:
             _owns_session = False
 
@@ -741,6 +743,12 @@ def send_push_to_org(
             from db import SessionLocal
             db = SessionLocal()
             _owns_session = True
+            # TENANT-017: Set RLS context for org-scoped push
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, org_id)
+            except Exception:
+                pass
         else:
             _owns_session = False
 
@@ -791,6 +799,7 @@ async def send_notification_with_push(
         from db import SessionLocal
         db = SessionLocal()
         _owns_session = True
+        # TENANT-017: No org_id available here; user-scoped notification
     else:
         _owns_session = False
 

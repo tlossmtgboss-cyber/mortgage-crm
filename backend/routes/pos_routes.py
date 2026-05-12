@@ -142,7 +142,8 @@ async def upload_document(
             mime_type=file.content_type or "application/octet-stream",
             category=category,
             description=description,
-            storage_key=f"pos/{application.id}/{storage_filename}",
+            # TENANT-011: Prefix with org_id for multi-tenant S3 isolation
+            storage_key=f"org_{application.organization_id}/pos/{application.id}/{storage_filename}",
             ctx=ctx,
         )
     except ApplicationStateError as exc:

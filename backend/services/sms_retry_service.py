@@ -136,6 +136,13 @@ class SMSRetryService:
             from integrations.sms_compliance_gate import check_sms_compliance
 
             db = SessionLocal()
+            # TENANT-017: Set RLS context if org_id is known
+            if organization_id:
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(db, organization_id)
+                except Exception:
+                    pass
             try:
                 compliance = check_sms_compliance(
                     db, to_phone, message,

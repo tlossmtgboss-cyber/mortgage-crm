@@ -1760,6 +1760,18 @@ async def process_incoming_sms(sms_id: int):
     """Background task to process an incoming SMS - creates its own db session"""
     from database import SessionLocal
     db = SessionLocal()
+    # TENANT-017: Resolve org_id from SMS record and set RLS context
+    try:
+        _sms_org = db.execute(text("""
+            SELECT u.organization_id FROM sms_intelligence_queue s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.id = :sms_id
+        """), {"sms_id": sms_id}).fetchone()
+        if _sms_org and _sms_org[0]:
+            from database.tenant_mixin import set_tenant_context
+            set_tenant_context(db, _sms_org[0])
+    except Exception:
+        pass
     try:
         # Get the SMS
         result = db.execute(text("""

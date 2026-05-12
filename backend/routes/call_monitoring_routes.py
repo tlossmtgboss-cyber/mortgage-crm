@@ -2958,6 +2958,15 @@ async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
         # Authenticate
         db = SessionLocal()
         user, auth_error = authenticate_websocket(websocket, db, require_auth=True)
+        # TENANT-017: Set RLS context after auth
+        if user:
+            _ws_org_id = getattr(user, "organization_id", None)
+            if _ws_org_id:
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(db, _ws_org_id)
+                except Exception:
+                    pass
 
         if not user:
             await websocket.send_json({"type": "error", "message": auth_error or "Auth failed"})
@@ -3089,6 +3098,16 @@ async def run_agents_background(
         engine = create_engine(db_url)
         SessionLocal = sessionmaker(bind=engine)
         db = SessionLocal()
+        # TENANT-017: Resolve org_id from user and set RLS context
+        if user_id:
+            try:
+                from sqlalchemy import text as _text
+                _org_row = db.execute(_text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
+                if _org_row and _org_row[0]:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(db, _org_row[0])
+            except Exception:
+                pass
 
         try:
             orchestrator = CallMonitoringOrchestrator(db)

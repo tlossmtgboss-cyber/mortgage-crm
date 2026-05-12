@@ -2487,6 +2487,13 @@ async def _transcribe_and_process_recording(
             )
             return
 
+        # TENANT-017: Set RLS context now that org_id is resolved
+        try:
+            from database.tenant_mixin import set_tenant_context
+            set_tenant_context(db, org_id)
+        except Exception:
+            pass
+
         # -----------------------------------------------------------------
         # 3. Feed transcript into Call Intelligence
         # -----------------------------------------------------------------

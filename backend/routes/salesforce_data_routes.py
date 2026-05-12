@@ -623,7 +623,9 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                 ).scalar()
                 if org_id:
                     try:
-                        db.execute(text("SET app.current_organization_id = :org_id"), {"org_id": str(org_id)})
+                        # TENANT-017: Use proper RLS variable (app.current_tenant)
+                        from database.tenant_mixin import set_tenant_context
+                        set_tenant_context(db, org_id)
                     except Exception as rls_err:
                         logger.warning(f"Could not set RLS context for background job: {rls_err}")
 
@@ -806,11 +808,18 @@ async def test_import_one_closed_loan(
         test_db = SessionLocal()
 
         try:
-            # Get org_id
+            # Get org_id and set RLS context
             user_row = test_db.execute(text(
                 "SELECT organization_id FROM users WHERE id = :uid"
             ), {"uid": user_id}).fetchone()
             importer.organization_id = user_row[0] if user_row else None
+            # TENANT-017: Set RLS context
+            if importer.organization_id:
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(test_db, importer.organization_id)
+                except Exception:
+                    pass
 
             # Connect to Salesforce
             importer.access_token, importer.instance_url = await importer.get_access_token(test_db)

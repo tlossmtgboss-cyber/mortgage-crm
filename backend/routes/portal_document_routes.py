@@ -214,7 +214,8 @@ async def initiate_document_upload(
             detail=f"File extension '.{file_ext}' does not match MIME type '{request.mime_type}'"
         )
     unique_id = str(uuid.uuid4())
-    storage_key = f"workspaces/{request.workspace_id}/documents/{unique_id}.{file_ext}"
+    # TENANT-011: Prefix with org_id for multi-tenant S3 isolation
+    storage_key = f"org_{org_id}/workspaces/{request.workspace_id}/documents/{unique_id}.{file_ext}"
 
     try:
         # Create document record in pending_upload status

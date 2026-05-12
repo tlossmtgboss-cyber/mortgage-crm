@@ -426,8 +426,10 @@ async def stop_chime_recording(
     recording.ended_at = datetime.now(timezone.utc)
 
     # Build the expected S3 key based on Chime media pipeline conventions
+    # TENANT-011: Prefix with org_id for multi-tenant S3 isolation
     if stopped and room.chime_meeting_id:
-        recording.s3_key = f"meetings/{room.chime_meeting_id}/{recording.chime_pipeline_id}"
+        _org_id = getattr(current_user, "organization_id", None) or "unscoped"
+        recording.s3_key = f"org_{_org_id}/meetings/{room.chime_meeting_id}/{recording.chime_pipeline_id}"
 
     db.commit()
 

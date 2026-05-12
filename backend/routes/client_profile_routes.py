@@ -327,7 +327,7 @@ def _parse_process_flow_async(document_id: int, *, db=None, organization_id: int
     """Background task to parse a process flow document using AI.
 
     When invoked via tenant_task, receives a tenant-scoped db session.
-    Falls back to unscoped SessionLocal for backward compatibility.
+    Falls back to tenant-scoped session via set_tenant_context when org_id is available.
     """
     main = get_main_module()
     ProcessFlowDocument = main.ProcessFlowDocument
@@ -339,6 +339,13 @@ def _parse_process_flow_async(document_id: int, *, db=None, organization_id: int
     if db is None:
         db = SessionLocal()
         _owns_session = True
+        # TENANT-017: Set RLS context if org_id is known
+        if organization_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, organization_id)
+            except Exception:
+                pass
     try:
         # Get the document
         document = db.query(ProcessFlowDocument).filter(ProcessFlowDocument.id == document_id).first()

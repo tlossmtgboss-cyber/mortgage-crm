@@ -207,10 +207,13 @@ def create_rls_policy(
 
     -- Create tenant isolation policy
     -- This assumes a session variable 'app.current_tenant' is set
+    -- USING restricts SELECT/UPDATE/DELETE to the current tenant
+    -- WITH CHECK restricts INSERT/UPDATE to prevent writing rows with wrong org_id
     CREATE POLICY {policy_name} ON {table_name}
         FOR ALL
         TO PUBLIC
-        USING (organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER);
+        USING (organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER)
+        WITH CHECK (organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER);
     """
 
     with engine.connect() as conn:

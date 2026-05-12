@@ -1475,6 +1475,13 @@ async def _send_sms_from_client_file(
     activity_row_id = None
     try:
         record_db = SessionLocal()
+        # TENANT-017: Set RLS context for record-keeping session
+        if org_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(record_db, org_id)
+            except Exception:
+                pass
         try:
             row = record_db.execute(sa_text("""
                 INSERT INTO sms_messages

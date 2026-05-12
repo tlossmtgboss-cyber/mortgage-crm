@@ -168,6 +168,13 @@ def process_webhook_event(
         from database import SessionLocal
         db = SessionLocal()
         _owns_session = True
+        # TENANT-017: Set RLS context if org_id is known
+        if organization_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, organization_id)
+            except Exception:
+                pass
     try:
         # Get connection and sync event
         connection = db.query(FUBUserConnection).filter(

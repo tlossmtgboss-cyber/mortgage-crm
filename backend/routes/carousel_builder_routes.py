@@ -1751,9 +1751,11 @@ async def get_image_upload_url(
         )
 
     # Generate storage key
+    # TENANT-011: Prefix with org_id for multi-tenant S3 isolation
     s3_service = get_s3_service()
     ext = upload_data.file_name.rsplit('.', 1)[-1].lower() if '.' in upload_data.file_name else 'png'
-    storage_key = f"carousels/{project_id}/images/{generate_short_uuid()}.{ext}"
+    _org_id = getattr(user, 'organization_id', None) or "unscoped"
+    storage_key = f"org_{_org_id}/carousels/{project_id}/images/{generate_short_uuid()}.{ext}"
 
     # Get presigned URL
     result = s3_service.get_presigned_put_url(storage_key, upload_data.content_type)

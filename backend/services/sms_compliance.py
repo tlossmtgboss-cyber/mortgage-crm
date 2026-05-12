@@ -75,6 +75,13 @@ def check_sms_consent(phone: str, organization_id: int = None, db=None) -> tuple
             from database import SessionLocal
             db = SessionLocal()
             owns_session = True
+            # TENANT-017: Set RLS context if org_id is known
+            if organization_id:
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(db, organization_id)
+                except Exception:
+                    pass
         except Exception as e:
             logger.error(f"Cannot create DB session: {e}")
             return False, f"Consent check error: {e}"

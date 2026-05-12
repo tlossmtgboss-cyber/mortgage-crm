@@ -167,6 +167,7 @@ def _create_agent_task_if_needed(
     try:
         from database import SessionLocal
         session = SessionLocal()
+        # Note: AI agent tasks are system-scoped; no per-tenant RLS needed
         try:
             # Dedup check
             existing = session.execute(

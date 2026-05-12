@@ -185,6 +185,13 @@ def _log_access_event_bg(
             from db import SessionLocal
             from soc2_compliance.services.access_control_service import AccessControlService
             session = SessionLocal()
+            # TENANT-017: Set RLS context if tenant_id is known
+            if tenant_id:
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(session, tenant_id)
+                except Exception:
+                    pass
             try:
                 svc = AccessControlService(session)
                 svc.log_authentication(
@@ -920,6 +927,14 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
             from middleware.impersonation_middleware import revoke_manager_impersonation_sessions
             from database import SessionLocal
             _db = SessionLocal()
+            # TENANT-017: Set RLS context for impersonation cleanup
+            _logout_org_id = getattr(current_user, "organization_id", None)
+            if _logout_org_id:
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(_db, _logout_org_id)
+                except Exception:
+                    pass
             try:
                 revoke_manager_impersonation_sessions(current_user.id, _db)
             finally:

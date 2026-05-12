@@ -301,6 +301,13 @@ async def on_any_appointment_event_audit_log(event: Event) -> None:
         AuditLog = models["SchedulerAuditLog"]
 
         session = SessionLocal()
+        # TENANT-017: Set RLS context for event subscriber
+        if org_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(session, int(org_id))
+            except Exception:
+                pass
         try:
             log_entry = AuditLog(
                 organization_id=int(org_id) if org_id else None,
@@ -374,6 +381,13 @@ async def on_pos_application_submitted_promote(event: Event) -> None:
         return
 
     session = SessionLocal()
+    # TENANT-017: Set RLS context for event subscriber
+    if org_id:
+        try:
+            from database.tenant_mixin import set_tenant_context
+            set_tenant_context(session, int(org_id))
+        except Exception:
+            pass
     try:
         # ----- Resolve the Lead ------------------------------------------------
         lead = session.query(Lead).filter(Lead.id == int(contact_id)).first()
@@ -580,6 +594,13 @@ async def on_pos_application_submitted_audit(event: Event) -> None:
         from database.enums import ActivityType
 
         session = SessionLocal()
+        # TENANT-017: Set RLS context for event subscriber
+        if org_id:
+            try:
+                from database.tenant_mixin import set_tenant_context as _stc
+                _stc(session, int(org_id))
+            except Exception:
+                pass
         try:
             activity = Activity(
                 organization_id=int(org_id) if org_id else None,
@@ -633,6 +654,14 @@ async def on_pos_application_submitted_notify_lo(event: Event) -> None:
         from database.models.core import User
 
         session = SessionLocal()
+        # TENANT-017: Set RLS context for event subscriber
+        _notify_org_id = event.org_id
+        if _notify_org_id:
+            try:
+                from database.tenant_mixin import set_tenant_context as _stc
+                _stc(session, int(_notify_org_id))
+            except Exception:
+                pass
         try:
             lead = session.query(Lead).filter(Lead.id == int(contact_id)).first()
             if not lead or not lead.owner_id:
@@ -701,6 +730,13 @@ async def on_pos_appointment_booked_create_task(event: Event) -> None:
         return
 
     session = SessionLocal()
+    # TENANT-017: Set RLS context for event subscriber
+    if org_id:
+        try:
+            from database.tenant_mixin import set_tenant_context as _stc
+            _stc(session, int(org_id))
+        except Exception:
+            pass
     try:
         task = Task(
             title=f"POS borrower booked {meeting_type} appointment — appointment #{appointment_id}",
@@ -758,6 +794,14 @@ async def on_pos_appointment_booked_notify_lo(event: Event) -> None:
         from database.models.core import User
 
         session = SessionLocal()
+        # TENANT-017: Set RLS context for event subscriber
+        _appt_org_id = event.org_id
+        if _appt_org_id:
+            try:
+                from database.tenant_mixin import set_tenant_context as _stc
+                _stc(session, int(_appt_org_id))
+            except Exception:
+                pass
         try:
             lo = session.query(User).filter(User.id == int(lo_user_id)).first()
             if not lo or not getattr(lo, "email", None):

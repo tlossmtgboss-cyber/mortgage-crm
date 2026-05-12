@@ -690,8 +690,15 @@ async def _send_followup_sms(
     Compliance gate (DNC, quiet hours, opt-out) runs via send_sms_verified_async.
     """
     from db import SessionLocal
+    from database.tenant_mixin import set_tenant_context
 
     db = SessionLocal()
+    # TENANT-017: Set RLS context for background task
+    if organization_id:
+        try:
+            set_tenant_context(db, organization_id)
+        except Exception:
+            pass
     try:
         from telephony.sms import send_sms_verified_async
 
@@ -2431,8 +2438,19 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
     """
     import asyncio
     from db import SessionLocal
+    from database.tenant_mixin import set_tenant_context
 
     db = SessionLocal()
+    # TENANT-017: Resolve org_id from user and set RLS context
+    try:
+        _org_row = db.execute(
+            text("SELECT organization_id FROM users WHERE id = :uid"),
+            {"uid": user_id},
+        ).fetchone()
+        if _org_row and _org_row[0]:
+            set_tenant_context(db, _org_row[0])
+    except Exception:
+        pass
     try:
         VoicemailCampaign = get_voicemail_campaign_model()
         VoicemailDrop = get_voicemail_drop_model()

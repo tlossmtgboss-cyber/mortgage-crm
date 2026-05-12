@@ -487,6 +487,7 @@ def _ensure_loans_columns():
                     try:
                         from services.mum_promotion_service import maybe_promote_loan_to_mum
                         from database import SessionLocal
+                        # Note: System-level startup task iterating all tenants; no per-tenant RLS
                         session = SessionLocal()
                         try:
                             for row in eligible:

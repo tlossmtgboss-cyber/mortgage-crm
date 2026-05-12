@@ -1117,6 +1117,9 @@ def run_prospect_reengagement_scan():
     """
     Daily scan job: iterate all enabled orgs, find stale leads, initiate outreach.
     Called from SchedulerService cron job.
+
+    Note: This is a system-wide scheduler that processes all orgs.
+    Per-org RLS context is set inside the org iteration loop.
     """
     from database import SessionLocal
 
@@ -1136,6 +1139,12 @@ def run_prospect_reengagement_scan():
         for config_row in configs:
             cfg = dict(config_row._mapping)
             org_id = cfg["organization_id"]
+            # TENANT-017: Set RLS context per org iteration
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(session, org_id)
+            except Exception:
+                pass
             stale_days = cfg.get("stale_days") or 30
             daily_limit = cfg.get("daily_limit") or 20
             eligible_stages = cfg.get("eligible_stages") or DEFAULT_ELIGIBLE_STAGES
@@ -1184,6 +1193,8 @@ def run_prospect_reengagement_expiry():
     """
     Daily expiry job: expire stale conversations that received no reply.
     Called from SchedulerService cron job.
+
+    Note: System-wide cron job; processes all tenants.
     """
     from database import SessionLocal
 

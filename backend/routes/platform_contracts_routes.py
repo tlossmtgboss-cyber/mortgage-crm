@@ -387,7 +387,9 @@ async def upload_contract_pdf(
         raise HTTPException(status_code=400, detail="File too large (max 50MB)")
 
     unique_id = uuid.uuid4().hex
-    storage_key = f"contracts/{contract_id}/{unique_id}.pdf"
+    # TENANT-011: Prefix with org_id for multi-tenant S3 isolation
+    _org_id = contract.organization_id or "unscoped"
+    storage_key = f"org_{_org_id}/contracts/{contract_id}/{unique_id}.pdf"
 
     try:
         s3 = PerenniaS3Service()

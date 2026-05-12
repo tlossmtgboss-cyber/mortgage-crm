@@ -86,6 +86,14 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         and health metrics.
         """
         db = SessionLocal()
+        # TENANT-017: Set RLS context for admin query
+        _admin_org = getattr(current_user, "organization_id", None)
+        if _admin_org:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, _admin_org)
+            except Exception:
+                pass
         try:
             result = {
                 "status": "ok",
@@ -400,6 +408,14 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Either provide an email to search for in Salesforce, or a lead_id to push.
         """
         db = SessionLocal()
+        # TENANT-017: Set RLS context for admin query
+        _admin_org2 = getattr(current_user, "organization_id", None)
+        if _admin_org2:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, _admin_org2)
+            except Exception:
+                pass
         try:
             from services.salesforce.sync_service import salesforce_sync
             from services.salesforce.oauth_service import salesforce_oauth
@@ -504,6 +520,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Run database migrations to add missing columns for Salesforce sync.
         Safe to run multiple times - uses IF NOT EXISTS.
         """
+        # Note: Schema migration endpoint is system-level; no per-tenant RLS
         db = SessionLocal()
         migrations_run = []
         errors = []

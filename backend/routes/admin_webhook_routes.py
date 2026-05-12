@@ -57,6 +57,7 @@ def _verify_admin(
                     from sqlalchemy import text
                     db = SessionLocal()
                     try:
+                        # Admin auth check -- system-level, no tenant scope needed
                         row = db.execute(
                             text("SELECT is_admin FROM users WHERE email = :email"),
                             {"email": email},

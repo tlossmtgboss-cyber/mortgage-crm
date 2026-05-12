@@ -1084,6 +1084,16 @@ async def generate_ai_sms_response(
     """Generate and send AI response to SMS message"""
     SessionLocal = get_session_local()
     db = SessionLocal()
+    # TENANT-017: Resolve org_id from user and set RLS context
+    if user_id:
+        try:
+            from sqlalchemy import text as _text
+            _org_row = db.execute(_text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
+            if _org_row and _org_row[0]:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, _org_row[0])
+        except Exception:
+            pass
     try:
         import openai
         from telephony.provider import get_telephony_provider

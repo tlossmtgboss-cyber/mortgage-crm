@@ -1033,6 +1033,22 @@ async def generate_ai_response(
     # Create a new database session for this background task
     from database import get_db, SessionLocal
     db = SessionLocal()
+    # TENANT-017: Resolve org_id and set RLS context
+    try:
+        _org_id_email = None
+        if loan_id:
+            _org_row = db.execute(text("SELECT organization_id FROM loans WHERE id = :lid"), {"lid": loan_id}).fetchone()
+            if _org_row:
+                _org_id_email = _org_row[0]
+        elif lead_id:
+            _org_row = db.execute(text("SELECT organization_id FROM leads WHERE id = :lid"), {"lid": lead_id}).fetchone()
+            if _org_row:
+                _org_id_email = _org_row[0]
+        if _org_id_email:
+            from database.tenant_mixin import set_tenant_context
+            set_tenant_context(db, _org_id_email)
+    except Exception:
+        pass
 
     try:
         logger.info(f"Generating AI response for conversation {conversation_id}")

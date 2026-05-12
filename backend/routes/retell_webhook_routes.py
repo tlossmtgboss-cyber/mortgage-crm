@@ -117,13 +117,20 @@ def _process_call_ended(payload: dict, *, db: Session = None, organization_id: i
     """Process call_ended event -- update local call record with duration and status.
 
     When invoked via tenant_task, receives a tenant-scoped db session.
-    Falls back to unscoped SessionLocal for backward compatibility.
+    Falls back to tenant-scoped session via get_db_with_tenant when org_id is available.
     """
     _owns_session = False
     if db is None:
-        from database import SessionLocal
+        from db import SessionLocal
         db = SessionLocal()
         _owns_session = True
+        # TENANT-017: Set RLS context if org_id is known
+        if organization_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, organization_id)
+            except Exception:
+                pass
     try:
         call_data = payload.get("data", {})
         call_id = call_data.get("call_id")
@@ -182,13 +189,20 @@ def _process_call_analyzed(payload: dict, *, db: Session = None, organization_id
     """Process call_analyzed event -- store transcript, summary, and sentiment.
 
     When invoked via tenant_task, receives a tenant-scoped db session.
-    Falls back to unscoped SessionLocal for backward compatibility.
+    Falls back to tenant-scoped session via get_db_with_tenant when org_id is available.
     """
     _owns_session = False
     if db is None:
-        from database import SessionLocal
+        from db import SessionLocal
         db = SessionLocal()
         _owns_session = True
+        # TENANT-017: Set RLS context if org_id is known
+        if organization_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, organization_id)
+            except Exception:
+                pass
     try:
         call_data = payload.get("data", {})
         call_id = call_data.get("call_id")

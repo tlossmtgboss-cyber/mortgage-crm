@@ -665,6 +665,7 @@ async def log_conversation_processing(
         )
 
         # Store in analytics table
+        # Note: Analytics logging is cross-tenant; org_id is not in scope here
         from database import SessionLocal
         db = SessionLocal()
         try:

@@ -1943,6 +1943,7 @@ def register_debug_data_routes(
             # =====================================================================
             from services.intelligent_email_handler import get_intelligent_email_handler
 
+            # Note: Inbound email webhook; org resolved inside handler by sender matching
             db = SessionLocal()
             try:
                 intelligent_handler = get_intelligent_email_handler(db)

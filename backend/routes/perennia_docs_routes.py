@@ -85,6 +85,16 @@ async def process_document_background(document_id: int):
             WHERE id = :id
         """), {"id": document_id}).fetchone()
 
+        # TENANT-017: Resolve org_id and set RLS context for background task
+        if doc and doc.loan_id:
+            try:
+                _org_row_rls = db.execute(text("SELECT organization_id FROM loans WHERE id = :lid"), {"lid": doc.loan_id}).fetchone()
+                if _org_row_rls and _org_row_rls.organization_id:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(db, _org_row_rls.organization_id)
+            except Exception:
+                pass
+
         if not doc:
             logger.error(f"Document {document_id} not found for processing")
             return
@@ -1147,8 +1157,10 @@ async def get_upload_presigned_url(
     import uuid
 
     # Generate storage key
+    # TENANT-011: Prefix with org_id for multi-tenant S3 isolation
     file_ext = file_name.split('.')[-1] if '.' in file_name else 'bin'
-    storage_key = f"documents/{loan_id}/{uuid.uuid4()}.{file_ext}"
+    _org_id = getattr(current_user, "organization_id", None) or "unscoped"
+    storage_key = f"org_{_org_id}/documents/{loan_id}/{uuid.uuid4()}.{file_ext}"
 
     try:
         # Create document record

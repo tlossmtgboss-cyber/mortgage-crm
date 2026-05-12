@@ -939,6 +939,13 @@ class NotificationService:
             try:
                 from db import SessionLocal
                 _panel_db = SessionLocal()
+                # TENANT-017: Set RLS context for SMS delivery tracking
+                if organization_id:
+                    try:
+                        from database.tenant_mixin import set_tenant_context
+                        set_tenant_context(_panel_db, organization_id)
+                    except Exception:
+                        pass
                 try:
                     from integrations.sms_delivery_tracker import record_message_sent
                     record_message_sent(

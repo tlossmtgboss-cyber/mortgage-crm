@@ -425,6 +425,13 @@ def _bg_send_needs_list(
         from database import SessionLocal
         db = SessionLocal()
         _owns_session = True
+        # TENANT-017: Set RLS context if org_id is known
+        if organization_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, organization_id)
+            except Exception:
+                pass
     try:
         loan = _get_loan_details(db, loan_id)
         if not loan:
@@ -504,6 +511,13 @@ def _bg_send_reminder(
         from database import SessionLocal
         db = SessionLocal()
         _owns_session = True
+        # TENANT-017: Set RLS context if org_id is known
+        if organization_id:
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, organization_id)
+            except Exception:
+                pass
     try:
         loan = _get_loan_details(db, loan_id)
         if not loan:
@@ -570,6 +584,14 @@ def _bg_send_batch_item(
     """Background task: send one item in a batch."""
     from database import SessionLocal
     db = SessionLocal()
+    # TENANT-017: Resolve org_id from loan and set RLS context
+    try:
+        _org_row = db.execute(sa_text("SELECT organization_id FROM loans WHERE id = :lid"), {"lid": loan_id}).fetchone()
+        if _org_row and _org_row[0]:
+            from database.tenant_mixin import set_tenant_context
+            set_tenant_context(db, _org_row[0])
+    except Exception:
+        pass
     try:
         loan = _get_loan_details(db, loan_id)
         if not loan:

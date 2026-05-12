@@ -698,6 +698,13 @@ async def _execute_stl_call(
     engine = create_engine(db_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
+    # TENANT-017: Set RLS context for background task
+    if organization_id:
+        try:
+            from database.tenant_mixin import set_tenant_context
+            set_tenant_context(db, organization_id)
+        except Exception:
+            pass
 
     try:
         _ensure_tables(db)

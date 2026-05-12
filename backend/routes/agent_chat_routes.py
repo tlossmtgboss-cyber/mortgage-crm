@@ -408,8 +408,16 @@ async def send_message_stream(
                 await asyncio.sleep(0.05)  # Small delay for streaming effect
 
             # Save complete message to database
+            # TENANT-017: Use tenant-scoped session for background DB write
             from database import SessionLocal
             async_db = SessionLocal()
+            _user_org_id = getattr(current_user, "organization_id", None)
+            if _user_org_id:
+                try:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(async_db, _user_org_id)
+                except Exception:
+                    pass
             try:
                 agent_message = AgentChatMessage(
                     session_id=session_id,

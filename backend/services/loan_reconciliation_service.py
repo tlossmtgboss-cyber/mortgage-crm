@@ -91,10 +91,23 @@ class LoanReconciliationService:
         self._own_db = None
 
     def _get_own_db(self):
-        """Lazily create a fresh session for write operations."""
+        """Lazily create a fresh session for write operations.
+
+        Inherits tenant context from the caller's session if available.
+        """
         if self._own_db is None:
             from db import SessionLocal
             self._own_db = SessionLocal()
+            # TENANT-017: Inherit RLS context from caller's db session
+            try:
+                org_id_val = self.db.execute(
+                    __import__("sqlalchemy").text("SHOW app.current_tenant")
+                ).scalar()
+                if org_id_val:
+                    from database.tenant_mixin import set_tenant_context
+                    set_tenant_context(self._own_db, int(org_id_val))
+            except Exception:
+                pass
         return self._own_db
 
     def _close_own_db(self):
