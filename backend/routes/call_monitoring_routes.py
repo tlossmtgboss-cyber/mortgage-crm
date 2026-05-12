@@ -2946,7 +2946,7 @@ async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
                    {"type": "connected", "session_id": "..."}
     """
     from database import SessionLocal
-    from utils.websocket_auth import authenticate_websocket
+    from utils.websocket_auth import authenticate_websocket_post_connect
 
     await websocket.accept()
 
@@ -2955,9 +2955,9 @@ async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
     deepgram_api_key = os.getenv("DEEPGRAM_API_KEY", "")
 
     try:
-        # Authenticate
+        # Authenticate (post-connect auth: token sent as first message, not in URL)
         db = SessionLocal()
-        user, auth_error = authenticate_websocket(websocket, db, require_auth=True)
+        user, auth_error = await authenticate_websocket_post_connect(websocket, db)
         # TENANT-017: Set RLS context after auth
         if user:
             _ws_org_id = getattr(user, "organization_id", None)

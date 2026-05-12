@@ -82,7 +82,6 @@ orjson==3.11.4
 ormsgpack==1.12.0
 packaging==24.2
 pandas==2.3.3
-passlib==1.7.4
 pdf2image==1.17.0
 pgvector==0.3.6
 pillow==12.0.0

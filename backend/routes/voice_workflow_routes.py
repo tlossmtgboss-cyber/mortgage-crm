@@ -134,12 +134,17 @@ async def transcribe_audio(audio_data: bytes) -> Optional[str]:
 @router.websocket("/ws")
 async def voice_workflow_websocket(
     websocket: WebSocket,
-    token: str = Query(...),
+    token: str = Query(None),
 ):
     """
     WebSocket endpoint for real-time voice workflow interaction.
 
+    Security: Token sent as first message after connect (not in URL query string)
+    to avoid leaking JWT into server/proxy access logs and browser history.
+    Backwards compatible: old clients with ?token= query param still work.
+
     Protocol:
+    - Client sends: {"type": "auth", "token": "..."} (first message if no ?token= in URL)
     - Client sends: {"type": "audio", "data": "<base64>"}
     - Client sends: {"type": "text_input", "text": "John Smith"}
     - Client sends: {"type": "start_workflow", "workflow_type": "pre_approval_letter"}
@@ -171,6 +176,26 @@ async def voice_workflow_websocket(
 
     try:
         user_id = None
+
+        # If no token in URL, wait for first-message auth
+        if not token:
+            import asyncio as _asyncio
+            import json as _json
+            try:
+                raw = await _asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+                msg = _json.loads(raw)
+                if isinstance(msg, dict) and msg.get("type") == "auth":
+                    token = msg.get("token", "")
+            except (_asyncio.TimeoutError, Exception):
+                pass
+
+        if not token:
+            await websocket.send_json({
+                "type": WebSocketMessageType.ERROR.value,
+                "error": "Authentication required"
+            })
+            await websocket.close()
+            return
 
         # First try JWT token via centralized auth (handles RS256/HS256 + blacklist)
         try:

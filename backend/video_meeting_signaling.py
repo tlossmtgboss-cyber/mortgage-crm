@@ -104,8 +104,9 @@ class MeetingConnectionManager:
         display_name: str,
         is_host: bool = False
     ):
-        """Connect a participant to a meeting room"""
-        await websocket.accept()
+        """Connect a participant to a meeting room.
+        Note: caller must accept() the WebSocket before calling this method.
+        """
 
         # Initialize room if needed
         if room_code not in self.rooms:
@@ -226,9 +227,23 @@ async def websocket_video_meeting(
     - media_state: Audio/video enabled state
     - chat: Chat message
     """
-    # Get display name and token from query params
+    # Get display name from query params; token via post-connect auth message
     display_name = websocket.query_params.get("name", f"Guest-{participant_id[:6]}")
     token = websocket.query_params.get("token", "")
+
+    await websocket.accept()
+
+    # Security: If no token in URL, read it from the first WebSocket message
+    # to avoid leaking JWT into server/proxy access logs and browser history.
+    if not token:
+        try:
+            import asyncio as _asyncio
+            raw = await _asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            msg = json.loads(raw)
+            if isinstance(msg, dict) and msg.get("type") == "auth":
+                token = msg.get("token", "")
+        except Exception:
+            pass  # Token is optional for meetings (guest participants)
 
     # Server-side host verification via JWT + DB lookup
     is_host, user_id = await resolve_host_status(token, room_code)

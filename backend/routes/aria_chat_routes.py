@@ -122,15 +122,41 @@ def _verify_ws_token(token: str):
 @router.websocket("/ws")
 async def aria_websocket(
     websocket: WebSocket,
-    token: str = Query(...),
+    token: str = Query(None),
 ):
-    """Main WebSocket endpoint for Aria conversations."""
+    """Main WebSocket endpoint for Aria conversations.
+
+    Security: Token sent as first message after connect (not in URL query string)
+    to avoid leaking JWT into server/proxy access logs and browser history.
+    Backwards compatible: old clients with ?token= query param still work.
+    """
+    # If no token in URL, accept first and wait for auth message
+    if not token:
+        await websocket.accept()
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            msg = json.loads(raw)
+            if isinstance(msg, dict) and msg.get("type") == "auth":
+                token = msg.get("token", "")
+        except (asyncio.TimeoutError, Exception):
+            pass
+        if not token:
+            await websocket.send_json({"type": "error", "message": "Authentication required"})
+            await websocket.close(code=4001)
+            return
+
     user = _verify_ws_token(token)
     if not user:
-        await websocket.close(code=4001)
+        # If we haven't accepted yet (legacy path with token in URL), close cleanly
+        try:
+            await websocket.close(code=4001)
+        except RuntimeError:
+            pass
         return
 
-    await websocket.accept()
+    # Accept if not already accepted (legacy path with token in URL)
+    if websocket.query_params.get("token"):
+        await websocket.accept()
     session_id = str(uuid4())
     session_store = _get_session_store()
     uid = str(user.user_id)

@@ -268,7 +268,9 @@ const MeetingRoom = () => {
       ? 'api.perenniaai.com'
       : (process.env.REACT_APP_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000');
     const token = getToken() || '';
-    const wsUrl = `${wsProtocol}//${wsHost}/api/v1/meetings/ws/${roomCode}/${participantId}?name=${encodeURIComponent(displayName)}&token=${encodeURIComponent(token)}`;
+    // Security: Token sent as first message after connect, not in URL query
+    // string, to avoid leaking JWT into server/proxy logs and browser history.
+    const wsUrl = `${wsProtocol}//${wsHost}/api/v1/meetings/ws/${roomCode}/${participantId}?name=${encodeURIComponent(displayName)}`;
 
     console.log('Connecting to signaling server:', wsUrl);
 
@@ -276,6 +278,10 @@ const MeetingRoom = () => {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // Send auth as first message
+      if (token) {
+        ws.send(JSON.stringify({ type: 'auth', token }));
+      }
       console.log('Connected to signaling server');
       // Flush queued ICE candidates from during disconnect
       if (iceCandidateQueueRef.current.length > 0) {
