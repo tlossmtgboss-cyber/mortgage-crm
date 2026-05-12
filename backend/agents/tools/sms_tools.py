@@ -309,9 +309,9 @@ def start_scheduling_sms(
             db.execute(
                 sa_text("""INSERT INTO sms_ai_conversations
                    (id, phone_number, lead_id, organization_id, status,
-                    current_stage, context_data, last_message_at, message_count, created_at, expires_at)
+                    current_stage, context_data, last_message_at, message_count, created_at)
                    VALUES (:id, :phone, :lead_id, :org_id, 'active',
-                           'scheduling', CAST(:context AS jsonb), NOW(), 1, NOW(), NOW() + interval '72 hours')
+                           'scheduling', CAST(:context AS jsonb), NOW(), 1, NOW())
                    ON CONFLICT DO NOTHING"""),
                 {
                     "id": conv_id,

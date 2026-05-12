@@ -1736,7 +1736,10 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             db.rollback()
             logger.warning("aria_sms_intercept: org lookup failed: %s", e)
 
-        # Query with org scope when available for tenant isolation
+        # Query with org scope when available for tenant isolation,
+        # then fall back to unscoped lookup if org-scoped misses
+        # (handles misconfigured verified_caller_ids mappings)
+        _aria_conv = None
         if _aria_intercept_org_id:
             _aria_conv = db.execute(sa_text("""
                 SELECT id, organization_id, current_stage, context_data
@@ -1746,7 +1749,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 ORDER BY last_message_at DESC NULLS LAST
                 LIMIT 1
             """), {"phone": normalized_from, "org_id": _aria_intercept_org_id}).fetchone()
-        else:
+        if not _aria_conv:
             _aria_conv = db.execute(sa_text("""
                 SELECT id, organization_id, current_stage, context_data
                 FROM sms_ai_conversations
@@ -1754,6 +1757,12 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 ORDER BY last_message_at DESC NULLS LAST
                 LIMIT 1
             """), {"phone": normalized_from}).fetchone()
+            if _aria_conv and _aria_intercept_org_id:
+                logger.warning(
+                    "aria_sms_intercept: org-scoped lookup missed, unscoped found conv in org=%s "
+                    "(verified_caller_ids mapped to org=%s) — phone=...%s",
+                    _aria_conv[1], _aria_intercept_org_id, normalized_from[-4:],
+                )
 
         if _aria_conv:
             _aria_conv_id = _aria_conv[0]
