@@ -36,6 +36,21 @@ export function usePOSApplication(loanId?: number) {
   // Autosave debounce timers per section.
   const timersRef = useRef<Partial<Record<SectionKey, ReturnType<typeof setTimeout>>>>({});
 
+  // Track whether there are unsaved changes (pending debounce or active save).
+  const dirtyRef = useRef(false);
+
+  // ---------- beforeunload guard ----------
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   // ---------- bootstrap ----------
 
   useEffect(() => {
@@ -93,14 +108,18 @@ export function usePOSApplication(loanId?: number) {
       try {
         const section = await posApi.updateSection(application.id, sectionKey, body);
         setSections(prev => ({ ...prev, [sectionKey]: section }));
-        // Refresh app shell so completion_pct and current_step advance.
-        const app = await posApi.getApplication(application.id);
-        setApplication(app);
+        // The PATCH response includes application metadata — use it directly
+        // instead of making a second GET round-trip (~200-300ms saved).
+        if (section.application) {
+          setApplication(section.application);
+        }
+        dirtyRef.current = false;
         setSaveState('saved');
         // Auto-clear the "saved" status after a few seconds.
         setTimeout(() => setSaveState(prev => (prev === 'saved' ? 'idle' : prev)), 2000);
         return section;
       } catch (e) {
+        dirtyRef.current = false;
         setSaveState('error');
         setError(e instanceof Error ? e.message : 'Save failed');
       }
@@ -131,6 +150,7 @@ export function usePOSApplication(loanId?: number) {
       // Debounced save.
       const existing = timersRef.current[sectionKey];
       if (existing) clearTimeout(existing);
+      dirtyRef.current = true;
       timersRef.current[sectionKey] = setTimeout(() => {
         saveSection(sectionKey, { data, mark_complete: false });
       }, AUTOSAVE_DELAY_MS);

@@ -57,26 +57,34 @@ class POSStatus:
 class POSSectionKey:
     INTAKE = "intake"
     PERSONAL = "personal"
+    COBORROWER = "coborrower"
     RESIDENCE = "residence"
     EMPLOYMENT = "employment"
     ASSETS = "assets"
     LIABILITIES = "liabilities"
     REO = "reo"
     LOAN = "loan"
+    DOCUMENTS_UPLOAD = "documents_upload"
     DECLARATIONS = "declarations"
+    CREDIT_AUTH = "credit_auth"
+    SCHEDULE = "schedule"
     REVIEW = "review"
 
     # Source of truth for ordering and the step count shown to the borrower.
     # intake is excluded — it's a pre-screen, not a numbered step.
     ORDERED = (
         PERSONAL,
+        COBORROWER,
         RESIDENCE,
         EMPLOYMENT,
         ASSETS,
         LIABILITIES,
         REO,
         LOAN,
+        DOCUMENTS_UPLOAD,
         DECLARATIONS,
+        CREDIT_AUTH,
+        SCHEDULE,
         REVIEW,
     )
 

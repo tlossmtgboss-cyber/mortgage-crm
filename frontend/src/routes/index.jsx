@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import { Route, Navigate, useParams } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import MainLayout from '../layouts/MainLayout';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
@@ -245,7 +245,8 @@ const BookingConfirmationPage = lazyRetry(() => import('../pages/BookingConfirma
 const EmbedBooking = lazyRetry(() => import('../pages/EmbedBooking'));
 
 // Application pages
-const BorrowerApplication = lazyRetry(() => import('../pages/BorrowerApplication'));
+// Legacy BorrowerApplication — route now redirects to /pos via LegacyApplyRedirect
+// const BorrowerApplication = lazyRetry(() => import('../pages/BorrowerApplication'));
 const AdaptiveURLA = lazyRetry(() => import('../pages/AdaptiveURLA'));
 const PurchaseApplication = lazyRetry(() => import('../pages/PurchaseApplication'));
 const RefinanceApplication = lazyRetry(() => import('../pages/RefinanceApplication'));
@@ -362,6 +363,19 @@ const TotalCostAnalysis = lazyRetry(() => import('../components/Portal/TotalCost
 // E-Signature Components
 const FieldPlacementBuilder = lazyRetry(() => import('../components/esign/FieldPlacementBuilder'));
 const SigningSession = lazyRetry(() => import('../pages/esign/SigningSession'));
+
+/**
+ * Redirect legacy /apply/:token to the primary POS flow at /pos?token=:token.
+ * The legacy BorrowerApplication path has critical bugs (SSN/DOB never saved,
+ * document uploads fake) and only covers 7 of 13 sections. This redirect
+ * ensures old PURL links land on the mature POS flow.
+ * If the token is not a valid POS token, POSEntryPage gracefully falls through
+ * to its auth flow (signup/login).
+ */
+function LegacyApplyRedirect() {
+  const { token } = useParams();
+  return <Navigate to={`/pos?token=${encodeURIComponent(token)}`} replace />;
+}
 
 // =============================================================================
 // ROUTE CONFIGURATION
@@ -507,7 +521,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/apply/demo" path="/apply/demo" element={<LazyPage><ApplicationDemo /></LazyPage>} />,
     <Route key="/apply/oauth/:provider/callback" path="/apply/oauth/:provider/callback" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />,
     <Route key="/apply/voice-review/:token" path="/apply/voice-review/:token" element={<LazyPage><VoiceReviewPage /></LazyPage>} />,
-    <Route key="/apply/:token" path="/apply/:token" element={<LazyPage><BorrowerApplication /></LazyPage>} />,
+    <Route key="/apply/:token" path="/apply/:token" element={<LegacyApplyRedirect />} />,
     <Route key="/coborrower/:token" path="/coborrower/:token" element={<LazyPage><CoborrowerApplication /></LazyPage>} />,
     <Route key="/borrower-portal/:token" path="/borrower-portal/:token" element={<LazyPage><BorrowerPortal /></LazyPage>} />,
     <Route key="/borrower-portal" path="/borrower-portal" element={<LazyPage><BorrowerPortal /></LazyPage>} />,

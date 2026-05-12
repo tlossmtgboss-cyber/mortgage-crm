@@ -260,6 +260,19 @@ function renderInline(text: string): React.ReactNode {
   });
 }
 
+/**
+ * H13 fix: only allow http:// and https:// schemes in source links.
+ * Reject javascript:, data:, vbscript:, and any other dangerous URI scheme.
+ */
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 const SourceChip: React.FC<{ source: Source }> = ({ source }) => {
   const node = (
     <span className="aria-source-chip">
@@ -267,7 +280,7 @@ const SourceChip: React.FC<{ source: Source }> = ({ source }) => {
       {source.label}
     </span>
   );
-  if (source.anchor && source.type === 'guideline' && source.anchor.startsWith('http')) {
+  if (source.anchor && source.type === 'guideline' && isSafeUrl(source.anchor)) {
     return (
       <a
         href={source.anchor}

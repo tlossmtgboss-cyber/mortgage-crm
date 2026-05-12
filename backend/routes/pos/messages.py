@@ -206,13 +206,18 @@ def send_message(
             parts = [contact.first_name or "", contact.last_name or ""]
             borrower_name = " ".join(p for p in parts if p).strip() or "Borrower"
 
+    # H11 fix: strip all HTML/script from borrower-authored content.
+    # Messages are plain text — reject any markup to prevent stored XSS.
+    import nh3
+    sanitized_content = nh3.clean(body.content.strip(), tags=set(), attributes={})
+
     msg = POSBorrowerMessage(
         application_id=application.id,
         organization_id=application.organization_id,
         sender_user_id=None,
         sender_name=borrower_name,
         sender_role="Borrower",
-        content=body.content.strip(),
+        content=sanitized_content,
         read_at=None,
     )
     db.add(msg)

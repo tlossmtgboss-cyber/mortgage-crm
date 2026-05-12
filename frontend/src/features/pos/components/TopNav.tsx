@@ -23,12 +23,19 @@ export const TopNav: React.FC<TopNavProps> = ({ saveState, userInitials, onExit 
         </span>
       </div>
       <div className="pos-topnav__right">
-        {saveState !== 'idle' && (
-          <div className="pos-topnav__save-status">
-            {saveState === 'saved' && <span className="pos-topnav__save-dot" />}
-            <span>{saveMessage}</span>
-          </div>
-        )}
+        {/* M9: aria-live for save/error status — screen readers announce changes */}
+        <div
+          className="pos-topnav__save-status"
+          aria-live="polite"
+          role={saveState === 'error' ? 'alert' : undefined}
+        >
+          {saveState !== 'idle' && (
+            <>
+              {saveState === 'saved' && <span className="pos-topnav__save-dot" />}
+              <span>{saveMessage}</span>
+            </>
+          )}
+        </div>
         <button type="button" className="pos-topnav__exit-btn" onClick={onExit}>
           <ClockIcon />
           <span>Save &amp; exit</span>

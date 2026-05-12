@@ -53,6 +53,12 @@ def get_ai_qa_service() -> AIQAService:
 # ---------------------------------------------------------------------------
 
 
+# TODO(perf): Add SSE streaming to eliminate the 2-8s spinner on every
+# question. The agent_chat_routes.py SSE pattern (StreamingResponse with
+# async generator) can be adapted here. Requires BorrowerApplicationAgent
+# to expose a streaming interface (async yield partial content chunks).
+# Until then, this endpoint blocks for the full agent response.
+
 @router.post(
     "/ask",
     response_model=AskResponse,

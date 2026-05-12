@@ -3555,6 +3555,7 @@ _pos_routers = {
     "documents": ("routes.pos.documents", "router"),
     "hydration": ("routes.pos.hydration", "router"),
     "messages": ("routes.pos.messages", "router"),
+    "lo_profile": ("routes.pos.lo_profile", "router"),
     "resolve_lo": ("routes.pos.resolve_lo", "router"),
     "start": ("routes.pos.start", "router"),
     "tasks": ("routes.pos.tasks", "router"),

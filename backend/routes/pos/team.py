@@ -95,15 +95,26 @@ def get_team(
             ORDER BY r.name, dra.user_id
         """), {"org_id": application.organization_id}).fetchall()
 
+        # Batch-fetch all users at once to avoid N+1 queries.
+        user_role_map: dict[int, str] = {}
         for row in rows:
             uid = row[0]
             role_name = row[1]
-            if uid in seen_ids:
-                continue
-            user = db.get(User, uid)
-            if user and user.is_active:
-                members.append(_user_to_member(user, role_name))
-                seen_ids.add(uid)
+            if uid not in seen_ids and uid not in user_role_map:
+                user_role_map[uid] = role_name
+
+        if user_role_map:
+            users = (
+                db.query(User)
+                .filter(User.id.in_(list(user_role_map.keys())), User.is_active.is_(True))
+                .all()
+            )
+            users_by_id = {u.id: u for u in users}
+            for uid, role_name in user_role_map.items():
+                user = users_by_id.get(uid)
+                if user:
+                    members.append(_user_to_member(user, role_name))
+                    seen_ids.add(uid)
     except Exception as e:
         logger.warning("Failed to load workflow role assignments: %s", e)
 

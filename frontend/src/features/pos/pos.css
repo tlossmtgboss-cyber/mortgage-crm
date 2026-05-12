@@ -3319,3 +3319,79 @@
   font-size: 13px;
 }
 
+/* ===================================================================
+   M8: Step title focus style (programmatic focus, no visible ring)
+   =================================================================== */
+
+.pos-main__step-title:focus,
+.pos-main__heading:focus {
+  outline: 2px solid var(--bt-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ===================================================================
+   H7: Mobile bottom navigation bar
+   Visible at <=1024px when the sidebar is hidden.
+   =================================================================== */
+
+.pos-mobile-nav {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .pos-mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--bt-bg-sidebar);
+    border-top: 1px solid var(--bt-border);
+    height: 60px;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px;
+    /* Ensure content above isn't hidden behind this bar */
+  }
+
+  /* Add bottom padding to the page so content isn't hidden behind the bar */
+  .pos-body {
+    padding-bottom: 60px;
+  }
+
+  .pos-mobile-nav__btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--bt-text-muted);
+    font-family: var(--bt-font-body);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    border-radius: 8px;
+    transition: color 0.15s, background 0.15s;
+    min-width: 56px;
+  }
+
+  .pos-mobile-nav__btn:hover {
+    color: var(--bt-text-secondary);
+    background: var(--bt-bg-elevated);
+  }
+
+  .pos-mobile-nav__btn--active {
+    color: var(--bt-primary);
+  }
+
+  .pos-mobile-nav__btn--active svg {
+    stroke: var(--bt-primary);
+  }
+}
+

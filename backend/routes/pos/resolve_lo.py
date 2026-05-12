@@ -174,22 +174,20 @@ async def resolve_loan_officer(
         if org_id is not None:
             loan_query = loan_query.filter(Loan.organization_id == org_id)
 
-        # Check if there are more rows than our scan limit (performance warning)
-        candidate_count = loan_query.count()
-        if candidate_count > _LOAN_SCAN_LIMIT:
-            logger.warning(
-                "Loan phone scan capped at %d rows (total matching: %d) — "
-                "consider adding a phone-hash lookup table",
-                _LOAN_SCAN_LIMIT,
-                candidate_count,
-            )
-
         candidate_loans = (
             loan_query
             .order_by(Loan.updated_at.desc())
             .limit(_LOAN_SCAN_LIMIT)
             .all()
         )
+
+        # Log the actual fetched count rather than running a separate COUNT query
+        if len(candidate_loans) == _LOAN_SCAN_LIMIT:
+            logger.warning(
+                "Loan phone scan hit %d-row cap — "
+                "consider adding a phone-hash lookup table",
+                _LOAN_SCAN_LIMIT,
+            )
 
         digits_variants = {_DIGITS_RE.sub("", v) for v in phone_variants if v}
         matched_loan = None

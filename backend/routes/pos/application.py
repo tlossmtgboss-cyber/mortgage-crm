@@ -190,6 +190,8 @@ def update_section(
     db.refresh(application)
 
     pii = application.pii
+    # Include application metadata so the frontend can skip a second GET.
+    app_meta = ApplicationResponse(**application_to_response_dict(application))
     return SectionResponse(
         section_key=section.section_key,  # type: ignore[arg-type]
         data=section.data or {},
@@ -199,6 +201,7 @@ def update_section(
         has_ssn=bool(pii and pii.ssn_encrypted),
         has_co_ssn=bool(pii and pii.co_ssn_encrypted),
         has_dob=bool(pii and pii.dob),
+        application=app_meta,
     )
 
 

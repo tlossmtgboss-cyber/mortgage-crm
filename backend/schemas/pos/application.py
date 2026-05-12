@@ -12,13 +12,17 @@ from database.models.pos import POSSectionKey, POSStatus
 
 SectionKey = Literal[
     "personal",
+    "coborrower",
     "residence",
     "employment",
     "assets",
     "liabilities",
     "reo",
     "loan",
+    "documents_upload",
     "declarations",
+    "credit_auth",
+    "schedule",
     "review",
 ]
 
@@ -133,6 +137,9 @@ class SectionResponse(BaseModel):
     has_ssn: bool = False
     has_co_ssn: bool = False
     has_dob: bool = False
+
+    # Populated on PATCH responses so the frontend can skip a second GET.
+    application: ApplicationResponse | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -283,6 +283,13 @@ async def create_booking(
         db, purl_ctx, application
     )
 
+    # Resolve LO once — reuse for both the booking call and the response
+    # instead of resolving again after book() returns.
+    try:
+        lo = service.resolve_loan_officer(db, application)
+    except NoLoanOfficerAssignedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
     try:
         booking = await service.book(
             db,
@@ -308,7 +315,6 @@ async def create_booking(
     application.submitted_appointment_id = booking.appointment_id
     db.commit()
 
-    lo = service.resolve_loan_officer(db, application)
     return BookingResponse(
         appointment_id=booking.appointment_id,
         application_id=application.id,

@@ -90,6 +90,8 @@ export interface SectionResponse {
   has_ssn: boolean;
   has_co_ssn: boolean;
   has_dob: boolean;
+  // Populated on PATCH responses so the frontend can skip a second GET.
+  application?: ApplicationResponse | null;
 }
 
 export interface SectionUpdateRequest {

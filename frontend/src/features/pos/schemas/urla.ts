@@ -164,20 +164,38 @@ export const declarationsSchema = z.object({
   permanent_resident: z.boolean(),
 });
 
+export const coborrowerSchema = z.object({
+  first_name: z.string().min(1, 'Required'),
+  last_name: z.string().min(1, 'Required'),
+  email,
+  phone: phone.optional(),
+  relationship_type: z.enum(['spouse', 'partner', 'parent', 'other']).optional(),
+  ssn: z.string().regex(/^\d{3}-?\d{2}-?\d{4}$/, 'Enter a valid SSN').optional(),
+  dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format').optional(),
+});
+
+export const creditAuthSchema = z.object({
+  authorization_granted: z.literal(true, {
+    errorMap: () => ({ message: 'You must authorize a credit check to proceed' }),
+  }),
+  borrower_name: z.string().min(1, 'Required'),
+  authorized_at: z.string().optional(),
+});
+
 export const SECTION_SCHEMAS: Record<SectionKey, z.ZodTypeAny> = {
   personal: personalSchema,
-  coborrower: z.object({}).passthrough(),
+  coborrower: coborrowerSchema,
   residence: residenceSchema,
   employment: employmentSchema,
   assets: assetsSchema,
   liabilities: liabilitiesSchema,
   reo: reoSchema,
   loan: loanSchema,
-  documents_upload: z.object({}).passthrough(),
+  documents_upload: z.object({}).passthrough(),  // metadata/action section
   declarations: declarationsSchema,
-  credit_auth: z.object({}).passthrough(),
-  schedule: z.object({}).passthrough(),
-  review: z.object({}).passthrough(),
+  credit_auth: creditAuthSchema,
+  schedule: z.object({}).passthrough(),  // action section — no data fields
+  review: z.object({}).passthrough(),  // aggregation section
 };
 
 /**

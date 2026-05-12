@@ -9,6 +9,19 @@ const POSContainer = React.lazy(() =>
 
 const API_BASE = API_BASE_URL;
 
+interface LOProfile {
+  name: string;
+  title: string | null;
+  headshot_url: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  nmls: string | null;
+  company_logo_url: string | null;
+  tagline: string | null;
+  schedule_url: string | null;
+}
+
 type FlowStep = 'checking' | 'auth' | 'verify' | 'app';
 type AuthTab = 'signup' | 'login';
 
@@ -33,6 +46,15 @@ const POSEntryPage: React.FC = () => {
   const [borrowerName, setBorrowerName] = useState(
     searchParams.get('name') || 'there',
   );
+  const [loProfile, setLoProfile] = useState<LOProfile | null>(null);
+
+  useEffect(() => {
+    if (!loSlug) return;
+    fetch(`${API_BASE}/api/v1/pos/lo-profile/${encodeURIComponent(loSlug)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setLoProfile(data); })
+      .catch(() => {});
+  }, [loSlug]);
 
   // Recover verify session if user refreshes mid-flow
   const savedSession = useRef<VerifySession | null>(null);
@@ -172,7 +194,7 @@ const POSEntryPage: React.FC = () => {
     );
   }
 
-  return <AuthGate onStarted={handleStarted} onVerified={handleVerified} loSlug={loSlug} />;
+  return <AuthGate onStarted={handleStarted} onVerified={handleVerified} loSlug={loSlug} loProfile={loProfile} />;
 };
 
 
@@ -184,13 +206,19 @@ function AuthGate({
   onStarted,
   onVerified,
   loSlug,
+  loProfile,
 }: {
   onStarted: (session: VerifySession) => void;
   onVerified: (token: string, name?: string) => void;
   loSlug?: string | null;
+  loProfile?: LOProfile | null;
 }) {
   const [tab, setTab] = useState<AuthTab>('signup');
-  const [variant, setVariant] = useState<DesignVariant>('split');
+  const [variant, setVariant] = useState<DesignVariant>(loProfile ? 'personal' : 'minimal');
+
+  useEffect(() => {
+    if (loProfile && variant === 'minimal') setVariant('personal');
+  }, [loProfile]);
 
   const tabButtons = (
     <div className="pos-start__tabs">
@@ -224,35 +252,43 @@ function AuthGate({
     </div>
   );
 
-  const VARIANT_NAMES: Record<DesignVariant, string> = {
-    split: 'Split',
-    social: 'Social',
-    conversational: 'Chat',
-    dashboard: 'Dash',
-    rate: 'Rate',
-    minimal: 'Min',
-    personal: 'Personal',
-    timeline: 'Timeline',
+  const VARIANT_META: Record<DesignVariant, { label: string; icon: string }> = {
+    personal:      { label: 'My LO',       icon: '👤' },
+    split:         { label: 'Hero',        icon: '◧' },
+    social:        { label: 'Proof',       icon: '★' },
+    rate:          { label: 'Rates',       icon: '↘' },
+    conversational:{ label: 'Chat',        icon: '💬' },
+    minimal:       { label: 'Clean',       icon: '◻' },
+    dashboard:     { label: 'Preview',     icon: '▦' },
+    timeline:      { label: 'Steps',       icon: '⋮' },
   };
 
-  const ALL_VARIANTS: DesignVariant[] = ['split', 'social', 'conversational', 'dashboard', 'rate', 'minimal', 'personal', 'timeline'];
+  const VARIANT_ORDER: DesignVariant[] = loProfile
+    ? ['personal', 'split', 'social', 'rate', 'conversational', 'minimal', 'dashboard', 'timeline']
+    : ['split', 'social', 'rate', 'conversational', 'minimal', 'dashboard', 'timeline', 'personal'];
 
   const showPicker = process.env.NODE_ENV === 'development' || new URLSearchParams(window.location.search).has('design');
 
   const picker = showPicker ? (
-    <div className="pos-picker">
-      <span className="pos-picker__label">Design</span>
-      {ALL_VARIANTS.map((v, i) => (
-        <button
-          key={v}
-          className={`pos-picker__btn${variant === v ? ' active' : ''}`}
-          onClick={() => setVariant(v)}
-          type="button"
-        >
-          {String.fromCharCode(65 + i)}
-          <span className="pos-picker__name">{VARIANT_NAMES[v]}</span>
-        </button>
-      ))}
+    <div className="pos-picker" role="toolbar" aria-label="Design variant picker">
+      <span className="pos-picker__label">Layout</span>
+      {VARIANT_ORDER.map(v => {
+        const meta = VARIANT_META[v];
+        const isActive = variant === v;
+        return (
+          <button
+            key={v}
+            className={`pos-picker__btn${isActive ? ' pos-picker__btn--active' : ''}`}
+            onClick={() => setVariant(v)}
+            type="button"
+            aria-pressed={isActive}
+            title={meta.label}
+          >
+            <span className="pos-picker__icon">{meta.icon}</span>
+            <span className="pos-picker__name">{meta.label}</span>
+          </button>
+        );
+      })}
     </div>
   ) : null;
 
@@ -492,27 +528,50 @@ function AuthGate({
     );
   }
 
-  /* ── G: Personal / Video ── */
+  /* ── G: Personal — data from CRM signature ── */
   if (variant === 'personal') {
+    const lo = loProfile;
+    const initials = lo?.name
+      ? lo.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+      : 'LO';
+    const displayName = lo?.name || 'Your Loan Officer';
+    const nmlsLine = [lo?.nmls ? `NMLS #${lo.nmls}` : null, lo?.title].filter(Boolean).join(' · ');
+
     return (
       <div className="pos-start pos-start--personal">
         <div className="pos-personal">
           <div className="pos-personal__header">
-            <div className="pos-personal__photo">TL</div>
-            <h1 className="pos-personal__name">Apply with Timothy Loss</h1>
-            <p className="pos-personal__nmls">NMLS #123456 &middot; Senior Loan Officer</p>
-            <blockquote className="pos-personal__quote">
-              &ldquo;I treat every borrower like family. Let me guide you home.&rdquo;
-            </blockquote>
+            {lo?.headshot_url ? (
+              <img src={lo.headshot_url} alt={displayName} className="pos-personal__photo pos-personal__photo--img" />
+            ) : (
+              <div className="pos-personal__photo">{initials}</div>
+            )}
+            <h1 className="pos-personal__name">Apply with {displayName}</h1>
+            {nmlsLine && <p className="pos-personal__nmls">{nmlsLine}</p>}
+            {lo?.tagline && (
+              <blockquote className="pos-personal__quote">
+                &ldquo;{lo.tagline}&rdquo;
+              </blockquote>
+            )}
             <div className="pos-personal__contact">
-              <a href="tel:+18438838956" className="pos-personal__contact-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
-                (843) 883-8956
-              </a>
-              <a href="mailto:tloss@perenniaai.com" className="pos-personal__contact-item">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-                tloss@perenniaai.com
-              </a>
+              {lo?.phone && (
+                <a href={`tel:${lo.phone.replace(/\D/g, '')}`} className="pos-personal__contact-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                  {lo.phone}
+                </a>
+              )}
+              {lo?.email && (
+                <a href={`mailto:${lo.email}`} className="pos-personal__contact-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                  {lo.email}
+                </a>
+              )}
+              {lo?.address && (
+                <span className="pos-personal__contact-item pos-personal__contact-item--address">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                  {lo.address}
+                </span>
+              )}
             </div>
           </div>
           <div className="pos-start__card">

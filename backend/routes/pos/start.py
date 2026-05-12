@@ -25,7 +25,7 @@ from datetime import datetime, timezone, timedelta
 from threading import Lock
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import Column, DateTime, Integer, String, text
 from sqlalchemy.orm import Session
@@ -116,6 +116,7 @@ class POSTrustedDevice(Base):
     id = Column(Integer, primary_key=True)
     contact_id = Column(Integer, nullable=False, index=True)
     ip_address = Column(String, nullable=False)
+    device_token = Column(String, nullable=False, default="")
     organization_id = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -178,10 +179,15 @@ def _ensure_table(db: Session):
             "id SERIAL PRIMARY KEY,"
             "contact_id INTEGER NOT NULL,"
             "ip_address VARCHAR NOT NULL,"
+            "device_token VARCHAR NOT NULL DEFAULT '',"
             "organization_id INTEGER,"
             "created_at TIMESTAMPTZ DEFAULT NOW(),"
             "expires_at TIMESTAMPTZ NOT NULL"
             ")"
+        ))
+        db.execute(text(
+            "ALTER TABLE pos_trusted_devices "
+            "ADD COLUMN IF NOT EXISTS device_token VARCHAR NOT NULL DEFAULT ''"
         ))
         db.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_pos_trusted_devices_contact_ip "
@@ -223,9 +229,9 @@ def _hash_code(code: str) -> str:
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    # C2 fix: Use request.client.host (set by Railway's reverse proxy) as the
+    # authoritative source. Do NOT trust X-Forwarded-For — it is trivially
+    # spoofable and lets attackers bypass IP rate limiting.
     return request.client.host if request.client else "unknown"
 
 
@@ -439,7 +445,7 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
     status_code=status.HTTP_201_CREATED,
     summary="Verify email code and create application",
 )
-def verify_code(body: VerifyRequest, request: Request, db: Session = Depends(get_db)):
+def verify_code(body: VerifyRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     _ensure_table(db)
 
     verification = (
@@ -531,6 +537,9 @@ def verify_code(body: VerifyRequest, request: Request, db: Session = Depends(get
 
     if body.remember_device:
         ip = _client_ip(request)
+        # H2 fix: generate a unique device token stored in a cookie.
+        # Trusted device = matching IP AND matching device cookie.
+        device_token = uuid.uuid4().hex
         db.query(POSTrustedDevice).filter(
             POSTrustedDevice.contact_id == contact.id,
             POSTrustedDevice.ip_address == ip,
@@ -538,9 +547,18 @@ def verify_code(body: VerifyRequest, request: Request, db: Session = Depends(get
         db.add(POSTrustedDevice(
             contact_id=contact.id,
             ip_address=ip,
+            device_token=device_token,
             organization_id=org_id,
             expires_at=datetime.now(timezone.utc) + timedelta(days=TRUSTED_DEVICE_DAYS),
         ))
+        response.set_cookie(
+            key="pos_device_token",
+            value=device_token,
+            max_age=TRUSTED_DEVICE_DAYS * 86400,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+        )
 
     db.commit()
     redirect_url = f"https://app.perenniaai.com/pos?token={full_token}"
@@ -618,6 +636,10 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
 
     email_lower = body.email.strip().lower()
 
+    # C1 fix: always return the same response shape to prevent account enumeration.
+    # Never reveal whether the email exists via different status codes or messages.
+    generic_message = "If an account exists, a verification code has been sent."
+
     contact = (
         db.query(PURLContact)
         .filter(PURLContact.email == email_lower)
@@ -625,21 +647,26 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
         .first()
     )
     if not contact:
-        raise HTTPException(
-            status_code=404,
-            detail="No account found with this email address. Please create a new account.",
+        # No account — return generic response. Do NOT send email or reveal absence.
+        return LoginResponse(
+            session_id="",
+            email_masked=_mask_email(email_lower),
+            expires_at="",
+            message=generic_message,
         )
 
     now = datetime.now(timezone.utc)
+    device_cookie = request.cookies.get("pos_device_token", "")
     trusted = (
         db.query(POSTrustedDevice)
         .filter(
             POSTrustedDevice.contact_id == contact.id,
             POSTrustedDevice.ip_address == ip,
+            POSTrustedDevice.device_token == device_cookie,
             POSTrustedDevice.expires_at > now,
         )
         .first()
-    )
+    ) if device_cookie else None
     if trusted:
         workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == contact.workspace_id).first()
         if workspace:
@@ -679,7 +706,7 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
             session_id=existing.session_id,
             email_masked=_mask_email(email_lower),
             expires_at=expires.isoformat(),
-            message="Verification code already sent. Check your email.",
+            message=generic_message,
         )
 
     session_id = f"pos_sess_{secrets.token_hex(16)}"
@@ -710,7 +737,7 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
         session_id=session_id,
         email_masked=_mask_email(email_lower),
         expires_at=expires.isoformat(),
-        message="Verification code sent",
+        message=generic_message,
     )
 
 

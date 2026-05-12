@@ -1,10 +1,11 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { usePOSApplication } from '../hooks/usePOSApplication';
 import { useDocumentDetector } from '../hooks/useDocumentDetector';
 import { posApi } from '../api';
 import type { SectionKey } from '../types';
 import { SECTION_ORDER, SECTION_LABELS, SECTION_CAPTIONS } from '../types';
+import { validateSection } from '../schemas/urla';
 import { TopNav } from './TopNav';
 import { POSSidebar } from './POSSidebar';
 import type { PosNavKey } from './POSSidebar';
@@ -81,6 +82,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   const [view, setView] = useState<PosNavKey>('home');
   const [taskCount, setTaskCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
+  const [validationErrors, setValidationErrors] = useState<{ path: string; message: string }[]>([]);
 
   const appId = application?.id;
   React.useEffect(() => {
@@ -93,6 +95,20 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   const [intakeData, setIntakeData] = useState<IntakeData>(EMPTY_INTAKE);
 
   const detectedDocs = useDocumentDetector(sections, intakeData);
+
+  // M8: Focus management on step/view transitions for screen readers
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const heading = (document.querySelector('.pos-main__step-title') || document.querySelector('.pos-main__heading')) as HTMLElement | null;
+      if (heading) {
+        if (!heading.hasAttribute('tabindex')) {
+          heading.setAttribute('tabindex', '-1');
+        }
+        heading.focus();
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [activeStep, view]);
 
   React.useEffect(() => {
     if (application && !sections.personal) {
@@ -121,6 +137,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   const handleStepChange = useCallback(
     (key: SectionKey, fieldToHighlight?: string) => {
       setActiveStep(key);
+      setValidationErrors([]);
       if (!sections[key]) loadSection(key);
       if (fieldToHighlight) {
         setTimeout(() => {
@@ -286,27 +303,56 @@ export const POSContainer: React.FC<POSContainerProps> = ({
                     <h2 className="pos-main__step-title">{SECTION_LABELS[activeStep]}</h2>
                   </div>
 
-                  <ActivePanel
-                    section={sections[activeStep]}
-                    onChange={(data: Record<string, unknown>) =>
-                      updateSectionData(activeStep, data)
-                    }
-                    onComplete={() => {
-                      markComplete(activeStep).then(() => {
-                        const nextIdx = Math.min(
-                          SECTION_ORDER.indexOf(activeStep) + 1,
-                          SECTION_ORDER.length - 1,
-                        );
-                        handleStepChange(SECTION_ORDER[nextIdx]);
-                      });
-                    }}
-                    application={application}
-                    onSubmit={submit}
-                    onAskAria={() => setAriaOpen(true)}
-                    intakeLoanPurpose={intakeData.loan_purpose}
-                    allSections={sections}
-                    onNavigate={handleStepChange}
-                  />
+                  <PanelErrorBoundary sectionKey={activeStep}>
+                    {validationErrors.length > 0 && (
+                      <div className="pos-validation-errors" role="alert" style={{
+                        background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+                        padding: '12px 16px', marginBottom: 16,
+                      }}>
+                        <p style={{ fontWeight: 600, color: '#991b1b', margin: '0 0 8px', fontSize: 14 }}>
+                          Please fix the following before continuing:
+                        </p>
+                        <ul style={{ margin: 0, paddingLeft: 20, color: '#b91c1c', fontSize: 13, lineHeight: 1.6 }}>
+                          {validationErrors.map((err, i) => (
+                            <li key={i}>{err.path ? `${err.path}: ` : ''}{err.message}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <ActivePanel
+                      section={sections[activeStep]}
+                      onChange={(data: Record<string, unknown>) => {
+                        setValidationErrors([]);
+                        updateSectionData(activeStep, data);
+                      }}
+                      onComplete={() => {
+                        // Sections with passthrough schemas skip validation.
+                        const SKIP_VALIDATION: SectionKey[] = ['documents_upload', 'schedule', 'review'];
+                        if (!SKIP_VALIDATION.includes(activeStep)) {
+                          const sectionData = sections[activeStep]?.data || {};
+                          const result = validateSection(activeStep, sectionData);
+                          if (!result.ok) {
+                            setValidationErrors(result.issues);
+                            return;
+                          }
+                        }
+                        setValidationErrors([]);
+                        markComplete(activeStep).then(() => {
+                          const nextIdx = Math.min(
+                            SECTION_ORDER.indexOf(activeStep) + 1,
+                            SECTION_ORDER.length - 1,
+                          );
+                          handleStepChange(SECTION_ORDER[nextIdx]);
+                        });
+                      }}
+                      application={application}
+                      onSubmit={submit}
+                      onAskAria={() => setAriaOpen(true)}
+                      intakeLoanPurpose={intakeData.loan_purpose}
+                      allSections={sections}
+                      onNavigate={handleStepChange}
+                    />
+                  </PanelErrorBoundary>
                 </div>
               </div>
             </>
@@ -321,9 +367,77 @@ export const POSContainer: React.FC<POSContainerProps> = ({
         currentStep={activeStep}
       />
 
+      {/* H7: Mobile bottom navigation (visible at <=1024px when sidebar hides) */}
+      <MobileBottomNav activeNav={view} onNavigate={setView} />
     </div>
   );
 };
+
+/* H7: Mobile bottom navigation bar — appears at <=1024px when sidebar is hidden */
+const MobileBottomNav: React.FC<{
+  activeNav: PosNavKey;
+  onNavigate: (key: PosNavKey) => void;
+}> = ({ activeNav, onNavigate }) => (
+  <nav className="pos-mobile-nav" aria-label="Mobile navigation">
+    <button
+      type="button"
+      className={`pos-mobile-nav__btn${activeNav === 'home' ? ' pos-mobile-nav__btn--active' : ''}`}
+      onClick={() => onNavigate('home')}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+      <span>Home</span>
+    </button>
+    <button
+      type="button"
+      className={`pos-mobile-nav__btn${activeNav === 'documents' ? ' pos-mobile-nav__btn--active' : ''}`}
+      onClick={() => onNavigate('documents')}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+      <span>Docs</span>
+    </button>
+    <button
+      type="button"
+      className={`pos-mobile-nav__btn${activeNav === 'tasks' ? ' pos-mobile-nav__btn--active' : ''}`}
+      onClick={() => onNavigate('tasks')}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </svg>
+      <span>Tasks</span>
+    </button>
+    <button
+      type="button"
+      className={`pos-mobile-nav__btn${activeNav === 'messages' ? ' pos-mobile-nav__btn--active' : ''}`}
+      onClick={() => onNavigate('messages')}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+      <span>Messages</span>
+    </button>
+    <button
+      type="button"
+      className={`pos-mobile-nav__btn${activeNav === 'team' ? ' pos-mobile-nav__btn--active' : ''}`}
+      onClick={() => onNavigate('team')}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+      <span>Team</span>
+    </button>
+  </nav>
+);
 
 const PlaceholderPage: React.FC<{
   title: string;
@@ -366,3 +480,54 @@ const PlaceholderPage: React.FC<{
     </div>
   </div>
 );
+
+class PanelErrorBoundary extends React.Component<
+  { sectionKey: string; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { sectionKey: string; children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error(`POS panel error in section "${this.props.sectionKey}":`, error, info.componentStack);
+  }
+
+  componentDidUpdate(prevProps: { sectionKey: string }) {
+    if (prevProps.sectionKey !== this.props.sectionKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <h3 style={{ fontFamily: 'var(--bt-font-display)', fontSize: 20, fontWeight: 600, color: 'var(--bt-text-primary)', marginBottom: 8 }}>
+            Something went wrong.
+          </h3>
+          <p style={{ fontSize: 15, color: 'var(--bt-text-secondary)', marginBottom: 20 }}>
+            Your data has been saved. Please try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => this.setState({ hasError: false })}
+            style={{
+              fontFamily: 'var(--bt-font-body)', fontSize: 14, fontWeight: 600,
+              color: '#fff', background: 'var(--bt-primary)',
+              border: 'none', borderRadius: 8, padding: '10px 24px', cursor: 'pointer',
+            }}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
