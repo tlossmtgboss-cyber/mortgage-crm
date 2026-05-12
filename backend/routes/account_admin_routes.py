@@ -1007,6 +1007,12 @@ async def update_user_roles(
         old_role = user[3]
         new_role = roles.roles[0] if roles.roles else None
 
+        # Prevent role escalation -- assigner must be at or above the target role
+        if new_role:
+            from auth.role_guards import enforce_no_escalation
+            assigner_role = getattr(current_user, 'permission_role', None) or getattr(current_user, 'role', '') or ''
+            enforce_no_escalation(assigner_role, new_role)
+
         db.execute(text("""
             UPDATE users SET role = :role, updated_at = NOW()
             WHERE id = :user_id

@@ -1008,6 +1008,9 @@ class ImportService:
             message=message,
         )
 
+    # Whitelist of tables allowed for import (defense-in-depth against SQL injection)
+    _ALLOWED_ENTITY_TYPES = frozenset({"leads", "loans", "borrower_applications", "contacts"})
+
     def _process_batch(
         self,
         batch: List[Tuple[Dict[str, Any], int]],
@@ -1024,6 +1027,12 @@ class ImportService:
         Returns empty string on success, or an abort message if
         skip_invalid_rows is False and validation fails.
         """
+        # SECURITY: Validate entity_type against whitelist to prevent SQL injection
+        if entity_type not in self._ALLOWED_ENTITY_TYPES:
+            raise ValueError(
+                f"Invalid entity_type '{entity_type}'. "
+                f"Allowed: {', '.join(sorted(self._ALLOWED_ENTITY_TYPES))}"
+            )
         savepoint = self.db.begin_nested()
         try:
             for mapped_row, row_num in batch:

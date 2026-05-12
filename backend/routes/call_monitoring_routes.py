@@ -1505,6 +1505,7 @@ async def get_loan_calls(
             params["org_id"] = org_id
 
         # Get total count
+        # SECURITY: the org_id clause is a code-defined boolean branch, not user-derived input
         count_result = db.execute(
             text(f"SELECT COUNT(*) FROM call_logs cl WHERE cl.loan_id = :loan_id"
                  + (" AND cl.organization_id = :org_id" if org_id else "")),

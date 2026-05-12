@@ -260,6 +260,7 @@ class PrivacyComplianceService:
 
         for table, fields in tables_and_fields.items():
             try:
+                # SECURITY: table and cols are from the hardcoded tables_and_fields dict above, not user input
                 cols = ", ".join(fields)
                 result = self.db.execute(
                     text(f"SELECT {cols} FROM {table} WHERE email = :email AND org_id = :org_id"),

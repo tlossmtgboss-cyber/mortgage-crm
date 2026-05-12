@@ -326,6 +326,7 @@ async def get_conversation(
 
     # Build optional cursor filter
     # Organization isolation is enforced to prevent cross-tenant data leakage (TCPA).
+    # SECURITY: before_filter and org_filter are code-defined constants, not user-derived input
     before_filter = ""
     org_filter = "AND organization_id = :org_id"
     params: dict = {"pattern": like_pattern, "lim": limit, "org_id": org_id}

@@ -334,6 +334,11 @@ async def fix_user_permission_role(request: dict, db: Session = Depends(get_db),
     if new_role not in valid_roles:
         return {"status": "error", "message": f"Invalid role. Must be one of: {valid_roles}"}
 
+    # Prevent role escalation -- assigner must be at or above the target role
+    from auth.role_guards import enforce_no_escalation
+    assigner_role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    enforce_no_escalation(assigner_role, new_role)
+
     try:
         user = db.query(User).filter(User.email == email).first()
         if not user:

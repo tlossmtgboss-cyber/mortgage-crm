@@ -1005,6 +1005,12 @@ async def update_sso_config(
         config = SSOConfig(organization_id=org_id)
         db.add(config)
 
+    # Prevent role escalation -- SSO default role must not exceed admin's own role
+    if request.default_permission_role:
+        from auth.role_guards import enforce_no_escalation
+        assigner_role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+        enforce_no_escalation(assigner_role, request.default_permission_role)
+
     # Update fields
     config.provider_type = request.provider_type
     config.default_role = request.default_role

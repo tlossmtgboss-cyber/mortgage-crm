@@ -1277,13 +1277,14 @@ async def create_employee_invite(
     if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
         raise HTTPException(status_code=403, detail="Insufficient permissions to manage invites")
 
-    from utils.roles import ALLOWED_ROLES, ADMIN_ROLES
+    from utils.roles import ALLOWED_ROLES
     _requested_role = (invite_data.permission_role or '').lower().strip()
     if _requested_role not in ALLOWED_ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role: {invite_data.permission_role}. Allowed: {', '.join(sorted(ALLOWED_ROLES))}")
 
-    if _requested_role in ADMIN_ROLES and _role not in ADMIN_ROLES and current_user.id != 1:
-        raise HTTPException(status_code=403, detail="Only admins can create admin invites")
+    # Prevent role escalation -- assigner must be at or above the target role
+    from auth.role_guards import enforce_no_escalation
+    enforce_no_escalation(_role, _requested_role)
 
     # Check email availability (scoped to current org for tenant isolation)
     _org_id = getattr(current_user, 'organization_id', None)

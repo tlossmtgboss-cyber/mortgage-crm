@@ -684,6 +684,7 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
             pass
 
     # 3. Update sms_messages table (general SMS log)
+    # SECURITY: update_fields and counter_col below are code-defined constants, not user input
     try:
         update_fields = "delivery_status = :status"
         params = {"status": normalized_status, "message_id": message_id}
@@ -2179,6 +2180,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
 
     try:
         # Look up which user owns this phone number (scoped to org if resolved)
+        # SECURITY: _lo_org_clause is a code-defined constant, not user-derived input
         _lo_org_clause = "AND l.organization_id = :org_id" if _inbound_org_id else ""
         _lo_params = {"phone": normalized_from}
         if _inbound_org_id:

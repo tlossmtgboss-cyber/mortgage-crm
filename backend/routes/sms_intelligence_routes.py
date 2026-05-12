@@ -846,6 +846,7 @@ async def match_sms_to_entity(phone_number: str, db: Session, user_id: int, orga
             "client_name": result[3]
         }
 
+    # SECURITY: org_filter is a code-defined constant, not user-derived input
     org_filter = "AND organization_id = :org_id" if organization_id else ""
     params = {"phone": normalized}
     if organization_id:

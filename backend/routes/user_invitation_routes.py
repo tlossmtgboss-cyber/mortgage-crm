@@ -147,9 +147,9 @@ def get_user_invitation_routes(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        # Prevent role escalation
-        if validated_role in ADMIN_ROLES and inviter_role not in ADMIN_ROLES and current_user.id != 1:
-            raise HTTPException(status_code=403, detail="Only admins can create admin invites")
+        # Prevent role escalation -- assigner must be at or above the target role
+        from auth.role_guards import enforce_no_escalation
+        enforce_no_escalation(inviter_role, validated_role)
 
         # Check if email already in use (active user in same org)
         _email_query = db.query(User).filter(User.email == request.email, User.is_active == True)
