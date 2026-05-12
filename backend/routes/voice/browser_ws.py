@@ -199,19 +199,24 @@ async def browser_voice_websocket(websocket: WebSocket):
         except Exception as e:
             logger.warning(f"Feature tier check failed, allowing through: {e}")
 
-    try:
-        await websocket.accept()
-        logger.info("Browser voice WebSocket accepted", extra={"user_id": ws_user_id})
-    except Exception as e:
-        logger.error(f"Failed to accept WebSocket: {e}")
-        # MED-6: Ensure rate limiter is always decremented on early return
-        with _ws_connections_lock:
-            if ws_user_id in _ws_connections_by_user:
-                _ws_connections_by_user[ws_user_id] = max(0, _ws_connections_by_user[ws_user_id] - 1)
-                if _ws_connections_by_user[ws_user_id] == 0:
-                    del _ws_connections_by_user[ws_user_id]
-            _ws_connections_total = max(0, _ws_connections_total - 1)
-        return
+    # Accept WebSocket if not already accepted (secure path accepts early for auth message)
+    _already_accepted = not websocket.query_params.get("token")
+    if not _already_accepted:
+        try:
+            await websocket.accept()
+            logger.info("Browser voice WebSocket accepted", extra={"user_id": ws_user_id})
+        except Exception as e:
+            logger.error(f"Failed to accept WebSocket: {e}")
+            # MED-6: Ensure rate limiter is always decremented on early return
+            with _ws_connections_lock:
+                if ws_user_id in _ws_connections_by_user:
+                    _ws_connections_by_user[ws_user_id] = max(0, _ws_connections_by_user[ws_user_id] - 1)
+                    if _ws_connections_by_user[ws_user_id] == 0:
+                        del _ws_connections_by_user[ws_user_id]
+                _ws_connections_total = max(0, _ws_connections_total - 1)
+            return
+    else:
+        logger.info("Browser voice WebSocket already accepted (post-connect auth)", extra={"user_id": ws_user_id})
 
     openai_ws = None
 

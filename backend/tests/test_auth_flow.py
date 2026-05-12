@@ -402,6 +402,113 @@ class TestTokenBlacklist:
 
 
 # ============================================================================
+# 3b. REFRESH TOKEN VERIFICATION (pure unit - no DB required)
+# ============================================================================
+
+@pytest.mark.unit
+class TestRefreshTokenVerification:
+    """Unit tests for the token verification logic used by /token/refresh.
+
+    These exercise the same code path as the refresh endpoint without
+    needing a TestClient or PostgreSQL. They validate that verify_token
+    correctly enforces type, expiry, and blacklist checks on refresh tokens.
+    """
+
+    def test_valid_refresh_token_verifies(self):
+        """A freshly created refresh token passes verify_token with expected_type=REFRESH."""
+        token = _make_refresh_token(sub="lo@example.com", user_id=1)
+        td = verify_token(token, expected_type=TokenType.REFRESH, check_blacklist=False)
+        assert td is not None
+        assert td.sub == "lo@example.com"
+        assert td.token_type == TokenType.REFRESH
+        assert td.user_id == 1
+
+    def test_expired_refresh_token_rejected(self):
+        """An expired refresh token is rejected by verify_token."""
+        expired = _make_expired_token(token_type="refresh")
+        td = verify_token(expired, expected_type=TokenType.REFRESH, check_blacklist=False)
+        assert td is None
+
+    def test_access_token_rejected_as_refresh(self):
+        """An access token is rejected when expected_type=REFRESH (type confusion prevention)."""
+        access = _make_access_token(sub="lo@example.com", user_id=1)
+        td = verify_token(access, expected_type=TokenType.REFRESH, check_blacklist=False)
+        assert td is None
+
+    def test_blacklisted_refresh_token_rejected(self):
+        """A blacklisted refresh token is rejected by verify_token."""
+        bl = _make_blacklist()
+        token = _make_refresh_token(sub="lo@example.com", user_id=1)
+        bl.add(token, reason="token_rotation")
+
+        with patch("auth.tokens.token_blacklist", bl):
+            td = verify_token(token, expected_type=TokenType.REFRESH, check_blacklist=True)
+        assert td is None
+
+    def test_revoked_user_refresh_token_rejected(self):
+        """After revoke_all_for_user, a refresh token for that user is rejected."""
+        bl = _make_blacklist()
+        token = _make_refresh_token(sub="lo@example.com", user_id=42)
+        bl.revoke_all_for_user(42)
+
+        with patch("auth.tokens.token_blacklist", bl):
+            td = verify_token(token, expected_type=TokenType.REFRESH, check_blacklist=True)
+        assert td is None
+
+    def test_refresh_token_wrong_signature_rejected(self):
+        """A refresh token signed with a different key is rejected."""
+        bad_settings = AuthSettings(
+            secret_key="wrong-key-entirely",
+            algorithm="HS256",
+            issuer="perennia-ai",
+            audience="perennia-crm",
+        )
+        with patch("auth.tokens.get_auth_settings", return_value=bad_settings):
+            bad_token = create_refresh_token({"sub": "attacker@evil.com"})
+
+        # Verify with the correct test settings -- should fail
+        td = verify_token(bad_token, expected_type=TokenType.REFRESH, check_blacklist=False)
+        assert td is None
+
+    def test_refresh_token_tampered_payload_rejected(self):
+        """Modifying the payload of a refresh token invalidates its signature."""
+        token = _make_refresh_token()
+        parts = token.split(".")
+        parts[1] = parts[1][:-4] + "XXXX"
+        tampered = ".".join(parts)
+        td = verify_token(tampered, expected_type=TokenType.REFRESH, check_blacklist=False)
+        assert td is None
+
+    def test_garbage_string_rejected(self):
+        """A garbage string is rejected as a refresh token."""
+        td = verify_token("garbage.jwt.here", expected_type=TokenType.REFRESH, check_blacklist=False)
+        assert td is None
+
+    def test_empty_string_rejected(self):
+        """An empty string is rejected as a refresh token."""
+        td = verify_token("", expected_type=TokenType.REFRESH, check_blacklist=False)
+        assert td is None
+
+    def test_used_refresh_becomes_blacklisted_after_rotation(self):
+        """Simulates the token rotation flow: after adding to blacklist, token is rejected."""
+        bl = _make_blacklist()
+        token = _make_refresh_token(sub="lo@example.com", user_id=1)
+
+        # Before blacklisting: token should verify
+        with patch("auth.tokens.token_blacklist", bl):
+            td_before = verify_token(token, expected_type=TokenType.REFRESH, check_blacklist=True)
+        assert td_before is not None, "Token should be valid before rotation"
+
+        # Blacklist it (simulating what the refresh endpoint does)
+        bl.add(token, reason="token_rotation")
+
+        # After blacklisting: token should be rejected
+        with patch("auth.tokens.token_blacklist", bl):
+            td_after = verify_token(token, expected_type=TokenType.REFRESH, check_blacklist=True)
+        assert td_after is None, "Token must be rejected after rotation blacklisting"
+
+
+# ============================================================================
 # 4. PROTECTED ENDPOINT TESTS (integration - require DB + app)
 # ============================================================================
 
