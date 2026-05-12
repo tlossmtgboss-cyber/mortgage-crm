@@ -37,8 +37,9 @@ const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError, onS
 
     try {
       const token = getToken();
-      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
-      const wsUrl = `${WS_BASE_URL}${WS_ENDPOINT}?token=${token}`;
+      // Security: Token sent as first message after connect, not in URL query
+      // string, to avoid leaking JWT into server/proxy logs and browser history.
+      const wsUrl = `${WS_BASE_URL}${WS_ENDPOINT}`;
 
       console.log('[useVoiceWebSocket] Connecting to:', wsUrl);
 
@@ -46,6 +47,7 @@ const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError, onS
       wsRef.current = ws;
 
       ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'auth', token }));
         console.log('[useVoiceWebSocket] Connected');
         reconnectAttempts.current = 0;
         updateStatus('connected');

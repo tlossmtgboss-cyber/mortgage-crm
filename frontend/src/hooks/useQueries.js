@@ -6,6 +6,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
+import { toast } from '../utils/toast';
 
 // Use the shared axios instance so auth refresh, CSRF, and interceptors all apply
 const fetchWithAuth = async (endpoint, options = {}) => {
@@ -290,6 +291,9 @@ export const useUpdateLead = () => {
       // Invalidate the leads list to refetch on next view
       queryClient.invalidateQueries({ queryKey: ['leads'] });
     },
+    onError: (error) => {
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to save lead');
+    },
   });
 };
 
@@ -306,6 +310,9 @@ export const useUpdateLoan = () => {
       queryClient.setQueryData(['loan', variables.loanId], data);
       queryClient.invalidateQueries({ queryKey: ['loans'] });
     },
+    onError: (error) => {
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to save loan');
+    },
   });
 };
 
@@ -321,6 +328,9 @@ export const useUpdateTask = () => {
     onSuccess: (data, variables) => {
       queryClient.setQueryData(['task', variables.taskId], data);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to save task');
     },
   });
 };

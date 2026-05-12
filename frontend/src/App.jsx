@@ -27,6 +27,7 @@ import { API_BASE_URL } from './services/api';
 import { getToken } from './utils/tokenStore';
 import InboundCallLightbox from './components/InboundCallLightbox';
 import { getRoutes, PageLoader } from './routes/index';
+import { toast } from './utils/toast';
 import './App.css';
 
 // Redirect to an external URL (outside React Router)
@@ -89,6 +90,19 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false, // Don't refetch on tab focus
       refetchOnMount: true, // Refetch stale/failed data on mount (staleTime still prevents unnecessary refetches)
       retry: 1, // Only retry once on failure
+      onError: (error) => {
+        if (error?.response?.status === 401) {
+          // Don't toast on 401 — the auth flow handles this
+          return;
+        }
+        // Log unexpected query errors for debugging
+        console.error('Query error:', error);
+      },
+    },
+    mutations: {
+      onError: (error) => {
+        toast.error(error?.response?.data?.detail || error?.message || 'Something went wrong');
+      },
     },
   },
 });

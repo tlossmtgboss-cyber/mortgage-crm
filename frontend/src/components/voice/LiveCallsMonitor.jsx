@@ -90,10 +90,12 @@ const LiveCallsMonitor = ({
   const connectWebSocket = useCallback(() => {
     try {
       const token = getToken();
-      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
-      const ws = new WebSocket(`${WS_BASE_URL}/api/v1/voice/calls/ws?token=${token}`);
+      // Security: Token sent as first message after connect, not in URL query
+      // string, to avoid leaking JWT into server/proxy logs and browser history.
+      const ws = new WebSocket(`${WS_BASE_URL}/api/v1/voice/calls/ws`);
 
       ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'auth', token }));
         console.log('Live calls WebSocket connected');
         setConnected(true);
       };

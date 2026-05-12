@@ -110,8 +110,9 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
 
     try {
       const token = getToken();
-      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
-      const wsUrl = `${API_BASE_URL}${WS_ENDPOINT}?token=${token}`;
+      // Security: Token sent as first message after connect, not in URL query
+      // string, to avoid leaking JWT into server/proxy logs and browser history.
+      const wsUrl = `${API_BASE_URL}${WS_ENDPOINT}`;
 
       console.log('[TalkToAgent] Connecting to:', wsUrl);
 
@@ -119,6 +120,7 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'auth', token }));
         console.log('[TalkToAgent] WebSocket connected');
       };
 

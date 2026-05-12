@@ -674,7 +674,13 @@ export default function SMSAccordionPanel({
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       return isLocalhost ? 'ws://localhost:8000' : 'wss://api.perenniaai.com'
     })()
-    const ws = new WebSocket(`${apiWsBase}/ws/sms/${phoneParam}?token=${encodeURIComponent(token)}`)
+    // Security: Token sent as first message after connect, not in URL query
+    // string, to avoid leaking JWT into server/proxy logs and browser history.
+    const ws = new WebSocket(`${apiWsBase}/ws/sms/${phoneParam}`)
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'auth', token }))
+    }
 
     ws.onmessage = e => {
       try {

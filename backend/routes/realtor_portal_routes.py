@@ -1791,15 +1791,9 @@ async def handle_crm_webhook(
 # WEBSOCKET ENDPOINT
 # =============================================================================
 
-@router.websocket("/ws/{token}")
-@router.websocket("/ws")
-async def realtor_websocket(
-    websocket: WebSocket,
-    token: str = "",
-    db: Session = Depends(get_db)
-):
+async def _realtor_ws_handler(websocket: WebSocket, token: str, db: Session):
     """
-    WebSocket endpoint for real-time loan updates.
+    Shared WebSocket handler for real-time loan updates.
 
     Security: Token sent as first message after connect (not in URL path)
     to avoid leaking session token into server/proxy access logs.
@@ -1887,6 +1881,25 @@ async def realtor_websocket(
     except Exception as e:
         logger.error(f"WebSocket error for realtor {realtor_id}: {e}")
         await realtor_sync_manager.disconnect(realtor_id)
+
+
+@router.websocket("/ws/{token}")
+async def realtor_websocket_compat(
+    websocket: WebSocket,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Backwards-compatible route: token in URL path (deprecated)."""
+    await _realtor_ws_handler(websocket, token, db)
+
+
+@router.websocket("/ws")
+async def realtor_websocket(
+    websocket: WebSocket,
+    db: Session = Depends(get_db)
+):
+    """Secure route: token sent as first message after connect."""
+    await _realtor_ws_handler(websocket, "", db)
 
 
 # =============================================================================

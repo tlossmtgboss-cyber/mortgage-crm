@@ -4,6 +4,7 @@ import { ImpersonationProvider } from '../contexts/ImpersonationContext';
 import { PermissionProvider } from '../contexts/PermissionContext';
 import { ModuleProvider } from '../contexts/ModuleContext';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { toast } from '../utils/toast';
 
 // Create a client with optimized defaults for instant navigation
 const queryClient = new QueryClient({
@@ -14,6 +15,17 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false, // Don't refetch on tab focus
       refetchOnMount: true, // Refetch stale/failed data on mount (staleTime still prevents unnecessary refetches)
       retry: 1, // Only retry once on failure
+      onError: (error) => {
+        if (error?.response?.status === 401) {
+          return;
+        }
+        console.error('Query error:', error);
+      },
+    },
+    mutations: {
+      onError: (error) => {
+        toast.error(error?.response?.data?.detail || error?.message || 'Something went wrong');
+      },
     },
   },
 });

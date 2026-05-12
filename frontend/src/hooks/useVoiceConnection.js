@@ -142,13 +142,16 @@ const useVoiceConnection = ({
         return;
       }
 
-      const wsUrl = `${WS_BASE_URL}/api/v1/voice/ws/browser-voice?token=${encodeURIComponent(token)}`;
-      console.log(`[${assistantName}] Connecting to:`, wsUrl.replace(/token=[^&]+/, 'token=***'));
+      // Security: Token sent as first message after connect, not in URL query
+      // string, to avoid leaking JWT into server/proxy logs and browser history.
+      const wsUrl = `${WS_BASE_URL}/api/v1/voice/ws/browser-voice`;
+      console.log(`[${assistantName}] Connecting to:`, wsUrl);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'auth', token }));
         console.log(`[${assistantName}] WebSocket connected`);
         setReconnectAttempt(0);
         wasConnectedRef.current = true;

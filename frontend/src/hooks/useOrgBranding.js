@@ -54,14 +54,29 @@ export default function useOrgBranding(orgSlug, loSlug) {
     root.style.setProperty('--booking-primary-dark', darken(data.primary_color || '#217F8D', 25));
     root.style.setProperty('--booking-accent-dark', darken(data.accent_color || '#34a853', 25));
 
-    // Inject custom CSS if provided (sanitized on the server)
+    // Inject custom CSS if provided.
+    // Defense-in-depth: strip dangerous CSS constructs client-side even though
+    // the server is expected to sanitize. CSS injection can exfiltrate data via
+    // url(), execute JS via expression() (legacy IE), or import external sheets.
     if (data.custom_css) {
+      let safeCss = data.custom_css;
+      // Block @import (external stylesheet injection)
+      safeCss = safeCss.replace(/@import\b[^;]*/gi, '/* blocked @import */');
+      // Block expression() (IE JS execution in CSS)
+      safeCss = safeCss.replace(/expression\s*\(/gi, '/* blocked-expression */(');
+      // Block javascript: and data: URLs in url()
+      safeCss = safeCss.replace(/url\s*\(\s*(['"]?)\s*(javascript|data)\s*:/gi, 'url($1blocked:');
+      // Block -moz-binding (XBL binding, Firefox XSS vector)
+      safeCss = safeCss.replace(/-moz-binding\s*:/gi, '/* blocked-binding */:');
+      // Block behavior (IE HTC component)
+      safeCss = safeCss.replace(/behavior\s*:/gi, '/* blocked-behavior */:');
+
       if (!styleRef.current) {
         styleRef.current = document.createElement('style');
         styleRef.current.setAttribute('data-org-branding', 'true');
         document.head.appendChild(styleRef.current);
       }
-      styleRef.current.textContent = data.custom_css;
+      styleRef.current.textContent = safeCss;
     }
   }, []);
 

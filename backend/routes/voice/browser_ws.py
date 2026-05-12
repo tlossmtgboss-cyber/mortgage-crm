@@ -65,39 +65,84 @@ async def browser_voice_websocket(websocket: WebSocket):
     """
     logger.info(f"Browser voice WebSocket connection from: {websocket.client}")
 
-    # --- CRIT-1: Authenticate BEFORE accepting the WebSocket ---
+    # --- Security: Support post-connect auth to avoid token in URL ---
+    # Backwards compatible: old clients with ?token= query param still work.
     token = websocket.query_params.get("token")
-    if not token:
-        try:
-            await websocket.close(code=4001, reason="Authentication required")
-        except RuntimeError:
-            pass  # WebSocket already closed
-        return
 
-    try:
-        from auth.tokens import verify_token
-        token_data = verify_token(token)
-        if not token_data or not token_data.user_id:
-            try:
-                await websocket.close(code=4001, reason="Invalid token claims")
-            except RuntimeError:
-                pass  # WebSocket already closed
-            return
-        ws_user_id = token_data.user_id
-        ws_organization_id = token_data.tenant_id
-        if not ws_organization_id:
-            try:
-                await websocket.close(code=4001, reason="Invalid token claims: missing tenant")
-            except RuntimeError:
-                pass  # WebSocket already closed
-            return
-    except Exception as e:
-        logger.warning("WebSocket auth failed", extra={"error": str(e)})
+    if token:
+        # Legacy path: token in query string (still works for old clients)
         try:
+            from auth.tokens import verify_token
+            token_data = verify_token(token)
+            if not token_data or not token_data.user_id:
+                try:
+                    await websocket.close(code=4001, reason="Invalid token claims")
+                except RuntimeError:
+                    pass
+                return
+            ws_user_id = token_data.user_id
+            ws_organization_id = token_data.tenant_id
+            if not ws_organization_id:
+                try:
+                    await websocket.close(code=4001, reason="Invalid token claims: missing tenant")
+                except RuntimeError:
+                    pass
+                return
+        except Exception as e:
+            logger.warning("WebSocket auth failed", extra={"error": str(e)})
+            try:
+                await websocket.close(code=4001, reason="Authentication failed")
+            except RuntimeError:
+                pass
+            return
+    else:
+        # Secure path: accept first, then read token from first message
+        import asyncio
+        import json as _json
+        try:
+            await websocket.accept()
+        except Exception as e:
+            logger.error(f"Failed to accept WebSocket: {e}")
+            return
+
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            msg = _json.loads(raw)
+            if not isinstance(msg, dict) or msg.get("type") != "auth" or not msg.get("token"):
+                await websocket.send_json({"type": "error", "message": "First message must be auth"})
+                await websocket.close(code=4001, reason="Authentication required")
+                return
+            token = msg["token"]
+        except asyncio.TimeoutError:
+            await websocket.send_json({"type": "error", "message": "Authentication timeout"})
+            await websocket.close(code=4001, reason="Authentication timeout")
+            return
+        except Exception as e:
+            logger.warning("WebSocket auth message error", extra={"error": str(e)})
+            try:
+                await websocket.close(code=4001, reason="Authentication failed")
+            except RuntimeError:
+                pass
+            return
+
+        try:
+            from auth.tokens import verify_token
+            token_data = verify_token(token)
+            if not token_data or not token_data.user_id:
+                await websocket.send_json({"type": "error", "message": "Invalid token"})
+                await websocket.close(code=4001, reason="Invalid token claims")
+                return
+            ws_user_id = token_data.user_id
+            ws_organization_id = token_data.tenant_id
+            if not ws_organization_id:
+                await websocket.send_json({"type": "error", "message": "Invalid token: missing tenant"})
+                await websocket.close(code=4001, reason="Invalid token claims: missing tenant")
+                return
+        except Exception as e:
+            logger.warning("WebSocket auth failed", extra={"error": str(e)})
+            await websocket.send_json({"type": "error", "message": "Authentication failed"})
             await websocket.close(code=4001, reason="Authentication failed")
-        except RuntimeError:
-            pass  # WebSocket already closed
-        return
+            return
 
     # H-12 fix: Rate limit WebSocket connections per user
     global _ws_connections_total

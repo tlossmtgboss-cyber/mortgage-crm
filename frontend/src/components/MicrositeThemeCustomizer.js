@@ -597,9 +597,21 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       .replace(/(^-|-$)/g, '');
   };
 
+  // Allowed tags for the rich text page editor
+  const PAGE_EDITOR_ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'b', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'span', 'div'];
+
   const handlePageFormChange = (key, value) => {
     setPageForm(prev => {
-      const updated = { ...prev, [key]: value };
+      const updated = { ...prev };
+      if (key === 'content') {
+        // Sanitize HTML from contentEditable before storing in state.
+        // Prevents stored XSS: raw innerHTML from contentEditable can contain
+        // script tags or event handlers injected via paste or browser devtools.
+        // Content flows to savePage() -> API -> LOMicrosite (public page).
+        updated.content = sanitizeHTML(value, { allowedTags: PAGE_EDITOR_ALLOWED_TAGS });
+      } else {
+        updated[key] = value;
+      }
       if (key === 'title' && !editingPage) {
         updated.slug = generateSlug(value);
       }
@@ -619,9 +631,15 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
         ? `${API_BASE}/api/v1/microsites/my-microsite/pages/${editingPage.slug}`
         : `${API_BASE}/api/v1/microsites/my-microsite/pages`;
 
-      // Build content object with HTML content
+      // Defense-in-depth: sanitize content before sending to API even though
+      // handlePageFormChange already sanitizes on input. Prevents stored XSS
+      // if any code path bypasses the input handler.
+      const sanitizedContent = sanitizeHTML(pageForm.content || '', {
+        allowedTags: PAGE_EDITOR_ALLOWED_TAGS,
+      });
+
       const contentData = {
-        body: pageForm.content || '',
+        body: sanitizedContent,
         heading: pageForm.title,
       };
 

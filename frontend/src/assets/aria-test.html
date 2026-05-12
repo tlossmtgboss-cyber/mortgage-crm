@@ -630,9 +630,11 @@ function connectWebSocket() {
 
   setConnStatus('reconnecting', 'Connecting...');
 
-  ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+  // Security: Token sent as first message after connect, not in URL query string
+  ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'auth', token }));
     reconnectAttempts = 0;
     setConnStatus('connected', 'Online');
     flushPending();

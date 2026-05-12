@@ -93,10 +93,12 @@ export function useLoanSync(options = {}) {
     }
 
     try {
-      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
-      const ws = new WebSocket(`${WS_BASE}/api/v1/realtor-portal/ws/${token}`);
+      // Security: Token sent as first message after connect, not in URL path,
+      // to avoid leaking session token into server/proxy logs and browser history.
+      const ws = new WebSocket(`${WS_BASE}/api/v1/realtor-portal/ws`);
 
       ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'auth', token }));
         setIsConnected(true);
         setConnectionError(null);
         reconnectAttempts.current = 0;

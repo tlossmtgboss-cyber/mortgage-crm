@@ -1,0 +1,529 @@
+/* ============================================================================
+   AriaCallHistory — Call audit trail component
+   ============================================================================ */
+
+.aria-call-history {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  background: #f8f9fa;
+  min-height: 100%;
+}
+
+/* Header */
+.ach-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.ach-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.ach-header-sub {
+  font-size: 13px;
+  color: #888;
+  margin-top: 4px;
+}
+
+/* Stats bar */
+.ach-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.ach-stat-card {
+  flex: 1;
+  min-width: 140px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid #eee;
+}
+
+.ach-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  display: block;
+}
+
+.ach-stat-label {
+  font-size: 12px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* Filters */
+.ach-filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ach-filter-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #d0d0d0;
+  background: #fff;
+  color: #555;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ach-filter-btn:hover {
+  background: #f0f0f0;
+}
+
+.ach-filter-btn.active {
+  background: #218D8D;
+  color: #fff;
+  border-color: #218D8D;
+}
+
+.ach-search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d0d0d0;
+  font-size: 13px;
+  outline: none;
+}
+
+.ach-search-input:focus {
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.15);
+}
+
+.ach-date-input {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #d0d0d0;
+  font-size: 13px;
+  outline: none;
+  color: #555;
+}
+
+.ach-date-input:focus {
+  border-color: #218D8D;
+}
+
+/* Call list */
+.ach-call-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ach-call-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-bottom: none;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ach-call-row:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.ach-call-row:last-child {
+  border-bottom: 1px solid #eee;
+  border-radius: 0 0 8px 8px;
+}
+
+.ach-call-row:only-child {
+  border-radius: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.ach-call-row:hover {
+  background: #f6fafa;
+}
+
+.ach-call-row.expanded {
+  background: #f0f9f9;
+  border-color: #218D8D;
+}
+
+/* Direction icon */
+.ach-direction-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ach-direction-icon.inbound {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.ach-direction-icon.outbound {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Call info */
+.ach-call-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ach-call-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ach-call-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.ach-call-phone {
+  font-size: 12px;
+  color: #888;
+}
+
+.ach-call-summary-text {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 600px;
+}
+
+.ach-call-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.ach-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f0f0f0;
+  color: #666;
+}
+
+.ach-tag.sentiment-positive {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.ach-tag.sentiment-negative {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.ach-tag.sentiment-neutral {
+  background: #f5f5f5;
+  color: #616161;
+}
+
+.ach-tag.has-recording {
+  background: #e8eaf6;
+  color: #283593;
+}
+
+.ach-tag.has-transcript {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+/* Call meta (right side) */
+.ach-call-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.ach-call-date {
+  font-size: 12px;
+  color: #888;
+}
+
+.ach-call-time {
+  font-size: 11px;
+  color: #aaa;
+}
+
+.ach-call-duration {
+  font-size: 12px;
+  font-weight: 600;
+  color: #218D8D;
+}
+
+/* Expanded detail panel */
+.ach-detail-panel {
+  background: #fafefe;
+  border: 1px solid #218D8D;
+  border-top: none;
+  padding: 20px;
+  margin-bottom: 2px;
+}
+
+.ach-detail-section {
+  margin-bottom: 18px;
+}
+
+.ach-detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.ach-detail-section h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #218D8D;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 10px 0;
+}
+
+/* Summary section */
+.ach-detail-summary {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.6;
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 3px solid #218D8D;
+}
+
+/* Transcript */
+.ach-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+
+.ach-transcript-line {
+  display: flex;
+  gap: 10px;
+  line-height: 1.5;
+}
+
+.ach-transcript-speaker {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  min-width: 70px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.ach-transcript-speaker.aria {
+  color: #218D8D;
+}
+
+.ach-transcript-speaker.caller {
+  color: #555;
+}
+
+.ach-transcript-text {
+  font-size: 13px;
+  color: #333;
+}
+
+/* Recording player */
+.ach-recording {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ach-recording audio {
+  flex: 1;
+  max-width: 400px;
+  height: 36px;
+}
+
+.ach-recording-link {
+  font-size: 12px;
+  color: #218D8D;
+  text-decoration: none;
+}
+
+.ach-recording-link:hover {
+  text-decoration: underline;
+}
+
+/* Notes/Action items */
+.ach-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ach-note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 4px;
+  border: 1px solid #eee;
+  font-size: 13px;
+}
+
+.ach-note-type {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: #e3f2fd;
+  color: #1565c0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.ach-note-content {
+  color: #333;
+  flex: 1;
+}
+
+/* Pagination */
+.ach-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px 0;
+}
+
+.ach-pagination button {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid #d0d0d0;
+  background: #fff;
+  color: #555;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ach-pagination button:hover:not(:disabled) {
+  background: #218D8D;
+  color: #fff;
+  border-color: #218D8D;
+}
+
+.ach-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ach-pagination-info {
+  font-size: 13px;
+  color: #888;
+}
+
+/* Loading + empty states */
+.ach-loading,
+.ach-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+}
+
+.ach-loading {
+  font-size: 14px;
+}
+
+.ach-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.ach-empty-sub {
+  font-size: 13px;
+  color: #999;
+}
+
+.ach-error {
+  text-align: center;
+  padding: 40px 20px;
+  color: #c62828;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .aria-call-history {
+    padding: 16px;
+  }
+
+  .ach-stats {
+    gap: 8px;
+  }
+
+  .ach-stat-card {
+    min-width: 100px;
+    padding: 10px 14px;
+  }
+
+  .ach-stat-value {
+    font-size: 18px;
+  }
+
+  .ach-call-row {
+    padding: 10px 14px;
+  }
+
+  .ach-call-summary-text {
+    max-width: 300px;
+  }
+
+  .ach-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ach-search-input {
+    min-width: unset;
+  }
+}

@@ -223,11 +223,15 @@ export default function PerenniaClientPortalUltimate() {
 
     try {
       setWsStatus(WS_STATUS.CONNECTING);
-      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
-      const wsEndpoint = `${wsUrl}/ws/loan/${resolvedLoanId}${token ? `?token=${token}` : ''}`;
+      // Security: Token sent as first message after connect, not in URL query
+      // string, to avoid leaking JWT into server/proxy logs and browser history.
+      const wsEndpoint = `${wsUrl}/ws/loan/${resolvedLoanId}`;
       wsRef.current = new WebSocket(wsEndpoint);
 
       wsRef.current.onopen = () => {
+        if (token) {
+          wsRef.current.send(JSON.stringify({ type: 'auth', token }));
+        }
         console.log('Portal WebSocket connected');
         setWsStatus(WS_STATUS.CONNECTED);
       };

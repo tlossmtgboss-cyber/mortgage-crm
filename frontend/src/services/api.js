@@ -4034,9 +4034,10 @@ export const callMonitoringAPI = {
   // Mobile Audio Stream WebSocket URL
   getAudioStreamUrl: (sessionId) => {
     const wsBase = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-    const token = getToken();
-    // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
-    return `${wsBase}/api/v1/call-monitoring/sessions/${sessionId}/audio-stream?token=${token}`;
+    // Security: Token must be sent as first message after connect, not in the
+    // URL query string. Callers of this URL must send {"type":"auth","token":"..."}
+    // as the first WebSocket message after onopen.
+    return `${wsBase}/api/v1/call-monitoring/sessions/${sessionId}/audio-stream`;
   },
 };
 

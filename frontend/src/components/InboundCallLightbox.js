@@ -15,7 +15,9 @@ function useInboundCallSocket() {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    const url = `${WS_BASE_URL}/ws/calls/inbound?token=${encodeURIComponent(token)}`;
+    // Security: Token sent as first message after connect, not in URL query
+    // string, to avoid leaking JWT into server/proxy logs and browser history.
+    const url = `${WS_BASE_URL}/ws/calls/inbound`;
 
     try {
       const ws = new WebSocket(url);
@@ -23,6 +25,7 @@ function useInboundCallSocket() {
 
       ws.onopen = () => {
         attemptsRef.current = 0;
+        ws.send(JSON.stringify({ type: 'auth', token }));
       };
 
       ws.onmessage = (event) => {

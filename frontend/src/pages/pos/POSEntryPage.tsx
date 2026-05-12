@@ -1,12 +1,11 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { API_BASE_URL } from '../../services/api';
+import './pos-entry.css';
 
 const POSContainer = React.lazy(() =>
   import('../../features/pos').then(m => ({ default: m.POSContainer }))
 );
-
-import { API_BASE_URL } from '../../services/api';
-import './pos-entry.css';
 
 const API_BASE = API_BASE_URL;
 
@@ -179,7 +178,7 @@ const POSEntryPage: React.FC = () => {
 
 /* ─── Auth Gate (Signup / Login tabs) — 4 design variants ─────────── */
 
-type DesignVariant = 'split' | 'personal' | 'journey' | 'luxe' | 'coastal' | 'warm' | 'slate' | 'classic';
+type DesignVariant = 'split' | 'social' | 'conversational' | 'dashboard' | 'rate' | 'minimal' | 'personal' | 'timeline';
 
 function AuthGate({
   onStarted,
@@ -226,17 +225,17 @@ function AuthGate({
   );
 
   const VARIANT_NAMES: Record<DesignVariant, string> = {
-    split: 'Split Hero',
+    split: 'Split',
+    social: 'Social',
+    conversational: 'Chat',
+    dashboard: 'Dash',
+    rate: 'Rate',
+    minimal: 'Min',
     personal: 'Personal',
-    journey: 'Journey',
-    luxe: 'Premium',
-    coastal: 'Coastal',
-    warm: 'Warm',
-    slate: 'Slate',
-    classic: 'Classic',
+    timeline: 'Timeline',
   };
 
-  const ALL_VARIANTS: DesignVariant[] = ['split', 'personal', 'journey', 'luxe', 'coastal', 'warm', 'slate', 'classic'];
+  const ALL_VARIANTS: DesignVariant[] = ['split', 'social', 'conversational', 'dashboard', 'rate', 'minimal', 'personal', 'timeline'];
 
   const showPicker = process.env.NODE_ENV === 'development' || new URLSearchParams(window.location.search).has('design');
 
@@ -257,11 +256,10 @@ function AuthGate({
     </div>
   ) : null;
 
-  /* ── A: Split-screen hero ── */
+  /* ── A: Split Hero ── */
   if (variant === 'split') {
     return (
       <div className="pos-start pos-start--split">
-
         <div className="pos-split">
           <div className="pos-split__hero">
             <div className="pos-split__content">
@@ -298,20 +296,224 @@ function AuthGate({
     );
   }
 
-  /* ── B: Personal LO welcome ── */
+  /* ── B: Social Proof ── */
+  if (variant === 'social') {
+    return (
+      <div className="pos-start pos-start--social">
+        <div className="pos-social">
+          <div className="pos-social__stats">
+            <div className="pos-social__stat">
+              <span className="pos-social__stat-num">2,500+</span>
+              <span className="pos-social__stat-label">Loans Closed</span>
+            </div>
+            <div className="pos-social__stat-divider" />
+            <div className="pos-social__stat">
+              <span className="pos-social__stat-num">4.9<span className="pos-social__star">&#9733;</span></span>
+              <span className="pos-social__stat-label">Borrower Rating</span>
+            </div>
+            <div className="pos-social__stat-divider" />
+            <div className="pos-social__stat">
+              <span className="pos-social__stat-num">10 min</span>
+              <span className="pos-social__stat-label">Avg. Application</span>
+            </div>
+          </div>
+
+          <div className="pos-social__testimonials">
+            <div className="pos-social__testimonial">
+              <div className="pos-social__avatar">SM</div>
+              <div className="pos-social__quote">&ldquo;Closed on our first home in 28 days. The AI kept us informed every step.&rdquo;</div>
+              <div className="pos-social__author">Sarah M. &middot; First-Time Buyer</div>
+            </div>
+            <div className="pos-social__testimonial">
+              <div className="pos-social__avatar">JR</div>
+              <div className="pos-social__quote">&ldquo;Refinanced and saved $340/mo. The process was shockingly simple.&rdquo;</div>
+              <div className="pos-social__author">James R. &middot; Refinance</div>
+            </div>
+            <div className="pos-social__testimonial">
+              <div className="pos-social__avatar">KP</div>
+              <div className="pos-social__quote">&ldquo;Pre-approved in 24 hours. My realtor couldn&rsquo;t believe how fast it was.&rdquo;</div>
+              <div className="pos-social__author">Kim P. &middot; Purchase</div>
+            </div>
+          </div>
+
+          <div className="pos-social__form-wrap">
+            <h2 className="pos-social__cta">Join them. Start your application.</h2>
+            <div className="pos-start__card">
+              {tabButtons}
+              {formContent}
+              {trustBadge}
+            </div>
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── C: Conversational ── */
+  if (variant === 'conversational') {
+    return (
+      <div className="pos-start pos-start--convo">
+        <div className="pos-convo">
+          <h1 className="pos-convo__headline">
+            Let&rsquo;s find your home<span className="pos-convo__cursor">|</span>
+          </h1>
+          <p className="pos-convo__sub">No complicated forms. Just a few quick steps to get started.</p>
+          <div className="pos-convo__bubble">
+            <div className="pos-convo__bubble-arrow" />
+            <div className="pos-start__card">
+              {tabButtons}
+              {formContent}
+              {trustBadge}
+            </div>
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── D: Dashboard Preview ── */
+  if (variant === 'dashboard') {
+    return (
+      <div className="pos-start pos-start--dash">
+        <div className="pos-dash__bg">
+          <div className="pos-dash__sidebar-mock">
+            <div className="pos-dash__sb-logo" />
+            <div className="pos-dash__sb-item pos-dash__sb-item--active" />
+            <div className="pos-dash__sb-item" />
+            <div className="pos-dash__sb-item" />
+            <div className="pos-dash__sb-item" />
+            <div className="pos-dash__sb-item" />
+          </div>
+          <div className="pos-dash__main-mock">
+            <div className="pos-dash__topbar-mock">
+              <div className="pos-dash__tb-search" />
+              <div className="pos-dash__tb-avatar" />
+            </div>
+            <div className="pos-dash__cards-mock">
+              <div className="pos-dash__card-mock">
+                <div className="pos-dash__cm-title" />
+                <div className="pos-dash__cm-bar" />
+                <div className="pos-dash__cm-bar pos-dash__cm-bar--short" />
+              </div>
+              <div className="pos-dash__card-mock">
+                <div className="pos-dash__cm-title" />
+                <div className="pos-dash__cm-chart" />
+              </div>
+              <div className="pos-dash__card-mock">
+                <div className="pos-dash__cm-title" />
+                <div className="pos-dash__cm-rows">
+                  <div className="pos-dash__cm-row" />
+                  <div className="pos-dash__cm-row" />
+                  <div className="pos-dash__cm-row" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="pos-dash__overlay">
+          <h1 className="pos-dash__title">Your dashboard is ready</h1>
+          <p className="pos-dash__sub">Track your loan, upload documents, and message your loan officer — all in one place.</p>
+          <div className="pos-start__card">
+            <div className="pos-start__logo"><PeLogoIcon /></div>
+            {tabButtons}
+            {formContent}
+            {trustBadge}
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── E: Rate Teaser ── */
+  if (variant === 'rate') {
+    return (
+      <div className="pos-start pos-start--rate">
+        <div className="pos-rate">
+          <div className="pos-rate__hero">
+            <div className="pos-rate__hero-content">
+              <div className="pos-rate__label">Today&rsquo;s Rates</div>
+              <div className="pos-rate__number">6.25<span className="pos-rate__pct">%</span></div>
+              <div className="pos-rate__details">Purchase &middot; 30yr Fixed &middot; 740+ FICO</div>
+              <div className="pos-rate__ticker">
+                <TimerIcon /> Updated 2 min ago
+              </div>
+              <div className="pos-rate__other-rates">
+                <div className="pos-rate__other">
+                  <span className="pos-rate__other-type">15yr Fixed</span>
+                  <span className="pos-rate__other-num">5.75%</span>
+                </div>
+                <div className="pos-rate__other-divider" />
+                <div className="pos-rate__other">
+                  <span className="pos-rate__other-type">FHA 30yr</span>
+                  <span className="pos-rate__other-num">5.99%</span>
+                </div>
+                <div className="pos-rate__other-divider" />
+                <div className="pos-rate__other">
+                  <span className="pos-rate__other-type">VA 30yr</span>
+                  <span className="pos-rate__other-num">5.50%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="pos-rate__form-wrap">
+            <div className="pos-start__card">
+              <div className="pos-start__logo"><PeLogoIcon /></div>
+              {tabButtons}
+              {formContent}
+              {trustBadge}
+            </div>
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── F: Minimal ── */
+  if (variant === 'minimal') {
+    return (
+      <div className="pos-start pos-start--minimal">
+        <div className="pos-minimal">
+          <div className="pos-start__logo"><PeLogoIcon /></div>
+          <p className="pos-minimal__tagline">Apply for your mortgage. It takes 10 minutes.</p>
+          <div className="pos-start__card">
+            {tabButtons}
+            {formContent}
+          </div>
+          <div className="pos-minimal__footer">
+            <TrustIcon /> <span>256-bit encryption &middot; NMLS compliant</span>
+          </div>
+        </div>
+        {picker}
+      </div>
+    );
+  }
+
+  /* ── G: Personal / Video ── */
   if (variant === 'personal') {
     return (
       <div className="pos-start pos-start--personal">
-
         <div className="pos-personal">
           <div className="pos-personal__header">
-            <div className="pos-personal__avatar">TL</div>
-            <h2 className="pos-personal__name">Timothy Loss</h2>
-            <p className="pos-personal__role">Senior Loan Officer &middot; NMLS #123456</p>
+            <div className="pos-personal__photo">TL</div>
+            <h1 className="pos-personal__name">Apply with Timothy Loss</h1>
+            <p className="pos-personal__nmls">NMLS #123456 &middot; Senior Loan Officer</p>
             <blockquote className="pos-personal__quote">
-              &ldquo;I&rsquo;m here to make your mortgage process simple and stress-free.
-              Let&rsquo;s find the right loan for you.&rdquo;
+              &ldquo;I treat every borrower like family. Let me guide you home.&rdquo;
             </blockquote>
+            <div className="pos-personal__contact">
+              <a href="tel:+18438838956" className="pos-personal__contact-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                (843) 883-8956
+              </a>
+              <a href="mailto:tloss@perenniaai.com" className="pos-personal__contact-item">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                tloss@perenniaai.com
+              </a>
+            </div>
           </div>
           <div className="pos-start__card">
             {tabButtons}
@@ -324,243 +526,44 @@ function AuthGate({
     );
   }
 
-  /* ── C: Journey / steps preview ── */
-  if (variant === 'journey') {
-    return (
-      <div className="pos-start pos-start--journey">
-
-        <div className="pos-journey">
-          <div className="pos-journey__steps">
-            {[
-              { num: '1', label: 'Create\nAccount', active: true },
-              { num: '2', label: 'Complete\nApplication', active: false },
-              { num: '3', label: 'Schedule\nCall', active: false },
-              { num: '4', label: 'Get\nApproved', active: false },
-            ].map((step, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <div className="pos-journey__line" />}
-                <div className={`pos-journey__step${step.active ? ' pos-journey__step--active' : ''}`}>
-                  <div className="pos-journey__num">{step.num}</div>
-                  <div className="pos-journey__label">{step.label.split('\n').map((l, j) => (
-                    <React.Fragment key={j}>{j > 0 && <br />}{l}</React.Fragment>
-                  ))}</div>
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
-          <div className="pos-start__card">
-            {tabButtons}
-            {formContent}
-            <div className="pos-journey__estimate">
-              <TimerIcon /> Most applicants complete this in under 10 minutes
-            </div>
-            {trustBadge}
-          </div>
-        </div>
-        {picker}
-      </div>
-    );
-  }
-
-  /* ── E: Coastal / ocean theme ── */
-  if (variant === 'coastal') {
-    return (
-      <div className="pos-start pos-start--coastal">
-
-        <div className="pos-coastal">
-          <div className="pos-coastal__header">
-            <div className="pos-coastal__wave" />
-            <div className="pos-coastal__badge">Begin Your Journey Home</div>
-            <h1 className="pos-coastal__title">Mortgage Made<br />Simple</h1>
-            <p className="pos-coastal__text">
-              Clear waters, clear process. Apply in minutes with
-              guidance every step of the way.
-            </p>
-          </div>
-          <div className="pos-start__card">
-            {tabButtons}
-            {formContent}
-            {trustBadge}
-          </div>
-        </div>
-        {picker}
-      </div>
-    );
-  }
-
-  /* ── F: Warm / terracotta ── */
-  if (variant === 'warm') {
-    return (
-      <div className="pos-start pos-start--warm">
-
-        <div className="pos-warm">
-          <div className="pos-warm__hero">
-            <div className="pos-warm__content">
-              <div className="pos-warm__icon">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              </div>
-              <h1 className="pos-warm__title">Welcome Home</h1>
-              <p className="pos-warm__text">
-                Your path to homeownership starts with a simple, guided application.
-                We'll walk through everything together.
-              </p>
-              <div className="pos-warm__stats">
-                <div className="pos-warm__stat">
-                  <span className="pos-warm__stat-num">10</span>
-                  <span className="pos-warm__stat-label">Min to apply</span>
-                </div>
-                <div className="pos-warm__stat-divider" />
-                <div className="pos-warm__stat">
-                  <span className="pos-warm__stat-num">24/7</span>
-                  <span className="pos-warm__stat-label">AI support</span>
-                </div>
-                <div className="pos-warm__stat-divider" />
-                <div className="pos-warm__stat">
-                  <span className="pos-warm__stat-num">100%</span>
-                  <span className="pos-warm__stat-label">Secure</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="pos-warm__form-side">
-            <div className="pos-start__card">
-              <div className="pos-start__logo"><PeLogoIcon /></div>
-              {tabButtons}
-              {formContent}
-              {trustBadge}
-            </div>
-          </div>
-        </div>
-        {picker}
-      </div>
-    );
-  }
-
-  /* ── G: Slate / professional ── */
-  if (variant === 'slate') {
-    return (
-      <div className="pos-start pos-start--slate">
-
-        <div className="pos-slate">
-          <div className="pos-slate__topbar">
-            <div className="pos-start__logo"><PeLogoIcon /></div>
-            <span className="pos-slate__topbar-text">Perennia Mortgage</span>
-          </div>
-          <div className="pos-slate__body">
-            <div className="pos-start__card">
-              {tabButtons}
-              {formContent}
-              {trustBadge}
-            </div>
-            <div className="pos-slate__sidebar">
-              <h3 className="pos-slate__sidebar-title">Why apply with us?</h3>
-              <div className="pos-slate__sidebar-items">
-                <div className="pos-slate__sidebar-item">
-                  <div className="pos-slate__sidebar-icon"><CheckCircleIcon /></div>
-                  <div>
-                    <strong>Competitive Rates</strong>
-                    <p>Access to a wide range of loan products and pricing.</p>
-                  </div>
-                </div>
-                <div className="pos-slate__sidebar-item">
-                  <div className="pos-slate__sidebar-icon"><CheckCircleIcon /></div>
-                  <div>
-                    <strong>Fast Pre-Approval</strong>
-                    <p>Get your pre-approval letter in as little as 24 hours.</p>
-                  </div>
-                </div>
-                <div className="pos-slate__sidebar-item">
-                  <div className="pos-slate__sidebar-icon"><CheckCircleIcon /></div>
-                  <div>
-                    <strong>Dedicated Support</strong>
-                    <p>Your loan officer and AI assistant are always available.</p>
-                  </div>
-                </div>
-                <div className="pos-slate__sidebar-item">
-                  <div className="pos-slate__sidebar-icon"><ShieldIcon /></div>
-                  <div>
-                    <strong>Bank-Level Security</strong>
-                    <p>256-bit encryption protects your information.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {picker}
-      </div>
-    );
-  }
-
-  /* ── H: Classic / navy traditional ── */
-  if (variant === 'classic') {
-    return (
-      <div className="pos-start pos-start--classic">
-
-        <div className="pos-classic">
-          <div className="pos-classic__header">
-            <div className="pos-classic__logo-row">
-              <div className="pos-start__logo"><PeLogoIcon /></div>
-              <span className="pos-classic__brand">Perennia</span>
-            </div>
-            <div className="pos-classic__headline">
-              <h1 className="pos-classic__title">Apply for Your Mortgage</h1>
-              <p className="pos-classic__subtitle">
-                Trusted by borrowers nationwide. Complete your application securely in minutes.
-              </p>
-            </div>
-          </div>
-          <div className="pos-classic__card-wrap">
-            <div className="pos-start__card">
-              {tabButtons}
-              {formContent}
-            </div>
-          </div>
-          <div className="pos-classic__footer">
-            <div className="pos-classic__footer-items">
-              <span><TrustIcon /> NMLS Licensed</span>
-              <span className="pos-classic__footer-dot">&middot;</span>
-              <span><ShieldIcon /> 256-bit Encrypted</span>
-              <span className="pos-classic__footer-dot">&middot;</span>
-              <span>Equal Housing Lender</span>
-            </div>
-          </div>
-        </div>
-        {picker}
-      </div>
-    );
-  }
-
-  /* ── D: Premium dark / luxe ── */
+  /* ── H: Milestone Timeline ── */
   return (
-    <div className="pos-start pos-start--luxe">
-
-      <div className="pos-luxe">
-        <div className="pos-start__card">
-          <div className="pos-luxe__badge">
-            <SparkleIcon /> Exclusive Application Portal
-          </div>
-          <div className="pos-start__logo"><PeLogoIcon /></div>
-          {tabButtons}
-          {formContent}
-          {trustBadge}
+    <div className="pos-start pos-start--timeline">
+      <div className="pos-timeline">
+        <div className="pos-timeline__track">
+          <div className="pos-timeline__line" />
+          {[
+            { icon: 'account', label: 'Create Account', desc: 'Quick sign-up with email verification', active: true },
+            { icon: 'form', label: 'Complete Application', desc: 'AI-guided questions, auto-save progress', active: false },
+            { icon: 'check', label: 'Get Pre-Approved', desc: 'Receive your pre-approval letter', active: false },
+            { icon: 'home', label: 'Close on Your Home', desc: 'We handle the rest through closing day', active: false },
+          ].map((step, i) => (
+            <div key={i} className={`pos-timeline__milestone${step.active ? ' pos-timeline__milestone--active' : ''}`}>
+              <div className="pos-timeline__dot">
+                {step.icon === 'account' && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                )}
+                {step.icon === 'form' && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                )}
+                {step.icon === 'check' && <CheckCircleIcon />}
+                {step.icon === 'home' && (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                )}
+              </div>
+              <div className="pos-timeline__text">
+                <div className="pos-timeline__label">{step.label}</div>
+                <div className="pos-timeline__desc">{step.desc}</div>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="pos-luxe__features">
-          <div className="pos-luxe__feat">
-            <ShieldIcon />
-            <span>Bank-Level<br />Security</span>
-          </div>
-          <div className="pos-luxe__feat-divider" />
-          <div className="pos-luxe__feat">
-            <SparkleIcon />
-            <span>AI-Powered<br />Experience</span>
-          </div>
-          <div className="pos-luxe__feat-divider" />
-          <div className="pos-luxe__feat">
-            <TimerIcon />
-            <span>10-Minute<br />Process</span>
+        <div className="pos-timeline__form-area">
+          <div className="pos-start__card">
+            <div className="pos-start__logo"><PeLogoIcon /></div>
+            {tabButtons}
+            {formContent}
+            {trustBadge}
           </div>
         </div>
       </div>
