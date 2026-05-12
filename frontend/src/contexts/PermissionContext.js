@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { useImpersonation } from './ImpersonationContext';
 import { API_BASE_URL } from '../services/api';
 import { getUserEffectiveRole, mapRoleNameToEffective } from '../config/roleConfig';
-import { getToken, clearTokens } from '../utils/tokenStore';
+import { getToken } from '../utils/tokenStore';
 
 const PermissionContext = createContext();
 
@@ -242,11 +242,10 @@ export const PermissionProvider = ({ children }) => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          const isLoginPage = window.location.pathname === '/login';
-          if (!isLoginPage) {
-            clearTokens().catch(() => {});
-            window.location.href = '/login';
-          }
+          // Don't clear tokens or redirect here — the api.js interceptor
+          // handles 401 session management with retry-with-refresh logic.
+          // Redirecting here races with login navigation and causes loops.
+          console.warn('[PermissionContext] 401 on permissions fetch — using defaults');
           return;
         }
         throw new Error(`Failed to fetch permissions: ${response.status}`);
@@ -310,11 +309,7 @@ export const PermissionProvider = ({ children }) => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          const isLoginPage = window.location.pathname === '/login';
-          if (!isLoginPage) {
-            clearTokens().catch(() => {});
-            window.location.href = '/login';
-          }
+          console.warn('[PermissionContext] 401 on roles fetch — skipping');
           return;
         }
         // If endpoint doesn't exist yet (404), silently continue

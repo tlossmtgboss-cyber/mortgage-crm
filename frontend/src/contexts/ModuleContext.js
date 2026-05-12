@@ -12,7 +12,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { getAuthHeaders } from '../utils/auth';
 import { API_BASE_URL } from '../services/api';
-import { getToken, clearTokens } from '../utils/tokenStore';
+import { getToken } from '../utils/tokenStore';
 
 // Use the same API URL as the rest of the app (handles production vs dev)
 const API_BASE = API_BASE_URL;
@@ -54,13 +54,11 @@ export const ModuleProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        // If 401, token is expired/invalid — redirect to login
+        // On 401, don't clear tokens or redirect — the api.js interceptor
+        // handles session management with retry-with-refresh logic.
+        // Redirecting here races with login navigation and causes loops.
         if (response.status === 401) {
-          const isLoginPage = window.location.pathname === '/login';
-          if (!isLoginPage) {
-            clearTokens().catch(() => {});
-            window.location.href = '/login';
-          }
+          console.warn('[ModuleContext] 401 on modules fetch — using defaults');
           return;
         }
         // If 403, user is logged in but lacks permission — use defaults
