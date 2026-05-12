@@ -1127,3 +1127,207 @@ def update_loan_fields(
 
     except Exception as e:
         return ToolResult.error(f"Failed to update loan: {str(e)}")
+
+
+# Valid loan stages (uppercase, matching database convention)
+VALID_LOAN_STAGES = frozenset({
+    "APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED",
+    "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL",
+    "APPROVED", "SUSPENDED", "CTC", "CLEAR_TO_CLOSE",
+    "CLOSING", "DOCS", "DOCS_OUT", "FUNDED",
+    "CANCELLED", "DENIED", "DEAD", "WITHDRAWN",
+    "DOES_NOT_QUALIFY", "NURTURE",
+})
+
+
+@mortgage_tool(
+    name="update_loan_stage",
+    description="Move a loan to a new pipeline stage with optional reason",
+    agent_roles=["pipeline_analyst", "ops_manager", "closer", "processor"],
+    risk_level="HIGH",
+    requires_confirmation=True,
+    examples=[
+        "Move this loan to underwriting",
+        "Advance loan to CTC",
+        "Update loan stage to FUNDED",
+    ],
+)
+def update_loan_stage(
+    loan_id: int,
+    new_stage: str,
+    reason: Optional[str] = None,
+    **kwargs,
+) -> ToolResult:
+    """Move a loan to a new pipeline stage."""
+    try:
+        from database.models.lead_loan import Loan
+
+        db = kwargs.get("db")
+        current_user = kwargs.get("current_user")
+
+        if not db or not current_user:
+            return ToolResult.error("Missing db session or current_user context")
+
+        # Validate stage
+        normalized_stage = new_stage.strip().upper()
+        if normalized_stage not in VALID_LOAN_STAGES:
+            return ToolResult.error(
+                f"Invalid stage '{new_stage}'. Valid stages: {', '.join(sorted(VALID_LOAN_STAGES))}"
+            )
+
+        loan = db.query(Loan).filter(
+            Loan.id == loan_id,
+            Loan.organization_id == current_user.organization_id,
+        ).first()
+
+        if not loan:
+            return ToolResult.no_data(f"Loan {loan_id} not found in your organization")
+
+        previous_stage = loan.stage
+        loan.stage = normalized_stage
+        loan.stage_changed_at = datetime.now()
+
+        # Append reason to ai_insights if provided
+        if reason:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            stage_note = f"\n[{timestamp}] Stage changed {previous_stage} -> {normalized_stage}: {reason}"
+            loan.ai_insights = (loan.ai_insights or "") + stage_note
+
+        db.flush()
+
+        return ToolResult.success({
+            "loan_id": loan_id,
+            "loan_number": loan.loan_number,
+            "borrower_name": loan.borrower_name,
+            "previous_stage": previous_stage,
+            "new_stage": normalized_stage,
+            "reason": reason,
+            "updated": True,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to update loan stage: {str(e)}")
+
+
+@mortgage_tool(
+    name="add_loan_note",
+    description="Add a timestamped note to a loan record",
+    agent_roles=["pipeline_analyst", "processor", "closer", "underwriter", "borrower_concierge"],
+    risk_level="LOW",
+    requires_confirmation=False,
+    examples=[
+        "Add a note to this loan",
+        "Log a comment on the loan file",
+        "Record underwriting feedback",
+    ],
+)
+def add_loan_note(
+    loan_id: int,
+    note_text: str,
+    **kwargs,
+) -> ToolResult:
+    """Add a timestamped note to a loan's ai_insights field."""
+    try:
+        from database.models.lead_loan import Loan
+
+        db = kwargs.get("db")
+        current_user = kwargs.get("current_user")
+
+        if not db or not current_user:
+            return ToolResult.error("Missing db session or current_user context")
+
+        if not note_text or not note_text.strip():
+            return ToolResult.error("Note text cannot be empty")
+
+        loan = db.query(Loan).filter(
+            Loan.id == loan_id,
+            Loan.organization_id == current_user.organization_id,
+        ).first()
+
+        if not loan:
+            return ToolResult.no_data(f"Loan {loan_id} not found in your organization")
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        formatted_note = f"\n[{timestamp}] {note_text.strip()}"
+
+        loan.ai_insights = (loan.ai_insights or "") + formatted_note
+        db.flush()
+
+        return ToolResult.success({
+            "loan_id": loan_id,
+            "loan_number": loan.loan_number,
+            "borrower_name": loan.borrower_name,
+            "note_added": True,
+            "note_preview": note_text.strip()[:100],
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to add loan note: {str(e)}")
+
+
+@mortgage_tool(
+    name="update_borrower_contact_info",
+    description="Update borrower contact details (email, phone, name) on a loan",
+    agent_roles=["pipeline_analyst", "borrower_concierge", "processor"],
+    risk_level="MEDIUM",
+    requires_confirmation=True,
+    examples=[
+        "Update borrower email on this loan",
+        "Change borrower phone number",
+        "Update borrower contact info",
+    ],
+)
+def update_borrower_contact_info(
+    loan_id: int,
+    borrower_email: Optional[str] = None,
+    borrower_phone: Optional[str] = None,
+    borrower_name: Optional[str] = None,
+    **kwargs,
+) -> ToolResult:
+    """Update borrower contact details on a loan."""
+    try:
+        from database.models.lead_loan import Loan
+
+        db = kwargs.get("db")
+        current_user = kwargs.get("current_user")
+
+        if not db or not current_user:
+            return ToolResult.error("Missing db session or current_user context")
+
+        if not borrower_email and not borrower_phone and not borrower_name:
+            return ToolResult.error("At least one field (borrower_email, borrower_phone, or borrower_name) is required")
+
+        loan = db.query(Loan).filter(
+            Loan.id == loan_id,
+            Loan.organization_id == current_user.organization_id,
+        ).first()
+
+        if not loan:
+            return ToolResult.no_data(f"Loan {loan_id} not found in your organization")
+
+        updated_fields = []
+
+        if borrower_email is not None:
+            loan.borrower_email = borrower_email
+            updated_fields.append("borrower_email")
+
+        if borrower_phone is not None:
+            loan.borrower_phone = borrower_phone
+            updated_fields.append("borrower_phone")
+
+        if borrower_name is not None:
+            loan.borrower_name = borrower_name
+            updated_fields.append("borrower_name")
+
+        db.flush()
+
+        return ToolResult.success({
+            "loan_id": loan_id,
+            "loan_number": loan.loan_number,
+            "borrower_name": loan.borrower_name,
+            "fields_updated": updated_fields,
+            "updated": True,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to update borrower contact info: {str(e)}")

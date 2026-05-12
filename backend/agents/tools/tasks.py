@@ -1294,3 +1294,103 @@ def get_daily_call_list(
         data=data,
         message=f"Found {len(formatted_calls)} contacts to call: {summary['from_tasks']} tasks, {summary['from_leads']} leads, {summary['from_loans']} loans",
     )
+
+
+# =============================================================================
+# Workflow Task Creation Tool
+# =============================================================================
+
+@mortgage_tool(
+    name="create_workflow_task",
+    description="Create a task tied to a specific workflow step such as follow-up, document review, or condition clearing",
+    agent_roles=["task_automation", "ops_manager", "pipeline_analyst"],
+    risk_level="LOW",
+    requires_confirmation=False,
+    parameters={
+        "title": "Task title (required)",
+        "task_type": "Workflow task type: follow_up, document_review, condition_clearing",
+        "loan_id": "Optional loan ID to link",
+        "lead_id": "Optional lead ID to link",
+        "due_date": "Due date (YYYY-MM-DD), defaults to 3 business days",
+        "assigned_to": "Optional user ID to assign to",
+    },
+)
+def create_workflow_task(
+    title: str,
+    task_type: str = "follow_up",
+    loan_id: Optional[int] = None,
+    lead_id: Optional[int] = None,
+    due_date: Optional[str] = None,
+    assigned_to: Optional[int] = None,
+) -> ToolResult:
+    """Create a task tied to a workflow step."""
+    valid_types = ["follow_up", "document_review", "condition_clearing"]
+    if task_type not in valid_types:
+        return ToolResult.error(
+            f"Invalid task_type '{task_type}'. Must be one of: {', '.join(valid_types)}"
+        )
+
+    # Default due date: 3 business days from now
+    if not due_date:
+        due = datetime.now() + timedelta(days=3)
+        while due.weekday() >= 5:
+            due += timedelta(days=1)
+        due_date = due.strftime("%Y-%m-%d")
+
+    import uuid
+    task_id = f"WFT-{str(uuid.uuid4())[:8].upper()}"
+
+    # Resolve related entity info
+    related_info = {}
+    if loan_id:
+        loan = execute_single(
+            "SELECT loan_number, borrower_name FROM loans WHERE id = :id",
+            {"id": loan_id},
+        )
+        if loan:
+            related_info["loan"] = {
+                "id": loan_id,
+                "number": loan.get("loan_number"),
+                "borrower": loan.get("borrower_name"),
+            }
+
+    if lead_id:
+        lead = execute_single(
+            "SELECT first_name, last_name FROM leads WHERE id = :id",
+            {"id": lead_id},
+        )
+        if lead:
+            related_info["lead"] = {
+                "id": lead_id,
+                "name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
+            }
+
+    assignee_name = None
+    if assigned_to:
+        user = execute_single(
+            "SELECT COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :id",
+            {"id": assigned_to},
+        )
+        if user:
+            assignee_name = user.get("name")
+
+    task = {
+        "task_id": task_id,
+        "title": title,
+        "task_type": task_type,
+        "category": task_type,
+        "due_date": due_date,
+        "priority": "high" if task_type == "condition_clearing" else "normal",
+        "assigned_to": assigned_to,
+        "assigned_name": assignee_name,
+        "loan_id": loan_id,
+        "lead_id": lead_id,
+        "status": "pending",
+        "related": related_info,
+        "created_at": datetime.now().isoformat(),
+    }
+
+    return ToolResult.success(
+        data=task,
+        message=f"Workflow task created: {title} ({task_type}, due {due_date})",
+    )

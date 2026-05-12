@@ -777,3 +777,287 @@ def get_call_metrics(
         data=data,
         message=f"Calls: {total_calls}, Connect rate: {data['summary']['connect_rate']}%",
     )
+
+
+# =============================================================================
+# Dialer & Voicemail Template Tools (3 tools)
+# =============================================================================
+
+@mortgage_tool(
+    name="start_dial_session",
+    description="Start a power dialer session with a list of contacts",
+    agent_roles=["voice_os", "lead_nurturer", "sales"],
+    risk_level="HIGH",
+    requires_confirmation=True,
+    parameters={
+        "contact_ids": "List of lead IDs to dial",
+        "session_type": "Session type: power, preview (default: power)",
+    },
+)
+def start_dial_session(
+    contact_ids: List[int],
+    session_type: str = "power",
+) -> ToolResult:
+    """Start a power dialer session with queued contacts."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
+    if not contact_ids:
+        return ToolResult.error("No contact IDs provided")
+
+    if len(contact_ids) > 200:
+        return ToolResult.error("Maximum 200 contacts per dialer session")
+
+    # Verify contacts exist and get their info
+    placeholders = ", ".join(f":id_{i}" for i in range(len(contact_ids)))
+    params = {f"id_{i}": cid for i, cid in enumerate(contact_ids)}
+    params["org_id"] = org_id
+
+    contacts = execute_query(f"""
+        SELECT id, first_name, last_name, phone
+        FROM leads
+        WHERE id IN ({placeholders}) AND organization_id = :org_id
+    """, params)
+
+    if not contacts:
+        return ToolResult.error("No valid contacts found in your organization")
+
+    valid_ids = {c["id"] for c in contacts}
+    missing_ids = [cid for cid in contact_ids if cid not in valid_ids]
+
+    # Create dialer session and queue tasks
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            from database.models.dialer import DialerSession, DialerSessionTask
+            from database.enums import DialerSessionStatus, DialerTaskStatus
+
+            dial_session = DialerSession(
+                organization_id=org_id,
+                agent_id=0,  # Will be set by the calling context
+                status=DialerSessionStatus.ACTIVE,
+                total_tasks=len(contacts),
+            )
+            session.add(dial_session)
+            session.flush()
+
+            for order, contact in enumerate(contacts):
+                task = DialerSessionTask(
+                    organization_id=org_id,
+                    session_id=dial_session.id,
+                    contact_phone=contact.get("phone", ""),
+                    contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
+                    lead_id=contact["id"],
+                    status=DialerTaskStatus.PENDING,
+                    task_order=order,
+                )
+                session.add(task)
+
+            session_id = dial_session.id
+    except Exception as e:
+        logger.error(f"Failed to create dialer session: {e}")
+        return ToolResult.error(f"Failed to create dialer session: {str(e)}")
+
+    data = {
+        "session_id": session_id,
+        "session_type": session_type,
+        "total_contacts": len(contacts),
+        "queued_contacts": [
+            {
+                "id": c["id"],
+                "name": f"{c.get('first_name', '')} {c.get('last_name', '')}".strip(),
+                "phone": c.get("phone"),
+            }
+            for c in contacts
+        ],
+        "missing_contacts": missing_ids if missing_ids else None,
+        "status": "active",
+        "created_at": datetime.now().isoformat(),
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=f"Dialer session started with {len(contacts)} contacts",
+        requires_approval=True,
+    )
+
+
+@mortgage_tool(
+    name="get_dial_queue",
+    description="Get the current dialer queue with optional status filter",
+    agent_roles=["voice_os", "lead_nurturer", "sales"],
+    risk_level="LOW",
+    parameters={
+        "status_filter": "Filter by status: pending, completed, skipped (optional)",
+    },
+)
+def get_dial_queue(
+    status_filter: Optional[str] = None,
+) -> ToolResult:
+    """Get the current dialer queue."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
+    params: Dict[str, Any] = {"org_id": org_id}
+    status_clause = ""
+    if status_filter:
+        status_clause = "AND dst.status = :status_filter"
+        params["status_filter"] = status_filter
+
+    tasks = execute_query(f"""
+        SELECT
+            dst.id, dst.session_id, dst.contact_phone, dst.contact_name,
+            dst.lead_id, dst.loan_id, dst.status, dst.disposition,
+            dst.notes, dst.follow_up_date, dst.task_order, dst.created_at,
+            ds.status as session_status
+        FROM dialer_session_tasks dst
+        JOIN dialer_sessions ds ON ds.id = dst.session_id
+            AND ds.organization_id = :org_id
+        WHERE dst.organization_id = :org_id {status_clause}
+            AND ds.status = 'active'
+        ORDER BY dst.task_order ASC
+        LIMIT 100
+    """, params)
+
+    if not tasks:
+        tasks = []
+
+    queue_items = []
+    for t in tasks:
+        queue_items.append({
+            "task_id": t.get("id"),
+            "session_id": t.get("session_id"),
+            "contact_name": t.get("contact_name"),
+            "contact_phone": t.get("contact_phone"),
+            "lead_id": t.get("lead_id"),
+            "loan_id": t.get("loan_id"),
+            "status": t.get("status"),
+            "disposition": t.get("disposition"),
+            "notes": t.get("notes"),
+            "follow_up_date": format_date(t.get("follow_up_date")),
+            "order": t.get("task_order"),
+        })
+
+    pending_count = len([q for q in queue_items if str(q.get("status")) in ("pending", "DialerTaskStatus.PENDING")])
+
+    data = {
+        "queue": queue_items,
+        "total": len(queue_items),
+        "pending_count": pending_count,
+        "status_filter": status_filter,
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=f"Dial queue: {len(queue_items)} tasks ({pending_count} pending)",
+    )
+
+
+@mortgage_tool(
+    name="manage_voicemail_templates",
+    description="List or create voicemail drop templates",
+    agent_roles=["voice_os", "content_creator"],
+    risk_level="LOW",
+    parameters={
+        "action": "Action: list or create",
+        "template_name": "Name for new template (required for create)",
+        "template_description": "Message text for new template (required for create)",
+    },
+)
+def manage_voicemail_templates(
+    action: str = "list",
+    template_name: Optional[str] = None,
+    template_description: Optional[str] = None,
+) -> ToolResult:
+    """List or create voicemail drop templates."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
+    if action == "list":
+        templates = execute_query("""
+            SELECT
+                id, name, category, message_text, audio_url,
+                voice_provider, voice_id, delivery_method,
+                times_used, last_used_at, is_active, is_default,
+                created_at
+            FROM voicemail_templates
+            WHERE organization_id = :org_id AND is_active = true
+            ORDER BY is_default DESC, times_used DESC
+        """, {"org_id": org_id})
+
+        if not templates:
+            templates = []
+
+        template_list = []
+        for t in templates:
+            template_list.append({
+                "id": t.get("id"),
+                "name": t.get("name"),
+                "category": t.get("category"),
+                "message_preview": (t.get("message_text", "")[:100] + "...") if len(t.get("message_text", "")) > 100 else t.get("message_text", ""),
+                "has_audio": bool(t.get("audio_url")),
+                "voice_provider": t.get("voice_provider"),
+                "delivery_method": t.get("delivery_method"),
+                "times_used": t.get("times_used", 0),
+                "is_default": t.get("is_default", False),
+                "created_at": format_date(t.get("created_at")),
+            })
+
+        data = {
+            "templates": template_list,
+            "total": len(template_list),
+        }
+
+        return ToolResult.success(
+            data=data,
+            message=f"Found {len(template_list)} voicemail templates",
+        )
+
+    elif action == "create":
+        if not template_name:
+            return ToolResult.error("template_name is required for create action")
+        if not template_description:
+            return ToolResult.error("template_description is required for create action")
+
+        try:
+            with db_session() as session:
+                from sqlalchemy import text
+                session.execute(text("""
+                    INSERT INTO voicemail_templates
+                        (organization_id, name, message_text, voice_provider, voice_id, delivery_method, is_active, created_at, updated_at)
+                    VALUES
+                        (:org_id, :name, :message_text, 'deepgram', 'asteria', 'vapi_ai', true, NOW(), NOW())
+                """), {
+                    "org_id": org_id,
+                    "name": template_name,
+                    "message_text": template_description,
+                })
+        except Exception as e:
+            logger.error(f"Failed to create voicemail template: {e}")
+            return ToolResult.error(f"Failed to create template: {str(e)}")
+
+        data = {
+            "name": template_name,
+            "message_text": template_description,
+            "voice_provider": "deepgram",
+            "voice_id": "asteria",
+            "delivery_method": "vapi_ai",
+            "status": "created",
+        }
+
+        return ToolResult.success(
+            data=data,
+            message=f"Voicemail template '{template_name}' created",
+        )
+
+    else:
+        return ToolResult.error(f"Invalid action '{action}'. Use 'list' or 'create'.")

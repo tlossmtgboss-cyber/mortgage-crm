@@ -1362,3 +1362,250 @@ def create_note(
 
     except Exception as e:
         return ToolResult.error(f"Failed to create note: {str(e)}")
+
+
+@mortgage_tool(
+    name="create_lead",
+    description="Create a new lead record in the CRM with basic contact information",
+    agent_roles=["lead_nurturer", "ai_receptionist", "borrower_concierge"],
+    risk_level="MEDIUM",
+    requires_confirmation=True,
+    examples=[
+        "Create a new lead",
+        "Add a prospect to the CRM",
+        "Register a new lead named John Smith",
+    ],
+)
+def create_lead(
+    first_name: str,
+    last_name: str,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    source: str = "AI Assistant",
+    **kwargs,
+) -> ToolResult:
+    """Create a new lead in the CRM."""
+    try:
+        from database.models.lead_loan import Lead
+
+        db = kwargs.get("db")
+        current_user = kwargs.get("current_user")
+
+        if not db or not current_user:
+            return ToolResult.error("Missing db session or current_user context")
+
+        if not email and not phone:
+            return ToolResult.error("At least one contact method (email or phone) is required")
+
+        lead = Lead(
+            first_name=first_name,
+            last_name=last_name,
+            name=f"{first_name} {last_name}",
+            email=email,
+            phone=phone,
+            source=source,
+            stage="New",
+            owner_id=current_user.id,
+            organization_id=current_user.organization_id,
+        )
+        db.add(lead)
+        db.flush()
+
+        return ToolResult.success({
+            "lead_id": lead.id,
+            "name": f"{first_name} {last_name}",
+            "email": email,
+            "phone": phone,
+            "source": source,
+            "stage": "New",
+            "owner_id": current_user.id,
+            "created": True,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to create lead: {str(e)}")
+
+
+@mortgage_tool(
+    name="update_lead",
+    description="Update specific fields on an existing lead record",
+    agent_roles=["lead_nurturer", "pipeline_analyst", "ai_receptionist"],
+    risk_level="MEDIUM",
+    requires_confirmation=True,
+    examples=[
+        "Update the lead's email address",
+        "Change the lead stage to Pre-Qualified",
+        "Update lead contact info",
+    ],
+)
+def update_lead(
+    lead_id: int,
+    updates: Optional[Dict[str, Any]] = None,
+    **kwargs,
+) -> ToolResult:
+    """Update lead fields with tenant isolation check."""
+    try:
+        from database.models.lead_loan import Lead
+
+        db = kwargs.get("db")
+        current_user = kwargs.get("current_user")
+
+        if not db or not current_user:
+            return ToolResult.error("Missing db session or current_user context")
+
+        if not updates:
+            return ToolResult.error("No updates provided")
+
+        lead = db.query(Lead).filter(
+            Lead.id == lead_id,
+            Lead.organization_id == current_user.organization_id,
+        ).first()
+
+        if not lead:
+            return ToolResult.no_data(f"Lead {lead_id} not found in your organization")
+
+        allowed_keys = {
+            "first_name", "last_name", "email", "phone", "stage",
+            "source", "notes", "address", "city", "state", "zip_code",
+        }
+        invalid_keys = set(updates.keys()) - allowed_keys
+        if invalid_keys:
+            return ToolResult.error(f"Invalid update fields: {', '.join(invalid_keys)}. Allowed: {', '.join(sorted(allowed_keys))}")
+
+        updated_fields = []
+        for key, value in updates.items():
+            setattr(lead, key, value)
+            updated_fields.append(key)
+
+        # Update the name field if first_name or last_name changed
+        if "first_name" in updates or "last_name" in updates:
+            lead.name = f"{lead.first_name} {lead.last_name}"
+
+        db.flush()
+
+        return ToolResult.success({
+            "lead_id": lead_id,
+            "name": lead.name,
+            "fields_updated": updated_fields,
+            "updated": True,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to update lead: {str(e)}")
+
+
+@mortgage_tool(
+    name="assign_lead",
+    description="Reassign a lead to another user within the same organization",
+    agent_roles=["lead_nurturer", "ops_manager", "manager"],
+    risk_level="MEDIUM",
+    requires_confirmation=True,
+    examples=[
+        "Assign this lead to another loan officer",
+        "Reassign lead to user 42",
+        "Transfer lead ownership",
+    ],
+)
+def assign_lead(
+    lead_id: int,
+    assignee_user_id: int,
+    **kwargs,
+) -> ToolResult:
+    """Reassign a lead to another user, verifying same organization."""
+    try:
+        from database.models.lead_loan import Lead
+        from database.models.user import User
+
+        db = kwargs.get("db")
+        current_user = kwargs.get("current_user")
+
+        if not db or not current_user:
+            return ToolResult.error("Missing db session or current_user context")
+
+        lead = db.query(Lead).filter(
+            Lead.id == lead_id,
+            Lead.organization_id == current_user.organization_id,
+        ).first()
+
+        if not lead:
+            return ToolResult.no_data(f"Lead {lead_id} not found in your organization")
+
+        # Verify assignee is in the same organization
+        assignee = db.query(User).filter(
+            User.id == assignee_user_id,
+            User.organization_id == current_user.organization_id,
+        ).first()
+
+        if not assignee:
+            return ToolResult.error(f"User {assignee_user_id} not found in your organization")
+
+        previous_owner_id = lead.owner_id
+        lead.owner_id = assignee_user_id
+        db.flush()
+
+        return ToolResult.success({
+            "lead_id": lead_id,
+            "name": lead.name,
+            "previous_owner_id": previous_owner_id,
+            "new_owner_id": assignee_user_id,
+            "assignee_name": f"{assignee.first_name or ''} {assignee.last_name or ''}".strip(),
+            "reassigned": True,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to assign lead: {str(e)}")
+
+
+@mortgage_tool(
+    name="add_lead_note",
+    description="Append a timestamped note to a lead record",
+    agent_roles=["lead_nurturer", "ai_receptionist", "pipeline_analyst", "borrower_concierge"],
+    risk_level="LOW",
+    requires_confirmation=False,
+    examples=[
+        "Add a note to the lead",
+        "Log a comment on this lead",
+        "Record a note about the conversation",
+    ],
+)
+def add_lead_note(
+    lead_id: int,
+    note_text: str,
+    **kwargs,
+) -> ToolResult:
+    """Append a timestamped note to a lead's notes field."""
+    try:
+        from database.models.lead_loan import Lead
+
+        db = kwargs.get("db")
+        current_user = kwargs.get("current_user")
+
+        if not db or not current_user:
+            return ToolResult.error("Missing db session or current_user context")
+
+        if not note_text or not note_text.strip():
+            return ToolResult.error("Note text cannot be empty")
+
+        lead = db.query(Lead).filter(
+            Lead.id == lead_id,
+            Lead.organization_id == current_user.organization_id,
+        ).first()
+
+        if not lead:
+            return ToolResult.no_data(f"Lead {lead_id} not found in your organization")
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        formatted_note = f"\n[{timestamp}] {note_text.strip()}"
+
+        lead.notes = (lead.notes or "") + formatted_note
+        db.flush()
+
+        return ToolResult.success({
+            "lead_id": lead_id,
+            "name": lead.name,
+            "note_added": True,
+            "note_preview": note_text.strip()[:100],
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to add lead note: {str(e)}")

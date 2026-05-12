@@ -111,6 +111,13 @@ from . import team_org
 # Smart Docs Bridge Tools
 from . import smart_documents
 
+# MUM, Portal, Dedup, Referral, Credit Monitoring Tools
+from . import mum_tools
+from . import portal_tools
+from . import dedup_tools
+from . import referral_tools
+from . import credit_monitoring_tools
+
 
 # =============================================================================
 # Agent Configuration
@@ -147,6 +154,12 @@ AGENT_MODULES = {
     "notification_center": notifications,
     "subscription_manager": subscription,
     "onboarding_assistant": onboarding,
+    # MUM & Post-Closing
+    "mum_manager": mum_tools,
+    # Data Quality
+    "data_quality": dedup_tools,
+    # Credit Monitoring
+    "credit_monitor": credit_monitoring_tools,
 }
 
 
@@ -164,6 +177,10 @@ PIPELINE_TOOLS = [
     "get_bottleneck_analysis",
     "compare_to_benchmark",
     "get_lo_pipeline_breakdown",
+    "update_loan_fields",
+    "update_loan_stage",
+    "add_loan_note",
+    "update_borrower_contact_info",
 ]
 
 COMPLIANCE_TOOLS = [
@@ -186,6 +203,13 @@ LEAD_TOOLS = [
     "schedule_outreach",
     "get_similar_converted_leads",
     "get_optimal_contact_time",
+    "get_stale_leads",
+    "update_lead_fields",
+    "create_note",
+    "create_lead",
+    "update_lead",
+    "assign_lead",
+    "add_lead_note",
 ]
 
 DOCUMENT_TOOLS = [
@@ -219,6 +243,9 @@ RATE_TOOLS = [
     "get_extension_pricing",
     "compare_rate_scenarios",
     "get_market_events",
+    "lock_rate",
+    "extend_rate_lock",
+    "get_rate_lock_status",
 ]
 
 COACHING_TOOLS = [
@@ -253,6 +280,9 @@ VOICE_TOOLS = [
     "get_power_dialer_queue",
     "transcribe_call",
     "get_call_metrics",
+    "start_dial_session",
+    "get_dial_queue",
+    "manage_voicemail_templates",
 ]
 
 VIDEO_TOOLS = [
@@ -302,6 +332,7 @@ SCHEDULER_TOOLS = [
 
 TASK_TOOLS = [
     "create_task",
+    "bulk_create_tasks",
     "get_task_queue",
     "update_task_status",
     "assign_task",
@@ -309,6 +340,8 @@ TASK_TOOLS = [
     "bulk_update_tasks",
     "execute_workflow",
     "get_workflow_status",
+    "get_daily_call_list",
+    "create_workflow_task",
 ]
 
 SLA_TOOLS = [
@@ -331,6 +364,7 @@ INTEGRATION_TOOLS = [
     "order_title",
     "get_pricing_engine_quote",
     "send_for_esign",
+    "get_credit_report_summary",
 ]
 
 # Business Tools
@@ -344,6 +378,7 @@ REPORTING_TOOLS = [
     "get_dashboard_metrics",
     "create_custom_report",
     "analyze_trends",
+    "generate_structured_report",
 ]
 
 NOTIFICATION_TOOLS = [
@@ -439,6 +474,44 @@ HISTORICAL_TOOLS = [
     "get_data_availability",
 ]
 
+# MUM (Managed Unused Mortgages) Tools
+MUM_TOOLS = [
+    "get_mum_clients",
+    "search_mum_clients",
+    "get_mum_client_details",
+    "create_mum_activity",
+    "get_mum_anniversaries",
+    "get_mum_refinance_candidates",
+    "update_mum_client",
+]
+
+# Portal Tools
+PORTAL_TOOLS = [
+    "invite_borrower_to_portal",
+    "get_portal_status",
+    "share_document_via_portal",
+]
+
+# Dedup Tools
+DEDUP_TOOLS = [
+    "find_duplicate_contacts",
+    "get_duplicate_candidates",
+]
+
+# Referral Partner Tools
+REFERRAL_TOOLS = [
+    "get_referral_partners",
+    "add_referral_partner",
+    "get_referral_stats",
+    "log_referral",
+]
+
+# Credit Monitoring Tools
+CREDIT_MONITORING_TOOLS = [
+    "get_credit_alerts",
+    "get_credit_score_history",
+]
+
 
 # =============================================================================
 # All Tools Organized by Category
@@ -480,6 +553,16 @@ ALL_TOOLS = {
     "team_org": TEAM_ORG_TOOLS,
     # Analytics
     "historical": HISTORICAL_TOOLS,
+    # MUM
+    "mum": MUM_TOOLS,
+    # Portal
+    "portal": PORTAL_TOOLS,
+    # Dedup
+    "dedup": DEDUP_TOOLS,
+    # Referral Partners
+    "referral": REFERRAL_TOOLS,
+    # Credit Monitoring
+    "credit_monitoring": CREDIT_MONITORING_TOOLS,
 }
 
 
@@ -602,6 +685,24 @@ AGENT_CONFIGS = {
         "description": "Guides new users through setup, training, and platform adoption",
         "tools": ONBOARDING_TOOLS,
         "category": "business",
+    },
+    # MUM & Post-Closing
+    "mum_manager": {
+        "description": "Manages closed/funded clients, anniversaries, refinance opportunities, and retention outreach",
+        "tools": MUM_TOOLS + REFERRAL_TOOLS,
+        "category": "crm",
+    },
+    # Data Quality
+    "data_quality": {
+        "description": "Detects duplicate contacts, merge candidates, and data hygiene issues",
+        "tools": DEDUP_TOOLS + PORTAL_TOOLS,
+        "category": "operations",
+    },
+    # Credit Monitoring
+    "credit_monitor": {
+        "description": "Tracks credit alerts, score changes, and credit report summaries",
+        "tools": CREDIT_MONITORING_TOOLS,
+        "category": "crm",
     },
 }
 
@@ -791,6 +892,20 @@ __all__ = [
 
     # Analytics Tool Lists
     "HISTORICAL_TOOLS",
+
+    # MUM Tool Lists
+    "MUM_TOOLS",
+    "PORTAL_TOOLS",
+    "DEDUP_TOOLS",
+    "REFERRAL_TOOLS",
+    "CREDIT_MONITORING_TOOLS",
+
+    # New Modules
+    "mum_tools",
+    "portal_tools",
+    "dedup_tools",
+    "referral_tools",
+    "credit_monitoring_tools",
 
     # Utilities
     "get_all_tool_names",

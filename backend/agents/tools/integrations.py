@@ -2,7 +2,7 @@
 Perennia AI - Integrations Tools
 ================================
 Tools for the Integrations Agent managing external system connections.
-8 tools for LOS, CRM, vendor, and third-party integrations.
+10 tools for LOS, CRM, vendor, and third-party integrations.
 """
 
 import logging
@@ -18,7 +18,16 @@ from .base import (
     execute_single,
     db_session,
     format_date,
+    format_currency,
+    get_tenant_context,
 )
+
+
+def _require_tenant() -> Optional[ToolResult]:
+    """Return error ToolResult if tenant context is missing, else None."""
+    if not get_tenant_context():
+        return ToolResult.error("Organization context required")
+    return None
 
 
 # =============================================================================
@@ -191,8 +200,9 @@ def check_integration_status(
 @mortgage_tool(
     name="trigger_credit_pull",
     description="Trigger credit pull from credit bureau integration",
-    agent_roles=["integrations"],
+    agent_roles=["integrations", "processor", "underwriter"],
     risk_level="HIGH",
+    requires_confirmation=True,
     parameters={
         "loan_id": "Loan ID",
         "bureau": "Bureau: equifax, experian, transunion, tri_merge",
@@ -203,19 +213,25 @@ def check_integration_status(
 def trigger_credit_pull(
     loan_id: str,
     bureau: str = "tri_merge",
-    pull_type: str = "soft",
+    pull_type: str = "hard",
     borrowers: str = "both",
 ) -> ToolResult:
-    """Trigger credit pull."""
+    """Trigger credit pull with tenant isolation."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     loan = execute_single("""
         SELECT id, loan_number, borrower_name, coborrower_name,
                borrower_email, co_borrower_email
         FROM loans
-        WHERE id = :id
-    """, {"id": loan_id})
+        WHERE id = :id AND organization_id = :org_id
+    """, {"id": loan_id, "org_id": org_id})
 
     if not loan:
-        return ToolResult.no_data(f"Loan {loan_id} not found")
+        return ToolResult.no_data(f"Loan {loan_id} not found in your organization")
 
     # Check for recent credit pulls
     recent_pull = execute_single("""
@@ -712,4 +728,153 @@ def get_pricing_engine_quote(
     return ToolResult.success(
         data=data,
         message=f"Pricing quote: {data['best_rate']}% ({pricing_engine}, {lock_period}-day lock)",
+    )
+
+
+# =============================================================================
+# Credit Report Summary Tool
+# =============================================================================
+
+@mortgage_tool(
+    name="get_credit_report_summary",
+    description="Get credit report summary for a loan including scores, items, and utilization",
+    agent_roles=["integrations", "processor", "underwriter", "pipeline_analyst"],
+    risk_level="LOW",
+    parameters={
+        "loan_id": "Loan ID to get credit summary for",
+    },
+)
+def get_credit_report_summary(
+    loan_id: int,
+) -> ToolResult:
+    """Get credit report summary for a loan."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
+    # Verify loan exists with tenant isolation
+    loan = execute_single("""
+        SELECT id, loan_number, borrower_first_name, borrower_last_name,
+               loan_amount, loan_type
+        FROM loans
+        WHERE id = :loan_id AND organization_id = :org_id
+    """, {"loan_id": loan_id, "org_id": org_id})
+
+    if not loan:
+        return ToolResult.no_data(f"Loan {loan_id} not found in your organization")
+
+    # Get credit summary
+    summary = execute_single("""
+        SELECT credit_score, equifax_score, experian_score, transunion_score,
+               bureau, report_date, total_accounts, open_accounts,
+               closed_accounts, total_debt, total_credit_limit, utilization,
+               late_payments_30, late_payments_60, late_payments_90,
+               collections, bankruptcies, created_at
+        FROM credit_summaries
+        WHERE loan_id = :loan_id
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, {"loan_id": loan_id})
+
+    # Get credit items
+    items = execute_query("""
+        SELECT id, title, description, category, severity, status,
+               recommendation, account_name, account_balance
+        FROM credit_items
+        WHERE loan_id = :loan_id
+        ORDER BY CASE severity
+            WHEN 'critical' THEN 1
+            WHEN 'high' THEN 2
+            WHEN 'medium' THEN 3
+            WHEN 'low' THEN 4
+            ELSE 5 END
+    """, {"loan_id": loan_id})
+
+    # Get recent credit pulls
+    pulls = execute_query("""
+        SELECT id, bureau, pull_type, status, pulled_at
+        FROM credit_pulls
+        WHERE loan_id = :loan_id
+        ORDER BY pulled_at DESC
+        LIMIT 5
+    """, {"loan_id": loan_id})
+
+    borrower = f"{loan.get('borrower_first_name', '')} {loan.get('borrower_last_name', '')}".strip()
+
+    if not summary and not items and not pulls:
+        return ToolResult.no_data(f"No credit data found for loan {loan_id}")
+
+    summary_data = None
+    if summary:
+        summary_data = {
+            "credit_score": summary.get("credit_score"),
+            "equifax_score": summary.get("equifax_score"),
+            "experian_score": summary.get("experian_score"),
+            "transunion_score": summary.get("transunion_score"),
+            "bureau": summary.get("bureau"),
+            "report_date": format_date(summary.get("report_date")),
+            "accounts": {
+                "total": summary.get("total_accounts"),
+                "open": summary.get("open_accounts"),
+                "closed": summary.get("closed_accounts"),
+            },
+            "debt": {
+                "total_debt": format_currency(summary.get("total_debt")),
+                "total_credit_limit": format_currency(summary.get("total_credit_limit")),
+                "utilization": f"{summary.get('utilization', 0)}%",
+            },
+            "derogatory": {
+                "late_30": summary.get("late_payments_30", 0),
+                "late_60": summary.get("late_payments_60", 0),
+                "late_90": summary.get("late_payments_90", 0),
+                "collections": summary.get("collections", 0),
+                "bankruptcies": summary.get("bankruptcies", 0),
+            },
+        }
+
+    item_list = []
+    if items:
+        for item in items:
+            item_list.append({
+                "id": item.get("id"),
+                "title": item.get("title"),
+                "category": item.get("category"),
+                "severity": item.get("severity"),
+                "status": item.get("status"),
+                "recommendation": item.get("recommendation"),
+                "account_name": item.get("account_name"),
+                "account_balance": format_currency(item.get("account_balance")) if item.get("account_balance") else None,
+            })
+
+    pull_list = []
+    if pulls:
+        for p in pulls:
+            pull_list.append({
+                "bureau": p.get("bureau"),
+                "pull_type": p.get("pull_type"),
+                "status": p.get("status"),
+                "date": format_date(p.get("pulled_at")),
+            })
+
+    critical_items = [i for i in item_list if i.get("severity") in ("critical", "high")]
+
+    data = {
+        "loan_id": loan_id,
+        "loan_number": loan.get("loan_number"),
+        "borrower": borrower,
+        "summary": summary_data,
+        "items": item_list,
+        "items_count": len(item_list),
+        "critical_items_count": len(critical_items),
+        "credit_pulls": pull_list,
+    }
+
+    score_str = f"Score: {summary_data['credit_score']}" if summary_data and summary_data.get("credit_score") else "No score"
+    items_str = f", {len(critical_items)} critical/high items" if critical_items else ""
+
+    return ToolResult.success(
+        data=data,
+        message=f"Credit report for loan {loan_id}: {score_str}{items_str}",
     )

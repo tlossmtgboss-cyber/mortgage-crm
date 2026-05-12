@@ -3,14 +3,18 @@ Perennia AI - Rate Advisory Tools
 Tools for the Rate Advisor agent to manage rate locks and market analysis.
 """
 
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 
+logger = logging.getLogger(__name__)
+
 from .base import (
     mortgage_tool, ToolResult, ToolError,
-    execute_query, execute_single, get_db,
+    execute_query, execute_single, get_db, db_session,
     format_currency, format_percentage, format_date, days_between,
+    get_tenant_context,
     LoanType,
 )
 
@@ -925,3 +929,376 @@ def _get_market_event_guidance(high_impact: List[Dict]) -> str:
         return "Jobs report ahead - lock before if risk-averse"
 
     return f"High-impact events coming: {', '.join(event_names[:2])} - monitor closely"
+
+
+def _require_tenant() -> Optional[ToolResult]:
+    """Return error ToolResult if tenant context is missing, else None."""
+    if not get_tenant_context():
+        return ToolResult.error("Organization context required")
+    return None
+
+
+# =============================================================================
+# Rate Lock Management Tools (3 tools)
+# =============================================================================
+
+@mortgage_tool(
+    name="lock_rate",
+    description="Lock a rate for a loan, recording the lock in the rate_locks ledger",
+    agent_roles=["rate_advisor", "pipeline_analyst", "closer"],
+    risk_level="HIGH",
+    requires_confirmation=True,
+    parameters={
+        "loan_id": "Loan ID to lock rate for",
+        "rate": "Interest rate to lock (e.g. 6.875)",
+        "lock_period_days": "Lock period in days: 15, 30, 45, or 60",
+    },
+)
+def lock_rate(
+    loan_id: int,
+    rate: float,
+    lock_period_days: int,
+) -> ToolResult:
+    """Lock a rate for a loan. Checks for existing active locks first."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
+    if lock_period_days not in (15, 30, 45, 60):
+        return ToolResult.error(f"Invalid lock period {lock_period_days}. Must be 15, 30, 45, or 60 days.")
+
+    # Verify loan exists
+    loan = execute_single("""
+        SELECT id, loan_number, borrower_first_name, borrower_last_name,
+               loan_amount, loan_type, rate_lock_status
+        FROM loans
+        WHERE id = :loan_id AND organization_id = :org_id
+    """, {"loan_id": loan_id, "org_id": org_id})
+
+    if not loan:
+        return ToolResult.no_data(f"Loan {loan_id} not found in your organization")
+
+    # Check for existing active rate lock
+    existing_lock = execute_single("""
+        SELECT id, rate_locked, lock_expiration_date, status
+        FROM rate_locks
+        WHERE loan_id = :loan_id AND organization_id = :org_id
+            AND status IN ('Locked', 'Lock Extended')
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, {"loan_id": loan_id, "org_id": org_id})
+
+    if existing_lock:
+        return ToolResult.error(
+            f"Loan {loan_id} already has an active rate lock at {existing_lock.get('rate_locked')}% "
+            f"(expires {format_date(existing_lock.get('lock_expiration_date'))}). "
+            f"Cancel or let it expire before locking a new rate."
+        )
+
+    lock_date = datetime.now()
+    expiration_date = lock_date + timedelta(days=lock_period_days)
+
+    # Create rate lock record
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            session.execute(text("""
+                INSERT INTO rate_locks
+                    (organization_id, loan_id, status, lock_type, lock_period_days,
+                     rate_locked, lock_date, lock_expiration_date, original_expiration_date,
+                     created_at, updated_at)
+                VALUES
+                    (:org_id, :loan_id, 'Locked', 'standard', :lock_period_days,
+                     :rate, :lock_date, :expiration_date, :expiration_date,
+                     NOW(), NOW())
+            """), {
+                "org_id": org_id,
+                "loan_id": loan_id,
+                "lock_period_days": lock_period_days,
+                "rate": rate,
+                "lock_date": lock_date,
+                "expiration_date": expiration_date,
+            })
+
+            # Update loan's rate_lock_status
+            session.execute(text("""
+                UPDATE loans SET rate_lock_status = 'Locked'
+                WHERE id = :loan_id AND organization_id = :org_id
+            """), {"loan_id": loan_id, "org_id": org_id})
+    except Exception as e:
+        logger.error(f"Failed to create rate lock: {e}")
+        return ToolResult.error(f"Failed to lock rate: {str(e)}")
+
+    borrower = f"{loan.get('borrower_first_name', '')} {loan.get('borrower_last_name', '')}".strip()
+
+    data = {
+        "loan_id": loan_id,
+        "loan_number": loan.get("loan_number"),
+        "borrower": borrower,
+        "rate_locked": rate,
+        "lock_period_days": lock_period_days,
+        "lock_date": lock_date.isoformat(),
+        "expiration_date": expiration_date.isoformat(),
+        "loan_amount": format_currency(loan.get("loan_amount")),
+        "loan_type": loan.get("loan_type"),
+        "status": "Locked",
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=f"Rate locked at {rate}% for {lock_period_days} days (expires {format_date(expiration_date)})",
+        requires_approval=True,
+    )
+
+
+@mortgage_tool(
+    name="extend_rate_lock",
+    description="Extend an existing rate lock by additional days",
+    agent_roles=["rate_advisor", "pipeline_analyst", "closer"],
+    risk_level="HIGH",
+    requires_confirmation=True,
+    parameters={
+        "loan_id": "Loan ID with active rate lock",
+        "extension_days": "Number of days to extend",
+    },
+)
+def extend_rate_lock(
+    loan_id: int,
+    extension_days: int,
+) -> ToolResult:
+    """Extend an existing rate lock."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
+    if extension_days <= 0 or extension_days > 60:
+        return ToolResult.error("Extension must be between 1 and 60 days")
+
+    # Find active lock
+    lock = execute_single("""
+        SELECT id, loan_id, rate_locked, lock_date, lock_expiration_date,
+               original_expiration_date, extension_count, extension_days_total,
+               extension_cost_total, lock_period_days
+        FROM rate_locks
+        WHERE loan_id = :loan_id AND organization_id = :org_id
+            AND status IN ('Locked', 'Lock Extended', 'Lock Expiring')
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, {"loan_id": loan_id, "org_id": org_id})
+
+    if not lock:
+        return ToolResult.error(f"No active rate lock found for loan {loan_id}")
+
+    # Calculate extension cost
+    extension_pricing = {
+        (1, 7): 0.0625,
+        (8, 15): 0.125,
+        (16, 30): 0.25,
+        (31, 60): 0.50,
+    }
+    cost_bps = 0.50  # default
+    for (min_d, max_d), bps in extension_pricing.items():
+        if min_d <= extension_days <= max_d:
+            cost_bps = bps
+            break
+
+    # Get loan amount for cost calculation
+    loan = execute_single("""
+        SELECT loan_amount FROM loans
+        WHERE id = :loan_id AND organization_id = :org_id
+    """, {"loan_id": loan_id, "org_id": org_id})
+
+    loan_amount = float(loan.get("loan_amount", 0)) if loan else 0
+    cost_dollars = loan_amount * (cost_bps / 100)
+
+    current_expiration = lock.get("lock_expiration_date")
+    new_expiration = current_expiration + timedelta(days=extension_days) if current_expiration else None
+
+    prev_ext_count = lock.get("extension_count", 0) or 0
+    prev_ext_days = lock.get("extension_days_total", 0) or 0
+    prev_ext_cost = float(lock.get("extension_cost_total", 0) or 0)
+
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            session.execute(text("""
+                UPDATE rate_locks SET
+                    status = 'Lock Extended',
+                    lock_expiration_date = :new_exp,
+                    extension_count = :ext_count,
+                    extension_days_total = :ext_days,
+                    extension_cost_total = :ext_cost,
+                    last_extension_date = NOW(),
+                    updated_at = NOW()
+                WHERE id = :lock_id AND organization_id = :org_id
+            """), {
+                "new_exp": new_expiration,
+                "ext_count": prev_ext_count + 1,
+                "ext_days": prev_ext_days + extension_days,
+                "ext_cost": prev_ext_cost + cost_dollars,
+                "lock_id": lock["id"],
+                "org_id": org_id,
+            })
+
+            session.execute(text("""
+                UPDATE loans SET rate_lock_status = 'Lock Extended'
+                WHERE id = :loan_id AND organization_id = :org_id
+            """), {"loan_id": loan_id, "org_id": org_id})
+    except Exception as e:
+        logger.error(f"Failed to extend rate lock: {e}")
+        return ToolResult.error(f"Failed to extend rate lock: {str(e)}")
+
+    data = {
+        "loan_id": loan_id,
+        "lock_id": lock["id"],
+        "rate_locked": float(lock.get("rate_locked", 0)),
+        "extension_days": extension_days,
+        "previous_expiration": format_date(current_expiration),
+        "new_expiration": format_date(new_expiration),
+        "extension_cost": {
+            "cost_bps": cost_bps,
+            "cost_dollars": round(cost_dollars, 2),
+            "cost_formatted": format_currency(cost_dollars),
+        },
+        "cumulative": {
+            "total_extensions": prev_ext_count + 1,
+            "total_extension_days": prev_ext_days + extension_days,
+            "total_extension_cost": format_currency(prev_ext_cost + cost_dollars),
+        },
+        "status": "Lock Extended",
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=f"Rate lock extended {extension_days} days to {format_date(new_expiration)} (cost: {format_currency(cost_dollars)})",
+        requires_approval=True,
+    )
+
+
+@mortgage_tool(
+    name="get_rate_lock_status",
+    description="Check rate lock status for a loan including expiration and extension history",
+    agent_roles=["rate_advisor", "pipeline_analyst", "closer", "processor"],
+    risk_level="LOW",
+    parameters={
+        "loan_id": "Loan ID to check",
+    },
+)
+def get_rate_lock_status(
+    loan_id: int,
+) -> ToolResult:
+    """Check rate lock status for a loan."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
+    # Get loan info
+    loan = execute_single("""
+        SELECT id, loan_number, borrower_first_name, borrower_last_name,
+               loan_amount, loan_type, rate_lock_status, rate_lock_recommendation
+        FROM loans
+        WHERE id = :loan_id AND organization_id = :org_id
+    """, {"loan_id": loan_id, "org_id": org_id})
+
+    if not loan:
+        return ToolResult.no_data(f"Loan {loan_id} not found in your organization")
+
+    # Get most recent rate lock
+    lock = execute_single("""
+        SELECT id, status, lock_type, lock_period_days,
+               rate_locked, apr_locked, points, lock_cost,
+               lock_date, lock_expiration_date, original_expiration_date,
+               extension_count, extension_days_total, extension_cost_total,
+               last_extension_date,
+               float_down_available, float_down_exercised,
+               ai_recommendation, ai_lock_score, ai_reasoning,
+               market_rate_at_lock, market_trend_at_lock,
+               resolved_at, resolution,
+               created_at
+        FROM rate_locks
+        WHERE loan_id = :loan_id AND organization_id = :org_id
+        ORDER BY created_at DESC
+        LIMIT 1
+    """, {"loan_id": loan_id, "org_id": org_id})
+
+    borrower = f"{loan.get('borrower_first_name', '')} {loan.get('borrower_last_name', '')}".strip()
+
+    if not lock:
+        data = {
+            "loan_id": loan_id,
+            "loan_number": loan.get("loan_number"),
+            "borrower": borrower,
+            "loan_amount": format_currency(loan.get("loan_amount")),
+            "loan_type": loan.get("loan_type"),
+            "rate_lock_status": str(loan.get("rate_lock_status", "No Lock")),
+            "has_active_lock": False,
+            "lock": None,
+        }
+        return ToolResult.success(
+            data=data,
+            message=f"Loan {loan_id}: No rate lock on file",
+        )
+
+    # Calculate days remaining
+    expiration = lock.get("lock_expiration_date")
+    days_remaining = None
+    is_expiring = False
+    if expiration:
+        days_remaining = days_between(datetime.now(), expiration)
+        is_expiring = 0 < days_remaining <= 7
+
+    lock_data = {
+        "lock_id": lock.get("id"),
+        "status": str(lock.get("status")),
+        "lock_type": lock.get("lock_type"),
+        "rate_locked": float(lock.get("rate_locked")) if lock.get("rate_locked") else None,
+        "apr_locked": float(lock.get("apr_locked")) if lock.get("apr_locked") else None,
+        "points": float(lock.get("points")) if lock.get("points") else None,
+        "lock_cost": format_currency(lock.get("lock_cost")) if lock.get("lock_cost") else None,
+        "lock_date": format_date(lock.get("lock_date")),
+        "expiration_date": format_date(expiration),
+        "original_expiration": format_date(lock.get("original_expiration_date")),
+        "days_remaining": days_remaining,
+        "is_expiring_soon": is_expiring,
+        "lock_period_days": lock.get("lock_period_days"),
+        "extensions": {
+            "count": lock.get("extension_count", 0) or 0,
+            "total_days": lock.get("extension_days_total", 0) or 0,
+            "total_cost": format_currency(lock.get("extension_cost_total")) if lock.get("extension_cost_total") else "$0.00",
+            "last_extension": format_date(lock.get("last_extension_date")),
+        },
+        "float_down": {
+            "available": lock.get("float_down_available", False),
+            "exercised": lock.get("float_down_exercised", False),
+        },
+        "ai_recommendation": str(lock.get("ai_recommendation")) if lock.get("ai_recommendation") else None,
+        "market_rate_at_lock": float(lock.get("market_rate_at_lock")) if lock.get("market_rate_at_lock") else None,
+        "resolution": lock.get("resolution"),
+    }
+
+    data = {
+        "loan_id": loan_id,
+        "loan_number": loan.get("loan_number"),
+        "borrower": borrower,
+        "loan_amount": format_currency(loan.get("loan_amount")),
+        "loan_type": loan.get("loan_type"),
+        "rate_lock_status": str(loan.get("rate_lock_status", "No Lock")),
+        "has_active_lock": str(lock.get("status")) in ("Locked", "Lock Extended", "Lock Expiring"),
+        "lock": lock_data,
+    }
+
+    status_str = str(lock.get("status"))
+    rate_str = f" at {lock_data['rate_locked']}%" if lock_data.get("rate_locked") else ""
+    expiry_str = f", {days_remaining} days remaining" if days_remaining and days_remaining > 0 else ""
+    warning = " -- EXPIRING SOON!" if is_expiring else ""
+
+    return ToolResult.success(
+        data=data,
+        message=f"Loan {loan_id}: {status_str}{rate_str}{expiry_str}{warning}",
+    )

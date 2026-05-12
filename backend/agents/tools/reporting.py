@@ -745,6 +745,162 @@ def create_custom_report(
 # Helper Functions
 # =============================================================================
 
+@mortgage_tool(
+    name="generate_structured_report",
+    description="Generate and return a structured summary report for pipeline, production, team performance, or lead conversion metrics",
+    agent_roles=["reporting_engine", "ops_manager", "manager", "executive"],
+    risk_level="LOW",
+    requires_confirmation=False,
+    parameters={
+        "report_type": "Report type: pipeline, production, team_performance, lead_conversion",
+        "time_period": "Time period: 7d, 14d, 30d, 60d, 90d (default 30d)",
+    },
+)
+def generate_structured_report(
+    report_type: str,
+    time_period: str = "30d",
+) -> ToolResult:
+    """Generate and return a structured report dict."""
+    valid_types = ["pipeline", "production", "team_performance", "lead_conversion"]
+    if report_type not in valid_types:
+        return ToolResult.error(
+            f"Invalid report_type '{report_type}'. Must be one of: {', '.join(valid_types)}"
+        )
+
+    # Parse time period
+    days = int(time_period.replace("d", "")) if time_period.endswith("d") else 30
+
+    import uuid
+    report_id = f"RPT-{report_type.upper()[:4]}-{str(uuid.uuid4())[:8].upper()}"
+
+    if report_type == "pipeline":
+        rows = execute_query("""
+            SELECT
+                stage,
+                COUNT(*) as count,
+                COALESCE(SUM(loan_amount), 0) as volume,
+                COALESCE(AVG(loan_amount), 0) as avg_amount
+            FROM loans
+            WHERE created_at >= CURRENT_DATE - INTERVAL '{days} days'
+                AND stage NOT IN ('Funded')
+            GROUP BY stage
+            ORDER BY count DESC
+        """.format(days=days))
+
+        stages = []
+        total_count = 0
+        total_volume = 0.0
+        for r in rows:
+            count = r.get("count", 0)
+            volume = float(r.get("volume", 0) or 0)
+            total_count += count
+            total_volume += volume
+            stages.append({
+                "stage": r.get("stage"),
+                "count": count,
+                "volume": format_currency(volume),
+                "avg_loan_size": format_currency(r.get("avg_amount", 0) or 0),
+            })
+
+        report_data = {
+            "total_active_loans": total_count,
+            "total_volume": format_currency(total_volume),
+            "by_stage": stages,
+        }
+
+    elif report_type == "production":
+        summary = execute_single("""
+            SELECT
+                COUNT(*) as funded_count,
+                COALESCE(SUM(loan_amount), 0) as funded_volume,
+                COALESCE(AVG(loan_amount), 0) as avg_loan_size
+            FROM loans
+            WHERE funded_at >= CURRENT_DATE - INTERVAL '{days} days'
+        """.format(days=days))
+
+        report_data = {
+            "funded_loans": summary.get("funded_count", 0) if summary else 0,
+            "funded_volume": format_currency(summary.get("funded_volume", 0) or 0) if summary else "$0.00",
+            "avg_loan_size": format_currency(summary.get("avg_loan_size", 0) or 0) if summary else "$0.00",
+        }
+
+    elif report_type == "team_performance":
+        rows = execute_query("""
+            SELECT
+                u.id as lo_id,
+                COALESCE(es.full_name, u.email) as lo_name,
+                COUNT(CASE WHEN l.funded_at IS NOT NULL THEN 1 END) as funded,
+                COALESCE(SUM(CASE WHEN l.funded_at IS NOT NULL THEN l.loan_amount ELSE 0 END), 0) as funded_volume,
+                COUNT(*) as pipeline_count
+            FROM loans l
+            JOIN users u ON u.id = l.loan_officer_id
+            LEFT JOIN email_signatures es ON es.user_id = u.id
+            WHERE l.created_at >= CURRENT_DATE - INTERVAL '{days} days'
+            GROUP BY u.id, COALESCE(es.full_name, u.email)
+            ORDER BY funded_volume DESC
+        """.format(days=days))
+
+        team = []
+        for r in rows:
+            team.append({
+                "lo_id": r.get("lo_id"),
+                "lo_name": r.get("lo_name"),
+                "funded_loans": r.get("funded", 0),
+                "funded_volume": format_currency(r.get("funded_volume", 0) or 0),
+                "pipeline_count": r.get("pipeline_count", 0),
+            })
+
+        report_data = {
+            "team_members": len(team),
+            "by_lo": team,
+        }
+
+    elif report_type == "lead_conversion":
+        funnel = execute_single("""
+            SELECT
+                COUNT(*) as total_leads,
+                COUNT(CASE WHEN stage NOT IN ('New') THEN 1 END) as contacted,
+                COUNT(CASE WHEN stage IN ('Qualified', 'Application') THEN 1 END) as qualified,
+                COUNT(CASE WHEN stage = 'Application' THEN 1 END) as applied,
+                COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded
+            FROM leads
+            WHERE created_at >= CURRENT_DATE - INTERVAL '{days} days'
+        """.format(days=days))
+
+        total = funnel.get("total_leads", 0) or 0 if funnel else 0
+        funded = funnel.get("funded", 0) or 0 if funnel else 0
+        conversion = round((funded / total) * 100, 1) if total > 0 else 0.0
+
+        report_data = {
+            "total_leads": total,
+            "contacted": funnel.get("contacted", 0) or 0 if funnel else 0,
+            "qualified": funnel.get("qualified", 0) or 0 if funnel else 0,
+            "applied": funnel.get("applied", 0) or 0 if funnel else 0,
+            "funded": funded,
+            "overall_conversion_rate": f"{conversion}%",
+        }
+
+    else:
+        report_data = {}
+
+    report = {
+        "report_id": report_id,
+        "report_type": report_type,
+        "time_period": time_period,
+        "generated_at": datetime.now().isoformat(),
+        "data": report_data,
+    }
+
+    return ToolResult.success(
+        data=report,
+        message=f"Generated {report_type} report for last {time_period}",
+    )
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
 def _calculate_next_run(frequency: str) -> str:
     """Calculate next run time based on frequency."""
     now = datetime.now()
