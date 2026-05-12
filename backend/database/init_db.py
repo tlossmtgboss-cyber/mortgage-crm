@@ -1194,6 +1194,7 @@ def init_db():
                 conn.execute(text("""
                     ALTER TABLE organizations ADD COLUMN IF NOT EXISTS sso_enforced BOOLEAN DEFAULT FALSE;
                     ALTER TABLE organizations ADD COLUMN IF NOT EXISTS mfa_required BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE organizations ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'America/Chicago';
                 """))
                 conn.execute(text("""
                     ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS scopes JSONB DEFAULT '[]';
