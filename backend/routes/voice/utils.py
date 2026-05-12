@@ -75,27 +75,14 @@ voice_client = None
 # WEBHOOK SIGNATURE VALIDATION
 # ============================================================================
 
-async def _validate_webhook_signature(request: Request, form_data: dict) -> bool:
-    """Validate webhook signature header. Returns True if valid or not configured."""
-    auth_token = os.getenv("TELNYX_API_KEY")
-    if not auth_token:
-        logger.warning("TELNYX_API_KEY not set — skipping webhook signature validation")
-        return True
-    try:
-        # Legacy RequestValidator removed — Telnyx uses webhook signing secrets instead.
-        # For now, log and pass through; Telnyx signature validation should be added
-        # at the Telnyx webhook ingress layer.
-        signature = request.headers.get("X-Telnyx-Signature", "")
-        url = str(request.url)
-        if signature:
-            logger.info(f"Received request with webhook signature header at {url} — pass-through (Telnyx)")
-        return True
-    except Exception as e:
-        logger.error(f"Webhook signature validation error: {e}")
-        return False
+# Legacy _validate_webhook_signature stub removed — always returned True.
+# All webhook endpoints should use Depends(require_telnyx_webhook) from
+# middleware.webhook_verification instead. Re-export here for backward compat.
+from middleware.webhook_verification import require_telnyx_webhook
 
-# Backward-compatible alias
-_validate_twilio_signature = _validate_webhook_signature
+# Backward-compatible alias (deprecated — use Depends(require_telnyx_webhook))
+_validate_webhook_signature = None
+_validate_twilio_signature = None
 
 
 # ============================================================================

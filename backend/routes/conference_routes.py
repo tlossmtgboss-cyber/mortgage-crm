@@ -17,6 +17,7 @@ import asyncio
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -974,12 +975,10 @@ async def dial_in_conference_twiml(
 @router.post("/webhook/participant-status")
 async def participant_status_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """Webhook for participant call status updates"""
-    # Webhook security: Legacy webhook_security module removed.
-    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
-    logger.info("Conference webhook received (legacy signature validation removed)")
 
     try:
         query_params = request.query_params
@@ -1022,12 +1021,10 @@ async def participant_status_webhook(
 @router.post("/webhook/conference-status")
 async def conference_status_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """Webhook for conference status updates"""
-    # Webhook security: Legacy webhook_security module removed.
-    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
-    logger.info("Conference webhook received (legacy signature validation removed)")
 
     try:
         query_params = request.query_params

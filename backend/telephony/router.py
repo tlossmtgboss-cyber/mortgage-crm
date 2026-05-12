@@ -6,6 +6,8 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import logging
 
+from middleware.webhook_verification import require_telnyx_webhook
+
 from .provider import get_telephony_provider
 from .dialer_engine import DialerEngine, click_to_dial
 from .compliance import ComplianceChecker
@@ -1166,7 +1168,8 @@ async def twiml_outbound(
 @router.post("/webhook/click-to-dial-status")
 async def webhook_click_to_dial_status(
     request: Request,
-    agent_id: Optional[int] = None
+    agent_id: Optional[int] = None,
+    raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """
     Status callback for click-to-dial calls.
@@ -1237,7 +1240,8 @@ async def webhook_call_status(
 async def webhook_dial_status(
     request: Request,
     session_id: Optional[int] = None,
-    task_id: Optional[int] = None
+    task_id: Optional[int] = None,
+    raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """
     Dial action callback - called when the <Dial> verb completes.
@@ -1269,7 +1273,8 @@ async def webhook_recording_complete(
     request: Request,
     session_id: Optional[int] = None,
     task_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """
     Recording status callback - called when call recording is complete.

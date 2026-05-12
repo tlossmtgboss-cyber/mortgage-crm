@@ -12,6 +12,7 @@ Trigger mechanisms:
   - Webhook: POST /api/v1/speed-to-lead/webhook (for external lead sources)
 """
 
+import hmac
 import os
 import asyncio
 import logging
@@ -351,10 +352,10 @@ async def speed_to_lead_webhook(
     External webhook for new leads from third-party sources.
     Creates the lead and triggers the speed-to-lead flow.
     """
-    # Validate API key
+    # Validate API key (constant-time comparison to prevent timing oracle)
     api_key = request.headers.get("X-API-Key", "")
     expected_key = os.getenv("SPEED_TO_LEAD_WEBHOOK_KEY", "")
-    if not expected_key or api_key != expected_key:
+    if not expected_key or not hmac.compare_digest(api_key, expected_key):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     payload = await request.json()

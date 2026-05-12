@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 
 from database import get_db
+from middleware.webhook_verification import require_telnyx_webhook as _require_telnyx_webhook
 from ai_receptionist_dashboard_models import AIReceptionistActivity
 from services.call_screening_service import (
     CallScreeningService,
@@ -30,7 +31,7 @@ from services.call_screening_service import (
 
 from .utils import (
     mask_phone, voice_client, ai_config,
-    _validate_webhook_signature, get_models,
+    get_models, require_telnyx_webhook,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,11 @@ def _lookup_org_by_phone(db: Session, called_number: str) -> Optional[int]:
 # ============================================================================
 
 @router.post("/incoming")
-async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
+async def handle_incoming_call(
+    request: Request,
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(_require_telnyx_webhook)
+):
     """
     Telnyx webhook for incoming calls
     Returns TeXML to handle the call with AI
@@ -118,12 +123,6 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
     """
     try:
         form_data = await request.form()
-        form_dict = {k: v for k, v in form_data.items()}
-
-        # Validate webhook signature
-        if not await _validate_webhook_signature(request, form_dict):
-            logger.warning("Invalid webhook signature on incoming call webhook")
-            return Response(content="<Response><Hangup/></Response>", media_type="application/xml")
 
         caller_number = form_data.get("From", "Unknown")
         called_number = form_data.get("To", "")

@@ -320,21 +320,23 @@ class WebhookVerifier:
 
         if not public_key:
             env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENVIRONMENT", "")).lower()
-            if env in ("production", "staging"):
-                logger.error(
-                    "TELNYX_PUBLIC_KEY not configured in %s — rejecting webhook "
-                    "(set the key to enable Ed25519 verification)", env,
+            if env in ("development", "local", "test"):
+                # Development/local/test: warn but allow through for testing
+                logger.warning(
+                    "TELNYX_PUBLIC_KEY not configured — allowing webhook without "
+                    "signature verification (development mode)"
                 )
-                raise HTTPException(
-                    status_code=503,
-                    detail="Telnyx webhook verification not configured",
-                )
-            # Development/local: warn but allow through for testing
-            logger.warning(
-                "TELNYX_PUBLIC_KEY not configured — allowing webhook without "
-                "signature verification (development mode)"
+                return body
+            # Everything else (production, staging, unknown): reject (fail-closed)
+            logger.error(
+                "TELNYX_PUBLIC_KEY not configured in %s — rejecting webhook "
+                "(set the key to enable Ed25519 verification)",
+                env or "unknown",
             )
-            return body
+            raise HTTPException(
+                status_code=503,
+                detail="Telnyx webhook verification not configured",
+            )
 
         signature = request.headers.get("telnyx-signature-ed25519", "")
         timestamp = request.headers.get("telnyx-timestamp", "")
@@ -429,21 +431,23 @@ class WebhookVerifier:
 
         if not secret:
             env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENVIRONMENT", "")).lower()
-            if env in ("production", "staging"):
-                logger.error(
-                    "VAPI_WEBHOOK_SECRET not configured in %s — rejecting Vapi "
-                    "webhook (set secret to enable verification)", env,
+            if env in ("development", "local", "test"):
+                # Development/local/test: warn but allow through for testing
+                logger.warning(
+                    "VAPI_WEBHOOK_SECRET not configured — allowing Vapi "
+                    "webhook without verification (development mode)"
                 )
-                raise HTTPException(
-                    status_code=503,
-                    detail="Vapi webhook verification not configured",
-                )
-            # Development/local: warn but allow through for testing
-            logger.warning(
-                "VAPI_WEBHOOK_SECRET not configured — allowing Vapi "
-                "webhook without verification (development mode)"
+                return body
+            # Everything else (production, staging, unknown): reject (fail-closed)
+            logger.error(
+                "VAPI_WEBHOOK_SECRET not configured in %s — rejecting Vapi "
+                "webhook (set secret to enable verification)",
+                env or "unknown",
             )
-            return body
+            raise HTTPException(
+                status_code=503,
+                detail="Vapi webhook verification not configured",
+            )
 
         # --- Mode 1: X-Vapi-Secret header (direct secret comparison) --------
         vapi_secret_header = request.headers.get("X-Vapi-Secret", "")

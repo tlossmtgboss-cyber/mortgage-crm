@@ -85,6 +85,30 @@ def startup_checks(engine, session_factory) -> dict:
         "secret_key_set": bool(os.getenv("SECRET_KEY")),
     }
 
+    # 4. Verify webhook verification env vars in production/staging
+    effective_env = (railway_env or env or "").lower()
+    is_production_like = effective_env not in ("development", "local", "test")
+    if is_production_like:
+        if not os.getenv("TELNYX_PUBLIC_KEY"):
+            results["checks_failed"] += 1
+            logger.error(
+                "Startup check: TELNYX_PUBLIC_KEY not set — Telnyx webhooks "
+                "will be rejected until this is configured"
+            )
+        else:
+            results["checks_passed"] += 1
+            logger.info("Startup check: TELNYX_PUBLIC_KEY configured OK")
+
+        if not os.getenv("VAPI_WEBHOOK_SECRET"):
+            results["checks_failed"] += 1
+            logger.error(
+                "Startup check: VAPI_WEBHOOK_SECRET not set — Vapi webhooks "
+                "will be rejected until this is configured"
+            )
+        else:
+            results["checks_passed"] += 1
+            logger.info("Startup check: VAPI_WEBHOOK_SECRET configured OK")
+
     elapsed = time.monotonic() - start
     results["startup_check_time_ms"] = round(elapsed * 1000, 1)
     results["startup_timestamp"] = time.time()

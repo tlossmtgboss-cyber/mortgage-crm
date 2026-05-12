@@ -16,6 +16,7 @@ from database import get_db
 from integrations.microsoft_graph import graph_client
 from integrations.sms_service import get_sms_client, SMSTemplates
 from integrations.agentic_ai import agentic_ai, TriggerType
+from middleware.webhook_verification import require_telnyx_webhook
 
 # Module-level sms_client for integration dicts passed to agentic AI
 sms_client = get_sms_client()
@@ -361,18 +362,13 @@ async def process_sms_with_ai(
 async def sms_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """Webhook for incoming SMS messages from Telnyx with AI processing"""
 
     try:
         form_data = await request.form()
-        form_dict = {k: v for k, v in form_data.items()}
-
-        # Validate webhook signature
-        if not await _validate_webhook_signature(request, form_dict):
-            logger.warning("Invalid webhook signature on SMS webhook")
-            raise HTTPException(status_code=403, detail="Invalid signature")
 
         from_number = form_data.get("From")
         to_number = form_data.get("To")
