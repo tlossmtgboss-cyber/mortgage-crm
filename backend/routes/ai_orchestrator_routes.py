@@ -335,16 +335,19 @@ async def orchestrator_chat(
         # Create the full agent service with all 215 tools
         service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
 
-        # Process through LangGraph orchestrator
-        # Active entity IDs allow the AI to fetch real data for the lead/loan the user is viewing
-        result = await service.process_message(
-            message,
-            conversation_history,
-            document_context=document_context,
-            active_lead_id=active_lead_id,
-            active_loan_id=active_loan_id,
-            voice_mode=voice_mode,
-        )
+        # Enforce AI concurrency limits (Enterprise Check 6.14)
+        from middleware.ai_concurrency import ai_concurrency_gate
+        async with ai_concurrency_gate(org_id):
+            # Process through LangGraph orchestrator
+            # Active entity IDs allow the AI to fetch real data for the lead/loan the user is viewing
+            result = await service.process_message(
+                message,
+                conversation_history,
+                document_context=document_context,
+                active_lead_id=active_lead_id,
+                active_loan_id=active_loan_id,
+                voice_mode=voice_mode,
+            )
 
         # Save to conversation memory (non-fatal on failure)
         for role, content in [("user", message), ("assistant", result.get("response", ""))]:
@@ -423,6 +426,7 @@ async def orchestrator_chat_stream(
         try:
             from agents.service import create_ai_agent_service
             from conversation_memory_service import ConversationMemory as ConvMemory
+            from middleware.ai_concurrency import ai_concurrency_gate
 
             # Load conversation history with rolling summary for older turns
             try:
@@ -447,31 +451,33 @@ async def orchestrator_chat_stream(
                     entity_hint += f"loan_id={active_loan_id}"
                 data_context = (data_context or "") + entity_hint
 
-            # Stream response through the agent
-            full_response = ""
-            follow_up_suggestions = []
-            async for chunk in service.process_message_stream(message, conversation_history, data_context=data_context, voice_mode=voice_mode):
-                chunk_type = chunk.get("type")
+            # Enforce AI concurrency limits (Enterprise Check 6.14)
+            async with ai_concurrency_gate(org_id):
+                # Stream response through the agent
+                full_response = ""
+                follow_up_suggestions = []
+                async for chunk in service.process_message_stream(message, conversation_history, data_context=data_context, voice_mode=voice_mode):
+                    chunk_type = chunk.get("type")
 
-                if chunk_type == "content":
-                    content = chunk.get("content", "")
-                    full_response += content
-                    yield f"data: {json.dumps({'content': content})}\n\n"
+                    if chunk_type == "content":
+                        content = chunk.get("content", "")
+                        full_response += content
+                        yield f"data: {json.dumps({'content': content})}\n\n"
 
-                elif chunk_type == "tool_use":
-                    yield f"data: {json.dumps({'tool_use': chunk.get('tool'), 'input': chunk.get('input', {})})}\n\n"
+                    elif chunk_type == "tool_use":
+                        yield f"data: {json.dumps({'tool_use': chunk.get('tool'), 'input': chunk.get('input', {})})}\n\n"
 
-                elif chunk_type == "tool_result":
-                    yield f"data: {json.dumps({'tool_result': chunk.get('tool'), 'result': chunk.get('result', {})})}\n\n"
+                    elif chunk_type == "tool_result":
+                        yield f"data: {json.dumps({'tool_result': chunk.get('tool'), 'result': chunk.get('result', {})})}\n\n"
 
-                elif chunk_type == "done":
-                    full_response = chunk.get("full_response", full_response)
-                    follow_up_suggestions = chunk.get("follow_up_suggestions", [])
+                    elif chunk_type == "done":
+                        full_response = chunk.get("full_response", full_response)
+                        follow_up_suggestions = chunk.get("follow_up_suggestions", [])
 
-                elif chunk_type == "error":
-                    yield f"data: {json.dumps({'error': chunk.get('error', 'Unknown error')})}\n\n"
+                    elif chunk_type == "error":
+                        yield f"data: {json.dumps({'error': chunk.get('error', 'Unknown error')})}\n\n"
 
-            # Send completion
+            # Send completion (outside concurrency gate -- LLM work is done)
             yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'engine': 'langgraph', 'follow_up_suggestions': follow_up_suggestions})}\n\n"
 
             # Save conversation (non-fatal on failure)
@@ -481,6 +487,9 @@ async def orchestrator_chat_stream(
                 except Exception as e:
                     logger.warning(f"Failed to save {role} message for session {session_id}: {e}")
 
+        except HTTPException as he:
+            # Surface 429/503 from concurrency gate as SSE error events
+            yield f"data: {json.dumps({'error': he.detail})}\n\n"
         except Exception as e:
             logger.error(f"Stream error: {e}", exc_info=True)
             yield f"data: {json.dumps({'error': 'An error occurred processing your request.'})}\n\n"
@@ -494,6 +503,20 @@ async def orchestrator_chat_stream(
             "X-Accel-Buffering": "no"
         }
     )
+
+
+@router.get("/concurrency-stats")
+async def get_concurrency_stats(
+    current_user=Depends(current_user_flexible_dep),
+):
+    """Return current AI concurrency statistics (admin only). Enterprise Check 6.14."""
+    perm_role = getattr(current_user, 'permission_role', '') or ''
+    role = getattr(current_user, 'role', '') or ''
+    if perm_role.lower() not in ('admin', 'site_admin') and role.lower() not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from middleware.ai_concurrency import get_ai_concurrency_stats
+    return get_ai_concurrency_stats()
 
 
 def set_dependencies(get_db_func, get_current_user_func):

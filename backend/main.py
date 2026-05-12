@@ -1097,9 +1097,11 @@ async def get_current_user(
                 # CRIT-V2-01: Reject MFA provisional tokens — they must NOT
                 # grant full API access. Only the MFA verification endpoint
                 # should accept tokens with scope=mfa_verify.
+                # Enterprise Check 4.6: Also reject mfa_setup tokens which
+                # only allow access to MFA setup endpoints.
                 token_scope = payload.get("scope")
-                if token_scope == "mfa_verify":
-                    logger.warning(f"Rejected MFA provisional token used as access token for {email}")
+                if token_scope in ("mfa_verify", "mfa_setup"):
+                    logger.warning(f"Rejected MFA scoped token ({token_scope}) used as access token for {email}")
                     raise credentials_exception
                 jti = payload.get("jti")
                 if jti:
@@ -1396,9 +1398,11 @@ async def get_current_user_flexible(
             # CRIT-V2-01: Reject MFA provisional tokens — they must NOT
             # grant full API access. Only the MFA verification endpoint
             # should accept tokens with scope=mfa_verify.
+            # Enterprise Check 4.6: Also reject mfa_setup tokens which
+            # only allow access to MFA setup endpoints.
             token_scope = payload.get("scope")
-            if token_scope == "mfa_verify":
-                logger.warning(f"Rejected MFA provisional token used as access token for {email}")
+            if token_scope in ("mfa_verify", "mfa_setup"):
+                logger.warning(f"Rejected MFA scoped token ({token_scope}) used as access token for {email}")
                 raise credentials_exception
         except InvalidTokenError:
             raise credentials_exception

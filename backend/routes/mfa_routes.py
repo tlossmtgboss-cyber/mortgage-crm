@@ -82,14 +82,70 @@ def get_current_user_dep():
     return main.get_current_user
 
 
+async def _get_user_from_mfa_setup_or_full_token(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Accept either a full access token OR an mfa_setup scoped token.
+
+    Enterprise Check 4.6: When org-level MFA is enforced and the user hasn't
+    set up MFA yet, the login endpoint issues a restricted ``mfa_setup``
+    scoped token. This dependency allows that token to access the MFA
+    /setup and /verify-setup endpoints while rejecting it everywhere else.
+    """
+    import main
+    import jwt as pyjwt
+    from jwt.exceptions import InvalidTokenError
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = auth_header[7:]
+
+    # Try normal auth first (full access token)
+    try:
+        user = await main.get_current_user(token, request, db)
+        if user:
+            return user
+    except HTTPException:
+        pass  # May be an mfa_setup token -- try below
+
+    # Check if it's an mfa_setup scoped token
+    try:
+        config_secret = main.SECRET_KEY
+        config_algo = main.ALGORITHM
+        payload = pyjwt.decode(
+            token, config_secret, algorithms=[config_algo],
+            options={"verify_aud": False},
+        )
+        if payload.get("scope") != "mfa_setup":
+            raise HTTPException(status_code=401, detail="Invalid token scope")
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user = db.query(main.User).filter(main.User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        if not getattr(user, "is_active", True):
+            raise HTTPException(status_code=401, detail="Account deactivated")
+        return user
+    except HTTPException:
+        raise
+    except (InvalidTokenError, Exception) as e:
+        logger.debug(f"MFA setup token validation failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
 
 @router.post("/setup", response_model=MFASetupResponse)
 async def setup_mfa(
+    request: Request,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user_dep()),
+    current_user=Depends(_get_user_from_mfa_setup_or_full_token),
 ):
     """
     Generate MFA secret and QR code for initial setup.
@@ -122,8 +178,9 @@ async def setup_mfa(
 @router.post("/verify-setup", response_model=MFAVerifySetupResponse)
 async def verify_and_enable_mfa(
     request: MFAVerifySetupRequest,
+    http_request: Request = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user_dep()),
+    current_user=Depends(_get_user_from_mfa_setup_or_full_token),
 ):
     """
     Verify a TOTP token and enable MFA for the user.
@@ -175,11 +232,12 @@ async def verify_and_enable_mfa(
 @router.post("/verify", response_model=MFAVerifySetupResponse, include_in_schema=False)
 async def verify_and_enable_mfa_compat(
     request: MFAVerifySetupRequest,
+    http_request: Request = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user_dep()),
+    current_user=Depends(_get_user_from_mfa_setup_or_full_token),
 ):
     """Backward-compatible alias for /verify-setup."""
-    return await verify_and_enable_mfa(request, db, current_user)
+    return await verify_and_enable_mfa(request, http_request, db, current_user)
 
 
 @router.delete("", status_code=status.HTTP_200_OK)

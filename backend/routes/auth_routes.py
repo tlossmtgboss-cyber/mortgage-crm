@@ -687,9 +687,50 @@ async def _login_impl(http_request: Request, form_data, db: Session):
                 }
             }
 
-        # Full token issuance (no MFA required, or MFA setup needed)
+        # Enterprise Check 4.6: Org-level MFA enforcement — when org requires MFA
+        # but user hasn't set it up yet, issue a restricted MFA-setup-only token.
+        # This token allows ONLY /api/v1/auth/mfa/* endpoints so the user can
+        # complete setup. Full access is blocked until MFA is enabled.
+        if mfa_setup_required:
+            mfa_setup_token_data = {
+                "sub": user_email,
+                "scope": "mfa_setup",
+                "user_id": user_id,
+            }
+            mfa_setup_expires = timedelta(minutes=15)
+            expire = datetime.now(timezone.utc) + mfa_setup_expires
+            mfa_setup_token_data["exp"] = expire
+            if tenant_id:
+                mfa_setup_token_data["tenant_id"] = tenant_id
+            mfa_setup_token = jwt.encode(
+                mfa_setup_token_data, config['SECRET_KEY'], algorithm=config['ALGORITHM']
+            )
+
+            logger.info(
+                f"MFA setup required for user {user_email} "
+                f"(org_enforced={org_mfa_required}, admin_enforced={admin_mfa_required})"
+            )
+
+            return {
+                "access_token": mfa_setup_token,  # Restricted: only MFA setup endpoints
+                "token_type": "bearer",
+                "expires_in": 900,  # 15 minutes to complete setup
+                "mfa_required": True,
+                "mfa_setup_required": True,
+                "mfa_token": True,  # Signal to frontend this is NOT a full token
+                "user": {
+                    "id": user_id,
+                    "email": user_email,
+                    "full_name": user_full_name,
+                    "role": user_role,
+                    "permission_role": user_perm_role,
+                    "onboarding_completed": user_onboarding
+                }
+            }
+
+        # Full token issuance (no MFA required)
         access_token = auth_funcs['create_access_token'](
-            data={"sub": user_email, "mfa_setup_pending": mfa_setup_required},
+            data={"sub": user_email},
             user_id=user_id,
             tenant_id=tenant_id
         )
@@ -703,8 +744,8 @@ async def _login_impl(http_request: Request, form_data, db: Session):
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "expires_in": config['ACCESS_TOKEN_EXPIRE_MINUTES'] * 60,  # seconds
-            "mfa_required": mfa_required,
-            "mfa_setup_required": mfa_setup_required,
+            "mfa_required": False,
+            "mfa_setup_required": False,
             "user": {
                 "id": user_id,
                 "email": user_email,
