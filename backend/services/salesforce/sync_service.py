@@ -2016,7 +2016,7 @@ class SalesforceSyncService:
 
     # CRM stages that are terminal/funded — used when the stage_map transform
     # has already converted the SF status to an UPPERCASE CRM stage.
-    _CRM_FUNDED_STAGES = {'FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY'}
+    _CRM_TERMINAL_STAGES = {'FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY'}
     _CRM_MUM_STAGES = {'FUNDED'}
 
     def _classify_record_bucket(self, data: Dict[str, Any]) -> str:
@@ -2049,7 +2049,7 @@ class SalesforceSyncService:
         # the field mapping used a stage_map transform. Check that first.
         if sf_status in self._CRM_MUM_STAGES:
             return 'loan_funded'
-        if sf_status in self._CRM_FUNDED_STAGES:
+        if sf_status in self._CRM_TERMINAL_STAGES:
             return 'loan'
 
         # Check lead statuses first (exact match on raw SF values)
@@ -2743,25 +2743,25 @@ class SalesforceSyncService:
         if not sf_id:
             return False
 
-        # --- Status gate: skip records that belong in MUM, not leads ---
+        # --- Status gate: funded/closed records belong in MUM, not leads ---
         sf_status = (
             sf_record.get('MtgPlanner_CRM__Status__c')
             or sf_record.get('Status')
             or ''
         )
-        if sf_status in self.FUNDED_STATUSES:
+        is_funded = (
+            sf_status in self.FUNDED_STATUSES
+            or self._map_salesforce_stage(sf_status) == 'FUNDED'
+        )
+        if is_funded:
             logger.info(
-                f"Skipping lead creation for SF {sf_type} {sf_id}: "
-                f"status '{sf_status}' is funded/closed — belongs in MUM, not leads"
+                f"SF {sf_type} {sf_id} has funded status '{sf_status}' — "
+                f"routing to loan+MUM instead of leads"
             )
-            return False
-        mapped = self._map_salesforce_stage(sf_status)
-        if mapped == 'FUNDED':
-            logger.info(
-                f"Skipping lead creation for SF {sf_type} {sf_id}: "
-                f"status '{sf_status}' maps to FUNDED — belongs in MUM, not leads"
+            created = await self._create_funded_record_from_contact(
+                db, sf_record, sf_type, user_id
             )
-            return False
+            return created
 
         # Check if already exists by salesforce_id
         existing = db.execute(text("""
@@ -2790,9 +2790,9 @@ class SalesforceSyncService:
         # Cross-entity dedup: check if a MUM CLIENT already exists with this SF ID.
         existing_mum = db.execute(text("""
             SELECT id FROM mum_clients
-            WHERE salesforce_id = :sf_id
+            WHERE salesforce_id = :sf_id AND user_id = :user_id
             LIMIT 1
-        """), {"sf_id": sf_id}).fetchone()
+        """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
 
         if existing_mum:
             logger.info(
@@ -2971,9 +2971,9 @@ class SalesforceSyncService:
         # If a record is already in MUM, don't create a duplicate loan.
         existing_mum = db.execute(text("""
             SELECT id FROM mum_clients
-            WHERE salesforce_id = :sf_id
+            WHERE salesforce_id = :sf_id AND user_id = :user_id
             LIMIT 1
-        """), {"sf_id": sf_id}).fetchone()
+        """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
 
         if existing_mum:
             logger.info(
@@ -2992,6 +2992,37 @@ class SalesforceSyncService:
 
         # Get user's organization_id for multi-tenant isolation (Fix 8: cached)
         org_id = _get_org_id_for_user(db, user_id)
+
+        # Email-based cross-entity dedup: check loans and MUM by borrower email.
+        # The borrower email may come from the related Contact (fetched later),
+        # but we can check the Opportunity-level email fields first.
+        opp_email = sf_opp.get('Email') or sf_opp.get('ContactEmail')
+        if opp_email:
+            existing_loan_by_email = db.execute(text("""
+                SELECT id FROM loans
+                WHERE LOWER(borrower_email) = LOWER(:email) AND loan_officer_id = :user_id
+                LIMIT 1
+            """), {"email": opp_email, "user_id": user_id}).fetchone()
+
+            if existing_loan_by_email:
+                logger.info(
+                    f"Skipping loan creation for SF Opportunity {sf_id}: "
+                    f"loan {existing_loan_by_email[0]} already exists with matching email"
+                )
+                return False
+
+            existing_mum_by_email = db.execute(text("""
+                SELECT id FROM mum_clients
+                WHERE LOWER(email) = LOWER(:email) AND user_id = :user_id
+                LIMIT 1
+            """), {"email": opp_email, "user_id": user_id}).fetchone()
+
+            if existing_mum_by_email:
+                logger.info(
+                    f"Skipping loan creation for SF Opportunity {sf_id}: "
+                    f"MUM client {existing_mum_by_email[0]} already exists with matching email"
+                )
+                return False
 
         # Build new loan record from Opportunity
         name = sf_opp.get('Name') or 'Salesforce Opportunity'
@@ -3094,6 +3125,99 @@ class SalesforceSyncService:
                 )
             except Exception as e:
                 logger.warning(f"Failed to mark lead as converted for SF {sf_id}: {e}")
+
+        return True
+
+    async def _create_funded_record_from_contact(
+        self,
+        db: Session,
+        sf_record: Dict[str, Any],
+        sf_type: str,
+        user_id: int,
+    ) -> bool:
+        """Create a loan + MUM record from a funded SF Lead/Contact.
+
+        Called when _create_crm_lead_if_new detects a funded status. Instead of
+        silently dropping the record, we create a minimal loan and promote to MUM
+        so the borrower appears on the MUM page.
+
+        Returns True if a new record was created, False if it already existed.
+        """
+        from sqlalchemy import text
+        import uuid
+
+        sf_id = sf_record.get('Id')
+        email = sf_record.get('Email')
+
+        # Dedup: check if already exists as loan, MUM, or lead
+        for tbl, id_col, uid_col in [
+            ('loans', 'salesforce_id', 'loan_officer_id'),
+            ('mum_clients', 'salesforce_id', 'user_id'),
+            ('leads', 'salesforce_id', 'owner_id'),
+        ]:
+            row = db.execute(text(
+                f"SELECT id FROM {tbl} WHERE {id_col} = :sf_id AND {uid_col} = :uid LIMIT 1"
+            ), {"sf_id": sf_id, "uid": user_id}).fetchone()
+            if row:
+                logger.info(
+                    f"Funded {sf_type} {sf_id} already exists in {tbl} ({row[0]}), skipping"
+                )
+                return False
+
+        if email:
+            for tbl, email_col, uid_col in [
+                ('loans', 'borrower_email', 'loan_officer_id'),
+                ('mum_clients', 'email', 'user_id'),
+            ]:
+                row = db.execute(text(
+                    f"SELECT id FROM {tbl} WHERE LOWER({email_col}) = LOWER(:email) "
+                    f"AND {uid_col} = :uid LIMIT 1"
+                ), {"email": email, "uid": user_id}).fetchone()
+                if row:
+                    logger.info(
+                        f"Funded {sf_type} {sf_id} matches existing {tbl} record "
+                        f"({row[0]}) by email, skipping"
+                    )
+                    return False
+
+        org_id = _get_org_id_for_user(db, user_id)
+
+        first_name = sf_record.get('FirstName') or ''
+        last_name = sf_record.get('LastName') or 'Unknown'
+        borrower_name = f"{first_name} {last_name}".strip() or 'Unknown'
+        phone = sf_record.get('Phone') or sf_record.get('MobilePhone')
+        loan_number = f"SF-{str(uuid.uuid4())[:8].upper()}"
+
+        result = db.execute(text("""
+            INSERT INTO loans (
+                loan_number, borrower_name, borrower_email, borrower_phone,
+                stage, funded_date, salesforce_id, loan_officer_id, organization_id,
+                created_at, updated_at
+            ) VALUES (
+                :loan_number, :borrower_name, :email, :phone,
+                'FUNDED', CURRENT_DATE, :sf_id, :user_id, :org_id,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            RETURNING id
+        """), {
+            "loan_number": loan_number,
+            "borrower_name": borrower_name,
+            "email": email,
+            "phone": phone,
+            "sf_id": sf_id,
+            "user_id": user_id,
+            "org_id": org_id,
+        })
+        loan_id = result.fetchone()[0]
+        logger.info(f"Created funded loan {loan_id} from SF {sf_type} {sf_id}")
+
+        try:
+            from services.mum_promotion_service import maybe_promote_loan_to_mum
+            mum_id = maybe_promote_loan_to_mum(db, loan_id, user_id)
+            if mum_id:
+                logger.info(f"Promoted funded loan {loan_id} to MUM client {mum_id}")
+        except Exception as e:
+            logger.warning(f"MUM promotion failed for funded {sf_type} {sf_id}: {e}")
 
         return True
 

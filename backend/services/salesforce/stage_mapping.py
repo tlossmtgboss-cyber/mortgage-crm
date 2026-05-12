@@ -99,7 +99,10 @@ SALESFORCE_STAGE_MAPPING = {
     "Loan Sold": "FUNDED",
     "Settled": "FUNDED",
     "Shipped": "FUNDED",
+    "Loan Shipped": "FUNDED",
     # --- Terminal / Special ---
+    "Closed Lost": "WITHDRAWN",
+    "Closed - Not Converted": "WITHDRAWN",
     "Cancelled": "CANCELLED",
     "Withdrawn": "WITHDRAWN",
     "Denied": "DENIED",
