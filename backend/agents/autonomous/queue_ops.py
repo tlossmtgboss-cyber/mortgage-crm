@@ -163,7 +163,7 @@ def call_queue_optimizer(
     # ---- Fetch all contactable leads needing outreach ----
     leads = db.execute(text(f"""
         SELECT l.id, l.first_name, l.last_name, l.owner_id,
-               l.ai_score, l.loan_amount, l.source, l.referral_source,
+               l.ai_score, l.loan_amount, l.source,
                l.last_contact, l.created_at, l.stage
         FROM leads l
         WHERE l.organization_id = :org_id
@@ -192,9 +192,8 @@ def call_queue_optimizer(
         ai_score = _safe_float(row[4])
         loan_amount = _safe_float(row[5])
         source = _safe_str(row[6]).lower()
-        referral_source = _safe_str(row[7]).lower()
-        last_contact = row[8]
-        created_at = row[9]
+        last_contact = row[7]
+        created_at = row[8]
 
         # Recency factor (0-40)
         recency = 5
@@ -228,7 +227,7 @@ def call_queue_optimizer(
             financial = 0
 
         # Source factor (0-15)
-        is_referral = "referral" in source or "referral" in referral_source
+        is_referral = "referral" in source
         is_portal = source in ("zillow", "realtor.com", "realtor", "lendingtree")
         is_organic = source in ("organic", "website", "direct", "seo")
         if is_referral:
@@ -801,7 +800,7 @@ def email_response_monitor(
     unanswered = db.execute(text("""
         SELECT a.id, a.lead_id, a.content, a.created_at,
                l.first_name, l.last_name, l.owner_id, l.source,
-               l.referral_source, l.stage,
+               l.stage,
                EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - a.created_at)) / 3600.0 as hours_waiting
         FROM activities a
         JOIN leads l ON l.id = a.lead_id AND l.organization_id = :org_id
@@ -866,9 +865,8 @@ def email_response_monitor(
         last_name = _safe_str(email[5])
         owner_id = str(email[6]) if email[6] else None
         source = _safe_str(email[7]).lower()
-        referral_source = _safe_str(email[8]).lower()
-        lead_stage = _safe_str(email[9])
-        hours_waiting = _safe_float(email[10])
+        lead_stage = _safe_str(email[8])
+        hours_waiting = _safe_float(email[9])
         contact_name = f"{first_name} {last_name}".strip() or "Unknown"
 
         # Track response time per LO
@@ -876,7 +874,7 @@ def email_response_monitor(
             lo_response_data.setdefault(owner_id, []).append(hours_waiting)
 
         # Determine source tier
-        is_referral = "referral" in source or "referral" in referral_source
+        is_referral = "referral" in source
         is_realtor = "realtor" in source or "agent" in source or "partner" in source
         if is_referral or is_realtor:
             source_priority = "high"
@@ -1010,7 +1008,7 @@ def new_lead_qualifier(
     unscored = db.execute(text("""
         SELECT l.id, l.first_name, l.last_name, l.email, l.phone,
                l.loan_amount, l.loan_purpose, l.credit_score,
-               l.property_value, l.down_payment, l.source, l.referral_source,
+               l.property_value, l.down_payment, l.source,
                l.owner_id, l.created_at, l.stage
         FROM leads l
         WHERE l.organization_id = :org_id
@@ -1071,10 +1069,9 @@ def new_lead_qualifier(
         property_value = _safe_float(lead[8])
         down_payment = _safe_float(lead[9])
         source = _safe_str(lead[10]).lower()
-        referral_source = _safe_str(lead[11]).lower()
-        owner_id = str(lead[12]) if lead[12] else None
-        created_at = lead[13]
-        current_stage = _safe_str(lead[14])
+        owner_id = str(lead[11]) if lead[11] else None
+        created_at = lead[12]
+        current_stage = _safe_str(lead[13])
         contact_name = f"{first_name} {last_name}".strip() or "Unknown"
 
         breakdown: List[str] = []
@@ -1149,7 +1146,7 @@ def new_lead_qualifier(
 
         # --- Source quality (0-10) ---
         source_pts = 0
-        is_referral = "referral" in source or "referral" in referral_source
+        is_referral = "referral" in source
         if is_referral:
             source_pts = 10
             breakdown.append("Source: referral (+10)")
@@ -1247,7 +1244,7 @@ def new_lead_qualifier(
                     f"  Credit: {int(credit_score) if credit_score else 'N/A'}\n"
                     f"  Loan amount: ${loan_amount:,.0f}\n"
                     f"  Purpose: {loan_purpose or 'N/A'}\n"
-                    f"  Source: {source or referral_source or 'N/A'}\n"
+                    f"  Source: {source or 'N/A'}\n"
                     f"  Down payment: ${down_payment:,.0f}\n"
                     f"  Contact: {email or 'no email'} / {phone or 'no phone'}\n\n"
                     f"Stage set to: {new_stage}{assignment_note}"

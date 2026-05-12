@@ -625,7 +625,7 @@ def borrower_status_updater(
         SELECT lo.id, lo.loan_number, lo.borrower_name, lo.borrower_email,
                lo.borrower_phone, lo.loan_officer_id, lo.stage, lo.amount,
                lo.closing_date,
-               ld.referral_source, ld.phone AS lead_phone, ld.email AS lead_email,
+               ld.source AS lead_source, ld.phone AS lead_phone, ld.email AS lead_email,
                ld.id AS lead_id
         FROM loans lo
         LEFT JOIN leads ld ON ld.email = lo.borrower_email
@@ -798,11 +798,11 @@ def referral_thank_you(
 
     referral_leads = db.execute(text("""
         SELECT l.id, l.first_name, l.last_name, l.source, l.owner_id,
-               l.referral_source, l.loan_amount, l.loan_purpose
+               l.loan_amount, l.loan_purpose
         FROM leads l
         WHERE l.organization_id = :org_id
           AND l.created_at >= CURRENT_DATE
-          AND (l.source ILIKE '%referral%' OR l.referral_source IS NOT NULL)
+          AND l.source ILIKE '%referral%'
           AND NOT EXISTS (
               SELECT 1 FROM tasks t
               WHERE t.lead_id = l.id
@@ -816,9 +816,9 @@ def referral_thank_you(
         last_name = lead[2] or ""
         source = lead[3] or ""
         owner_id = lead[4]
-        referral_source = lead[5] or source or "referral partner"
-        loan_amount = lead[6]
-        loan_purpose = lead[7]
+        referral_source = source or "referral partner"
+        loan_amount = lead[5]
+        loan_purpose = lead[6]
 
         # --- Lifetime value from this referral source ---
         ltv_row = db.execute(text("""
@@ -827,7 +827,7 @@ def referral_thank_you(
             FROM loans lo
             JOIN leads ld ON ld.email = lo.borrower_email AND ld.organization_id = lo.organization_id
             WHERE ld.organization_id = :org_id
-              AND (ld.referral_source ILIKE :ref_src OR ld.source ILIKE :ref_src)
+              AND ld.source ILIKE :ref_src
               AND lo.stage = 'FUNDED'
         """), {"org_id": organization_id, "ref_src": f"%{referral_source}%"}).fetchone()
 

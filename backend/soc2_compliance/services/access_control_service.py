@@ -84,7 +84,7 @@ class AccessControlService:
                         :timestamp, :user_id, :attempted_email, :tenant_id,
                         :event_type, :success, :failure_reason,
                         :auth_method, :mfa_method, :session_id,
-                        :ip_address::inet, :user_agent, :geo_location, :device_fingerprint,
+                        CAST(:ip_address AS inet), :user_agent, :geo_location, :device_fingerprint,
                         :is_anomalous, :anomaly_reason, :risk_score
                     ) RETURNING id
                 """),
@@ -201,7 +201,7 @@ class AccessControlService:
             conditions.append("attempted_email = :email")
             params["email"] = email
         if ip:
-            conditions.append("ip_address = :ip::inet")
+            conditions.append("ip_address = CAST(:ip AS inet)")
             params["ip"] = ip
 
         if not conditions:
@@ -361,7 +361,7 @@ class AccessControlService:
                 text("""
                     SELECT COUNT(*) FROM soc2_access_event
                     WHERE user_id = :user_id
-                      AND ip_address = :ip::inet
+                      AND ip_address = CAST(:ip AS inet)
                       AND success = TRUE
                       AND timestamp > NOW() - INTERVAL '90 days'
                 """),
