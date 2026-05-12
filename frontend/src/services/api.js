@@ -213,6 +213,27 @@ async function _retryWith429Backoff(config) {
 }
 
 // ---------------------------------------------------------------------------
+// 503 retry with exponential backoff
+// 503 = Service Unavailable — transient (e.g., DB connection pool exhausted).
+// Backend messages are intentionally user-friendly, so we preserve them.
+// ---------------------------------------------------------------------------
+const _503_MAX_RETRIES = 2;
+const _503_BASE_DELAY_MS = 2000; // 2s, 4s
+
+async function _retry503(config) {
+  const attempt = (config._503RetryCount || 0);
+  if (attempt >= _503_MAX_RETRIES) return null;
+
+  config._503RetryCount = attempt + 1;
+  const delay = _503_BASE_DELAY_MS * Math.pow(2, attempt);
+  const jitter = Math.random() * delay * 0.25;
+  console.warn(`[API] 503 — retry ${config._503RetryCount}/${_503_MAX_RETRIES} in ${Math.round(delay + jitter)}ms`);
+
+  await new Promise((resolve) => setTimeout(resolve, delay + jitter));
+  return api.request(config);
+}
+
+// ---------------------------------------------------------------------------
 // 401 token refresh — attempt to refresh the access token once before
 // clearing auth state and redirecting to login.
 // Uses a single in-flight promise so concurrent 401s don't stampede.
@@ -417,7 +438,38 @@ api.interceptors.response.use(
     const status = error.response.status;
     let message;
 
+    // --- 503 Service Unavailable — transient, retryable. Backend detail is safe to show. ---
+    if (status === 503) {
+      const retryResult = await _retry503(error.config);
+      if (retryResult) return retryResult;
+
+      // All retries exhausted — preserve the backend's user-friendly message
+      message = error.response.data?.detail || "Service temporarily unavailable. Please try again in a moment.";
+      error.response.data = { ...error.response.data, detail: message };
+
+      return Promise.reject(_buildApiError(503, message, {
+        retryable: true,
+        code: 'ERR_SERVICE_UNAVAILABLE',
+        detail: message,
+        _axiosError: error,
+      }));
+    }
+
+    // --- 502/504 Gateway errors — transient, generic message (upstream may leak internals) ---
+    if (status === 502 || status === 504) {
+      message = "Server is temporarily unavailable. Please try again in a moment.";
+      error.response.data = { ...error.response.data, detail: message };
+
+      return Promise.reject(_buildApiError(status, message, {
+        retryable: true,
+        code: `ERR_HTTP_${status}`,
+        detail: message,
+        _axiosError: error,
+      }));
+    }
+
     if (status >= 500) {
+      // 500 and other 5xx — sanitize (may contain implementation details)
       message = "An unexpected error occurred. Please try again later.";
       error.response.data = {
         ...error.response.data,

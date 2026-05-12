@@ -26,13 +26,16 @@ logger = logging.getLogger(__name__)
 MAX_CONCURRENT_REQUESTS = int(os.getenv("MAX_CONCURRENT_REQUESTS", "100"))
 RETRY_AFTER_SECONDS = int(os.getenv("BACKPRESSURE_RETRY_AFTER", "5"))
 
-# Paths exempt from backpressure (health checks must always respond)
+# Paths exempt from backpressure (health checks and login must always respond)
 _EXEMPT_PATHS = frozenset({
     "/health",
     "/api/health",
     "/api/v1/health",
     "/api/v1/health/live",
     "/api/v1/health/ready",
+    "/api/v1/account/start",  # Login — must always be reachable
+    "/api/v1/auth/login",     # Login (JSON endpoint)
+    "/token",                  # Login (legacy form-encoded endpoint)
 })
 
 

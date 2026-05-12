@@ -15,6 +15,7 @@ Handles all authentication-related endpoints:
 - Admin setup utilities
 """
 
+import asyncio
 import os
 import re
 import secrets
@@ -439,16 +440,18 @@ async def login_waf_safe(http_request: Request, login_data: LoginRequest, db: Se
     return await _login_impl(http_request, form_data, db)
 
 
-async def _login_impl(http_request: Request, form_data, db: Session):
+async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: bool = False):
     # Rate limit login attempts — per-minute AND per-hour windows
+    # Skip rate-limit check on internal DB-retry to avoid double-counting
     client_ip = _get_real_client_ip(http_request)
-    allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
-        (_AUTH_RATE_MAX_LOGIN, _AUTH_RATE_WINDOW, "login"),
-        (_AUTH_RATE_MAX_LOGIN_HOUR, _AUTH_RATE_WINDOW_HOUR, "login_hour"),
-    ])
-    if not allowed:
-        logger.warning(f"Login rate limit exceeded for {client_ip}")
-        _raise_rate_limit(retry_after, "Too many login attempts. Please try again later.")
+    if not _is_retry:
+        allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
+            (_AUTH_RATE_MAX_LOGIN, _AUTH_RATE_WINDOW, "login"),
+            (_AUTH_RATE_MAX_LOGIN_HOUR, _AUTH_RATE_WINDOW_HOUR, "login_hour"),
+        ])
+        if not allowed:
+            logger.warning(f"Login rate limit exceeded for {client_ip}")
+            _raise_rate_limit(retry_after, "Too many login attempts. Please try again later.")
 
     try:
         models = get_models()
@@ -760,20 +763,50 @@ async def _login_impl(http_request: Request, form_data, db: Session):
     except (OperationalError, InterfaceError) as e:
         import traceback
         tb_str = traceback.format_exc()
-        logger.error(f"Login DB error for {form_data.username}: {type(e).__name__}: {str(e)}\n{tb_str}")
+        attempt_label = "retry" if _is_retry else "attempt 1"
+        logger.warning(f"Login DB error ({attempt_label}) for {form_data.username}: {type(e).__name__}: {str(e)}")
+        # Clean up the failed session
+        try:
+            db.rollback()
+            db.close()
+        except Exception:
+            pass
+        # Login is the most critical endpoint — retry once with a fresh DB session.
+        # Transient connection failures (pool exhaustion, brief network blip) often
+        # resolve immediately with a new connection checkout + pool_pre_ping.
+        if not _is_retry:
+            try:
+                from db import SessionLocal as _SessionLocal
+                retry_db = _SessionLocal()
+                try:
+                    return await _login_impl(http_request, form_data, retry_db, _is_retry=True)
+                finally:
+                    try:
+                        retry_db.close()
+                    except Exception:
+                        pass
+            except HTTPException:
+                raise  # Auth failures (401, 423, etc.) from retry — propagate normally
+            except Exception as retry_err:
+                retry_tb = traceback.format_exc()
+                logger.error(
+                    f"Login DB retry also failed for {form_data.username}: "
+                    f"{type(retry_err).__name__}: {retry_err}\n{retry_tb}"
+                )
+        # Both attempts failed (or this IS the retry) — record and return 503
         try:
             from utils.error_handling import _record_error
             _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
         except Exception:
             pass
-        # Return diagnostic info in body (production error handler strips HTTPException detail for 500s)
+        # Minimum delay to prevent timing oracle — DB errors return instantly vs.
+        # ~100-200ms for password hash comparison, leaking DB availability state.
+        await asyncio.sleep(0.5)
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=503,
-            content={
-                "detail": "Database connection error. Please try again in a moment.",
-                "error_type": type(e).__name__,
-            },
+            content={"detail": "Service temporarily unavailable. Please try again in a moment."},
+            headers={"Retry-After": "3"},
         )
     except (InvalidTokenError, ExpiredSignatureError) as e:
         import traceback
@@ -787,10 +820,7 @@ async def _login_impl(http_request: Request, form_data, db: Session):
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=500,
-            content={
-                "detail": "Token generation failed. Please try again.",
-                "error_type": type(e).__name__,
-            },
+            content={"detail": "Token generation failed. Please try again."},
         )
     except Exception as e:
         import traceback
@@ -805,10 +835,7 @@ async def _login_impl(http_request: Request, form_data, db: Session):
         from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=500,
-            content={
-                "detail": "Login service temporarily unavailable. Please try again.",
-                "error_type": type(e).__name__,
-            },
+            content={"detail": "Login service temporarily unavailable. Please try again."},
         )
 
 

@@ -118,7 +118,10 @@ function Login() {
       navigate(getPostLoginRoute(data));
     } catch (err) {
       console.error('Login error:', err);
-      const errorMessage = err.response?.data?.detail || err.response?.data?.error || err.message || 'Login failed. Please check your credentials and try again.';
+      let errorMessage = err.response?.data?.detail || err.response?.data?.error || err.message || 'Login failed. Please check your credentials and try again.';
+      if (err.retryable) {
+        errorMessage += ' (You can try again)';
+      }
       setError(errorMessage);
       haptics.error();
     } finally {
