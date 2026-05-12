@@ -36,7 +36,7 @@ export const TeamContactPanel: React.FC<TeamContactPanelProps> = ({
   useEffect(() => {
     posApi.getTeam(applicationId)
       .then(resp => setMembers(resp.members))
-      .catch(() => {})
+      .catch((err) => { console.error('Failed to load team members:', err); })
       .finally(() => setLoading(false));
   }, [applicationId]);
 
@@ -52,8 +52,8 @@ export const TeamContactPanel: React.FC<TeamContactPanelProps> = ({
       setMessageTarget(null);
       setSentConfirm(true);
       setTimeout(() => setSentConfirm(false), 3000);
-    } catch {
-      // keep the text so user can retry
+    } catch (err) {
+      console.error('Failed to send message to team:', err);
     } finally {
       setSending(false);
     }

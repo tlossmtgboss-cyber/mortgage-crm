@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 
 import {
   ContinueButton,
@@ -35,12 +35,18 @@ export const LoanPanel: React.FC<PanelProps> = ({ section, onChange, onComplete,
   const loanPurpose = intakeLoanPurpose || (data.loan_purpose as string) || '';
   const property = (data.property as Record<string, unknown>) || {};
 
+  // Refs to hold latest values, avoiding stale closures in the effect below.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   // Sync intake loan_purpose into section data so the backend has it.
   React.useEffect(() => {
-    if (intakeLoanPurpose && data.loan_purpose !== intakeLoanPurpose) {
-      onChange({ ...data, loan_purpose: intakeLoanPurpose });
+    if (intakeLoanPurpose && dataRef.current.loan_purpose !== intakeLoanPurpose) {
+      onChangeRef.current({ ...dataRef.current, loan_purpose: intakeLoanPurpose });
     }
-  }, [intakeLoanPurpose]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [intakeLoanPurpose]);
 
   const purchasePrice = Number(data.purchase_price) || 0;
   const loanAmount = Number(data.loan_amount) || 0;

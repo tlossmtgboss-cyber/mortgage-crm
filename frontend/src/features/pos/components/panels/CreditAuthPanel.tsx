@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 import { ContinueButton, FormSection, PanelProps, usePanelData } from './_shared';
 import { posApi } from '../../api';
+import { validateSection } from '../../schemas/urla';
 
 export const CreditAuthPanel: React.FC<PanelProps> = ({
   section,
@@ -11,6 +12,7 @@ export const CreditAuthPanel: React.FC<PanelProps> = ({
 }) => {
   const { data, updateField } = usePanelData(section, onChange);
   const [agreed, setAgreed] = useState((data.credit_auth_agreed as boolean) || false);
+  const [errors, setErrors] = useState<{ path: string; message: string }[]>([]);
 
   useEffect(() => {
     if (data.credit_auth_agreed != null) setAgreed(Boolean(data.credit_auth_agreed));
@@ -18,8 +20,15 @@ export const CreditAuthPanel: React.FC<PanelProps> = ({
 
   const handleContinue = async () => {
     if (!application || !agreed) return;
+    const submitData = { ...data, credit_auth_agreed: true, agreed_at: new Date().toISOString() };
+    const result = validateSection('credit_auth', submitData);
+    if (!result.ok) {
+      setErrors(result.issues);
+      return;
+    }
+    setErrors([]);
     await posApi.updateSection(application.id, 'credit_auth', {
-      data: { ...data, credit_auth_agreed: true, agreed_at: new Date().toISOString() },
+      data: submitData,
       mark_complete: true,
     });
     onComplete();
@@ -31,6 +40,22 @@ export const CreditAuthPanel: React.FC<PanelProps> = ({
         To proceed with your application, we need your permission to pull a credit report.
         This is a standard part of the mortgage process.
       </p>
+
+      {errors.length > 0 && (
+        <div className="pos-validation-errors" role="alert" style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+        }}>
+          <p style={{ fontWeight: 600, color: '#991b1b', margin: '0 0 8px', fontSize: 14 }}>
+            Please fix the following before continuing:
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, color: '#b91c1c', fontSize: 13, lineHeight: 1.6 }}>
+            {errors.map((err, i) => (
+              <li key={i}>{err.path ? `${err.path}: ` : ''}{err.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <FormSection>
         <div className="urla-field urla-field--cols-4">

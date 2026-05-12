@@ -53,8 +53,8 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
     try {
       const resp = await posApi.getMessages(applicationId);
       setMessages(resp.messages);
-    } catch {
-      // empty state on failure
+    } catch (err) {
+      console.error('Failed to load messages:', err);
     } finally {
       setLoading(false);
     }
@@ -77,8 +77,8 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
         setMessages(prev =>
           prev.map(m => m.id === msg.id ? { ...m, is_read: true, read_at: updated.read_at } : m),
         );
-      } catch {
-        // ignore — still show the message
+      } catch (err) {
+        console.error('Failed to mark message as read:', err);
       }
     }
   }, [applicationId, expandedId]);
@@ -88,8 +88,8 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
     try {
       const resp = await posApi.markAllMessagesRead(applicationId);
       setMessages(resp.messages);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Failed to mark all messages as read:', err);
     } finally {
       setMarkingAll(false);
     }
@@ -102,8 +102,8 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
       const newMsg = await posApi.sendMessage(applicationId, composeText.trim());
       setMessages(prev => [newMsg, ...prev]);
       setComposeText('');
-    } catch {
-      // keep text for retry
+    } catch (err) {
+      console.error('Failed to send message:', err);
     } finally {
       setSending(false);
     }

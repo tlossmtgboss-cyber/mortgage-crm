@@ -1,10 +1,7 @@
 // API client for the POS feature.
 //
-// Assumes a PURL token is present in either:
-//   - localStorage under key "perennia_purl_token", OR
-//   - a global window.__PURL_TOKEN__ (set by your portal shell)
-//
-// Adjust `getPurlToken()` below if your portal stores tokens differently.
+// Assumes a PURL token is set via setPurlToken() or present in
+// localStorage under key "perennia_purl_token".
 
 import type {
   ApplicationResponse,
@@ -36,13 +33,17 @@ const API_BASE =
   process.env.REACT_APP_PERENNIA_API_BASE ||
   API_BASE_URL;
 
+// Module-scoped PURL token — avoids exposing credentials on window globals.
+let _purlToken: string | null = null;
+
+export function setPurlToken(token: string | null): void {
+  _purlToken = token;
+}
+
 function getPurlToken(): string {
+  if (_purlToken) return _purlToken;
   if (typeof window === 'undefined') return '';
-  return (
-    (window as any).__PURL_TOKEN__ ||
-    window.localStorage?.getItem('perennia_purl_token') ||
-    ''
-  );
+  return window.localStorage?.getItem('perennia_purl_token') || '';
 }
 
 class APIError extends Error {
@@ -60,6 +61,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   _retries = 0,
+  signal?: AbortSignal,
 ): Promise<T> {
   const token = getPurlToken();
   const resp = await fetch(`${API_BASE}${path}`, {
@@ -71,6 +73,7 @@ async function request<T>(
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
+    signal,
   });
 
   if (resp.status === 429 && _retries < 3) {
@@ -79,7 +82,7 @@ async function request<T>(
     const jitter = Math.random() * 500;
     const delay = Math.max(retryAfter * 1000, backoff) + jitter;
     await new Promise(r => setTimeout(r, delay));
-    return request<T>(method, path, body, _retries + 1);
+    return request<T>(method, path, body, _retries + 1, signal);
   }
 
   if (!resp.ok) {
@@ -199,8 +202,8 @@ export const posApi = {
 
   // ---------- AI Q&A ----------
 
-  ask: (body: AskRequest) =>
-    request<AskResponse>('POST', '/api/v1/pos/ai-qa/ask', body),
+  ask: (body: AskRequest, signal?: AbortSignal) =>
+    request<AskResponse>('POST', '/api/v1/pos/ai-qa/ask', body, 0, signal),
 
   getQAHistory: (applicationId: string, limit: number = 50) =>
     request<QAHistoryResponse>(

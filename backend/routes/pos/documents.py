@@ -160,6 +160,10 @@ def get_pos_documents(
     # -----------------------------------------------------------------------
     # 1. Fetch active document requests
     # -----------------------------------------------------------------------
+    # NOTE: DocumentRequest has no organization_id column. Tenant isolation
+    # is enforced by the PURLLoan workspace check above — only the
+    # borrower's own loan_id can reach this point. SmartDocument does have
+    # organization_id, and we filter on it in sections 2 and 5 below.
     requests = (
         db.query(DocumentRequest)
         .filter(
@@ -184,6 +188,7 @@ def get_pos_documents(
             db.query(SmartDocument)
             .filter(
                 SmartDocument.request_id.in_(request_ids),
+                SmartDocument.organization_id == purl_ctx.organization_id,
                 SmartDocument.status.notin_(["DELETED", "SUPERSEDED"]),
             )
             .order_by(SmartDocument.uploaded_at.desc())
@@ -287,6 +292,7 @@ def get_pos_documents(
             db.query(SmartDocument)
             .filter(
                 SmartDocument.loan_id == loan_id,
+                SmartDocument.organization_id == purl_ctx.organization_id,
                 SmartDocument.request_id == None,  # noqa: E711
                 SmartDocument.status.notin_(["DELETED", "SUPERSEDED"]),
             )

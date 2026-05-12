@@ -1,6 +1,7 @@
 """Pydantic schemas for the POS application endpoints."""
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -11,6 +12,7 @@ from database.models.pos import POSSectionKey, POSStatus
 
 
 SectionKey = Literal[
+    "intake",
     "personal",
     "coborrower",
     "residence",
@@ -89,6 +91,11 @@ class SectionData(BaseModel):
     canonical-store mapper.
     """
 
+    # M4: Cap at 100 KB serialized and 10 levels of nesting to prevent
+    # abuse via deeply nested or oversized JSON payloads.
+    _MAX_DATA_BYTES: int = 100_000  # 100 KB
+    _MAX_NESTING_DEPTH: int = 10
+
     data: dict[str, Any] = Field(
         default_factory=dict,
         description="Section-specific URLA fields (varies by section_key).",
@@ -100,6 +107,22 @@ class SectionData(BaseModel):
     co_ssn: str | None = Field(default=None, pattern=r"^\d{3}-?\d{2}-?\d{4}$")
     dob: date | None = None
     co_dob: date | None = None
+
+    @field_validator("data")
+    @classmethod
+    def _validate_data_limits(cls, v: dict[str, Any]) -> dict[str, Any]:
+        # Size check
+        serialized = json.dumps(v, default=str)
+        if len(serialized) > cls._MAX_DATA_BYTES:
+            raise ValueError(
+                f"Section data exceeds maximum size of {cls._MAX_DATA_BYTES // 1000} KB"
+            )
+        # Depth check
+        if _check_depth(v) > cls._MAX_NESTING_DEPTH:
+            raise ValueError(
+                f"Section data exceeds maximum nesting depth of {cls._MAX_NESTING_DEPTH}"
+            )
+        return v
 
     @field_validator("ssn", "co_ssn")
     @classmethod
@@ -183,3 +206,27 @@ class ApplicationSubmitResponse(BaseModel):
         default_factory=list,
         description="Borrower-facing checklist of what happens next.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _check_depth(obj: Any, current: int = 1) -> int:
+    """Return the maximum nesting depth of a JSON-like structure (iterative)."""
+    stack = [(obj, current)]
+    max_depth = current
+    while stack:
+        item, depth = stack.pop()
+        if depth > max_depth:
+            max_depth = depth
+        if isinstance(item, dict):
+            for v in item.values():
+                if isinstance(v, (dict, list)):
+                    stack.append((v, depth + 1))
+        elif isinstance(item, list):
+            for v in item:
+                if isinstance(v, (dict, list)):
+                    stack.append((v, depth + 1))
+    return max_depth

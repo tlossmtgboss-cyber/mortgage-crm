@@ -46,8 +46,11 @@ def build_audit_context(
     purl_ctx: PURLAuthContext = Depends(require_purl_token),
 ) -> AuditContext:
     """Stamp every borrower action with IP and User-Agent for compliance."""
+    # M2 fix: Use request.client.host (set by reverse proxy) as authoritative
+    # source. X-Forwarded-For is trivially spoofable and must not be used for
+    # audit trail IP addresses. Matches the pattern in start.py:_client_ip().
     client = request.client
-    ip = (request.headers.get("x-forwarded-for") or (client.host if client else "")).split(",")[0].strip() or None
+    ip = client.host if client else None
     return AuditContext(
         actor_type="borrower",
         actor_id=purl_ctx.contact_id,
@@ -130,6 +133,20 @@ def resolve_application_direct(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found",
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Name formatting
+# ---------------------------------------------------------------------------
+
+
+def full_name(first: str | None, last: str | None) -> str:
+    """Best-effort display name from first/last parts.
+
+    Used by calendar, team, and calendar_service to avoid duplicating
+    the same formatting logic.
+    """
+    return f"{first or ''} {last or ''}".strip() or "Unknown"
 
 
 # ---------------------------------------------------------------------------

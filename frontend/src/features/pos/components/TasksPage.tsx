@@ -68,8 +68,8 @@ export const TasksPage: React.FC<TasksPageProps> = ({
     try {
       const resp = await posApi.getTasks(applicationId, showCompleted);
       setTasks(resp.tasks);
-    } catch {
-      // silently fail — page will show empty state
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
     } finally {
       setLoading(false);
     }
@@ -100,8 +100,8 @@ export const TasksPage: React.FC<TasksPageProps> = ({
     try {
       const updated = await posApi.completeTask(applicationId, taskId);
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t));
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Failed to complete task:', err);
     } finally {
       setCompleting(null);
     }

@@ -17,6 +17,8 @@ import time as _time
 from typing import Any
 from uuid import UUID
 
+import nh3
+
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -63,6 +65,10 @@ class AIQAService:
     ) -> dict[str, Any]:
         """Answer the borrower's question with loan-aware grounding."""
         started = _time.monotonic()
+
+        # M3 fix: Sanitize borrower question before storage to prevent stored
+        # XSS. Strip all HTML tags — plain text only.
+        question = nh3.clean(question, tags=set(), attributes={})
 
         # 1. Persist the borrower's turn.
         borrower_msg = POSAIQAMessage(

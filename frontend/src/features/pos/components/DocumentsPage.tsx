@@ -99,7 +99,7 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
           setBackendDocs(mapped);
         }
       })
-      .catch(() => {})
+      .catch((err) => { console.error('Failed to load documents:', err); })
       .finally(() => {
         if (!cancelled) setDocsLoading(false);
       });

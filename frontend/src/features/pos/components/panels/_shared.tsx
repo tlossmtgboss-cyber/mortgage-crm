@@ -184,21 +184,35 @@ export const FormSection: React.FC<{
 // ---------- Continue button ----------
 
 export const ContinueButton: React.FC<{
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   disabled?: boolean;
   label?: string;
-}> = ({ onClick, disabled, label = 'Save & Continue' }) => (
-  <div className="urla-actions">
-    <button
-      type="button"
-      className="urla-btn urla-btn--primary"
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {label}
-    </button>
-  </div>
-);
+}> = ({ onClick, disabled, label = 'Save & Continue' }) => {
+  const [saving, setSaving] = React.useState(false);
+
+  const handleClick = async () => {
+    if (saving || disabled) return;
+    setSaving(true);
+    try {
+      await onClick();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="urla-actions">
+      <button
+        type="button"
+        className="urla-btn urla-btn--primary"
+        onClick={handleClick}
+        disabled={disabled || saving}
+      >
+        {saving ? 'Saving...' : label}
+      </button>
+    </div>
+  );
+};
 
 // ---------- Hook: section data with field-level updater ----------
 

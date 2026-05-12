@@ -51,16 +51,27 @@ class TeamResponse(BaseModel):
     members: list[TeamMemberResponse]
 
 
-def _user_to_member(user: User, role: str) -> TeamMemberResponse:
+# L3 fix: Only expose email/phone for borrower-facing roles. Internal roles
+# (underwriter, team lead, admin, etc.) should not leak contact info to
+# borrowers. The primary LO's info is already on the LO profile page.
+_BORROWER_FACING_ROLES = {
+    "loan officer", "processor", "closer", "loan coordinator",
+    "loan officer assistant", "junior loan officer",
+}
+
+
+def _user_to_member(user: User, role: str, *, is_primary_lo: bool = False) -> TeamMemberResponse:
+    # Show contact info only for the primary LO or borrower-facing roles
+    show_contact = is_primary_lo or role.lower() in _BORROWER_FACING_ROLES
     return TeamMemberResponse(
         user_id=user.id,
         name=user.full_name,
         role=role,
-        email=user.email,
-        phone=user.phone,
+        email=user.email if show_contact else None,
+        phone=user.phone if show_contact else None,
         title=user.title,
         avatar_url=user.headshot_url,
-        nmls=user.nmls_id or user.nmls_number,
+        nmls=user.nmls_id or user.nmls_number if show_contact else None,
     )
 
 
@@ -82,7 +93,7 @@ def get_team(
         if loan and getattr(loan, "loan_officer_id", None):
             lo = db.get(User, loan.loan_officer_id)
             if lo:
-                members.append(_user_to_member(lo, "Loan Officer"))
+                members.append(_user_to_member(lo, "Loan Officer", is_primary_lo=True))
                 seen_ids.add(lo.id)
 
     # 2. Workflow role assignments for this org

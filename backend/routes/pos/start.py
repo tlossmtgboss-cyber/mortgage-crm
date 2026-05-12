@@ -18,7 +18,9 @@ import hashlib
 import hmac
 import logging
 import os
+import random
 import secrets
+import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -27,11 +29,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import Column, DateTime, Integer, String, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from database import Base, get_db
+from database import get_db
 from database.models.core import User
+from database.models.pos import POSTrustedDevice, POSVerification
 from models.purl import (
     ContactType,
     PURLContact,
@@ -52,6 +55,10 @@ IP_RATE_WINDOW_MINUTES = 10
 
 
 # ── IP rate limiter (in-memory, resets on deploy) ──────────────────
+# NOTE: This tracker lives in process memory and resets on every deploy.
+# For production-grade rate limiting, migrate to Redis-backed tracking
+# (e.g., redis INCR with TTL). Acceptable for now because Railway deploys
+# are infrequent and the window is short (10 min).
 
 _ip_tracker: dict[str, list[float]] = defaultdict(list)
 _ip_lock = Lock()
@@ -85,41 +92,10 @@ def _check_ip_rate_limit(ip: str):
         _ip_tracker.setdefault(ip, []).append(now)
 
 
-# ── OTP storage model ──────────────────────────────────────────────
-
-class POSVerification(Base):
-    __tablename__ = "pos_verifications"
-    id = Column(Integer, primary_key=True)
-    session_id = Column(String, unique=True, nullable=False, index=True)
-    phone = Column(String, nullable=False)
-    phone_raw = Column(String, nullable=False, default="")
-    code_hash = Column(String, nullable=False)
-    first_name = Column(String, nullable=False, default="")
-    last_name = Column(String, nullable=False, default="")
-    email = Column(String, nullable=False, default="")
-    organization_id = Column(Integer, nullable=True)
-    flow_type = Column(String, nullable=False, default="signup")
-    contact_id = Column(Integer, nullable=True)
-    attempts = Column(Integer, default=0)
-    ip_address = Column(String, nullable=True)
-    consent_at = Column(DateTime(timezone=True), nullable=True)
-    last_resend_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    verified_at = Column(DateTime(timezone=True), nullable=True)
-
+# POSVerification and POSTrustedDevice models live in database/models/pos.py
+# (imported at module level above).
 
 TRUSTED_DEVICE_DAYS = 30
-
-
-class POSTrustedDevice(Base):
-    __tablename__ = "pos_trusted_devices"
-    id = Column(Integer, primary_key=True)
-    contact_id = Column(Integer, nullable=False, index=True)
-    ip_address = Column(String, nullable=False)
-    device_token = Column(String, nullable=False, default="")
-    organization_id = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    expires_at = Column(DateTime(timezone=True), nullable=False)
 
 
 _table_ensured = False
@@ -648,6 +624,10 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
     )
     if not contact:
         # No account — return generic response. Do NOT send email or reveal absence.
+        # M1 fix: Sleep a random duration to match the typical latency of the
+        # "account exists" path (DB queries + email send = 200-2000ms). Without
+        # this, an attacker can distinguish account existence via response time.
+        time.sleep(random.uniform(0.5, 1.5))
         return LoginResponse(
             session_id="",
             email_masked=_mask_email(email_lower),

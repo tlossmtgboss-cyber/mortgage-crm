@@ -400,6 +400,46 @@ class POSBorrowerMessage(Base):
 
 
 # ---------------------------------------------------------------------------
+# OTP verification (public POS start flow)
+# ---------------------------------------------------------------------------
+
+class POSVerification(Base):
+    """Email OTP session for the public POS start/login flow."""
+
+    __tablename__ = "pos_verifications"
+    id = Column(Integer, primary_key=True)
+    session_id = Column(String, unique=True, nullable=False, index=True)
+    phone = Column(String, nullable=False)
+    phone_raw = Column(String, nullable=False, default="")
+    code_hash = Column(String, nullable=False)
+    first_name = Column(String, nullable=False, default="")
+    last_name = Column(String, nullable=False, default="")
+    email = Column(String, nullable=False, default="")
+    organization_id = Column(Integer, nullable=True)
+    flow_type = Column(String, nullable=False, default="signup")
+    contact_id = Column(Integer, nullable=True)
+    attempts = Column(Integer, default=0)
+    ip_address = Column(String, nullable=True)
+    consent_at = Column(DateTime(timezone=True), nullable=True)
+    last_resend_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now())
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class POSTrustedDevice(Base):
+    """Remembered device for passwordless re-login."""
+
+    __tablename__ = "pos_trusted_devices"
+    id = Column(Integer, primary_key=True)
+    contact_id = Column(Integer, nullable=False, index=True)
+    ip_address = Column(String, nullable=False)
+    device_token = Column(String, nullable=False, default="")
+    organization_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

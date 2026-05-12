@@ -87,8 +87,8 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   const appId = application?.id;
   React.useEffect(() => {
     if (appId) {
-      posApi.getTasks(appId).then(resp => setTaskCount(resp.counts.pending + resp.counts.in_progress)).catch(() => {});
-      posApi.getMessages(appId).then(resp => setMessageCount(resp.counts.unread)).catch(() => {});
+      posApi.getTasks(appId).then(resp => setTaskCount(resp.counts.pending + resp.counts.in_progress)).catch((err) => { console.error('Failed to load task counts:', err); });
+      posApi.getMessages(appId).then(resp => setMessageCount(resp.counts.unread)).catch((err) => { console.error('Failed to load message counts:', err); });
     }
   }, [appId]);
   const [intakeComplete, setIntakeComplete] = useState(false);

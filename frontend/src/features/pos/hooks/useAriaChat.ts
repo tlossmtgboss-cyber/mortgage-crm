@@ -87,11 +87,19 @@ export function useAriaChat(applicationId: string | undefined, currentStep?: str
       setError(null);
 
       try {
-        const result: AskResponse = await posApi.ask({
-          application_id: applicationId,
-          message: trimmed,
-          current_step: currentStep ?? null,
-        });
+        // Abort any previous in-flight request.
+        inFlight.current?.abort();
+        const controller = new AbortController();
+        inFlight.current = controller;
+
+        const result: AskResponse = await posApi.ask(
+          {
+            application_id: applicationId,
+            message: trimmed,
+            current_step: currentStep ?? null,
+          },
+          controller.signal,
+        );
 
         setMessages(prev => [
           // Replace the optimistic stub with a confirmed one (no id on borrower
@@ -112,6 +120,8 @@ export function useAriaChat(applicationId: string | undefined, currentStep?: str
           },
         ]);
       } catch (e) {
+        // Silently ignore aborted requests.
+        if (e instanceof DOMException && e.name === 'AbortError') return;
         // Remove the optimistic borrower turn on error.
         setMessages(prev => prev.filter(m => !m.isOptimistic));
         setError(e instanceof Error ? e.message : 'Aria is unavailable');

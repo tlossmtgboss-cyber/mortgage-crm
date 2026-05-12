@@ -322,12 +322,13 @@ class CalendarService:
 
 def _full_name(user: User) -> str:
     """Best-effort name string for a User."""
-    parts = [
-        getattr(user, "first_name", None) or "",
-        getattr(user, "last_name", None) or "",
-    ]
-    name = " ".join(p for p in parts if p).strip()
-    if name:
+    from routes.pos._helpers import full_name as _full_name_parts
+
+    name = _full_name_parts(
+        getattr(user, "first_name", None),
+        getattr(user, "last_name", None),
+    )
+    if name != "Unknown":
         return name
     return getattr(user, "name", None) or getattr(user, "email", "") or f"User #{user.id}"
 

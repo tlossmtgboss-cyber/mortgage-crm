@@ -10,6 +10,7 @@ import {
 } from './_shared';
 import type { SectionUpdateRequest } from '../../types';
 import { posApi } from '../../api';
+import { validateSection } from '../../schemas/urla';
 
 export const PersonalPanel: React.FC<PanelProps> = ({
   section,
@@ -21,9 +22,16 @@ export const PersonalPanel: React.FC<PanelProps> = ({
 
   const [ssn, setSSN] = useState('');
   const [dob, setDOB] = useState('');
+  const [errors, setErrors] = useState<{ path: string; message: string }[]>([]);
 
   const handleContinue = async () => {
     if (!application) return;
+    const result = validateSection('personal', data);
+    if (!result.ok) {
+      setErrors(result.issues);
+      return;
+    }
+    setErrors([]);
     const body: SectionUpdateRequest = {
       data,
       mark_complete: true,
@@ -41,6 +49,22 @@ export const PersonalPanel: React.FC<PanelProps> = ({
       <p className="urla-form-section__desc">
         Tell us a bit about yourself. This information is used to verify your identity and pull credit when you're ready.
       </p>
+
+      {errors.length > 0 && (
+        <div className="pos-validation-errors" role="alert" style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+        }}>
+          <p style={{ fontWeight: 600, color: '#991b1b', margin: '0 0 8px', fontSize: 14 }}>
+            Please fix the following before continuing:
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, color: '#b91c1c', fontSize: 13, lineHeight: 1.6 }}>
+            {errors.map((err, i) => (
+              <li key={i}>{err.path ? `${err.path}: ` : ''}{err.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <FormSection>
         <TextField label="First name" name="first_name" required value={data.first_name} onChange={updateField} />

@@ -1,6 +1,7 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/api';
+import { setPurlToken as setApiPurlToken } from '../../features/pos/api/client';
 import './pos-entry.css';
 
 const POSContainer = React.lazy(() =>
@@ -53,7 +54,7 @@ const POSEntryPage: React.FC = () => {
     fetch(`${API_BASE}/api/v1/pos/lo-profile/${encodeURIComponent(loSlug)}`)
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setLoProfile(data); })
-      .catch(() => {});
+      .catch((err) => { console.error('Failed to load LO profile:', err); });
   }, [loSlug]);
 
   // Recover verify session if user refreshes mid-flow
@@ -61,7 +62,7 @@ const POSEntryPage: React.FC = () => {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (raw) savedSession.current = JSON.parse(raw);
-  } catch {}
+  } catch (err) { console.error('Failed to parse saved verify session:', err); }
 
   const [flowStep, setFlowStep] = useState<FlowStep>(
     savedSession.current ? 'verify' : 'checking',
@@ -84,18 +85,21 @@ const POSEntryPage: React.FC = () => {
         const data = await resp.json().catch(() => ({ valid: false }));
         if (data.valid) {
           localStorage.setItem('perennia_purl_token', token);
-          (window as any).__PURL_TOKEN__ = token;
+          setApiPurlToken(token);
           setPurlToken(token);
           if (data.borrower_name) setBorrowerName(data.borrower_name);
           setFlowStep('app');
         } else {
           localStorage.removeItem('perennia_purl_token');
-          delete (window as any).__PURL_TOKEN__;
+          setApiPurlToken(null);
+          setPurlToken(null);
           setFlowStep('auth');
         }
-      } catch {
+      } catch (err) {
+        console.error('Token validation failed:', err);
         localStorage.removeItem('perennia_purl_token');
-        delete (window as any).__PURL_TOKEN__;
+        setApiPurlToken(null);
+        setPurlToken(null);
         setFlowStep('auth');
       }
     };
@@ -118,7 +122,7 @@ const POSEntryPage: React.FC = () => {
 
   const handleAuthError = () => {
     localStorage.removeItem('perennia_purl_token');
-    delete (window as any).__PURL_TOKEN__;
+    setApiPurlToken(null);
     setPurlToken(null);
     setFlowStep('auth');
   };
@@ -131,7 +135,7 @@ const POSEntryPage: React.FC = () => {
 
   const handleVerified = (token: string, name?: string) => {
     localStorage.setItem('perennia_purl_token', token);
-    (window as any).__PURL_TOKEN__ = token;
+    setApiPurlToken(token);
     setPurlToken(token);
     if (name) setBorrowerName(name);
     setFlowStep('app');
@@ -214,10 +218,10 @@ function AuthGate({
   loProfile?: LOProfile | null;
 }) {
   const [tab, setTab] = useState<AuthTab>('signup');
-  const [variant, setVariant] = useState<DesignVariant>(loProfile ? 'personal' : 'minimal');
+  const [variant, setVariant] = useState<DesignVariant>('conversational');
 
   useEffect(() => {
-    if (loProfile && variant === 'minimal') setVariant('personal');
+    if (loProfile && variant === 'conversational') setVariant('conversational');
   }, [loProfile]);
 
   const tabButtons = (
@@ -263,9 +267,7 @@ function AuthGate({
     timeline:      { label: 'Steps',       icon: '⋮' },
   };
 
-  const VARIANT_ORDER: DesignVariant[] = loProfile
-    ? ['personal', 'split', 'social', 'rate', 'conversational', 'minimal', 'dashboard', 'timeline']
-    : ['split', 'social', 'rate', 'conversational', 'minimal', 'dashboard', 'timeline', 'personal'];
+  const VARIANT_ORDER: DesignVariant[] = ['conversational', 'split', 'social', 'rate', 'personal', 'minimal', 'dashboard', 'timeline'];
 
   const showPicker = process.env.NODE_ENV === 'development' || new URLSearchParams(window.location.search).has('design');
 
@@ -386,11 +388,55 @@ function AuthGate({
     );
   }
 
-  /* ── C: Conversational ── */
+  /* ── C: Conversational — primary landing page ── */
   if (variant === 'conversational') {
+    const lo = loProfile;
+    const initials = lo?.name
+      ? lo.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+      : 'LO';
+    const displayName = lo?.name || 'Your Loan Officer';
+    const nmlsLine = [lo?.nmls ? `NMLS #${lo.nmls}` : null, lo?.title].filter(Boolean).join(' · ');
+
     return (
       <div className="pos-start pos-start--convo">
-        <div className="pos-convo">
+        {/* Top bar: company logo left, LO info right */}
+        <header className="pos-convo__topbar">
+          <div className="pos-convo__logo-area">
+            {lo?.company_logo_url ? (
+              <img src={lo.company_logo_url} alt="Company" className="pos-convo__company-logo" />
+            ) : (
+              <div className="pos-convo__logo-fallback"><PeLogoIcon /></div>
+            )}
+          </div>
+          {lo && (
+            <div className="pos-convo__lo-bar">
+              {lo.headshot_url ? (
+                <img src={lo.headshot_url} alt={displayName} className="pos-convo__lo-avatar pos-convo__lo-avatar--img" />
+              ) : (
+                <div className="pos-convo__lo-avatar">{initials}</div>
+              )}
+              <div className="pos-convo__lo-info">
+                <span className="pos-convo__lo-name">{displayName}</span>
+                {nmlsLine && <span className="pos-convo__lo-detail">{nmlsLine}</span>}
+              </div>
+              {lo.phone && (
+                <a href={`tel:${lo.phone.replace(/\D/g, '')}`} className="pos-convo__lo-action">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                  {lo.phone}
+                </a>
+              )}
+              {lo.email && (
+                <a href={`mailto:${lo.email}`} className="pos-convo__lo-action">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                  {lo.email}
+                </a>
+              )}
+            </div>
+          )}
+        </header>
+
+        {/* Main form area */}
+        <div className="pos-convo__body">
           <h1 className="pos-convo__headline">
             Let&rsquo;s find your home<span className="pos-convo__cursor">|</span>
           </h1>
@@ -404,6 +450,18 @@ function AuthGate({
             </div>
           </div>
         </div>
+
+        {/* Compliance footer */}
+        <footer className="pos-convo__footer">
+          <div className="pos-convo__compliance">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+            <span>256-bit encryption · NMLS compliant · Equal Housing Lender</span>
+            <svg className="pos-convo__ehl" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L4 9v12h16V9l-8-6zm0 2.2L18 10v9H6v-9l6-4.8zM11 13h2v4h-2v-4zm0-3h2v2h-2v-2z"/></svg>
+          </div>
+          {lo?.address && <p className="pos-convo__address">{lo.address}</p>}
+          {lo?.nmls && <p className="pos-convo__nmls-footer">NMLS #{lo.nmls}</p>}
+        </footer>
+
         {picker}
       </div>
     );

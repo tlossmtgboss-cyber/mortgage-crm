@@ -45,6 +45,7 @@ from services.pos.application_service import AuditContext
 
 from ._helpers import (
     build_audit_context,
+    full_name as _full_name_parts,
     resolve_application_for_borrower,
     resolve_application_for_borrower_write,
 )
@@ -392,12 +393,14 @@ async def cancel_booking(
 
 
 def _full_name(user: Any) -> str:
-    parts = [
-        getattr(user, "first_name", None) or "",
-        getattr(user, "last_name", None) or "",
-    ]
-    name = " ".join(p for p in parts if p).strip()
-    return name or getattr(user, "name", None) or getattr(user, "email", "") or f"User #{user.id}"
+    """Format a User object's name for display."""
+    name = _full_name_parts(
+        getattr(user, "first_name", None),
+        getattr(user, "last_name", None),
+    )
+    if name != "Unknown":
+        return name
+    return getattr(user, "name", None) or getattr(user, "email", "") or f"User #{user.id}"
 
 
 def _resolve_attendee_info(

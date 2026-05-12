@@ -11,6 +11,7 @@ import {
 } from './_shared';
 import type { SectionUpdateRequest } from '../../types';
 import { posApi } from '../../api';
+import { validateSection } from '../../schemas/urla';
 
 export const CoBorrowerPanel: React.FC<PanelProps> = ({
   section,
@@ -21,11 +22,21 @@ export const CoBorrowerPanel: React.FC<PanelProps> = ({
   const { data, updateField } = usePanelData(section, onChange);
   const [coSSN, setCoSSN] = useState('');
   const [coDOB, setCoDOB] = useState('');
+  const [errors, setErrors] = useState<{ path: string; message: string }[]>([]);
 
   const hasCoBorrower = data.has_coborrower as boolean | null;
 
   const handleContinue = async () => {
     if (!application) return;
+    // Only validate co-borrower fields if a co-borrower is being added.
+    if (hasCoBorrower) {
+      const result = validateSection('coborrower', data);
+      if (!result.ok) {
+        setErrors(result.issues);
+        return;
+      }
+    }
+    setErrors([]);
     const body: SectionUpdateRequest = { data, mark_complete: true };
     if (coSSN) body.co_ssn = coSSN;
     if (coDOB) body.co_dob = coDOB;
@@ -39,6 +50,22 @@ export const CoBorrowerPanel: React.FC<PanelProps> = ({
         If someone is applying with you, enter their information below.
         A co-borrower's income and credit are considered jointly.
       </p>
+
+      {errors.length > 0 && (
+        <div className="pos-validation-errors" role="alert" style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+        }}>
+          <p style={{ fontWeight: 600, color: '#991b1b', margin: '0 0 8px', fontSize: 14 }}>
+            Please fix the following before continuing:
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, color: '#b91c1c', fontSize: 13, lineHeight: 1.6 }}>
+            {errors.map((err, i) => (
+              <li key={i}>{err.path ? `${err.path}: ` : ''}{err.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <FormSection>
         <YesNoField

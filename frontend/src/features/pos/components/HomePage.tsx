@@ -96,8 +96,8 @@ export const HomePage: React.FC<HomePageProps> = ({
           if (!cancelled && calResp.recommended_slot) {
             setAppointment(null);
           }
-        } catch {
-          // calendar may not be set up yet
+        } catch (err) {
+          console.error('Failed to load calendar slots:', err);
         }
       } finally {
         if (!cancelled) setLoading(false);

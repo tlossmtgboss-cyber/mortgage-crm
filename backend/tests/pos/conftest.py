@@ -27,7 +27,9 @@ from middleware.purl_auth import (
     require_purl_write_scope,
 )
 
-from routes.pos import application_router, calendar_router, ai_qa_router
+from routes.pos.application import router as application_router
+from routes.pos.calendar import router as calendar_router
+from routes.pos.ai_qa import router as ai_qa_router
 from services.pos.ai_qa_service import AIQAService
 from services.pos._scheduler_bridge import (
     BridgeBooking,
