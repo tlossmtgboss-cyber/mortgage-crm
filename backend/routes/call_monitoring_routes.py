@@ -2870,7 +2870,7 @@ async def get_recording_playback(
                transcript, summary, duration, lead_id, created_at
         FROM vapi_calls
         WHERE (vapi_call_id = :cid OR CAST(id AS TEXT) = :cid)
-          AND (organization_id = :org_id OR organization_id IS NULL)
+          AND organization_id = :org_id
         LIMIT 1
     """), {"cid": call_id, "org_id": org_id}).fetchone()
 
@@ -2902,7 +2902,7 @@ async def get_recording_playback(
                transcript_text, duration_seconds, lead_id, created_at
         FROM call_logs
         WHERE (call_sid = :cid OR CAST(id AS TEXT) = :cid)
-          AND (organization_id = :org_id OR organization_id IS NULL)
+          AND organization_id = :org_id
         LIMIT 1
     """), {"cid": call_id, "org_id": org_id}).fetchone()
 

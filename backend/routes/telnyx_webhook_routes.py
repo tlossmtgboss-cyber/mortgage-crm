@@ -17,6 +17,8 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
+
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -78,9 +80,8 @@ async def _route_inbound_to_livekit(
 
     Answer → transfer to Vapi AI number → Aria answers directly.
     No hold message, no callback — caller is bridged seamlessly.
+    Uses httpx.AsyncClient to avoid blocking the event loop.
     """
-    import requests as http_requests
-
     telnyx_key = os.getenv("TELNYX_API_KEY", "")
     if not telnyx_key:
         logger.error("[AriaInbound] TELNYX_API_KEY not set")
@@ -94,75 +95,73 @@ async def _route_inbound_to_livekit(
     }
     base_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions"
 
-    # Step 1: Answer the inbound call immediately
-    try:
-        resp = http_requests.post(f"{base_url}/answer", headers=headers, json={}, timeout=10)
-        logger.warning(f"[AriaInbound] Answer: {resp.status_code}")
-        if resp.status_code >= 400:
-            logger.error(f"[AriaInbound] Answer failed: {resp.text[:300]}")
-            return
-    except Exception as e:
-        logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
-        return
-
-    # Step 2: Transfer to Aria AI receptionist number (Vapi-backed)
-    transfer_to = ARIA_TRANSFER_NUMBER
-    if not transfer_to:
-        logger.error("[AriaInbound] ARIA_TRANSFER_NUMBER not configured")
+    async with httpx.AsyncClient(timeout=15) as client:
+        # Step 1: Answer the inbound call immediately
         try:
-            http_requests.post(
-                f"{base_url}/speak",
-                headers=headers,
-                json={
-                    "payload": "I'm sorry, I'm unable to connect you right now. Please try again shortly.",
-                    "voice": "female",
-                    "language": "en-US",
-                },
-                timeout=10,
-            )
-            await asyncio.sleep(4)
-            http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
-        except Exception:
-            pass
-        return
+            resp = await client.post(f"{base_url}/answer", headers=headers, json={})
+            logger.warning(f"[AriaInbound] Answer: {resp.status_code}")
+            if resp.status_code >= 400:
+                logger.error(f"[AriaInbound] Answer failed: {resp.text[:300]}")
+                return
+        except Exception as e:
+            logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
+            return
 
-    try:
-        resp = http_requests.post(
-            f"{base_url}/transfer",
-            headers=headers,
-            json={
-                "to": transfer_to,
-                "from": to_number,
-                "timeout_secs": 30,
-            },
-            timeout=10,
-        )
-        if resp.status_code < 400:
-            logger.warning(
-                "[AriaInbound] Transferred ...%s to Aria at %s (status=%s)",
-                from_number[-4:] if from_number else "?",
-                transfer_to[-4:],
-                resp.status_code,
-            )
-        else:
-            logger.error(
-                "[AriaInbound] Transfer failed (%s): %s",
-                resp.status_code, resp.text[:300],
-            )
-            http_requests.post(
-                f"{base_url}/speak",
+        # Step 2: Transfer to Aria AI receptionist number (Vapi-backed)
+        transfer_to = ARIA_TRANSFER_NUMBER
+        if not transfer_to:
+            logger.error("[AriaInbound] ARIA_TRANSFER_NUMBER not configured")
+            try:
+                await client.post(
+                    f"{base_url}/speak",
+                    headers=headers,
+                    json={
+                        "payload": "I'm sorry, I'm unable to connect you right now. Please try again shortly.",
+                        "voice": "female",
+                        "language": "en-US",
+                    },
+                )
+                await asyncio.sleep(4)
+                await client.post(f"{base_url}/hangup", headers=headers, json={})
+            except Exception:
+                pass
+            return
+
+        try:
+            resp = await client.post(
+                f"{base_url}/transfer",
                 headers=headers,
                 json={
-                    "payload": "I'm sorry, I'm unable to connect you right now. Please try again shortly.",
-                    "voice": "female",
-                    "language": "en-US",
+                    "to": transfer_to,
+                    "from": to_number,
+                    "timeout_secs": 30,
                 },
-                timeout=10,
             )
-            await asyncio.sleep(4)
-            http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
-    except Exception as e:
-        logger.error(f"[AriaInbound] Transfer failed: {e}", exc_info=True)
+            if resp.status_code < 400:
+                logger.warning(
+                    "[AriaInbound] Transferred ...%s to Aria at %s (status=%s)",
+                    from_number[-4:] if from_number else "?",
+                    transfer_to[-4:],
+                    resp.status_code,
+                )
+            else:
+                logger.error(
+                    "[AriaInbound] Transfer failed (%s): %s",
+                    resp.status_code, resp.text[:300],
+                )
+                await client.post(
+                    f"{base_url}/speak",
+                    headers=headers,
+                    json={
+                        "payload": "I'm sorry, I'm unable to connect you right now. Please try again shortly.",
+                        "voice": "female",
+                        "language": "en-US",
+                    },
+                )
+                await asyncio.sleep(4)
+                await client.post(f"{base_url}/hangup", headers=headers, json={})
+        except Exception as e:
+            logger.error(f"[AriaInbound] Transfer failed: {e}", exc_info=True)
 
 
 # =============================================================================
@@ -975,37 +974,23 @@ async def _handle_sms_opt_keyword(
         db.rollback()
         logger.error("sms_opt_keyword: commit failed: %s", e)
 
-    # --- 5. Send auto-reply ---
+    # --- 5. Send auto-reply via compliance chokepoint ---
     reply_text = _OPT_OUT_REPLY if is_opt_out else _OPT_IN_REPLY
     try:
-        import requests as _http
-        _telnyx_key = os.environ.get("TELNYX_API_KEY", "")
-        _telnyx_from = os.environ.get(
-            "TELNYX_FROM_NUMBER",
-            os.environ.get("TELNYX_PHONE_NUMBER", ""),
+        from telephony.sms import send_sms_verified
+        _first_lead_id = lead_ids[0] if lead_ids else None
+        _reply_result = send_sms_verified(
+            to=from_phone,
+            text=reply_text,
+            lead_id=_first_lead_id,
+            organization_id=int(org_id) if org_id else None,
+            db=db,
+            bypass_compliance=True,  # Legally required opt-out/in confirmation
         )
-        _telnyx_profile = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "")
-        if _telnyx_key and _telnyx_from:
-            _resp = _http.post(
-                "https://api.telnyx.com/v2/messages",
-                headers={
-                    "Authorization": f"Bearer {_telnyx_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "from": _telnyx_from,
-                    "to": from_phone,
-                    "text": reply_text,
-                    "messaging_profile_id": _telnyx_profile,
-                },
-                timeout=10,
-            )
-            logger.info(
-                "sms_opt_keyword: auto-reply sent, status=%d, to=...%s, action=%s",
-                _resp.status_code, from_phone[-4:] if from_phone else "?", action_label,
-            )
-        else:
-            logger.error("sms_opt_keyword: TELNYX_API_KEY or FROM_NUMBER not set, skipped reply")
+        logger.info(
+            "sms_opt_keyword: auto-reply sent via chokepoint, result=%s, to=...%s, action=%s",
+            _reply_result.get("status"), from_phone[-4:] if from_phone else "?", action_label,
+        )
     except Exception as e:
         logger.error("sms_opt_keyword: auto-reply send failed: %s", e)
 
@@ -1022,6 +1007,454 @@ async def _handle_sms_opt_keyword(
         "channel_prefs_updated": channel_prefs_updated,
         "tcpa_records_updated": tcpa_updated,
     }
+
+
+async def _aria_sms_ai_background_task(
+    conv_id,
+    org_id,
+    stage: str,
+    context_data: dict,
+    message_body: str,
+    normalized_from: str,
+) -> None:
+    """Background task: generate Claude AI reply and send via Telnyx for Aria SMS conversations.
+
+    Runs outside the webhook request lifecycle with its own DB session so the
+    webhook handler returns 200 to Telnyx immediately. Uses httpx for async
+    HTTP calls and the Anthropic SDK for Claude API calls (sync, run in thread
+    to avoid blocking the event loop).
+
+    All errors are caught and logged -- never propagated to caller.
+    """
+    import uuid as _uuid_bg
+    db: Optional[Session] = None
+    try:
+        db = SessionLocal()
+
+        # Fetch conversation history for context
+        _history_rows = db.execute(sa_text("""
+            SELECT direction, content FROM sms_ai_conversation_messages
+            WHERE conversation_id = :conv_id
+            ORDER BY created_at ASC
+        """), {"conv_id": conv_id}).fetchall()
+
+        _messages = []
+        for row in _history_rows:
+            role = "user" if row[0] == "inbound" else "assistant"
+            _messages.append({"role": role, "content": row[1]})
+        # Add current message if not already in history
+        if not _messages or _messages[-1].get("content") != message_body:
+            _messages.append({"role": "user", "content": message_body})
+
+        # Generate AI reply via Claude (sync SDK call, run in thread)
+        _reply_text = None
+        try:
+            import anthropic as _anthropic
+            _client = _anthropic.Anthropic(timeout=15.0)
+
+            borrower_name = context_data.get("borrower_name", "there")
+            lo_name = context_data.get("lo_name", "your loan officer")
+            appt_type = context_data.get("appointment_type", "consultation")
+
+            # Look up real LO availability for the next 7 days
+            _avail_context = ""
+            try:
+                _lo_user_id = context_data.get("user_id") or context_data.get("lo_id")
+                if not _lo_user_id:
+                    _lo_row = db.execute(sa_text("""
+                        SELECT user_id FROM leads
+                        WHERE id = :lead_id AND user_id IS NOT NULL
+                        LIMIT 1
+                    """), {"lead_id": context_data.get("lead_id")}).fetchone()
+                    if not _lo_row:
+                        _lo_row = db.execute(sa_text("""
+                            SELECT id FROM users
+                            WHERE organization_id = :org_id AND role IN ('admin', 'loan_officer', 'lo')
+                            LIMIT 1
+                        """), {"org_id": org_id}).fetchone()
+                    if _lo_row:
+                        _lo_user_id = _lo_row[0]
+
+                if _lo_user_id:
+                    from agents.tools.scheduler import get_availability
+                    _avail_result = get_availability(
+                        user_id=str(_lo_user_id),
+                        duration_minutes=30,
+                        meeting_type=appt_type,
+                    )
+                    if hasattr(_avail_result, 'to_dict'):
+                        _avail_data = _avail_result.to_dict().get("data", {})
+                    else:
+                        _avail_data = _avail_result.get("data", {}) if isinstance(_avail_result, dict) else {}
+                    _avail_slots = _avail_data.get("slots", [])[:6]
+                    if _avail_slots:
+                        _slot_list = ", ".join(s.get("display", "") for s in _avail_slots)
+                        _avail_context = f"\n\nAVAILABLE TIMES (next 7 days): {_slot_list}"
+            except Exception as _avail_err:
+                logger.warning("aria_sms_bg: availability lookup failed: %s", _avail_err)
+
+            _system = (
+                f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
+                f"a mortgage lending company. You are texting {borrower_name} "
+                f"to schedule a {appt_type}.\n\n"
+                "RULES:\n"
+                "- Keep responses under 160 characters (1 SMS segment)\n"
+                "- Be warm and professional\n"
+                "- When the borrower suggests a time, check if it's in the available slots and confirm it\n"
+                "- If they suggest a time that isn't available, propose the closest available time\n"
+                "- If they ask a vague question like 'do you have time tomorrow', propose 2-3 specific available slots for that day\n"
+                "- Do NOT quote rates, fees, or loan terms\n"
+                "- If they say stop or opt out, respect it immediately\n"
+                "- Do NOT promise to send calendar invites or emails -- the system sends those automatically\n"
+                "- When confirming, just say the appointment is confirmed for the date/time\n"
+                f"- Current stage: {stage}"
+                f"{_avail_context}"
+            )
+
+            # Run synchronous Anthropic SDK call in a thread to avoid blocking event loop
+            _resp = await asyncio.to_thread(
+                _client.messages.create,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=200,
+                system=_system,
+                messages=_messages,
+            )
+            if _resp.content:
+                _reply_text = _resp.content[0].text.strip()
+        except Exception as e:
+            logger.error("aria_sms_bg: Claude response generation failed: %s", e)
+
+        if _reply_text:
+            # Store outbound message and update conversation state
+            try:
+                db.execute(sa_text("""
+                    INSERT INTO sms_ai_conversation_messages
+                    (id, conversation_id, direction, content, ai_generated, created_at)
+                    VALUES (:id, :conv_id, 'outbound', :content, true, NOW())
+                """), {
+                    "id": str(_uuid_bg.uuid4()),
+                    "conv_id": conv_id,
+                    "content": _reply_text,
+                })
+                db.execute(sa_text("""
+                    UPDATE sms_ai_conversations
+                    SET last_message_at = NOW(),
+                        message_count = COALESCE(message_count, 0) + 2,
+                        current_stage = CASE
+                            WHEN current_stage = 'scheduling' THEN 'confirming'
+                            ELSE current_stage
+                        END
+                    WHERE id = :conv_id
+                """), {"conv_id": conv_id})
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error("aria_sms_bg: store reply/update state failed: %s", e)
+
+            # Send reply via Telnyx (async httpx)
+            try:
+                _telnyx_key = os.environ.get("TELNYX_API_KEY", "")
+                _telnyx_from = os.environ.get(
+                    "TELNYX_FROM_NUMBER",
+                    os.environ.get("TELNYX_PHONE_NUMBER", ""),
+                )
+                _telnyx_profile = os.environ.get(
+                    "TELNYX_MESSAGING_PROFILE_ID", "",
+                )
+                if _telnyx_key:
+                    async with httpx.AsyncClient(timeout=15) as _http_client:
+                        _send_resp = await _http_client.post(
+                            "https://api.telnyx.com/v2/messages",
+                            headers={
+                                "Authorization": f"Bearer {_telnyx_key}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "from": _telnyx_from,
+                                "to": normalized_from,
+                                "text": _reply_text,
+                                "messaging_profile_id": _telnyx_profile,
+                            },
+                        )
+                    logger.info(
+                        "aria_sms_bg: reply sent, status=%d, to=...%s, text='%s'",
+                        _send_resp.status_code, normalized_from[-4:], _reply_text[:50],
+                    )
+                else:
+                    logger.error("aria_sms_bg: TELNYX_API_KEY not set")
+            except Exception as e:
+                logger.error("aria_sms_bg: send reply failed: %s", e)
+
+            # ==========================================================
+            # Calendar invite email -- fires when appointment is confirmed
+            # ==========================================================
+            try:
+                _full_convo = "\n".join(
+                    f"{'Borrower' if m['role'] == 'user' else 'Aria'}: {m['content']}"
+                    for m in _messages
+                )
+                # Add the reply we just generated
+                _full_convo += f"\nAria: {_reply_text}"
+
+                _extract_resp = await asyncio.to_thread(
+                    _client.messages.create,
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=400,
+                    system=(
+                        "You are a data extractor. Analyze this SMS conversation and determine "
+                        "if an appointment has been CONFIRMED (both parties agreed on a specific "
+                        "date and time). If confirmed, extract the details.\n\n"
+                        "Respond in EXACTLY this format (no markdown, no extra text):\n"
+                        "CONFIRMED: yes or no\n"
+                        "DATE: YYYY-MM-DD (use the next occurrence if only day-of-week given)\n"
+                        "TIME: HH:MM (24-hour format)\n"
+                        "EMAILS: comma-separated list of any email addresses mentioned in the conversation\n\n"
+                        f"Today's date is {datetime.now().strftime('%Y-%m-%d')} "
+                        f"({datetime.now().strftime('%A')}).\n"
+                        "If no appointment is confirmed yet, just respond: CONFIRMED: no"
+                    ),
+                    messages=[{"role": "user", "content": _full_convo}],
+                )
+                _extract_text = _extract_resp.content[0].text.strip() if _extract_resp.content else ""
+                logger.info("aria_sms_bg: appointment extraction: %s", _extract_text[:200])
+
+                if "CONFIRMED: yes" in _extract_text.lower() or "CONFIRMED:yes" in _extract_text.lower():
+                    # Parse extracted fields
+                    _appt_date = None
+                    _appt_time = None
+                    _appt_emails = []
+
+                    for _line in _extract_text.split("\n"):
+                        _line = _line.strip()
+                        if _line.upper().startswith("DATE:"):
+                            _appt_date = _line.split(":", 1)[1].strip()
+                        elif _line.upper().startswith("TIME:"):
+                            _appt_time = _line.split(":", 1)[1].strip()
+                        elif _line.upper().startswith("EMAILS:"):
+                            _raw_emails = _line.split(":", 1)[1].strip()
+                            _appt_emails = [
+                                e.strip() for e in _raw_emails.split(",")
+                                if "@" in e.strip()
+                            ]
+
+                    # Also check context_data for emails collected during voice call
+                    _ctx_emails = context_data.get("attendee_emails", [])
+                    if isinstance(_ctx_emails, str):
+                        _ctx_emails = [e.strip() for e in _ctx_emails.split(",") if "@" in e]
+                    for _ce in _ctx_emails:
+                        if _ce not in _appt_emails:
+                            _appt_emails.append(_ce)
+
+                    # Look up lead's email if not already known
+                    if not _appt_emails:
+                        try:
+                            _lead_id_for_email = context_data.get("lead_id") or (
+                                db.execute(sa_text("""
+                                    SELECT lead_id FROM sms_ai_conversations WHERE id = :cid
+                                """), {"cid": conv_id}).scalar()
+                            )
+                            if _lead_id_for_email:
+                                _lead_email_row = db.execute(sa_text("""
+                                    SELECT email FROM leads WHERE id = :lid AND email IS NOT NULL
+                                """), {"lid": int(_lead_id_for_email)}).fetchone()
+                                if _lead_email_row and _lead_email_row[0]:
+                                    _appt_emails.append(_lead_email_row[0])
+                        except Exception:
+                            pass
+
+                    # Create CRM appointment record regardless of email availability
+                    if _appt_date and _appt_time:
+                        try:
+                            _lo_uid = context_data.get("user_id") or context_data.get("lo_id")
+                            if _lo_uid:
+                                db.execute(sa_text("""
+                                    INSERT INTO appointments
+                                    (user_id, lead_id, start_time, end_time,
+                                     appointment_type, title, status, notes, created_at)
+                                    VALUES (:uid, :lid,
+                                            CAST(:start AS timestamptz),
+                                            CAST(:end AS timestamptz),
+                                            :atype, :title, 'confirmed',
+                                            :notes, NOW())
+                                """), {
+                                    "uid": int(_lo_uid),
+                                    "lid": int(context_data.get("lead_id") or 0) or None,
+                                    "start": f"{_appt_date} {_appt_time}:00",
+                                    "end": f"{_appt_date} {_appt_time}:00",
+                                    "atype": appt_type,
+                                    "title": f"{appt_type.replace('_', ' ').title()} with {borrower_name}",
+                                    "notes": f"Scheduled via SMS by Aria. Borrower: {borrower_name}",
+                                })
+                                db.commit()
+                                logger.info("aria_sms_bg: appointment created for %s at %s %s", borrower_name, _appt_date, _appt_time)
+                        except Exception as _appt_err:
+                            db.rollback()
+                            logger.error("aria_sms_bg: appointment creation failed: %s", _appt_err)
+
+                    if _appt_date and _appt_time and _appt_emails:
+                        from datetime import timedelta
+                        try:
+                            _start_dt = datetime.strptime(
+                                f"{_appt_date} {_appt_time}", "%Y-%m-%d %H:%M"
+                            ).replace(tzinfo=timezone.utc)
+                        except ValueError:
+                            _start_dt = None
+                            logger.warning(
+                                "aria_sms_bg: could not parse date/time: %s %s",
+                                _appt_date, _appt_time,
+                            )
+
+                        if _start_dt:
+                            from services.ics_generator import generate_ics_content
+                            from services.email_delivery_service import EmailDeliveryService
+                            from services.email_delivery_models import EmailAttachment
+
+                            _ics_title = f"{appt_type.replace('_', ' ').title()} with {lo_name}"
+                            _ics_content = generate_ics_content(
+                                appointment_title=_ics_title,
+                                start_datetime=_start_dt,
+                                duration_minutes=30,
+                                attendee_email=_appt_emails[0],
+                                attendee_name=borrower_name,
+                                organizer_email="aria@perenniaai.com",
+                                organizer_name=f"Aria (on behalf of {lo_name})",
+                                description=(
+                                    f"Scheduled via SMS by Aria AI assistant.\n"
+                                    f"Appointment type: {appt_type.replace('_', ' ')}\n"
+                                    f"Borrower: {borrower_name}"
+                                ),
+                            )
+
+                            _ics_attachment = EmailAttachment(
+                                filename="appointment.ics",
+                                content_type="text/calendar; method=REQUEST",
+                                raw_content=_ics_content.encode("utf-8"),
+                            )
+
+                            _email_html = (
+                                f"<h2>Appointment Confirmed</h2>"
+                                f"<p>Hi {borrower_name},</p>"
+                                f"<p>Your <strong>{appt_type.replace('_', ' ')}</strong> "
+                                f"with <strong>{lo_name}</strong> has been confirmed.</p>"
+                                f"<p><strong>Date:</strong> {_start_dt.strftime('%A, %B %d, %Y')}<br>"
+                                f"<strong>Time:</strong> {_start_dt.strftime('%I:%M %p')}</p>"
+                                f"<p>A calendar invite is attached to this email. "
+                                f"Please add it to your calendar.</p>"
+                                f"<p>If you need to reschedule, just reply to the "
+                                f"text message thread or call us.</p>"
+                                f"<br><p>Best regards,<br>Aria -- Perennia AI</p>"
+                            )
+
+                            # Send to all collected emails
+                            _all_failed = True
+                            _email_svc = EmailDeliveryService(db)
+                            for _addr in _appt_emails:
+                                try:
+                                    _result = await _email_svc.send_email(
+                                        to=_addr,
+                                        subject=f"Appointment Confirmed: {_ics_title}",
+                                        html_body=_email_html,
+                                        from_name="Aria -- Perennia AI",
+                                        attachments=[_ics_attachment],
+                                        organization_id=str(org_id) if org_id else None,
+                                    )
+                                    if _result.success:
+                                        _all_failed = False
+                                    logger.info(
+                                        "aria_sms_bg: calendar invite sent to %s, status=%s, provider=%s",
+                                        _addr, _result.status.value, _result.provider.value,
+                                    )
+                                except Exception as _email_err:
+                                    logger.error(
+                                        "aria_sms_bg: calendar invite to %s failed: %s",
+                                        _addr, _email_err,
+                                    )
+
+                            # SMTP fallback
+                            if _all_failed:
+                                _smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+                                _smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+                                _smtp_user = os.environ.get("SMTP_USER", "")
+                                _smtp_pass = os.environ.get("SMTP_PASSWORD", "")
+                                if _smtp_user and _smtp_pass:
+                                    import smtplib as _smtplib
+                                    from email.mime.multipart import MIMEMultipart as _MMP
+                                    from email.mime.text import MIMEText as _MT
+                                    from email.mime.base import MIMEBase as _MB
+                                    from email import encoders as _enc
+
+                                    for _addr in _appt_emails:
+                                        try:
+                                            _msg = _MMP("mixed")
+                                            _msg["From"] = f"Aria -- Perennia AI <{_smtp_user}>"
+                                            _msg["To"] = _addr
+                                            _msg["Subject"] = f"Appointment Confirmed: {_ics_title}"
+                                            _msg.attach(_MT(_email_html, "html"))
+                                            _ics_part = _MB("text", "calendar", method="REQUEST")
+                                            _ics_part.set_payload(_ics_content.encode("utf-8"))
+                                            _enc.encode_base64(_ics_part)
+                                            _ics_part.add_header("Content-Disposition", "attachment", filename="appointment.ics")
+                                            _msg.attach(_ics_part)
+                                            # Run blocking SMTP in thread to avoid blocking event loop
+                                            _msg_str = _msg.as_string()
+                                            def _send_smtp(_to_addr, _msg_payload):
+                                                with _smtplib.SMTP(_smtp_host, _smtp_port) as _srv:
+                                                    _srv.starttls()
+                                                    _srv.login(_smtp_user, _smtp_pass)
+                                                    _srv.sendmail(_smtp_user, _to_addr, _msg_payload)
+                                            await asyncio.to_thread(_send_smtp, _addr, _msg_str)
+                                            logger.info("aria_sms_bg: SMTP calendar invite sent to %s", _addr)
+                                        except Exception as _smtp_err:
+                                            logger.error("aria_sms_bg: SMTP invite to %s failed: %s", _addr, _smtp_err)
+
+                            # Update conversation to confirmed
+                            try:
+                                db.execute(sa_text("""
+                                    UPDATE sms_ai_conversations
+                                    SET current_stage = 'confirmed',
+                                        context_data = context_data || CAST(:extra AS jsonb)
+                                    WHERE id = :conv_id
+                                """), {
+                                    "conv_id": conv_id,
+                                    "extra": json.dumps({
+                                        "confirmed_date": _appt_date,
+                                        "confirmed_time": _appt_time,
+                                        "invite_sent_to": _appt_emails,
+                                    }),
+                                })
+                                db.commit()
+                            except Exception as _db_err:
+                                db.rollback()
+                                logger.error(
+                                    "aria_sms_bg: update confirmed stage failed: %s",
+                                    _db_err,
+                                )
+
+                            logger.info(
+                                "aria_sms_bg: calendar invite sent to %s for %s %s",
+                                _appt_emails, _appt_date, _appt_time,
+                            )
+                    elif _appt_date and _appt_time:
+                        logger.info(
+                            "aria_sms_bg: appointment confirmed (%s %s) but no emails in conversation",
+                            _appt_date, _appt_time,
+                        )
+            except Exception as e:
+                logger.error("aria_sms_bg: calendar invite flow failed: %s", e)
+
+        logger.info(
+            "aria_sms_bg: completed for conv_id=%s, reply_sent=%s",
+            conv_id, bool(_reply_text),
+        )
+
+    except Exception as e:
+        logger.error("aria_sms_bg: unhandled error for conv_id=%s: %s", conv_id, e, exc_info=True)
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
@@ -1332,7 +1765,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 _aria_conv_id, normalized_from[-4:], _aria_stage,
             )
 
-            # Store inbound message in conversation
+            # Store inbound message in conversation (fast DB op -- keep in request)
             import uuid as _uuid_mod
             _inbound_msg_id = str(_uuid_mod.uuid4())
             try:
@@ -1349,416 +1782,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             except Exception:
                 db.rollback()
 
-            # Fetch conversation history for context
-            _history_rows = db.execute(sa_text("""
-                SELECT direction, content FROM sms_ai_conversation_messages
-                WHERE conversation_id = :conv_id
-                ORDER BY created_at ASC
-            """), {"conv_id": _aria_conv_id}).fetchall()
-
-            _messages = []
-            for row in _history_rows:
-                role = "user" if row[0] == "inbound" else "assistant"
-                _messages.append({"role": role, "content": row[1]})
-            # Add current message if not already in history
-            if not _messages or _messages[-1].get("content") != message_body:
-                _messages.append({"role": "user", "content": message_body})
-
-            # Generate AI reply via Claude
-            _reply_text = None
-            try:
-                import anthropic as _anthropic
-                _client = _anthropic.Anthropic(timeout=15.0)
-
-                borrower_name = _aria_context.get("borrower_name", "there")
-                lo_name = _aria_context.get("lo_name", "your loan officer")
-                appt_type = _aria_context.get("appointment_type", "consultation")
-
-                # Look up real LO availability for the next 7 days
-                _avail_context = ""
-                try:
-                    _lo_user_id = _aria_context.get("user_id") or _aria_context.get("lo_id")
-                    if not _lo_user_id:
-                        _lo_row = db.execute(sa_text("""
-                            SELECT user_id FROM leads
-                            WHERE id = :lead_id AND user_id IS NOT NULL
-                            LIMIT 1
-                        """), {"lead_id": _aria_conv[1] if len(_aria_conv) > 1 else None}).fetchone() if hasattr(_aria_conv, '__getitem__') else None
-                        if not _lo_row:
-                            _lo_row = db.execute(sa_text("""
-                                SELECT id FROM users
-                                WHERE organization_id = :org_id AND role IN ('admin', 'loan_officer', 'lo')
-                                LIMIT 1
-                            """), {"org_id": _aria_org_id}).fetchone()
-                        if _lo_row:
-                            _lo_user_id = _lo_row[0]
-
-                    if _lo_user_id:
-                        from agents.tools.scheduler import get_availability
-                        _avail_result = get_availability(
-                            user_id=str(_lo_user_id),
-                            duration_minutes=30,
-                            meeting_type=appt_type,
-                        )
-                        if hasattr(_avail_result, 'to_dict'):
-                            _avail_data = _avail_result.to_dict().get("data", {})
-                        else:
-                            _avail_data = _avail_result.get("data", {}) if isinstance(_avail_result, dict) else {}
-                        _avail_slots = _avail_data.get("slots", [])[:6]
-                        if _avail_slots:
-                            _slot_list = ", ".join(s.get("display", "") for s in _avail_slots)
-                            _avail_context = f"\n\nAVAILABLE TIMES (next 7 days): {_slot_list}"
-                except Exception as _avail_err:
-                    logger.warning("aria_sms_intercept: availability lookup failed: %s", _avail_err)
-
-                _system = (
-                    f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
-                    f"a mortgage lending company. You are texting {borrower_name} "
-                    f"to schedule a {appt_type}.\n\n"
-                    "RULES:\n"
-                    "- Keep responses under 160 characters (1 SMS segment)\n"
-                    "- Be warm and professional\n"
-                    "- When the borrower suggests a time, check if it's in the available slots and confirm it\n"
-                    "- If they suggest a time that isn't available, propose the closest available time\n"
-                    "- If they ask a vague question like 'do you have time tomorrow', propose 2-3 specific available slots for that day\n"
-                    "- Do NOT quote rates, fees, or loan terms\n"
-                    "- If they say stop or opt out, respect it immediately\n"
-                    "- Do NOT promise to send calendar invites or emails — the system sends those automatically\n"
-                    "- When confirming, just say the appointment is confirmed for the date/time\n"
-                    f"- Current stage: {_aria_stage}"
-                    f"{_avail_context}"
-                )
-
-                _resp = _client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=200,
-                    system=_system,
-                    messages=_messages,
-                )
-                if _resp.content:
-                    _reply_text = _resp.content[0].text.strip()
-            except Exception as e:
-                logger.error("aria_sms_intercept: Claude response generation failed: %s", e)
-
-            if _reply_text:
-                # Store outbound message and update conversation state
-                try:
-                    db.execute(sa_text("""
-                        INSERT INTO sms_ai_conversation_messages
-                        (id, conversation_id, direction, content, ai_generated, created_at)
-                        VALUES (:id, :conv_id, 'outbound', :content, true, NOW())
-                    """), {
-                        "id": str(_uuid_mod.uuid4()),
-                        "conv_id": _aria_conv_id,
-                        "content": _reply_text,
-                    })
-                    db.execute(sa_text("""
-                        UPDATE sms_ai_conversations
-                        SET last_message_at = NOW(),
-                            message_count = COALESCE(message_count, 0) + 2,
-                            current_stage = CASE
-                                WHEN current_stage = 'scheduling' THEN 'confirming'
-                                ELSE current_stage
-                            END
-                        WHERE id = :conv_id
-                    """), {"conv_id": _aria_conv_id})
-                    db.commit()
-                except Exception as e:
-                    db.rollback()
-                    logger.error("aria_sms_intercept: store reply/update state failed: %s", e)
-
-                # Send reply via Telnyx
-                try:
-                    import requests as _req
-                    _telnyx_key = os.environ.get("TELNYX_API_KEY", "")
-                    _telnyx_from = os.environ.get(
-                        "TELNYX_FROM_NUMBER",
-                        os.environ.get("TELNYX_PHONE_NUMBER", ""),
-                    )
-                    _telnyx_profile = os.environ.get(
-                        "TELNYX_MESSAGING_PROFILE_ID", "",
-                    )
-                    if _telnyx_key:
-                        _send_resp = _req.post(
-                            "https://api.telnyx.com/v2/messages",
-                            headers={
-                                "Authorization": f"Bearer {_telnyx_key}",
-                                "Content-Type": "application/json",
-                            },
-                            json={
-                                "from": _telnyx_from,
-                                "to": normalized_from,
-                                "text": _reply_text,
-                                "messaging_profile_id": _telnyx_profile,
-                            },
-                            timeout=10,
-                        )
-                        logger.info(
-                            "aria_sms_intercept: reply sent, status=%d, to=...%s, text='%s'",
-                            _send_resp.status_code, normalized_from[-4:], _reply_text[:50],
-                        )
-                    else:
-                        logger.error("aria_sms_intercept: TELNYX_API_KEY not set")
-                except Exception as e:
-                    logger.error("aria_sms_intercept: send reply failed: %s", e)
-
-                # ==========================================================
-                # Calendar invite email — fires when appointment is confirmed
-                # ==========================================================
-                try:
-                    _full_convo = "\n".join(
-                        f"{'Borrower' if m['role'] == 'user' else 'Aria'}: {m['content']}"
-                        for m in _messages
-                    )
-                    # Add the reply we just generated
-                    _full_convo += f"\nAria: {_reply_text}"
-
-                    _extract_resp = _client.messages.create(
-                        model="claude-haiku-4-5-20251001",
-                        max_tokens=400,
-                        system=(
-                            "You are a data extractor. Analyze this SMS conversation and determine "
-                            "if an appointment has been CONFIRMED (both parties agreed on a specific "
-                            "date and time). If confirmed, extract the details.\n\n"
-                            "Respond in EXACTLY this format (no markdown, no extra text):\n"
-                            "CONFIRMED: yes or no\n"
-                            "DATE: YYYY-MM-DD (use the next occurrence if only day-of-week given)\n"
-                            "TIME: HH:MM (24-hour format)\n"
-                            "EMAILS: comma-separated list of any email addresses mentioned in the conversation\n\n"
-                            f"Today's date is {datetime.now().strftime('%Y-%m-%d')} "
-                            f"({datetime.now().strftime('%A')}).\n"
-                            "If no appointment is confirmed yet, just respond: CONFIRMED: no"
-                        ),
-                        messages=[{"role": "user", "content": _full_convo}],
-                    )
-                    _extract_text = _extract_resp.content[0].text.strip() if _extract_resp.content else ""
-                    logger.info("aria_sms_intercept: appointment extraction: %s", _extract_text[:200])
-
-                    if "CONFIRMED: yes" in _extract_text.lower() or "CONFIRMED:yes" in _extract_text.lower():
-                        # Parse extracted fields
-                        _appt_date = None
-                        _appt_time = None
-                        _appt_emails = []
-
-                        for _line in _extract_text.split("\n"):
-                            _line = _line.strip()
-                            if _line.upper().startswith("DATE:"):
-                                _appt_date = _line.split(":", 1)[1].strip()
-                            elif _line.upper().startswith("TIME:"):
-                                _appt_time = _line.split(":", 1)[1].strip()
-                            elif _line.upper().startswith("EMAILS:"):
-                                _raw_emails = _line.split(":", 1)[1].strip()
-                                _appt_emails = [
-                                    e.strip() for e in _raw_emails.split(",")
-                                    if "@" in e.strip()
-                                ]
-
-                        # Also check context_data for emails collected during voice call
-                        _ctx_emails = _aria_context.get("attendee_emails", [])
-                        if isinstance(_ctx_emails, str):
-                            _ctx_emails = [e.strip() for e in _ctx_emails.split(",") if "@" in e]
-                        for _ce in _ctx_emails:
-                            if _ce not in _appt_emails:
-                                _appt_emails.append(_ce)
-
-                        # Look up lead's email if not already known
-                        if not _appt_emails:
-                            try:
-                                _lead_id_for_email = _aria_context.get("lead_id") or (
-                                    db.execute(sa_text("""
-                                        SELECT lead_id FROM sms_ai_conversations WHERE id = :cid
-                                    """), {"cid": _aria_conv_id}).scalar()
-                                )
-                                if _lead_id_for_email:
-                                    _lead_email_row = db.execute(sa_text("""
-                                        SELECT email FROM leads WHERE id = :lid AND email IS NOT NULL
-                                    """), {"lid": int(_lead_id_for_email)}).fetchone()
-                                    if _lead_email_row and _lead_email_row[0]:
-                                        _appt_emails.append(_lead_email_row[0])
-                            except Exception:
-                                pass
-
-                        # Create CRM appointment record regardless of email availability
-                        if _appt_date and _appt_time:
-                            try:
-                                _lo_uid = _aria_context.get("user_id") or _aria_context.get("lo_id")
-                                if _lo_uid:
-                                    db.execute(sa_text("""
-                                        INSERT INTO appointments
-                                        (user_id, lead_id, start_time, end_time,
-                                         appointment_type, title, status, notes, created_at)
-                                        VALUES (:uid, :lid,
-                                                CAST(:start AS timestamptz),
-                                                CAST(:end AS timestamptz),
-                                                :atype, :title, 'confirmed',
-                                                :notes, NOW())
-                                    """), {
-                                        "uid": int(_lo_uid),
-                                        "lid": int(_aria_context.get("lead_id") or 0) or None,
-                                        "start": f"{_appt_date} {_appt_time}:00",
-                                        "end": f"{_appt_date} {_appt_time}:00",
-                                        "atype": appt_type,
-                                        "title": f"{appt_type.replace('_', ' ').title()} with {borrower_name}",
-                                        "notes": f"Scheduled via SMS by Aria. Borrower: {borrower_name}",
-                                    })
-                                    db.commit()
-                                    logger.info("aria_sms_intercept: appointment created for %s at %s %s", borrower_name, _appt_date, _appt_time)
-                            except Exception as _appt_err:
-                                db.rollback()
-                                logger.error("aria_sms_intercept: appointment creation failed: %s", _appt_err)
-
-                        if _appt_date and _appt_time and _appt_emails:
-                            from datetime import timedelta
-                            try:
-                                _start_dt = datetime.strptime(
-                                    f"{_appt_date} {_appt_time}", "%Y-%m-%d %H:%M"
-                                ).replace(tzinfo=timezone.utc)
-                            except ValueError:
-                                _start_dt = None
-                                logger.warning(
-                                    "aria_sms_intercept: could not parse date/time: %s %s",
-                                    _appt_date, _appt_time,
-                                )
-
-                            if _start_dt:
-                                from services.ics_generator import generate_ics_content
-                                from services.email_delivery_service import EmailDeliveryService
-                                from services.email_delivery_models import EmailAttachment
-
-                                _ics_title = f"{appt_type.replace('_', ' ').title()} with {lo_name}"
-                                _ics_content = generate_ics_content(
-                                    appointment_title=_ics_title,
-                                    start_datetime=_start_dt,
-                                    duration_minutes=30,
-                                    attendee_email=_appt_emails[0],
-                                    attendee_name=borrower_name,
-                                    organizer_email="aria@perenniaai.com",
-                                    organizer_name=f"Aria (on behalf of {lo_name})",
-                                    description=(
-                                        f"Scheduled via SMS by Aria AI assistant.\n"
-                                        f"Appointment type: {appt_type.replace('_', ' ')}\n"
-                                        f"Borrower: {borrower_name}"
-                                    ),
-                                )
-
-                                _ics_attachment = EmailAttachment(
-                                    filename="appointment.ics",
-                                    content_type="text/calendar; method=REQUEST",
-                                    raw_content=_ics_content.encode("utf-8"),
-                                )
-
-                                _email_html = (
-                                    f"<h2>Appointment Confirmed</h2>"
-                                    f"<p>Hi {borrower_name},</p>"
-                                    f"<p>Your <strong>{appt_type.replace('_', ' ')}</strong> "
-                                    f"with <strong>{lo_name}</strong> has been confirmed.</p>"
-                                    f"<p><strong>Date:</strong> {_start_dt.strftime('%A, %B %d, %Y')}<br>"
-                                    f"<strong>Time:</strong> {_start_dt.strftime('%I:%M %p')}</p>"
-                                    f"<p>A calendar invite is attached to this email. "
-                                    f"Please add it to your calendar.</p>"
-                                    f"<p>If you need to reschedule, just reply to the "
-                                    f"text message thread or call us.</p>"
-                                    f"<br><p>Best regards,<br>Aria — Perennia AI</p>"
-                                )
-
-                                # Send to all collected emails
-                                async def _send_invite():
-                                    _all_failed = True
-                                    _email_svc = EmailDeliveryService(db)
-                                    for _addr in _appt_emails:
-                                        try:
-                                            _result = await _email_svc.send_email(
-                                                to=_addr,
-                                                subject=f"Appointment Confirmed: {_ics_title}",
-                                                html_body=_email_html,
-                                                from_name="Aria — Perennia AI",
-                                                attachments=[_ics_attachment],
-                                                organization_id=str(_aria_org_id) if _aria_org_id else None,
-                                            )
-                                            if _result.success:
-                                                _all_failed = False
-                                            logger.info(
-                                                "aria_sms_intercept: calendar invite sent to %s, status=%s, provider=%s",
-                                                _addr, _result.status.value, _result.provider.value,
-                                            )
-                                        except Exception as _email_err:
-                                            logger.error(
-                                                "aria_sms_intercept: calendar invite to %s failed: %s",
-                                                _addr, _email_err,
-                                            )
-
-                                    # SMTP fallback
-                                    if _all_failed:
-                                        _smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-                                        _smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-                                        _smtp_user = os.environ.get("SMTP_USER", "")
-                                        _smtp_pass = os.environ.get("SMTP_PASSWORD", "")
-                                        if _smtp_user and _smtp_pass:
-                                            import smtplib as _smtplib
-                                            from email.mime.multipart import MIMEMultipart as _MMP
-                                            from email.mime.text import MIMEText as _MT
-                                            from email.mime.base import MIMEBase as _MB
-                                            from email import encoders as _enc
-
-                                            for _addr in _appt_emails:
-                                                try:
-                                                    _msg = _MMP("mixed")
-                                                    _msg["From"] = f"Aria — Perennia AI <{_smtp_user}>"
-                                                    _msg["To"] = _addr
-                                                    _msg["Subject"] = f"Appointment Confirmed: {_ics_title}"
-                                                    _msg.attach(_MT(_email_html, "html"))
-                                                    _ics_part = _MB("text", "calendar", method="REQUEST")
-                                                    _ics_part.set_payload(_ics_content.encode("utf-8"))
-                                                    _enc.encode_base64(_ics_part)
-                                                    _ics_part.add_header("Content-Disposition", "attachment", filename="appointment.ics")
-                                                    _msg.attach(_ics_part)
-                                                    with _smtplib.SMTP(_smtp_host, _smtp_port) as _srv:
-                                                        _srv.starttls()
-                                                        _srv.login(_smtp_user, _smtp_pass)
-                                                        _srv.sendmail(_smtp_user, _addr, _msg.as_string())
-                                                    logger.info("aria_sms_intercept: SMTP calendar invite sent to %s", _addr)
-                                                except Exception as _smtp_err:
-                                                    logger.error("aria_sms_intercept: SMTP invite to %s failed: %s", _addr, _smtp_err)
-
-                                # We're inside an async handler — schedule the send
-                                await _send_invite()
-
-                                # Update conversation to confirmed
-                                try:
-                                    db.execute(sa_text("""
-                                        UPDATE sms_ai_conversations
-                                        SET current_stage = 'confirmed',
-                                            context_data = context_data || CAST(:extra AS jsonb)
-                                        WHERE id = :conv_id
-                                    """), {
-                                        "conv_id": _aria_conv_id,
-                                        "extra": json.dumps({
-                                            "confirmed_date": _appt_date,
-                                            "confirmed_time": _appt_time,
-                                            "invite_sent_to": _appt_emails,
-                                        }),
-                                    })
-                                    db.commit()
-                                except Exception as _db_err:
-                                    db.rollback()
-                                    logger.error(
-                                        "aria_sms_intercept: update confirmed stage failed: %s",
-                                        _db_err,
-                                    )
-
-                                logger.info(
-                                    "aria_sms_intercept: calendar invite sent to %s for %s %s",
-                                    _appt_emails, _appt_date, _appt_time,
-                                )
-                        elif _appt_date and _appt_time:
-                            logger.info(
-                                "aria_sms_intercept: appointment confirmed (%s %s) but no emails in conversation",
-                                _appt_date, _appt_time,
-                            )
-                except Exception as e:
-                    logger.error("aria_sms_intercept: calendar invite flow failed: %s", e)
-
-            # Store inbound for audit trail
+            # Store inbound for audit trail (fast DB op -- keep in request)
             try:
                 db.execute(sa_text("""
                     INSERT INTO sms_messages (
@@ -1807,11 +1831,26 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 db.rollback()
                 logger.debug(f"aria_sms_intercept: panel write failed: {_panel_err}")
 
+            # Spawn background task for Claude AI processing + reply sending.
+            # This releases the webhook DB connection and returns 200 to Telnyx
+            # immediately, preventing the 5s timeout retry and avoiding event
+            # loop blocking from synchronous Claude API calls (2-8s each).
+            asyncio.create_task(
+                _aria_sms_ai_background_task(
+                    conv_id=_aria_conv_id,
+                    org_id=_aria_org_id,
+                    stage=_aria_stage,
+                    context_data=_aria_context,
+                    message_body=message_body,
+                    normalized_from=normalized_from,
+                )
+            )
+
             return {
                 "status": "received",
                 "handler": "aria_sms_conversation",
                 "conversation_id": str(_aria_conv_id),
-                "reply_sent": bool(_reply_text),
+                "reply_sent": False,  # reply happens asynchronously in background
             }
     except Exception as e:
         db.rollback()

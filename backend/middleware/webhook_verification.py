@@ -304,9 +304,10 @@ class WebhookVerifier:
         - ``telnyx-signature-ed25519``: base64-encoded Ed25519 signature
         - ``telnyx-timestamp``: UNIX epoch seconds when Telnyx signed
 
-        Verification is **optional** when ``TELNYX_PUBLIC_KEY`` is not set
-        (to allow development without configuring the key).  When the key
-        IS set, verification is fail-closed.
+        Verification is **fail-closed** in production/staging when
+        ``TELNYX_PUBLIC_KEY`` is not set — webhooks are rejected.
+        In development, webhooks are allowed through with a warning.
+        When the key IS set, verification is always fail-closed.
 
         Replay protection rejects payloads whose timestamp is older than
         ``WEBHOOK_TIMESTAMP_TOLERANCE`` seconds (default 300 = 5 min).
@@ -318,11 +319,20 @@ class WebhookVerifier:
         body = await request.body()
 
         if not public_key:
-            # Allow webhooks through without signature verification.
-            # SMS inbound + delivery status depend on this path being open.
+            env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENVIRONMENT", "")).lower()
+            if env in ("production", "staging"):
+                logger.error(
+                    "TELNYX_PUBLIC_KEY not configured in %s — rejecting webhook "
+                    "(set the key to enable Ed25519 verification)", env,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Telnyx webhook verification not configured",
+                )
+            # Development/local: warn but allow through for testing
             logger.warning(
                 "TELNYX_PUBLIC_KEY not configured — allowing webhook without "
-                "signature verification (set the key to enable Ed25519 checks)"
+                "signature verification (development mode)"
             )
             return body
 
@@ -357,46 +367,32 @@ class WebhookVerifier:
             raise HTTPException(status_code=401, detail="Invalid Telnyx timestamp")
 
         # -- Ed25519 signature verification -----------------------------------
-        # Validate sender IP is from Telnyx network (192.76.120.0/24) as
-        # primary authentication. Ed25519 sig check is advisory for now
-        # because the public key format needs debugging.
-        telnyx_ip = False
-        if source_ip.startswith("192.76.120.") or source_ip.startswith("100.64."):
-            telnyx_ip = True
-
+        # Fail closed: signature must validate. IP-based trust is unreliable
+        # behind Railway's reverse proxy and has been removed.
         try:
             from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
             if not validate_telnyx_webhook(body, signature, timestamp, public_key):
-                if telnyx_ip:
-                    logger.warning(
-                        "Telnyx Ed25519 signature mismatch from %s — "
-                        "allowing (trusted IP)", source_ip,
-                    )
-                else:
-                    logger.warning(
-                        "Invalid Telnyx Ed25519 signature from %s", source_ip,
-                    )
-                    raise HTTPException(status_code=401, detail="Invalid Telnyx webhook signature")
-        except ImportError:
-            if not telnyx_ip:
-                logger.error("Telnyx webhook validation unavailable and untrusted IP")
-                raise HTTPException(
-                    status_code=503,
-                    detail="Telnyx webhook verification unavailable",
+                logger.warning(
+                    "Invalid Telnyx Ed25519 signature from %s", source_ip,
                 )
-            logger.warning(
+                raise HTTPException(status_code=401, detail="Invalid Telnyx webhook signature")
+        except ImportError:
+            logger.error(
                 "Telnyx webhook validation module not available — "
-                "allowing (trusted IP)"
+                "rejecting webhook (install PyNaCl)"
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Telnyx webhook verification unavailable",
             )
         except HTTPException:
             raise
         except Exception as e:
             logger.error("Telnyx webhook signature validation error: %s", e)
-            if not telnyx_ip:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Telnyx webhook signature validation failed",
-                )
+            raise HTTPException(
+                status_code=401,
+                detail="Telnyx webhook signature validation failed",
+            )
 
         return body
 
@@ -432,11 +428,20 @@ class WebhookVerifier:
         source_ip = request.client.host if request.client else "unknown"
 
         if not secret:
-            env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
+            env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENVIRONMENT", "")).lower()
+            if env in ("production", "staging"):
+                logger.error(
+                    "VAPI_WEBHOOK_SECRET not configured in %s — rejecting Vapi "
+                    "webhook (set secret to enable verification)", env,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Vapi webhook verification not configured",
+                )
+            # Development/local: warn but allow through for testing
             logger.warning(
-                "VAPI_WEBHOOK_SECRET not configured in %s — allowing Vapi "
-                "webhook without verification (set secret to enable checks)",
-                env or "development",
+                "VAPI_WEBHOOK_SECRET not configured — allowing Vapi "
+                "webhook without verification (development mode)"
             )
             return body
 
@@ -589,9 +594,10 @@ async def require_vapi_webhook(request: Request) -> bytes:
     Returns the raw request body bytes.  The caller should parse JSON
     from these bytes instead of calling ``request.json()`` again.
 
-    Verification is **skipped** when ``VAPI_WEBHOOK_SECRET`` is not set
-    (webhooks allowed through with a warning).  When the secret IS set,
-    verification is fail-closed.
+    Verification is **fail-closed** in production/staging when
+    ``VAPI_WEBHOOK_SECRET`` is not set — webhooks are rejected.
+    In development, webhooks are allowed through with a warning.
+    When the secret IS set, verification is always fail-closed.
 
     Usage:
         @router.post("/webhook/vapi")

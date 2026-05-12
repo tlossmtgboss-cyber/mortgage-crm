@@ -2801,7 +2801,9 @@ async def send_followup_sms(
                 phone_number=phone_number,
                 caller_name=name,
                 appointment_time=appointment_time,
-                appointment_type=appointment_type
+                appointment_type=appointment_type,
+                lead_id=data.get("lead_id"),
+                organization_id=getattr(current_user, "organization_id", None),
             )
         elif message_type == "calendly":
             context = data.get("context")

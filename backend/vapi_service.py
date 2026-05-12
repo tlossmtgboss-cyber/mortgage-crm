@@ -244,7 +244,9 @@ Pick a time that works best for you!
         phone_number: str,
         caller_name: Optional[str],
         appointment_time: str,
-        appointment_type: str = "consultation"
+        appointment_type: str = "consultation",
+        lead_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Send appointment confirmation SMS.
@@ -254,6 +256,8 @@ Pick a time that works best for you!
             caller_name: Caller's name
             appointment_time: Formatted appointment time
             appointment_type: Type of appointment (consultation, pre-approval, etc.)
+            lead_id: Lead ID for org-specific DNC list checking
+            organization_id: Org ID for tenant-scoped compliance gate
 
         Returns:
             Result dict with success status
@@ -276,7 +280,9 @@ We'll call you at this number at the scheduled time.
         try:
             send_result = client.send_sms(
                 to_phone=phone_number,
-                message=message
+                message=message,
+                lead_id=lead_id,
+                organization_id=organization_id,
             )
             message_sid = send_result.get("message_id") if isinstance(send_result, dict) else send_result
 

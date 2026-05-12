@@ -277,8 +277,8 @@ def validate_telnyx_webhook(
         return True
 
     except ImportError:
-        logger.warning("PyNaCl not installed - webhook validation skipped. Install with: pip install pynacl")
-        return True
+        logger.error("PyNaCl not installed - webhook validation REJECTED. Install with: pip install pynacl")
+        return False
     except Exception as e:
         logger.error(f"Telnyx webhook validation failed: {e}")
         return False
