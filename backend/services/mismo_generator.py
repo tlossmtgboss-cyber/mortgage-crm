@@ -7,7 +7,7 @@ import os
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
-from defusedxml.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.dom import minidom
 import uuid
 
