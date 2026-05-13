@@ -1968,18 +1968,21 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     LIMIT 1
                 """), {"org_id": _auto_org_id, "digits": _phone_digits}).fetchone()
 
+                _auto_from_purl = False
                 if not _auto_lead:
                     _auto_lead = db.execute(sa_text("""
-                        SELECT pc.id, pc.first_name, pc.last_name, NULL AS user_id
+                        SELECT pc.id, pc.first_name, pc.last_name, NULL AS owner_id
                         FROM purl_contacts pc
                         WHERE pc.organization_id = :org_id
                         AND RIGHT(REGEXP_REPLACE(COALESCE(pc.phone, ''), '[^0-9]', '', 'g'), 10) = :digits
                         ORDER BY pc.id DESC
                         LIMIT 1
                     """), {"org_id": _auto_org_id, "digits": _phone_digits}).fetchone()
+                    if _auto_lead:
+                        _auto_from_purl = True
 
                 if _auto_lead:
-                    _auto_lead_id = _auto_lead[0]
+                    _auto_lead_id = None if _auto_from_purl else _auto_lead[0]
                     _auto_borrower = (
                         f"{_auto_lead[1] or ''} {_auto_lead[2] or ''}".strip() or "there"
                     )
