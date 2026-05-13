@@ -341,11 +341,11 @@ def main():
                     timeout=120  # 2 minute timeout — don't let migrations block startup
                 )
                 if result.returncode != 0:
-                    print(f"FATAL: Migration failed with exit code {result.returncode}", flush=True)
-                    sys.exit(1)
+                    print(f"WARNING: Migration failed with exit code {result.returncode}, continuing startup...", flush=True)
             except subprocess.TimeoutExpired:
-                print("FATAL: Migrations timed out after 120s", flush=True)
-                sys.exit(1)
+                print("WARNING: Migrations timed out after 120s, continuing startup...", flush=True)
+    except Exception as e:
+        print(f"START.PY: Migration phase skipped due to error: {e}", flush=True)
     finally:
         if lock_conn:
             if got_lock:
