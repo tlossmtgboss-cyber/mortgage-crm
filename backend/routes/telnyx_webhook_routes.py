@@ -1959,7 +1959,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 if len(_phone_digits) > 10:
                     _phone_digits = _phone_digits[-10:]
                 _auto_lead = db.execute(sa_text("""
-                    SELECT l.id, l.first_name, l.last_name, l.user_id
+                    SELECT l.id, l.first_name, l.last_name, l.owner_id
                     FROM leads l
                     WHERE l.organization_id = :org_id
                     AND l.deleted_at IS NULL
