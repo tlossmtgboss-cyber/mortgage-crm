@@ -261,6 +261,19 @@ async def handle_telnyx_webhook(
         + (f" hangup={_raw_hangup} sip={_raw_sip}" if _raw_hangup else "")
     )
 
+    if _raw_event_type == "message.finalized" and isinstance(_raw_to, list):
+        for _to_entry in _raw_to:
+            if isinstance(_to_entry, dict) and _to_entry.get("status") in ("delivery_failed", "sending_failed"):
+                _errs = _raw_payload.get("errors", [])
+                logger.error(
+                    "[SMS-DELIVERY-FAILED] to=%s status=%s errors=%s carrier=%s payload_keys=%s",
+                    _to_entry.get("phone_number", "?"),
+                    _to_entry.get("status"),
+                    _errs,
+                    _to_entry.get("carrier"),
+                    list(_raw_payload.keys()),
+                )
+
     # Webhook idempotency — best-effort dedup via database.
     # Wrapped in try/except so a missing table never blocks webhook processing.
     webhook_event_id = payload.get("data", {}).get("id", "")
