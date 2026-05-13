@@ -244,7 +244,7 @@ function AuthGate({
   );
 
   const formContent = tab === 'signup' ? (
-    <SignupForm onStarted={onStarted} onSwitchToLogin={() => setTab('login')} loSlug={loSlug} />
+    <SignupForm onStarted={onStarted} onVerified={onVerified} onSwitchToLogin={() => setTab('login')} loSlug={loSlug} />
   ) : (
     <LoginForm onStarted={onStarted} onVerified={onVerified} onSwitchToSignup={() => setTab('signup')} />
   );
@@ -731,10 +731,12 @@ function useCountdown(expiresAt: string | null): { minutes: number; seconds: num
 
 function SignupForm({
   onStarted,
+  onVerified,
   onSwitchToLogin,
   loSlug,
 }: {
   onStarted: (session: VerifySession) => void;
+  onVerified: (token: string, name?: string) => void;
   onSwitchToLogin: () => void;
   loSlug?: string | null;
 }) {
@@ -755,7 +757,7 @@ function SignupForm({
 
     try {
       const phoneDigits = unformatPhone(phone);
-      const resp = await fetch(`${API_BASE}/api/v1/pos/start`, {
+      const resp = await fetch(`${API_BASE}/api/v1/pos/start-demo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -772,12 +774,7 @@ function SignupForm({
         throw new Error(data.detail || 'Failed to start application');
       }
 
-      onStarted({
-        sessionId: data.session_id,
-        emailMasked: data.email_masked,
-        expiresAt: data.expires_at,
-        flowType: 'signup',
-      });
+      onVerified(data.token, data.borrower_name);
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -789,8 +786,8 @@ function SignupForm({
     <>
       <h1 className="pos-start__title">Start Your Application</h1>
       <p className="pos-start__subtitle">
-        Begin your mortgage application in minutes. We'll send a verification
-        code to your email. Your progress saves automatically.
+        Begin your mortgage application in minutes.
+        Your progress saves automatically.
       </p>
 
       {error && <div className="pos-start__error">{error}</div>}
@@ -855,10 +852,10 @@ function SignupForm({
         >
           {submitting ? (
             <span className="pos-start__btn-loading">
-              <span className="pos-start__spinner" /> Sending code...
+              <span className="pos-start__spinner" /> Starting...
             </span>
           ) : (
-            'Send Verification Code'
+            'Start Application'
           )}
         </button>
       </form>
@@ -900,7 +897,7 @@ function LoginForm({
     setSubmitting(true);
 
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/pos/login`, {
+      const resp = await fetch(`${API_BASE}/api/v1/pos/login-demo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),
@@ -908,23 +905,10 @@ function LoginForm({
 
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        if (resp.status === 404) {
-          throw new Error('No account found with this email address. Please create a new account.');
-        }
-        throw new Error(data.detail || 'Failed to sign in');
+        throw new Error(data.detail || 'No account found. Please create a new account.');
       }
 
-      if (data.trusted_device && data.token) {
-        onVerified(data.token, data.borrower_name);
-        return;
-      }
-
-      onStarted({
-        sessionId: data.session_id,
-        emailMasked: data.email_masked,
-        expiresAt: data.expires_at,
-        flowType: 'login',
-      });
+      onVerified(data.token, data.borrower_name);
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -936,8 +920,7 @@ function LoginForm({
     <>
       <h1 className="pos-start__title">Welcome Back</h1>
       <p className="pos-start__subtitle">
-        Enter the email address associated with your application. We'll send a
-        verification code to confirm your identity.
+        Enter the email address associated with your application to continue.
       </p>
 
       {error && <div className="pos-start__error">{error}</div>}
@@ -965,10 +948,10 @@ function LoginForm({
         >
           {submitting ? (
             <span className="pos-start__btn-loading">
-              <span className="pos-start__spinner" /> Sending code...
+              <span className="pos-start__spinner" /> Signing in...
             </span>
           ) : (
-            'Send Verification Code'
+            'Continue'
           )}
         </button>
       </form>

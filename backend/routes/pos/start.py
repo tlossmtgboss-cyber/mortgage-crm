@@ -721,6 +721,158 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
     )
 
 
+class LoginDemoRequest(BaseModel):
+    email: EmailStr
+
+
+class LoginDemoResponse(BaseModel):
+    token: str
+    workspace_slug: str
+    borrower_name: str
+
+
+@router.post(
+    "/login-demo",
+    response_model=LoginDemoResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Demo login — returns token directly without email verification",
+)
+def login_demo(body: LoginDemoRequest, request: Request, db: Session = Depends(get_db)):
+    _ensure_table(db)
+
+    email_lower = body.email.strip().lower()
+
+    contact = (
+        db.query(PURLContact)
+        .filter(PURLContact.email == email_lower)
+        .order_by(PURLContact.id.desc())
+        .first()
+    )
+    if not contact:
+        raise HTTPException(status_code=404, detail="No account found with this email. Please create a new account.")
+
+    workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == contact.workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="No account found. Please create a new account.")
+
+    token_service = PURLTokenService(db)
+    _token_id, full_token = token_service.create_token(
+        organization_id=contact.organization_id,
+        workspace_id=workspace.id,
+        scope=TokenScope.WRITE,
+        contact_id=contact.id,
+        expires_in_days=90,
+    )
+    db.commit()
+
+    return LoginDemoResponse(
+        token=full_token,
+        workspace_slug=workspace.slug,
+        borrower_name=contact.first_name or "",
+    )
+
+
+class DemoStartRequest(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    phone: str = Field("", max_length=20)
+    lo_slug: Optional[str] = Field(None, max_length=200)
+
+
+class DemoStartResponse(BaseModel):
+    token: str
+    workspace_slug: str
+    borrower_name: str
+
+
+@router.post(
+    "/start-demo",
+    response_model=DemoStartResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Demo start — creates application immediately without email verification",
+)
+def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(get_db)):
+    _ensure_table(db)
+
+    try:
+        org_id = _resolve_organization_id(db, body.lo_slug)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("POS demo start: failed to resolve organization: %s", e)
+        raise HTTPException(status_code=500, detail=f"Organization lookup failed: {type(e).__name__}")
+
+    email_lower = body.email.strip().lower()
+
+    existing_contact = (
+        db.query(PURLContact)
+        .filter(PURLContact.email == email_lower)
+        .order_by(PURLContact.id.desc())
+        .first()
+    )
+    if existing_contact:
+        workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == existing_contact.workspace_id).first()
+        if workspace:
+            token_service = PURLTokenService(db)
+            _token_id, full_token = token_service.create_token(
+                organization_id=existing_contact.organization_id,
+                workspace_id=workspace.id,
+                scope=TokenScope.WRITE,
+                contact_id=existing_contact.id,
+                expires_in_days=90,
+            )
+            db.commit()
+            return DemoStartResponse(
+                token=full_token,
+                workspace_slug=workspace.slug,
+                borrower_name=existing_contact.first_name or body.first_name,
+            )
+
+    slug = f"{body.first_name.strip().lower()}-{body.last_name.strip().lower()}-{uuid.uuid4().hex[:8]}"
+    display_name = f"{body.first_name.strip()} {body.last_name.strip()}"
+    phone_raw = body.phone.strip() if body.phone else ""
+
+    workspace = PURLWorkspace(
+        organization_id=org_id,
+        slug=slug,
+        status=WorkspaceStatus.APPLICATION.value,
+        display_name=display_name,
+        source="pos_demo",
+        application_at=datetime.now(timezone.utc),
+    )
+    db.add(workspace)
+    db.flush()
+
+    contact = PURLContact(
+        organization_id=org_id,
+        workspace_id=workspace.id,
+        contact_type=ContactType.BORROWER.value,
+        first_name=body.first_name.strip(),
+        last_name=body.last_name.strip(),
+        email=email_lower,
+        phone=phone_raw,
+    )
+    db.add(contact)
+    db.flush()
+
+    token_service = PURLTokenService(db)
+    _token_id, full_token = token_service.create_token(
+        organization_id=org_id,
+        workspace_id=workspace.id,
+        scope=TokenScope.WRITE,
+        contact_id=contact.id,
+        expires_in_days=90,
+    )
+    db.commit()
+
+    return DemoStartResponse(
+        token=full_token,
+        workspace_slug=slug,
+        borrower_name=body.first_name.strip(),
+    )
+
+
 @router.post(
     "/check-token",
     response_model=TokenCheckResponse,
