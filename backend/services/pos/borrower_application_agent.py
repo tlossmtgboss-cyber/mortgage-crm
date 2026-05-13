@@ -25,6 +25,30 @@ PROMPT_PATH = Path(__file__).resolve().parent.parent.parent / (
 
 TOOL_DEFINITIONS = [
     {
+        "name": "get_application_state",
+        "description": "Fetch the borrower's in-progress application sections, completion percentage, and current step. Call when they ask what's left to do, how far along they are, or which sections need attention.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "application_id": {"type": "string"},
+                "organization_id": {"type": "integer"},
+            },
+            "required": ["application_id", "organization_id"],
+        },
+    },
+    {
+        "name": "get_loan_status",
+        "description": "Pull real-time loan milestones: stage, appraisal status, title status, closing date, and outstanding conditions. Call when borrower asks about their loan progress, appraisal, title, or closing timeline.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer"},
+                "organization_id": {"type": "integer"},
+            },
+            "required": ["loan_id", "organization_id"],
+        },
+    },
+    {
         "name": "get_lo_availability",
         "description": "Fetch 3-5 available calendar slots for the assigned LO. Call when the borrower wants to schedule a call.",
         "input_schema": {
@@ -152,7 +176,7 @@ class BorrowerApplicationAgent:
         )
 
         tool_results = await self._process_tool_calls(
-            response, organization_id, contact_id, application_id
+            response, organization_id, contact_id, application_id, loan_context
         )
 
         if tool_results:
@@ -214,6 +238,7 @@ IMPORTANT: Address the borrower by their first name ({borrower_name.split()[0] i
         organization_id: int | None,
         contact_id: int | None,
         application_id: str | None,
+        loan_context: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]] | None:
         tool_use_blocks = [
             block for block in response.content
@@ -226,7 +251,7 @@ IMPORTANT: Address the borrower by their first name ({borrower_name.split()[0] i
         for block in tool_use_blocks:
             result = await self._execute_tool(
                 block.name, block.input,
-                organization_id, contact_id, application_id,
+                organization_id, contact_id, application_id, loan_context,
             )
             results.append({
                 "type": "tool_result",
@@ -242,15 +267,20 @@ IMPORTANT: Address the borrower by their first name ({borrower_name.split()[0] i
         organization_id: int | None,
         contact_id: int | None,
         application_id: str | None,
+        loan_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         import asyncio
         from agents.tools import borrower_application as tools
 
         tool_input.setdefault("organization_id", organization_id)
-        if "application_id" in tool_input or tool_name in ("prompt_document_upload", "emit_crm_event", "recall_borrower_context"):
+        if "application_id" in tool_input or tool_name in ("get_application_state", "prompt_document_upload", "emit_crm_event", "recall_borrower_context"):
             tool_input.setdefault("application_id", application_id)
         if "contact_id" in tool_input or tool_name == "emit_crm_event":
             tool_input.setdefault("contact_id", contact_id)
+        if tool_name == "get_loan_status" and loan_context:
+            loan_blob = loan_context.get("loan") or {}
+            if loan_blob.get("id"):
+                tool_input.setdefault("loan_id", loan_blob["id"])
 
         tool_fn = getattr(tools, tool_name, None)
         if tool_fn is None:
