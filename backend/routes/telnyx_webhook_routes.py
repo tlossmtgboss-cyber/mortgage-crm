@@ -1177,7 +1177,7 @@ async def _aria_sms_ai_background_task(
                 _telnyx_profile = os.environ.get(
                     "TELNYX_MESSAGING_PROFILE_ID", "",
                 )
-                if _telnyx_key:
+                if _telnyx_key and _telnyx_from:
                     async with httpx.AsyncClient(timeout=15) as _http_client:
                         _send_resp = await _http_client.post(
                             "https://api.telnyx.com/v2/messages",
@@ -1192,12 +1192,38 @@ async def _aria_sms_ai_background_task(
                                 "messaging_profile_id": _telnyx_profile,
                             },
                         )
-                    logger.info(
-                        "aria_sms_bg: reply sent, status=%d, to=...%s, text='%s'",
-                        _send_resp.status_code, normalized_from[-4:], _reply_text[:50],
-                    )
-                else:
+                    if _send_resp.status_code >= 400:
+                        logger.error(
+                            "aria_sms_bg: Telnyx rejected reply: status=%d, body=%s",
+                            _send_resp.status_code, _send_resp.text[:300],
+                        )
+                    else:
+                        logger.info(
+                            "aria_sms_bg: reply sent, status=%d, to=...%s, text='%s'",
+                            _send_resp.status_code, normalized_from[-4:], _reply_text[:50],
+                        )
+                        try:
+                            db.execute(sa_text("""
+                                INSERT INTO sms_panel_messages
+                                    (id, phone, organization_id, direction, body,
+                                     sender_name, sender_role, status, created_at)
+                                VALUES (:id, :phone, :org_id, 'outbound', :body,
+                                        'Aria', 'ai_assistant', 'sent', NOW())
+                                ON CONFLICT (id) DO NOTHING
+                            """), {
+                                "id": str(_uuid_bg.uuid4()),
+                                "phone": normalized_from,
+                                "org_id": org_id,
+                                "body": _reply_text,
+                            })
+                            db.commit()
+                        except Exception as _panel_err:
+                            db.rollback()
+                            logger.debug("aria_sms_bg: outbound panel write: %s", _panel_err)
+                elif not _telnyx_key:
                     logger.error("aria_sms_bg: TELNYX_API_KEY not set")
+                else:
+                    logger.error("aria_sms_bg: TELNYX_FROM_NUMBER not set")
             except Exception as e:
                 logger.error("aria_sms_bg: send reply failed: %s", e)
 
@@ -1900,15 +1926,17 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     _auto_org_id = _auto_org_row[0]
 
             if _auto_org_id:
+                _phone_digits = re.sub(r'\D', '', normalized_from)
+                if len(_phone_digits) > 10:
+                    _phone_digits = _phone_digits[-10:]
                 _auto_lead = db.execute(sa_text("""
                     SELECT l.id, l.first_name, l.last_name, l.user_id
                     FROM leads l
                     WHERE l.organization_id = :org_id
-                    AND (l.phone = :phone OR l.cell_phone = :phone
-                         OR l.home_phone = :phone OR l.work_phone = :phone)
+                    AND RIGHT(REGEXP_REPLACE(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10) = :digits
                     ORDER BY l.updated_at DESC NULLS LAST
                     LIMIT 1
-                """), {"org_id": _auto_org_id, "phone": normalized_from}).fetchone()
+                """), {"org_id": _auto_org_id, "digits": _phone_digits}).fetchone()
 
                 if _auto_lead:
                     _auto_lead_id = _auto_lead[0]
@@ -1959,6 +1987,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                          message_count, created_at)
                         VALUES (:id, :phone, :lead_id, :org_id, 'active',
                                 'general', CAST(:context AS jsonb), NOW(), 1, NOW())
+                        ON CONFLICT DO NOTHING
                     """), {
                         "id": _auto_conv_id,
                         "phone": normalized_from,
