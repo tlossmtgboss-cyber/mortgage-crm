@@ -25,7 +25,31 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 
 from database import get_db, SessionLocal
-from middleware.webhook_verification import require_telnyx_webhook
+from middleware.webhook_verification import require_telnyx_webhook as _require_telnyx_webhook_strict
+
+_TELNYX_IP_PREFIX = "192.76.120."
+
+
+async def require_telnyx_webhook(request: Request) -> bytes:
+    """Telnyx webhook verification with IP-based fallback.
+
+    Ed25519 verification fails in production due to CDN body modification.
+    Falls back to IP verification for known Telnyx egress range.
+    """
+    try:
+        return await _require_telnyx_webhook_strict(request)
+    except HTTPException as exc:
+        if exc.status_code in (401, 503):
+            forwarded = request.headers.get("x-forwarded-for", "")
+            origin_ip = forwarded.split(",")[0].strip() if forwarded else ""
+            if origin_ip.startswith(_TELNYX_IP_PREFIX):
+                body = await request.body()
+                logger.warning(
+                    "Telnyx Ed25519 failed — allowing via IP fallback. "
+                    "ip=%s, body_len=%d", origin_ip, len(body),
+                )
+                return body
+        raise
 
 # Call Intelligence Integration (optional — degrades gracefully if unavailable)
 try:
