@@ -1130,13 +1130,18 @@ async def _aria_sms_ai_background_task(
             # Run synchronous Anthropic SDK call in a thread to avoid blocking event loop
             _resp = await asyncio.to_thread(
                 _client.messages.create,
-                model="claude-haiku-4-5-20251001",
+                model=os.environ.get("ARIA_SMS_MODEL", "claude-haiku-4-5-20251001"),
                 max_tokens=200,
                 system=_system,
                 messages=_messages,
             )
             if _resp.content:
                 _reply_text = _resp.content[0].text.strip()
+            if getattr(_resp, "stop_reason", None) == "max_tokens":
+                logger.warning(
+                    "aria_sms_bg: Claude reply truncated (hit max_tokens) for conv=%s",
+                    conv_id,
+                )
         except Exception as e:
             logger.error("aria_sms_bg: Claude response generation failed: %s", e)
 
@@ -1240,7 +1245,7 @@ async def _aria_sms_ai_background_task(
 
                 _extract_resp = await asyncio.to_thread(
                     _client.messages.create,
-                    model="claude-haiku-4-5-20251001",
+                    model=os.environ.get("ARIA_SMS_MODEL", "claude-haiku-4-5-20251001"),
                     max_tokens=400,
                     system=(
                         "You are a data extractor. Analyze this SMS conversation and determine "
@@ -1301,8 +1306,8 @@ async def _aria_sms_ai_background_task(
                                 """), {"lid": int(_lead_id_for_email)}).fetchone()
                                 if _lead_email_row and _lead_email_row[0]:
                                     _appt_emails.append(_lead_email_row[0])
-                        except Exception:
-                            pass
+                        except Exception as _email_err:
+                            logger.warning("aria_sms_bg: lead email lookup failed: %s", _email_err)
 
                     # Create CRM appointment record regardless of email availability
                     if _appt_date and _appt_time:
@@ -1933,10 +1938,21 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     SELECT l.id, l.first_name, l.last_name, l.user_id
                     FROM leads l
                     WHERE l.organization_id = :org_id
+                    AND l.deleted_at IS NULL
                     AND RIGHT(REGEXP_REPLACE(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10) = :digits
                     ORDER BY l.updated_at DESC NULLS LAST
                     LIMIT 1
                 """), {"org_id": _auto_org_id, "digits": _phone_digits}).fetchone()
+
+                if not _auto_lead:
+                    _auto_lead = db.execute(sa_text("""
+                        SELECT pc.id, pc.first_name, pc.last_name, NULL AS user_id
+                        FROM purl_contacts pc
+                        WHERE pc.organization_id = :org_id
+                        AND RIGHT(REGEXP_REPLACE(COALESCE(pc.phone, ''), '[^0-9]', '', 'g'), 10) = :digits
+                        ORDER BY pc.id DESC
+                        LIMIT 1
+                    """), {"org_id": _auto_org_id, "digits": _phone_digits}).fetchone()
 
                 if _auto_lead:
                     _auto_lead_id = _auto_lead[0]

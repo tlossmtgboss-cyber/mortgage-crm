@@ -1994,6 +1994,15 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ POS 1003 tables note: {e}")
 
+        # Add partial unique index on sms_ai_conversations (active phone+org)
+        try:
+            import importlib
+            _sms_idx_mod = importlib.import_module("migrations.add_sms_conv_unique_index")
+            _sms_idx_mod.run_migration(_engine)
+            logger.info("SMS AI conversations unique index ready")
+        except Exception as e:
+            logger.warning(f"SMS AI conversations unique index note: {e}")
+
         # Add deleted_at soft-delete column to leads, loans, borrower_profiles
         try:
             with _engine.connect() as conn:
