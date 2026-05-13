@@ -264,7 +264,7 @@ def validate_telnyx_webhook(
         import nacl.signing
         import nacl.encoding
 
-        signed_payload = f"{timestamp}.".encode() + payload
+        signed_payload = f"{timestamp}|".encode() + payload
 
         # Decode the signature and public key from base64
         signature_bytes = nacl.encoding.Base64Encoder.decode(signature)
