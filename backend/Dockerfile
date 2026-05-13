@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Build cache buster - change this value to force full rebuild
-ARG CACHE_DATE=2026-05-02-calendar-sync-v2
+ARG CACHE_DATE=2026-05-13-telnyx-webhook-fix
 RUN echo "Build timestamp: ${CACHE_DATE}"
 
 WORKDIR /app

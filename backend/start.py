@@ -324,28 +324,27 @@ def main():
             lock_conn = psycopg2.connect(database_url, connect_timeout=10)
             lock_conn.autocommit = True
             lock_cursor = lock_conn.cursor()
-            # Advisory lock key 728371 — arbitrary but unique to migrations
             lock_cursor.execute("SELECT pg_try_advisory_lock(728371)")
             got_lock = lock_cursor.fetchone()[0]
             lock_cursor.close()
             if not got_lock:
                 print("START.PY: Another replica is running migrations, skipping...", flush=True)
         else:
-            got_lock = True  # SQLite — no concurrency concern
+            got_lock = True
 
         if got_lock:
             try:
                 result = subprocess.run(
                     [sys.executable, os.path.join(script_dir, "run_migrations.py")],
                     check=False,
-                    timeout=120  # 2 minute timeout — don't let migrations block startup
+                    timeout=120
                 )
                 if result.returncode != 0:
-                    print(f"FATAL: Migration failed with exit code {result.returncode}", flush=True)
-                    sys.exit(1)
+                    print(f"START.PY: Migration exited with code {result.returncode} — continuing startup", flush=True)
             except subprocess.TimeoutExpired:
-                print("FATAL: Migrations timed out after 120s", flush=True)
-                sys.exit(1)
+                print("START.PY: Migrations timed out after 120s — continuing startup", flush=True)
+    except Exception as e:
+        print(f"START.PY: Migration step failed ({e}) — continuing startup without migrations", flush=True)
     finally:
         if lock_conn:
             if got_lock:
@@ -355,7 +354,10 @@ def main():
                     release_cursor.close()
                 except Exception:
                     pass
-            lock_conn.close()
+            try:
+                lock_conn.close()
+            except Exception:
+                pass
 
     # Ensure tables from Alembic migration 014 exist.
     # run_migrations.py stamps at head when core tables pre-exist, so these
