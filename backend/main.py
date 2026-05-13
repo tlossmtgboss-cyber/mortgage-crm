@@ -3640,6 +3640,19 @@ except Exception as e:
     logger.warning(f"Microsoft 365 routes skipped: {e}")
 
 # ============================================================================
+# MICROSOFT GRAPH EMAIL (OAuth2 send-as integration)
+# ============================================================================
+try:
+    from routes.microsoft_email_routes import register_microsoft_email_routes
+    register_microsoft_email_routes(app)
+    # Ensure table exists in production
+    from database.models.microsoft_email import MicrosoftEmailToken
+    MicrosoftEmailToken.__table__.create(engine, checkfirst=True)
+    logger.info("Microsoft Graph email routes loaded, table verified")
+except Exception as e:
+    logger.warning(f"Microsoft Graph email routes skipped: {e}")
+
+# ============================================================================
 # TEAMS INBOUND CALL NOTIFICATIONS (WebSocket + webhook)
 # ============================================================================
 try:

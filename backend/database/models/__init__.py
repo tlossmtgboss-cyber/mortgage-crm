@@ -172,6 +172,9 @@ from .microsoft import (
     MicrosoftAppConfig,
 )
 
+# Microsoft Graph email OAuth tokens
+from .microsoft_email import MicrosoftEmailToken
+
 # Data reconciliation engine models
 from .data_reconciliation import (
     IncomingDataEvent,
@@ -833,6 +836,11 @@ __all__ = [
     "MicrosoftToken",
     "MicrosoftOAuthToken",
     "MicrosoftAppConfig",
+
+    # =====================
+    # Microsoft Graph Email
+    # =====================
+    "MicrosoftEmailToken",
 
     # =====================
     # Data Reconciliation

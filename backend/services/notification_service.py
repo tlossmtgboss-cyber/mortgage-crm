@@ -179,13 +179,20 @@ class NotificationService:
         attachments: Optional[List[Dict]] = None,
         cc: Optional[List[str]] = None,
         bcc: Optional[List[str]] = None,
+        org_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        Send an email via SMTP (primary) or SendGrid (fallback).
+        Send an email. Tries Microsoft Graph first (if org has connected account),
+        then SMTP, then SendGrid fallback.
 
         Returns:
             Dict with 'success' boolean and 'message_id' or 'error'
         """
+        if org_id:
+            ms_result = self._send_email_microsoft(org_id, to_email, subject, html_content, plain_content, attachments, cc, bcc)
+            if ms_result is not None:
+                return ms_result
+
         if self.smtp_configured:
             return self._send_email_smtp(to_email, subject, html_content, plain_content, attachments, cc, bcc)
         elif self.sendgrid_client:
@@ -193,6 +200,45 @@ class NotificationService:
         else:
             logger.info("[DRY RUN] Would send email to %s: %s", self._mask_email(to_email), subject)
             return {"success": True, "dry_run": True}
+
+    def _send_email_microsoft(
+        self,
+        org_id: int,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        plain_content: Optional[str] = None,
+        attachments: Optional[List[Dict]] = None,
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Try sending via Microsoft Graph. Returns None if no tokens exist (falls through to SMTP)."""
+        try:
+            from db import SessionLocal
+            from services.microsoft_graph_email import MicrosoftGraphEmailService
+
+            db = SessionLocal()
+            try:
+                access_token, from_email = MicrosoftGraphEmailService.get_valid_access_token(db, org_id)
+                result = MicrosoftGraphEmailService.send_email(
+                    access_token=access_token,
+                    to_email=to_email,
+                    subject=subject,
+                    html_content=html_content,
+                    from_email=from_email,
+                    plain_content=plain_content,
+                    cc=cc,
+                    bcc=bcc,
+                    attachments=attachments,
+                )
+                return result
+            except ValueError:
+                return None
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning("Microsoft Graph email attempt failed, falling through: %s", str(e))
+            return None
 
     def _send_email_smtp(
         self,
