@@ -1,21 +1,33 @@
 """
 Notification Service - Email and SMS notifications for borrower applications.
 
-Uses SendGrid for email and Telnyx for SMS.
+Uses SMTP for email (any provider) and Telnyx for SMS.
+Falls back to SendGrid if SMTP is not configured but SENDGRID_API_KEY is set.
 """
 
 import html
 import os
 import logging
+import smtplib
+import ssl
 import threading
 import time as _time
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileName, FileType
 from telephony.provider import get_telephony_provider
 import base64
 from sqlalchemy.exc import SQLAlchemyError
+
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileName, FileType
+    _HAS_SENDGRID = True
+except ImportError:
+    _HAS_SENDGRID = False
 
 logger = logging.getLogger(__name__)
 
@@ -100,14 +112,24 @@ _telnyx_circuit_breaker = NotificationCircuitBreaker(
     recovery_timeout=int(os.getenv("TELNYX_CB_TIMEOUT", "60")),
 )
 
-# SendGrid configuration
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+# SMTP configuration (primary email transport)
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+
 try:
     from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_EMAIL
 except ImportError:
-    _DEFAULT_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "sarah@reply.perenniaai.com")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", _DEFAULT_EMAIL)
-SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME", "Sarah from Perennia AI")
+    _DEFAULT_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "noreply@perenniaai.com")
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", _DEFAULT_EMAIL)
+SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Perennia AI")
+
+# SendGrid fallback (used only if SMTP is not configured)
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", SMTP_FROM_EMAIL)
+SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME", SMTP_FROM_NAME)
 
 # Telnyx configuration
 TELNYX_API_KEY = (os.getenv("TELNYX_API_KEY") or "").strip()
@@ -122,18 +144,20 @@ class NotificationService:
     """Service for sending email and SMS notifications."""
 
     def __init__(self):
+        self.smtp_configured = False
         self.sendgrid_client = None
         self.telephony_provider = None
 
-        if SENDGRID_API_KEY:
+        if SMTP_HOST and SMTP_USER and SMTP_PASSWORD:
+            self.smtp_configured = True
+            logger.info("SMTP email configured: %s:%d (user: %s)", SMTP_HOST, SMTP_PORT, SMTP_USER)
+        elif SENDGRID_API_KEY and _HAS_SENDGRID:
             self.sendgrid_client = SendGridAPIClient(SENDGRID_API_KEY)
-            # Set a 30-second timeout on the underlying HTTP client to prevent
-            # indefinite hangs when SendGrid is slow or unreachable.
             if hasattr(self.sendgrid_client, 'client'):
                 self.sendgrid_client.client.timeout = 30
-            logger.info("SendGrid client initialized")
+            logger.info("SendGrid client initialized (SMTP not configured, using fallback)")
         else:
-            logger.warning("SendGrid API key not configured - emails will be logged only")
+            logger.warning("No email provider configured (set SMTP_HOST/SMTP_USER/SMTP_PASSWORD) - emails will be logged only")
 
         try:
             self.telephony_provider = get_telephony_provider()
@@ -157,20 +181,93 @@ class NotificationService:
         bcc: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
-        Send an email via SendGrid.
-
-        Args:
-            to_email: Recipient email address
-            subject: Email subject line
-            html_content: HTML body content
-            plain_content: Plain text fallback (optional)
-            attachments: List of attachment dicts with 'content', 'filename', 'type'
-            cc: List of CC email addresses
-            bcc: List of BCC email addresses
+        Send an email via SMTP (primary) or SendGrid (fallback).
 
         Returns:
             Dict with 'success' boolean and 'message_id' or 'error'
         """
+        if self.smtp_configured:
+            return self._send_email_smtp(to_email, subject, html_content, plain_content, attachments, cc, bcc)
+        elif self.sendgrid_client:
+            return self._send_email_sendgrid(to_email, subject, html_content, plain_content, attachments, cc, bcc)
+        else:
+            logger.info("[DRY RUN] Would send email to %s: %s", self._mask_email(to_email), subject)
+            return {"success": True, "dry_run": True}
+
+    def _send_email_smtp(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        plain_content: Optional[str] = None,
+        attachments: Optional[List[Dict]] = None,
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        try:
+            msg = MIMEMultipart("mixed")
+            msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
+            msg["To"] = to_email
+            msg["Subject"] = subject
+
+            if cc:
+                msg["Cc"] = ", ".join(cc)
+
+            body_part = MIMEMultipart("alternative")
+            if plain_content:
+                body_part.attach(MIMEText(plain_content, "plain", "utf-8"))
+            body_part.attach(MIMEText(html_content, "html", "utf-8"))
+            msg.attach(body_part)
+
+            if attachments:
+                for att in attachments:
+                    content = att.get("content", "")
+                    filename = att.get("filename", "attachment")
+                    mime_type = att.get("type", "application/octet-stream")
+
+                    part = MIMEBase(*mime_type.split("/", 1)) if "/" in mime_type else MIMEBase("application", "octet-stream")
+                    try:
+                        raw = base64.b64decode(content)
+                    except Exception:
+                        raw = content.encode("utf-8") if isinstance(content, str) else content
+                    part.set_payload(raw)
+                    encoders.encode_base64(part)
+                    part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
+                    msg.attach(part)
+
+            recipients = [to_email]
+            if cc:
+                recipients.extend(cc)
+            if bcc:
+                recipients.extend(bcc)
+
+            if SMTP_USE_TLS:
+                server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
+                server.starttls(context=ssl.create_default_context())
+            else:
+                server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30, context=ssl.create_default_context())
+
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM_EMAIL, recipients, msg.as_string())
+            server.quit()
+
+            logger.info("Email sent via SMTP to %s: %s", self._mask_email(to_email), subject)
+            return {"success": True, "provider": "smtp"}
+
+        except Exception as e:
+            logger.error("SMTP email failed to %s: %s", self._mask_email(to_email), str(e))
+            return {"success": False, "error": str(e)}
+
+    def _send_email_sendgrid(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        plain_content: Optional[str] = None,
+        attachments: Optional[List[Dict]] = None,
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         try:
             message = Mail(
                 from_email=Email(SENDGRID_FROM_EMAIL, SENDGRID_FROM_NAME),
@@ -181,15 +278,12 @@ class NotificationService:
 
             if plain_content:
                 message.add_content(Content("text/plain", plain_content))
-
             if cc:
                 for cc_email in cc:
                     message.add_cc(cc_email)
-
             if bcc:
                 for bcc_email in bcc:
                     message.add_bcc(bcc_email)
-
             if attachments:
                 for att in attachments:
                     attachment = Attachment(
@@ -199,13 +293,8 @@ class NotificationService:
                     )
                     message.add_attachment(attachment)
 
-            if not self.sendgrid_client:
-                logger.info(f"[DRY RUN] Would send email to {self._mask_email(to_email)}: {subject}")
-                return {"success": True, "dry_run": True}
-
-            # Circuit breaker: short-circuit if SendGrid is known-down
             if not _sendgrid_circuit_breaker.allow_request():
-                logger.warning(f"SendGrid circuit breaker OPEN — email to {self._mask_email(to_email)} deferred")
+                logger.warning("SendGrid circuit breaker OPEN — email to %s deferred", self._mask_email(to_email))
                 return {"success": False, "error": "Email service temporarily unavailable", "circuit_open": True}
 
             response = self.sendgrid_client.send(message)
@@ -215,8 +304,7 @@ class NotificationService:
             else:
                 _sendgrid_circuit_breaker.record_failure()
 
-            logger.info(f"Email sent to {self._mask_email(to_email)}: {subject} (status: {response.status_code})")
-
+            logger.info("Email sent via SendGrid to %s: %s (status: %d)", self._mask_email(to_email), subject, response.status_code)
             return {
                 "success": response.status_code in [200, 201, 202],
                 "status_code": response.status_code,
@@ -225,7 +313,7 @@ class NotificationService:
 
         except Exception as e:
             _sendgrid_circuit_breaker.record_failure()
-            logger.error(f"Failed to send email to {self._mask_email(to_email)}: {str(e)}")
+            logger.error("SendGrid email failed to %s: %s", self._mask_email(to_email), str(e))
             return {"success": False, "error": "Internal server error"}
 
     def send_application_confirmation(
