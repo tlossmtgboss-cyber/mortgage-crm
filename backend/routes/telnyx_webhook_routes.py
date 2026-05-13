@@ -1093,23 +1093,39 @@ async def _aria_sms_ai_background_task(
             except Exception as _avail_err:
                 logger.warning("aria_sms_bg: availability lookup failed: %s", _avail_err)
 
-            _system = (
-                f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
-                f"a mortgage lending company. You are texting {borrower_name} "
-                f"to schedule a {appt_type}.\n\n"
-                "RULES:\n"
-                "- Keep responses under 160 characters (1 SMS segment)\n"
-                "- Be warm and professional\n"
-                "- When the borrower suggests a time, check if it's in the available slots and confirm it\n"
-                "- If they suggest a time that isn't available, propose the closest available time\n"
-                "- If they ask a vague question like 'do you have time tomorrow', propose 2-3 specific available slots for that day\n"
-                "- Do NOT quote rates, fees, or loan terms\n"
-                "- If they say stop or opt out, respect it immediately\n"
-                "- Do NOT promise to send calendar invites or emails -- the system sends those automatically\n"
-                "- When confirming, just say the appointment is confirmed for the date/time\n"
-                f"- Current stage: {stage}"
-                f"{_avail_context}"
-            )
+            if stage == "general":
+                _system = (
+                    f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
+                    f"a mortgage lending company. You are texting with {borrower_name}.\n\n"
+                    "RULES:\n"
+                    "- Keep responses under 160 characters (1 SMS segment)\n"
+                    "- Be warm and professional\n"
+                    "- Help with mortgage questions, application status, scheduling\n"
+                    "- If they want to schedule a call, propose available times\n"
+                    "- Do NOT quote rates, fees, or loan terms\n"
+                    "- NEVER say 'you qualify' or 'you're approved'\n"
+                    "- If they say stop or opt out, respect it immediately\n"
+                    "- If you can't answer, say you'll have their LO follow up"
+                    f"{_avail_context}"
+                )
+            else:
+                _system = (
+                    f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
+                    f"a mortgage lending company. You are texting {borrower_name} "
+                    f"to schedule a {appt_type}.\n\n"
+                    "RULES:\n"
+                    "- Keep responses under 160 characters (1 SMS segment)\n"
+                    "- Be warm and professional\n"
+                    "- When the borrower suggests a time, check if it's in the available slots and confirm it\n"
+                    "- If they suggest a time that isn't available, propose the closest available time\n"
+                    "- If they ask a vague question like 'do you have time tomorrow', propose 2-3 specific available slots for that day\n"
+                    "- Do NOT quote rates, fees, or loan terms\n"
+                    "- If they say stop or opt out, respect it immediately\n"
+                    "- Do NOT promise to send calendar invites or emails -- the system sends those automatically\n"
+                    "- When confirming, just say the appointment is confirmed for the date/time\n"
+                    f"- Current stage: {stage}"
+                    f"{_avail_context}"
+                )
 
             # Run synchronous Anthropic SDK call in a thread to avoid blocking event loop
             _resp = await asyncio.to_thread(
@@ -1864,6 +1880,174 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     except Exception as e:
         db.rollback()
         logger.error(f"Aria SMS conversation intercept error (falling through): {e}")
+
+    # ======================================================================
+    # Aria SMS Auto-Create — Cold Inbound
+    # If no active conversation exists but the phone belongs to a known
+    # lead or POS borrower, auto-create an Aria conversation and reply.
+    # This lets borrowers text Aria directly without a prior voice call.
+    # ======================================================================
+    try:
+        if not _aria_conv:
+            _auto_org_id = _aria_intercept_org_id
+            if not _auto_org_id:
+                _auto_org_row = db.execute(sa_text("""
+                    SELECT organization_id FROM verified_caller_ids
+                    WHERE phone_number = :to_phone AND organization_id IS NOT NULL
+                    LIMIT 1
+                """), {"to_phone": normalized_to}).fetchone()
+                if _auto_org_row:
+                    _auto_org_id = _auto_org_row[0]
+
+            if _auto_org_id:
+                _auto_lead = db.execute(sa_text("""
+                    SELECT l.id, l.first_name, l.last_name, l.user_id
+                    FROM leads l
+                    WHERE l.organization_id = :org_id
+                    AND (l.phone = :phone OR l.cell_phone = :phone
+                         OR l.home_phone = :phone OR l.work_phone = :phone)
+                    ORDER BY l.updated_at DESC NULLS LAST
+                    LIMIT 1
+                """), {"org_id": _auto_org_id, "phone": normalized_from}).fetchone()
+
+                if _auto_lead:
+                    _auto_lead_id = _auto_lead[0]
+                    _auto_borrower = (
+                        f"{_auto_lead[1] or ''} {_auto_lead[2] or ''}".strip() or "there"
+                    )
+                    _auto_lo_user_id = _auto_lead[3]
+
+                    _auto_lo_name = "your loan officer"
+                    if _auto_lo_user_id:
+                        _auto_lo_row = db.execute(sa_text("""
+                            SELECT first_name, last_name FROM users WHERE id = :uid
+                        """), {"uid": _auto_lo_user_id}).fetchone()
+                        if _auto_lo_row:
+                            _auto_lo_name = (
+                                f"{_auto_lo_row[0] or ''} {_auto_lo_row[1] or ''}".strip()
+                                or "your loan officer"
+                            )
+                    else:
+                        _auto_lo_row = db.execute(sa_text("""
+                            SELECT id, first_name, last_name FROM users
+                            WHERE organization_id = :org_id
+                            AND role IN ('admin', 'lo', 'loan_officer')
+                            ORDER BY id LIMIT 1
+                        """), {"org_id": _auto_org_id}).fetchone()
+                        if _auto_lo_row:
+                            _auto_lo_user_id = _auto_lo_row[0]
+                            _auto_lo_name = (
+                                f"{_auto_lo_row[1] or ''} {_auto_lo_row[2] or ''}".strip()
+                                or "your loan officer"
+                            )
+
+                    import uuid as _uuid_auto
+                    _auto_conv_id = str(_uuid_auto.uuid4())
+                    _auto_context = {
+                        "borrower_name": _auto_borrower,
+                        "lo_name": _auto_lo_name,
+                        "appointment_type": "general",
+                        "user_id": str(_auto_lo_user_id) if _auto_lo_user_id else None,
+                        "lead_id": str(_auto_lead_id),
+                        "auto_created": True,
+                    }
+
+                    db.execute(sa_text("""
+                        INSERT INTO sms_ai_conversations
+                        (id, phone_number, lead_id, organization_id, status,
+                         current_stage, context_data, last_message_at,
+                         message_count, created_at)
+                        VALUES (:id, :phone, :lead_id, :org_id, 'active',
+                                'general', CAST(:context AS jsonb), NOW(), 1, NOW())
+                    """), {
+                        "id": _auto_conv_id,
+                        "phone": normalized_from,
+                        "lead_id": _auto_lead_id,
+                        "org_id": _auto_org_id,
+                        "context": json.dumps(_auto_context),
+                    })
+                    db.execute(sa_text("""
+                        INSERT INTO sms_ai_conversation_messages
+                        (id, conversation_id, direction, content, ai_generated, created_at)
+                        VALUES (:id, :conv_id, 'inbound', :content, false, NOW())
+                    """), {
+                        "id": str(_uuid_auto.uuid4()),
+                        "conv_id": _auto_conv_id,
+                        "content": message_body,
+                    })
+                    db.commit()
+
+                    logger.info(
+                        "aria_sms_auto_create: new conversation %s for lead=%s, phone=...%s",
+                        _auto_conv_id, _auto_lead_id, normalized_from[-4:],
+                    )
+
+                    try:
+                        db.execute(sa_text("""
+                            INSERT INTO sms_messages (
+                                direction, from_number, to_number, message,
+                                provider_message_id, status, created_at
+                            ) VALUES (
+                                'inbound', :from_number, :to_number, :body,
+                                :message_id, 'received', NOW()
+                            )
+                        """), {
+                            "from_number": from_number,
+                            "to_number": to_number,
+                            "body": message_body,
+                            "message_id": event.message_id,
+                        })
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+
+                    try:
+                        import uuid as _uuid_panel
+                        db.execute(sa_text("""
+                            INSERT INTO sms_panel_messages
+                                (id, phone, organization_id, direction, body,
+                                 sender_name, status, telnyx_message_id, created_at)
+                            VALUES (:id, :phone, :org_id, 'inbound', :body,
+                                    :sender_name, 'received', :telnyx_id, NOW())
+                            ON CONFLICT (id) DO NOTHING
+                        """), {
+                            "id": event.message_id or str(_uuid_panel.uuid4()),
+                            "phone": normalized_from,
+                            "org_id": _auto_org_id,
+                            "body": message_body or "",
+                            "sender_name": normalized_from,
+                            "telnyx_id": event.message_id,
+                        })
+                        db.commit()
+                        from routes.sms_conversation_routes import notify_inbound_sms
+                        await notify_inbound_sms(
+                            phone=normalized_from, body=message_body or "",
+                            telnyx_message_id=event.message_id, org_id=_auto_org_id,
+                        )
+                    except Exception as _panel_err:
+                        db.rollback()
+                        logger.debug("aria_sms_auto_create: panel write: %s", _panel_err)
+
+                    asyncio.create_task(
+                        _aria_sms_ai_background_task(
+                            conv_id=_auto_conv_id,
+                            org_id=_auto_org_id,
+                            stage="general",
+                            context_data=_auto_context,
+                            message_body=message_body,
+                            normalized_from=normalized_from,
+                        )
+                    )
+
+                    return {
+                        "status": "received",
+                        "handler": "aria_sms_auto_created",
+                        "conversation_id": _auto_conv_id,
+                        "reply_sent": False,
+                    }
+    except Exception as e:
+        db.rollback()
+        logger.error("Aria SMS auto-create error (falling through): %s", e)
 
     # ======================================================================
     # ACO (Application Completion Orchestrator) Intercept
