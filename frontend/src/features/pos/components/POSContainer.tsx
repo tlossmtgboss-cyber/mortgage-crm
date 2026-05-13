@@ -79,7 +79,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
-  const [view, setView] = useState<PosNavKey>('home');
+  const [view, setView] = useState<PosNavKey>('application');
   const [taskCount, setTaskCount] = useState(0);
   const [messageCount, setMessageCount] = useState(0);
   const [validationErrors, setValidationErrors] = useState<{ path: string; message: string }[]>([]);
