@@ -85,6 +85,15 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   const [validationErrors, setValidationErrors] = useState<{ path: string; message: string }[]>([]);
 
   const appId = application?.id;
+  const initialViewSet = useRef(false);
+  React.useEffect(() => {
+    if (application && !initialViewSet.current) {
+      initialViewSet.current = true;
+      if (application.status === 'submitted') {
+        setView('home');
+      }
+    }
+  }, [application]);
   React.useEffect(() => {
     if (appId) {
       posApi.getTasks(appId).then(resp => setTaskCount(resp.counts.pending + resp.counts.in_progress)).catch((err) => { console.error('Failed to load task counts:', err); });
