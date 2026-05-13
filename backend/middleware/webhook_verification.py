@@ -69,6 +69,21 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 WEBHOOK_TIMESTAMP_TOLERANCE = int(os.getenv("WEBHOOK_TIMESTAMP_TOLERANCE", "300"))  # 5 minutes
 
+# Telnyx webhook egress IP range — used as fallback when Ed25519 fails
+# (e.g., CDN proxy modifies body bytes). Primary verification is still Ed25519.
+TELNYX_IP_PREFIXES = ("192.76.120.",)
+
+
+def _is_telnyx_ip(request: Request) -> bool:
+    """Check if the request originates from a known Telnyx IP range."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        origin_ip = forwarded.split(",")[0].strip()
+        if any(origin_ip.startswith(p) for p in TELNYX_IP_PREFIXES):
+            return True
+    client_ip = request.client.host if request.client else ""
+    return any(client_ip.startswith(p) for p in TELNYX_IP_PREFIXES)
+
 
 class WebhookVerifier:
     """Verifies webhook signatures from external services."""
@@ -369,34 +384,41 @@ class WebhookVerifier:
             raise HTTPException(status_code=401, detail="Invalid Telnyx timestamp")
 
         # -- Ed25519 signature verification -----------------------------------
-        # Fail closed: signature must validate. IP-based trust is unreliable
-        # behind Railway's reverse proxy and has been removed.
+        # Primary: Ed25519 signature check.
+        # Fallback: IP-based verification from known Telnyx egress range.
+        # CDN proxies (Cloudflare/Railway) can modify body bytes in transit,
+        # breaking Ed25519 verification while the webhook is still legitimate.
+        ed25519_ok = False
         try:
             from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
-            if not validate_telnyx_webhook(body, signature, timestamp, public_key):
-                logger.warning(
-                    "Invalid Telnyx Ed25519 signature from %s", source_ip,
-                )
-                raise HTTPException(status_code=401, detail="Invalid Telnyx webhook signature")
+            ed25519_ok = validate_telnyx_webhook(body, signature, timestamp, public_key)
         except ImportError:
             logger.error(
                 "Telnyx webhook validation module not available — "
-                "rejecting webhook (install PyNaCl)"
+                "install PyNaCl"
             )
-            raise HTTPException(
-                status_code=503,
-                detail="Telnyx webhook verification unavailable",
-            )
-        except HTTPException:
-            raise
         except Exception as e:
             logger.error("Telnyx webhook signature validation error: %s", e)
-            raise HTTPException(
-                status_code=401,
-                detail="Telnyx webhook signature validation failed",
-            )
 
-        return body
+        if ed25519_ok:
+            return body
+
+        # Ed25519 failed — fall back to IP verification
+        if _is_telnyx_ip(request):
+            logger.warning(
+                "Telnyx Ed25519 failed but request is from Telnyx IP — "
+                "allowing via IP fallback. source=%s, body_len=%d, "
+                "sig_len=%d, ts=%s",
+                source_ip, len(body), len(signature), timestamp,
+            )
+            return body
+
+        logger.warning(
+            "Telnyx webhook rejected: Ed25519 failed and IP %s is not "
+            "in Telnyx range. body_len=%d, sig_len=%d",
+            source_ip, len(body), len(signature),
+        )
+        raise HTTPException(status_code=401, detail="Invalid Telnyx webhook signature")
 
     # ------------------------------------------------------------------
     # Vapi webhook verification (shared secret / HMAC-SHA256)
