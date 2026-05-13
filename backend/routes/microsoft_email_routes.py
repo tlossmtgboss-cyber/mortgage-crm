@@ -141,6 +141,47 @@ async def microsoft_email_connect(
     return ConnectResponse(authorization_url=auth_url)
 
 
+@router.get("/connect-redirect")
+async def microsoft_email_connect_redirect(
+    token: str = Query(..., description="JWT access token"),
+    db: Session = Depends(get_db),
+):
+    """Browser-friendly: redirects directly to Microsoft OAuth login.
+
+    Usage: navigate to /api/v1/email/microsoft/connect-redirect?token=YOUR_TOKEN
+    """
+    from auth.dependencies import get_current_user as _get_user_fn
+    from auth.tokens import verify_access_token
+
+    try:
+        payload = verify_access_token(token)
+        user_id = payload.get("sub") or payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        from db import SessionLocal
+        from database.models.core import User
+        _db = SessionLocal()
+        try:
+            user = _db.query(User).filter(User.id == int(user_id)).first()
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+            org_id = getattr(user, "organization_id", None)
+            if not org_id:
+                raise HTTPException(status_code=400, detail="No organization")
+            state = _create_state_token(user.id, org_id)
+            auth_url = MicrosoftGraphEmailService.get_authorization_url(state)
+            logger.info("Microsoft email OAuth redirect for user %d, org %d", user.id, org_id)
+            return RedirectResponse(url=auth_url, status_code=302)
+        finally:
+            _db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Connect-redirect failed: %s", str(e))
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
 @router.get("/callback")
 async def microsoft_email_callback(
     code: str = Query(..., description="Authorization code from Microsoft"),
