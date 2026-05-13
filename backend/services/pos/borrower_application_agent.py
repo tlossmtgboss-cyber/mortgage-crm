@@ -177,13 +177,19 @@ class BorrowerApplicationAgent:
         history: list[dict[str, Any]],
         current_step: str | None,
     ) -> list[dict[str, Any]]:
+        borrower_name = loan_context.get('borrower_name') or 'the borrower'
+        lo_name = loan_context.get('lo_name') or 'the loan officer'
         context_block = f"""<application_context>
+Borrower name: {borrower_name}
+Loan officer name: {lo_name}
 Current step: {current_step or 'unknown'}
 Completion: {loan_context.get('completion_pct', 0)}%
 Sections: {json.dumps(loan_context.get('sections', {}), indent=2)}
 Loan: {json.dumps(loan_context.get('loan', {}), indent=2)}
 PII flags: {json.dumps(loan_context.get('presence_flags', {}), indent=2)}
-</application_context>"""
+</application_context>
+
+IMPORTANT: Address the borrower by their first name ({borrower_name.split()[0] if borrower_name != 'the borrower' else 'there'}). When mentioning the loan officer, use their name ({lo_name})."""
 
         messages = []
         messages.append({
@@ -192,7 +198,7 @@ PII flags: {json.dumps(loan_context.get('presence_flags', {}), indent=2)}
         })
         messages.append({
             "role": "assistant",
-            "content": "Understood. I have the application context loaded. Ready to help the borrower.",
+            "content": f"Understood. I have {borrower_name}'s application context loaded. Ready to help.",
         })
 
         for turn in history:

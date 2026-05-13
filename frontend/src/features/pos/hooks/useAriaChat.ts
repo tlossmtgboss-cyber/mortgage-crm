@@ -43,12 +43,14 @@ export function useAriaChat(applicationId: string | undefined, currentStep?: str
     (async () => {
       setLoading(true);
       try {
-        const history = await posApi.getQAHistory(applicationId);
+        const [history, ctx] = await Promise.all([
+          posApi.getQAHistory(applicationId),
+          posApi.getAriaContext(applicationId).catch(() => null),
+        ]);
         if (cancelled) return;
         const ui = history.messages.map(toUIMessage);
-        // If the conversation is empty, show a friendly seed greeting.
         if (ui.length === 0) {
-          ui.push(buildSeedGreeting(currentStep));
+          ui.push(buildSeedGreeting(currentStep, ctx?.borrower_name, ctx?.lo_name));
         }
         setMessages(ui);
       } catch (e) {
@@ -153,17 +155,21 @@ function toUIMessage(m: QAMessageResponse): UIMessage {
   };
 }
 
-function buildSeedGreeting(currentStep?: string): UIMessage {
+function buildSeedGreeting(currentStep?: string, borrowerName?: string | null, loName?: string | null): UIMessage {
+  const nameGreeting = borrowerName ? `Hi ${borrowerName}!` : 'Hi!';
   const stepLine = currentStep
     ? `You're on the ${prettyStep(currentStep)} step. `
     : '';
+  const loLine = loName
+    ? `If I'm not sure about something, I'll loop in ${loName} directly.`
+    : "If I'm not sure about something, I'll loop in your loan officer.";
   return {
     role: 'aria',
     content:
-      "Hi — I'm Aria, your AI loan assistant. I can answer questions about " +
+      `${nameGreeting} I'm Aria, your AI loan assistant. I can answer questions about ` +
       "your application, mortgage guidelines, or what comes next. " +
       stepLine +
-      "Ask me anything — and if I'm not sure, I'll loop in your loan officer.",
+      loLine,
     sources: [],
     followUps: [
       'How are my numbers looking?',

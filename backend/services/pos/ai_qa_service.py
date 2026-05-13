@@ -186,9 +186,6 @@ class AIQAService:
         if application.loan_id is not None:
             loan = session.get(Loan, application.loan_id)
             if loan is not None:
-                # Pull a minimal set of fields. Don't blanket-serialize the
-                # Loan model — tenant-specific columns may contain LO notes
-                # or pricing strategy that shouldn't be exposed to the agent.
                 loan_blob = {
                     "id": loan.id,
                     "purpose": getattr(loan, "loan_purpose", None),
@@ -200,12 +197,37 @@ class AIQAService:
                     "status": getattr(loan, "status", None),
                 }
 
+        borrower_name = None
+        lo_name = None
+        try:
+            from models.purl import PURLContact
+            contact = session.query(PURLContact).filter(
+                PURLContact.id == application.contact_id
+            ).first()
+            if contact:
+                borrower_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip() or None
+
+            from database.models.core import User
+            lo = (
+                session.query(User)
+                .filter(User.organization_id == application.organization_id)
+                .filter(User.role.in_(["admin", "lo", "loan_officer"]))
+                .order_by(User.id)
+                .first()
+            )
+            if lo:
+                lo_name = f"{lo.first_name or ''} {lo.last_name or ''}".strip() or None
+        except Exception as e:
+            logger.debug("Failed to resolve borrower/LO names: %s", e)
+
         return {
             "application_id": str(application.id),
             "completion_pct": application.completion_pct,
             "current_step": application.current_step,
             "sections": sections_blob,
             "loan": loan_blob,
+            "borrower_name": borrower_name,
+            "lo_name": lo_name,
             "presence_flags": {
                 "has_ssn": bool(application.pii and application.pii.ssn_encrypted),
                 "has_co_ssn": bool(application.pii and application.pii.co_ssn_encrypted),

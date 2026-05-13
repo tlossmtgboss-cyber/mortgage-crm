@@ -211,6 +211,17 @@ export const posApi = {
       `/api/v1/pos/ai-qa/applications/${applicationId}/history?limit=${limit}`,
     ),
 
+  getAriaContext: (applicationId: string) =>
+    request<{
+      borrower_name: string | null;
+      lo_name: string | null;
+      lo_user_id: number | null;
+      lo_phone: string | null;
+      lo_email: string | null;
+      completion_pct: number;
+      current_step: string;
+    }>('GET', `/api/v1/pos/ai-qa/applications/${applicationId}/context`),
+
   // ---------- Documents ----------
 
   getDocuments: (loanId: number) =>

@@ -72,6 +72,9 @@ async def ask_aria(
     service: AIQAService = Depends(get_ai_qa_service),
 ) -> AskResponse:
     """Single-turn Q&A. Persists both the borrower turn and Aria's response."""
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+
     from ._helpers import resolve_application_direct
 
     application = resolve_application_direct(
@@ -81,23 +84,41 @@ async def ask_aria(
     )
 
     if application.status != "draft":
-        # Aria is a draft-time helper. Once submitted, the borrower goes
-        # through their LO. Returning 410 (Gone) gives the frontend a clear
-        # signal to swap the chat panel for a "message Sarah" CTA.
         raise HTTPException(
             status.HTTP_410_GONE,
             detail="Application is no longer accepting Aria queries (already submitted).",
         )
 
-    result = await service.ask(
-        db,
-        application=application,
-        question=body.message,
-        context_message_ids=body.context_message_ids,
-        current_step=body.current_step,
-        ctx=ctx,
-    )
-    db.commit()
+    try:
+        result = await service.ask(
+            db,
+            application=application,
+            question=body.message,
+            context_message_ids=body.context_message_ids,
+            current_step=body.current_step,
+            ctx=ctx,
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        _logger.exception("Aria ask failed: %s", exc)
+        from datetime import datetime as _dt, timezone as _tz
+        return AskResponse(
+            message_id=0,
+            application_id=body.application_id,
+            content=(
+                "I'm having a little trouble connecting right now. "
+                "Let me loop in your loan officer so nothing slips through the cracks. "
+                "In the meantime, feel free to keep filling out your application!"
+            ),
+            sources=[],
+            follow_ups=["What documents do I still need?", "Can I schedule a call?"],
+            latency_ms=0,
+            confidence="escalate",
+            escalation_recommended=True,
+            escalation_reason=f"Agent error: {type(exc).__name__}",
+            created_at=_dt.now(_tz.utc),
+        )
 
     return AskResponse(
         message_id=result["message_id"],
@@ -119,6 +140,63 @@ async def ask_aria(
 # ---------------------------------------------------------------------------
 # History
 # ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/applications/{application_id}/context",
+    summary="Get borrower name and LO info for personalized Aria greeting",
+)
+def get_aria_context(
+    application: POSApplication = Depends(resolve_application_for_borrower),
+    purl_ctx: PURLAuthContext = Depends(require_purl_token),
+    db: Session = Depends(get_db),
+):
+    from models.purl import PURLContact
+    from database.models.core import User
+
+    contact = db.query(PURLContact).filter(PURLContact.id == purl_ctx.contact_id).first()
+    borrower_name = contact.first_name if contact else None
+
+    lo_name = None
+    lo_user_id = None
+    lo_phone = None
+    lo_email = None
+    try:
+        from database.models.lead_loan import Loan
+        if application.loan_id:
+            loan = db.query(Loan).filter(Loan.id == application.loan_id).first()
+            if loan and getattr(loan, "user_id", None):
+                lo = db.query(User).filter(User.id == loan.user_id).first()
+                if lo:
+                    lo_name = f"{lo.first_name or ''} {lo.last_name or ''}".strip() or None
+                    lo_user_id = lo.id
+                    lo_phone = getattr(lo, "phone", None)
+                    lo_email = getattr(lo, "email", None)
+        if not lo_name:
+            lo = (
+                db.query(User)
+                .filter(User.organization_id == purl_ctx.organization_id)
+                .filter(User.role.in_(["admin", "lo", "loan_officer"]))
+                .order_by(User.id)
+                .first()
+            )
+            if lo:
+                lo_name = f"{lo.first_name or ''} {lo.last_name or ''}".strip() or None
+                lo_user_id = lo.id
+                lo_phone = getattr(lo, "phone", None)
+                lo_email = getattr(lo, "email", None)
+    except Exception:
+        pass
+
+    return {
+        "borrower_name": borrower_name,
+        "lo_name": lo_name,
+        "lo_user_id": lo_user_id,
+        "lo_phone": lo_phone,
+        "lo_email": lo_email,
+        "completion_pct": application.completion_pct,
+        "current_step": application.current_step,
+    }
 
 
 @router.get(
