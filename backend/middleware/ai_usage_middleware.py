@@ -208,6 +208,36 @@ class AIUsageTracker:
                 f"tokens={input_tokens}/{output_tokens}, cost=${costs['total_cost']:.6f}"
             )
 
+            # Also record to ai_cost_records for the cost tracking dashboard
+            try:
+                self.db.execute(text("""
+                    INSERT INTO ai_cost_records (
+                        id, organization_id, user_id, agent_type, model,
+                        input_tokens, output_tokens, cost_usd, duration_ms,
+                        created_at
+                    ) VALUES (
+                        gen_random_uuid(), :org_id, :user_id, :agent_type, :model,
+                        :input_tokens, :output_tokens, :cost_usd, :duration_ms,
+                        NOW()
+                    )
+                """), {
+                    "org_id": self.organization_id,
+                    "user_id": user_id,
+                    "agent_type": feature or "unknown",
+                    "model": model,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cost_usd": str(costs["total_cost"]),
+                    "duration_ms": latency_ms,
+                })
+                self.db.commit()
+            except Exception as cost_err:
+                logger.debug(f"ai_cost_records insert skipped: {cost_err}")
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
+
         except Exception as e:
             logger.error(f"Failed to log AI usage: {e}")
             # Don't fail the main request if logging fails
@@ -447,6 +477,36 @@ def log_ai_usage(
             f"AI Usage logged: user={user_id}, model={model}, "
             f"tokens={input_tokens}/{output_tokens}, cost=${costs['total_cost']:.6f}"
         )
+
+        # Also record to ai_cost_records for the cost tracking dashboard
+        try:
+            db.execute(text("""
+                INSERT INTO ai_cost_records (
+                    id, organization_id, user_id, agent_type, model,
+                    input_tokens, output_tokens, cost_usd, duration_ms,
+                    created_at
+                ) VALUES (
+                    gen_random_uuid(), :org_id, :user_id, :agent_type, :model,
+                    :input_tokens, :output_tokens, :cost_usd, :duration_ms,
+                    NOW()
+                )
+            """), {
+                "org_id": organization_id,
+                "user_id": user_id,
+                "agent_type": feature or "unknown",
+                "model": model,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": str(costs["total_cost"]),
+                "duration_ms": latency_ms,
+            })
+            db.commit()
+        except Exception as cost_err:
+            logger.debug(f"ai_cost_records insert skipped: {cost_err}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         return request_id
 

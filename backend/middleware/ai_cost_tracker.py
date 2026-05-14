@@ -163,6 +163,76 @@ class AIBudgetTracker:
         )
         return cost
 
+    def track_call_with_tokens(
+        self,
+        org_id: int,
+        agent_type: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        duration_ms: Optional[int] = None,
+        user_id: Optional[int] = None,
+        db=None,
+    ) -> float:
+        """Record an AI API call with token-level detail.
+
+        Updates the in-memory budget window AND persists to
+        ``ai_cost_records`` via the persistent cost tracker if a
+        database session is provided.
+
+        Parameters
+        ----------
+        org_id : int
+            Organization ID.
+        agent_type : str
+            Agent role identifier (e.g. ``"pipeline_analyst"``).
+        model : str
+            Model identifier (e.g. ``"claude-sonnet-4-6"``).
+        input_tokens : int
+            Number of input/prompt tokens.
+        output_tokens : int
+            Number of output/completion tokens.
+        duration_ms : int, optional
+            Wall-clock latency of the API call.
+        user_id : int, optional
+            User who triggered the call.
+        db : Session, optional
+            SQLAlchemy session for persistent tracking.
+
+        Returns
+        -------
+        float
+            The computed cost in USD.
+        """
+        # Calculate cost using the persistent tracker's pricing
+        try:
+            from services.ai_cost_tracker import calculate_cost as _calc
+            cost = float(_calc(model, input_tokens, output_tokens))
+        except Exception:
+            cost = self.get_cost_estimate(agent_type)
+
+        # Record in the in-memory sliding window
+        self.track_call(org_id, agent_type, estimated_cost=cost)
+
+        # Persist to ai_cost_records if a DB session is available
+        if db is not None:
+            try:
+                from services.ai_cost_tracker import AICostTracker
+                tracker = AICostTracker(db)
+                tracker.record_usage(
+                    org_id=org_id,
+                    agent_type=agent_type,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    duration_ms=duration_ms,
+                    user_id=user_id,
+                )
+            except Exception as e:
+                logger.debug("Persistent cost tracking skipped: %s", e)
+
+        return cost
+
     def get_usage(
         self,
         org_id: int,

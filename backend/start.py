@@ -287,10 +287,32 @@ def _ensure_new_tables(database_url: str):
     cur.execute("CREATE INDEX IF NOT EXISTS ix_audit_events_actor ON audit_events(actor_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS ix_audit_events_resource ON audit_events(resource_id)")
 
+    # ── AI Cost Records (persistent dollar-cost tracking) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ai_cost_records (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            organization_id INTEGER NOT NULL REFERENCES organizations(id),
+            user_id INTEGER REFERENCES users(id),
+            agent_type VARCHAR(64) NOT NULL,
+            model VARCHAR(64) NOT NULL,
+            input_tokens INTEGER NOT NULL,
+            output_tokens INTEGER NOT NULL,
+            cost_usd NUMERIC(10,6) NOT NULL,
+            duration_ms INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_org_created ON ai_cost_records(organization_id, created_at)")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_org_agent ON ai_cost_records(organization_id, agent_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_model ON ai_cost_records(model)")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_created ON ai_cost_records(created_at)")
+    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_user ON ai_cost_records(user_id, created_at)")
+
     tables_created = []
     for tbl in ("client_files", "client_file_collaborators",
                 "team_chat_channels", "team_chat_messages",
-                "team_chat_reactions", "team_chat_reads", "audit_events"):
+                "team_chat_reactions", "team_chat_reads", "audit_events",
+                "ai_cost_records"):
         cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (tbl,))
         if cur.fetchone()[0]:
             tables_created.append(tbl)

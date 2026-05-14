@@ -3990,6 +3990,20 @@ async def _check_vapi_phone_config():
 
 
 # ============================================================================
+# AI COST TRACKING ROUTES
+# ============================================================================
+try:
+    from routes.ai_cost_routes import register_ai_cost_routes
+    register_ai_cost_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("AI cost tracking routes loaded")
+except Exception as e:
+    logger.warning(f"AI cost tracking routes skipped: {e}")
+
+# ============================================================================
 # ADMIN WEBHOOK DEAD-LETTER QUEUE
 # ============================================================================
 try:

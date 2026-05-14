@@ -688,6 +688,9 @@ from .lo_license import LoanOfficerLicense, LicenseStatus, LicenseType
 from .briefing_thread import BriefingThread, BriefingTask, BriefingAuditLog
 from .contact_card import ContactCardMember
 
+# AI Cost Records (persistent dollar-cost tracking for AI API calls)
+from .ai_cost_record import AICostRecord
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1421,4 +1424,9 @@ __all__ = [
     # Contact Card
     # =====================
     "ContactCardMember",
+
+    # =====================
+    # AI Cost Records
+    # =====================
+    "AICostRecord",
 ]
