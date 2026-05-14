@@ -1,14 +1,26 @@
 """
 Endpoint-Level Rate Limiter (In-Memory, No Redis Required)
 
+DECORATOR-BASED RATE LIMITER — complements the middleware-level
+APIRateLimitMiddleware (middleware/api_rate_limit.py).
+
 Provides a decorator-based rate limiter for FastAPI route handlers using a
 sliding window counter algorithm.  Designed for per-endpoint protection of
 Smart Docs V2 and other sensitive routes.
 
-Unlike the middleware-level AdaptiveRateLimiter (rate_limiting.py) which uses
-Redis and operates at the ASGI layer, this module is applied directly to
-individual route handlers via decorators.  This makes it easy to assign
-different limits to different endpoints without middleware path matching.
+This module is applied directly to individual route handlers via decorators,
+making it easy to assign different limits to different endpoints without
+middleware path matching.
+
+Rate Limiting Architecture (consolidated 2026-05-14):
+    ACTIVE modules (each serves a distinct purpose):
+    - middleware/api_rate_limit.py  — primary per-user/IP middleware (ASGI layer)
+    - middleware/rate_limiter.py    (THIS FILE) — decorator-based per-endpoint limits
+    - middleware/tenant_rate_limiter.py — per-organization quotas
+    - middleware/mobile_rate_limit.py   — mobile-specific limits
+
+    DEPRECATED modules (thin wrappers for backward compat):
+    - middleware/rate_limiting.py   — dead code, retained for chat_system_bootstrap.py
 
 Features:
     - Sliding window counter (no Redis — pure in-memory)

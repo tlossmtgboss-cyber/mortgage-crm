@@ -1,6 +1,8 @@
 """
 Tenant Context Middleware
 =========================
+PRIMARY TENANT MIDDLEWARE — registered in main.py as TenantContextMiddleware.
+
 Sets tenant context on request.state for all authenticated requests.
 
 This middleware extracts the authenticated user from the JWT token (if present)
@@ -13,6 +15,13 @@ It also sets the structured logging context variables for correlation:
 - tenant_id: For organization-level log correlation (organization_id)
 
 This enables the tenant isolation system to work without modifying every route.
+
+Tenant Middleware Architecture (consolidated 2026-05-14):
+    ACTIVE:
+    - middleware/tenant_context_middleware.py (THIS FILE) — JWT-based context setting
+    - middleware/tenant_filter.py             — query-level isolation helpers
+    DEPRECATED:
+    - middleware/tenant_middleware.py — unused multi-DB routing (example file only)
 """
 
 import logging

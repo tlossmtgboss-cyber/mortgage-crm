@@ -10,9 +10,12 @@ It is only imported by chat_system_bootstrap.py (which is itself unused).
 
 DO NOT import this module in new code.  All active rate limiting is handled by:
   - middleware/api_rate_limit.py  (APIRateLimitMiddleware) — primary per-user/IP
+  - middleware/rate_limiter.py    — decorator-based per-endpoint limits
   - middleware/tenant_rate_limiter.py (TenantRateLimitMiddleware) — per-org
   - middleware/mobile_rate_limit.py  (MobileRateLimitMiddleware) — mobile
-  - middleware/rate_limiter.py — decorator-based per-endpoint
+
+Rate limiter consolidation completed 2026-05-14.  See api_rate_limit.py docstring
+for the canonical architecture diagram.
 
 This file is retained only to avoid breaking the (unused) chat_system_bootstrap
 import.  It will be deleted when chat_system_bootstrap.py is removed.

@@ -1,18 +1,63 @@
 """
-Tenant Middleware
-Routes requests to the correct tenant database based on subdomain, header, or JWT token.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+DEPRECATED — DO NOT USE IN NEW CODE  [Deprecated 2026-05-14]
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+Tenant Middleware — Multi-Database Routing by Subdomain/Header/JWT
+
+STATUS: UNUSED.  This module is NOT registered in main.py.  It is only
+imported by main_integration_example.py (an example file, not production code).
+
+This was designed for a multi-database-per-tenant architecture that was never
+adopted.  The actual tenant isolation system uses:
+
+  - middleware/tenant_context_middleware.py (TenantContextMiddleware)
+      Registered in main.py.  Sets request.state.user, request.state.tenant_context,
+      and request.state.organization_id from JWT tokens.  This is the ACTIVE
+      tenant context middleware.
+
+  - middleware/tenant_filter.py
+      Query helpers (require_tenant_filter, verify_entity_tenant, TenantMixin)
+      for enforcing organization_id isolation at the query level.  Used by
+      routes and tests.
+
+  - services/tenant_isolation.py (TenantContext dataclass)
+      The TenantContext used in production — distinct from the TenantContext
+      class in THIS file which wraps a per-tenant DB session.
+
+Tenant Middleware Architecture (consolidated 2026-05-14):
+    ACTIVE:
+    - middleware/tenant_context_middleware.py — JWT-based context setting (middleware)
+    - middleware/tenant_filter.py             — query-level isolation helpers
+    DEPRECATED:
+    - middleware/tenant_middleware.py (THIS FILE) — unused multi-DB routing
 """
 import logging
 import os
+import warnings
 from typing import Optional
 from fastapi import Request, HTTPException, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
+warnings.warn(
+    "middleware.tenant_middleware is deprecated and unused in production. "
+    "Active tenant isolation is handled by middleware/tenant_context_middleware.py "
+    "(request context) and middleware/tenant_filter.py (query helpers). "
+    "The only importer is main_integration_example.py (example file).",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from tenant_database_manager import tenant_db_manager
 from models.tenant import Tenant
 
 logger = logging.getLogger(__name__)
+
+logger.warning(
+    "DEPRECATED: middleware.tenant_middleware imported — this module is not used "
+    "in production. Only importer is main_integration_example.py (example file)."
+)
 
 
 class TenantContext:

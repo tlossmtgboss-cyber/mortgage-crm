@@ -1,6 +1,8 @@
 """
 API Rate Limiting Middleware — Per-User and Per-IP Sliding Window
 
+PRIMARY RATE LIMITER — registered in main.py as APIRateLimitMiddleware.
+
 Enterprise-grade API rate limiting using a sliding window algorithm.
 Applies globally to all API requests with per-prefix overrides for
 expensive or high-frequency endpoints.
@@ -13,11 +15,15 @@ Architecture:
     - Standard rate limit response headers on every response
     - Exempt paths for health checks, CSRF, and public webhooks
 
-This middleware complements (does not replace) the existing rate limiters:
-    - security_middleware.RateLimitMiddleware — role-based tiers, burst protection
+Rate Limiting Architecture (consolidated 2026-05-14):
+    ACTIVE modules (each serves a distinct purpose):
+    - middleware/api_rate_limit.py  (THIS FILE) — primary per-user/IP middleware
+    - middleware/rate_limiter.py    — decorator-based per-endpoint limits
     - middleware/tenant_rate_limiter.py — per-organization quotas
-    - middleware/mobile_rate_limit.py — mobile-specific limits
-    - middleware/rate_limiter.py — per-endpoint decorator
+    - middleware/mobile_rate_limit.py   — mobile-specific limits
+
+    DEPRECATED modules (thin wrappers for backward compat):
+    - middleware/rate_limiting.py   — dead code, retained for chat_system_bootstrap.py
 
 This layer enforces a hard per-identity ceiling with prefix-specific tuning,
 independent of user role or tenant.  It is the final safety net before the

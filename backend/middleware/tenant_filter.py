@@ -1,9 +1,19 @@
 """
 Tenant Isolation Query Helpers
 
+QUERY-LEVEL TENANT ISOLATION — complements TenantContextMiddleware
+(middleware/tenant_context_middleware.py) which sets the request context.
+
 Provides reusable functions and a mixin class for enforcing organization-level
 tenant isolation on database queries. Every multi-tenant model should be
 queried through these helpers to prevent cross-tenant data leakage.
+
+Tenant Middleware Architecture (consolidated 2026-05-14):
+    ACTIVE:
+    - middleware/tenant_context_middleware.py — JWT-based context setting (middleware)
+    - middleware/tenant_filter.py (THIS FILE) — query-level isolation helpers
+    DEPRECATED:
+    - middleware/tenant_middleware.py — unused multi-DB routing (example file only)
 
 Usage:
     from middleware.tenant_filter import (
