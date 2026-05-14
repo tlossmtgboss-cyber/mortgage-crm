@@ -426,28 +426,21 @@ async def upload_document(
     if content_length and int(content_length) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
 
-    # Read magic bytes for type verification, then reset stream
-    header = await file.read(8)
-    await file.seek(0)
+    # Run full security pipeline: MIME check, magic bytes, malware scan,
+    # EXIF stripping (images), PDF sanitization
+    from middleware.upload_security import secure_upload
+    sec_result = await secure_upload(file, max_size=MAX_UPLOAD_SIZE)
+    file_content = sec_result.file_bytes
+    safe_filename = sec_result.filename
+    mime_type = sec_result.mime_type
+    file_size = sec_result.file_size
 
-    # Validate MIME type, magic bytes, and sanitize filename
-    claimed_content_type = file.content_type or "application/octet-stream"
-    is_valid, validation_error, safe_filename = validate_upload_file(
-        claimed_content_type, header, file.filename
-    )
-    if not is_valid:
-        raise HTTPException(status_code=400, detail=validation_error)
-
-    # Read file content
-    file_content = await file.read()
-
-    # Get file info
-    mime_type = claimed_content_type
-    file_size = len(file_content)
-
-    # Validate file size (max 20MB) — belt-and-suspenders after early Content-Length check
-    if file_size > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail="File too large (max 20MB)")
+    if sec_result.sanitization_log:
+        logger.info(
+            "Upload security for %s: %s",
+            file.filename,
+            "; ".join(sec_result.sanitization_log),
+        )
 
     # Check storage quota (MTR-004)
     try:

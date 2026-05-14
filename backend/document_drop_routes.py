@@ -221,18 +221,20 @@ async def upload_document(
         # Validate file type before reading content
         _validate_file_type(file.filename, file.content_type)
 
-        # Read file content with size limit
-        content = await file.read(MAX_FILE_SIZE + 1)
-        file_size = len(content)
-        if file_size > MAX_FILE_SIZE:
-            raise HTTPException(status_code=413, detail=f"File too large. Maximum size is 50 MB.")
+        # Run full security pipeline: MIME check, magic bytes, malware scan,
+        # EXIF stripping (images), PDF sanitization
+        from middleware.upload_security import secure_upload
+        sec_result = await secure_upload(file, max_size=MAX_FILE_SIZE)
+        content = sec_result.file_bytes
+        file_size = sec_result.file_size
+        unique_filename = sec_result.filename
 
-        # Generate unique filename with sanitization
-        import re as _re
-        raw_name = os.path.basename(file.filename or 'upload')
-        safe_name = _re.sub(r'[^\w\.\-]', '_', raw_name)[:100]
-        ext = safe_name.rsplit('.', 1)[-1].lower() if '.' in safe_name else ''
-        unique_filename = f"{uuid.uuid4().hex[:12]}_{safe_name}"
+        if sec_result.sanitization_log:
+            logger.info(
+                "Upload security for %s: %s",
+                file.filename,
+                "; ".join(sec_result.sanitization_log),
+            )
 
         # Determine storage path (in production, upload to S3/GCS)
         storage_path = f"documents/{datetime.now().strftime('%Y/%m/%d')}/{unique_filename}"

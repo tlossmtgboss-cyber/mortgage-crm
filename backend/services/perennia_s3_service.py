@@ -560,6 +560,94 @@ class PerenniaS3Service:
                 "error": "Internal server error"
             }
 
+    def upload_streaming(
+        self,
+        file_obj,
+        storage_key: str,
+        content_type: str,
+        metadata: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Upload a file-like object to S3 using multipart streaming.
+
+        Uses boto3's ``upload_fileobj()`` with ``TransferConfig`` to
+        automatically split large files into multipart uploads. This
+        avoids holding the entire file in memory as a single ``bytes``
+        object — boto3 reads from the file object in chunks.
+
+        Args:
+            file_obj: A file-like object (must support ``.read()``).
+                Can be an ``io.BytesIO``, a ``SpooledTemporaryFile``
+                from FastAPI's ``UploadFile``, or any binary IO.
+            storage_key: S3 object key.
+            content_type: MIME type of the file.
+            metadata: Optional custom metadata dict.
+
+        Returns:
+            Dict with success status and storage info.
+        """
+        from boto3.s3.transfer import TransferConfig
+
+        # Validate content type
+        if content_type not in self.allowed_content_types:
+            return {
+                "success": False,
+                "error": f"Content type '{content_type}' not allowed",
+                "allowed_types": self.allowed_content_types,
+            }
+
+        # Configure multipart: split into parts at 8 MB, use 4 threads
+        transfer_config = TransferConfig(
+            multipart_threshold=8 * 1024 * 1024,   # 8 MB
+            multipart_chunksize=8 * 1024 * 1024,    # 8 MB parts
+            max_concurrency=4,
+            use_threads=True,
+        )
+
+        extra_args: Dict[str, Any] = {"ContentType": content_type}
+        if metadata:
+            extra_args["Metadata"] = metadata
+
+        try:
+            self.s3_client.upload_fileobj(
+                file_obj,
+                self.bucket_name,
+                storage_key,
+                ExtraArgs=extra_args,
+                Config=transfer_config,
+            )
+
+            # Get uploaded size for logging
+            try:
+                file_obj.seek(0, 2)  # Seek to end
+                file_size = file_obj.tell()
+                file_obj.seek(0)
+            except Exception:
+                file_size = -1
+
+            logger.info(
+                "Streamed upload: %s bytes to s3://%s/%s",
+                file_size if file_size >= 0 else "unknown",
+                self.bucket_name,
+                storage_key,
+            )
+
+            return {
+                "success": True,
+                "storage_key": storage_key,
+                "bucket": self.bucket_name,
+                "file_size": file_size if file_size >= 0 else None,
+                "content_type": content_type,
+                "s3_uri": f"s3://{self.bucket_name}/{storage_key}",
+            }
+
+        except ClientError as e:
+            logger.error("Streaming upload failed for %s: %s", storage_key, e)
+            return {
+                "success": False,
+                "error": "Internal server error",
+            }
+
     def download_file(self, storage_key: str) -> Dict[str, Any]:
         """
         Download file content directly from S3.
