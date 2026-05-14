@@ -80,9 +80,8 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   // Get user email to check for master admin
   const userEmail = useMemo(() => {
     try {
-      const userStr = getUserData();
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      const user = getUserData();
+      if (user) {
         return user.email || null;
       }
       return null;

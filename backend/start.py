@@ -398,8 +398,8 @@ def main():
     print("=" * 50, flush=True)
 
     # Start uvicorn — single worker per replica is intentional.
-    # With numReplicas=2 in railway.toml and pool_size=5 + max_overflow=5 = 10 per process,
-    # 2 replicas × 1 worker × 10 = 20 connections, using full Railway capacity.
+    # With numReplicas=2 in railway.toml and pool_size=5 + max_overflow=3 = 8 per process,
+    # 2 replicas × 1 worker × 8 = 16 connections + 1 audit writer = 17 total.
     # Adding --workers would multiply connection usage beyond safe limits.
     os.execvp("uvicorn", [
         "uvicorn",

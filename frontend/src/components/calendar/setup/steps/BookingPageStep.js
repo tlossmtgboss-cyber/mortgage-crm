@@ -169,9 +169,8 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
 
       // Populate LO name from localStorage user if not set from API
       try {
-        const userStr = getUserData();
-        if (userStr) {
-          const user = JSON.parse(userStr);
+        const user = getUserData();
+        if (user) {
           const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
           setLoName(prev => prev || fullName || '');
           // Auto-generate slug from name if none exists

@@ -24,9 +24,8 @@ const AdminPanel = () => {
   // Get user info from localStorage as fallback (in case PermissionContext has stale data)
   const getLocalStorageRole = () => {
     try {
-      const userStr = getUserData();
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      const user = getUserData();
+      if (user) {
         return {
           role: user.role,
           permission_role: user.permission_role,
@@ -88,9 +87,8 @@ const AdminPanel = () => {
   // Get current user ID
   const _getCurrentUserId = () => {
     try {
-      const userStr = getUserData();
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      const user = getUserData();
+      if (user) {
         return user.id;
       }
     } catch (e) {}

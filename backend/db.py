@@ -8,7 +8,7 @@ conflict with the database/ package. All existing imports continue to work:
 
 Production settings (Railway PostgreSQL):
 - PgBouncer support: Use DATABASE_POOLED_URL for connection pooling (NullPool)
-- Direct connection: pool_size=5, max_overflow=5 (max 10 per replica)
+- Direct connection: pool_size=5, max_overflow=3 (max 8 per replica)
 - Pool recycling: Refresh connections every 5 min (pool_recycle=300)
 - Pool pre-ping: Verify connections before use (catches stale/dead connections)
 - TCP keepalives: Detect dead connections quickly (15s idle, 5s interval, 3 retries)
@@ -17,7 +17,7 @@ Production settings (Railway PostgreSQL):
 
 Connection exhaustion prevention:
 - Prefer PgBouncer (Railway's pooled URL) for unlimited virtual connections
-- With 2 replicas: 2 x 10 = 20 connections, using full Railway capacity
+- With 2 replicas: 2 x 8 = 16 connections, leaving room for audit + background
 - LIFO pool reuse keeps fewer connections warm
 - TCP keepalives detect network issues before they cause pool exhaustion
 - Per-tenant connection limits (MAX_DB_CONNECTIONS_PER_TENANT, default 3)
@@ -96,18 +96,20 @@ elif USE_PGBOUNCER:
     )
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has ~20 max connections. With numReplicas=2 in railway.toml,
-    # each replica gets pool_size=3 + max_overflow=2 = 5 connections max.
-    # 2 replicas × 5 = 10 pooled connections, leaving headroom for
-    # background tasks and migration scripts that use direct psycopg2.
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=2, max=5)")
+    # Railway has ~25 max connections. With numReplicas=2 in railway.toml,
+    # each replica gets pool_size=5 + max_overflow=3 = 8 connections max.
+    # 2 replicas × 8 = 16 pooled connections + 1 audit writer = 17 total,
+    # leaving headroom for startup migrations and psycopg2 scripts.
+    # The SPA fires ~20 concurrent API calls per page load; pool_size=5
+    # prevents connection starvation that caused widespread 500 errors.
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=5, max_overflow=3, max=8)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_size=3,
-        max_overflow=2,
+        pool_size=5,
+        max_overflow=3,
         pool_recycle=300,             # Recycle connections every 5min (prevents stale connections without excessive churn)
-        pool_timeout=10,              # Wait max 10s for a connection (fail fast)
+        pool_timeout=20,              # Wait max 20s for a connection (handles SPA burst loads)
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         pool_reset_on_return='rollback',  # Clean connections before reuse
         echo=False,                   # Set True for SQL debugging
@@ -296,7 +298,10 @@ _tenant_connection_counts: Dict[int, int] = {}
 _tenant_conn_lock = threading.Lock()
 
 # Max concurrent DB connections per tenant (configurable via env)
-MAX_CONNECTIONS_PER_TENANT = int(os.getenv("MAX_DB_CONNECTIONS_PER_TENANT", "5"))
+# Default 7 allows a single user's SPA page load (~20 concurrent API calls)
+# to be served without 503 errors, while still preventing one org from
+# monopolizing the pool in multi-tenant scenarios.
+MAX_CONNECTIONS_PER_TENANT = int(os.getenv("MAX_DB_CONNECTIONS_PER_TENANT", "7"))
 
 
 def get_db(request: Request = None):
@@ -753,7 +758,7 @@ def get_pool_stats() -> dict:
         return {"error": str(e), "status": "unknown"}
 
 
-_POOL_HEAL_THRESHOLD = int(os.getenv("POOL_HEAL_THRESHOLD", "8"))
+_POOL_HEAL_THRESHOLD = int(os.getenv("POOL_HEAL_THRESHOLD", "12"))
 _pool_heal_lock = threading.Lock()
 _last_pool_heal = 0.0
 

@@ -14,15 +14,14 @@ function Portfolio() {
   // Determine user's effective role to show/hide MUM Dashboard tab
   const userRole = useMemo(() => {
     try {
-      const userStr = getUserData();
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      const user = getUserData();
+      if (user) {
         return getUserEffectiveRole(user.permission_role, user.role);
       }
     } catch (e) {
       console.error('Error parsing user from localStorage:', e);
     }
-    return 'loan_officer'; // Default fallback
+    return 'loan_officer';
   }, []);
 
   // Only loan officers and admins see the MUM Dashboard tab

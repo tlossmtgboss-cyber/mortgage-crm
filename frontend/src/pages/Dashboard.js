@@ -40,9 +40,8 @@ function Dashboard() {
   // Check if current user is demo user
   const isDemoUser = () => {
     try {
-      const userStr = getUserData();
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      const user = getUserData();
+      if (user) {
         return user.email === 'admin@perenniaai.com';
       }
     } catch (error) {

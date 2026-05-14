@@ -1662,10 +1662,25 @@ def _get_or_create_client_file(db: Session, lead_id: int, org_id: int) -> str:
     from database.models.lead_loan import Lead
 
     cf_id = db.execute(
-        select(ClientFile.id).where(ClientFile.lead_id == lead_id)
+        select(ClientFile.id).where(
+            ClientFile.lead_id == lead_id,
+            ClientFile.organization_id == org_id,
+        )
     ).scalar_one_or_none()
     if cf_id is not None:
         return str(cf_id)
+
+    # Fix orphaned records from backfill with wrong org_id
+    orphan_id = db.execute(
+        select(ClientFile.id).where(ClientFile.lead_id == lead_id)
+    ).scalar_one_or_none()
+    if orphan_id is not None:
+        db.execute(
+            text("UPDATE client_files SET organization_id = :org WHERE id = :id"),
+            {"org": org_id, "id": orphan_id},
+        )
+        db.commit()
+        return str(orphan_id)
 
     lead = db.execute(
         select(Lead).where(Lead.id == lead_id, Lead.organization_id == org_id)

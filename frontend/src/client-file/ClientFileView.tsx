@@ -79,7 +79,10 @@ function ClientFileHeader({ client }: { client: ClientFile }) {
 }
 
 export function ClientFileView({ clientFileId, currentUserId }: Props) {
-  const { data: client, isLoading, error } = useClientFile(clientFileId);
+  const { data: client, isLoading, error, refetch } = useClientFile(clientFileId, {
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+  });
   const navigate = useNavigate();
 
   const handleQuickAction = useCallback((key: string) => {
@@ -101,10 +104,47 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
   }
 
   if (error || !client) {
+    const status = (error as any)?.status;
     return (
       <div className="pf-cf">
-        <div className="pf-cf-loading" style={{ color: "var(--pf-cf-danger)" }}>
-          Could not load client file.
+        <div className="pf-cf-loading" style={{ color: "var(--pf-cf-danger)", textAlign: "center" }}>
+          <div>Could not load client file.</div>
+          <div style={{ fontSize: "0.85em", opacity: 0.7, marginTop: 4 }}>
+            {status === 404
+              ? "This record may not exist yet — try refreshing."
+              : "The server may be temporarily unavailable."}
+          </div>
+          <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "center" }}>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              style={{
+                padding: "6px 16px",
+                borderRadius: 6,
+                border: "1px solid var(--pf-cf-border, #ddd)",
+                background: "var(--pf-cf-surface, #fff)",
+                cursor: "pointer",
+                fontSize: "0.9em",
+              }}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(-1 as any)}
+              style={{
+                padding: "6px 16px",
+                borderRadius: 6,
+                border: "none",
+                background: "var(--pf-cf-primary, #1F3D2E)",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "0.9em",
+              }}
+            >
+              Go Back
+            </button>
+          </div>
         </div>
       </div>
     );

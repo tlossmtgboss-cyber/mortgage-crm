@@ -17,12 +17,17 @@ This enables the tenant isolation system to work without modifying every route.
 
 import logging
 import os
+import threading
+import time
+from collections import namedtuple
 from typing import Optional, Callable
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from sqlalchemy.orm import Session
+
+_CachedUser = namedtuple("_CachedUser", ["id", "organization_id", "permission_role", "email"])
 
 # Import auth.tokens for algorithm-agnostic JWT verification (RS256/HS256)
 try:
@@ -56,6 +61,9 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
     It's non-blocking - if auth fails, the route's own auth dependency will handle it.
     """
 
+    _USER_CACHE_TTL = 60  # seconds
+    _USER_CACHE_MAX = 200
+
     def __init__(
         self,
         app,
@@ -69,6 +77,22 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         self.algorithm = algorithm
         self.get_db = get_db
         self.user_model = user_model
+        self._user_cache: dict[int, tuple[float, object]] = {}
+        self._cache_lock = threading.Lock()
+
+    def _cache_get(self, user_id: int):
+        with self._cache_lock:
+            entry = self._user_cache.get(user_id)
+            if entry and (time.time() - entry[0]) < self._USER_CACHE_TTL:
+                return entry[1]
+            return None
+
+    def _cache_put(self, user_id: int, user_obj):
+        with self._cache_lock:
+            if len(self._user_cache) >= self._USER_CACHE_MAX:
+                oldest = min(self._user_cache, key=lambda k: self._user_cache[k][0])
+                del self._user_cache[oldest]
+            self._user_cache[user_id] = (time.time(), user_obj)
 
     def _set_tenant_state(self, request: Request, user) -> None:
         """Populate request.state with tenant context from a resolved user."""
@@ -200,23 +224,31 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                                 pass
 
                     if self.get_db and self.user_model:
-                        db = next(self.get_db())
-                        try:
-                            user = None
-                            if user_id:
-                                user = db.query(self.user_model).filter(
-                                    self.user_model.id == user_id
-                                ).first()
-                            elif sub:
-                                # Email-based sub: look up user by email
-                                user = db.query(self.user_model).filter(
-                                    self.user_model.email == sub
-                                ).first()
-
-                            if user:
-                                self._set_tenant_state(request, user)
-                        finally:
-                            db.close()
+                        cached = self._cache_get(user_id) if user_id else None
+                        if cached:
+                            self._set_tenant_state(request, cached)
+                        else:
+                            db = next(self.get_db())
+                            try:
+                                user = None
+                                if user_id:
+                                    user = db.query(self.user_model).filter(
+                                        self.user_model.id == user_id
+                                    ).first()
+                                elif sub:
+                                    user = db.query(self.user_model).filter(
+                                        self.user_model.email == sub
+                                    ).first()
+                                if user:
+                                    self._set_tenant_state(request, user)
+                                    self._cache_put(user.id, _CachedUser(
+                                        id=user.id,
+                                        organization_id=getattr(user, 'organization_id', None),
+                                        permission_role=getattr(user, 'permission_role', 'sales'),
+                                        email=getattr(user, 'email', None),
+                                    ))
+                            finally:
+                                db.close()
 
                 except InvalidTokenError as e:
                     # Token invalid - route auth will handle the error

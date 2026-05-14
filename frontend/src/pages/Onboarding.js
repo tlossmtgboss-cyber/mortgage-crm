@@ -10,9 +10,8 @@ const Onboarding = () => {
   const handleOnboardingComplete = async () => {
     // Update localStorage to mark onboarding as completed
     try {
-      const userStr = getUserData();
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      const user = getUserData();
+      if (user) {
         user.onboarding_completed = true;
         await setTokens({ user_data: user });
       }
@@ -27,9 +26,8 @@ const Onboarding = () => {
   const handleOnboardingSkip = async () => {
     // Mark as completed when skipped
     try {
-      const userStr = getUserData();
-      if (userStr) {
-        const user = JSON.parse(userStr);
+      const user = getUserData();
+      if (user) {
         user.onboarding_completed = true;
         await setTokens({ user_data: user });
       }
