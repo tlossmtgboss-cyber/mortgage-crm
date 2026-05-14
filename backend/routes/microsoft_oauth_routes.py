@@ -508,6 +508,8 @@ async def get_microsoft_status(
             "last_sync_at": None
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Microsoft status error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -620,6 +622,8 @@ async def cleanup_microsoft_oauth_by_email(
             "deleted_count": deleted_count
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Cleanup Microsoft OAuth error: {e}")
         db.rollback()
@@ -687,6 +691,8 @@ async def get_microsoft_oauth_config(
             configured=True,
             has_client_secret=bool(config.client_secret)
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting Microsoft OAuth config: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -754,6 +760,8 @@ async def save_microsoft_oauth_config(
             configured=True,
             has_client_secret=bool(config.client_secret)
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error saving Microsoft OAuth config: {e}")
         db.rollback()
@@ -857,6 +865,8 @@ async def get_email_sync_diagnostics(
             "recommendations": get_sync_recommendations(connection_status, len(email_data))
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Sync diagnostics error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -1152,6 +1162,8 @@ async def fix_microsoft_oauth_config(
             }
         else:
             return {"status": "info", "message": "No existing config found - system will use environment variables"}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error fixing Microsoft OAuth config: {e}")
@@ -1190,6 +1202,8 @@ async def create_microsoft_app_config_table(
         """))
         db.commit()
         return {"status": "success", "message": "microsoft_app_config table created"}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating microsoft_app_config table: {e}")
@@ -1302,6 +1316,8 @@ async def create_organizations_table(
             "message": "Multi-tenant organizations setup complete",
             "results": results
         }
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating organizations table: {e}")

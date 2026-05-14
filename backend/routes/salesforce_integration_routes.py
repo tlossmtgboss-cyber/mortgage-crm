@@ -252,6 +252,27 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.rollback()
             logger.debug(f"sync_queue.{col_name} fix: {e}")
 
+    # Fix integration_profiles table — add columns that may be missing from initial migration
+    integration_profiles_columns = [
+        ("cdc_webhook_secret", "VARCHAR(255)"),
+        ("sync_metadata", "JSONB"),
+        ("sync_enabled", "BOOLEAN DEFAULT TRUE"),
+        ("sync_interval_minutes", "INTEGER DEFAULT 15"),
+        ("sync_direction", "VARCHAR(20) DEFAULT 'bidirectional'"),
+    ]
+    _allowed_ip_cols = {c[0] for c in integration_profiles_columns}
+    for col_name, col_type in integration_profiles_columns:
+        if col_name not in _allowed_ip_cols or not col_name.isidentifier():
+            continue
+        try:
+            ddl = "ALTER TABLE integration_profiles ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+            db.execute(text(ddl))
+            db.commit()
+            fixes.append(f"Added {col_name} to integration_profiles")
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.debug(f"integration_profiles.{col_name} fix: {e}")
+
     # Fix integration_record_tracking table
     record_tracking_columns = [
         ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
@@ -1111,11 +1132,15 @@ async def connect_salesforce(
                 detail="Salesforce integration not configured"
             )
 
-        # Ensure clean session state
+        # Ensure integration_profiles table has all required columns before OAuth
+        try:
+            fix_salesforce_schema(db)
+        except Exception:
+            pass
         try:
             db.rollback()
-        except Exception as e:
-            logger.error(f"Error in salesforce_connect (session rollback): {e}")
+        except Exception:
+            pass
 
         logger.info(f"Generating Salesforce auth URL for user {user_id}, return_url: {return_url}")
         try:

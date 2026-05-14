@@ -197,7 +197,10 @@ class SalesforceOAuthService:
         if oauth_state.used:
             raise ValueError("State token already used")
 
-        if datetime.now(timezone.utc) > oauth_state.expires_at:
+        expires = oauth_state.expires_at
+        if expires and expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires and datetime.now(timezone.utc) > expires:
             raise ValueError("State token expired")
 
         # Get code_verifier from state metadata for PKCE

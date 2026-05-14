@@ -73,6 +73,12 @@ def get_postgres_migrations():
             CREATE INDEX IF NOT EXISTS idx_integration_profiles_user_provider
             ON integration_profiles(user_id, provider);
         """),
+        ("integration_profiles_add_cdc_webhook_secret", """
+            ALTER TABLE integration_profiles ADD COLUMN IF NOT EXISTS cdc_webhook_secret VARCHAR(255);
+        """),
+        ("integration_profiles_add_sync_metadata", """
+            ALTER TABLE integration_profiles ADD COLUMN IF NOT EXISTS sync_metadata JSONB;
+        """),
         ("sf_user_schemas", """
             CREATE TABLE IF NOT EXISTS sf_user_schemas (
                 id SERIAL PRIMARY KEY,

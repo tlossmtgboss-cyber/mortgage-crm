@@ -127,8 +127,12 @@ async def salesforce_callback(
             if oauth_state:
                 logger.info(f"Found OAuth state in database for state token")
 
-                # Check if state has expired
-                if oauth_state[4] and oauth_state[4] < datetime.now(timezone.utc):
+                # Check if state has expired (handle naive datetimes from TIMESTAMP columns)
+                expires_at = oauth_state[4]
+                if expires_at:
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at and expires_at < datetime.now(timezone.utc):
                     logger.error(f"OAuth state has expired")
                     return RedirectResponse(
                         url=f"{frontend_url}/settings/integrations?error=state_expired&message=OAuth+session+expired.+Please+try+again."
@@ -147,12 +151,12 @@ async def salesforce_callback(
                     return_url = _safe_redirect_url(result.get('return_url'), frontend_url)
                     logger.info(f"Salesforce OAuth successful for user {result['user_id']}")
                     return RedirectResponse(url=f"{return_url}?salesforce=connected")
-                except ValueError as e:
-                    logger.error(f"OAuth callback error: {e}")
+                except Exception as e:
+                    logger.error(f"OAuth callback error: {type(e).__name__}: {e}", exc_info=True)
                     from urllib.parse import urlencode
                     safe_msg = str(e)[:100].replace("\r", "").replace("\n", "")
                     return RedirectResponse(
-                        url=f"{frontend_url}/settings/integrations?error=salesforce_auth_failed&{urlencode({'message': safe_msg})}"
+                        url=f"{frontend_url}/settings/integrations/salesforce?error=salesforce_auth_failed&{urlencode({'message': safe_msg})}"
                     )
             else:
                 # State not found in oauth_states - check if it's a long hex token that should have been there
