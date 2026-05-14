@@ -358,16 +358,20 @@ const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled, pl
           f.label.toLowerCase().replace(/[_\s]/g, '').includes(q.replace(/[_\s]/g, ''))
         )
       : fields;
-    const sugSet = new Set((suggestedSF || []).map(s => s.toLowerCase()));
+    const sugBare = new Set((suggestedSF || []).map(s => s.toLowerCase().replace(/^[a-z_]+__/, '')));
+    const isSuggested = (apiName) => {
+      const lower = apiName.toLowerCase();
+      const bare = lower.replace(/^[a-z_]+__/, '');
+      return sugBare.has(lower) || sugBare.has(bare);
+    };
     res.sort((a, b) => {
-      const aS = sugSet.has(a.apiName.toLowerCase()) ? 0 : 1;
-      const bS = sugSet.has(b.apiName.toLowerCase()) ? 0 : 1;
+      const aS = isSuggested(a.apiName) ? 0 : 1;
+      const bS = isSuggested(b.apiName) ? 0 : 1;
       if (aS !== bS) return aS - bS;
-      // Sort custom fields after standard when not searching
       if (!q && a.custom !== b.custom) return a.custom ? 1 : -1;
       return a.apiName.localeCompare(b.apiName);
     });
-    return res.slice(0, 60);
+    return res.slice(0, 200);
   }, [search, suggestedSF, sfFields]);
 
   const sel = value ? (sfFields || []).find(f => `${f.object}.${f.apiName}` === value) : null;
@@ -399,7 +403,12 @@ const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled, pl
             {filtered.length === 0 && <div style={{ padding: 14, textAlign: "center", color: "#9ca3af", fontSize: 12 }}>No fields found — try a different search term or refresh schema</div>}
             {filtered.map(f => {
               const k = `${f.object}.${f.apiName}`;
-              const isSug = (suggestedSF || []).some(s => s.toLowerCase() === f.apiName.toLowerCase());
+              const bareName = f.apiName.toLowerCase().replace(/^[a-z_]+__/, '');
+              const isSug = (suggestedSF || []).some(s => {
+                const sLower = s.toLowerCase();
+                const sBare = sLower.replace(/^[a-z_]+__/, '');
+                return sLower === f.apiName.toLowerCase() || sBare === bareName;
+              });
               const showLabel = f.label && f.label !== f.apiName;
               return (
                 <button key={k} onClick={() => { onChange(k); setOpen(false); setSearch(""); }}
@@ -715,7 +724,15 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
         }
         const sug = f.suggestedSF || [];
         for (const s of sug) {
-          const match = sfFields.find(x => x.apiName.toLowerCase() === s.toLowerCase());
+          const sLower = s.toLowerCase();
+          const match = sfFields.find(x => {
+            const api = x.apiName.toLowerCase();
+            if (api === sLower) return true;
+            // Strip namespace prefix (e.g., MtgPlanner_CRM__) and compare bare field name
+            const bareApi = api.replace(/^[a-z_]+__/, '');
+            const bareSug = sLower.replace(/^[a-z_]+__/, '');
+            return bareApi === bareSug;
+          });
           if (match) { n[k] = `${match.object}.${match.apiName}`; break; }
         }
       }
