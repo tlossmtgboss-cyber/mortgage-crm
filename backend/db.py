@@ -61,10 +61,12 @@ SLOW_QUERY_THRESHOLD_MS = float(os.getenv("SLOW_QUERY_THRESHOLD_MS", "500"))
 STATEMENT_TIMEOUT_MS = int(os.getenv("STATEMENT_TIMEOUT_MS", "30000"))  # 30 seconds
 
 # RLS_STRICT_MODE: When True, raise an exception if tenant context cannot be set
-# instead of silently proceeding without RLS isolation. Defaults to True in
-# development so tenant isolation bugs are caught early.
+# instead of silently proceeding without RLS isolation. Defaults to True in ALL
+# environments — silent RLS failure in production is the #1 data breach risk.
+# Set RLS_STRICT_MODE=false explicitly only for local scripts that intentionally
+# run without tenant context (e.g., migrations, one-off data fixes).
 _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
-RLS_STRICT_MODE = os.getenv("RLS_STRICT_MODE", "true" if _env == "development" else "false").lower() == "true"
+RLS_STRICT_MODE = os.getenv("RLS_STRICT_MODE", "true").lower() == "true"
 if RLS_STRICT_MODE:
     logger.info("RLS_STRICT_MODE enabled — missing tenant context will raise exceptions")
 

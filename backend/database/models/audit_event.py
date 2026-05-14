@@ -19,6 +19,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
@@ -74,6 +75,8 @@ class AuditEvent(Base):
     actor_email = Column(String(320), nullable=True)
     actor_role = Column(String(32), nullable=True)
     org_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    # Integer FK for RLS tenant isolation (complements UUID org_id for legacy compat)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # What it acted on
     resource_type = Column(String(64), nullable=True)

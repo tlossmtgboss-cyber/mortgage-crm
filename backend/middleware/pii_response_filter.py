@@ -281,6 +281,9 @@ def _should_mask(request: Request) -> bool:
     Masking is ON by default. It is only disabled when ALL of:
       1. The request includes header `X-Mask-PII: false`
       2. The caller has a platform_admin or site_admin role (from JWT)
+
+    When bypass is granted, an audit log entry is emitted with the user_id,
+    endpoint, and timestamp for SOC 2 compliance traceability.
     """
     mask_header = request.headers.get("x-mask-pii", "").lower().strip()
     if mask_header == "false":
@@ -292,8 +295,34 @@ def _should_mask(request: Request) -> bool:
                 request.method, request.url.path,
             )
         elif role.lower() in _ADMIN_ROLES:
+            # SEC-007: Audit log every PII masking bypass for SOC 2 traceability
+            _user_id = _extract_user_id_from_request(request)
+            logger.warning(
+                "PII_MASK_BYPASS: user_id=%s role=%s endpoint=%s %s ip=%s — "
+                "PII masking disabled via X-Mask-PII header",
+                _user_id, role, request.method, request.url.path,
+                request.client.host if request.client else "unknown",
+            )
             return False
     return True
+
+
+def _extract_user_id_from_request(request: Request) -> Optional[str]:
+    """Extract user_id from a verified JWT for audit logging."""
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header[7:].strip()
+    if not token:
+        return None
+    try:
+        from auth.tokens import verify_token
+        token_data = verify_token(token)
+        if token_data is None:
+            return None
+        return str(getattr(token_data, "user_id", None) or getattr(token_data, "sub", None))
+    except Exception:
+        return None
 
 
 class PIIResponseFilterMiddleware(BaseHTTPMiddleware):

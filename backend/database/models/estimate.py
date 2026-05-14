@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime,
-    Text, ForeignKey, JSON, Numeric
+    Text, ForeignKey, Index, JSON, Numeric
 )
 from sqlalchemy.orm import relationship
 
@@ -27,6 +27,7 @@ class EstimateParseCache(Base):
     __tablename__ = "estimate_parse_cache"
 
     doc_hash = Column(String(64), primary_key=True)  # SHA-256 hash
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
     parsed_json = Column(JSON, nullable=False)
     confidence_score = Column(Numeric(3, 2), nullable=True)  # 0.00 to 1.00
     needs_review = Column(Boolean, default=False)
@@ -43,6 +44,7 @@ class EstimateParseFailure(Base):
     __tablename__ = "estimate_parse_failures"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
     request_id = Column(String(36), nullable=False)
     doc_hash = Column(String(64), nullable=False)
     error_stage = Column(String(50), nullable=False)  # ocr, llm, json_parse, validation
@@ -58,6 +60,7 @@ class EstimateComparison(Base):
     __tablename__ = "estimate_comparisons"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     session_id = Column(String(100), nullable=True)  # for anonymous tracking
     estimate_a_hash = Column(String(64), ForeignKey("estimate_parse_cache.doc_hash", ondelete="CASCADE"), nullable=False)

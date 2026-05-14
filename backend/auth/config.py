@@ -47,8 +47,9 @@ class AuthSettings(BaseModel):
         description="Access token expiration in minutes (reduced from 30 for security)"
     )
     refresh_token_expire_days: int = Field(
-        default=7,
-        description="Refresh token expiration in days"
+        default=1,
+        description="Refresh token expiration in days (reduced from 7 to 1 for security — "
+        "limits the window for stolen refresh token abuse)"
     )
 
     # Token claims

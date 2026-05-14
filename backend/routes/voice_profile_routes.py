@@ -157,6 +157,15 @@ def upload_voice_sample(
     Accept a single voice sample recording from the onboarding flow.
     Stores the raw audio in S3/R2 and persists metadata to voice_samples.
     """
+    # Validate MIME type before processing
+    from utils.validators import validate_upload_mime_type, ALLOWED_AUDIO_MIME_TYPES
+    claimed_type = audio.content_type or "application/octet-stream"
+    is_valid, mime_error = validate_upload_mime_type(
+        audio.filename or "recording.wav", claimed_type, ALLOWED_AUDIO_MIME_TYPES
+    )
+    if not is_valid:
+        raise HTTPException(400, mime_error)
+
     audio_data = audio.file.read()
     if len(audio_data) < 1024:
         raise HTTPException(400, "Audio file too small — likely empty recording")
@@ -345,6 +354,15 @@ def verify_voice(
 
     stored_vals = [float(x) for x in result[0].strip("[]").split(",")]
     stored_embedding = np.array(stored_vals, dtype=np.float32)
+
+    # Validate MIME type before processing
+    from utils.validators import validate_upload_mime_type, ALLOWED_AUDIO_MIME_TYPES
+    claimed_type = audio.content_type or "application/octet-stream"
+    is_valid, mime_error = validate_upload_mime_type(
+        audio.filename or "recording.wav", claimed_type, ALLOWED_AUDIO_MIME_TYPES
+    )
+    if not is_valid:
+        raise HTTPException(400, mime_error)
 
     audio_bytes = audio.file.read()
     live_embedding = _compute_embedding(audio_bytes)

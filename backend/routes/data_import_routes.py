@@ -616,9 +616,17 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
           - Summary statistics
         """
         from services.import_service import check_file_size, stream_csv_rows, stream_excel_rows
+        from utils.validators import validate_upload_mime_type, ALLOWED_IMPORT_MIME_TYPES
 
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
+
+        # --- Validate MIME type ---
+        claimed_type = file.content_type or "application/octet-stream"
+        filename = file.filename or "upload.csv"
+        is_valid, mime_error = validate_upload_mime_type(filename, claimed_type, ALLOWED_IMPORT_MIME_TYPES)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=mime_error)
 
         # --- Check file size without reading into memory ---
         try:
@@ -627,7 +635,6 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(status_code=400, detail=str(e))
 
         # --- Stream rows for preview ---
-        filename = file.filename or "upload.csv"
         is_excel = filename.lower().endswith((".xlsx", ".xls"))
 
         try:
@@ -773,10 +780,18 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             save_upload_to_temp,
             should_run_async,
         )
+        from utils.validators import validate_upload_mime_type, ALLOWED_IMPORT_MIME_TYPES
 
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
         user_id = getattr(current_user, "id", None)
+
+        # Validate MIME type before processing
+        filename = file.filename or "upload.csv"
+        claimed_type = file.content_type or "application/octet-stream"
+        is_valid, mime_error = validate_upload_mime_type(filename, claimed_type, ALLOWED_IMPORT_MIME_TYPES)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=mime_error)
 
         # Parse mapping
         try:
@@ -799,8 +814,6 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             file_size = check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-
-        filename = file.filename or "upload.csv"
 
         # ---------------------------------------------------------------
         # Decide sync vs. async
@@ -962,10 +975,19 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
           - skip_invalid_rows: If true, skip invalid rows
         """
         from services.import_service import ImportService, check_file_size
+        from utils.validators import validate_upload_mime_type, ALLOWED_IMPORT_MIME_TYPES
 
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
         user_id = getattr(current_user, "id", None)
+
+        # Validate MIME type
+        claimed_type = file.content_type or "application/octet-stream"
+        is_valid, mime_error = validate_upload_mime_type(
+            file.filename or "upload.csv", claimed_type, ALLOWED_IMPORT_MIME_TYPES
+        )
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=mime_error)
 
         try:
             mapping = json.loads(field_mapping)
@@ -1044,10 +1066,19 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
           - skip_invalid_rows: If true, skip invalid rows
         """
         from services.import_service import ImportService, check_file_size
+        from utils.validators import validate_upload_mime_type, ALLOWED_IMPORT_MIME_TYPES
 
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
         user_id = getattr(current_user, "id", None)
+
+        # Validate MIME type
+        claimed_type = file.content_type or "application/octet-stream"
+        is_valid, mime_error = validate_upload_mime_type(
+            file.filename or "upload.xlsx", claimed_type, ALLOWED_IMPORT_MIME_TYPES
+        )
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=mime_error)
 
         try:
             mapping = json.loads(field_mapping)
@@ -1114,18 +1145,24 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         For full control, use /preview then /execute.
         """
         from services.import_service import ImportService, check_file_size, stream_csv_rows, stream_excel_rows
+        from utils.validators import validate_upload_mime_type, ALLOWED_IMPORT_MIME_TYPES
 
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
         user_id = getattr(current_user, "id", None)
+
+        # Validate MIME type
+        filename = file.filename or "upload.csv"
+        claimed_type = file.content_type or "application/octet-stream"
+        is_valid, mime_error = validate_upload_mime_type(filename, claimed_type, ALLOWED_IMPORT_MIME_TYPES)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=mime_error)
 
         # Check file size
         try:
             check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-
-        filename = file.filename or "upload.csv"
         is_excel = filename.lower().endswith((".xlsx", ".xls"))
 
         # Read a small preview to detect headers for auto-mapping

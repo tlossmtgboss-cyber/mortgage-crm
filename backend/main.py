@@ -143,11 +143,27 @@ if ENVIRONMENT == "production" and (not _ADMIN_API_KEY or len(_ADMIN_API_KEY) < 
 elif not _ADMIN_API_KEY:
     logger.warning("ADMIN_API_KEY not set — CSRF API-key bypass and admin endpoints disabled")
 
+# REDIS_URL is MANDATORY in production — token blacklisting, rate limiting, and
+# Celery all require Redis for correctness across replicas. Without it, logged-out
+# tokens remain valid and rate limits are per-process (trivially bypassable).
+_is_production = bool(os.getenv("RAILWAY_ENVIRONMENT") or ENVIRONMENT == "production")
+_redis_url_check = os.getenv("REDIS_URL", "").strip()
+if _is_production and not _redis_url_check:
+    logger.critical(
+        "REDIS_URL is not set in production. Token blacklisting, rate limiting, "
+        "and Celery require Redis for correctness across replicas. "
+        "Refusing to start — set REDIS_URL or downgrade ENVIRONMENT."
+    )
+    raise SystemExit(
+        "FATAL: REDIS_URL environment variable is required in production. "
+        "Token blacklisting, rate limiting, and Celery all require Redis."
+    )
+
 # JWT Configuration - Uses new auth module for RS256 support
 # Keep these for backward compatibility, but auth module settings take precedence
 ALGORITHM = os.getenv("AUTH_ALGORITHM", "HS256")  # Can be overridden to RS256
 ACCESS_TOKEN_EXPIRE_MINUTES = 15  # Reduced from 30 for security
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+REFRESH_TOKEN_EXPIRE_DAYS = 1  # Reduced from 7 to 1 — limits stolen refresh token window
 
 # Import new auth module for secure token handling
 try:
@@ -3269,6 +3285,81 @@ except Exception as e:
     logger.warning(f"Contact card routes skipped: {e}")
 
 # ============================================================================
+# SEC-005: RLS Policy Validation at Startup
+# ============================================================================
+
+def _validate_rls_policies(eng):
+    """Verify RLS policies exist on all tenant-scoped tables.
+
+    Queries pg_policies and pg_tables to find tables with an organization_id
+    column but no RLS policy. Logs warnings for uncovered tables so ops can
+    detect configuration drift before it becomes a data leak.
+    """
+    from sqlalchemy import text as _text
+
+    if not str(eng.url).startswith("postgresql"):
+        logger.debug("RLS policy validation skipped (non-PostgreSQL)")
+        return
+
+    try:
+        with eng.connect() as conn:
+            # Find tables with organization_id column
+            tenant_tables = conn.execute(_text("""
+                SELECT table_name
+                FROM information_schema.columns
+                WHERE column_name = 'organization_id'
+                  AND table_schema = 'public'
+                ORDER BY table_name
+            """)).fetchall()
+            tenant_table_names = {row[0] for row in tenant_tables}
+
+            if not tenant_table_names:
+                logger.info("RLS validation: no tenant-scoped tables found")
+                return
+
+            # Find tables with RLS policies
+            rls_tables = conn.execute(_text("""
+                SELECT DISTINCT tablename
+                FROM pg_policies
+                WHERE schemaname = 'public'
+            """)).fetchall()
+            rls_table_names = {row[0] for row in rls_tables}
+
+            # Also check which tables have RLS enabled (even without policies)
+            rls_enabled = conn.execute(_text("""
+                SELECT relname
+                FROM pg_class
+                WHERE relrowsecurity = true
+                  AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+            """)).fetchall()
+            rls_enabled_names = {row[0] for row in rls_enabled}
+
+            # Tables with organization_id but no RLS policy
+            uncovered = tenant_table_names - rls_table_names
+            # Tables with policies but RLS not force-enabled
+            not_enabled = rls_table_names - rls_enabled_names
+
+            if uncovered:
+                logger.warning(
+                    "SEC-005: %d tenant-scoped tables have NO RLS policy: %s",
+                    len(uncovered), ", ".join(sorted(uncovered)),
+                )
+            else:
+                logger.info(
+                    "SEC-005: All %d tenant-scoped tables have RLS policies",
+                    len(tenant_table_names),
+                )
+
+            if not_enabled:
+                logger.warning(
+                    "SEC-005: %d tables have RLS policies but ROW SECURITY not enabled: %s",
+                    len(not_enabled), ", ".join(sorted(not_enabled)),
+                )
+    except Exception as e:
+        logger.error(f"SEC-005: RLS policy validation failed: {e}")
+
+
+# ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
 # ============================================================================
 @app.on_event("startup")  # Deprecated in FastAPI >=0.103; migrate to lifespan when feasible
@@ -3285,6 +3376,12 @@ async def startup_event():
     # Run all startup migrations (extracted to startup_migrations.py for maintainability)
     from startup_migrations import run_all_startup_migrations
     run_all_startup_migrations(engine)
+
+    # SEC-005: Validate RLS policies exist on tenant-scoped tables
+    try:
+        _validate_rls_policies(engine)
+    except Exception as e:
+        logger.warning(f"RLS policy validation skipped: {e}")
 
     # Initialize query timing middleware (PERF-006)
     try:
