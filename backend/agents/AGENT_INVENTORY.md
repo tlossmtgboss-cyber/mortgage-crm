@@ -2,12 +2,23 @@
 
 ## Overview
 
-The platform has **two agent systems** running in parallel:
+The platform uses a **consolidated 10-agent system** as the default routing layer:
 
-1. **Legacy system**: 46 agents defined in `tool_integration.py` AGENT_CONFIGS, routed by `intent_router.py`
-2. **Consolidated overlay**: 10 agents defined in `consolidation.py`, available as opt-in but not yet wired as default
+- **Canonical roles**: 10 first-class agents defined in `roles.py` (`ConsolidatedRole` enum)
+- **Agent configs**: `consolidation.py` defines tool lists, personas, and legacy mappings
+- **Intent routing**: `intent_router.py` maps intents to consolidated agent IDs via `INTENT_TO_CONSOLIDATED`
+- **Tool registry**: `tools/base.py` `ToolRegistry.get_for_agent()` resolves both consolidated and legacy role names
+- **Backward compat**: 60 legacy role strings still work everywhere via `ROLE_MAPPING` in `roles.py`
 
-The intent router maps 27 intent categories to legacy agents via INTENT_TO_AGENTS. The consolidation module maps the same intents to 10 consolidated agents via INTENT_TO_CONSOLIDATED.
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `roles.py` | `ConsolidatedRole` enum, `ROLE_MAPPING` (60 legacy -> 10 consolidated), system prompts |
+| `consolidation.py` | `ConsolidatedAgent` dataclass, tool lists, `INTENT_TO_CONSOLIDATED` |
+| `tool_integration.py` | Legacy `AGENT_CONFIGS` (60 roles) -- still used for tool name lists |
+| `intent_router.py` | Fast intent classification, `classify_intent()` returns consolidated agent IDs |
+| `tools/base.py` | `ToolRegistry.get_for_agent()` supports both consolidated and legacy roles |
 
 ---
 
@@ -181,89 +192,88 @@ u_agent_challenge.py, usage_tracker.py, video.py, voice.py
 
 ---
 
-## Consolidation Recommendations
+## Consolidated Agent System (ACTIVE)
 
-The existing `consolidation.py` already proposes a 10-agent target that is well-designed. Below is an adjusted recommendation to consolidate from 60 to **10 first-class agents**, aligning with the consolidation module:
+The 10 consolidated agents are the **default routing targets** as of May 2026. The `classify_intent()` function returns consolidated agent IDs, and the tool registry supports both legacy and consolidated role names.
 
-### Proposed 10 First-Class Agents
+### 10 First-Class Agents
 
-| # | Agent | Absorbs (Legacy Roles) | Model | Rationale |
-|---|-------|------------------------|-------|-----------|
-| 1 | **Aria** | ai_receptionist, voice_os | haiku | Single voice interface. Inbound + outbound call management. |
-| 2 | **Avery** | lead_nurturer, pre_approval_specialist, credit_repair_advisor, down_payment_advisor, borrower_concierge, onboarding_assistant | sonnet | All borrower-facing outreach in one agent. Lifecycle stages differentiated by prompt context, not tool sets. |
-| 3 | **Pipeline Coach** | pipeline_analyst, sla_tracker, task_automation, smart_scheduler, ops_manager, reporting_engine, notification_center, closing_coordinator, warehouse_manager, shipping_coordinator, uvip | sonnet | Central operational hub. Pipeline health, tasks, scheduling, reporting, and closing coordination under one roof. |
-| 4 | **Calculator** | rate_advisor, profitability_analyst, revenue_forecaster, pricing_strategist, loan_structuring, secondary_market, commercial_bridge | sonnet | All financial computation: rates, profitability, pricing, scenarios, forecasting. |
-| 5 | **Document Intelligence** | document_tracker, title_vendor_manager, appraiser_coordinator, insurance_coordinator | haiku | All document lifecycle: tracking, conditions, third-party orders, vendor coordination. |
-| 6 | **Compliance Sentry** | compliance_checker, quality_control, fraud_detector, risk_assessor, turn_down_specialist, investor_relations | sonnet | All regulatory and risk: TRID, RESPA, QC, fraud, adverse action. No guessing on compliance. |
-| 7 | **Email Intelligence** | email_intelligence, content_creator, social_media_manager, campaign_manager, review_manager | sonnet | All written communication: email, content, campaigns, reviews. |
-| 8 | **Talent Radar** | team_coach, recruiter, training_specialist, performance_manager | sonnet | All people management: coaching, recruiting, training, performance. |
-| 9 | **Opportunity Agent** | customer_intelligence, referral_partner_manager, post_closing_care, market_analyst, servicing_transfer | sonnet | Market intelligence and revenue discovery from existing book. |
-| 10 | **Underwriter Copilot** | integrations, va_loan_specialist, fha_loan_specialist, jumbo_specialist, reverse_mortgage_advisor, construction_loan_advisor, subscription_manager, system_health_monitor, data_quality_manager, migration_assistant | sonnet | Guideline RAG, product matching, LOS integration, platform admin. |
+| # | Role ID | Name | Absorbs (Legacy Roles) | Model |
+|---|---------|------|------------------------|-------|
+| 1 | `aria` | Aria | ai_receptionist, voice_os | haiku |
+| 2 | `avery` | Avery | lead_nurturer, pre_approval_specialist, credit_repair_advisor, down_payment_advisor, borrower_concierge, onboarding_assistant | sonnet |
+| 3 | `pipeline_coach` | Pipeline Coach | pipeline_analyst, sla_tracker, task_automation, smart_scheduler, ops_manager, reporting_engine, notification_center, closing_coordinator, warehouse_manager, shipping_coordinator, uvip | sonnet |
+| 4 | `calculator` | Calculator | rate_advisor, profitability_analyst, revenue_forecaster, pricing_strategist, loan_structuring, secondary_market, commercial_bridge | sonnet |
+| 5 | `doc_intel` | Document Intelligence | document_tracker, title_vendor_manager, appraiser_coordinator, insurance_coordinator | haiku |
+| 6 | `compliance` | Compliance Sentry | compliance_checker, quality_control, fraud_detector, risk_assessor, turn_down_specialist, investor_relations | sonnet |
+| 7 | `email_intel` | Email Intelligence | email_intelligence, content_creator, social_media_manager, campaign_manager, review_manager | sonnet |
+| 8 | `talent_radar` | Talent Radar | team_coach, recruiter, training_specialist, performance_manager | sonnet |
+| 9 | `opportunity` | Opportunity Agent | customer_intelligence, referral_partner_manager, post_closing_care, market_analyst, servicing_transfer | sonnet |
+| 10 | `uw_copilot` | Underwriter Copilot | integrations, va_loan_specialist, fha_loan_specialist, jumbo_specialist, reverse_mortgage_advisor, construction_loan_advisor, subscription_manager, system_health_monitor, data_quality_manager, migration_assistant | sonnet |
 
-### Migration Notes
+### How Backward Compatibility Works
 
-- The consolidation.py module is already built and ready to use. It defines all 10 agents with tool lists, personas, and legacy role mappings.
-- Migration is a routing-layer change: swap `INTENT_TO_AGENTS` for `INTENT_TO_CONSOLIDATED` in the orchestrator.
-- Legacy agents remain available during transition -- the consolidation module is an overlay, not a replacement.
-- The main risk is tool-count inflation per agent (Pipeline Coach has ~70 tools). Monitor for LLM context window impact and tool-selection confusion.
-- Consider a phased rollout: start with low-risk agents (Aria, Document Intelligence, Talent Radar) where haiku model and tool-driven responses make consolidation low-risk.
+1. **`ROLE_MAPPING`** in `roles.py` maps all 60 legacy role strings to their consolidated role. Both old and new strings work anywhere a role is expected.
+2. **`ToolRegistry.get_for_agent("pipeline_coach")`** returns tools tagged with `pipeline_analyst`, `sla_tracker`, `task_automation`, etc. (all absorbed legacy roles).
+3. **`ToolRegistry.get_for_agent("pipeline_analyst")`** still works -- it returns tools tagged with `pipeline_analyst` plus tools tagged with `pipeline_coach`.
+4. **`classify_intent()`** returns consolidated agent IDs in the `agents` field. Legacy `INTENT_TO_AGENTS` is preserved for any code that reads it directly.
+5. **`@mortgage_tool(agent_roles=[...])`** decorators in tool files still use legacy role names. The registry lookup resolves them via the role mapping.
 
 ---
 
-## Agent-to-Intent Mapping (from intent_router.py)
+## Agent-to-Intent Mapping (Active -- consolidated routing)
 
-| Intent | Legacy Agents | Consolidated Agent(s) |
-|--------|---------------|-----------------------|
-| greeting | (none -- direct response) | aria |
-| simple | pipeline_analyst | pipeline_coach |
-| pipeline | pipeline_analyst, revenue_forecaster | pipeline_coach, calculator |
-| historical | pipeline_analyst | pipeline_coach |
-| compliance | compliance_checker, quality_control | compliance |
-| tasks | task_automation | pipeline_coach |
-| priorities | pipeline_analyst, task_automation | pipeline_coach |
-| top_leads | lead_nurturer | avery |
-| leads | lead_nurturer, pre_approval_specialist | avery |
-| documents | document_tracker, closing_coordinator | doc_intel |
-| rates | rate_advisor, secondary_market | calculator |
-| schedule | smart_scheduler | pipeline_coach |
-| sla | sla_tracker | pipeline_coach |
-| calls | voice_os, ai_receptionist | aria |
-| email | email_intelligence | email_intel |
-| video | uvip | pipeline_coach |
-| reports | reporting_engine | pipeline_coach |
-| billing | subscription_manager | uw_copilot |
-| team | team_coach | talent_radar |
-| coaching | team_coach, training_specialist | talent_radar |
-| customer | customer_intelligence, borrower_concierge | opportunity |
-| integrations | integrations, migration_assistant | uw_copilot |
-| operations | ops_manager | pipeline_coach |
-| profit | profitability_analyst, pricing_strategist | calculator |
-| notifications | notification_center | pipeline_coach |
-| onboarding | onboarding_assistant | avery |
-| compound | pipeline_analyst + lead_nurturer + smart_scheduler + email_intelligence + voice_os + task_automation + closing_coordinator | pipeline_coach + avery + email_intel + aria |
-| general | pipeline_analyst, task_automation | pipeline_coach |
+| Intent | Consolidated Agent(s) |
+|--------|-----------------------|
+| greeting | aria |
+| simple | pipeline_coach |
+| pipeline | pipeline_coach, calculator |
+| historical | pipeline_coach |
+| compliance | compliance |
+| tasks | pipeline_coach |
+| priorities | pipeline_coach |
+| top_leads | avery |
+| leads | avery |
+| documents | doc_intel |
+| rates | calculator |
+| schedule | pipeline_coach |
+| sla | pipeline_coach |
+| calls | aria |
+| email | email_intel |
+| video | pipeline_coach |
+| reports | pipeline_coach |
+| billing | uw_copilot |
+| team | talent_radar |
+| coaching | talent_radar |
+| customer | opportunity |
+| integrations | uw_copilot |
+| operations | pipeline_coach |
+| profit | calculator |
+| notifications | pipeline_coach |
+| onboarding | avery |
+| compound | pipeline_coach, avery, email_intel, aria |
+| general | pipeline_coach |
 
 ---
 
 ## Model Selection Summary
 
-### Haiku agents (fast, tool-driven -- 16 of 60 legacy agents):
-document_tracker, voice_os, uvip, ai_receptionist, smart_scheduler, task_automation,
-sla_tracker, notification_center, onboarding_assistant, customer_intelligence,
-closing_coordinator, post_closing_care, review_manager, training_specialist,
-title_vendor_manager, appraiser_coordinator, insurance_coordinator, shipping_coordinator,
-servicing_transfer, system_health_monitor, data_quality_manager
+### Haiku consolidated agents (fast, tool-driven):
+- `aria` (voice routing, call CRUD)
+- `doc_intel` (document checklist/status lookups)
 
-### Sonnet agents (complex reasoning -- 39 of 60 legacy agents):
-All remaining agents require analytical reasoning, compliance precision, or creative generation.
+### Sonnet consolidated agents (complex reasoning):
+- `avery`, `pipeline_coach`, `calculator`, `compliance`, `email_intel`, `talent_radar`, `opportunity`, `uw_copilot`
 
 ---
 
 ## Key Files
 
-- Agent configs: `backend/agents/tool_integration.py` (AGENT_CONFIGS, 1633 lines)
-- Intent routing: `backend/agents/intent_router.py` (INTENT_TO_AGENTS, INTENT_PATTERNS, 1281 lines)
-- Consolidation plan: `backend/agents/consolidation.py` (CONSOLIDATED_AGENTS, 1106 lines)
-- Agent service: `backend/agents/service.py` (~2799 lines)
-- Orchestrator: `backend/agents/orchestrator.py`
-- Tool files: `backend/agents/tools/` (44 files)
+- **Consolidated roles**: `backend/agents/roles.py` (ConsolidatedRole enum, ROLE_MAPPING, system prompts)
+- **Agent configs**: `backend/agents/consolidation.py` (CONSOLIDATED_AGENTS, INTENT_TO_CONSOLIDATED)
+- **Legacy configs**: `backend/agents/tool_integration.py` (AGENT_CONFIGS, 60 roles -- still referenced for tool lists)
+- **Intent routing**: `backend/agents/intent_router.py` (classify_intent returns consolidated agent IDs)
+- **Tool registry**: `backend/agents/tools/base.py` (get_for_agent supports both role systems)
+- **Agent service**: `backend/agents/service.py` (~2799 lines)
+- **Orchestrator**: `backend/agents/orchestrator.py`
+- **Tool files**: `backend/agents/tools/` (44 files)

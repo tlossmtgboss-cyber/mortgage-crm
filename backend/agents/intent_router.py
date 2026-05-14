@@ -1068,6 +1068,25 @@ async def classify_intent_llm(
 # MAIN CLASSIFICATION FUNCTION
 # =============================================================================
 
+def _resolve_agents_for_intent(intent: str) -> List[str]:
+    """
+    Resolve the agent list for an intent using consolidated roles.
+
+    Returns consolidated agent IDs (e.g. ["pipeline_coach", "calculator"])
+    instead of legacy role names.  Falls back to legacy mapping if the
+    consolidation module is unavailable.
+    """
+    try:
+        from .consolidation import INTENT_TO_CONSOLIDATED
+        agents = INTENT_TO_CONSOLIDATED.get(intent)
+        if agents is not None:
+            return agents
+    except ImportError:
+        pass
+    # Fallback to legacy mapping
+    return INTENT_TO_AGENTS.get(intent, INTENT_TO_AGENTS["general"])
+
+
 async def classify_intent(
     query: str,
     anthropic_client = None,
@@ -1080,6 +1099,10 @@ async def classify_intent(
     - Pattern match: ~1-5ms (handles 80%+ of queries)
     - LLM fallback: ~500-1000ms (for complex/ambiguous queries)
 
+    Returns consolidated agent IDs (10 roles) instead of legacy agent
+    names (60 roles).  Legacy role strings still work throughout the
+    system via ROLE_MAPPING in agents.roles.
+
     Args:
         query: User's input query
         anthropic_client: Optional pre-configured Anthropic client
@@ -1089,7 +1112,7 @@ async def classify_intent(
         Dict with:
         - intent: The classified intent
         - confidence: Confidence score (0-1)
-        - agents: List of agent names to use
+        - agents: List of consolidated agent IDs
         - method: 'pattern_match' or 'llm'
         - elapsed_ms: Classification time in milliseconds
     """
@@ -1100,7 +1123,7 @@ async def classify_intent(
         return {
             "intent": "general",
             "confidence": 0.0,
-            "agents": INTENT_TO_AGENTS["general"],
+            "agents": _resolve_agents_for_intent("general"),
             "method": "fallback",
             "matched_pattern": None,
             "elapsed_ms": 0.0,
@@ -1128,7 +1151,7 @@ async def classify_intent(
         return {
             "intent": intent,
             "confidence": confidence,
-            "agents": INTENT_TO_AGENTS.get(intent, INTENT_TO_AGENTS["general"]),
+            "agents": _resolve_agents_for_intent(intent),
             "method": method,
             "matched_pattern": pattern,
             "elapsed_ms": elapsed
@@ -1154,7 +1177,7 @@ async def classify_intent(
         return {
             "intent": intent,
             "confidence": confidence,
-            "agents": INTENT_TO_AGENTS.get(intent, INTENT_TO_AGENTS["general"]),
+            "agents": _resolve_agents_for_intent(intent),
             "method": "llm",
             "matched_pattern": None,
             "elapsed_ms": elapsed
@@ -1165,7 +1188,7 @@ async def classify_intent(
     return {
         "intent": "general",
         "confidence": 0.3,
-        "agents": INTENT_TO_AGENTS["general"],
+        "agents": _resolve_agents_for_intent("general"),
         "method": "fallback",
         "matched_pattern": None,
         "elapsed_ms": elapsed
@@ -1271,6 +1294,8 @@ __all__ = [
     "get_tool_count_for_intent",
     "flush_intent_cache",
     "print_intent_summary",
+    # Consolidated role resolution
+    "_resolve_agents_for_intent",
     # Pattern learning & stats
     "get_routing_stats",
     "get_learned_patterns",

@@ -593,11 +593,35 @@ class ToolRegistry:
 
     @classmethod
     def get_for_agent(cls, agent_role: str) -> List[ToolDefinition]:
-        """Get all tools available for a specific agent role."""
+        """Get all tools available for a specific agent role.
+
+        Supports both legacy role names (e.g. "pipeline_analyst") and
+        consolidated role names (e.g. "pipeline_coach").  When a
+        consolidated role is passed, tools tagged with ANY of the
+        absorbed legacy roles are included.
+        """
         instance = cls()
+
+        # Build the set of role strings to match against
+        roles_to_match = {agent_role}
+
+        # If this is a consolidated role, expand to include all legacy roles
+        try:
+            from ..roles import ConsolidatedRole, get_legacy_roles_for, ROLE_MAPPING
+            if agent_role in {r.value for r in ConsolidatedRole}:
+                # It's a consolidated role — include all absorbed legacy roles
+                consolidated = ConsolidatedRole(agent_role)
+                roles_to_match.update(get_legacy_roles_for(consolidated))
+            elif agent_role in ROLE_MAPPING:
+                # It's a legacy role — also match the consolidated role
+                consolidated = ROLE_MAPPING[agent_role]
+                roles_to_match.add(consolidated.value)
+        except (ImportError, ValueError):
+            pass  # roles.py not available — use direct match only
+
         return [
             tool for tool in instance._tools.values()
-            if agent_role in tool.agent_roles or "all" in tool.agent_roles
+            if (roles_to_match & set(tool.agent_roles)) or ("all" in tool.agent_roles)
         ]
 
     @classmethod

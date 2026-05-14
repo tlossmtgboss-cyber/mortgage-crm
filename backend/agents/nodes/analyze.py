@@ -41,12 +41,18 @@ from ..intent_router import (
     INTENT_TO_AGENTS,
     HAIKU_INTENTS,
     is_haiku_intent,
+    _resolve_agents_for_intent,
 )
 
 try:
     from utils.pii_mask import mask_phone
 except ImportError:
     mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
+
+def _resolve_consolidated_agents(intent_str: str) -> list:
+    """Resolve intent to consolidated agent IDs, with legacy fallback."""
+    return _resolve_agents_for_intent(intent_str)
 
 logger = logging.getLogger(__name__)
 
@@ -888,7 +894,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
                 "required_tools": final_tools,
                 "requires_action": pattern_result.get("requires_action", False),
                 "analysis_method": "pattern_match",
-                "intent_agents": INTENT_TO_AGENTS.get(intent_str, ["pipeline_analyst"]),
+                "intent_agents": _resolve_consolidated_agents(intent_str),
                 # Pass use_haiku flag for model selection in reason_and_respond
                 "use_haiku": pattern_result.get("use_haiku", False),
                 "intent_str": pattern_result.get("intent_str", intent_str),
@@ -946,7 +952,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             # Orchestrator already classified this with high confidence — skip re-classification
             intent_str = pre_classified_intent
             confidence = pre_classified_confidence
-            agents = state.get("intent_agents", ["pipeline_analyst"])
+            agents = state.get("intent_agents", ["pipeline_coach"])
             method = f"pre_classified ({state.get('pre_classified_method', 'unknown')})"
             timing["intent_classify"] = 0.0
 
@@ -1097,5 +1103,5 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             "required_tools": ["get_daily_priorities", "get_tasks", "get_pipeline"],
             "requires_action": False,
             "analysis_method": "fallback",
-            "intent_agents": ["pipeline_analyst", "task_automation"],
+            "intent_agents": ["pipeline_coach"],
         })
