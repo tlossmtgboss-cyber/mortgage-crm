@@ -1,7 +1,7 @@
 """LOS integration and compliance enforcement tables
 
-Revision ID: 010_los_compliance
-Revises: 009c_compliance_models
+Revision ID: 010b_los_compliance
+Revises: 010_sso_mfa_enforcement
 Create Date: 2026-02-19
 
 Creates tables for:
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '010_los_compliance'
+revision = '010b_los_compliance'
 down_revision = '010_sso_mfa_enforcement'
 branch_labels = None
 depends_on = None

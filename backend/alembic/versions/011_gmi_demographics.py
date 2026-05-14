@@ -1,7 +1,7 @@
 """Add GMI (Government Monitoring Information) demographic fields to borrower_applications
 
 Revision ID: 011_gmi_demographics
-Revises: 010_los_compliance
+Revises: 010b_los_compliance
 Create Date: 2026-02-19
 
 ECOA (Equal Credit Opportunity Act) requires collection of Government Monitoring
@@ -35,7 +35,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic
 revision = '011_gmi_demographics'
-down_revision = '010_los_compliance'
+down_revision = '010b_los_compliance'
 branch_labels = None
 depends_on = None
 

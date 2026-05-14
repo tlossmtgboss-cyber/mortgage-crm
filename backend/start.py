@@ -104,11 +104,12 @@ def cleanup_idle_connections():
         print(f"START.PY: Connection cleanup warning: {e}", flush=True)
 
 def _ensure_new_tables(database_url: str):
-    """Create tables that Alembic migration 014 should have created.
+    """Verify that tables managed by Alembic migrations 014/015 exist.
 
-    run_migrations.py stamps at head when core tables already exist,
-    so newer migrations (client_files, team_chat, audit_events) may
-    never have actually run.  This is idempotent (IF NOT EXISTS).
+    DDL was moved to Alembic migration 015_inline_ddl_consolidation.
+    This function now only performs a startup health check — if any
+    expected table is missing, it logs a warning directing operators
+    to run ``alembic upgrade head``.
     """
     if not database_url or "sqlite" in database_url:
         return
@@ -121,203 +122,34 @@ def _ensure_new_tables(database_url: str):
     conn.autocommit = True
     cur = conn.cursor()
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS client_files (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            organization_id INTEGER NOT NULL REFERENCES organizations(id),
-            lead_id INTEGER UNIQUE REFERENCES leads(id),
-            first_name VARCHAR,
-            last_name VARCHAR,
-            primary_email VARCHAR,
-            primary_phone VARCHAR,
-            lifecycle_stage VARCHAR NOT NULL DEFAULT 'new_lead',
-            source VARCHAR,
-            preferred_channel VARCHAR,
-            sticky_note TEXT,
-            assigned_loan_officer_id INTEGER REFERENCES users(id),
-            assigned_loan_assistant_id INTEGER REFERENCES users(id),
-            assigned_processor_id INTEGER REFERENCES users(id),
-            assigned_underwriter_id INTEGER REFERENCES users(id),
-            property_address JSONB,
-            active_loan_program VARCHAR,
-            active_loan_purpose VARCHAR,
-            active_loan_amount NUMERIC(18,2),
-            active_loan_fico INTEGER,
-            active_loan_ltv NUMERIC(8,4),
-            active_loan_lock_expires_at TIMESTAMPTZ,
-            active_loan_projected_close_date TIMESTAMPTZ,
-            tags JSONB NOT NULL DEFAULT '[]',
-            last_contact_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            created_by_user_id INTEGER REFERENCES users(id)
+    expected_tables = (
+        "client_files", "client_file_collaborators",
+        "team_chat_channels", "team_chat_messages",
+        "team_chat_reactions", "team_chat_reads",
+        "audit_events", "ai_cost_records",
+    )
+
+    present = []
+    missing = []
+    for tbl in expected_tables:
+        cur.execute(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s)",
+            (tbl,),
         )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS client_file_collaborators (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            organization_id INTEGER NOT NULL REFERENCES organizations(id),
-            client_file_id UUID NOT NULL REFERENCES client_files(id) ON DELETE CASCADE,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            role VARCHAR NOT NULL DEFAULT 'viewer',
-            notify_on_inbound BOOLEAN NOT NULL DEFAULT FALSE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(client_file_id, user_id)
-        )
-    """)
-
-    cur.execute("""
-        DO $$ BEGIN
-            CREATE TYPE team_chat_author_kind AS ENUM ('human', 'system');
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$
-    """)
-    cur.execute("""
-        DO $$ BEGIN
-            CREATE TYPE team_chat_agent_slug AS ENUM (
-                'cadence', 'aria', 'avery', 'insight',
-                'ops_manager', 'document', 'milestone', 'lifecycle'
-            );
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$
-    """)
-    cur.execute("""
-        DO $$ BEGIN
-            CREATE TYPE team_chat_reaction_emoji AS ENUM (
-                'thumbs_up', 'check', 'fire', 'question'
-            );
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS team_chat_channels (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            organization_id INTEGER NOT NULL,
-            client_file_id UUID NOT NULL REFERENCES client_files(id) ON DELETE CASCADE,
-            pinned_message_id UUID,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(client_file_id)
-        )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_team_chat_channels_org ON team_chat_channels(organization_id)")
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS team_chat_messages (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            organization_id INTEGER NOT NULL,
-            channel_id UUID NOT NULL REFERENCES team_chat_channels(id) ON DELETE CASCADE,
-            client_file_id UUID NOT NULL REFERENCES client_files(id) ON DELETE CASCADE,
-            author_kind team_chat_author_kind NOT NULL,
-            author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-            system_agent_slug team_chat_agent_slug,
-            system_display_name VARCHAR(80),
-            system_source_event_kind VARCHAR(80),
-            system_source_object_id UUID,
-            system_source_object_label VARCHAR(200),
-            body TEXT NOT NULL,
-            mentioned_user_ids INTEGER[] NOT NULL DEFAULT '{}',
-            attachments JSONB NOT NULL DEFAULT '[]',
-            is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            edited_at TIMESTAMPTZ,
-            deleted_at TIMESTAMPTZ
-        )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_tc_messages_channel_time ON team_chat_messages(channel_id, created_at)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_tc_messages_org ON team_chat_messages(organization_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_tc_messages_client_file ON team_chat_messages(client_file_id)")
-
-    cur.execute("""
-        DO $$ BEGIN
-            ALTER TABLE team_chat_channels
-                ADD CONSTRAINT fk_tc_channels_pinned
-                FOREIGN KEY (pinned_message_id) REFERENCES team_chat_messages(id)
-                ON DELETE SET NULL;
-        EXCEPTION WHEN duplicate_object THEN NULL;
-        END $$
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS team_chat_reactions (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            organization_id INTEGER NOT NULL,
-            message_id UUID NOT NULL REFERENCES team_chat_messages(id) ON DELETE CASCADE,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            emoji team_chat_reaction_emoji NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(message_id, user_id, emoji)
-        )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_tc_reactions_message ON team_chat_reactions(message_id)")
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS team_chat_reads (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            organization_id INTEGER NOT NULL,
-            channel_id UUID NOT NULL REFERENCES team_chat_channels(id) ON DELETE CASCADE,
-            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            last_read_message_id UUID NOT NULL,
-            last_read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE(channel_id, user_id)
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS audit_events (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            event_type VARCHAR(64) NOT NULL,
-            outcome VARCHAR(16) NOT NULL DEFAULT 'success',
-            actor_id UUID,
-            actor_email VARCHAR(320),
-            actor_role VARCHAR(32),
-            org_id UUID,
-            resource_type VARCHAR(64),
-            resource_id VARCHAR(128),
-            ip INET,
-            user_agent TEXT,
-            request_id VARCHAR(64),
-            metadata JSONB NOT NULL DEFAULT '{}'
-        )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_audit_events_occurred ON audit_events(occurred_at)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_audit_events_event_type ON audit_events(event_type)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_audit_events_actor ON audit_events(actor_id)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_audit_events_resource ON audit_events(resource_id)")
-
-    # ── AI Cost Records (persistent dollar-cost tracking) ──
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ai_cost_records (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            organization_id INTEGER NOT NULL REFERENCES organizations(id),
-            user_id INTEGER REFERENCES users(id),
-            agent_type VARCHAR(64) NOT NULL,
-            model VARCHAR(64) NOT NULL,
-            input_tokens INTEGER NOT NULL,
-            output_tokens INTEGER NOT NULL,
-            cost_usd NUMERIC(10,6) NOT NULL,
-            duration_ms INTEGER,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_org_created ON ai_cost_records(organization_id, created_at)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_org_agent ON ai_cost_records(organization_id, agent_type)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_model ON ai_cost_records(model)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_created ON ai_cost_records(created_at)")
-    cur.execute("CREATE INDEX IF NOT EXISTS ix_ai_cost_user ON ai_cost_records(user_id, created_at)")
-
-    tables_created = []
-    for tbl in ("client_files", "client_file_collaborators",
-                "team_chat_channels", "team_chat_messages",
-                "team_chat_reactions", "team_chat_reads", "audit_events",
-                "ai_cost_records"):
-        cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (tbl,))
         if cur.fetchone()[0]:
-            tables_created.append(tbl)
+            present.append(tbl)
+        else:
+            missing.append(tbl)
 
-    print(f"START.PY: Tables verified: {', '.join(tables_created)}", flush=True)
+    if missing:
+        print(
+            f"START.PY: WARNING — missing tables: {', '.join(missing)}. "
+            f"Run 'alembic upgrade head' to create them "
+            f"(see migration 015_inline_ddl_consolidation).",
+            flush=True,
+        )
+    else:
+        print(f"START.PY: All {len(present)} expected tables verified.", flush=True)
 
     cur.close()
     conn.close()
@@ -381,15 +213,47 @@ def main():
             except Exception:
                 pass
 
-    # Ensure tables from Alembic migration 014 exist.
-    # run_migrations.py stamps at head when core tables pre-exist, so these
-    # tables may never have been created despite the migration being "applied".
+    # Verify schema is at Alembic head revision
     print("=" * 50, flush=True)
-    print("START.PY: Ensuring client_files and team_chat tables exist...", flush=True)
+    print("START.PY: Checking Alembic schema version...", flush=True)
+    try:
+        from alembic.config import Config as _AlembicConfig
+        from alembic.runtime.migration import MigrationContext as _MigCtx
+        from alembic.script import ScriptDirectory as _ScriptDir
+        from sqlalchemy import create_engine as _create_engine
+
+        _alembic_cfg = _AlembicConfig(os.path.join(script_dir, "alembic.ini"))
+        _alembic_cfg.set_main_option(
+            "script_location", os.path.join(script_dir, "alembic")
+        )
+        _script = _ScriptDir.from_config(_alembic_cfg)
+        _head = _script.get_current_head()
+
+        if database_url and "sqlite" not in database_url:
+            _engine = _create_engine(database_url)
+            with _engine.connect() as _conn:
+                _current = _MigCtx.configure(_conn).get_current_revision()
+            _engine.dispose()
+
+            if _current == _head:
+                print(f"START.PY: Schema at head ({_head})", flush=True)
+            else:
+                print(
+                    f"START.PY: WARNING — schema at {_current!r}, "
+                    f"head is {_head!r}. Run 'alembic upgrade head'.",
+                    flush=True,
+                )
+    except Exception as e:
+        print(f"START.PY: Schema version check warning: {e}", flush=True)
+
+    # Verify tables from Alembic migrations 014/015 exist.
+    # DDL is now managed exclusively by Alembic — this is just a health check.
+    print("=" * 50, flush=True)
+    print("START.PY: Verifying schema tables exist...", flush=True)
     try:
         _ensure_new_tables(database_url)
     except Exception as e:
-        print(f"START.PY: Table creation warning: {e}", flush=True)
+        print(f"START.PY: Table verification warning: {e}", flush=True)
 
     # Backfill client_files from existing leads (idempotent — skips existing)
     print("START.PY: Backfilling client_files from leads...", flush=True)
