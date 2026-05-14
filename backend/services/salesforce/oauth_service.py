@@ -223,11 +223,24 @@ class SalesforceOAuthService:
             identity
         )
 
-        # Initialize calendar sync settings for this user
-        self._initialize_calendar_sync_settings(db, oauth_state.user_id)
+        # Non-critical post-connect setup — failures here must not break the connection
+        try:
+            self._initialize_calendar_sync_settings(db, oauth_state.user_id)
+        except Exception as e:
+            logger.warning(f"Calendar sync init failed (non-fatal): {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
-        # Queue schema discovery
-        self._queue_schema_discovery(db, profile.id)
+        try:
+            self._queue_schema_discovery(db, profile.id)
+        except Exception as e:
+            logger.warning(f"Schema discovery queue failed (non-fatal): {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         return {
             'user_id': oauth_state.user_id,

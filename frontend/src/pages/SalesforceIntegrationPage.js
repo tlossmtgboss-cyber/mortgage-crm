@@ -42,8 +42,18 @@ function SalesforceIntegrationPage() {
 
   const token = getToken();
 
-  // Check connection status on mount
+  // Check connection status on mount + show OAuth errors from redirect
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = params.get('error');
+    const oauthMessage = params.get('message');
+    if (oauthError) {
+      toast.error(`Salesforce connection failed: ${oauthMessage || oauthError}`);
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('salesforce') === 'connected') {
+      toast.success('Salesforce connected successfully');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     checkConnectionStatus();
   }, []);
 

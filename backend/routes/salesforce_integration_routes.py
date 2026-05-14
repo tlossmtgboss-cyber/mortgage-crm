@@ -1179,6 +1179,7 @@ async def oauth_callback(
             url=f"{frontend_url}/settings/integrations?error={error}&message={error_description or ''}"
         )
 
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     try:
         logger.info(f"Processing OAuth callback with code length: {len(code)}, state: {state[:20]}...")
         result = await salesforce_oauth.handle_callback(db, code, state)
@@ -1192,36 +1193,26 @@ async def oauth_callback(
                 schemas = await salesforce_schema.discover_schema(db, profile.id)
                 logger.info(f"Initial schema discovery completed: {len(schemas)} objects discovered")
             except Exception as schema_error:
-                # Don't fail OAuth callback if schema discovery fails - it can be retried later
                 logger.warning(f"Initial schema discovery failed (non-fatal): {schema_error}")
 
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         # Validate return_url to prevent open redirect
-        # Rejects: javascript: URLs, data: URLs, protocol-relative URLs,
-        # external domains, and any non-http(s) scheme
         raw_return_url = result.get('return_url')
         if raw_return_url:
             from urllib.parse import urlparse
             parsed = urlparse(raw_return_url)
             frontend_parsed = urlparse(frontend_url)
-            # Must be http or https scheme (blocks javascript:, data:, vbscript:, etc.)
             if parsed.scheme and parsed.scheme not in ("http", "https"):
                 raw_return_url = None
-            # Block protocol-relative URLs (//evil.com)
             elif raw_return_url.startswith("//"):
                 raw_return_url = None
-            # If it has a netloc (host), it must match the frontend domain
             elif parsed.netloc and parsed.netloc != frontend_parsed.netloc:
                 raw_return_url = None
-            # If no scheme and no netloc, it's a relative path — that's OK
-            # But if scheme is present without netloc, reject (malformed)
             elif parsed.scheme and not parsed.netloc:
                 raw_return_url = None
-        final_redirect = raw_return_url or f"{frontend_url}/settings/integrations"
+        final_redirect = raw_return_url or f"{frontend_url}/settings/integrations/salesforce"
 
-        # Properly append query parameter - avoid double ?
         if '?salesforce=' in final_redirect:
-            redirect_url = final_redirect  # Already has the parameter
+            redirect_url = final_redirect
         elif '?' in final_redirect:
             redirect_url = f"{final_redirect}&salesforce=connected"
         else:
@@ -1230,11 +1221,18 @@ async def oauth_callback(
 
         return RedirectResponse(url=redirect_url)
 
-    except ValueError as e:
-        logger.error(f"OAuth callback error: {e}")
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    except Exception as e:
+        logger.error(f"OAuth callback failed: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(f"OAuth callback traceback: {traceback.format_exc()}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        from urllib.parse import quote
+        msg = quote(f"{type(e).__name__}: {str(e)[:100]}")
         return RedirectResponse(
-            url=f"{frontend_url}/settings/integrations?error=auth_failed&message=Authentication+failed"
+            url=f"{frontend_url}/settings/integrations/salesforce?error=auth_failed&message={msg}"
         )
 
 
@@ -1244,17 +1242,20 @@ async def get_connection_status(
     db: Session = Depends(get_db)
 ):
     """Get Salesforce connection status for current user."""
-    # Ensure tables exist
+    # Ensure tables exist — run in isolation so DDL failures don't corrupt the session
     try:
         fix_salesforce_schema(db)
     except Exception as e:
         logger.warning(f"Could not run schema fix: {e}")
+    finally:
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     try:
         user_id = require_user(request, db)
-        logger.info(f"Checking Salesforce status for user_id: {user_id}")
     except HTTPException:
-        logger.warning("Salesforce status check: User not authenticated")
         raise
     except Exception as e:
         logger.warning(f"Salesforce status check: Error getting user: {e}")
@@ -1262,7 +1263,6 @@ async def get_connection_status(
 
     try:
         profile = get_integration_profile(db, user_id)
-        logger.info(f"Found profile for user {user_id}: {profile.id if profile else 'None'}, status: {profile.status if profile else 'N/A'}")
     except Exception as e:
         logger.warning(f"Salesforce status check: Error getting profile (may not exist): {e}")
         return ConnectionStatus(connected=False)
