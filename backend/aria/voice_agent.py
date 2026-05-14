@@ -194,6 +194,24 @@ class AriaVoiceAgent(Agent):
             self._register_speech_handler()
             return
 
+        # LO assistant mode — check for proactive alerts and personalize greeting
+        proactive_context = ""
+        if self._mode == "lo_assistant" and self._session_data.get("organization_id"):
+            try:
+                from aria.core.proactive_voice import ProactiveVoiceEngine
+                proactive = ProactiveVoiceEngine(self._session_data)
+                alerts = await proactive.check_urgent_notifications()
+                if alerts:
+                    proactive_context = proactive.get_greeting_context(alerts)
+            except Exception as e:
+                logger.debug("[AriaVoice] Proactive check failed (non-fatal): %s", e)
+
+        if proactive_context:
+            await self.update_instructions(
+                (self._initial_instructions or "")
+                + "\n\n" + proactive_context
+            )
+
         greetings = {
             "lo_assistant": (
                 "Greet the loan officer briefly. "
@@ -203,6 +221,14 @@ class AriaVoiceAgent(Agent):
                 "Introduce yourself briefly using the context in your instructions."
             ),
         }
+
+        # If there are critical proactive alerts, modify the greeting
+        if proactive_context and "URGENT ITEMS" in proactive_context:
+            greetings["lo_assistant"] = (
+                "Greet the loan officer briefly, then immediately mention the urgent items "
+                "from your instructions. Be concise — one sentence per urgent item."
+            )
+
         await self.session.generate_reply(
             instructions=greetings.get(self._mode, greetings["lo_assistant"])
         )
@@ -1177,6 +1203,187 @@ class AriaVoiceAgent(Agent):
             return json.dumps({"facts": [], "no_results": True})
         return json.dumps(result, default=str)
 
+    # ─── Voice Workflow Tools ────────────────────────────────────────
+
+    @function_tool()
+    async def morning_briefing(self, context: RunContext):
+        """Give the loan officer their morning briefing with pipeline status, today's appointments, urgent items, and tasks due. Use when they say things like 'good morning', 'what do I have today', 'briefing', 'morning update', 'what's going on today'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_morning_briefing()
+        self._session_data["tools_executed"].append({
+            "tool": "morning_briefing",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def check_loan_status(self, context: RunContext, borrower_name: str):
+        """Check the current status of a specific loan by borrower name. Gives stage, conditions, next steps, and timeline. Use when they say 'where are we with', 'status on', 'how's the X file', 'update on the X loan'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_loan_status_check(borrower_name)
+        self._session_data["tools_executed"].append({
+            "tool": "check_loan_status",
+            "borrower": borrower_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def create_voice_task(
+        self, context: RunContext,
+        description: str,
+        due_date: str = "",
+    ):
+        """Create a task from a voice command. Use when they say 'remind me to', 'don't let me forget', 'add a task', 'I need to remember to'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_quick_task_create(description, due_date or None)
+        self._session_data["tools_executed"].append({
+            "tool": "create_voice_task",
+            "description": description,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def chase_documents(
+        self, context: RunContext,
+        borrower_name: str,
+        document_types: str = "",
+    ):
+        """Send a document request to a borrower via SMS and email. Use when they say 'chase docs', 'need bank statements from', 'follow up on documents', 'get the paperwork from'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_document_chase(borrower_name, document_types or None)
+        self._session_data["tools_executed"].append({
+            "tool": "chase_documents",
+            "borrower": borrower_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def rate_quote(
+        self, context: RunContext,
+        fico: int = 0,
+        ltv: float = 0.0,
+        loan_type: str = "conventional",
+        loan_amount: float = 0.0,
+    ):
+        """Get a quick rate quote for given loan parameters. Use when they ask about rates, pricing, or what a borrower would qualify for."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_rate_quote(
+            fico=fico or None,
+            ltv=ltv or None,
+            loan_type=loan_type,
+            loan_amount=loan_amount or None,
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "rate_quote",
+            "fico": fico,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def pipeline_summary(self, context: RunContext):
+        """Get a full summary of the loan officer's current pipeline — active loans by stage, volume, projected closings, and funded count. Use when they say 'my pipeline', 'how's my pipeline', 'pipeline update'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_pipeline_overview()
+        self._session_data["tools_executed"].append({
+            "tool": "pipeline_summary",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def compliance_status(
+        self, context: RunContext,
+        borrower_name: str = "",
+    ):
+        """Check compliance status for a specific loan — TRID deadlines, disclosure status, rate lock expiration, SLA tracking. Use when they ask about compliance, disclosures, or 'are we good on'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_compliance_check(borrower_name=borrower_name or None)
+        self._session_data["tools_executed"].append({
+            "tool": "compliance_status",
+            "borrower": borrower_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def end_of_day_recap(self, context: RunContext):
+        """Summarize the day's activities — tasks completed, calls made, leads contacted — and preview tomorrow's priorities. Use when they say 'how'd today go', 'wrap up', 'end of day', 'recap'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_end_of_day_recap()
+        self._session_data["tools_executed"].append({
+            "tool": "end_of_day_recap",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def coaching_tip(self, context: RunContext, topic: str):
+        """Get sales coaching advice on a specific mortgage topic — objection handling, follow-up strategy, referral tactics. Use when they ask 'how should I handle', 'what's the best way to', 'coaching', 'advice on'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_coaching_moment(topic)
+        self._session_data["tools_executed"].append({
+            "tool": "coaching_tip",
+            "topic": topic,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def schedule_callback(
+        self, context: RunContext,
+        contact_name: str,
+        time: str,
+        reason: str = "",
+    ):
+        """Schedule a callback with a contact at a specific time. Use when they say 'schedule a call with', 'set up a callback', 'book a call', 'call X at Y'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_schedule_callback(contact_name, time, reason or None)
+        self._session_data["tools_executed"].append({
+            "tool": "schedule_callback",
+            "contact": contact_name,
+            "time": time,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
+    @function_tool()
+    async def qualify_lead(
+        self, context: RunContext,
+        credit_score: int = 0,
+        loan_amount: float = 0.0,
+        loan_type: str = "conventional",
+        source: str = "",
+    ):
+        """Instantly qualify a new lead — credit eligibility, program options, rate estimates. Use when they say 'I just got a lead', 'new borrower', 'can they qualify', 'quick qual'."""
+        from aria.core.voice_workflows import VoiceWorkflowEngine
+        engine = VoiceWorkflowEngine(self._session_data)
+        result = await engine.handle_lead_qualification(
+            credit_score=credit_score or None,
+            loan_amount=loan_amount or None,
+            loan_type=loan_type,
+            source=source or None,
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "qualify_lead",
+            "credit_score": credit_score,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return result
+
     # ─── Speech Handler & Speculative Pre-fetch ──────────────────────
 
     def _register_speech_handler(self) -> None:
@@ -1243,6 +1450,25 @@ class AriaVoiceAgent(Agent):
             )
         except Exception as e:
             logger.error("[AriaVoice] Failed to persist audit trail: %s", e)
+
+        # Track voice intelligence analytics
+        try:
+            from aria.core.voice_intelligence import VoiceIntelligence
+            vi = VoiceIntelligence(
+                organization_id=self._session_data.get("organization_id")
+            )
+            tools_executed = self._session_data.get("tools_executed", [])
+            vi.track_conversation_outcome(
+                session_id=self._session_data.get("call_session_id", f"aria_{id(self)}"),
+                user_id=str(self._session_data.get("user_id", "")),
+                outcome="completed",
+                duration_seconds=self._compute_duration(),
+                intents_handled=[t["tool"] for t in tools_executed],
+                tools_used=[t["tool"] for t in tools_executed],
+                mode=self._mode,
+            )
+        except Exception as e:
+            logger.debug("[AriaVoice] Voice intelligence tracking failed (non-fatal): %s", e)
 
         borrower_id = self._session_data.get("lead_id") or self._session_data.get("borrower_id")
         org_id = self._session_data.get("organization_id")

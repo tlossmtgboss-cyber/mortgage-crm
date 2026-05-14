@@ -2114,6 +2114,13 @@ try:
 except Exception as e:
     logger.warning(f"Aria chat routes not loaded: {e}")
 
+try:
+    from routes.aria_analytics_routes import router as aria_analytics_router
+    app.include_router(aria_analytics_router, tags=["Aria Analytics"])
+    logger.info("Aria analytics routes loaded")
+except Exception as e:
+    logger.warning(f"Aria analytics routes not loaded: {e}")
+
 # ============================================================================
 # ARIA INTERNAL ROUTES — Voice agent → backend tool calls (no user JWT, uses
 # X-Internal-API-Key header for auth)
