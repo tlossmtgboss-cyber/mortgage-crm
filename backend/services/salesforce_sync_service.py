@@ -143,40 +143,18 @@ DEFAULT_FIELD_MAPPING = {
     "Name": ("loan_number", None),
 
     # ============================================================
-    # LOAN PROFILE (essential for pipeline dashboard + LTV/PMI)
+    # BORROWER NAME
     # ============================================================
-    "MtgPlanner_CRM__Loan_Amount__c": ("amount", "decimal"),
-    "MtgPlanner_CRM__Loan_Type__c": ("loan_type", None),
-    "MtgPlanner_CRM__Appraised_Value__c": ("appraisal_value", "decimal"),
-    "MtgPlanner_CRM__Mortgage_Ins_1st_TD__c": ("mortgage_insurance", "decimal"),
-
-    # Status → stage mapping (drives pipeline bucket routing)
-    "MtgPlanner_CRM__Status__c": ("stage", "stage_mapping"),
-    "MtgPlanner_CRM__Stage__c": ("stage", "stage_mapping"),
-
-    # ============================================================
-    # BORROWER INFO (required for communication + portal access)
-    # ============================================================
-    "MtgPlanner_CRM__Borrower_Name__c": ("borrower_name", None),
     "MtgPlanner_CRM__Borrower_First_Name__c": ("borrower_first_name", None),
     "MtgPlanner_CRM__Borrower_Last_Name__c": ("borrower_last_name", None),
-    "MtgPlanner_CRM__Borrower_Email__c": ("borrower_email", None),
-    "MtgPlanner_CRM__Borrower_Phone__c": ("borrower_phone", None),
-    "MtgPlanner_CRM__CoBorrower_Name__c": ("coborrower_name", None),
-    "MtgPlanner_CRM__CoBorrower_Email__c": ("co_borrower_email", None),
 
     # ============================================================
-    # PROPERTY ADDRESS (loan identification)
+    # STATUS
     # ============================================================
-    "MtgPlanner_CRM__Property_Address__c": ("property_address", None),
-    "MtgPlanner_CRM__Property_City__c": ("property_city", None),
-    "MtgPlanner_CRM__Property_State__c": ("property_state", None),
-    "MtgPlanner_CRM__Property_Zip__c": ("property_zip", None),
+    "MtgPlanner_CRM__Status__c": ("stage", "stage_mapping"),
 
     # ============================================================
-    # ALL 33 SLA DATE FIELDS (workflow execution engine)
-    # These dates drive the entire SLA/task generation system.
-    # DO NOT REMOVE — they are the backbone of pipeline automation.
+    # ALL SLA DATE FIELDS (workflow execution engine)
     # ============================================================
 
     # Lead & Application Phase
@@ -238,12 +216,6 @@ DEFAULT_FIELD_MAPPING = {
     # Status Changes
     "MtgPlanner_CRM__Withdrawn_Date__c": ("withdrawn_date", "date"),
     "MtgPlanner_CRM__Contract_Date__c": ("contract_received_date", "date"),
-
-    # ============================================================
-    # TIMESTAMPS
-    # ============================================================
-    "CreatedDate": ("created_at", "datetime"),
-    "LastModifiedDate": ("updated_at", "datetime"),
 }
 
 # =============================================================================
