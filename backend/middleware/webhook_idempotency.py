@@ -17,18 +17,7 @@ Two layers are provided:
 3. **Dead-letter queue** (``record_webhook_failure``, ``get_failed_webhooks``,
    ``retry_webhook``): Stores failed webhook events for later inspection and
    reprocessing.  Uses Redis list with in-memory deque fallback.  Capped at
-   10,000 entries per provider (FIFO eviction).
-
-4. **Circuit breaker**: Redis operations are protected by a circuit breaker
-   with three states (closed / open / half-open).
-   After N failures (default 5) within a window (default 60s), the breaker
-   opens and Redis is bypassed.  After a cooldown (default 30s) the breaker
-   enters half-open state and allows a single probe request through.  If the
-   probe succeeds the breaker closes; if it fails the breaker re-opens.
-
-5. **Latency monitoring** (``get_webhook_stats``): Returns counters for
-   total webhooks processed, duplicates caught, average check latency,
-   DLQ sizes per provider, and circuit breaker state.
+   1000 entries per provider (FIFO eviction).
 
 Usage — lightweight:
     from middleware.webhook_idempotency import is_duplicate_webhook
@@ -95,31 +84,18 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _CB_FAILURE_THRESHOLD = 5   # failures before opening
-_CB_WINDOW_SECONDS = 60.0   # window for failure counting
-_CB_HALFOPEN_SECONDS = 30.0  # cooldown before allowing a probe request
+_CB_WINDOW_SECONDS = 60.0   # window for both failure counting and recovery
 
 _cb_lock = threading.Lock()
-_cb_failures: list[float] = []      # timestamps of recent failures
-_cb_open_since: Optional[float] = None  # monotonic time when breaker opened
-_cb_half_open: bool = False  # True when a single probe is in flight
+_cb_failures: list[float] = []     # timestamps of recent failures
+_cb_open_since: float | None = None  # monotonic time when breaker opened
 
 
 def _cb_record_failure() -> None:
     """Record a Redis failure and possibly open the circuit breaker."""
-    global _cb_open_since, _cb_half_open
+    global _cb_open_since
     now = time.monotonic()
     with _cb_lock:
-        if _cb_half_open:
-            # Probe failed — reopen the breaker for another cooldown period
-            _cb_half_open = False
-            _cb_open_since = now
-            logger.warning(
-                "Webhook circuit breaker re-OPENED: half-open probe failed. "
-                "Will retry in %.0fs.",
-                _CB_HALFOPEN_SECONDS,
-            )
-            return
-
         _cb_failures.append(now)
         # Prune failures outside the window
         cutoff = now - _CB_WINDOW_SECONDS
@@ -130,56 +106,32 @@ def _cb_record_failure() -> None:
             logger.warning(
                 "Webhook circuit breaker OPEN: %d Redis failures in %.0fs window. "
                 "Falling back to in-memory for %.0fs.",
-                len(_cb_failures), _CB_WINDOW_SECONDS, _CB_HALFOPEN_SECONDS,
+                len(_cb_failures), _CB_WINDOW_SECONDS, _CB_WINDOW_SECONDS,
             )
 
 
 def _cb_record_success() -> None:
     """Record a successful Redis operation (resets failure history)."""
-    global _cb_open_since, _cb_half_open
+    global _cb_open_since
     with _cb_lock:
-        if _cb_half_open:
-            # Probe succeeded — close the breaker
-            logger.info(
-                "Webhook circuit breaker CLOSED: half-open probe succeeded.",
-            )
-        _cb_half_open = False
         _cb_failures.clear()
         _cb_open_since = None
 
 
 def _cb_is_open() -> bool:
-    """
-    Check if the circuit breaker is currently blocking Redis.
-
-    States:
-      - closed: Redis available, all requests go through.
-      - open: Redis bypassed entirely. After ``_CB_HALFOPEN_SECONDS``
-        transitions to half-open.
-      - half-open: A single probe request is allowed through. If it
-        succeeds the breaker closes; if it fails the breaker re-opens.
-
-    Returns True when Redis should be bypassed (open state).
-    Returns False when Redis should be used (closed or half-open probe).
-    """
-    global _cb_open_since, _cb_half_open
+    """Check if the circuit breaker is currently open (Redis bypassed)."""
+    global _cb_open_since
     with _cb_lock:
         if _cb_open_since is None:
-            return False  # closed
-        if _cb_half_open:
-            # A probe is already in flight — block other callers
-            return True
+            return False
         elapsed = time.monotonic() - _cb_open_since
-        if elapsed >= _CB_HALFOPEN_SECONDS:
-            # Cooldown expired — allow exactly one probe request
-            _cb_half_open = True
-            logger.info(
-                "Webhook circuit breaker HALF-OPEN: allowing single probe "
-                "request after %.0fs cooldown.",
-                elapsed,
-            )
-            return False  # let the probe through
-        return True  # still in open cooldown
+        if elapsed >= _CB_WINDOW_SECONDS:
+            # Window expired — close breaker and allow retry
+            _cb_open_since = None
+            _cb_failures.clear()
+            logger.info("Webhook circuit breaker CLOSED: recovery window expired, retrying Redis.")
+            return False
+        return True
 
 
 def _cb_state() -> str:
@@ -187,11 +139,9 @@ def _cb_state() -> str:
     with _cb_lock:
         if _cb_open_since is None:
             return "closed"
-        if _cb_half_open:
-            return "half-open"
         elapsed = time.monotonic() - _cb_open_since
-        if elapsed >= _CB_HALFOPEN_SECONDS:
-            return "half-open"
+        if elapsed >= _CB_WINDOW_SECONDS:
+            return "closed"
         return "open"
 
 
@@ -237,7 +187,7 @@ def get_webhook_stats() -> dict:
     # DLQ sizes per provider
     dlq_sizes: dict[str, int] = {}
     redis = _get_redis()
-    if redis is not None:
+    if redis is not None and not _cb_is_open():
         try:
             cursor_keys = redis.keys(f"{_DLQ_REDIS_PREFIX}*")
             for rkey in cursor_keys:
@@ -377,7 +327,7 @@ def is_duplicate_webhook(provider: str, event_key: str) -> bool:
 # Dead-letter queue (DLQ) for failed webhook events
 # ---------------------------------------------------------------------------
 
-_DLQ_MAX_PER_PROVIDER = 10_000
+_DLQ_MAX_PER_PROVIDER = 1000
 _DLQ_REDIS_PREFIX = "webhook:dlq:"
 
 # In-memory fallback: provider -> deque of serialized JSON entries
@@ -419,14 +369,12 @@ def record_webhook_failure(
             redis.lpush(redis_key, entry_json)
             # Trim to cap — keep the newest _DLQ_MAX_PER_PROVIDER entries
             redis.ltrim(redis_key, 0, _DLQ_MAX_PER_PROVIDER - 1)
-            _cb_record_success()
             logger.info(
                 "Webhook DLQ [redis]: recorded failure for %s (provider=%s)",
                 event_key[:80], provider,
             )
             return
         except Exception as e:
-            _cb_record_failure()
             logger.warning("Webhook DLQ: Redis error, falling back to memory: %s", e)
 
     # In-memory fallback
@@ -485,12 +433,10 @@ def get_failed_webhooks(
                 if len(results) >= limit:
                     break
 
-            _cb_record_success()
             # Sort by failed_at descending and cap
             results.sort(key=lambda x: x.get("failed_at", ""), reverse=True)
             return results[:limit]
         except Exception as e:
-            _cb_record_failure()
             logger.warning("Webhook DLQ: Redis read error, falling back to memory: %s", e)
 
     # In-memory fallback
@@ -554,13 +500,10 @@ def retry_webhook(event_key: str) -> bool:
                 # but event_key here is already the full composite key.
                 # Try removing both possible Redis key formats.
                 redis.delete(f"webhook:idem:{event_key}")
-                _cb_record_success()
                 logger.info("Webhook DLQ [redis]: removed %s for retry", event_key[:80])
                 return True
 
-            _cb_record_success()
         except Exception as e:
-            _cb_record_failure()
             logger.warning("Webhook DLQ: Redis retry error, falling back to memory: %s", e)
 
     # In-memory fallback

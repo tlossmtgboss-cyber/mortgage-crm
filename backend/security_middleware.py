@@ -623,6 +623,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # env var at startup).  DynamicCORSMiddleware wraps us and will add its
         # own CORS headers, but 429 responses short-circuit before reaching it,
         # so we must set headers here for the browser to read the error body.
+        # Allowed origins loaded from RATE_LIMIT_ALLOWED_ORIGINS env var at module level.
         origin = request.headers.get("origin", "")
         cors_origin = origin if origin in _RATE_LIMIT_ALLOWED_ORIGINS else ""
         cors_headers = {}
