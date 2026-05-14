@@ -7,11 +7,38 @@
 
 import DOMPurify from 'dompurify';
 
+type ToastType = 'success' | 'error' | 'warning' | 'info' | 'loading';
+
+export interface ToastOptions {
+  duration?: number | null;
+  icon?: string;
+  allowDuplicate?: boolean;
+}
+
+export interface ToastHandle {
+  id: string | null;
+  dismiss: () => void;
+  update: (newMessage: string) => void;
+}
+
+export interface ToastPromiseMessages<T> {
+  loading?: string;
+  success?: string | ((result: T) => string);
+  error?: string | ((error: Error) => string);
+}
+
+interface ToastConfig {
+  duration: number | null;
+  icon: string;
+  className: string;
+  bgColor: string;
+}
+
 /**
  * Escape a string for safe insertion into HTML.
  * Uses the browser's own text encoding to neutralize any HTML/script content.
  */
-function escapeHtml(str) {
+function escapeHtml(str: string): string {
   if (!str) return '';
   const div = document.createElement('div');
   div.textContent = str;
@@ -19,48 +46,44 @@ function escapeHtml(str) {
 }
 
 // Toast container element
-let toastContainer = null;
-
-// Toast queue
-const toastQueue = [];
-let isProcessing = false;
+let toastContainer: HTMLDivElement | null = null;
 
 // Deduplication: track recent messages to prevent spam
-const recentMessages = new Map();
+const recentMessages = new Map<string, number>();
 const DEDUPE_WINDOW_MS = 2000; // Don't show same message within 2 seconds
 const MAX_VISIBLE_TOASTS = 5; // Maximum toasts visible at once
 
 /**
  * Toast configuration
  */
-const CONFIG = {
+const CONFIG: Record<ToastType, ToastConfig> = {
   success: {
     duration: 3000,
-    icon: '\u2705', // checkmark
+    icon: '✅', // checkmark
     className: 'toast-success',
     bgColor: '#10B981',
   },
   error: {
     duration: 5000,
-    icon: '\u274C', // X
+    icon: '❌', // X
     className: 'toast-error',
     bgColor: '#EF4444',
   },
   warning: {
     duration: 4000,
-    icon: '\u26A0\uFE0F', // warning
+    icon: '⚠️', // warning
     className: 'toast-warning',
     bgColor: '#F59E0B',
   },
   info: {
     duration: 3000,
-    icon: '\u2139\uFE0F', // info
+    icon: 'ℹ️', // info
     className: 'toast-info',
     bgColor: '#3B82F6',
   },
   loading: {
     duration: null, // Doesn't auto-dismiss
-    icon: '\u23F3', // hourglass
+    icon: '⏳', // hourglass
     className: 'toast-loading',
     bgColor: '#6B7280',
   },
@@ -69,7 +92,7 @@ const CONFIG = {
 /**
  * Initialize toast container
  */
-function initContainer() {
+function initContainer(): HTMLDivElement {
   if (toastContainer) return toastContainer;
 
   // Create container
@@ -170,7 +193,7 @@ function initContainer() {
 /**
  * Check if message was recently shown (deduplication)
  */
-function isDuplicate(message, type) {
+function isDuplicate(message: string, type: ToastType): boolean {
   const key = `${type}:${message}`;
   const lastShown = recentMessages.get(key);
   const now = Date.now();
@@ -197,7 +220,7 @@ function isDuplicate(message, type) {
 /**
  * Create and show a toast
  */
-function createToast(message, type = 'info', options = {}) {
+function createToast(message: string, type: ToastType = 'info', options: ToastOptions = {}): ToastHandle {
   // Skip duplicates (unless explicitly allowed)
   if (!options.allowDuplicate && isDuplicate(message, type)) {
     return { id: null, dismiss: () => {}, update: () => {} };
@@ -244,7 +267,7 @@ function createToast(message, type = 'info', options = {}) {
   toastEl.appendChild(closeBtn);
 
   // Close handler
-  const dismiss = () => {
+  const dismiss = (): void => {
     toastEl.classList.add('toast-exiting');
     setTimeout(() => {
       if (toastEl.parentNode) {
@@ -253,14 +276,14 @@ function createToast(message, type = 'info', options = {}) {
     }, 200);
   };
 
-  closeBtn.addEventListener('click', (e) => {
+  closeBtn.addEventListener('click', (e: Event) => {
     e.stopPropagation();
     dismiss();
   });
 
-  toastEl.addEventListener('click', (e) => {
+  toastEl.addEventListener('click', (e: MouseEvent) => {
     // Don't dismiss if clicking a link — let the link navigate
-    if (e.target.tagName === 'A') return;
+    if ((e.target as HTMLElement).tagName === 'A') return;
     dismiss();
   });
 
@@ -276,7 +299,7 @@ function createToast(message, type = 'info', options = {}) {
   return {
     id: toastId,
     dismiss,
-    update: (newMessage) => {
+    update: (newMessage: string) => {
       const msgEl = toastEl.querySelector('.toast-message');
       if (msgEl) msgEl.textContent = newMessage;
     },
@@ -290,42 +313,42 @@ export const toast = {
   /**
    * Show success toast
    */
-  success(message, options = {}) {
+  success(message: string, options: ToastOptions = {}): ToastHandle {
     return createToast(message, 'success', options);
   },
 
   /**
    * Show error toast
    */
-  error(message, options = {}) {
+  error(message: string, options: ToastOptions = {}): ToastHandle {
     return createToast(message, 'error', { duration: 5000, ...options });
   },
 
   /**
    * Show warning toast
    */
-  warning(message, options = {}) {
+  warning(message: string, options: ToastOptions = {}): ToastHandle {
     return createToast(message, 'warning', options);
   },
 
   /**
    * Show info toast
    */
-  info(message, options = {}) {
+  info(message: string, options: ToastOptions = {}): ToastHandle {
     return createToast(message, 'info', options);
   },
 
   /**
    * Show loading toast (doesn't auto-dismiss)
    */
-  loading(message, options = {}) {
+  loading(message: string, options: ToastOptions = {}): ToastHandle {
     return createToast(message, 'loading', { duration: null, ...options });
   },
 
   /**
    * Show toast for a promise
    */
-  async promise(promise, messages = {}) {
+  async promise<T>(promise: Promise<T>, messages: ToastPromiseMessages<T> = {}): Promise<T> {
     const loadingToast = this.loading(messages.loading || 'Loading...');
 
     try {
@@ -341,9 +364,10 @@ export const toast = {
     } catch (error) {
       loadingToast.dismiss();
 
+      const err = error as Error;
       const errorMsg = typeof messages.error === 'function'
-        ? messages.error(error)
-        : messages.error || error.message || 'An error occurred';
+        ? messages.error(err)
+        : messages.error || err.message || 'An error occurred';
       this.error(errorMsg);
 
       throw error;
@@ -354,12 +378,8 @@ export const toast = {
    * Show a toast with sanitized HTML content.
    * Use ONLY when you need formatting (bold, links, etc.) in the message.
    * The HTML is sanitized via DOMPurify before rendering.
-   *
-   * @param {string} htmlMessage - HTML string to sanitize and render
-   * @param {string} type - Toast type (success, error, warning, info)
-   * @param {object} options - Toast options
    */
-  html(htmlMessage, type = 'info', options = {}) {
+  html(htmlMessage: string, type: ToastType = 'info', options: ToastOptions = {}): ToastHandle {
     const result = createToast('', type, options);
     if (result.id) {
       const toastEl = document.getElementById(result.id);
@@ -381,7 +401,7 @@ export const toast = {
   /**
    * Dismiss all toasts
    */
-  dismissAll() {
+  dismissAll(): void {
     const container = document.getElementById('toast-container');
     if (container) {
       while (container.firstChild) {

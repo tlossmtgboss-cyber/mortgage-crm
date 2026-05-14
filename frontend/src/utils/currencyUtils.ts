@@ -5,10 +5,8 @@
 
 /**
  * Format a number with commas for display
- * @param {number|string} value - The value to format
- * @returns {string} Formatted string with commas (e.g., "400,000")
  */
-export const formatCurrency = (value) => {
+export const formatCurrency = (value: number | string | null | undefined): string => {
   if (value === null || value === undefined || value === '') {
     return '';
   }
@@ -36,10 +34,8 @@ export const formatCurrency = (value) => {
 
 /**
  * Format a number as currency with dollar sign
- * @param {number|string} value - The value to format
- * @returns {string} Formatted string with dollar sign and commas (e.g., "$400,000")
  */
-export const formatDollarAmount = (value) => {
+export const formatDollarAmount = (value: number | string | null | undefined): string => {
   const formatted = formatCurrency(value);
   if (formatted === '' || formatted === '-') {
     return formatted;
@@ -49,10 +45,8 @@ export const formatDollarAmount = (value) => {
 
 /**
  * Parse a formatted currency string back to a number
- * @param {string} value - The formatted value (e.g., "400,000" or "$400,000")
- * @returns {number|null} Parsed number or null if invalid
  */
-export const parseCurrency = (value) => {
+export const parseCurrency = (value: string | number | null | undefined): number | null => {
   if (value === null || value === undefined || value === '') {
     return null;
   }
@@ -69,13 +63,18 @@ export const parseCurrency = (value) => {
   return isNaN(num) ? null : num;
 };
 
+export interface CurrencyInputResult {
+  displayValue: string;
+  numericValue: number | null;
+}
+
 /**
  * Handle currency input change - formats as user types
- * @param {string} inputValue - Raw input value
- * @param {string} previousValue - Previous formatted value
- * @returns {object} { displayValue, numericValue }
  */
-export const handleCurrencyInput = (inputValue, previousValue = '') => {
+export const handleCurrencyInput = (
+  inputValue: string | null | undefined,
+  _previousValue: string = ''
+): CurrencyInputResult => {
   // Allow empty value
   if (inputValue === '' || inputValue === null || inputValue === undefined) {
     return { displayValue: '', numericValue: null };

@@ -3,9 +3,8 @@
  * retry logic (429, 503), 401 token refresh, error normalization.
  */
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { getToken } from '../../utils/tokenStore.js';
-import { getItem, STORAGE_KEYS } from '../../utils/storage.js';
-import { clearTokens } from '../../utils/tokenStore.js';
+import { getToken, clearTokens } from '../../utils/tokenStore';
+import { getItem, STORAGE_KEYS } from '../../utils/storage';
 import { getCSRFToken, fetchCSRFToken, resetCSRFTokenCache, CSRF_METHODS, attemptTokenRefresh } from './auth';
 import { cacheSet, cacheGet, dispatchMutationDebounced } from './offline';
 import { buildApiError, SAFE_ERROR_MESSAGES } from './errors';

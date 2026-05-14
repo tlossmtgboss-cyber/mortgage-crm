@@ -235,6 +235,7 @@ const SmartDocsBankAnalysis = lazyRetry(() => import('../pages/SmartDocsBankAnal
 const SmartDocsIncome = lazyRetry(() => import('../pages/SmartDocsIncome'));
 const SmartDocsAdmin = lazyRetry(() => import('../pages/SmartDocsAdmin'));
 const SmartDocsCadence = lazyRetry(() => import('../pages/SmartDocsCadence'));
+const SmartDocsDashboardV2 = lazyRetry(() => import('../pages/SmartDocsDashboardV2'));
 const EnterpriseDocumentationPortal = lazyRetry(() => import('../pages/EnterpriseDocumentationPortal'));
 const AppCompletionScoring = lazyRetry(() => import('../pages/AppCompletionScoring'));
 
@@ -760,6 +761,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/smart-docs/income" path="/smart-docs/income" element={withMainLayout(SmartDocsIncome)} />,
     <Route key="/smart-docs/admin" path="/smart-docs/admin" element={withMainLayout(SmartDocsAdmin)} />,
     <Route key="/smart-docs/cadence" path="/smart-docs/cadence" element={withMainLayout(SmartDocsCadence)} />,
+    <Route key="/smart-docs/v2" path="/smart-docs/v2" element={withMainLayout(SmartDocsDashboardV2)} />,
     <Route key="/smart-docs/app-scoring" path="/smart-docs/app-scoring" element={withMainLayout(AppCompletionScoring)} />,
     <Route key="/smart-docs/app-scoring/:loanId" path="/smart-docs/app-scoring/:loanId" element={withMainLayout(AppCompletionScoring)} />,
 

@@ -18,6 +18,7 @@
  *   <a href={sanitizeURL(userUrl)}>Link</a>
  */
 
+import React from 'react';
 import DOMPurify from 'dompurify';
 
 // Configure DOMPurify defaults
@@ -25,8 +26,7 @@ const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'b', 'i', 'ul', 'ol', 'li', 'a'
 const ALLOWED_ATTR = ['href', 'title', 'class'];
 
 // Register DOMPurify hooks at module level to avoid race conditions
-// (previously registered inside sanitizeHTML, which could interfere if called concurrently)
-DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+DOMPurify.addHook('afterSanitizeAttributes', (node: Element) => {
   if (node.tagName === 'A') {
     node.setAttribute('rel', 'noopener noreferrer');
     const href = node.getAttribute('href');
@@ -36,15 +36,18 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 });
 
+export interface SanitizeHTMLOptions {
+  allowedTags?: string[];
+  allowedAttr?: string[];
+  ALLOW_DATA_ATTR?: boolean;
+  [key: string]: unknown;
+}
+
 /**
  * Sanitize HTML content - allows basic formatting tags
  * Use for rich text descriptions, comments with formatting
- *
- * @param {string} dirty - Potentially unsafe HTML string
- * @param {object} options - Optional DOMPurify configuration
- * @returns {string} Sanitized HTML safe for dangerouslySetInnerHTML
  */
-export const sanitizeHTML = (dirty, options = {}) => {
+export const sanitizeHTML = (dirty: string | null | undefined, options: SanitizeHTMLOptions = {}): string => {
   if (!dirty) return '';
 
   const config = {
@@ -54,19 +57,14 @@ export const sanitizeHTML = (dirty, options = {}) => {
     ...options
   };
 
-  // Hook for link safety attributes is registered at module level above
   return DOMPurify.sanitize(dirty, config);
 };
 
 /**
  * Sanitize text - removes ALL HTML tags
  * Use for plain text fields: titles, names, labels
- *
- * @param {string} dirty - Potentially unsafe text string
- * @param {number} maxLength - Maximum length (default 1000)
- * @returns {string} Plain text with all HTML removed
  */
-export const sanitizeText = (dirty, maxLength = 1000) => {
+export const sanitizeText = (dirty: string | null | undefined, maxLength: number = 1000): string => {
   if (!dirty) return '';
 
   // Remove all HTML tags
@@ -84,12 +82,11 @@ export const sanitizeText = (dirty, maxLength = 1000) => {
 /**
  * Sanitize URL - validates and cleans URLs
  * Prevents javascript:, data:, vbscript: URLs
- *
- * @param {string} url - Potentially unsafe URL
- * @param {array} allowedProtocols - Allowed protocols (default: http, https, mailto)
- * @returns {string|null} Safe URL or null if invalid
  */
-export const sanitizeURL = (url, allowedProtocols = ['http:', 'https:', 'mailto:']) => {
+export const sanitizeURL = (
+  url: string | null | undefined,
+  allowedProtocols: string[] = ['http:', 'https:', 'mailto:']
+): string | null => {
   if (!url) return null;
 
   try {
@@ -123,11 +120,8 @@ export const sanitizeURL = (url, allowedProtocols = ['http:', 'https:', 'mailto:
 
 /**
  * Sanitize filename - removes path traversal and special chars
- *
- * @param {string} filename - Potentially unsafe filename
- * @returns {string} Safe filename
  */
-export const sanitizeFilename = (filename) => {
+export const sanitizeFilename = (filename: string | null | undefined): string => {
   if (!filename) return 'unnamed';
 
   // Remove path components
@@ -155,14 +149,11 @@ export const sanitizeFilename = (filename) => {
 /**
  * Escape text for safe display in React
  * Alternative to sanitizeText when you need to preserve special chars for display
- *
- * @param {string} text - Text to escape
- * @returns {string} Escaped text safe for display
  */
-export const escapeForDisplay = (text) => {
+export const escapeForDisplay = (text: string | null | undefined): string => {
   if (!text) return '';
 
-  const escapeMap = {
+  const escapeMap: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
@@ -181,7 +172,13 @@ export const escapeForDisplay = (text) => {
  *   <SafeHTML html={userContent} />
  *   <SafeHTML html={userContent} allowedTags={['p', 'br']} />
  */
-export const SafeHTML = ({ html, allowedTags, allowedAttr, className, ...props }) => {
+export interface SafeHTMLProps extends React.HTMLAttributes<HTMLDivElement> {
+  html: string | null | undefined;
+  allowedTags?: string[];
+  allowedAttr?: string[];
+}
+
+export const SafeHTML: React.FC<SafeHTMLProps> = ({ html, allowedTags, allowedAttr, className, ...props }) => {
   const sanitized = sanitizeHTML(html, { allowedTags, allowedAttr });
 
   return (

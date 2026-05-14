@@ -5,11 +5,35 @@ const TOKEN_KEY = 'token';
 const REFRESH_KEY = 'refresh_token';
 const USER_KEY = 'user';
 
+// ── Types ────────────────────────────────────────────────────
+export interface UserData {
+  id?: number;
+  user_id?: number;
+  email?: string;
+  full_name?: string;
+  organization_id?: number;
+  role?: string;
+  [key: string]: unknown;
+}
+
+export interface SetTokensParams {
+  access_token?: string | null;
+  refresh_token?: string | null;
+  user_data?: UserData | null;
+}
+
+interface TokenCache {
+  access_token: string | null;
+  refresh_token: string | null;
+  user_data: UserData | null;
+  initialized: boolean;
+}
+
 // ── In-memory cache ──────────────────────────────────────────
 // Loaded once at app startup via initialize().
 // All subsequent reads are synchronous from memory.
 // Token never touches localStorage after migration.
-const _cache = {
+const _cache: TokenCache = {
   access_token: null,
   refresh_token: null,
   user_data: null,
@@ -19,7 +43,7 @@ const _cache = {
 // ── Initialize — call once at app startup ────────────────────
 // Loads tokens from Capacitor Preferences into memory.
 // Also migrates any existing localStorage tokens on first run.
-export async function initialize() {
+export async function initialize(): Promise<void> {
   if (_cache.initialized) return;
 
   if (Capacitor.isNativePlatform()) {
@@ -31,13 +55,13 @@ export async function initialize() {
     ]);
     _cache.access_token  = accessResult.value ?? null;
     _cache.refresh_token = refreshResult.value ?? null;
-    _cache.user_data     = userResult.value ? JSON.parse(userResult.value) : null;
+    _cache.user_data     = userResult.value ? JSON.parse(userResult.value) as UserData : null;
   } else {
     // Web: read from localStorage (acceptable on web — no Keychain available)
     _cache.access_token  = localStorage.getItem(TOKEN_KEY);
     _cache.refresh_token = localStorage.getItem(REFRESH_KEY);
     const raw = localStorage.getItem(USER_KEY);
-    _cache.user_data     = raw ? JSON.parse(raw) : null;
+    _cache.user_data     = raw ? JSON.parse(raw) as UserData : null;
   }
 
   // One-time migration: if localStorage has a token but Preferences doesn't,
@@ -60,7 +84,7 @@ export async function initialize() {
 // ── Synchronous read ─────────────────────────────────────────
 // Safe to call anywhere — returns from memory cache after initialize().
 // Returns null if initialize() hasn't been called yet (app startup race).
-export function getToken() {
+export function getToken(): string | null {
   // Return from memory cache if available
   if (_cache.access_token) return _cache.access_token;
 
@@ -77,7 +101,7 @@ export function getToken() {
   return null;
 }
 
-export function getRefreshToken() {
+export function getRefreshToken(): string | null {
   if (_cache.refresh_token) return _cache.refresh_token;
   const lsToken = localStorage.getItem(REFRESH_KEY);
   if (lsToken) {
@@ -87,19 +111,19 @@ export function getRefreshToken() {
   return null;
 }
 
-export function getUserData() {
+export function getUserData(): UserData | null {
   if (_cache.user_data) return _cache.user_data;
   const raw = localStorage.getItem(USER_KEY);
   if (raw) {
     try {
-      _cache.user_data = JSON.parse(raw);
+      _cache.user_data = JSON.parse(raw) as UserData;
       return _cache.user_data;
     } catch { return null; }
   }
   return null;
 }
 
-export function isAuthenticated() {
+export function isAuthenticated(): boolean {
   return !!getToken();
 }
 
@@ -108,22 +132,22 @@ export async function setTokens({
   access_token,
   refresh_token,
   user_data,
-}) {
+}: SetTokensParams): Promise<void> {
   if (access_token !== undefined) {
     _cache.access_token = access_token;
     if (Capacitor.isNativePlatform()) {
-      await Preferences.set({ key: TOKEN_KEY, value: access_token });
+      await Preferences.set({ key: TOKEN_KEY, value: access_token ?? '' });
     } else {
-      localStorage.setItem(TOKEN_KEY, access_token);
+      localStorage.setItem(TOKEN_KEY, access_token ?? '');
     }
   }
 
   if (refresh_token !== undefined) {
     _cache.refresh_token = refresh_token;
     if (Capacitor.isNativePlatform()) {
-      await Preferences.set({ key: REFRESH_KEY, value: refresh_token });
+      await Preferences.set({ key: REFRESH_KEY, value: refresh_token ?? '' });
     } else {
-      localStorage.setItem(REFRESH_KEY, refresh_token);
+      localStorage.setItem(REFRESH_KEY, refresh_token ?? '');
     }
   }
 
@@ -139,7 +163,7 @@ export async function setTokens({
 }
 
 // ── Clear on logout ──────────────────────────────────────────
-export async function clearTokens() {
+export async function clearTokens(): Promise<void> {
   _cache.access_token  = null;
   _cache.refresh_token = null;
   _cache.user_data     = null;

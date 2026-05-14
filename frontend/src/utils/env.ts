@@ -4,46 +4,6 @@
  * This module provides a unified way to access environment variables
  * that works with both Create React App (process.env.REACT_APP_*) and
  * Vite (import.meta.env.VITE_*).
- *
- * MIGRATION GUIDE:
- * ================
- *
- * 1. Environment Variable Naming:
- *    - CRA uses: REACT_APP_* prefix
- *    - Vite uses: VITE_* prefix
- *
- *    During migration, you can rename variables in your .env files:
- *    - REACT_APP_API_URL -> VITE_API_URL
- *    - REACT_APP_WS_URL -> VITE_WS_URL
- *    - etc.
- *
- * 2. Code Updates:
- *    Instead of:
- *      process.env.REACT_APP_API_URL
- *
- *    Use:
- *      import { env } from '@/utils/env';
- *      env.VITE_API_URL
- *
- *    Or for direct access:
- *      import.meta.env.VITE_API_URL
- *
- * 3. Environment Variables Mapping:
- *    REACT_APP_API_URL           -> VITE_API_URL
- *    REACT_APP_WS_URL            -> VITE_WS_URL
- *    REACT_APP_MICROSOFT_CLIENT_ID -> VITE_MICROSOFT_CLIENT_ID
- *    REACT_APP_GOOGLE_PLACES_API_KEY -> VITE_GOOGLE_PLACES_API_KEY
- *    REACT_APP_GOOGLE_CLIENT_ID  -> VITE_GOOGLE_CLIENT_ID
- *    REACT_APP_FACEBOOK_APP_ID   -> VITE_FACEBOOK_APP_ID
- *    REACT_APP_LINKEDIN_CLIENT_ID -> VITE_LINKEDIN_CLIENT_ID
- *    REACT_APP_APPLE_CLIENT_ID   -> VITE_APPLE_CLIENT_ID
- *    REACT_APP_ENABLE_*          -> VITE_ENABLE_*
- *    REACT_APP_SENTRY_DSN        -> VITE_SENTRY_DSN
- *    REACT_APP_GA_TRACKING_ID    -> VITE_GA_TRACKING_ID
- *    REACT_APP_MIXPANEL_TOKEN    -> VITE_MIXPANEL_TOKEN
- *    REACT_APP_ENVIRONMENT       -> VITE_ENVIRONMENT
- *    REACT_APP_DEBUG             -> VITE_DEBUG
- *    REACT_APP_PURL_*            -> VITE_PURL_*
  */
 
 // Detect if running in Vite or CRA
@@ -53,22 +13,64 @@ const isVite = typeof import.meta !== 'undefined' && import.meta.env;
  * Get environment variable value with fallback support
  * Checks both VITE_ and REACT_APP_ prefixes for compatibility
  */
-function getEnvVar(name, defaultValue = '') {
+function getEnvVar(name: string, defaultValue: string = ''): string {
   if (isVite) {
     // Try VITE_ prefix first, then REACT_APP_ for backward compatibility
-    return import.meta.env[`VITE_${name}`]
-      ?? import.meta.env[`REACT_APP_${name}`]
+    return (import.meta.env[`VITE_${name}`] as string)
+      ?? (import.meta.env[`REACT_APP_${name}`] as string)
       ?? defaultValue;
   }
   // CRA fallback
-  return process.env[`REACT_APP_${name}`] ?? defaultValue;
+  return (process.env[`REACT_APP_${name}`] as string) ?? defaultValue;
+}
+
+export interface EnvConfig {
+  // API Configuration
+  API_URL: string;
+  WS_URL: string;
+
+  // Microsoft Authentication
+  MICROSOFT_CLIENT_ID: string;
+
+  // Google
+  GOOGLE_PLACES_API_KEY: string;
+  GOOGLE_CLIENT_ID: string;
+
+  // Social Login
+  FACEBOOK_APP_ID: string;
+  LINKEDIN_CLIENT_ID: string;
+  APPLE_CLIENT_ID: string;
+
+  // Feature Flags
+  ENABLE_AGENT_DASHBOARD: boolean;
+  ENABLE_AGENT_GYM: boolean;
+  ENABLE_PURL_PORTAL: boolean;
+  ENABLE_VIDEO_FEATURE: boolean;
+
+  // Analytics
+  SENTRY_DSN: string;
+  GA_TRACKING_ID: string;
+  MIXPANEL_TOKEN: string;
+
+  // Environment
+  ENVIRONMENT: string;
+  DEBUG: boolean;
+
+  // PURL
+  PURL_SESSION_TIMEOUT: number;
+  PURL_DEBUG: boolean;
+
+  // Runtime checks
+  isDevelopment: boolean;
+  isProduction: boolean;
+  mode: string;
 }
 
 /**
  * Environment configuration object
  * Access environment variables through this object for consistency
  */
-export const env = {
+export const env: EnvConfig = {
   // API Configuration
   API_URL: getEnvVar('API_URL', 'http://localhost:8000'),
   WS_URL: getEnvVar('WS_URL', 'ws://localhost:8000'),
@@ -113,13 +115,15 @@ export const env = {
     : process.env.NODE_ENV === 'production',
   mode: isVite
     ? import.meta.env.MODE
-    : process.env.NODE_ENV,
+    : (process.env.NODE_ENV || 'development'),
 };
 
 /**
  * Raw access to import.meta.env or process.env
  * Use this when you need direct access to all environment variables
  */
-export const rawEnv = isVite ? import.meta.env : process.env;
+export const rawEnv: Record<string, string | boolean | undefined> = isVite
+  ? (import.meta.env as unknown as Record<string, string | boolean | undefined>)
+  : (process.env as unknown as Record<string, string | boolean | undefined>);
 
 export default env;

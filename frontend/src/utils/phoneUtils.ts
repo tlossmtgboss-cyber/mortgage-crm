@@ -4,10 +4,8 @@
 
 /**
  * Format a phone number string as (XXX) XXX-XXXX
- * @param {string} value - The raw input value
- * @returns {string} - Formatted phone number
  */
-export const formatPhoneNumber = (value) => {
+export const formatPhoneNumber = (value: string | null | undefined): string => {
   if (!value) return '';
 
   // Remove all non-digits
@@ -25,29 +23,23 @@ export const formatPhoneNumber = (value) => {
 
 /**
  * Get raw digits from a formatted phone number
- * @param {string} value - The formatted phone number
- * @returns {string} - Just the digits
  */
-export const getPhoneDigits = (value) => {
+export const getPhoneDigits = (value: string | null | undefined): string => {
   if (!value) return '';
   return value.replace(/\D/g, '');
 };
 
 /**
  * Check if a phone number is complete (10 digits)
- * @param {string} value - The phone number (formatted or raw)
- * @returns {boolean}
  */
-export const isPhoneComplete = (value) => {
+export const isPhoneComplete = (value: string | null | undefined): boolean => {
   return getPhoneDigits(value).length === 10;
 };
 
 /**
  * Format phone for display (handles already formatted or raw input)
- * @param {string} value - Phone number in any format
- * @returns {string} - Formatted as (XXX) XXX-XXXX
  */
-export const formatPhoneForDisplay = (value) => {
+export const formatPhoneForDisplay = (value: string | null | undefined): string => {
   const digits = getPhoneDigits(value);
   if (digits.length !== 10) return value || '';
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;

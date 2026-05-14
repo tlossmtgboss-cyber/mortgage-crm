@@ -6,14 +6,12 @@
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 
-const isNative = Capacitor.isNativePlatform();
+const isNative: boolean = Capacitor.isNativePlatform();
 
 /**
  * Get a value from storage
- * @param {string} key - The key to retrieve
- * @returns {Promise<string|null>} - The stored value or null
  */
-export const getItem = async (key) => {
+export const getItem = async (key: string): Promise<string | null> => {
   if (isNative) {
     const { value } = await Preferences.get({ key });
     return value;
@@ -23,11 +21,8 @@ export const getItem = async (key) => {
 
 /**
  * Set a value in storage
- * @param {string} key - The key to store
- * @param {string} value - The value to store
- * @returns {Promise<void>}
  */
-export const setItem = async (key, value) => {
+export const setItem = async (key: string, value: string): Promise<void> => {
   if (isNative) {
     await Preferences.set({ key, value });
     // NO localStorage mirror — tokens must not be exposed in WKWebView storage
@@ -38,10 +33,8 @@ export const setItem = async (key, value) => {
 
 /**
  * Remove a value from storage
- * @param {string} key - The key to remove
- * @returns {Promise<void>}
  */
-export const removeItem = async (key) => {
+export const removeItem = async (key: string): Promise<void> => {
   if (isNative) {
     await Preferences.remove({ key });
     // NO localStorage mirror
@@ -52,9 +45,8 @@ export const removeItem = async (key) => {
 
 /**
  * Clear all stored values
- * @returns {Promise<void>}
  */
-export const clear = async () => {
+export const clear = async (): Promise<void> => {
   if (isNative) {
     await Preferences.clear();
   } else {
@@ -64,9 +56,8 @@ export const clear = async () => {
 
 /**
  * Get all keys in storage
- * @returns {Promise<string[]>}
  */
-export const keys = async () => {
+export const keys = async (): Promise<string[]> => {
   if (isNative) {
     const { keys: storedKeys } = await Preferences.keys();
     return storedKeys;
@@ -76,14 +67,12 @@ export const keys = async () => {
 
 /**
  * Get a JSON object from storage
- * @param {string} key - The key to retrieve
- * @returns {Promise<any|null>} - The parsed object or null
  */
-export const getJSON = async (key) => {
+export const getJSON = async <T = unknown>(key: string): Promise<T | null> => {
   const value = await getItem(key);
   if (!value) return null;
   try {
-    return JSON.parse(value);
+    return JSON.parse(value) as T;
   } catch (error) {
     console.error(`Error parsing JSON for key "${key}":`, error);
     return null;
@@ -92,11 +81,8 @@ export const getJSON = async (key) => {
 
 /**
  * Set a JSON object in storage
- * @param {string} key - The key to store
- * @param {any} value - The object to store
- * @returns {Promise<void>}
  */
-export const setJSON = async (key, value) => {
+export const setJSON = async (key: string, value: unknown): Promise<void> => {
   await setItem(key, JSON.stringify(value));
 };
 
@@ -107,7 +93,9 @@ export const STORAGE_KEYS = {
   USER: 'user',
   IMPERSONATION: 'impersonation',
   DASHBOARD_ORDER: 'dashboardOrder',
-};
+} as const;
+
+export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
 
 /**
  * Auth token migration: moves tokens from localStorage to Capacitor Preferences.
@@ -121,11 +109,11 @@ export const STORAGE_KEYS = {
  * No-op on web (localStorage IS the primary store there).
  */
 let _migrationDone = false;
-export const migrateTokensToSecureStorage = async () => {
+export const migrateTokensToSecureStorage = async (): Promise<void> => {
   if (!isNative || _migrationDone) return;
   _migrationDone = true;
 
-  const sensitiveKeys = [
+  const sensitiveKeys: string[] = [
     STORAGE_KEYS.TOKEN,
     STORAGE_KEYS.REFRESH_TOKEN,
     STORAGE_KEYS.USER,
@@ -155,8 +143,8 @@ export const migrateTokensToSecureStorage = async () => {
  * This is the authoritative "wipe auth state" function that should be used
  * instead of manually calling localStorage.removeItem for auth keys.
  */
-export const clearAllAuthTokens = async () => {
-  const authKeys = [
+export const clearAllAuthTokens = async (): Promise<void> => {
+  const authKeys: string[] = [
     STORAGE_KEYS.TOKEN,
     STORAGE_KEYS.REFRESH_TOKEN,
     STORAGE_KEYS.USER,

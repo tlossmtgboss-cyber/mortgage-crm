@@ -5,7 +5,7 @@ import api from './client';
 import { API_BASE_URL } from './client';
 import { attemptTokenRefresh } from './auth';
 import { ensureArray } from '../../utils/arrayHelpers.js';
-import { getToken } from '../../utils/tokenStore.js';
+import { getToken } from '../../utils/tokenStore';
 
 // AI Assistant & Conversations
 export const aiAPI = {

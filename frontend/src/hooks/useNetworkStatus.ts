@@ -5,15 +5,20 @@
 import { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 
-export function useNetworkStatus() {
-  const [isOnline, setIsOnline] = useState(true);
-  const [connectionType, setConnectionType] = useState('unknown');
+export interface NetworkStatus {
+  isOnline: boolean;
+  connectionType: string;
+}
+
+export function useNetworkStatus(): NetworkStatus {
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [connectionType, setConnectionType] = useState<string>('unknown');
 
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      let listener;
+      let listener: Promise<{ remove: () => void }> | undefined;
       import('@capacitor/network').then(({ Network }) => {
-        Network.getStatus().then(status => {
+        Network.getStatus().then((status) => {
           setIsOnline(status.connected);
           setConnectionType(status.connectionType);
         });
@@ -25,11 +30,11 @@ export function useNetworkStatus() {
       });
 
       return () => {
-        if (listener) listener.then(l => l.remove());
+        if (listener) listener.then((l) => l.remove());
       };
     } else {
-      const handleOnline = () => setIsOnline(true);
-      const handleOffline = () => setIsOnline(false);
+      const handleOnline = (): void => setIsOnline(true);
+      const handleOffline = (): void => setIsOnline(false);
       setIsOnline(navigator.onLine);
 
       window.addEventListener('online', handleOnline);

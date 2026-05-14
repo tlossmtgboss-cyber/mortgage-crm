@@ -11,20 +11,81 @@ import { toast } from './toast';
 // Re-export from api/errors for convenience
 export { APIError, ValidationError, ErrorCode } from './api/errors';
 
+// ── Types ────────────────────────────────────────────────────
+
+export interface NormalizedError {
+  message: string;
+  code: string;
+  statusCode?: number;
+  stack?: string;
+  details?: { fieldErrors?: Record<string, string> };
+  fieldErrors?: Record<string, string>;
+  getUserMessage: () => string;
+  isRecoverable: () => boolean;
+}
+
+export interface UseAsyncOperationOptions<T = unknown> {
+  onSuccess?: (result: T) => void;
+  onError?: (error: NormalizedError) => void;
+  showSuccessToast?: boolean;
+  showErrorToast?: boolean;
+  successMessage?: string;
+  errorMessage?: string;
+}
+
+export interface UseAsyncOperationReturn<T = unknown> {
+  execute: (asyncFn: () => Promise<T>, executeOptions?: UseAsyncOperationOptions<T>) => Promise<T>;
+  loading: boolean;
+  error: NormalizedError | null;
+  data: T | null;
+  reset: () => void;
+  isLoading: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+}
+
+export interface UseFormSubmitOptions<T = unknown, R = unknown> {
+  onSubmit?: (formData: T) => Promise<R>;
+  validate?: (formData: T) => Record<string, string> | null;
+  onSuccess?: (result: R) => void;
+  onError?: (error: NormalizedError) => void;
+  showSuccessToast?: boolean;
+  showErrorToast?: boolean;
+  successMessage?: string;
+  resetOnSuccess?: boolean;
+}
+
+export interface UseFormSubmitReturn<T = unknown, R = unknown> {
+  handleSubmit: (formData: T, event?: Event) => Promise<R>;
+  submitting: boolean;
+  isSubmitting: boolean;
+  errors: Record<string, string>;
+  submitError: NormalizedError | null;
+  setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  setFieldError: (field: string, message: string) => void;
+  clearFieldError: (field: string) => void;
+  resetErrors: () => void;
+  hasErrors: boolean;
+}
+
+export interface WithErrorHandlingOptions {
+  showToast?: boolean;
+  onError?: (error: NormalizedError) => void;
+}
+
+export interface RetryOptions {
+  maxRetries?: number;
+  initialDelay?: number;
+  maxDelay?: number;
+  shouldRetry?: (error: NormalizedError) => boolean;
+}
+
 /**
  * Hook for handling async operations with loading, error, and success states
- *
- * @param {Object} options - Configuration options
- * @param {Function} options.onSuccess - Callback on successful operation
- * @param {Function} options.onError - Callback on error
- * @param {boolean} options.showSuccessToast - Show toast on success (default: true)
- * @param {boolean} options.showErrorToast - Show toast on error (default: true)
- * @param {string} options.successMessage - Custom success message
- * @param {string} options.errorMessage - Custom error message prefix
- *
- * @returns {Object} - { execute, loading, error, data, reset }
  */
-export function useAsyncOperation(options = {}) {
+export function useAsyncOperation<T = unknown>(
+  options: UseAsyncOperationOptions<T> = {}
+): UseAsyncOperationReturn<T> {
   const {
     onSuccess,
     onError,
@@ -35,20 +96,19 @@ export function useAsyncOperation(options = {}) {
   } = options;
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [data, setData] = useState(null);
+  const [error, setError] = useState<NormalizedError | null>(null);
+  const [data, setData] = useState<T | null>(null);
 
   // Track if component is mounted to avoid state updates after unmount
   const mountedRef = useRef(true);
 
   /**
    * Execute an async operation with automatic state management
-   *
-   * @param {Function} asyncFn - The async function to execute
-   * @param {Object} executeOptions - Per-call options override
-   * @returns {Promise} - Resolves with data or rejects with error
    */
-  const execute = useCallback(async (asyncFn, executeOptions = {}) => {
+  const execute = useCallback(async (
+    asyncFn: () => Promise<T>,
+    executeOptions: UseAsyncOperationOptions<T> = {}
+  ): Promise<T> => {
     const finalOptions = { ...options, ...executeOptions };
 
     setLoading(true);
@@ -127,20 +187,10 @@ export function useAsyncOperation(options = {}) {
 
 /**
  * Hook for handling form submissions with validation and error handling
- *
- * @param {Object} options - Configuration options
- * @param {Function} options.onSubmit - The submit handler function
- * @param {Function} options.validate - Optional validation function
- * @param {Function} options.onSuccess - Callback on successful submission
- * @param {Function} options.onError - Callback on error
- * @param {boolean} options.showSuccessToast - Show toast on success (default: true)
- * @param {boolean} options.showErrorToast - Show toast on error (default: true)
- * @param {string} options.successMessage - Custom success message
- * @param {boolean} options.resetOnSuccess - Reset form state on success (default: false)
- *
- * @returns {Object} - { handleSubmit, submitting, errors, setErrors, resetErrors }
  */
-export function useFormSubmit(options = {}) {
+export function useFormSubmit<T = unknown, R = unknown>(
+  options: UseFormSubmitOptions<T, R> = {}
+): UseFormSubmitReturn<T, R> {
   const {
     onSubmit,
     validate,
@@ -153,19 +203,15 @@ export function useFormSubmit(options = {}) {
   } = options;
 
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [submitError, setSubmitError] = useState(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<NormalizedError | null>(null);
 
   /**
    * Handle form submission
-   *
-   * @param {Object} formData - The form data to submit
-   * @param {Event} event - Optional form event
-   * @returns {Promise} - Resolves with result or rejects with error
    */
-  const handleSubmit = useCallback(async (formData, event) => {
+  const handleSubmit = useCallback(async (formData: T, event?: Event): Promise<R> => {
     // Prevent default form submission if event provided
-    if (event && event.preventDefault) {
+    if (event && 'preventDefault' in event) {
       event.preventDefault();
     }
 
@@ -190,7 +236,7 @@ export function useFormSubmit(options = {}) {
     setSubmitting(true);
 
     try {
-      let result;
+      let result: R | undefined;
       if (onSubmit) {
         result = await onSubmit(formData);
       }
@@ -202,14 +248,14 @@ export function useFormSubmit(options = {}) {
       }
 
       if (onSuccess) {
-        onSuccess(result);
+        onSuccess(result as R);
       }
 
       if (resetOnSuccess) {
         setErrors({});
       }
 
-      return result;
+      return result as R;
     } catch (err) {
       setSubmitting(false);
 
@@ -249,7 +295,7 @@ export function useFormSubmit(options = {}) {
   /**
    * Set a specific field error
    */
-  const setFieldError = useCallback((field, message) => {
+  const setFieldError = useCallback((field: string, message: string) => {
     setErrors(prev => ({
       ...prev,
       [field]: message,
@@ -259,7 +305,7 @@ export function useFormSubmit(options = {}) {
   /**
    * Clear a specific field error
    */
-  const clearFieldError = useCallback((field) => {
+  const clearFieldError = useCallback((field: string) => {
     setErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[field];
@@ -283,36 +329,37 @@ export function useFormSubmit(options = {}) {
 
 /**
  * Normalize various error types to a consistent format
- *
- * @param {Error|Object|string} error - The error to normalize
- * @returns {Object} - Normalized error object
  */
-export function normalizeError(error) {
-  // Already an API error with getUserMessage
-  if (error && typeof error.getUserMessage === 'function') {
-    return error;
+export function normalizeError(error: unknown): NormalizedError {
+  // Already has getUserMessage
+  if (error && typeof error === 'object' && 'getUserMessage' in error && typeof (error as NormalizedError).getUserMessage === 'function') {
+    return error as NormalizedError;
   }
 
+  const err = error as Record<string, unknown>;
+
   // Backend error response
-  if (error && error.message && error.error_code) {
+  if (err && err.message && err.error_code) {
+    const errorCode = err.error_code as string;
     return {
-      message: error.message,
-      code: error.error_code,
-      details: error.details,
-      fieldErrors: error.details?.fieldErrors || error.field_errors,
-      getUserMessage: () => error.message,
-      isRecoverable: () => ['NETWORK_ERROR', 'TIMEOUT', 'SERVER_ERROR'].includes(error.error_code),
+      message: err.message as string,
+      code: errorCode,
+      details: err.details as NormalizedError['details'],
+      fieldErrors: (err.details as Record<string, unknown>)?.fieldErrors as Record<string, string> || err.field_errors as Record<string, string>,
+      getUserMessage: () => err.message as string,
+      isRecoverable: () => ['NETWORK_ERROR', 'TIMEOUT', 'SERVER_ERROR'].includes(errorCode),
     };
   }
 
   // Fetch response error
-  if (error && error.status && error.statusText) {
+  if (err && typeof err.status === 'number' && err.statusText) {
+    const status = err.status as number;
     return {
-      message: `Request failed: ${error.statusText}`,
+      message: `Request failed: ${err.statusText}`,
       code: 'HTTP_ERROR',
-      statusCode: error.status,
-      getUserMessage: () => getHttpErrorMessage(error.status),
-      isRecoverable: () => error.status >= 500,
+      statusCode: status,
+      getUserMessage: () => getHttpErrorMessage(status),
+      isRecoverable: () => status >= 500,
     };
   }
 
@@ -349,8 +396,8 @@ export function normalizeError(error) {
 /**
  * Get user-friendly message for HTTP status codes
  */
-function getHttpErrorMessage(status) {
-  const messages = {
+function getHttpErrorMessage(status: number): string {
+  const messages: Record<number, string> = {
     400: 'Invalid request. Please check your input.',
     401: 'Please log in to continue.',
     403: 'You don\'t have permission to perform this action.',
@@ -370,18 +417,17 @@ function getHttpErrorMessage(status) {
 
 /**
  * Create a wrapper for API calls with automatic error handling
- *
- * @param {Function} apiCall - The API function to wrap
- * @param {Object} options - Error handling options
- * @returns {Function} - Wrapped function with error handling
  */
-export function withErrorHandling(apiCall, options = {}) {
-  return async (...args) => {
+export function withErrorHandling<TArgs extends unknown[], TReturn>(
+  apiCall: (...args: TArgs) => Promise<TReturn>,
+  options: WithErrorHandlingOptions = {}
+): (...args: TArgs) => Promise<TReturn> {
+  return async (...args: TArgs): Promise<TReturn> => {
     try {
       const response = await apiCall(...args);
 
       // Check if response indicates an error
-      if (response && response.status === 'error') {
+      if (response && typeof response === 'object' && (response as Record<string, unknown>).status === 'error') {
         throw normalizeError(response);
       }
 
@@ -404,20 +450,19 @@ export function withErrorHandling(apiCall, options = {}) {
 
 /**
  * Retry an async operation with exponential backoff
- *
- * @param {Function} fn - Async function to retry
- * @param {Object} options - Retry options
- * @returns {Promise} - Result of successful call
  */
-export async function retryWithBackoff(fn, options = {}) {
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> {
   const {
     maxRetries = 3,
     initialDelay = 1000,
     maxDelay = 10000,
-    shouldRetry = (error) => error.isRecoverable?.() ?? false,
+    shouldRetry = (error: NormalizedError) => error.isRecoverable?.() ?? false,
   } = options;
 
-  let lastError;
+  let lastError: NormalizedError | undefined;
   let delay = initialDelay;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {

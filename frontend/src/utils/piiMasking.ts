@@ -11,7 +11,11 @@
  *   formatMasked('123456789', 'ssn')  // "***-**-6789"
  */
 
-const EMPTY = '\u2014'; // em dash
+const EMPTY = '—'; // em dash
+
+export type MaskFieldType = 'ssn' | 'dob' | 'income' | 'phone' | 'email' | 'account';
+
+type MaskableValue = string | number | Date | null | undefined;
 
 // =============================================================================
 // INDIVIDUAL MASK FUNCTIONS
@@ -20,10 +24,8 @@ const EMPTY = '\u2014'; // em dash
 /**
  * Mask a Social Security Number, showing only the last 4 digits.
  * Accepts raw digits ("123456789") or formatted ("123-45-6789").
- * @param {string|number|null|undefined} value
- * @returns {string} e.g. "***-**-6789"
  */
-export function maskSSN(value) {
+export function maskSSN(value: string | number | null | undefined): string {
   if (value == null || value === '') return EMPTY;
 
   const digits = String(value).replace(/\D/g, '');
@@ -41,13 +43,11 @@ export function maskSSN(value) {
 /**
  * Mask a date of birth, showing only the year.
  * Accepts ISO ("1990-03-15"), US format ("03/15/1990"), or Date objects.
- * @param {string|Date|null|undefined} value
- * @returns {string} masked DOB showing only year
  */
-export function maskDOB(value) {
+export function maskDOB(value: string | Date | null | undefined): string {
   if (value == null || value === '') return EMPTY;
 
-  let year = null;
+  let year: string | number | null = null;
 
   if (value instanceof Date) {
     if (isNaN(value.getTime())) return EMPTY;
@@ -81,10 +81,8 @@ export function maskDOB(value) {
 
 /**
  * Mask an income value, showing an approximate range instead of the exact amount.
- * @param {string|number|null|undefined} value
- * @returns {string} e.g. "$50k-$75k"
  */
-export function maskIncome(value) {
+export function maskIncome(value: string | number | null | undefined): string {
   if (value == null || value === '') return EMPTY;
 
   // Parse to number, stripping currency symbols and commas
@@ -95,7 +93,7 @@ export function maskIncome(value) {
   if (isNaN(num) || num < 0) return EMPTY;
 
   // Define range buckets
-  const ranges = [
+  const ranges: [number, number, string][] = [
     [0, 25000, 'Under $25k'],
     [25000, 50000, '$25k-$50k'],
     [50000, 75000, '$50k-$75k'],
@@ -120,10 +118,8 @@ export function maskIncome(value) {
 
 /**
  * Mask a phone number, showing only the last 4 digits.
- * @param {string|number|null|undefined} value
- * @returns {string} e.g. "(***) ***-1234"
  */
-export function maskPhone(value) {
+export function maskPhone(value: string | number | null | undefined): string {
   if (value == null || value === '') return EMPTY;
 
   const digits = String(value).replace(/\D/g, '');
@@ -139,10 +135,8 @@ export function maskPhone(value) {
 
 /**
  * Mask an email address, showing only the first character and the domain.
- * @param {string|null|undefined} value
- * @returns {string} e.g. "t***@gmail.com"
  */
-export function maskEmail(value) {
+export function maskEmail(value: string | null | undefined): string {
   if (value == null || value === '') return EMPTY;
 
   const str = String(value).trim();
@@ -158,10 +152,8 @@ export function maskEmail(value) {
 /**
  * Mask an account number (bank account, routing number, etc.),
  * showing only the last 4 digits.
- * @param {string|number|null|undefined} value
- * @returns {string} e.g. "****1234"
  */
-export function maskAccountNumber(value) {
+export function maskAccountNumber(value: string | number | null | undefined): string {
   if (value == null || value === '') return EMPTY;
 
   const str = String(value).replace(/\s/g, '');
@@ -179,25 +171,22 @@ export function maskAccountNumber(value) {
 // DISPATCHER
 // =============================================================================
 
-const MASK_FUNCTIONS = {
-  ssn: maskSSN,
-  dob: maskDOB,
-  income: maskIncome,
-  phone: maskPhone,
-  email: maskEmail,
-  account: maskAccountNumber,
+const MASK_FUNCTIONS: Record<MaskFieldType, (value: MaskableValue) => string> = {
+  ssn: maskSSN as (value: MaskableValue) => string,
+  dob: maskDOB as (value: MaskableValue) => string,
+  income: maskIncome as (value: MaskableValue) => string,
+  phone: maskPhone as (value: MaskableValue) => string,
+  email: maskEmail as (value: MaskableValue) => string,
+  account: maskAccountNumber as (value: MaskableValue) => string,
 };
 
 /**
  * Dispatch to the correct mask function based on field type.
- * @param {*} value - The raw value to mask
- * @param {string} type - One of: ssn, dob, income, phone, email, account
- * @returns {string} The masked representation
  */
-export function formatMasked(value, type) {
+export function formatMasked(value: MaskableValue, type: string): string {
   if (!type) return EMPTY;
 
-  const maskFn = MASK_FUNCTIONS[type.toLowerCase()];
+  const maskFn = MASK_FUNCTIONS[type.toLowerCase() as MaskFieldType];
   if (!maskFn) {
     // Unknown type — return the value as-is (caller should handle)
     return value != null ? String(value) : EMPTY;

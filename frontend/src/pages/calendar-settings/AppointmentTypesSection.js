@@ -5,7 +5,7 @@
  */
 import React, { useState } from 'react';
 import { calendarSettingsAPI } from '../../services/api.js';
-import { toast } from '../../utils/toast.js';
+import { toast } from '../../utils/toast';
 import AIGenerateButton from '../../components/common/AIGenerateButton.js';
 
 const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];

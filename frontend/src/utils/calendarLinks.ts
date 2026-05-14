@@ -5,40 +5,43 @@
  *  - Google Calendar event URLs
  *  - Outlook Web event URLs
  *  - ICS file blobs for Apple Calendar / Outlook desktop download
- *
- * All functions accept an appointment object with:
- *   title, startTime (ISO string or Date), endTime (ISO string or Date),
- *   description, location, attendeeName, attendeeEmail
  */
+
+export interface CalendarAppointment {
+  title: string;
+  startTime: string | Date;
+  endTime: string | Date;
+  description?: string;
+  location?: string;
+  attendeeName?: string;
+  attendeeEmail?: string;
+  organizerName?: string;
+  organizerEmail?: string;
+  appointmentId?: number;
+}
 
 /**
  * Format a Date to Google Calendar's required format: YYYYMMDDTHHmmSSZ
- * @param {Date|string} dt
- * @returns {string}
  */
-function toGoogleDateFormat(dt) {
+function toGoogleDateFormat(dt: Date | string): string {
   const d = dt instanceof Date ? dt : new Date(dt);
   return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 }
 
 /**
  * Format a Date to Outlook Web's required format: YYYY-MM-DDTHH:mm:SSZ
- * @param {Date|string} dt
- * @returns {string}
  */
-function toOutlookDateFormat(dt) {
+function toOutlookDateFormat(dt: Date | string): string {
   const d = dt instanceof Date ? dt : new Date(dt);
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
 /**
  * Format a Date to ICS format: YYYYMMDDTHHmmSS (UTC with trailing Z)
- * @param {Date|string} dt
- * @returns {string}
  */
-function toICSDateFormat(dt) {
+function toICSDateFormat(dt: Date | string): string {
   const d = dt instanceof Date ? dt : new Date(dt);
-  const pad = (n) => String(n).padStart(2, '0');
+  const pad = (n: number): string => String(n).padStart(2, '0');
   return (
     d.getUTCFullYear().toString() +
     pad(d.getUTCMonth() + 1) +
@@ -53,10 +56,8 @@ function toICSDateFormat(dt) {
 
 /**
  * Escape special characters for ICS text fields (RFC 5545).
- * @param {string} text
- * @returns {string}
  */
-function escapeICSText(text) {
+function escapeICSText(text: string): string {
   if (!text) return '';
   return text
     .replace(/\\/g, '\\\\')
@@ -67,12 +68,10 @@ function escapeICSText(text) {
 
 /**
  * Fold long lines at 75 octets per RFC 5545.
- * @param {string} line
- * @returns {string}
  */
-function foldLine(line) {
+function foldLine(line: string): string {
   if (line.length <= 75) return line;
-  const parts = [];
+  const parts: string[] = [];
   parts.push(line.substring(0, 75));
   let remaining = line.substring(75);
   while (remaining.length > 0) {
@@ -84,16 +83,8 @@ function foldLine(line) {
 
 /**
  * Generate a Google Calendar "add event" URL.
- *
- * @param {object} appointment
- * @param {string} appointment.title
- * @param {string|Date} appointment.startTime
- * @param {string|Date} appointment.endTime
- * @param {string} [appointment.description]
- * @param {string} [appointment.location]
- * @returns {string} Google Calendar URL
  */
-export function generateGoogleCalendarUrl(appointment) {
+export function generateGoogleCalendarUrl(appointment: CalendarAppointment): string {
   const { title, startTime, endTime, description, location } = appointment;
 
   const startStr = toGoogleDateFormat(startTime);
@@ -112,16 +103,8 @@ export function generateGoogleCalendarUrl(appointment) {
 
 /**
  * Generate an Outlook Web "compose event" URL.
- *
- * @param {object} appointment
- * @param {string} appointment.title
- * @param {string|Date} appointment.startTime
- * @param {string|Date} appointment.endTime
- * @param {string} [appointment.description]
- * @param {string} [appointment.location]
- * @returns {string} Outlook Web URL
  */
-export function generateOutlookUrl(appointment) {
+export function generateOutlookUrl(appointment: CalendarAppointment): string {
   const { title, startTime, endTime, description, location } = appointment;
 
   const startStr = toOutlookDateFormat(startTime);
@@ -141,21 +124,8 @@ export function generateOutlookUrl(appointment) {
 
 /**
  * Generate an ICS file as a Blob for download (Apple Calendar / Outlook desktop).
- *
- * @param {object} appointment
- * @param {string} appointment.title
- * @param {string|Date} appointment.startTime
- * @param {string|Date} appointment.endTime
- * @param {string} [appointment.description]
- * @param {string} [appointment.location]
- * @param {string} [appointment.attendeeName]
- * @param {string} [appointment.attendeeEmail]
- * @param {string} [appointment.organizerName]
- * @param {string} [appointment.organizerEmail]
- * @param {number} [appointment.appointmentId]
- * @returns {Blob} ICS file blob
  */
-export function generateICSFile(appointment) {
+export function generateICSFile(appointment: CalendarAppointment): Blob {
   const {
     title,
     startTime,
@@ -174,7 +144,7 @@ export function generateICSFile(appointment) {
     ? `appt-${appointmentId}@perenniaai.com`
     : `${now}-${Math.random().toString(36).substring(2, 10)}@perenniaai.com`;
 
-  const lines = [
+  const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Perennia AI//Booking//EN',
@@ -226,11 +196,8 @@ export function generateICSFile(appointment) {
 
 /**
  * Trigger a download of an ICS file blob.
- *
- * @param {Blob} blob - ICS file blob from generateICSFile
- * @param {string} [filename] - Download filename (default: "appointment.ics")
  */
-export function downloadICSFile(blob, filename = 'appointment.ics') {
+export function downloadICSFile(blob: Blob, filename: string = 'appointment.ics'): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

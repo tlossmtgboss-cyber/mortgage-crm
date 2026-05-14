@@ -1,7 +1,38 @@
 import { getItem, setItem, removeItem, getJSON, setJSON, STORAGE_KEYS, clearAllAuthTokens, migrateTokensToSecureStorage } from './storage';
-import { setTokens } from './tokenStore';
+import { setTokens, type UserData } from './tokenStore';
 
-export const setAuth = async (token, user, refreshToken) => {
+export interface AuthState {
+  token: string | null;
+  user: UserData | null;
+}
+
+export interface AuthHeaders {
+  Authorization: string;
+  'Content-Type': string;
+}
+
+export interface ContentTypeHeaders {
+  'Content-Type': string;
+}
+
+export type AuthHeadersIfPresent = AuthHeaders | ContentTypeHeaders;
+
+interface AuthChangeLoginDetail {
+  type: 'login';
+  user: UserData;
+}
+
+interface AuthChangeLogoutDetail {
+  type: 'logout';
+}
+
+type AuthChangeDetail = AuthChangeLoginDetail | AuthChangeLogoutDetail;
+
+export const setAuth = async (
+  token: string,
+  user: UserData,
+  refreshToken?: string
+): Promise<void> => {
   await setItem(STORAGE_KEYS.TOKEN, token);
   if (refreshToken) {
     await setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
@@ -15,21 +46,21 @@ export const setAuth = async (token, user, refreshToken) => {
     user_data: user,
   });
   // Dispatch custom event to notify contexts of auth change
-  window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'login', user } }));
+  window.dispatchEvent(new CustomEvent<AuthChangeDetail>('authChange', { detail: { type: 'login', user } }));
 };
 
-export const getAuth = async () => {
+export const getAuth = async (): Promise<AuthState> => {
   const token = await getItem(STORAGE_KEYS.TOKEN);
-  const user = await getJSON(STORAGE_KEYS.USER);
+  const user = await getJSON<UserData>(STORAGE_KEYS.USER);
   return { token, user };
 };
 
-export const clearAuth = async () => {
+export const clearAuth = async (): Promise<void> => {
   // Clear from ALL storage locations (Preferences + localStorage) to prevent
   // stale tokens surviving in one store after logout.
   await clearAllAuthTokens();
   // Dispatch custom event to notify contexts of auth change
-  window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'logout' } }));
+  window.dispatchEvent(new CustomEvent<AuthChangeDetail>('authChange', { detail: { type: 'logout' } }));
 };
 
 /**
@@ -39,30 +70,29 @@ export const clearAuth = async () => {
  */
 export const migrateAuthTokens = migrateTokensToSecureStorage;
 
-export const isAuthenticated = async () => {
+export const isAuthenticated = async (): Promise<boolean> => {
   const token = await getItem(STORAGE_KEYS.TOKEN);
   return !!token;
 };
 
 // Synchronous versions for backwards compatibility (web only)
 // These use localStorage directly and should only be used where async isn't possible
-export const getAuthSync = () => {
+export const getAuthSync = (): AuthState => {
   const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
   const userStr = localStorage.getItem(STORAGE_KEYS.USER);
-  const user = userStr ? JSON.parse(userStr) : null;
+  const user = userStr ? (JSON.parse(userStr) as UserData) : null;
   return { token, user };
 };
 
-export const isAuthenticatedSync = () => {
+export const isAuthenticatedSync = (): boolean => {
   return !!localStorage.getItem(STORAGE_KEYS.TOKEN);
 };
 
 /**
  * Get authorization headers for API requests
  * Returns headers object with Bearer token and Content-Type
- * @returns {Object} Headers object with Authorization and Content-Type
  */
-export const getAuthHeaders = () => {
+export const getAuthHeaders = (): AuthHeaders => {
   const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
   return {
     'Authorization': `Bearer ${token}`,
@@ -71,20 +101,15 @@ export const getAuthHeaders = () => {
 };
 
 /**
- * Get authorization headers only if token exists
- * Returns headers with auth if logged in, just content-type if not
- * @returns {Object} Headers object
- */
-/**
  * Get the current user from localStorage (set at login).
  * Returns { user_id, email, full_name, organization_id, ... } or null.
  * Avoids insecure client-side JWT decoding via atob().
  */
-export const getCurrentUser = () => {
+export const getCurrentUser = (): UserData | null => {
   const userStr = localStorage.getItem(STORAGE_KEYS.USER);
   if (userStr) {
     try {
-      return JSON.parse(userStr);
+      return JSON.parse(userStr) as UserData;
     } catch {
       return null;
     }
@@ -96,12 +121,12 @@ export const getCurrentUser = () => {
  * Get the current user ID from localStorage.
  * Returns the user_id number, or null if not logged in.
  */
-export const getCurrentUserId = () => {
+export const getCurrentUserId = (): number | string | null => {
   const user = getCurrentUser();
   return user?.id || user?.user_id || null;
 };
 
-export const getAuthHeadersIfPresent = () => {
+export const getAuthHeadersIfPresent = (): AuthHeadersIfPresent => {
   const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
   if (token) {
     return {

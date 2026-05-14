@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../services/api.js';
-import { toast } from '../../utils/toast.js';
+import { toast } from '../../utils/toast';
 
 /**
  * AIGenerateButton — clickable button that generates AI content for a field.

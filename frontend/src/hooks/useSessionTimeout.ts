@@ -16,29 +16,39 @@ import {
   onSessionStateChange,
 } from '../services/sessionManager';
 
+export interface SessionState {
+  isWarning: boolean;
+  timeRemaining: number;
+  isLocked: boolean;
+  failedAttempts: number;
+}
+
+export interface UseSessionTimeoutReturn {
+  // State
+  isWarning: boolean;
+  timeRemaining: number;
+  isLocked: boolean;
+  failedAttempts: number;
+  // Actions
+  extendSession: () => boolean;
+  lock: () => void;
+  unlockBiometric: () => Promise<boolean>;
+  unlockPassword: (password: string) => Promise<boolean>;
+}
+
 /**
  * Hook for session timeout management.
- *
- * @returns {Object} Session timeout state and actions
- * @returns {boolean} isWarning - True when within 2 min of expiry
- * @returns {number} timeRemaining - Seconds until timeout
- * @returns {boolean} isLocked - Session has expired / is locked
- * @returns {number} failedAttempts - Number of failed unlock attempts
- * @returns {Function} extendSession - Reset inactivity timer
- * @returns {Function} lock - Manually lock session
- * @returns {Function} unlockBiometric - Unlock with biometrics
- * @returns {Function} unlockPassword - Unlock with password
  */
-export function useSessionTimeout() {
-  const [sessionState, setSessionState] = useState(() => getSessionState());
-  const countdownRef = useRef(null);
+export function useSessionTimeout(): UseSessionTimeoutReturn {
+  const [sessionState, setSessionState] = useState<SessionState>(() => getSessionState());
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Initialize session manager on mount
   useEffect(() => {
     initSession();
 
     // Subscribe to session state changes from the manager
-    const unsubscribe = onSessionStateChange((state) => {
+    const unsubscribe = onSessionStateChange((state: SessionState) => {
       setSessionState(state);
     });
 
@@ -79,7 +89,7 @@ export function useSessionTimeout() {
   }, [sessionState.isWarning, sessionState.isLocked]);
 
   // Actions
-  const extendSession = useCallback(() => {
+  const extendSession = useCallback((): boolean => {
     const result = extendSessionAction();
     if (result) {
       setSessionState(getSessionState());
@@ -87,18 +97,18 @@ export function useSessionTimeout() {
     return result;
   }, []);
 
-  const lock = useCallback(() => {
+  const lock = useCallback((): void => {
     lockSessionAction();
     setSessionState(getSessionState());
   }, []);
 
-  const unlockBiometric = useCallback(async () => {
+  const unlockBiometric = useCallback(async (): Promise<boolean> => {
     const result = await unlockWithBiometrics();
     setSessionState(getSessionState());
     return result;
   }, []);
 
-  const unlockPassword = useCallback(async (password) => {
+  const unlockPassword = useCallback(async (password: string): Promise<boolean> => {
     const result = await unlockWithPassword(password);
     setSessionState(getSessionState());
     return result;

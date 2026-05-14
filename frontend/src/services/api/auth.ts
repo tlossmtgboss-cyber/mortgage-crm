@@ -1,8 +1,8 @@
 /**
  * Token refresh and CSRF management.
  */
-import { getCSRFTokenFromCookie } from '../../utils/security.js';
-import { getToken, getRefreshToken, setTokens, clearTokens } from '../../utils/tokenStore.js';
+import { getCSRFTokenFromCookie } from '../../utils/security';
+import { getToken, getRefreshToken, setTokens, clearTokens } from '../../utils/tokenStore';
 import { API_BASE_URL } from './client';
 
 // ---------------------------------------------------------------------------

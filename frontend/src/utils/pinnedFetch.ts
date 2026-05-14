@@ -1,5 +1,5 @@
 /**
- * pinnedFetch.js — Certificate-pinned HTTP adapter for iOS
+ * pinnedFetch — Certificate-pinned HTTP adapter for iOS
  *
  * On native iOS, routes all API requests through the PinnedFetch Capacitor
  * plugin, which uses a URLSession with SPKI certificate pinning. This closes
@@ -14,15 +14,33 @@
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-const PinnedFetch = Capacitor.isNativePlatform()
-  ? registerPlugin('PinnedFetch')
+interface PinnedFetchPlugin {
+  request(options: {
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+    body: string | null;
+    timeout: number;
+  }): Promise<{
+    data: unknown;
+    status: number;
+    headers?: Record<string, string>;
+  }>;
+}
+
+const PinnedFetch: PinnedFetchPlugin | null = Capacitor.isNativePlatform()
+  ? registerPlugin<PinnedFetchPlugin>('PinnedFetch')
   : null;
 
 /**
  * Axios adapter that routes requests through the native pinned URLSession.
  * Falls back to the default adapter on non-native platforms.
+ *
+ * The config/response types use `any` here to remain compatible with
+ * multiple axios versions (v0.x, v1.x) without pulling in axios types directly.
  */
-export function pinnedAdapter(config) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function pinnedAdapter(config: any): Promise<any> | null {
   if (!PinnedFetch) {
     // Not on native — use default axios behavior
     return null;
@@ -37,7 +55,7 @@ export function pinnedAdapter(config) {
         : `${baseURL}${config.url}`;
 
       // Serialize headers
-      const headers = {};
+      const headers: Record<string, string> = {};
       if (config.headers) {
         for (const [key, value] of Object.entries(config.headers)) {
           if (value != null) headers[key] = String(value);
@@ -45,7 +63,7 @@ export function pinnedAdapter(config) {
       }
 
       // Serialize body
-      let body = null;
+      let body: string | null = null;
       if (config.data != null) {
         body = typeof config.data === 'string'
           ? config.data
@@ -74,7 +92,10 @@ export function pinnedAdapter(config) {
       if (result.status >= 200 && result.status < 300) {
         resolve(response);
       } else {
-        const error = new Error(`Request failed with status ${result.status}`);
+        const error: Record<string, unknown> & Error = Object.assign(
+          new Error(`Request failed with status ${result.status}`),
+          {} as Record<string, unknown>
+        );
         error.response = response;
         error.config = config;
         error.isAxiosError = true;
@@ -82,9 +103,13 @@ export function pinnedAdapter(config) {
       }
     } catch (err) {
       // Plugin-level error (pinning failure, network error)
-      const error = new Error(err.message || 'Pinned request failed');
+      const pluginErr = err as { message?: string; code?: string };
+      const error: Record<string, unknown> & Error = Object.assign(
+        new Error(pluginErr.message || 'Pinned request failed'),
+        {} as Record<string, unknown>
+      );
       error.config = config;
-      error.code = err.code || 'PINNING_ERROR';
+      error.code = pluginErr.code || 'PINNING_ERROR';
       error.isAxiosError = true;
       reject(error);
     }

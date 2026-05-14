@@ -23,7 +23,7 @@ const TIMEZONE_LAST_FETCH_KEY = 'schedulerTimezoneLastFetch';
  * Reads from localStorage cache first, falls back to browser timezone.
  * Call refreshTimezoneCache() on app init or when settings change to keep it fresh.
  */
-export function getUserTimezone() {
+export function getUserTimezone(): string {
   try {
     const cached = localStorage.getItem(TIMEZONE_STORAGE_KEY);
     if (cached && isValidTimezone(cached)) {
@@ -39,7 +39,7 @@ export function getUserTimezone() {
  * Set the timezone in localStorage cache.
  * Called by CalendarSettings when the user saves, and by refreshTimezoneCache.
  */
-export function setUserTimezone(timezone) {
+export function setUserTimezone(timezone: string): void {
   try {
     if (timezone && isValidTimezone(timezone)) {
       localStorage.setItem(TIMEZONE_STORAGE_KEY, timezone);
@@ -53,7 +53,7 @@ export function setUserTimezone(timezone) {
 /**
  * Validate that a string is a recognized IANA timezone identifier.
  */
-function isValidTimezone(tz) {
+function isValidTimezone(tz: string): boolean {
   try {
     Intl.DateTimeFormat(undefined, { timeZone: tz });
     return true;
@@ -66,7 +66,7 @@ function isValidTimezone(tz) {
  * Fetch timezone from the API and update the localStorage cache.
  * Safe to call on app boot -- will not throw.
  */
-export async function refreshTimezoneCache() {
+export async function refreshTimezoneCache(): Promise<string> {
   try {
     // Skip if recently fetched
     const lastFetch = parseInt(localStorage.getItem(TIMEZONE_LAST_FETCH_KEY) || '0', 10);
@@ -90,7 +90,7 @@ export async function refreshTimezoneCache() {
 
     if (response.ok) {
       const data = await response.json();
-      const tz = data?.data?.timezone;
+      const tz = data?.data?.timezone as string | undefined;
       if (tz) {
         setUserTimezone(tz);
         return tz;
@@ -112,7 +112,7 @@ export async function refreshTimezoneCache() {
  * Backend often returns datetime strings without a Z suffix -- this adds it
  * so the browser's Date constructor interprets them as UTC.
  */
-export function normalizeUTCDate(dateString) {
+export function normalizeUTCDate(dateString: string): string {
   if (!dateString) return dateString;
   if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
     return dateString + 'Z';
@@ -122,13 +122,11 @@ export function normalizeUTCDate(dateString) {
 
 /**
  * Format a date/datetime in the user's configured timezone.
- *
- * @param {Date|string} date - A Date object or ISO string (UTC)
- * @param {Intl.DateTimeFormatOptions} options - Intl formatting options
- *   (e.g. { hour: 'numeric', minute: '2-digit', hour12: true })
- * @returns {string} Formatted date string in the user's timezone
  */
-export function formatInUserTimezone(date, options = {}) {
+export function formatInUserTimezone(
+  date: Date | string,
+  options: Intl.DateTimeFormatOptions = {}
+): string {
   const d = date instanceof Date ? date : new Date(normalizeUTCDate(date));
   const tz = getUserTimezone();
   return d.toLocaleString('en-US', { ...options, timeZone: tz });
@@ -136,11 +134,8 @@ export function formatInUserTimezone(date, options = {}) {
 
 /**
  * Format just the time portion of a UTC date string in the user's timezone.
- *
- * @param {string} dateString - ISO datetime string from backend
- * @returns {string} e.g. "2:30 PM"
  */
-export function formatTimeInUserTimezone(dateString) {
+export function formatTimeInUserTimezone(dateString: string): string {
   return formatInUserTimezone(dateString, {
     hour: 'numeric',
     minute: '2-digit',
@@ -150,12 +145,11 @@ export function formatTimeInUserTimezone(dateString) {
 
 /**
  * Format a date (no time) in the user's timezone.
- *
- * @param {Date|string} date
- * @param {object} options - Additional Intl options
- * @returns {string} e.g. "Mon, Mar 9"
  */
-export function formatDateInUserTimezone(date, options = {}) {
+export function formatDateInUserTimezone(
+  date: Date | string,
+  options: Intl.DateTimeFormatOptions = {}
+): string {
   return formatInUserTimezone(date, {
     weekday: 'short',
     month: 'short',
@@ -167,15 +161,8 @@ export function formatDateInUserTimezone(date, options = {}) {
 /**
  * Convert a UTC date to the user's timezone and return a Date-like object
  * with the correct local year/month/day/hour values.
- *
- * This creates a new Date whose UTC values represent the wall-clock time
- * in the user's configured timezone.  Useful for comparisons like
- * "is this event on the same calendar day as selectedDate?"
- *
- * @param {Date|string} utcDate
- * @returns {Date}
  */
-export function toUserTimezone(utcDate) {
+export function toUserTimezone(utcDate: Date | string): Date {
   const d = utcDate instanceof Date ? utcDate : new Date(normalizeUTCDate(utcDate));
   const tz = getUserTimezone();
 
@@ -191,7 +178,7 @@ export function toUserTimezone(utcDate) {
     hour12: false,
   }).formatToParts(d);
 
-  const get = (type) => {
+  const get = (type: Intl.DateTimeFormatPartTypes): number => {
     const part = parts.find(p => p.type === type);
     return part ? parseInt(part.value, 10) : 0;
   };
@@ -209,21 +196,11 @@ export function toUserTimezone(utcDate) {
 /**
  * Convert a "local" date/time (as entered by the user in their configured
  * timezone) to a UTC ISO string suitable for sending to the API.
- *
- * @param {Date|string} localDate - Date representing wall-clock time in user's tz.
- *   If a string like "2026-03-09T14:00", it is interpreted as being in the
- *   user's configured timezone.
- * @returns {string} ISO 8601 UTC string (e.g. "2026-03-09T20:00:00.000Z")
  */
-export function fromUserTimezone(localDate) {
+export function fromUserTimezone(localDate: Date | string): string {
   const tz = getUserTimezone();
 
   if (typeof localDate === 'string') {
-    // Build an Intl formatter to figure out the UTC offset for this moment
-    // in the target timezone, then construct the correct Date.
-    //
-    // Strategy: parse the string as-is into a Date (interpreted as local browser time),
-    // then adjust for the difference between browser TZ and configured TZ.
     const naive = new Date(localDate);
     if (isNaN(naive.getTime())) {
       return localDate; // can't parse, return as-is
@@ -232,25 +209,18 @@ export function fromUserTimezone(localDate) {
   }
 
   if (localDate instanceof Date) {
-    // If the Date was constructed from form inputs (e.g. new Date("2026-03-09T14:00")),
-    // the browser already interpreted it in the browser's local timezone.
-    // We need to re-interpret it as if it were in the user's configured timezone.
     return convertNaiveToTimezone(localDate, tz).toISOString();
   }
 
-  return new Date(localDate).toISOString();
+  return new Date(localDate as unknown as string).toISOString();
 }
 
 /**
- * Given a Date whose local-time fields (getFullYear, getMonth, getDate, getHours, etc.)
- * represent wall-clock time in the BROWSER's timezone, re-interpret those same
- * wall-clock values as if they were in `targetTz` and return the corresponding UTC Date.
- *
- * For example, if the browser is in America/New_York and the user's configured TZ is
- * America/Chicago, and the Date says 2:00 PM (NY), we want to produce the UTC instant
- * corresponding to 2:00 PM Chicago time (which is 8:00 PM UTC, not 7:00 PM UTC).
+ * Given a Date whose local-time fields represent wall-clock time in the BROWSER's
+ * timezone, re-interpret those same wall-clock values as if they were in `targetTz`
+ * and return the corresponding UTC Date.
  */
-function convertNaiveToTimezone(date, targetTz) {
+function convertNaiveToTimezone(date: Date, targetTz: string): Date {
   // Step 1: extract the wall-clock components from the Date
   const year = date.getFullYear();
   const month = date.getMonth(); // 0-indexed
@@ -258,11 +228,6 @@ function convertNaiveToTimezone(date, targetTz) {
   const hours = date.getHours();
   const minutes = date.getMinutes();
   const seconds = date.getSeconds();
-
-  // Step 2: format those same components in the target timezone to find the offset
-  // We construct a reference UTC date and see what the target TZ shows.
-  // But it's simpler to use the inverse approach: create a UTC date from the components
-  // and then adjust.
 
   // Create a Date in UTC with the same wall-clock values
   const utcEquivalent = new Date(Date.UTC(year, month, day, hours, minutes, seconds));
@@ -279,7 +244,7 @@ function convertNaiveToTimezone(date, targetTz) {
     hour12: false,
   }).formatToParts(utcEquivalent);
 
-  const get = (type) => {
+  const get = (type: Intl.DateTimeFormatPartTypes): number => {
     const part = targetLocal.find(p => p.type === type);
     return part ? parseInt(part.value, 10) : 0;
   };
@@ -287,13 +252,11 @@ function convertNaiveToTimezone(date, targetTz) {
   const tzHour = get('hour') === 24 ? 0 : get('hour');
   const tzMin = get('minute');
 
-  // The difference between what we wanted (hours:minutes) and what the tz shows
-  // tells us the offset adjustment needed.
   const wantedMinutes = hours * 60 + minutes;
   const gotMinutes = tzHour * 60 + tzMin;
   let diffMinutes = wantedMinutes - gotMinutes;
 
-  // Handle day boundary wrap (e.g., wanted 23:00, got 01:00 next day means diff = -120 but should be +1320)
+  // Handle day boundary wrap
   if (diffMinutes > 720) diffMinutes -= 1440;
   if (diffMinutes < -720) diffMinutes += 1440;
 
@@ -304,7 +267,7 @@ function convertNaiveToTimezone(date, targetTz) {
 /**
  * Get a date string (YYYY-MM-DD) representing "today" in the user's timezone.
  */
-export function getTodayInUserTimezone() {
+export function getTodayInUserTimezone(): string {
   const now = new Date();
   const tz = getUserTimezone();
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now);
@@ -314,12 +277,8 @@ export function getTodayInUserTimezone() {
 /**
  * Check whether a UTC date string falls on the same calendar day as a local Date
  * in the user's configured timezone.
- *
- * @param {string} utcDateString - ISO date string from backend
- * @param {Date} localDate - A local Date to compare against
- * @returns {boolean}
  */
-export function isSameDayInUserTimezone(utcDateString, localDate) {
+export function isSameDayInUserTimezone(utcDateString: string, localDate: Date): boolean {
   const converted = toUserTimezone(utcDateString);
   return (
     converted.getFullYear() === localDate.getFullYear() &&
@@ -330,11 +289,8 @@ export function isSameDayInUserTimezone(utcDateString, localDate) {
 
 /**
  * Get a short timezone abbreviation for display (e.g., "CT", "ET", "PT").
- *
- * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
- * @returns {string} e.g. "EST", "CDT", "PST"
  */
-export function getTimezoneAbbreviation(timezone = null) {
+export function getTimezoneAbbreviation(timezone: string | null = null): string {
   const tz = timezone || getUserTimezone();
   try {
     const formatted = new Intl.DateTimeFormat('en-US', {
@@ -356,22 +312,15 @@ export function getTimezoneAbbreviation(timezone = null) {
 /**
  * Get the user's browser timezone (always returns the browser's own timezone,
  * ignoring any configured/cached scheduler timezone).
- *
- * @returns {string} IANA timezone identifier, e.g. "America/New_York"
  */
-export function getBrowserTimezone() {
+export function getBrowserTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
 /**
  * Format a UTC ISO string to a localized display time in the given timezone.
- * Includes the full date and time but no timezone abbreviation.
- *
- * @param {string} isoString - UTC ISO datetime string from the backend
- * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
- * @returns {string} e.g. "Monday, March 9, 2:30 PM"
  */
-export function formatLocalTime(isoString, timezone = null) {
+export function formatLocalTime(isoString: string, timezone: string | null = null): string {
   if (!isoString) return '';
   const d = new Date(normalizeUTCDate(isoString));
   const tz = timezone || getUserTimezone();
@@ -388,12 +337,8 @@ export function formatLocalTime(isoString, timezone = null) {
 
 /**
  * Format a date for display with an explicit timezone abbreviation appended.
- *
- * @param {string} isoString - UTC ISO datetime string from the backend
- * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
- * @returns {string} e.g. "10:00 AM EST"
  */
-export function formatTimeWithZone(isoString, timezone = null) {
+export function formatTimeWithZone(isoString: string, timezone: string | null = null): string {
   if (!isoString) return '';
   const d = new Date(normalizeUTCDate(isoString));
   const tz = timezone || getUserTimezone();
@@ -409,20 +354,14 @@ export function formatTimeWithZone(isoString, timezone = null) {
 /**
  * Convert a local date string and time string (as selected by a user in their
  * timezone) into a UTC ISO string suitable for API submission.
- *
- * @param {string} dateStr - Date in "YYYY-MM-DD" format
- * @param {string} timeStr - Time in "HH:MM" (24-hour) format
- * @param {string} [timezone] - IANA timezone the date/time are expressed in.
- *   Defaults to the user's configured timezone.
- * @returns {string} UTC ISO 8601 string, e.g. "2026-03-09T20:00:00.000Z"
  */
-export function localToUTC(dateStr, timeStr, timezone = null) {
+export function localToUTC(
+  dateStr: string,
+  timeStr: string,
+  timezone: string | null = null
+): string {
   if (!dateStr || !timeStr) return '';
   const tz = timezone || getUserTimezone();
-  // Parse the combined string as a naive local datetime, then convert using
-  // the target timezone. We call convertNaiveToTimezone directly so that an
-  // explicit timezone parameter is honored (fromUserTimezone always uses
-  // getUserTimezone).
   const naive = new Date(`${dateStr}T${timeStr}`);
   if (isNaN(naive.getTime())) return '';
   return convertNaiveToTimezone(naive, tz).toISOString();
@@ -430,13 +369,12 @@ export function localToUTC(dateStr, timeStr, timezone = null) {
 
 /**
  * Format a start/end time range with a single timezone abbreviation.
- *
- * @param {string} startISO - UTC ISO datetime string for range start
- * @param {string} endISO   - UTC ISO datetime string for range end
- * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
- * @returns {string} e.g. "10:00 AM - 10:30 AM EST"
  */
-export function formatTimeRange(startISO, endISO, timezone = null) {
+export function formatTimeRange(
+  startISO: string,
+  endISO: string,
+  timezone: string | null = null
+): string {
   if (!startISO || !endISO) return '';
   const tz = timezone || getUserTimezone();
   const startDate = new Date(normalizeUTCDate(startISO));

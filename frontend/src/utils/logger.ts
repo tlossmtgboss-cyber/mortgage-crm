@@ -3,36 +3,45 @@
  * Automatically disables console.log in production builds while keeping error/warn logging
  */
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction: boolean = process.env.NODE_ENV === 'production';
 
-export const logger = {
-  log: (...args) => {
+export interface Logger {
+  log: (...args: unknown[]) => void;
+  info: (...args: unknown[]) => void;
+  warn: (...args: unknown[]) => void;
+  error: (...args: unknown[]) => void;
+  debug: (...args: unknown[]) => void;
+  table: (...args: unknown[]) => void;
+}
+
+export const logger: Logger = {
+  log: (...args: unknown[]) => {
     if (!isProduction) {
       console.log(...args);
     }
   },
 
-  info: (...args) => {
+  info: (...args: unknown[]) => {
     if (!isProduction) {
       console.info(...args);
     }
   },
 
-  warn: (...args) => {
+  warn: (...args: unknown[]) => {
     console.warn(...args);
   },
 
-  error: (...args) => {
+  error: (...args: unknown[]) => {
     console.error(...args);
   },
 
-  debug: (...args) => {
+  debug: (...args: unknown[]) => {
     if (!isProduction) {
       console.debug(...args);
     }
   },
 
-  table: (...args) => {
+  table: (...args: unknown[]) => {
     if (!isProduction) {
       console.table(...args);
     }

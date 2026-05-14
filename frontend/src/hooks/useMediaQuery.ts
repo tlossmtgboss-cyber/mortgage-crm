@@ -5,17 +5,14 @@ import { useState, useEffect, useCallback } from 'react';
  *
  * Uses window.matchMedia for efficient, event-driven matching.
  * Returns a boolean indicating whether the query currently matches.
- *
- * @param {string} query - A CSS media query string, e.g. "(min-width: 768px)"
- * @returns {boolean} Whether the media query currently matches
  */
-export function useMediaQuery(query) {
-  const getMatches = useCallback(() => {
+export function useMediaQuery(query: string): boolean {
+  const getMatches = useCallback((): boolean => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia(query).matches;
   }, [query]);
 
-  const [matches, setMatches] = useState(getMatches);
+  const [matches, setMatches] = useState<boolean>(getMatches);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -25,7 +22,7 @@ export function useMediaQuery(query) {
     // Set initial value (query may have changed)
     setMatches(mediaQueryList.matches);
 
-    const handler = (event) => {
+    const handler = (event: MediaQueryListEvent): void => {
       setMatches(event.matches);
     };
 
@@ -45,57 +42,50 @@ export function useMediaQuery(query) {
 
 /**
  * useIsTablet - Detects tablet viewport (768px - 1024px).
- * @returns {boolean}
  */
-export function useIsTablet() {
+export function useIsTablet(): boolean {
   return useMediaQuery('(min-width: 768px) and (max-width: 1024px)');
 }
 
 /**
  * useIsMobile - Detects mobile viewport (below 768px).
- * @returns {boolean}
  */
-export function useIsMobile() {
+export function useIsMobile(): boolean {
   return useMediaQuery('(max-width: 767px)');
 }
 
 /**
  * useIsDesktop - Detects desktop viewport (above 1024px).
- * @returns {boolean}
  */
-export function useIsDesktop() {
+export function useIsDesktop(): boolean {
   return useMediaQuery('(min-width: 1025px)');
 }
 
 /**
  * useIsPortrait - Detects portrait orientation.
- * @returns {boolean}
  */
-export function useIsPortrait() {
+export function useIsPortrait(): boolean {
   return useMediaQuery('(orientation: portrait)');
 }
 
 /**
  * useIsLandscape - Detects landscape orientation.
- * @returns {boolean}
  */
-export function useIsLandscape() {
+export function useIsLandscape(): boolean {
   return useMediaQuery('(orientation: landscape)');
 }
 
 /**
  * useIsTabletPortrait - Detects tablet in portrait orientation.
- * @returns {boolean}
  */
-export function useIsTabletPortrait() {
+export function useIsTabletPortrait(): boolean {
   return useMediaQuery('(min-width: 768px) and (max-width: 1024px) and (orientation: portrait)');
 }
 
 /**
  * useIsTabletLandscape - Detects tablet in landscape orientation.
- * @returns {boolean}
  */
-export function useIsTabletLandscape() {
+export function useIsTabletLandscape(): boolean {
   return useMediaQuery('(min-width: 768px) and (max-width: 1024px) and (orientation: landscape)');
 }
 

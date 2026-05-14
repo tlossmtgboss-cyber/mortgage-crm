@@ -2,11 +2,6 @@
  * Security Utilities for Frontend
  *
  * Provides CSRF protection and secure authentication helpers.
- *
- * MIGRATION GUIDE:
- * 1. Import { getSecureAuthHeaders } instead of { getAuthHeaders }
- * 2. CSRF tokens are automatically included for state-changing requests
- * 3. Eventually, auth will move to HttpOnly cookies (transparent to frontend)
  */
 
 import { getAuthHeaders as getBaseAuthHeaders } from './auth';
@@ -14,12 +9,12 @@ import { API_BASE_URL } from '../services/api';
 import { clearTokens, getToken } from '../utils/tokenStore';
 
 // CSRF token handling
-let csrfToken = null;
+let csrfToken: string | null = null;
 
 /**
  * Get CSRF token from cookie
  */
-export const getCSRFTokenFromCookie = () => {
+export const getCSRFTokenFromCookie = (): string | null => {
   const cookies = document.cookie.split(';');
   for (const cookie of cookies) {
     const [name, value] = cookie.trim().split('=');
@@ -33,7 +28,7 @@ export const getCSRFTokenFromCookie = () => {
 /**
  * Fetch CSRF token from server if not already cached
  */
-export const getCSRFToken = async () => {
+export const getCSRFToken = async (): Promise<string | null> => {
   // Try cookie first
   const cookieToken = getCSRFTokenFromCookie();
   if (cookieToken) {
@@ -49,7 +44,7 @@ export const getCSRFToken = async () => {
       });
       if (response.ok) {
         const data = await response.json();
-        csrfToken = data.csrf_token;
+        csrfToken = data.csrf_token as string;
       }
     } catch (error) {
       console.warn('Could not fetch CSRF token:', error);
@@ -61,7 +56,7 @@ export const getCSRFToken = async () => {
 /**
  * Clear cached CSRF token (call on logout)
  */
-export const clearCSRFToken = () => {
+export const clearCSRFToken = (): void => {
   csrfToken = null;
 };
 
@@ -70,7 +65,7 @@ export const clearCSRFToken = () => {
  *
  * Use this for all state-changing requests (POST, PUT, PATCH, DELETE)
  */
-export const getSecureHeaders = async () => {
+export const getSecureHeaders = async (): Promise<Record<string, string>> => {
   const baseHeaders = getBaseAuthHeaders();
   const token = await getCSRFToken();
 
@@ -82,20 +77,17 @@ export const getSecureHeaders = async () => {
 
 /**
  * Secure fetch wrapper that automatically includes CSRF token
- *
- * Usage:
- *   const response = await secureFetch('/api/v1/leads', {
- *     method: 'POST',
- *     body: JSON.stringify(data),
- *   });
  */
-export const secureFetch = async (url, options = {}) => {
-  const method = (options.method || 'GET').toUpperCase();
+export const secureFetch = async (
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  const method = ((options.method as string) || 'GET').toUpperCase();
   const needsCSRF = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
 
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string>),
   };
 
   // Add CSRF token for state-changing requests
@@ -117,7 +109,7 @@ export const secureFetch = async (url, options = {}) => {
  * Check if the current session is authenticated
  * Works with both localStorage tokens and HttpOnly cookies
  */
-export const isSessionAuthenticated = () => {
+export const isSessionAuthenticated = (): boolean => {
   // Check localStorage (current implementation)
   const token = getToken();
   if (token) return true;
@@ -131,7 +123,7 @@ export const isSessionAuthenticated = () => {
 /**
  * Logout helper that clears all auth state
  */
-export const secureLogout = async () => {
+export const secureLogout = async (): Promise<void> => {
   try {
     // Call logout endpoint to clear HttpOnly cookies and blacklist token
     await secureFetch('/api/v1/account/signoff', {
@@ -156,7 +148,7 @@ export const secureLogout = async () => {
  * Sanitize user input to prevent XSS
  * Use this when displaying user-generated content
  */
-export const sanitizeHTML = (str) => {
+export const sanitizeHTML = (str: string | null | undefined): string => {
   if (!str) return '';
   const div = document.createElement('div');
   div.textContent = str;
@@ -166,7 +158,7 @@ export const sanitizeHTML = (str) => {
 /**
  * Validate URL to prevent javascript: and data: URLs
  */
-export const isValidURL = (url) => {
+export const isValidURL = (url: string | null | undefined): boolean => {
   if (!url) return false;
   try {
     const parsed = new URL(url, window.location.origin);

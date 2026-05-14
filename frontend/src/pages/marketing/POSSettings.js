@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext.js';
 import api from '../../services/api.js';
-import { toast } from '../../utils/toast.js';
+import { toast } from '../../utils/toast';
 import './MarketingSettings.css';
 
 function POSSettings() {

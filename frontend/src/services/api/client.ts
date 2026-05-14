@@ -3,7 +3,7 @@
  */
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
-import { pinnedAdapter } from '../../utils/pinnedFetch.js';
+import { pinnedAdapter } from '../../utils/pinnedFetch';
 
 // Detect native mobile app FIRST — Capacitor serves from localhost,
 // so we must check isNativePlatform() before the hostname check.

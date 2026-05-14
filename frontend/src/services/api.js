@@ -1,10 +1,10 @@
 import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
 import { ensureArray } from '../utils/arrayHelpers.js';
-import { getCSRFTokenFromCookie } from '../utils/security.js';
-import { pinnedAdapter } from '../utils/pinnedFetch.js';
-import { getItem, setItem, removeItem, STORAGE_KEYS, clearAllAuthTokens } from '../utils/storage.js';
-import { getToken, getRefreshToken, setTokens, clearTokens } from '../utils/tokenStore.js';
+import { getCSRFTokenFromCookie } from '../utils/security';
+import { pinnedAdapter } from '../utils/pinnedFetch';
+import { getItem, setItem, removeItem, STORAGE_KEYS, clearAllAuthTokens } from '../utils/storage';
+import { getToken, getRefreshToken, setTokens, clearTokens } from '../utils/tokenStore';
 
 // Detect native mobile app FIRST — Capacitor serves from localhost,
 // so we must check isNativePlatform() before the hostname check.

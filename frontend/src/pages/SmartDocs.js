@@ -9,7 +9,7 @@
  * - Completed clients (finished financing)
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useDebounce } from '../hooks/useDebounce.js';
+import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi.js';
 import { API_BASE_URL } from '../services/api.js';
@@ -17,8 +17,8 @@ import { usePermissions } from '../contexts/PermissionContext.js';
 import BatchReminderModal from '../components/smart-docs/BatchReminderModal.jsx';
 import SectionErrorBoundary from '../components/SectionErrorBoundary.jsx';
 import './SmartDocs.css';
-import { toast } from '../utils/toast.js';
-import { getToken } from '../utils/tokenStore.js';
+import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 function SmartDocs() {
   const navigate = useNavigate();
