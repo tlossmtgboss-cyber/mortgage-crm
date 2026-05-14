@@ -452,16 +452,29 @@ def get_token_jti(token: str) -> Optional[str]:
 
 
 # =============================================================================
-# Token Blacklist (Phase 4 - Redis-backed with in-memory fallback)
+# Token Blacklist (Redis-backed, no in-memory fallback in production)
 # =============================================================================
+
+# Redis key prefix for deny-listed JTIs
+_DENY_KEY_PREFIX = "token:deny:"
+_USER_REVOKED_PREFIX = "token:user_revoked:"
+
+
+def _is_production() -> bool:
+    """Detect production environment (Railway or explicit ENV)."""
+    env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+    return env.lower() in ("production", "prod")
+
 
 class _InMemoryBlacklist:
     """
-    Process-local fallback blacklist used when Redis is unavailable.
+    Process-local fallback blacklist used ONLY in development/test.
 
-    Stores entries in a dict with TTL-based expiry. This is a degraded-mode
-    safety net: it is not shared across processes and does not survive restarts.
-    Entries are lazily evicted on read to avoid unbounded memory growth.
+    In production, Redis is mandatory for the token denylist. This class
+    exists solely for local development and test suites where Redis may
+    not be available.
+
+    Entries are stored with TTL-based expiry and lazily evicted on read.
     """
 
     def __init__(self):
@@ -510,62 +523,97 @@ class _InMemoryBlacklist:
 
 class TokenBlacklist:
     """
-    Token blacklist for immediate revocation.
+    Token denylist for immediate revocation.
 
-    Tokens can be blacklisted when:
+    Tokens can be denied when:
     - User logs out
     - Password is changed
     - Account is compromised
     - Admin force-logout
 
-    Implementation uses Redis with TTL matching token expiration.
+    Implementation:
+    - Redis keys: ``token:deny:{jti}`` with TTL = remaining token lifetime
+    - User-level revocation: ``token:user_revoked:{user_id}``
+    - Production: Redis is MANDATORY. In-memory fallback is disabled.
+    - Development/test: In-memory fallback is allowed.
     """
 
     def __init__(self):
         self._redis = None
-        self._enabled = True  # Always enabled — in-memory fallback is the baseline
+        self._enabled = True
         self._fallback = _InMemoryBlacklist()
-        self._using_fallback = True  # Start in fallback mode until Redis is configured
+        self._using_fallback = True  # Start in fallback until Redis is configured
+        self._is_production = _is_production()
 
-    def _activate_fallback(self, operation: str, error: Exception):
-        """Log and switch to in-memory fallback on Redis failure."""
-        if not self._using_fallback:
-            logger.warning(
-                f"Redis unavailable during {operation}: {error}. "
-                "Falling back to in-memory token blacklist (degraded mode). "
-                "WARNING: In-memory blacklist is NOT shared across Railway replicas — "
-                "tokens blacklisted on this instance will NOT be seen by other replicas. "
-                "Restore Redis connectivity to ensure consistent token revocation."
+    def _handle_redis_failure(self, operation: str, error: Exception):
+        """Handle Redis failures based on environment.
+
+        Production: Log CRITICAL and do NOT fall back to in-memory.
+        Development: Log warning and fall back to in-memory.
+        """
+        if self._is_production:
+            logger.critical(
+                "SECURITY: Redis unavailable during %s: %s. "
+                "Token denylist is NOT operational — revoked tokens may be accepted. "
+                "Redis is MANDATORY in production for token revocation. "
+                "Restore Redis connectivity immediately.",
+                operation, error,
             )
-            self._using_fallback = True
+            # Do NOT set self._using_fallback = True in production.
+            # The denylist will report "not denied" for all checks when Redis
+            # is down, which is safer than silently accepting an in-memory
+            # fallback that is not shared across replicas.
+        else:
+            if not self._using_fallback:
+                logger.warning(
+                    "Redis unavailable during %s: %s. "
+                    "Falling back to in-memory token denylist (dev/test mode).",
+                    operation, error,
+                )
+                self._using_fallback = True
 
     def initialize(self, redis_url: str):
-        """Initialize Redis connection for blacklist."""
+        """Initialize Redis connection for the denylist."""
         try:
             import redis
             self._redis = redis.from_url(redis_url)
+            # Verify connectivity
+            self._redis.ping()
             self._enabled = True
             self._using_fallback = False
-            logger.info("Token blacklist initialized with Redis")
+            logger.info("Token denylist initialized with Redis")
         except Exception as e:
-            logger.warning(
-                f"Redis connection failed: {e}. Using in-memory token blacklist. "
-                "WARNING: In-memory blacklist is NOT shared across Railway replicas — "
-                "tokens blacklisted on this instance will NOT be seen by other replicas."
-            )
-            self._enabled = True  # Enable with fallback
-            self._using_fallback = True
+            if self._is_production:
+                logger.critical(
+                    "SECURITY: Redis connection failed during denylist init: %s. "
+                    "Token revocation will NOT work until Redis is restored. "
+                    "In-memory fallback is DISABLED in production.",
+                    e,
+                )
+                self._enabled = True
+                self._using_fallback = False  # No fallback in production
+            else:
+                logger.warning(
+                    "Redis connection failed: %s. Using in-memory token denylist (dev/test).",
+                    e,
+                )
+                self._enabled = True
+                self._using_fallback = True
+
+    def _redis_available(self) -> bool:
+        """Check if Redis is available for denylist operations."""
+        return self._redis is not None and not self._using_fallback
 
     def add(self, token: str, reason: str = "logout") -> bool:
         """
-        Add a token to the blacklist.
+        Add a token to the denylist.
 
         Args:
-            token: The JWT token to blacklist
-            reason: Reason for blacklisting
+            token: The JWT token to deny
+            reason: Reason for denial
 
         Returns:
-            True if successfully blacklisted
+            True if successfully denied
         """
         if not self._enabled:
             return False
@@ -582,23 +630,51 @@ class TokenBlacklist:
         exp_timestamp = payload.get("exp")
         ttl = int(max(0, exp_timestamp - datetime.now(timezone.utc).timestamp())) if exp_timestamp else 86400
 
-        key = f"blacklist:{jti}"
+        return self.revoke_token(jti, ttl, reason)
 
-        if self._redis and not self._using_fallback:
+    def revoke_token(self, jti: str, remaining_ttl: int, reason: str = "revoked") -> bool:
+        """
+        Revoke a token by its JTI with the remaining TTL.
+
+        This is the primary revocation method. The TTL ensures the Redis
+        key auto-expires when the token would have expired naturally,
+        preventing unbounded key growth.
+
+        Args:
+            jti: The JWT token ID (jti claim)
+            remaining_ttl: Seconds until the token expires (Redis TTL)
+            reason: Human-readable revocation reason
+
+        Returns:
+            True if successfully written to Redis
+        """
+        if not self._enabled or not jti:
+            return False
+
+        # Ensure TTL is at least 1 second (Redis rejects 0 or negative)
+        ttl = max(1, remaining_ttl)
+        key = f"{_DENY_KEY_PREFIX}{jti}"
+
+        if self._redis_available():
             try:
                 self._redis.setex(key, ttl, reason)
-                logger.info(f"Token {jti[:8]}... blacklisted: {reason}")
+                logger.info("Token %s... denied (ttl=%ds): %s", jti[:8], ttl, reason)
                 return True
             except Exception as e:
-                self._activate_fallback("add", e)
+                self._handle_redis_failure("revoke_token", e)
 
-        # Fallback: in-memory blacklist
-        self._fallback.setex(key, ttl, reason)
-        logger.info(f"Token {jti[:8]}... blacklisted (in-memory): {reason}")
-        return True
+        # Fallback: in-memory (dev/test only — production never reaches here)
+        if self._using_fallback:
+            self._fallback.setex(key, ttl, reason)
+            logger.info("Token %s... denied (in-memory, ttl=%ds): %s", jti[:8], ttl, reason)
+            return True
+
+        # Production with Redis down — log but return False
+        logger.error("Token %s... revocation FAILED — Redis unavailable in production", jti[:8])
+        return False
 
     def is_blacklisted(self, token: str) -> bool:
-        """Check if a token is blacklisted (by full JWT token string)."""
+        """Check if a token is denied (by full JWT token string)."""
         if not self._enabled:
             return False
 
@@ -609,7 +685,7 @@ class TokenBlacklist:
         return self.is_blacklisted_by_jti(jti)
 
     def is_blacklisted_by_jti(self, jti: str) -> bool:
-        """Check if a token is blacklisted by its JTI (token ID) directly.
+        """Check if a token is denied by its JTI (token ID) directly.
 
         This avoids re-decoding the JWT when the caller already has the JTI
         extracted from the payload.
@@ -620,15 +696,25 @@ class TokenBlacklist:
         if not jti:
             return False
 
-        key = f"blacklist:{jti}"
+        key = f"{_DENY_KEY_PREFIX}{jti}"
 
-        if self._redis and not self._using_fallback:
+        if self._redis_available():
             try:
                 return self._redis.exists(key) > 0
             except Exception as e:
-                self._activate_fallback("is_blacklisted_by_jti", e)
+                self._handle_redis_failure("is_blacklisted_by_jti", e)
 
-        return self._fallback.exists(key) > 0
+        # Fallback for dev/test
+        if self._using_fallback:
+            return self._fallback.exists(key) > 0
+
+        # Production with Redis down — cannot confirm denial
+        # Log and return False (fail-open for availability, fail is logged)
+        logger.error(
+            "SECURITY: Cannot check denylist for jti=%s... — Redis unavailable in production",
+            jti[:8],
+        )
+        return False
 
     def revoke_all_for_user(self, user_id: int) -> int:
         """
@@ -639,20 +725,24 @@ class TokenBlacklist:
         if not self._enabled:
             return 0
 
-        key = f"user_revoked:{user_id}"
+        key = f"{_USER_REVOKED_PREFIX}{user_id}"
         value = datetime.now(timezone.utc).isoformat()
 
-        if self._redis and not self._using_fallback:
+        if self._redis_available():
             try:
                 self._redis.set(key, value)
-                logger.info(f"All tokens revoked for user {user_id}")
+                logger.info("All tokens revoked for user %s", user_id)
                 return 1
             except Exception as e:
-                self._activate_fallback("revoke_all_for_user", e)
+                self._handle_redis_failure("revoke_all_for_user", e)
 
-        self._fallback.set(key, value)
-        logger.info(f"All tokens revoked for user {user_id} (in-memory)")
-        return 1
+        if self._using_fallback:
+            self._fallback.set(key, value)
+            logger.info("All tokens revoked for user %s (in-memory)", user_id)
+            return 1
+
+        logger.error("User %s token revocation FAILED — Redis unavailable in production", user_id)
+        return 0
 
     def is_user_revoked(self, user_id: int, token_iat: Optional[int] = None) -> bool:
         """
@@ -668,16 +758,17 @@ class TokenBlacklist:
         if not self._enabled:
             return False
 
-        key = f"user_revoked:{user_id}"
+        key = f"{_USER_REVOKED_PREFIX}{user_id}"
         revoked_at = None
 
-        if self._redis and not self._using_fallback:
+        if self._redis_available():
             try:
                 revoked_at = self._redis.get(key)
             except Exception as e:
-                self._activate_fallback("is_user_revoked", e)
-                revoked_at = self._fallback.get(key)
-        else:
+                self._handle_redis_failure("is_user_revoked", e)
+                if self._using_fallback:
+                    revoked_at = self._fallback.get(key)
+        elif self._using_fallback:
             revoked_at = self._fallback.get(key)
 
         if not revoked_at:
@@ -700,7 +791,7 @@ class TokenBlacklist:
     def revoke_on_privilege_change(self, user_id: int, reason: str = "privilege_change"):
         """Revoke all tokens when user's role/permissions change."""
         self.revoke_all_for_user(user_id)
-        logger.info(f"Revoked all tokens for user {user_id} due to: {reason}")
+        logger.info("Revoked all tokens for user %s due to: %s", user_id, reason)
 
     def clear_user_revocation(self, user_id: int) -> bool:
         """
@@ -709,29 +800,32 @@ class TokenBlacklist:
         if not self._enabled:
             return False
 
-        key = f"user_revoked:{user_id}"
+        key = f"{_USER_REVOKED_PREFIX}{user_id}"
 
-        if self._redis and not self._using_fallback:
+        if self._redis_available():
             try:
                 self._redis.delete(key)
-                logger.info(f"Revocation cleared for user {user_id}")
+                logger.info("Revocation cleared for user %s", user_id)
                 return True
             except Exception as e:
-                self._activate_fallback("clear_user_revocation", e)
+                self._handle_redis_failure("clear_user_revocation", e)
 
-        self._fallback.delete(key)
-        logger.info(f"Revocation cleared for user {user_id} (in-memory)")
-        return True
+        if self._using_fallback:
+            self._fallback.delete(key)
+            logger.info("Revocation cleared for user %s (in-memory)", user_id)
+            return True
+
+        return False
 
     def get_status(self) -> Dict[str, Any]:
-        """Return the current status of the token blacklist for health checks.
+        """Return the current status of the token denylist for health checks.
 
         Reports which backend is active (redis vs in-memory), the number of
-        blacklisted tokens currently tracked, and whether the blacklist is
-        operating in degraded mode (in-memory fallback).
+        denied tokens currently tracked, and whether the denylist is
+        operating in degraded mode.
 
         Returns:
-            Dict with: mode, status, blacklisted_count, and cross_replica_safe.
+            Dict with: mode, status, denied_count, and cross_replica_safe.
         """
         if not self._enabled:
             return {
@@ -741,16 +835,14 @@ class TokenBlacklist:
                 "cross_replica_safe": False,
             }
 
-        if self._redis and not self._using_fallback:
+        if self._redis_available():
             # Redis mode — shared across replicas
             try:
-                # Count blacklisted tokens (keys matching blacklist:*)
                 blacklisted_count = 0
                 try:
-                    # Use SCAN to count keys without blocking
                     cursor = 0
                     while True:
-                        cursor, keys = self._redis.scan(cursor, match="blacklist:*", count=100)
+                        cursor, keys = self._redis.scan(cursor, match=f"{_DENY_KEY_PREFIX}*", count=100)
                         blacklisted_count += len(keys)
                         if cursor == 0:
                             break
@@ -764,24 +856,36 @@ class TokenBlacklist:
                     "cross_replica_safe": True,
                 }
             except Exception as e:
-                self._activate_fallback("get_status", e)
+                self._handle_redis_failure("get_status", e)
 
-        # In-memory fallback mode — NOT shared across replicas
-        with self._fallback._lock:
-            self._fallback._evict_expired()
-            blacklisted_count = sum(
-                1 for k in self._fallback._store if k.startswith("blacklist:")
-            )
+        if self._using_fallback:
+            # In-memory fallback mode (dev/test only)
+            with self._fallback._lock:
+                self._fallback._evict_expired()
+                blacklisted_count = sum(
+                    1 for k in self._fallback._store if k.startswith(_DENY_KEY_PREFIX)
+                )
 
+            return {
+                "status": "degraded",
+                "mode": "in_memory",
+                "blacklisted_count": blacklisted_count,
+                "cross_replica_safe": False,
+                "warning": (
+                    "Token denylist is using in-memory fallback (dev/test mode). "
+                    "This is NOT acceptable in production."
+                ),
+            }
+
+        # Production with Redis down
         return {
-            "status": "degraded",
-            "mode": "in_memory",
-            "blacklisted_count": blacklisted_count,
+            "status": "critical",
+            "mode": "unavailable",
+            "blacklisted_count": -1,
             "cross_replica_safe": False,
             "warning": (
-                "Token blacklist is using in-memory fallback. Blacklisted tokens "
-                "are NOT shared across Railway replicas. Tokens revoked on one "
-                "replica may still be accepted by another. Restore Redis to fix."
+                "SECURITY CRITICAL: Token denylist Redis is unavailable in production. "
+                "Revoked tokens may be accepted. Restore Redis immediately."
             ),
         }
 

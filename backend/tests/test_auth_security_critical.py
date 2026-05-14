@@ -281,3 +281,137 @@ class TestTokenClaims:
                 assert payload["aud"] == "perennia-test"
                 # jti should be a valid UUID
                 uuid.UUID(payload["jti"])  # Should not raise
+
+
+@pytest.mark.critical
+@pytest.mark.security
+@pytest.mark.unit
+class TestTokenDenylistRedis:
+    """Verify the token denylist uses Redis with JTI-based keys."""
+
+    def test_revoke_token_uses_jti_key_prefix(self):
+        """revoke_token() must write to Redis with 'token:deny:{jti}' key."""
+        from auth.tokens import TokenBlacklist
+
+        mock_redis = MagicMock()
+        bl = TokenBlacklist()
+        bl._redis = mock_redis
+        bl._using_fallback = False
+        bl._is_production = False
+
+        jti = str(uuid.uuid4())
+        bl.revoke_token(jti, remaining_ttl=3600, reason="test")
+
+        mock_redis.setex.assert_called_once_with(
+            f"token:deny:{jti}", 3600, "test"
+        )
+
+    def test_is_blacklisted_by_jti_checks_redis(self):
+        """is_blacklisted_by_jti() must check Redis for 'token:deny:{jti}' key."""
+        from auth.tokens import TokenBlacklist
+
+        mock_redis = MagicMock()
+        mock_redis.exists.return_value = 1
+        bl = TokenBlacklist()
+        bl._redis = mock_redis
+        bl._using_fallback = False
+        bl._is_production = False
+
+        jti = str(uuid.uuid4())
+        result = bl.is_blacklisted_by_jti(jti)
+
+        assert result is True
+        mock_redis.exists.assert_called_once_with(f"token:deny:{jti}")
+
+    def test_production_no_fallback_to_memory_on_redis_failure(self):
+        """In production, Redis failure must NOT activate in-memory fallback."""
+        from auth.tokens import TokenBlacklist
+
+        mock_redis = MagicMock()
+        mock_redis.setex.side_effect = ConnectionError("Redis down")
+        bl = TokenBlacklist()
+        bl._redis = mock_redis
+        bl._using_fallback = False
+        bl._is_production = True
+
+        jti = str(uuid.uuid4())
+        result = bl.revoke_token(jti, remaining_ttl=3600, reason="test")
+
+        # Should NOT fall back to in-memory in production
+        assert bl._using_fallback is False
+        # Should return False because Redis write failed
+        assert result is False
+
+    def test_revoke_token_sets_ttl_matching_token_lifetime(self):
+        """TTL on the Redis key must match the remaining token lifetime."""
+        from auth.tokens import TokenBlacklist
+
+        mock_redis = MagicMock()
+        bl = TokenBlacklist()
+        bl._redis = mock_redis
+        bl._using_fallback = False
+        bl._is_production = False
+
+        jti = str(uuid.uuid4())
+        remaining = 1800  # 30 minutes
+        bl.revoke_token(jti, remaining_ttl=remaining, reason="logout")
+
+        # Verify the TTL passed to Redis matches
+        call_args = mock_redis.setex.call_args
+        assert call_args[0][1] == remaining
+
+    def test_add_uses_revoke_token_internally(self):
+        """add() must delegate to revoke_token() with correct JTI and TTL."""
+        from auth.tokens import TokenBlacklist, create_access_token, _DENY_KEY_PREFIX
+
+        mock_redis = MagicMock()
+        bl = TokenBlacklist()
+        bl._redis = mock_redis
+        bl._using_fallback = False
+        bl._is_production = False
+
+        with patch("auth.tokens.get_auth_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(
+                algorithm="HS256",
+                secret_key="test-add-secret",
+                access_token_expire_minutes=15,
+                issuer="perennia-test",
+                audience="perennia-test",
+            )
+            with patch("auth.tokens.get_signing_key", return_value="test-add-secret"), \
+                 patch("auth.tokens.get_verification_key", return_value="test-add-secret"):
+
+                token_id = str(uuid.uuid4())
+                token = create_access_token(
+                    data={"sub": "user@test.com", "user_id": 1},
+                    expires_delta=timedelta(hours=1),
+                    token_id=token_id,
+                )
+
+                bl.add(token, reason="logout")
+
+                # Verify the key uses the new prefix
+                call_args = mock_redis.setex.call_args
+                assert call_args[0][0] == f"{_DENY_KEY_PREFIX}{token_id}"
+                assert call_args[0][2] == "logout"
+                # TTL should be roughly 3600 seconds (1 hour)
+                ttl = call_args[0][1]
+                assert 3500 < ttl <= 3600
+
+    def test_dev_mode_allows_memory_fallback(self):
+        """In development, Redis failure should fall back to in-memory."""
+        from auth.tokens import TokenBlacklist
+
+        mock_redis = MagicMock()
+        mock_redis.setex.side_effect = ConnectionError("Redis down")
+        bl = TokenBlacklist()
+        bl._redis = mock_redis
+        bl._using_fallback = False
+        bl._is_production = False
+
+        jti = str(uuid.uuid4())
+        result = bl.revoke_token(jti, remaining_ttl=3600, reason="test")
+
+        # Should fall back to in-memory in development
+        assert bl._using_fallback is True
+        assert result is True
