@@ -153,6 +153,19 @@ def _get_cf(db: Session, cf_id: uuid.UUID, org_id: int):
         )
     ).scalar_one_or_none()
     if cf is None:
+        # Orphan repair: backfill may have set wrong org_id
+        from sqlalchemy import text as _text
+        orphan = db.execute(
+            select(ClientFile).where(ClientFile.id == cf_id)
+        ).scalar_one_or_none()
+        if orphan is not None:
+            db.execute(
+                _text("UPDATE client_files SET organization_id = :org WHERE id = :id"),
+                {"org": org_id, "id": cf_id},
+            )
+            db.commit()
+            db.refresh(orphan)
+            return orphan
         raise HTTPException(404, "client file not found")
     return cf
 

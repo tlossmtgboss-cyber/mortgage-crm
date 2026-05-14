@@ -87,6 +87,8 @@ async def get_workflow_tasks(
         return {"tasks": tasks, "count": len(tasks)}
 
     except Exception as e:
+        if "workflow_tasks" in str(e) and ("does not exist" in str(e) or "no such table" in str(e)):
+            return {"tasks": [], "count": 0}
         logger.error(f"Get tasks error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
