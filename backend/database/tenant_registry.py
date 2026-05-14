@@ -529,6 +529,314 @@ TENANT_SCOPED_MODELS: set[str] = {
     # --- voice_workflow.py (non-exported) ---
     "VoiceWorkflow",
 
+    # --- agent_memory.py (non-exported, has org_id) ---
+    "AgentConversation",
+    "AgentMemory",
+    "AgentContext",
+
+    # --- agent_feedback.py (non-exported, has org_id) ---
+    "AgentFeedback",
+    "AgentFeedbackSummary",
+
+    # --- autonomous_task.py (non-exported, has org_id) ---
+    "TaskExecution",
+    "AgentAction",
+
+    # --- subscription.py: shares __tablename__ with OrgSubscription (billing.py)
+    # which adds organization_id to the merged Table at runtime ---
+    "Subscription",
+
+    # =========================================================================
+    # Legacy models (backend/models/ directory and scattered backend files)
+    # =========================================================================
+
+    # --- models/accounting/accounts_payable.py ---
+    "APVendor",
+    "APBill",
+    "APPayment",
+
+    # --- models/accounting/accounts_receivable.py ---
+    "ARCustomer",
+    "ARInvoice",
+    "ARPayment",
+
+    # --- models/accounting/banking.py ---
+    "BankAccount",
+    "PlaidItem",
+    "BankTransaction",
+    "BankCategorizationRule",
+    "BankReconciliation",
+
+    # --- models/accounting/budgeting.py ---
+    "BudgetTemplate",
+
+    # --- models/accounting/core.py ---
+    "ChartOfAccounts",
+    "AccountingPeriod",
+    "JournalEntry",
+    "JournalEntryTemplate",
+    "AccountingSettings",
+    "TaxRate",
+    "RecurringTransaction",
+    "AccountingAuditLog",
+
+    # --- models/acquisition_engine/campaign_models.py ---
+    "CampaignInstance",
+
+    # --- models/acquisition_engine/event_models.py ---
+    "AcquisitionEvent",
+
+    # --- models/agent_governance.py ---
+    "AgentProfile",
+
+    # --- models/billing.py ---
+    "OrgSubscription",
+    "Invoice",
+    "UsageRecord",
+    "PaymentMethod",
+    "OrganizationFeature",
+
+    # --- models/business_operations.py ---
+    "ServiceProvider",
+    "ServiceUsageRecord",
+    "ServiceInvoice",
+    "SubscriptionRevenue",
+    "UsageRevenue",
+    "MarketingCampaign",
+    "MarketingMetrics",
+    "BusinessForecast",
+    "BusinessKPI",
+    "BudgetAlert",
+
+    # --- models/calendar_sync_models.py ---
+    "CRMCalendarEvent",
+    "CalendarEventSyncMap",
+    "CalendarSyncLog",
+    "CalendarSyncSettings",
+
+    # --- models/call_monitoring_models.py ---
+    "CallSession",
+    "CallParticipant",
+    "AgentRun",
+    "AgentEvent",
+    "CallArtifact",
+    "IntakeFieldUpdate",
+    "CallRiskFlag",
+    "UnderwritingGuideline",
+
+    # --- models/carousel_builder.py ---
+    "CarouselProject",
+    "CarouselTheme",
+
+    # --- models/content_marketing.py ---
+    "ContentBrandVoice",
+    "ContentCalendar",
+    "ContentBrief",
+    "SEOKeyword",
+    "ContentMarketingTemplate",
+
+    # --- models/custom_domains.py ---
+    "CustomDomain",
+
+    # --- models/financial_intelligence.py ---
+    "LoanSale",
+    "HedgePosition",
+    "SecondaryMetrics",
+    "MSRPortfolio",
+    "WarehouseLine",
+    "WarehouseUsage",
+    "ProductProfitability",
+    "CashPosition",
+    "CashForecast",
+    "BurnRate",
+    "CompetitorRate",
+    "LostDeal",
+    "CapitalRequirement",
+    "ComplianceRisk",
+
+    # --- models/master_manager_models.py ---
+    "RoleDefinition",
+    "TalentCapacity",
+    "TalentState",
+    "TalentStateHistory",
+    "TalentPerformance",
+    "CapacityAlert",
+    "CoverageMap",
+    "Candidate",
+    "JobPosting",
+    "Interview",
+    "Offer",
+    "CandidateActivity",
+    "CandidateNote",
+
+    # --- models/microsite.py ---
+    "MicrositeTemplatePack",
+    "MicrositePage",
+    "MicrositeLead",
+    "OrganizationMicrositeSettings",
+
+    # --- models/pii_audit_log.py ---
+    "PIIAuditLog",
+
+    # --- models/profitability.py ---
+    # NOTE: ExpenseCategory has no org_id (global reference data) -> SYSTEM
+    # NOTE: LoanAttribution has no org_id (FK-scoped to loan) -> SYSTEM
+    "Expense",
+    "ProfitabilityRole",
+    "EmployeeCost",
+    "ProfitabilityLoan",
+    "RevenueRecord",
+    "ProfitabilitySnapshot",
+    "ProfitabilityScenario",
+    "ProfitabilityInsight",
+    "ProfitabilityAudit",
+
+    # --- models/purl.py ---
+    "PURLWorkspace",
+    "PURLContact",
+    "PURLWorkspaceMember",
+    "PURLAccessToken",
+    "PURLApplication",
+    "PURLLoan",
+    "PURLDocument",
+    "PURLPortalModule",
+    "PURLMilestoneDefinition",
+    "PURLLoanMilestone",
+    "PURLTask",
+    "PURLMessage",
+    "PURLEventsOutbox",
+    "PURLAuditLog",
+    "PURLDocumentRequest",
+
+    # --- models/salesforce_sync_log.py ---
+    "SalesforceSyncLog",
+    "SalesforceFieldMapping",
+
+    # --- models/sla_tracking.py ---
+    "SLAMeasure",
+    "LoanMilestoneHistory",
+    "CompanyHoliday",
+    "SLAPerformanceSnapshot",
+    "SLAAlert",
+    "SLAEfficiencyReport",
+
+    # --- models/smart_docs_models.py ---
+    "DocumentRequest",
+    "SmartDocument",
+
+    # --- models/surveying_models.py ---
+    "SurveyTemplate",
+    "SurveyResponse",
+    "SurveyAnalytics",
+    "SavingsValidation",
+
+    # --- models/usage_tracking.py ---
+    "AITokenUsageLog",
+    "UserUsageSnapshot",
+    "TeamUsageSnapshot",
+    "OrgUsageSnapshot",
+    "UsageForecast",
+    "PricingRecommendation",
+    "UsageAlert",
+
+    # --- ai_receptionist_dashboard_models.py ---
+    "AIReceptionistActivity",
+    "AIReceptionistMetricsDaily",
+    "AIReceptionistError",
+    "AIReceptionistConversation",
+
+    # --- conversation_memory_models.py ---
+    "AIConversationMemory",
+    "AIActionHistory",
+
+    # --- microsite_models.py ---
+    "MicrositeTheme",
+    "UserMicrosite",
+
+    # --- subscription_models.py ---
+    "OrganizationSubscription",
+    "FeatureUsage",
+    "UsageWarning",
+    "AdminAction",
+
+    # --- vapi_models.py ---
+    "VapiCall",
+    "VapiCallNote",
+    "VapiAssistant",
+    "VapiPhoneNumber",
+    "CallRoutingLog",
+    "StaffAvailability",
+    "CallTransferConfig",
+
+    # --- video_clip_models.py ---
+    "VideoClip",
+    "ClipTemplate",
+
+    # --- video_meeting_models.py ---
+    "VideoMeetingRoom",
+    "MeetingTemplate",
+    "OrganizationVideoSettings",
+
+    # --- workflow_config_models.py ---
+    "WorkflowConfiguration",
+
+    # --- scheduler_enhancements.py ---
+    "SchedulerResource",
+    "SoftHold",
+    "ReminderProfile",
+    "SchedulerAnalytics",
+    "CampaignBooking",
+    "GroupSession",
+    "SeriesSchedule",
+    "CalendarSync",
+    "IntakeQuestion",
+
+    # --- services/pipeline_appointment_trigger.py ---
+    "PipelineAppointmentRuleModel",
+    "PipelineAppointmentTriggerLog",
+
+    # --- services/smart_scheduler_service.py ---
+    "ScheduledAppointment",
+
+    # --- services/holiday_service.py ---
+    "Holiday",
+    "PTORequest",
+
+    # --- routes/ai_activity_routes.py ---
+    "AIActivityLog",
+
+    # --- routes/calendly_routes.py ---
+    "CalendlyIntegration",
+    "CalendlyBooking",
+
+    # --- routes/file_collaborator_routes.py ---
+    "FileCollaborator",
+
+    # --- routes/support_tickets_routes.py ---
+    "SupportTicket",
+
+    # --- routes/pre_approval_letter_settings_routes.py ---
+    "PreApprovalLetterSettings",
+
+    # --- integrations/microsoft365/models.py ---
+    "MSAccount",
+    "MSGraphSubscription",
+    "MSCalendarSyncMapping",
+    "MSEmailReconciliation",
+    "MSTeamsChatReconciliation",
+
+    # --- models/workflow_sla.py ---
+    "WorkflowInstance",
+    "LeadWorkflowRoleAssignment",
+    "LoanWorkflowRoleAssignment",
+
+    # --- billing.py (StripeEvent has org_id via FK) ---
+    "StripeEvent",
+
+    # --- ab_testing_models.py ---
+    "Experiment",
+    "ExperimentResult",
+
 }
 
 # ---------------------------------------------------------------------------
@@ -620,7 +928,8 @@ SYSTEM_SCOPED_MODELS: set[str] = {
 
     # --- subscription.py: Global billing/plan data ---
     "SubscriptionPlan",
-    "Subscription",
+    # NOTE: Subscription moved to TENANT — shares __tablename__ 'subscriptions'
+    # with OrgSubscription (models/billing.py) which adds organization_id at runtime
     "PromoCode",
     "TeamMember",
 
@@ -661,7 +970,7 @@ SYSTEM_SCOPED_MODELS: set[str] = {
     "WebhookDeliveryLog",
     "WebhookEventCatalog",
 
-    # --- agent_context.py (non-exported) ---
+    # --- agent_context.py (non-exported): No org_id ---
     "AgentContextStore",
     "AgentContextEvent",
     "ContextChangeAudit",
@@ -679,18 +988,14 @@ SYSTEM_SCOPED_MODELS: set[str] = {
     "AgentRegistryEntry",
     "HarnessChangeProposal",
 
-    # --- agent_memory.py (non-exported): User-scoped ---
-    "AgentConversation",
-    "AgentMemory",
-    "AgentContext",
+    # --- agent_memory.py (non-exported): AgentConversation, AgentMemory,
+    # AgentContext have org_id -> moved to TENANT
 
-    # --- agent_feedback.py (non-exported) ---
-    "AgentFeedback",
-    "AgentFeedbackSummary",
+    # --- agent_feedback.py (non-exported): AgentFeedback, AgentFeedbackSummary
+    # have org_id -> moved to TENANT
 
-    # --- autonomous_task.py (non-exported): FK-scoped ---
-    "TaskExecution",
-    "AgentAction",
+    # --- autonomous_task.py (non-exported): TaskExecution, AgentAction
+    # have org_id -> moved to TENANT
 
     # --- borrower_prep.py (non-exported): FK to BorrowerPrepSequence ---
     "BorrowerPrepStep",
@@ -752,4 +1057,376 @@ SYSTEM_SCOPED_MODELS: set[str] = {
     # --- password_history.py: User-scoped, no org_id ---
     "PasswordHistory",
     "LoginAttempt",
+
+    # =========================================================================
+    # Legacy models (backend/models/ directory and scattered backend files)
+    # =========================================================================
+
+    # --- models/accounting/accounts_payable.py: Child records, no org_id ---
+    "APBillLine",
+    "APPaymentApplication",
+
+    # --- models/accounting/accounts_receivable.py: Child records ---
+    "ARInvoiceLine",
+    "ARPaymentApplication",
+
+    # --- models/accounting/budgeting.py: FK to BudgetTemplate ---
+    "BudgetItem",
+
+    # --- models/accounting/core.py: Child records ---
+    "JournalEntryLine",
+    "JournalEntryTemplateLine",
+
+    # --- models/acquisition_engine/campaign_models.py: Template, no org_id ---
+    "CampaignBlueprint",
+
+    # --- models/acquisition_engine/scoring_models.py ---
+    "LeadTemperature",
+    "CampaignAttribution",
+
+    # --- models/agent_governance.py ---
+    "AgentTool",
+    "AgentExecution",
+    "GymTestScenario",
+    "GymTestRun",
+    "GymTestResult",
+    "AgentAlert",
+    "AgentMetricsTimeseries",
+    "AgentChatSession",
+    "AgentChatMessage",
+    "TrainingScenario",
+    "TrainingSession",
+
+    # --- models/ai_daily_blog.py: All user-scoped ---
+    "BlogVoiceProfile",
+    "BlogComplianceProfile",
+    "BlogSourceDocument",
+    "BlogCampaign",
+    "BlogContentItem",
+    "BlogContentJob",
+    "BlogImageAsset",
+    "BlogSocialConnection",
+    "BlogPublishLog",
+    "BlogTopicQueue",
+    "BlogAuditLog",
+    "BlogPerformanceFeedback",
+    "BlogUserSettings",
+
+    # --- models/active_loan_profile.py ---
+    "ActiveLoanProfile",
+
+    # --- models/bank_statement_models.py ---
+    "BankStatementWorksheet",
+    "BankStatementAccount",
+    "BankStatementMonth",
+    "BankStatementIneligibleItem",
+
+    # --- models/billing.py: Global plan definition ---
+    "Plan",
+
+    # --- models/call_monitoring_models.py: FK-scoped child ---
+    "GuidelineSection",
+
+    # --- models/carousel_builder.py: FK-scoped children ---
+    "CarouselSlide",
+    "CarouselTemplate",
+    "CarouselExport",
+
+    # --- models/content_marketing.py: FK-scoped children ---
+    "ContentComment",
+    "ContentBriefApproval",
+    "PersonalizationToken",
+    "ContentPublishLog",
+
+    # --- models/conversation_intelligence_models.py: All no org_id ---
+    "CICallRecording",
+    "CICallTranscription",
+    "CITranscriptionSegment",
+    "CICallAnalysis",
+    "CIQARubric",
+    "CIQAScorecard",
+    "CIQAScorecardItem",
+    "CIRealtimeSession",
+    "CIRealtimeSuggestion",
+    "CICoachingClip",
+    "CICoachingAssignment",
+    "CICoachingComment",
+    "CIComplianceRule",
+    "CIComplianceViolation",
+    "CIAgentMetrics",
+
+    # --- models/call_screening_models.py ---
+    "PhoneBlocklist",
+    "PhoneWhitelist",
+    "CallScreeningLog",
+    "PhoneLookupCache",
+
+    # --- models/data_conflict.py ---
+    "DataConflict",
+
+    # --- models/document_extraction.py ---
+    "SmartDocumentExtraction",
+
+    # --- models/document_visibility.py ---
+    "DocumentVisibility",
+    "DocumentVisibilityAudit",
+
+    # --- models/email_interaction.py ---
+    "EmailInteraction",
+
+    # --- models/email_monitor.py ---
+    "EmailMonitorAddress",
+    "EmailMonitorKeyword",
+    "EmailMonitorRule",
+    "EmailMonitorCaptured",
+    "EmailCRMLink",
+    "EmailRelevanceAnalysis",
+    "EmailFilterWhitelist",
+    "EmailFilterBlacklist",
+    "EmailProviderConfig",
+    "GmailOAuthToken",
+    "OutlookOAuthToken",
+    "EmailMonitorLog",
+
+    # --- models/esign_models.py ---
+    "EsignEnvelope",
+    "EsignSigner",
+    "EsignField",
+    "EsignFieldValue",
+    "EsignAuditEvent",
+    "EsignCompletedDocument",
+
+    # --- models/feature_flags.py ---
+    "SystemFeature",
+    "CompanyFeatureAccess",
+    "FeatureAuditLog",
+
+    # --- models/field_update_history.py ---
+    "FieldUpdateHistory",
+
+    # --- models/followupboss_models.py ---
+    "FUBUserConnection",
+    "FUBLeadMapping",
+    "FUBSyncEvent",
+    "FUBStageMapping",
+
+    # --- models/income_engine_models.py ---
+    "IncomeSummary",
+    "IncomeCalculationDetail",
+    "IncomeFlag",
+    "MileageDepreciationRate",
+    "IncomeWorksheet",
+
+    # --- models/income_models.py ---
+    # NOTE: IncomeSource already in SYSTEM (income_calculation.py version).
+    # Remaining models (PaystubExtraction, Employment, SelfEmploymentIncome,
+    # RentalIncomeProperty, IncomeCalculationHistory) are NOT imported because
+    # income_models.py is skipped to avoid 'income_sources' table conflict.
+
+    # --- models/lead_profile.py ---
+    "LeadProfile",
+
+    # --- models/master_manager_models.py: No org_id --- (none found without)
+
+    # --- models/microsite.py: FK-scoped children ---
+    "MicrositeAsset",
+    "MicrositePublishHistory",
+    "MicrositeAnalyticsEvent",
+    "MicrositeCustomPage",
+
+    # --- models/mum_client_profile.py ---
+    "MUMClientProfile",
+
+    # --- models/perennia_docs.py ---
+    # NOTE: perennia_docs models live inside create_perennia_docs_models() factory.
+    # DocumentRequest (smart_docs version with org_id) is in TENANT above.
+    # The following FK-scoped children have no org_id:
+    "PerenniaDocument",
+    "TemplatePack",
+    "DocumentRule",
+    "DocumentEvent",
+    "DocumentNotification",
+    "RetentionPolicy",
+    "BorrowerPortalSession",
+
+    # --- models/portal_models.py ---
+    "PortalLoan",
+    "LifecycleStateHistory",
+    "MilestoneTemplate",
+    "MilestoneInstance",
+    "TaskTemplate",
+    "TaskInstance",
+    "FederalHoliday",
+    "CloseOnTimeSchedule",
+    "CloseOnTimeMilestone",
+    "PortalDocument",
+    "DocumentExtraction",
+    "PropertyCosts",
+    "HomePriceIndex",
+    "PropertyValueBaseline",
+    "PropertyValuation",
+    "HomeValueInsight",
+    "NotificationTemplate",
+    "NotificationQueue",
+    "LoanActivityLog",
+    "RiskFlag",
+    "PartnerAccessToken",
+    "AnnualRefreshCycle",
+    "PresentationSession",
+    "PortalPresentationScenario",
+    "PresentationCitation",
+
+    # --- models/presentation.py ---
+    "PresentationScenario",
+    "QuoteRequest",
+
+    # --- models/rate_monitor.py ---
+    "RateMonitorTarget",
+    "RateMonitorHistory",
+    "RateMonitorAlert",
+    "OptimalBlueRateCache",
+
+    # --- models/rate_sheet.py ---
+    "RateSheet",
+    "RateSheetRate",
+    "RefinanceOpportunity",
+
+    # --- models/smart_docs_models.py: FK-scoped ---
+    "DocPolicyEvent",
+    "NeedsListTemplate",
+    "ClientReminderSettings",
+
+    # --- models/sms_models.py ---
+    "SMSRateLimitLog",
+    "SMSQueue",
+
+    # --- models/profitability.py: No org_id ---
+    "ExpenseCategory",
+    "LoanAttribution",
+
+    # --- models/surveying_models.py: FK-scoped children ---
+    "SurveyQuestion",
+    "SurveyAnswer",
+
+    # --- models/usage_tracking.py: Global pricing reference ---
+    "AIModelPricing",
+    # NOTE: UsageAlert already in TENANT (usage_tracking.py version has org_id)
+
+    # --- models/team_member_profile.py ---
+    "TeamMemberProfile",
+
+    # --- models/tenant.py ---
+    "Tenant",
+
+    # --- models/user_integration.py ---
+    "UserIntegration",
+
+    # --- models/user_onboarding.py ---
+    # NOTE: Role, Category, RoleDefaultCategory, RoleDefaultResponsibility,
+    # UserProfile, UserCategory, PermissionTemplate, UserPermissions,
+    # KPIScorecard, BulkUploadSession, BulkUserDraft, UserAuditLog,
+    # OnboardingSession share __tablename__ with Onboarding* equivalents
+    # from user_onboarding_integration.py. The Onboarding* versions take
+    # precedence at runtime, so only those names are listed.
+    # Responsibility and UserResponsibility are already in SYSTEM (permission.py).
+
+    # --- models/workflow_sla.py: AI confidence data ---
+    "WorkflowAIConfidence",
+
+    # --- ai_receptionist_dashboard_models.py: No org_id ---
+    "AIReceptionistSkill",
+    "AIReceptionistSystemHealth",
+
+    # --- chat_state_machine_models.py ---
+    "ChatSession",
+    "ChatMessage",
+    "CallRequest",
+
+    # --- guideline_updates_models.py ---
+    "GuidelineUpdate",
+    "UserUpdateView",
+
+    # --- microsite_models.py: FK-scoped ---
+    "MicrositeProfile",
+    "MicrositeContentPage",
+
+    # --- models_mum.py ---
+    # NOTE: MUMClient already in TENANT (database/models/referral.py version).
+    # MUMTransaction NOT imported because models_mum.py is skipped to avoid
+    # 'mum_clients' table conflict.
+
+    # --- salesforce_integration_models.py ---
+    "IntegrationProfile",
+    "SfUserSchema",
+    "FieldMapping",
+    "IntegrationEvent",
+    "SyncQueueItem",
+    "OAuthState",
+    "IntegrationRecordTracking",
+
+    # --- subscription_models.py: Global feature catalog ---
+    "FeatureDefinition",
+
+    # --- user_onboarding_integration.py ---
+    "OnboardingRole",
+    "OnboardingCategory",
+    "OnboardingResponsibility",
+    "OnboardingPermissionTemplate",
+    "OnboardingUserProfile",
+    "OnboardingUserCategory",
+    "OnboardingUserResponsibility",
+    "OnboardingUserPermissions",
+    "OnboardingKPIScorecard",
+    "OnboardingRoleDefaultCategory",
+    "OnboardingRoleDefaultResponsibility",
+    "OnboardingSession",
+    "OnboardingAuditLog",
+
+    # --- video_clip_models.py: FK-scoped children ---
+    "ClipShare",
+    "ClipView",
+    "ClipComment",
+    "ClipNotification",
+
+    # --- video_meeting_models.py: FK-scoped children ---
+    "MeetingParticipant",
+    "MeetingRecording",
+    "RecordingTranscript",
+    "MeetingAIAnalysis",
+    "MeetingChat",
+    "ParticipantAnalytics",
+    "CoachingRecommendation",
+    "MortgageIntelligence",
+    "BreakoutRoom",
+
+    # --- workflow_config_models.py: FK-scoped children ---
+    "WorkflowDayConfig",
+    "WorkflowRoleAssignment",
+    "WorkflowTaskInstance",
+    "BrokenTaskAlert",
+
+    # --- workflow_models.py ---
+    # NOTE: EmployerRecord, Opportunity, RecurringTask NOT imported because
+    # workflow_models.py is skipped to avoid 'workflow_executions' table conflict.
+    # WorkflowExecution already in TENANT (database/models/workflow.py version).
+
+    # --- routes/analytics_tracking_routes.py ---
+    "AnalyticsEvent",
+
+    # --- routes/beta_routes.py ---
+    "BetaApplication",
+
+    # --- routes/ai_email_settings_routes.py ---
+    "AIEmailSettings",
+
+    # --- routes/email_integration_settings_routes.py ---
+    "EmailIntegrationSettings",
+
+    # --- routes/email_training_routes.py ---
+    "EmailTrainingLog",
+
+    # --- ab_testing_models.py: FK-scoped children ---
+    "ExperimentVariant",
+    "ExperimentAssignment",
+    "ExperimentInsight",
 }
