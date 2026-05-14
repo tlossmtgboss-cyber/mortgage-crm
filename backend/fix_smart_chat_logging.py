@@ -53,7 +53,7 @@ async def smart_chat_with_memory(
 
         # Try to get AI response (might fail)
         try:
-            from ai_memory_service import context_ai
+            from services.ai_memory_service import context_ai
 
             result = await context_ai.get_intelligent_response(
                 db=db,

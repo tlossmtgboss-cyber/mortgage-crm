@@ -69,9 +69,9 @@ def register_cache_routes(app, get_db, get_current_user, **kwargs):
         except Exception:
             result["embedding_cache"] = {"error": "unavailable"}
 
-        # 2. Pinecone query cache (in-memory TTL in ai_memory_service)
+        # 2. Pinecone query cache (in-memory TTL in services/ai_memory_service)
         try:
-            from ai_memory_service import _pinecone_query_cache
+            from services.ai_memory_service import _pinecone_query_cache
             result["pinecone_query_cache"] = _pinecone_query_cache.stats()
         except Exception:
             result["pinecone_query_cache"] = {"error": "unavailable"}
