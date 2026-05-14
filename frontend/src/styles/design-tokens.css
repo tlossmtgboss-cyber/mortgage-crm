@@ -1,0 +1,51 @@
+/* ==========================================================================
+   Perennia AI — Global Design Tokens
+   ==========================================================================
+   Canonical brand tokens for new components. Existing variables in index.css
+   remain authoritative for legacy code; these add the --pf-* namespace for
+   new CSS Modules so tokens are self-documenting and grep-friendly.
+
+   Loaded globally via index.css import. Use var(--pf-primary) etc. in
+   CSS Modules.
+   ========================================================================== */
+
+:root {
+  /* Colors — Perennia AI brand */
+  --pf-deep-space: #060A10;
+  --pf-electric-blue: #7EB8F7;
+  --pf-primary: #218d8d;
+  --pf-secondary: #7c3aed;
+  --pf-accent: #059669;
+  --pf-danger: #e74c3c;
+  --pf-warning: #f39c12;
+  --pf-success: #27ae60;
+
+  /* Typography */
+  --pf-font-display: 'Cormorant Garamond', serif;
+  --pf-font-mono: 'DM Mono', monospace;
+  --pf-font-body: 'DM Sans', 'Inter', sans-serif;
+
+  /* Spacing */
+  --pf-space-xs: 4px;
+  --pf-space-sm: 8px;
+  --pf-space-md: 16px;
+  --pf-space-lg: 24px;
+  --pf-space-xl: 32px;
+  --pf-space-2xl: 48px;
+
+  /* Borders */
+  --pf-radius-sm: 4px;
+  --pf-radius-md: 8px;
+  --pf-radius-lg: 12px;
+  --pf-radius-full: 9999px;
+
+  /* Glassmorphism */
+  --pf-glass-bg: rgba(255, 255, 255, 0.05);
+  --pf-glass-border: rgba(255, 255, 255, 0.1);
+  --pf-glass-blur: blur(12px);
+
+  /* Shadows */
+  --pf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --pf-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --pf-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.15);
+}

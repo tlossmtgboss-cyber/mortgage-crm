@@ -116,8 +116,13 @@ export default defineConfig(({ mode }) => {
     },
 
     // CSS configuration
+    // CSS Modules are supported natively by Vite for *.module.css files.
+    // New components should use CSS Modules; see src/styles/README.md.
     css: {
       devSourcemap: true,
+      modules: {
+        localsConvention: 'camelCase',
+      },
     },
   };
 });

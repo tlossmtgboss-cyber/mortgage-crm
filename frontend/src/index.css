@@ -1,3 +1,5 @@
+@import './styles/design-tokens.css';
+
 :root {
   /* ── Brand custom properties (overridden at runtime by BrandingContext) ── */
   --brand-primary: #218d8d;

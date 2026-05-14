@@ -1,0 +1,20 @@
+#!/bin/sh
+# Enforce TypeScript for new frontend files
+# Existing .js/.jsx files are allowed; only newly added files are checked.
+
+new_js_files=$(git diff --cached --name-only --diff-filter=A | grep -E '^frontend/src/.*\.(js|jsx)$' | grep -v 'setupTests\|vite\.config\|vitest\.' || true)
+if [ -n "$new_js_files" ]; then
+  echo "ERROR: New frontend files must be TypeScript (.ts or .tsx):"
+  echo "$new_js_files"
+  echo "Rename to .ts/.tsx and add type annotations."
+  exit 1
+fi
+
+# Enforce CSS Modules for new component stylesheets
+new_plain_css=$(git diff --cached --name-only --diff-filter=A | grep -E '^frontend/src/components/.*\.css$' | grep -v '\.module\.css$' || true)
+if [ -n "$new_plain_css" ]; then
+  echo "ERROR: New component stylesheets must use CSS Modules (.module.css):"
+  echo "$new_plain_css"
+  echo "Rename to ComponentName.module.css and use: import styles from './ComponentName.module.css'"
+  exit 1
+fi
