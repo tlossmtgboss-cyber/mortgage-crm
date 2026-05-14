@@ -306,12 +306,20 @@ def run_agent_all_orgs(agent_name: str) -> List[AgentExecutionResult]:
     return results
 
 
-def register_all_autonomous_agents(scheduler):
-    """Register all autonomous agents with APScheduler.
+def register_all_autonomous_agents(scheduler_or_service):
+    """Register all autonomous agents with the unified scheduler.
 
-    Called from startup_event in main.py.
+    Accepts either a SchedulerService instance (preferred — wraps each agent
+    with distributed lock guard) or a raw APScheduler BackgroundScheduler
+    (legacy fallback).
+
+    Called from startup_event in app_lifespan.py.
     """
     from apscheduler.triggers.cron import CronTrigger
+    import functools
+
+    # Detect whether we got a SchedulerService or raw APScheduler
+    has_register_job = hasattr(scheduler_or_service, 'register_job')
 
     # Import all agent modules to trigger @autonomous_agent registration
     # Original 5 agents (morning_briefing deleted as dead code — now uses MorningBriefingService)
@@ -346,18 +354,37 @@ def register_all_autonomous_agents(scheduler):
             continue
 
         cron_kwargs = FREQUENCY_CRON.get(agent_def.frequency, {"hour": "7", "minute": "0"})
-        trigger = CronTrigger(**cron_kwargs, timezone="America/New_York")
+        job_id = f"autonomous_{name}"
 
-        scheduler.add_job(
-            run_agent_all_orgs,
-            trigger=trigger,
-            args=[name],
-            id=f"autonomous_{name}",
-            name=f"Autonomous: {agent_def.description}",
-            replace_existing=True,
-            max_instances=1,
-            misfire_grace_time=30,  # 30s grace — skip missed runs on restart to avoid connection burst
-        )
+        if has_register_job:
+            # Use unified scheduler with distributed lock wrapping
+            # functools.partial to bind the agent name argument
+            agent_func = functools.partial(run_agent_all_orgs, name)
+            agent_func.__name__ = f"autonomous_{name}"
+            agent_func.__doc__ = agent_def.description
+
+            scheduler_or_service.register_job(
+                name=job_id,
+                func=agent_func,
+                trigger="cron",
+                description=f"Autonomous: {agent_def.description}",
+                lock_ttl=180,
+                **cron_kwargs,
+            )
+        else:
+            # Legacy fallback: raw APScheduler (no distributed lock)
+            trigger = CronTrigger(**cron_kwargs, timezone="America/New_York")
+            scheduler_or_service.add_job(
+                run_agent_all_orgs,
+                trigger=trigger,
+                args=[name],
+                id=job_id,
+                name=f"Autonomous: {agent_def.description}",
+                replace_existing=True,
+                max_instances=1,
+                misfire_grace_time=30,
+            )
+
         registered += 1
         logger.info(f"Scheduled autonomous agent: {name} ({agent_def.frequency.value})")
 

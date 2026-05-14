@@ -548,6 +548,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Admin Migration routes: {e}")
 
+    # Include Admin Scheduler Status routes
+    try:
+        from routes.admin_scheduler_routes import router as admin_scheduler_router
+        app.include_router(admin_scheduler_router, tags=["Admin Scheduler"])
+        logger.info("✅ Admin Scheduler routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load Admin Scheduler routes: {e}")
+
     # Include Credit Report routes
     try:
         from routes.credit_routes import router as credit_router
@@ -2331,56 +2339,142 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Salesforce user integration routes not loaded: {e}")
 
-    # Register Salesforce sync jobs with APScheduler
-    if scheduler:
-        try:
-            from tasks.salesforce_sync_tasks import register_salesforce_sync_jobs
-            register_salesforce_sync_jobs(scheduler)
-            logger.info("✅ Salesforce sync jobs registered")
-        except Exception as e:
-            logger.warning(f"⚠️ Salesforce sync jobs not registered: {e}")
+    # Register Salesforce sync, SLA, workflow, ops manager jobs via unified scheduler.
+    # Uses scheduler_service.register_job() for distributed lock wrapping.
+    try:
+        from services.scheduler_service import scheduler_service as _unified_sched
 
-    # Register SLA tracking jobs (milestone status, risk alerts, snapshots)
-    if scheduler:
+        # Salesforce sync jobs
         try:
-            from tasks.sla_tasks import setup_sla_scheduler
-            setup_sla_scheduler(scheduler)
-            logger.info("✅ SLA scheduler jobs registered")
-        except Exception as e:
-            logger.warning(f"⚠️ SLA scheduler jobs not registered: {e}")
-
-    # Register workflow engine job (task generation, escalation, completions — every 5 min)
-    if scheduler:
-        try:
-            from apscheduler.triggers.interval import IntervalTrigger
-            from routes.workflow_sla_routes import run_scheduled_workflow_tasks_background
-            scheduler.add_job(
-                run_scheduled_workflow_tasks_background,
-                trigger=IntervalTrigger(minutes=5),
-                id="workflow_engine",
-                name="Workflow Engine: generate tasks, escalate overdue, check completions",
-                replace_existing=True,
+            from tasks.salesforce_sync_tasks import (
+                sync_all_users_salesforce_sync,
+                check_salesforce_sync_health_sync,
             )
-            logger.info("✅ Workflow engine job registered (every 5 min)")
-        except Exception as e:
-            logger.warning(f"⚠️ Workflow engine job not registered: {e}")
+            import functools as _ft
 
-    # Register ops manager jobs (daily sweep, auto-resolve stale tasks)
-    if scheduler:
-        try:
-            from tasks.ops_manager_tasks import setup_ops_manager_scheduler
-            setup_ops_manager_scheduler(scheduler)
-            logger.info("✅ Ops Manager scheduler jobs registered")
+            # Bind the same kwargs that register_salesforce_sync_jobs used
+            _sf_sync_bound = _ft.partial(
+                sync_all_users_salesforce_sync,
+                sync_emails=True,
+                sync_calendar=True,
+                sync_client_fields=True,
+                import_new_clients=True,
+                push_to_salesforce=False,
+                email_days_back=1,
+                calendar_days_back=1,
+                calendar_days_forward=14,
+                import_days_back=7,
+            )
+
+            _unified_sched.register_job(
+                "salesforce_sync_all_users", _sf_sync_bound, "cron",
+                description="Inbound Salesforce sync: pull from Salesforce to CRM every 3 minutes",
+                lock_ttl=180, minute="*/3",
+            )
+            _unified_sched.register_job(
+                "salesforce_sync_health", check_salesforce_sync_health_sync, "cron",
+                description="Salesforce sync health check",
+                lock_ttl=60, minute="2,12,22,32,42,52",
+            )
+            logger.info("Salesforce sync jobs registered via unified scheduler")
         except Exception as e:
-            logger.warning(f"⚠️ Ops Manager scheduler jobs not registered: {e}")
+            logger.warning(f"Salesforce sync jobs not registered: {e}")
+
+        # SLA tracking jobs
+        try:
+            from tasks.sla_tasks import (
+                update_milestone_statuses_task,
+                create_risk_alerts_task,
+                reactivate_snoozed_alerts_task,
+                create_morning_snapshot_task,
+                create_midday_snapshot_task,
+                generate_weekly_report_task,
+            )
+            _unified_sched.register_job(
+                "sla_status_update", update_milestone_statuses_task, "interval",
+                description="Update SLA Milestone Statuses", lock_ttl=120, minutes=15,
+            )
+            _unified_sched.register_job(
+                "sla_risk_alerts", create_risk_alerts_task, "interval",
+                description="Create SLA Risk Alerts", lock_ttl=120, hours=1,
+            )
+            _unified_sched.register_job(
+                "sla_snooze_reactivation", reactivate_snoozed_alerts_task, "interval",
+                description="Reactivate Snoozed Alerts", lock_ttl=60, minutes=15,
+            )
+            _unified_sched.register_job(
+                "sla_morning_snapshot", create_morning_snapshot_task, "cron",
+                description="Create Morning SLA Snapshot (8 AM)", lock_ttl=180, hour=8, minute=0,
+            )
+            _unified_sched.register_job(
+                "sla_midday_snapshot", create_midday_snapshot_task, "cron",
+                description="Create Midday SLA Snapshot (12 PM)", lock_ttl=180, hour=12, minute=0,
+            )
+            _unified_sched.register_job(
+                "sla_weekly_report", generate_weekly_report_task, "cron",
+                description="Generate Weekly SLA Report",
+                lock_ttl=300, day_of_week="mon", hour=6, minute=0,
+            )
+            logger.info("SLA scheduler jobs registered via unified scheduler")
+        except Exception as e:
+            logger.warning(f"SLA scheduler jobs not registered: {e}")
+
+        # Workflow engine job
+        try:
+            from routes.workflow_sla_routes import run_scheduled_workflow_tasks_background
+            _unified_sched.register_job(
+                "workflow_engine", run_scheduled_workflow_tasks_background, "interval",
+                description="Workflow Engine: generate tasks, escalate overdue, check completions",
+                lock_ttl=180, minutes=5,
+            )
+            logger.info("Workflow engine job registered via unified scheduler (every 5 min)")
+        except Exception as e:
+            logger.warning(f"Workflow engine job not registered: {e}")
+
+        # Ops Manager jobs
+        try:
+            from tasks.ops_manager_tasks import run_daily_ops_sweep, run_auto_resolve_stale_tasks
+            _unified_sched.register_job(
+                "ops_manager_daily_sweep", run_daily_ops_sweep, "cron",
+                description="Ops Manager: Daily pipeline sweep across all orgs",
+                lock_ttl=600, hour=6, minute=0,
+            )
+            _unified_sched.register_job(
+                "ops_manager_auto_resolve", run_auto_resolve_stale_tasks, "interval",
+                description="Ops Manager: Auto-resolve stale tasks",
+                lock_ttl=300, hours=4,
+            )
+            logger.info("Ops Manager scheduler jobs registered via unified scheduler")
+        except Exception as e:
+            logger.warning(f"Ops Manager scheduler jobs not registered: {e}")
+
+    except Exception as e:
+        logger.error(f"Unified scheduler registration failed, falling back to direct: {e}")
+        # Fallback: register directly with the AsyncIOScheduler passed in
+        if scheduler:
+            try:
+                from tasks.salesforce_sync_tasks import register_salesforce_sync_jobs
+                register_salesforce_sync_jobs(scheduler)
+            except Exception:
+                pass
+            try:
+                from tasks.sla_tasks import setup_sla_scheduler
+                setup_sla_scheduler(scheduler)
+            except Exception:
+                pass
+            try:
+                from tasks.ops_manager_tasks import setup_ops_manager_scheduler
+                setup_ops_manager_scheduler(scheduler)
+            except Exception:
+                pass
 
     # Ensure scheduler is started after all jobs registered
     if scheduler and not scheduler.running:
         try:
             scheduler.start()
-            logger.info("✅ APScheduler started")
+            logger.info("APScheduler started")
         except Exception as e:
-            logger.warning(f"⚠️ APScheduler failed to start: {e}")
+            logger.warning(f"APScheduler failed to start: {e}")
 
     # Calendar routes (consolidated: Salesforce sync, CalendarEvent CRUD, unified view)
     # All calendar sub-routers are now in routes/calendar_sync_routes.py

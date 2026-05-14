@@ -40,14 +40,48 @@ def register_integration_routes(app, get_db, get_current_user, get_current_user_
     except Exception as e:
         logger.warning(f"Salesforce user integration routes not loaded: {e}")
 
-    # Register Salesforce sync jobs with APScheduler
-    if scheduler:
-        try:
-            from tasks.salesforce_sync_tasks import register_salesforce_sync_jobs
-            register_salesforce_sync_jobs(scheduler)
-            logger.info("Salesforce sync jobs registered")
-        except Exception as e:
-            logger.warning(f"Salesforce sync jobs not registered: {e}")
+    # Register Salesforce sync jobs via unified scheduler (with distributed locking)
+    try:
+        from services.scheduler_service import scheduler_service as _unified_sched
+        from tasks.salesforce_sync_tasks import (
+            sync_all_users_salesforce_sync,
+            check_salesforce_sync_health_sync,
+        )
+        import functools as _ft
+
+        _sf_sync_bound = _ft.partial(
+            sync_all_users_salesforce_sync,
+            sync_emails=True,
+            sync_calendar=True,
+            sync_client_fields=True,
+            import_new_clients=True,
+            push_to_salesforce=False,
+            email_days_back=1,
+            calendar_days_back=1,
+            calendar_days_forward=14,
+            import_days_back=7,
+        )
+
+        _unified_sched.register_job(
+            "salesforce_sync_all_users", _sf_sync_bound, "cron",
+            description="Inbound Salesforce sync: pull from Salesforce to CRM every 3 minutes",
+            lock_ttl=180, minute="*/3",
+        )
+        _unified_sched.register_job(
+            "salesforce_sync_health", check_salesforce_sync_health_sync, "cron",
+            description="Salesforce sync health check",
+            lock_ttl=60, minute="2,12,22,32,42,52",
+        )
+        logger.info("Salesforce sync jobs registered via unified scheduler")
+    except Exception as e:
+        # Fallback: register directly with the AsyncIOScheduler passed in
+        if scheduler:
+            try:
+                from tasks.salesforce_sync_tasks import register_salesforce_sync_jobs
+                register_salesforce_sync_jobs(scheduler)
+                logger.info("Salesforce sync jobs registered (legacy fallback)")
+            except Exception as e2:
+                logger.warning(f"Salesforce sync jobs not registered: {e2}")
 
     # Microsoft Teams Integration routes
     try:

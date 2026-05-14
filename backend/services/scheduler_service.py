@@ -1,11 +1,23 @@
 """
-Scheduler Service - Background jobs for automated notifications and reminders.
+Scheduler Service - Unified background job scheduler with distributed locking.
 
-Uses APScheduler for job scheduling.
+Uses APScheduler for job scheduling. Wraps every job execution with a Redis
+distributed lock (via DistributedLockService) to prevent duplicate execution
+across Railway replicas. Falls back to PostgreSQL advisory lock if Redis is
+unavailable.
+
+Key design:
+  - Single BackgroundScheduler instance (singleton via scheduler_service)
+  - Jobs registered from the centralized registry (services/scheduled_jobs.py)
+  - Each job wrapped with distributed lock guard before execution
+  - Job execution start/end logged with timing
+  - get_job_status() exposes last run time, duration, lock holder info
 """
 
 import os
 import logging
+import time
+import functools
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -132,7 +144,14 @@ _reminders_table_checked = False
 
 
 class SchedulerService:
-    """Service for managing scheduled background jobs."""
+    """Unified scheduler service with distributed locking for multi-replica safety.
+
+    Wraps APScheduler's BackgroundScheduler and adds:
+      - Distributed lock guard (Redis) around each job execution
+      - Centralized job registration from services/scheduled_jobs.py
+      - Job execution logging with timing
+      - Status reporting with last run time, duration, lock info
+    """
 
     def __init__(self):
         self.scheduler = BackgroundScheduler(
@@ -147,6 +166,8 @@ class SchedulerService:
             }
         )
         self._jobs_registered = False
+        # Track job execution history: {job_name: {last_start, last_end, last_duration_ms, last_status, lock_acquired}}
+        self._execution_log: Dict[str, Dict[str, Any]] = {}
 
     @staticmethod
     def _job_error_listener(event):
@@ -172,10 +193,158 @@ class SchedulerService:
             getattr(event, 'scheduled_run_time', None),
         )
 
+    def _wrap_with_lock(self, job_name: str, func, lock_ttl: int = 300):
+        """Wrap a job function with distributed lock guard and execution logging.
+
+        Before running the job, acquires a Redis lock keyed by
+        ``scheduler:{job_name}``. If the lock cannot be acquired (another
+        replica is running the same job), the execution is skipped silently.
+
+        Falls back gracefully if Redis is unavailable — the PostgreSQL
+        advisory lock (acquired at init_scheduler time) is the primary
+        replica guard; this Redis lock is defense-in-depth for the case
+        where advisory lock fails or is not available.
+
+        Each execution is timed and logged at INFO level.
+        """
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            lock_key = f"scheduler:{job_name}"
+            lock_acquired = False
+            lock_svc = None
+
+            try:
+                from services.distributed_lock import get_lock_service
+                lock_svc = get_lock_service()
+            except Exception as e:
+                logger.debug("Distributed lock service unavailable for job %s: %s", job_name, e)
+
+            # Try to acquire lock via Redis
+            if lock_svc is not None:
+                redis = lock_svc._get_redis()
+                if redis is not None:
+                    import uuid
+                    lock_value = str(uuid.uuid4())
+                    try:
+                        acquired = redis.set(lock_key, lock_value, nx=True, ex=lock_ttl)
+                        if not acquired:
+                            logger.debug(
+                                "SCHEDULER_JOB_SKIPPED: job=%s reason=lock_held_by_other_replica",
+                                job_name,
+                            )
+                            self._execution_log[job_name] = {
+                                "last_start": datetime.now().isoformat(),
+                                "last_end": datetime.now().isoformat(),
+                                "last_duration_ms": 0,
+                                "last_status": "skipped_lock",
+                                "lock_acquired": False,
+                            }
+                            return
+                        lock_acquired = True
+                    except Exception as e:
+                        logger.warning("Redis lock acquire failed for job %s, proceeding anyway: %s", job_name, e)
+
+            # Execute the job with timing
+            start_time = time.monotonic()
+            start_dt = datetime.now()
+            logger.info("SCHEDULER_JOB_START: job=%s", job_name)
+
+            try:
+                result = func(*args, **kwargs)
+                duration_ms = round((time.monotonic() - start_time) * 1000, 1)
+                logger.info(
+                    "SCHEDULER_JOB_END: job=%s duration_ms=%.1f status=success",
+                    job_name, duration_ms,
+                )
+                self._execution_log[job_name] = {
+                    "last_start": start_dt.isoformat(),
+                    "last_end": datetime.now().isoformat(),
+                    "last_duration_ms": duration_ms,
+                    "last_status": "success",
+                    "lock_acquired": lock_acquired,
+                }
+                return result
+            except Exception as e:
+                duration_ms = round((time.monotonic() - start_time) * 1000, 1)
+                logger.error(
+                    "SCHEDULER_JOB_END: job=%s duration_ms=%.1f status=error error=%s",
+                    job_name, duration_ms, e,
+                )
+                self._execution_log[job_name] = {
+                    "last_start": start_dt.isoformat(),
+                    "last_end": datetime.now().isoformat(),
+                    "last_duration_ms": duration_ms,
+                    "last_status": "error",
+                    "last_error": str(e),
+                    "lock_acquired": lock_acquired,
+                }
+                raise
+            finally:
+                # Release lock
+                if lock_acquired and lock_svc is not None:
+                    try:
+                        redis = lock_svc._get_redis()
+                        if redis is not None:
+                            # Use the Lua script for safe release if available
+                            lock_svc._release(lock_key, lock_value)
+                    except Exception as e:
+                        logger.warning("Failed to release lock for job %s: %s", job_name, e)
+
+        return wrapper
+
+    def register_job(self, name: str, func, trigger: str, description: str = "",
+                     lock_ttl: int = 300, **trigger_kwargs):
+        """Register a single job with the scheduler.
+
+        Args:
+            name: Unique job ID
+            func: Callable to execute
+            trigger: "cron" or "interval"
+            description: Human-readable description
+            lock_ttl: Max seconds to hold the distributed lock
+            **trigger_kwargs: Passed to CronTrigger or IntervalTrigger
+        """
+        wrapped_func = self._wrap_with_lock(name, func, lock_ttl)
+
+        if trigger == "cron":
+            trigger_obj = CronTrigger(**trigger_kwargs)
+        elif trigger == "interval":
+            trigger_obj = IntervalTrigger(**trigger_kwargs)
+        else:
+            raise ValueError(f"Unknown trigger type: {trigger}")
+
+        self.scheduler.add_job(
+            func=wrapped_func,
+            trigger=trigger_obj,
+            id=name,
+            name=description or name,
+            replace_existing=True,
+        )
+
+    def register_from_registry(self):
+        """Register all jobs from the centralized scheduled_jobs registry.
+
+        Each job is wrapped with distributed lock guard before registration.
+        """
+        from services.scheduled_jobs import get_all_jobs
+
+        jobs = get_all_jobs()
+        for job_def in jobs:
+            self.register_job(
+                name=job_def.name,
+                func=job_def.func,
+                trigger=job_def.trigger,
+                description=job_def.description,
+                lock_ttl=job_def.lock_ttl,
+                **job_def.trigger_kwargs,
+            )
+
+        logger.info("Registered %d jobs from centralized registry", len(jobs))
+
     def start(self):
-        """Start the scheduler and register jobs."""
+        """Start the scheduler and register jobs from the centralized registry."""
         if not self._jobs_registered:
-            self._register_jobs()
+            self.register_from_registry()
             self._jobs_registered = True
 
         # OBS-007: Register error/missed listeners for structured alerting
@@ -184,226 +353,13 @@ class SchedulerService:
 
         if not self.scheduler.running:
             self.scheduler.start()
-            logger.info("Scheduler started")
+            logger.info("Scheduler started with %d jobs", len(self.scheduler.get_jobs()))
 
     def stop(self):
         """Stop the scheduler."""
         if self.scheduler.running:
             self.scheduler.shutdown(wait=False)
             logger.info("Scheduler stopped")
-
-    def _register_jobs(self):
-        """
-        Register all scheduled jobs with STAGGERED timing.
-
-        Jobs are spread across different minute offsets to prevent
-        database connection spikes from multiple jobs running simultaneously.
-
-        Schedule strategy:
-        - Hourly jobs: :07 and :37 (offset from :00)
-        - 30-min jobs: :12 and :42
-        - 15-min jobs: :05, :20, :35, :50 and :09, :24, :39, :54
-        - 10-min jobs: :03, :13, :23, :33, :43, :53
-        - Daily jobs: staggered minutes (not :00)
-        """
-
-        # Application reminder job - runs every hour at :07
-        self.scheduler.add_job(
-            func=self.send_application_reminders,
-            trigger=CronTrigger(minute=7),  # Every hour at :07
-            id="application_reminders",
-            name="Send Application Reminders",
-            replace_existing=True,
-        )
-
-        # Document expiration check - runs daily at 9:15 AM (staggered from :00)
-        self.scheduler.add_job(
-            func=self.check_document_expirations,
-            trigger=CronTrigger(hour=9, minute=15),
-            id="document_expiration_check",
-            name="Check Document Expirations",
-            replace_existing=True,
-        )
-
-        # Appointment reminders - runs every 15 minutes at :05, :20, :35, :50
-        self.scheduler.add_job(
-            func=self.send_appointment_reminders,
-            trigger=CronTrigger(minute="5,20,35,50"),
-            id="appointment_reminders",
-            name="Send Appointment Reminders",
-            replace_existing=True,
-        )
-
-        # Stale application cleanup - runs daily at 00:30 (staggered from midnight)
-        self.scheduler.add_job(
-            func=self.cleanup_stale_applications,
-            trigger=CronTrigger(hour=0, minute=30),
-            id="stale_cleanup",
-            name="Cleanup Stale Applications",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # WORKFLOW SLA SYSTEM JOBS (staggered to prevent connection spikes)
-        # =================================================================
-
-        # Workflow task generation - runs every 15 minutes at :09, :24, :39, :54
-        self.scheduler.add_job(
-            func=self.run_workflow_task_generation,
-            trigger=CronTrigger(minute="9,24,39,54"),
-            id="workflow_task_generation",
-            name="Generate Workflow Tasks",
-            replace_existing=True,
-        )
-
-        # Workflow status processing - runs every 10 minutes at :03, :13, :23, :33, :43, :53
-        self.scheduler.add_job(
-            func=self.run_workflow_status_processing,
-            trigger=CronTrigger(minute="3,13,23,33,43,53"),
-            id="workflow_status_processing",
-            name="Process Workflow Status Changes",
-            replace_existing=True,
-        )
-
-        # Workflow escalation check - runs every hour at :37
-        self.scheduler.add_job(
-            func=self.run_workflow_escalation,
-            trigger=CronTrigger(minute=37),  # Every hour at :37
-            id="workflow_escalation",
-            name="Escalate Overdue Workflow Tasks",
-            replace_existing=True,
-        )
-
-        # Workflow completion check - runs every 30 minutes at :12 and :42
-        self.scheduler.add_job(
-            func=self.run_workflow_completion_check,
-            trigger=CronTrigger(minute="12,42"),
-            id="workflow_completion_check",
-            name="Check Workflow Completions",
-            replace_existing=True,
-        )
-
-        # AI autonomous execution - runs every 15 minutes at :01, :16, :31, :46
-        self.scheduler.add_job(
-            func=self.run_ai_autonomous_execution,
-            trigger=CronTrigger(minute="1,16,31,46"),
-            id="ai_autonomous_execution",
-            name="Run AI Autonomous Task Execution",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # LISTING AGENT PORTAL JOBS
-        # =================================================================
-
-        # Listing agent weekly updates - runs every Monday at 9:25 AM (staggered)
-        self.scheduler.add_job(
-            func=self.run_listing_weekly_updates,
-            trigger=CronTrigger(day_of_week="mon", hour=9, minute=25),
-            id="listing_weekly_updates",
-            name="Send Listing Agent Weekly Updates",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # AI PROSPECT RE-ENGAGEMENT JOBS
-        # =================================================================
-
-        # Daily prospect scan - 9:45 AM (staggered from other daily jobs)
-        self.scheduler.add_job(
-            func=self.run_prospect_reengagement_scan,
-            trigger=CronTrigger(hour=9, minute=45),
-            id="prospect_reengagement_scan",
-            name="AI Prospect Re-Engagement Scan",
-            replace_existing=True,
-        )
-
-        # Daily conversation expiry - 10:15 AM (staggered)
-        self.scheduler.add_job(
-            func=self.run_prospect_reengagement_expiry,
-            trigger=CronTrigger(hour=10, minute=15),
-            id="prospect_reengagement_expiry",
-            name="Expire Stale AI Re-Engagement Conversations",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # NO-SHOW RECOVERY JOBS
-        # =================================================================
-
-        # No-show detection + recovery step execution - every 15 min at :08, :23, :38, :53
-        self.scheduler.add_job(
-            func=self.run_no_show_recovery,
-            trigger=CronTrigger(minute="8,23,38,53"),
-            id="no_show_recovery",
-            name="No-Show Detection & Recovery",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # SLOT HOLD MAINTENANCE JOBS
-        # =================================================================
-
-        # SlotHold maintenance - runs every 5 minutes at :02, :07, ..., :57
-        # Two-step process:
-        #   1. Expire stale active holds (active -> expired when past TTL)
-        #   2. Delete old expired/released records (>1 hour old)
-        # Frequency matches the 5-minute default hold TTL so phantom blocks
-        # are resolved within one cycle even if no booking query triggers
-        # inline cleanup.
-        self.scheduler.add_job(
-            func=self.cleanup_slot_holds,
-            trigger=IntervalTrigger(minutes=5),
-            id="slot_hold_cleanup",
-            name="Expire & Cleanup Slot Holds",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # WEBHOOK AUTO-RETRY JOBS
-        # =================================================================
-
-        # Auto-retry dead-lettered webhook deliveries - runs every 2 hours at :22
-        # Picks up failed deliveries that entered the dead-letter queue >1 hour ago
-        # and retries them once. Also disables subscriptions with >10 consecutive
-        # failures (circuit breaker).
-        self.scheduler.add_job(
-            func=self.retry_dead_letter_webhooks,
-            trigger=CronTrigger(minute=22, hour="1,3,5,7,9,11,13,15,17,19,21,23"),
-            id="webhook_dead_letter_retry",
-            name="Auto-Retry Dead-Letter Webhooks",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # OUTBOUND CALENDAR SYNC CATCHUP
-        # =================================================================
-
-        # Retry failed/pending outbound calendar syncs - runs every 10 minutes at :03
-        # Finds CalendarEventMap rows stuck in 'failed' or 'pending' and retries
-        # the push to Google Calendar / Outlook via the provider system.
-        self.scheduler.add_job(
-            func=self.run_outbound_calendar_sync,
-            trigger=CronTrigger(minute="3,13,23,33,43,53"),
-            id="outbound_calendar_sync",
-            name="Outbound Calendar Sync Catchup",
-            replace_existing=True,
-        )
-
-        # =================================================================
-        # AUDIT LOG RETENTION CLEANUP
-        # =================================================================
-
-        # Purge audit log entries older than retention period — daily at 3:17 AM
-        self.scheduler.add_job(
-            func=self.cleanup_audit_logs,
-            trigger=CronTrigger(hour=3, minute=17),
-            id="audit_log_retention",
-            name="Audit Log Retention Cleanup",
-            replace_existing=True,
-        )
-
-        logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
         """Send reminders for incomplete applications.
@@ -1768,16 +1724,84 @@ class SchedulerService:
             session.close()
 
     def get_job_status(self) -> List[Dict[str, Any]]:
-        """Get status of all scheduled jobs."""
+        """Get status of all scheduled jobs with execution history."""
         jobs = []
         for job in self.scheduler.get_jobs():
-            jobs.append({
+            job_info = {
                 "id": job.id,
                 "name": job.name,
                 "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
                 "trigger": str(job.trigger),
-            })
+            }
+            # Merge execution history if available
+            exec_info = self._execution_log.get(job.id)
+            if exec_info:
+                job_info["last_start"] = exec_info.get("last_start")
+                job_info["last_end"] = exec_info.get("last_end")
+                job_info["last_duration_ms"] = exec_info.get("last_duration_ms")
+                job_info["last_status"] = exec_info.get("last_status")
+                job_info["last_error"] = exec_info.get("last_error")
+                job_info["lock_acquired"] = exec_info.get("lock_acquired")
+            jobs.append(job_info)
         return jobs
+
+    def list_jobs(self) -> List[Dict[str, Any]]:
+        """List all registered jobs grouped by domain.
+
+        Returns registry entries enriched with runtime status from APScheduler.
+        """
+        try:
+            from services.scheduled_jobs import get_all_jobs
+            registry_jobs = get_all_jobs()
+        except Exception:
+            registry_jobs = []
+
+        # Build lookup of APScheduler runtime info
+        apscheduler_jobs = {job.id: job for job in self.scheduler.get_jobs()}
+
+        result = []
+        for job_def in registry_jobs:
+            entry = {
+                "name": job_def.name,
+                "domain": job_def.domain,
+                "description": job_def.description,
+                "trigger": job_def.trigger,
+                "trigger_kwargs": job_def.trigger_kwargs,
+                "lock_ttl": job_def.lock_ttl,
+            }
+            # Runtime info from APScheduler
+            ap_job = apscheduler_jobs.get(job_def.name)
+            if ap_job:
+                entry["next_run"] = ap_job.next_run_time.isoformat() if ap_job.next_run_time else None
+                entry["registered"] = True
+            else:
+                entry["next_run"] = None
+                entry["registered"] = False
+
+            # Execution history
+            exec_info = self._execution_log.get(job_def.name)
+            if exec_info:
+                entry["last_run"] = exec_info
+            result.append(entry)
+
+        # Include any APScheduler jobs NOT in the registry (externally registered)
+        registry_names = {j.name for j in registry_jobs}
+        for job_id, ap_job in apscheduler_jobs.items():
+            if job_id not in registry_names:
+                entry = {
+                    "name": job_id,
+                    "domain": "external",
+                    "description": ap_job.name,
+                    "trigger": str(ap_job.trigger),
+                    "next_run": ap_job.next_run_time.isoformat() if ap_job.next_run_time else None,
+                    "registered": True,
+                }
+                exec_info = self._execution_log.get(job_id)
+                if exec_info:
+                    entry["last_run"] = exec_info
+                result.append(entry)
+
+        return result
 
 
 # Create singleton instance

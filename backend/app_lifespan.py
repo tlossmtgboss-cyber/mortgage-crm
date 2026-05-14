@@ -79,23 +79,26 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
         except Exception as e:
             logger.warning(f"Agent event subscribers skipped: {e}")
 
-        # Register agent message processor background job
-        try:
-            from services.agent_message_processor import register_message_processor_job
-            from services.scheduler_service import scheduler_service
-            register_message_processor_job(scheduler_service.scheduler)
-            logger.info("Agent message processor job registered")
-        except Exception as e:
-            logger.warning(f"Agent message processor skipped: {e}")
+        # Agent message processor is now in the centralized job registry
+        # (services/scheduled_jobs.py) and registered via register_from_registry().
+        # No separate registration needed here.
 
-        # Register autonomous AI agents
+        # Register autonomous AI agents via unified scheduler for lock wrapping
         try:
             from agents.autonomous.loop import register_all_autonomous_agents
             from services.scheduler_service import scheduler_service
-            agent_count = register_all_autonomous_agents(scheduler_service.scheduler)
+            agent_count = register_all_autonomous_agents(scheduler_service)
             logger.info(f"{agent_count} autonomous agents registered with scheduler")
         except Exception as e:
             logger.warning(f"Autonomous agents registration skipped: {e}")
+
+        # Register SOC 2 compliance jobs via unified scheduler
+        try:
+            from services.scheduler_service import scheduler_service as _svc
+            _register_soc2_jobs_unified(_svc)
+            logger.info("SOC 2 compliance jobs registered via unified scheduler")
+        except Exception as e:
+            logger.warning(f"SOC 2 unified scheduler registration skipped: {e}")
 
         # Start autonomous AI task executor
         try:
@@ -114,11 +117,17 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
         except Exception as e:
             logger.warning(f"Vapi phone config check skipped: {e}")
 
-        # Register SOC 2 compliance scheduled jobs
+        # SOC 2 compliance scheduled jobs — registered via unified scheduler above.
+        # Legacy fallback: if unified registration failed, try direct registration.
         try:
-            from soc2_compliance.scheduler import register_soc2_jobs
-            register_soc2_jobs(scheduler)
-            logger.info("SOC 2 compliance jobs registered")
+            from services.scheduler_service import scheduler_service as _svc_check
+            soc2_registered = any(
+                j.id.startswith("soc2_") for j in _svc_check.scheduler.get_jobs()
+            )
+            if not soc2_registered:
+                from soc2_compliance.scheduler import register_soc2_jobs
+                register_soc2_jobs(scheduler)
+                logger.info("SOC 2 compliance jobs registered (legacy fallback)")
         except Exception as e:
             logger.warning(f"SOC 2 scheduler registration skipped: {e}")
 
@@ -174,13 +183,14 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
         except Exception as e:
             logger.warning(f"Certificate pin verification skipped: {e}")
 
-        # Microsoft 365 scheduled tasks
+        # Microsoft 365 scheduled tasks — register via unified scheduler
         try:
             from integrations.microsoft365.tasks import (
                 renew_expiring_subscriptions as _ms365_renew,
                 delta_sync_all_active_accounts as _ms365_delta,
                 garbage_collect_subscriptions as _ms365_gc,
             )
+            from services.scheduler_service import scheduler_service as _sched_svc
 
             async def _ms365_renew_job():
                 from db import SessionLocal
@@ -218,16 +228,20 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
                 finally:
                     db.close()
 
-            scheduler.add_job(_ms365_renew_job, "interval", minutes=15, id="ms365_renew_subs", replace_existing=True)
-            scheduler.add_job(_ms365_delta_job, "interval", hours=6, id="ms365_delta_sync", replace_existing=True)
-            scheduler.add_job(_ms365_gc_job, "cron", hour=3, minute=0, id="ms365_gc_subs", replace_existing=True)
-            logger.info("Microsoft 365 scheduled tasks registered (renew/15m, delta/6h, GC/daily)")
+            _sched_svc.register_job("ms365_renew_subs", _ms365_renew_job, "interval",
+                                    description="MS365 subscription renewal", lock_ttl=120, minutes=15)
+            _sched_svc.register_job("ms365_delta_sync", _ms365_delta_job, "interval",
+                                    description="MS365 delta sync", lock_ttl=600, hours=6)
+            _sched_svc.register_job("ms365_gc_subs", _ms365_gc_job, "cron",
+                                    description="MS365 subscription garbage collection", lock_ttl=120, hour=3, minute=0)
+            logger.info("Microsoft 365 scheduled tasks registered via unified scheduler (renew/15m, delta/6h, GC/daily)")
         except Exception as e:
             logger.warning(f"Microsoft 365 scheduled tasks skipped: {e}")
 
-        # Outlook inbox/sent sync
+        # Outlook inbox/sent sync — register via unified scheduler
         try:
             from services.email_inbox_sync import sync_all_users as _email_sync_all
+            from services.scheduler_service import scheduler_service as _sched_svc2
 
             async def _email_inbox_sync_job():
                 try:
@@ -242,11 +256,9 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
                 except Exception as _e:
                     logger.error(f"Email inbox sync failed: {_e}")
 
-            scheduler.add_job(
-                _email_inbox_sync_job, "interval", minutes=5,
-                id="email_inbox_sync", replace_existing=True,
-            )
-            logger.info("Email inbox sync scheduled (every 5m)")
+            _sched_svc2.register_job("email_inbox_sync", _email_inbox_sync_job, "interval",
+                                     description="Outlook inbox/sent email sync", lock_ttl=120, minutes=5)
+            logger.info("Email inbox sync scheduled via unified scheduler (every 5m)")
         except Exception as e:
             logger.warning(f"Email inbox sync skipped: {e}")
 
@@ -263,6 +275,14 @@ def register_shutdown_event(app: FastAPI):
     @app.on_event("shutdown")  # Deprecated in FastAPI >=0.103; migrate to lifespan when feasible
     async def shutdown_event():
         """Shutdown handler — clean up resources."""
+        # Shut down the unified scheduler service
+        try:
+            from services.scheduler_service import scheduler_service
+            scheduler_service.stop()
+            logger.info("Unified scheduler service shut down")
+        except Exception as e:
+            logger.warning(f"Scheduler shutdown error: {e}")
+
         if hasattr(app.state, "langgraph_executor"):
             app.state.langgraph_executor.shutdown(wait=False)
             logger.info("LangGraph thread pool executor shut down")
@@ -314,6 +334,35 @@ def register_seed_demo_endpoint(app: FastAPI, SECRET_KEY: str):
         except Exception as e:
             logger.exception("Demo seed failed")
             return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+
+def _register_soc2_jobs_unified(sched_svc):
+    """Register SOC 2 compliance jobs via the unified SchedulerService.
+
+    This replaces the direct APScheduler registration in
+    soc2_compliance/scheduler.py with distributed-lock-wrapped versions.
+    """
+    from soc2_compliance.scheduler import (
+        run_daily_compliance_scan,
+        run_retention_enforcement,
+        run_data_classification_seed,
+    )
+
+    sched_svc.register_job(
+        "soc2_daily_compliance_scan", run_daily_compliance_scan, "cron",
+        description="SOC 2 Daily Compliance Scan",
+        lock_ttl=300, hour=2, minute=15,
+    )
+    sched_svc.register_job(
+        "soc2_daily_retention", run_retention_enforcement, "cron",
+        description="SOC 2 Daily Retention Enforcement",
+        lock_ttl=300, hour=3, minute=0,
+    )
+    sched_svc.register_job(
+        "soc2_weekly_classification", run_data_classification_seed, "cron",
+        description="SOC 2 Weekly Data Classification Update",
+        lock_ttl=300, day_of_week="sun", hour=4, minute=0,
+    )
 
 
 def _validate_rls_policies(eng):
