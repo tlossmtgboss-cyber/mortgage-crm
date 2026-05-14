@@ -294,8 +294,9 @@ jobs:
       - name: Run ESLint
         working-directory: ./frontend
         run: npm run lint --if-present
-  # NOTE: Security scanning is handled by the dedicated security-scan.yml workflow
-  # which runs gitleaks, pip-audit, npm audit, semgrep, codeql, and trivy.
+  # NOTE: Comprehensive security scanning (gitleaks, semgrep, codeql, trivy) is
+  # handled by the dedicated security-scan.yml workflow. The dependency-audit and
+  # secret-scan jobs below provide fast, blocking checks on every PR.
   type-check:
     name: Type Check (mypy)
     runs-on: ubuntu-latest
@@ -318,17 +319,73 @@ jobs:
         run: |
           mypy --ignore-missing-imports --no-strict-optional --warn-return-any auth/ db.py middleware/rate_limiting.py middleware/csrf_protection.py
   # ============================================================================
-  # STAGE 3: CODE QUALITY (Non-blocking)
+  # STAGE 3: CODE QUALITY (Blocking)
   # ============================================================================
   file-size-check:
     name: File Size Limits
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Check file sizes
         run: bash scripts/check-file-sizes.sh
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Audit Python dependencies
+        working-directory: ./backend
+        run: pip-audit --requirement requirements.txt --vulnerability-service osv --strict
+      - name: Install Node dependencies
+        working-directory: ./frontend
+        run: npm ci --prefer-offline
+      - name: Audit Node dependencies
+        working-directory: ./frontend
+        run: npm audit --audit-level=high
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan git history for hardcoded secrets
+        run: |
+          echo "Scanning for hardcoded secrets in git history..."
+          FOUND=$(git log --all -p | grep -cE '(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|-----BEGIN (RSA |EC )?PRIVATE KEY)' || true)
+          if [ "$FOUND" -gt 0 ]; then
+            echo "::error::Found $FOUND potential secret(s) in git history!"
+            echo "Matches:"
+            git log --all -p | grep -nE '(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|-----BEGIN (RSA |EC )?PRIVATE KEY)' | head -20
+            exit 1
+          fi
+          echo "No hardcoded secrets found in git history."
+      - name: Check for committed .env files
+        run: |
+          echo "Checking for committed .env files..."
+          ENV_FILES=$(git ls-files | grep -E '(^|/)\.env($|\.[^e])' | grep -v '\.example' || true)
+          if [ -n "$ENV_FILES" ]; then
+            echo "::error::Found committed .env files that should not be in the repository:"
+            echo "$ENV_FILES"
+            exit 1
+          fi
+          echo "No .env files found in repository."
   build-check:
     name: Build Check
     runs-on: ubuntu-latest

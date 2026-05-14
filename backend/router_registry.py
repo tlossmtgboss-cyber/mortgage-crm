@@ -927,6 +927,16 @@ def _register_core_crm_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Compliance routes failed to load: {e}")
 
+    # Compliance Calculation Engine (deterministic, no LLM)
+    try:
+        from routes.compliance_engine_routes import register_compliance_engine_routes
+        register_compliance_engine_routes(
+            app=app, get_db=get_db, get_current_user=get_current_user,
+        )
+        logger.info("Compliance calculation engine routes loaded")
+    except Exception as e:
+        logger.warning(f"Compliance engine routes failed to load: {e}")
+
     # State Licensing Compliance
     try:
         from routes.state_licensing_routes import register_state_licensing_routes

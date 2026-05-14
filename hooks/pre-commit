@@ -53,3 +53,31 @@ if [ -n "$oversized" ]; then
   echo "Decompose large files before committing."
   exit 1
 fi
+
+# --- Scan staged files for hardcoded secrets (warning only) ---
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR || true)
+if [ -n "$staged_files" ]; then
+  secret_matches=""
+  for file in $staged_files; do
+    if [ -f "$file" ]; then
+      # Skip binary files, lock files, and .env.example
+      case "$file" in
+        *.lock|*.png|*.jpg|*.jpeg|*.gif|*.ico|*.woff*|*.ttf|*.eot|*.svg|*.env.example) continue ;;
+      esac
+      # Check staged content (not working tree) for secret patterns
+      matches=$(git show ":$file" 2>/dev/null | grep -nE '(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|-----BEGIN (RSA |EC )?PRIVATE KEY|password\s*=\s*["\x27][^"\x27]{8,}["\x27])' || true)
+      if [ -n "$matches" ]; then
+        secret_matches="${secret_matches}  ${file}:\n${matches}\n"
+      fi
+    fi
+  done
+  if [ -n "$secret_matches" ]; then
+    echo ""
+    echo "WARNING: Possible secrets detected in staged files:"
+    printf "$secret_matches"
+    echo ""
+    echo "If these are false positives, proceed. Otherwise, remove secrets before committing."
+    echo "(This is a warning only — commit will proceed.)"
+    echo ""
+  fi
+fi

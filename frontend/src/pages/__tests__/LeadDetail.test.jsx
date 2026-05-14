@@ -10,26 +10,26 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 vi.mock('../LeadDetail.css', () => ({}));
 
-// Mock API services
-const mockLeadsAPI = {
-  getAll: vi.fn(() => Promise.resolve([])),
-  getById: vi.fn(() => Promise.resolve(null)),
-  create: vi.fn(() => Promise.resolve({ id: 999 })),
-  update: vi.fn(() => Promise.resolve({})),
-  delete: vi.fn(() => Promise.resolve()),
-  search: vi.fn(() => Promise.resolve({ leads: [] })),
-};
-
-const mockActivitiesAPI = {
-  getAll: vi.fn(() => Promise.resolve([])),
-  create: vi.fn(() => Promise.resolve({})),
-};
-
-const mockLoansAPI = {
-  getAll: vi.fn(() => Promise.resolve([])),
-  create: vi.fn(() => Promise.resolve({ id: 100 })),
-  update: vi.fn(() => Promise.resolve({})),
-};
+// Use vi.hoisted so these variables are available inside vi.mock factories
+const { mockLeadsAPI, mockActivitiesAPI, mockLoansAPI } = vi.hoisted(() => ({
+  mockLeadsAPI: {
+    getAll: vi.fn(() => Promise.resolve([])),
+    getById: vi.fn(() => Promise.resolve(null)),
+    create: vi.fn(() => Promise.resolve({ id: 999 })),
+    update: vi.fn(() => Promise.resolve({})),
+    delete: vi.fn(() => Promise.resolve()),
+    search: vi.fn(() => Promise.resolve({ leads: [] })),
+  },
+  mockActivitiesAPI: {
+    getAll: vi.fn(() => Promise.resolve([])),
+    create: vi.fn(() => Promise.resolve({})),
+  },
+  mockLoansAPI: {
+    getAll: vi.fn(() => Promise.resolve([])),
+    create: vi.fn(() => Promise.resolve({ id: 100 })),
+    update: vi.fn(() => Promise.resolve({})),
+  },
+}));
 
 vi.mock('../../services/api', () => ({
   leadsAPI: mockLeadsAPI,
@@ -107,6 +107,8 @@ vi.mock('../../components/VideoCallScheduleModal', () => ({ default: () => null 
 vi.mock('../../components/EmailComposerModal', () => ({ default: () => null }));
 vi.mock('../../components/CalendarSidebar', () => ({ default: () => null }));
 vi.mock('../../components/smart-docs/NeedsListView', () => ({ default: () => <div>Smart Docs</div> }));
+vi.mock('../../components/ai/AIActivityTab', () => ({ default: () => <div>AI Activity Tab</div> }));
+vi.mock('../../components/sms/SMSAccordionPanel', () => ({ default: () => null }));
 vi.mock('../../components/video/SendVideoModal', () => ({ default: () => null }));
 vi.mock('../../components/SalesforceConnectionBadge', () => ({ default: () => null }));
 vi.mock('../../components/common/CurrencyInput', () => ({
@@ -118,6 +120,19 @@ vi.mock('../../components/common/CurrencyInput', () => ({
       placeholder={placeholder}
     />
   ),
+}));
+
+// Mock useQueries hooks used by LeadDetail
+// useLead delegates to mockLeadsAPI.getById so existing test patterns work
+const { mockUseLead } = vi.hoisted(() => {
+  const React = require('react');
+  return {
+    mockUseLead: vi.fn(() => ({ data: null, isLoading: true, error: null, refetch: vi.fn() })),
+  };
+});
+
+vi.mock('../../hooks/useQueries', () => ({
+  useLead: (...args) => mockUseLead(...args),
 }));
 
 // Mock global fetch for direct fetch() calls in the component
@@ -185,8 +200,15 @@ function renderLeadDetail(leadId = '42') {
   );
 }
 
-function setupDefaultMocks() {
-  mockLeadsAPI.getById.mockResolvedValue({ ...sampleLead });
+function setupDefaultMocks(leadOverride) {
+  const leadData = leadOverride || { ...sampleLead };
+  mockUseLead.mockReturnValue({
+    data: leadData,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  });
+  mockLeadsAPI.getById.mockResolvedValue(leadData);
   mockLeadsAPI.getAll.mockResolvedValue([sampleLead]);
   mockActivitiesAPI.getAll.mockResolvedValue([...sampleActivities]);
   mockFetch.mockImplementation(() =>
@@ -206,6 +228,8 @@ describe('LeadDetail', () => {
     vi.clearAllMocks();
     localStorage.clear();
     localStorage.setItem('token', 'test-token');
+    // Default: loading state (tests that need data call setupDefaultMocks)
+    mockUseLead.mockReturnValue({ data: null, isLoading: true, error: null, refetch: vi.fn() });
   });
 
   // =========================================================================
@@ -214,8 +238,8 @@ describe('LeadDetail', () => {
 
   describe('Loading State', () => {
     it('shows loading message initially', () => {
-      // Make the API call never resolve so we stay in loading
-      mockLeadsAPI.getById.mockReturnValue(new Promise(() => {}));
+      // useLead returns isLoading=true so component stays in loading state
+      mockUseLead.mockReturnValue({ data: null, isLoading: true, error: null, refetch: vi.fn() });
       mockLeadsAPI.getAll.mockReturnValue(new Promise(() => {}));
       mockActivitiesAPI.getAll.mockReturnValue(new Promise(() => {}));
       renderLeadDetail();
@@ -230,9 +254,9 @@ describe('LeadDetail', () => {
 
   describe('Error States', () => {
     it('shows error message when lead is not found (404)', async () => {
-      mockLeadsAPI.getById.mockRejectedValue({
-        response: { status: 404 },
-        message: 'Not Found',
+      mockUseLead.mockReturnValue({
+        data: null, isLoading: false, refetch: vi.fn(),
+        error: { message: 'Request failed with status code 404' },
       });
       mockLeadsAPI.getAll.mockResolvedValue([]);
       mockActivitiesAPI.getAll.mockResolvedValue([]);
@@ -240,15 +264,14 @@ describe('LeadDetail', () => {
       renderLeadDetail();
 
       await waitFor(() => {
-        expect(screen.getByText('Error Loading Lead')).toBeInTheDocument();
+        expect(screen.getByText(/Lead not found/)).toBeInTheDocument();
       });
-      expect(screen.getByText(/Lead not found/)).toBeInTheDocument();
     });
 
     it('shows back to leads button on error page', async () => {
-      mockLeadsAPI.getById.mockRejectedValue({
-        response: { status: 404 },
-        message: 'Not Found',
+      mockUseLead.mockReturnValue({
+        data: null, isLoading: false, refetch: vi.fn(),
+        error: { message: 'Request failed with status code 404' },
       });
       mockLeadsAPI.getAll.mockResolvedValue([]);
       mockActivitiesAPI.getAll.mockResolvedValue([]);
@@ -261,9 +284,9 @@ describe('LeadDetail', () => {
     });
 
     it('shows API error message when load fails with non-404', async () => {
-      mockLeadsAPI.getById.mockRejectedValue({
-        response: { status: 500, data: { detail: 'Internal server error' } },
-        message: 'Server Error',
+      mockUseLead.mockReturnValue({
+        data: null, isLoading: false, refetch: vi.fn(),
+        error: { message: 'Internal server error' },
       });
       mockLeadsAPI.getAll.mockResolvedValue([]);
       mockActivitiesAPI.getAll.mockResolvedValue([]);
@@ -343,7 +366,8 @@ describe('LeadDetail', () => {
       renderLeadDetail();
 
       await waitFor(() => {
-        expect(screen.getByText('Loan Details')).toBeInTheDocument();
+        // Loan Details appears as both tab button and content h2
+        expect(screen.getAllByText('Loan Details').length).toBeGreaterThan(0);
       });
 
       expect(screen.getByText('Personal')).toBeInTheDocument();
@@ -357,19 +381,20 @@ describe('LeadDetail', () => {
       expect(screen.getByText('Conditions')).toBeInTheDocument();
       expect(screen.getByText('SLA Dates')).toBeInTheDocument();
       expect(screen.getByText('Team Members')).toBeInTheDocument();
-      expect(screen.getByText('Call Intelligence')).toBeInTheDocument();
+      expect(screen.getByText('AI Activity')).toBeInTheDocument();
     });
 
     it('defaults to Loan Details tab', async () => {
       renderLeadDetail();
 
       await waitFor(() => {
-        expect(screen.getByText('Loan Details')).toBeInTheDocument();
+        expect(screen.getAllByText('Loan Details').length).toBeGreaterThan(0);
       });
 
       // The Loan Details tab button should have the active class
-      const loanDetailsTab = screen.getByText('Loan Details');
-      expect(loanDetailsTab.closest('button')).toHaveClass('active');
+      const tabButtons = screen.getAllByText('Loan Details');
+      const tabButton = tabButtons.find(el => el.closest('button.tab-btn'));
+      expect(tabButton.closest('button')).toHaveClass('active');
     });
 
     it('switches to Personal tab when clicked', async () => {
@@ -389,13 +414,15 @@ describe('LeadDetail', () => {
       renderLeadDetail();
 
       await waitFor(() => {
-        expect(screen.getByText('Tasks')).toBeInTheDocument();
+        expect(screen.getAllByText('Loan Details').length).toBeGreaterThan(0);
       });
 
-      await userEvent.click(screen.getByText('Tasks'));
+      // Find the Tasks tab button specifically (not the heading inside the tab content)
+      const tasksButtons = screen.getAllByText('Tasks');
+      const tasksTabBtn = tasksButtons.find(el => el.closest('button.tab-btn'));
+      await userEvent.click(tasksTabBtn);
 
-      const tasksTab = screen.getByText('Tasks');
-      expect(tasksTab.closest('button')).toHaveClass('active');
+      expect(tasksTabBtn.closest('button')).toHaveClass('active');
     });
   });
 
@@ -605,16 +632,15 @@ describe('LeadDetail', () => {
 
   describe('Edge Cases', () => {
     it('handles lead with no name gracefully', async () => {
-      mockLeadsAPI.getById.mockResolvedValue({
+      const noNameLead = {
         id: 42,
         first_name: '',
         last_name: '',
         email: 'noname@example.com',
         stage: 'New',
         created_at: new Date().toISOString(),
-      });
-      mockLeadsAPI.getAll.mockResolvedValue([]);
-      mockActivitiesAPI.getAll.mockResolvedValue([]);
+      };
+      setupDefaultMocks(noNameLead);
 
       renderLeadDetail();
 
@@ -625,16 +651,15 @@ describe('LeadDetail', () => {
     });
 
     it('handles lead with only first_name', async () => {
-      mockLeadsAPI.getById.mockResolvedValue({
+      const firstNameOnlyLead = {
         id: 42,
         first_name: 'Jane',
         last_name: '',
         email: 'jane@example.com',
         stage: 'Prospect',
         created_at: new Date().toISOString(),
-      });
-      mockLeadsAPI.getAll.mockResolvedValue([]);
-      mockActivitiesAPI.getAll.mockResolvedValue([]);
+      };
+      setupDefaultMocks(firstNameOnlyLead);
 
       renderLeadDetail();
 
@@ -644,14 +669,13 @@ describe('LeadDetail', () => {
     });
 
     it('handles lead with co-borrower data', async () => {
-      mockLeadsAPI.getById.mockResolvedValue({
+      const coBorrowerLead = {
         ...sampleLead,
         co_applicant_name: 'Bob Johnson',
         co_applicant_email: 'bob@example.com',
         co_applicant_phone: '(555) 999-0000',
-      });
-      mockLeadsAPI.getAll.mockResolvedValue([]);
-      mockActivitiesAPI.getAll.mockResolvedValue([]);
+      };
+      setupDefaultMocks(coBorrowerLead);
 
       renderLeadDetail();
 
@@ -663,15 +687,14 @@ describe('LeadDetail', () => {
 
     it('initializes formData from lead response (name parsing)', async () => {
       // Lead with name but no first_name/last_name
-      mockLeadsAPI.getById.mockResolvedValue({
+      const nameOnlyLead = {
         id: 42,
         name: 'Jane Smith',
         email: 'jane@example.com',
         stage: 'New',
         created_at: new Date().toISOString(),
-      });
-      mockLeadsAPI.getAll.mockResolvedValue([]);
-      mockActivitiesAPI.getAll.mockResolvedValue([]);
+      };
+      setupDefaultMocks(nameOnlyLead);
 
       renderLeadDetail();
 

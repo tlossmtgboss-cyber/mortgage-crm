@@ -498,7 +498,7 @@ async def sync_emails(
 
         # Process emails through extraction pipeline for reconciliation
         from database.models import IncomingDataEvent, ExtractedData
-        from main import process_microsoft_email_to_dre
+        from services.dre_helpers import process_microsoft_email_to_dre
         from sqlalchemy import text
 
         processed_count = 0
@@ -661,7 +661,7 @@ async def cron_sync_all_gmail(
 
                 # Process emails through extraction pipeline
                 from database.models import IncomingDataEvent, ExtractedData
-                from main import process_microsoft_email_to_dre
+                from services.dre_helpers import process_microsoft_email_to_dre
 
                 # Also queue ALL emails to Email Intelligence system
                 queued_to_intelligence = 0

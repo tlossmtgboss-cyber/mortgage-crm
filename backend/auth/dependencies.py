@@ -274,6 +274,22 @@ async def _extract_org_id_from_body(request: Request) -> Optional[int]:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Password hashing utilities (re-exported from main for canonical access)
+# ---------------------------------------------------------------------------
+
+def get_password_hash(password: str) -> str:
+    """Hash a password using bcrypt. Delegates to main.get_password_hash."""
+    from main import get_password_hash as _gph
+    return _gph(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """Verify a plaintext password against a bcrypt hash."""
+    from main import verify_password as _vp
+    return _vp(plain, hashed)
+
+
 __all__ = [
     'require_auth',
     'get_current_user',
@@ -283,4 +299,6 @@ __all__ = [
     'current_user_dep',
     'current_user_flexible_dep',
     'oauth2_scheme',
+    'get_password_hash',
+    'verify_password',
 ]

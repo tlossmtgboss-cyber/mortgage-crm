@@ -162,7 +162,7 @@ async def create_demo_user(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
-        from main import get_password_hash
+        from auth.dependencies import get_password_hash
         from sqlalchemy import text as _text
 
         demo_email = "demo@perenniaai.com"
