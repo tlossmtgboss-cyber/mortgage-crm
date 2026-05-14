@@ -29,14 +29,33 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import date
+import os
+import threading
+import time
+from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Redis helper (lazy import, graceful fallback)
+# =============================================================================
+
+def _get_redis_client():
+    """Get a Redis client for circuit breaker state caching.
+
+    Returns None if Redis is unavailable — callers must handle gracefully.
+    """
+    try:
+        from services.redis_service import redis_service
+        return redis_service.get_client()
+    except Exception:
+        return None
 
 
 # =============================================================================
@@ -73,6 +92,17 @@ ALERT_THRESHOLDS = {
     "critical": Decimal("0.90"),   # 90%
     "exceeded": Decimal("1.00"),   # 100%
 }
+
+
+# Agent types that bypass the circuit breaker (safety-critical operations)
+CRITICAL_AGENT_TYPES = frozenset({
+    "compliance_checker",
+    "quality_control",
+})
+
+# Circuit breaker Redis key prefix and TTL
+_CB_KEY_PREFIX = "ai:circuit:"
+_CB_TTL_SECONDS = 86400  # 24 hours
 
 
 def _get_pricing(model: str) -> Dict[str, Decimal]:
@@ -614,3 +644,322 @@ class AICostTracker:
         except Exception as e:
             logger.error("Failed to get daily trend: %s", e)
             return []
+
+    # ------------------------------------------------------------------
+    # Budget status (all orgs)
+    # ------------------------------------------------------------------
+
+    def get_all_budget_status(self) -> List[Dict[str, Any]]:
+        """Return spend vs budget for all orgs with recent AI usage.
+
+        Joins against organizations table to pull per-org budgets.
+        """
+        try:
+            rows = self.db.execute(text("""
+                SELECT
+                    acr.organization_id,
+                    COALESCE(o.name, 'Org ' || acr.organization_id) AS org_name,
+                    COALESCE(SUM(acr.cost_usd), 0) AS spent_today,
+                    COALESCE(o.ai_daily_budget_usd, :default_budget) AS daily_budget
+                FROM ai_cost_records acr
+                LEFT JOIN organizations o ON o.id = acr.organization_id
+                WHERE acr.created_at >= CURRENT_DATE
+                GROUP BY acr.organization_id, o.name, o.ai_daily_budget_usd
+                ORDER BY spent_today DESC
+            """), {"default_budget": str(DEFAULT_DAILY_BUDGET)}).fetchall()
+
+            results = []
+            for row in rows:
+                org_id = int(row[0])
+                org_name = str(row[1])
+                spent = float(row[2])
+                budget = float(row[3])
+                pct = (spent / budget * 100) if budget > 0 else 0.0
+
+                # Determine circuit breaker state from cache
+                cb_state = _get_circuit_breaker_state(org_id)
+
+                results.append({
+                    "organization_id": org_id,
+                    "org_name": org_name,
+                    "spent_today": round(spent, 2),
+                    "daily_budget": round(budget, 2),
+                    "usage_pct": round(pct, 1),
+                    "circuit_breaker_state": cb_state,
+                })
+
+            return results
+        except Exception as e:
+            logger.error("Failed to get all budget status: %s", e)
+            return []
+
+    # ------------------------------------------------------------------
+    # Budget alerts log
+    # ------------------------------------------------------------------
+
+    def get_recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Return recent orgs that have crossed budget thresholds today.
+
+        Scans today's cost records and returns any org whose spend has
+        crossed warning/critical/exceeded thresholds.
+        """
+        try:
+            rows = self.db.execute(text("""
+                SELECT
+                    acr.organization_id,
+                    COALESCE(o.name, 'Org ' || acr.organization_id) AS org_name,
+                    COALESCE(SUM(acr.cost_usd), 0) AS spent_today,
+                    COALESCE(o.ai_daily_budget_usd, :default_budget) AS daily_budget
+                FROM ai_cost_records acr
+                LEFT JOIN organizations o ON o.id = acr.organization_id
+                WHERE acr.created_at >= CURRENT_DATE
+                GROUP BY acr.organization_id, o.name, o.ai_daily_budget_usd
+                HAVING COALESCE(SUM(acr.cost_usd), 0) >=
+                    COALESCE(o.ai_daily_budget_usd, :default_budget) * :warning_pct
+                ORDER BY COALESCE(SUM(acr.cost_usd), 0) DESC
+                LIMIT :limit
+            """), {
+                "default_budget": str(DEFAULT_DAILY_BUDGET),
+                "warning_pct": str(ALERT_THRESHOLDS["warning"]),
+                "limit": limit,
+            }).fetchall()
+
+            alerts = []
+            for row in rows:
+                org_id = int(row[0])
+                org_name = str(row[1])
+                spent = Decimal(str(row[2]))
+                budget = Decimal(str(row[3]))
+                pct = (spent / budget) if budget > 0 else Decimal("0")
+
+                if pct >= ALERT_THRESHOLDS["exceeded"]:
+                    level = "exceeded"
+                elif pct >= ALERT_THRESHOLDS["critical"]:
+                    level = "critical"
+                else:
+                    level = "warning"
+
+                alerts.append({
+                    "organization_id": org_id,
+                    "org_name": org_name,
+                    "level": level,
+                    "spent_today": float(spent),
+                    "daily_budget": float(budget),
+                    "usage_pct": round(float(pct * 100), 1),
+                    "message": (
+                        f"{level.upper()}: {org_name} has spent "
+                        f"${spent:.2f} of ${budget:.2f} daily budget "
+                        f"({pct * 100:.0f}%)"
+                    ),
+                })
+
+            return alerts
+        except Exception as e:
+            logger.error("Failed to get recent alerts: %s", e)
+            return []
+
+
+# =============================================================================
+# Circuit Breaker — Per-org AI cost circuit breaker
+# =============================================================================
+
+# In-memory fallback when Redis is unavailable
+_cb_memory_lock = threading.Lock()
+_cb_memory_state: Dict[int, Dict[str, Any]] = {}
+
+
+def _get_circuit_breaker_state(org_id: int) -> str:
+    """Read circuit breaker state from Redis (fast path) or memory fallback.
+
+    Returns one of: "closed", "warning", "critical", "open"
+    """
+    redis = _get_redis_client()
+    key = f"{_CB_KEY_PREFIX}{org_id}"
+
+    if redis is not None:
+        try:
+            state = redis.get(key)
+            if state is not None:
+                return state.decode("utf-8") if isinstance(state, bytes) else str(state)
+        except Exception as e:
+            logger.debug("Redis read failed for circuit breaker state: %s", e)
+
+    # In-memory fallback
+    with _cb_memory_lock:
+        entry = _cb_memory_state.get(org_id)
+        if entry and entry.get("expires_at", 0) > time.time():
+            return entry["state"]
+
+    return "closed"
+
+
+def _set_circuit_breaker_state(org_id: int, state: str) -> None:
+    """Write circuit breaker state to Redis + in-memory fallback."""
+    redis = _get_redis_client()
+    key = f"{_CB_KEY_PREFIX}{org_id}"
+
+    if redis is not None:
+        try:
+            redis.setex(key, _CB_TTL_SECONDS, state)
+        except Exception as e:
+            logger.debug("Redis write failed for circuit breaker state: %s", e)
+
+    # Always update in-memory as well (for fast reads and Redis-down fallback)
+    with _cb_memory_lock:
+        _cb_memory_state[org_id] = {
+            "state": state,
+            "expires_at": time.time() + _CB_TTL_SECONDS,
+        }
+
+
+def check_circuit_breaker(
+    org_id: int,
+    db: Session,
+    agent_type: Optional[str] = None,
+) -> Tuple[bool, str]:
+    """Check whether an AI request should be allowed for this org.
+
+    Uses a three-tier threshold system against the org's daily budget:
+    - WARNING (75%): log warning, allow request
+    - CRITICAL (90%): allow request, signal caller to add warning header
+    - EXCEEDED (100%): block request (unless agent is in CRITICAL_AGENT_TYPES)
+
+    Fast path: checks Redis/in-memory cache first. Only queries DB when
+    cache indicates closed state to refresh the check.
+
+    Parameters
+    ----------
+    org_id : int
+        Organization ID.
+    db : Session
+        SQLAlchemy session for budget lookup.
+    agent_type : str, optional
+        Agent type for critical-agent bypass logic.
+
+    Returns
+    -------
+    tuple[bool, str]
+        (allowed, reason) — allowed=True means request can proceed.
+        Reason is one of: "ok", "warning", "critical", "exceeded",
+        "exceeded_bypass" (critical agent bypassed the breaker).
+    """
+    # Fast path: check cached state
+    cached_state = _get_circuit_breaker_state(org_id)
+
+    if cached_state == "open":
+        # Circuit is open (budget exceeded)
+        if agent_type and agent_type in CRITICAL_AGENT_TYPES:
+            logger.warning(
+                "Circuit breaker OPEN for org=%d but allowing critical agent=%s",
+                org_id, agent_type,
+            )
+            return True, "exceeded_bypass"
+        return False, "exceeded"
+
+    # For warning/critical cached states, allow but propagate the state
+    if cached_state == "critical":
+        return True, "critical"
+    if cached_state == "warning":
+        return True, "warning"
+
+    # Cached state is "closed" — refresh from DB to catch threshold crossings
+    try:
+        budget = _get_org_budget(org_id, db)
+        if budget is None:
+            # NULL budget = unlimited
+            return True, "ok"
+
+        spent = _get_org_spent_today(org_id, db)
+        budget_dec = Decimal(str(budget))
+
+        if budget_dec <= 0:
+            return True, "ok"
+
+        usage_pct = spent / budget_dec
+
+        if usage_pct >= ALERT_THRESHOLDS["exceeded"]:
+            _set_circuit_breaker_state(org_id, "open")
+            logger.warning(
+                "Circuit breaker OPEN: org=%d spent=$%s of $%s budget (%s%%)",
+                org_id, spent, budget_dec, round(float(usage_pct * 100)),
+            )
+            if agent_type and agent_type in CRITICAL_AGENT_TYPES:
+                return True, "exceeded_bypass"
+            return False, "exceeded"
+
+        elif usage_pct >= ALERT_THRESHOLDS["critical"]:
+            _set_circuit_breaker_state(org_id, "critical")
+            logger.warning(
+                "Circuit breaker CRITICAL: org=%d at %s%% of budget",
+                org_id, round(float(usage_pct * 100)),
+            )
+            return True, "critical"
+
+        elif usage_pct >= ALERT_THRESHOLDS["warning"]:
+            _set_circuit_breaker_state(org_id, "warning")
+            logger.info(
+                "Circuit breaker WARNING: org=%d at %s%% of budget",
+                org_id, round(float(usage_pct * 100)),
+            )
+            return True, "warning"
+
+        return True, "ok"
+
+    except Exception as e:
+        logger.error("Circuit breaker check failed for org=%d: %s", org_id, e)
+        # Fail open — don't block on transient errors
+        return True, "ok"
+
+
+def reset_circuit_breaker(org_id: int) -> None:
+    """Manually reset the circuit breaker for an org (admin action).
+
+    Clears both Redis and in-memory state.
+    """
+    redis = _get_redis_client()
+    key = f"{_CB_KEY_PREFIX}{org_id}"
+
+    if redis is not None:
+        try:
+            redis.delete(key)
+        except Exception as e:
+            logger.debug("Redis delete failed for circuit breaker reset: %s", e)
+
+    with _cb_memory_lock:
+        _cb_memory_state.pop(org_id, None)
+
+    logger.info("Circuit breaker reset for org=%d", org_id)
+
+
+def _get_org_budget(org_id: int, db: Session) -> Optional[Decimal]:
+    """Fetch the org's daily AI budget from the organizations table.
+
+    Returns None if the org has no budget set (unlimited).
+    """
+    try:
+        result = db.execute(text("""
+            SELECT ai_daily_budget_usd
+            FROM organizations
+            WHERE id = :org_id
+        """), {"org_id": org_id}).scalar()
+        if result is None:
+            return None
+        return Decimal(str(result))
+    except Exception as e:
+        logger.debug("Failed to fetch org budget: %s", e)
+        return DEFAULT_DAILY_BUDGET
+
+
+def _get_org_spent_today(org_id: int, db: Session) -> Decimal:
+    """Fetch total AI spend for an org today (UTC)."""
+    try:
+        result = db.execute(text("""
+            SELECT COALESCE(SUM(cost_usd), 0)
+            FROM ai_cost_records
+            WHERE organization_id = :org_id
+              AND created_at >= CURRENT_DATE
+        """), {"org_id": org_id}).scalar()
+        return Decimal(str(result))
+    except Exception as e:
+        logger.debug("Failed to fetch org spend today: %s", e)
+        return Decimal("0")

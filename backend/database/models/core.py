@@ -14,7 +14,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, UniqueConstraint, Index
+    Text, ForeignKey, JSON, Numeric, UniqueConstraint, Index
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -48,6 +48,9 @@ class Organization(Base):
 
     # MFA enforcement (Enterprise Check 4.6) - when True, all users must enable MFA
     mfa_required = Column(Boolean, default=False)
+
+    # AI budget enforcement — NULL means unlimited (no cap)
+    ai_daily_budget_usd = Column(Numeric(10, 2), default=50.00, nullable=True)
 
     # Status
     is_active = Column(Boolean, default=True)

@@ -525,6 +525,33 @@ async def run_orchestrator(
                 "processing_time_seconds": 0,
             }
 
+        # Dollar-cost circuit breaker check
+        try:
+            from services.ai_cost_tracker import check_circuit_breaker
+            cb_allowed, cb_reason = check_circuit_breaker(
+                org_id=_early_org_id,
+                db=db_session,
+                agent_type=None,  # Agent type not yet known at this point
+            )
+            if not cb_allowed:
+                clear_request_id()
+                logger.warning(
+                    "AI cost circuit breaker blocked request: org=%d reason=%s",
+                    _early_org_id, cb_reason,
+                )
+                return {
+                    "response": (
+                        "AI services are temporarily limited due to daily usage limits. "
+                        "Please try again later or contact your administrator."
+                    ),
+                    "error": "budget_exceeded",
+                    "error_type": "circuit_breaker",
+                    "processing_time_seconds": 0,
+                }
+        except Exception as e:
+            # Fail open — don't block on circuit breaker errors
+            logger.debug("Circuit breaker check skipped: %s", e)
+
     try:
         # ================================================================
         # PHASE 1: Quick Intent Classification (BEFORE loading tools)
@@ -786,6 +813,19 @@ async def run_orchestrator(
         response["performance"]["tokens_input"] = tokens_input if 'tokens_input' in dir() else 0
         response["performance"]["tokens_output"] = tokens_output if 'tokens_output' in dir() else 0
         response["performance"]["tokens_total"] = total_tokens_used
+
+        # Post-call circuit breaker re-check: update state after recording usage
+        if resolved_org_id is not None and db_session is not None:
+            try:
+                from services.ai_cost_tracker import check_circuit_breaker as _post_cb_check
+                _, cb_post_reason = _post_cb_check(
+                    org_id=resolved_org_id, db=db_session,
+                )
+                if cb_post_reason in ("warning", "critical"):
+                    response["cost_warning"] = cb_post_reason
+                    response.setdefault("headers", {})["X-AI-Cost-Warning"] = cb_post_reason
+            except Exception:
+                pass
 
         # ================================================================
         # HALLUCINATION VERIFICATION

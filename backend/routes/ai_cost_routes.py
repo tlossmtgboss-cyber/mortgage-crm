@@ -2,24 +2,30 @@
 AI Cost Tracking Routes
 
 Admin endpoints for viewing AI cost breakdowns, daily trends, per-agent
-costs, and budget alerts. All endpoints require admin role.
+costs, budget alerts, circuit breaker management, and per-org budget
+configuration.
 
 Endpoints:
-    GET /api/v1/ai/costs/summary     — Platform-wide cost summary
-    GET /api/v1/ai/costs/org/{id}    — Org-level cost breakdown
-    GET /api/v1/ai/costs/daily       — Daily cost trend (last N days)
-    GET /api/v1/ai/costs/by-agent    — Cost broken down by agent type
+    GET  /api/v1/ai/costs/summary            — Platform-wide cost summary
+    GET  /api/v1/ai/costs/org/{id}           — Org-level cost breakdown
+    GET  /api/v1/ai/costs/daily              — Daily cost trend (last N days)
+    GET  /api/v1/ai/costs/by-agent           — Cost broken down by agent type
+    GET  /api/v1/ai/costs/budget-status      — Current spend vs budget for all orgs
+    PUT  /api/v1/ai/costs/org/{id}/budget    — Set daily budget for an org
+    GET  /api/v1/ai/costs/alerts             — Recent budget alerts/warnings
+    POST /api/v1/ai/costs/reset-circuit/{id} — Manual circuit breaker reset
 
 Registration:
-    Called from main.py via register_ai_cost_routes(app, get_db, get_current_user).
+    Called from router_registry.py via register_ai_cost_routes(app, get_db, get_current_user).
 """
 
 import logging
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -92,6 +98,55 @@ class DailyTrendResponse(BaseModel):
     period_days: int
     org_id: Optional[int] = None
     daily: List[DailyEntry]
+
+
+class OrgBudgetStatusEntry(BaseModel):
+    organization_id: int
+    org_name: str
+    spent_today: float
+    daily_budget: float
+    usage_pct: float
+    circuit_breaker_state: str
+
+
+class BudgetStatusResponse(BaseModel):
+    orgs: List[OrgBudgetStatusEntry]
+    total_platform_spend: float
+
+
+class SetBudgetRequest(BaseModel):
+    daily_budget_usd: Optional[float] = Field(
+        None,
+        description="Daily AI budget in USD. NULL means unlimited.",
+        ge=0,
+    )
+
+
+class SetBudgetResponse(BaseModel):
+    organization_id: int
+    daily_budget_usd: Optional[float]
+    message: str
+
+
+class AlertEntry(BaseModel):
+    organization_id: int
+    org_name: str
+    level: str
+    spent_today: float
+    daily_budget: float
+    usage_pct: float
+    message: str
+
+
+class AlertsResponse(BaseModel):
+    alerts: List[AlertEntry]
+    count: int
+
+
+class CircuitResetResponse(BaseModel):
+    organization_id: int
+    message: str
+    previous_state: str
 
 
 # =============================================================================
@@ -270,4 +325,165 @@ def register_ai_cost_routes(app, get_db, get_current_user):
         tracker = AICostTracker(db)
         return tracker.get_cost_by_agent(org_id=org_id, period_days=period_days)
 
-    logger.info("AI cost tracking routes registered (4 endpoints)")
+    # ------------------------------------------------------------------
+    # Budget Status (all orgs)
+    # ------------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/ai/costs/budget-status",
+        response_model=BudgetStatusResponse,
+        tags=["AI Cost Tracking"],
+        summary="Budget status for all orgs",
+    )
+    async def get_ai_budget_status(
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Return current spend vs budget for all organizations (admin only).
+
+        Includes circuit breaker state for each org.
+        """
+        _require_admin(current_user)
+
+        from services.ai_cost_tracker import AICostTracker
+        tracker = AICostTracker(db)
+        orgs = tracker.get_all_budget_status()
+        total_spend = sum(o["spent_today"] for o in orgs)
+
+        return {
+            "orgs": orgs,
+            "total_platform_spend": round(total_spend, 2),
+        }
+
+    # ------------------------------------------------------------------
+    # Set Org Budget
+    # ------------------------------------------------------------------
+
+    @app.put(
+        "/api/v1/ai/costs/org/{org_id}/budget",
+        response_model=SetBudgetResponse,
+        tags=["AI Cost Tracking"],
+        summary="Set daily AI budget for an org",
+    )
+    async def set_ai_org_budget(
+        org_id: int,
+        body: SetBudgetRequest,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Set or remove the daily AI budget for an organization (admin only).
+
+        Set ``daily_budget_usd`` to a positive number to enforce a limit,
+        or to ``null`` to remove the cap (unlimited).
+        """
+        _require_admin(current_user)
+
+        from sqlalchemy import text as sql_text
+
+        # Verify org exists
+        org_row = db.execute(sql_text(
+            "SELECT id, name FROM organizations WHERE id = :org_id"
+        ), {"org_id": org_id}).fetchone()
+
+        if not org_row:
+            raise HTTPException(status_code=404, detail=f"Organization {org_id} not found")
+
+        budget_value = body.daily_budget_usd
+        db.execute(sql_text(
+            "UPDATE organizations SET ai_daily_budget_usd = :budget WHERE id = :org_id"
+        ), {"budget": budget_value, "org_id": org_id})
+        db.commit()
+
+        # Also update the in-memory budget tracker
+        try:
+            from middleware.ai_cost_tracker import get_ai_budget_tracker
+            tracker = get_ai_budget_tracker()
+            if budget_value is not None:
+                tracker.set_org_budget(org_id, budget_value)
+        except Exception as e:
+            logger.debug("Failed to update in-memory budget tracker: %s", e)
+
+        budget_str = f"${budget_value:.2f}" if budget_value is not None else "unlimited"
+        logger.info(
+            "AI budget updated: org=%d budget=%s by user=%s",
+            org_id, budget_str, getattr(current_user, "id", "?"),
+        )
+
+        return {
+            "organization_id": org_id,
+            "daily_budget_usd": budget_value,
+            "message": f"Daily AI budget set to {budget_str} for {org_row[1]}",
+        }
+
+    # ------------------------------------------------------------------
+    # Budget Alerts
+    # ------------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/ai/costs/alerts",
+        response_model=AlertsResponse,
+        tags=["AI Cost Tracking"],
+        summary="Recent budget alerts across platform",
+    )
+    async def get_ai_budget_alerts(
+        limit: int = Query(50, ge=1, le=200),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Return recent budget alerts/warnings across all orgs (admin only).
+
+        Lists all orgs that have crossed the 75% warning threshold today.
+        """
+        _require_admin(current_user)
+
+        from services.ai_cost_tracker import AICostTracker
+        tracker = AICostTracker(db)
+        alerts = tracker.get_recent_alerts(limit=limit)
+
+        return {
+            "alerts": alerts,
+            "count": len(alerts),
+        }
+
+    # ------------------------------------------------------------------
+    # Circuit Breaker Reset
+    # ------------------------------------------------------------------
+
+    @app.post(
+        "/api/v1/ai/costs/reset-circuit/{org_id}",
+        response_model=CircuitResetResponse,
+        tags=["AI Cost Tracking"],
+        summary="Reset circuit breaker for an org",
+    )
+    async def reset_ai_circuit_breaker(
+        org_id: int,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Manually reset the circuit breaker for an organization (admin only).
+
+        Use this when an org's budget has been exceeded but needs to be
+        unblocked immediately (e.g., after increasing their budget).
+        """
+        _require_admin(current_user)
+
+        from services.ai_cost_tracker import (
+            _get_circuit_breaker_state,
+            reset_circuit_breaker,
+        )
+
+        previous_state = _get_circuit_breaker_state(org_id)
+        reset_circuit_breaker(org_id)
+
+        logger.info(
+            "Circuit breaker reset: org=%d previous_state=%s by user=%s",
+            org_id, previous_state, getattr(current_user, "id", "?"),
+        )
+
+        return {
+            "organization_id": org_id,
+            "message": f"Circuit breaker reset for organization {org_id}",
+            "previous_state": previous_state,
+        }
+
+    logger.info("AI cost tracking routes registered (8 endpoints)")
