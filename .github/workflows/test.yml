@@ -317,6 +317,18 @@ jobs:
         working-directory: ./backend
         run: |
           mypy --ignore-missing-imports --no-strict-optional --warn-return-any auth/ db.py middleware/rate_limiting.py middleware/csrf_protection.py
+  # ============================================================================
+  # STAGE 3: CODE QUALITY (Non-blocking)
+  # ============================================================================
+  file-size-check:
+    name: File Size Limits
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check file sizes
+        run: bash scripts/check-file-sizes.sh
   build-check:
     name: Build Check
     runs-on: ubuntu-latest

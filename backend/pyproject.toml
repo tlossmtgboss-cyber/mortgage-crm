@@ -26,6 +26,7 @@ markers = [
     "golden: Golden flow critical path tests",
     "critical: Critical path tests that must pass before deployment",
     "slow: Tests that take longer than 5 seconds",
+    "ai: Tests for AI features and LLM integrations",
     "agents: Tests for AI agents",
     "tools: Tests for agent tools",
     "orchestrator: Tests for agent orchestration/routing",

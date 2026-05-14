@@ -1,7 +1,8 @@
 #!/bin/sh
-# Enforce TypeScript for new frontend files
-# Existing .js/.jsx files are allowed; only newly added files are checked.
+# Pre-commit hook: enforce TypeScript, CSS Modules, and file size limits
+# Only checks NEWLY ADDED files (--diff-filter=A), not existing ones.
 
+# --- Enforce TypeScript for new frontend files ---
 new_js_files=$(git diff --cached --name-only --diff-filter=A | grep -E '^frontend/src/.*\.(js|jsx)$' | grep -v 'setupTests\|vite\.config\|vitest\.' || true)
 if [ -n "$new_js_files" ]; then
   echo "ERROR: New frontend files must be TypeScript (.ts or .tsx):"
@@ -10,11 +11,45 @@ if [ -n "$new_js_files" ]; then
   exit 1
 fi
 
-# Enforce CSS Modules for new component stylesheets
+# --- Enforce CSS Modules for new component stylesheets ---
 new_plain_css=$(git diff --cached --name-only --diff-filter=A | grep -E '^frontend/src/components/.*\.css$' | grep -v '\.module\.css$' || true)
 if [ -n "$new_plain_css" ]; then
   echo "ERROR: New component stylesheets must use CSS Modules (.module.css):"
   echo "$new_plain_css"
   echo "Rename to ComponentName.module.css and use: import styles from './ComponentName.module.css'"
+  exit 1
+fi
+
+# --- Enforce file size limits on newly added files ---
+BACKEND_LIMIT=500
+FRONTEND_LIMIT=400
+oversized=""
+
+# Check new backend Python files (exclude tests, migrations)
+new_py_files=$(git diff --cached --name-only --diff-filter=A | grep -E '^backend/.*\.py$' | grep -v -E '(tests/|migrations/|alembic/|__pycache__)' || true)
+for file in $new_py_files; do
+  if [ -f "$file" ]; then
+    lines=$(wc -l < "$file" | tr -d ' ')
+    if [ "$lines" -gt "$BACKEND_LIMIT" ]; then
+      oversized="${oversized}  ${file} (${lines} lines, limit ${BACKEND_LIMIT})\n"
+    fi
+  fi
+done
+
+# Check new frontend component files
+new_fe_files=$(git diff --cached --name-only --diff-filter=A | grep -E '^frontend/src/.*\.(js|jsx|ts|tsx)$' | grep -v -E '(__tests__/|\.test\.|\.spec\.)' || true)
+for file in $new_fe_files; do
+  if [ -f "$file" ]; then
+    lines=$(wc -l < "$file" | tr -d ' ')
+    if [ "$lines" -gt "$FRONTEND_LIMIT" ]; then
+      oversized="${oversized}  ${file} (${lines} lines, limit ${FRONTEND_LIMIT})\n"
+    fi
+  fi
+done
+
+if [ -n "$oversized" ]; then
+  echo "ERROR: New files exceed size limits (see CONTRIBUTING.md):"
+  printf "$oversized"
+  echo "Decompose large files before committing."
   exit 1
 fi
