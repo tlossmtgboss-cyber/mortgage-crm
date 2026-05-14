@@ -25,10 +25,7 @@ logger = logging.getLogger("urla.routes.intelligence")
 # Auth & DB dependencies — match existing codebase patterns
 # ---------------------------------------------------------------------------
 
-try:
-    from auth.dependencies import get_current_user
-except ImportError:
-    from main import get_current_user
+from auth.dependencies import get_current_user
 
 try:
     from db import get_db

@@ -382,7 +382,7 @@ class CalendarSyncOrchestrator:
                     access_token = ms_row[0]
                     refresh_token = ms_row[1]
                     try:
-                        from main import decrypt_token
+                        from services.calendly_service import decrypt_token
                         access_token = decrypt_token(access_token)
                         if refresh_token:
                             refresh_token = decrypt_token(refresh_token)

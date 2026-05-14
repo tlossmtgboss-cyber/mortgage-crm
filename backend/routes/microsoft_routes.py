@@ -664,8 +664,8 @@ async def sync_outlook_emails(
     skipped_count = 0
     errors = []
 
-    # Import the DRE processing function (same pattern as gmail_routes.py)
-    from main import process_microsoft_email_to_dre
+    # Import the DRE processing function (canonical source)
+    from services.dre_helpers import process_microsoft_email_to_dre
 
     for email_data in email_list:
         try:
