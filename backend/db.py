@@ -17,7 +17,8 @@ Production settings (Railway PostgreSQL):
 
 Connection exhaustion prevention:
 - Prefer PgBouncer (Railway's pooled URL) for unlimited virtual connections
-- With 2 replicas: 2 x 8 = 16 connections, leaving room for audit + background
+- With 1 replica: pool_size=5 + max_overflow=1 = 6 connections, plus advisory lock = 7
+- During deploy overlap (2 containers): 14 connections — well within ~25 limit
 - LIFO pool reuse keeps fewer connections warm
 - TCP keepalives detect network issues before they cause pool exhaustion
 - Per-tenant connection limits (MAX_DB_CONNECTIONS_PER_TENANT, default 3)
@@ -96,18 +97,16 @@ elif USE_PGBOUNCER:
     )
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has ~25 max connections. With numReplicas=2 in railway.toml,
-    # each replica gets pool_size=5 + max_overflow=3 = 8 connections max.
-    # 2 replicas × 8 = 16 pooled connections + 1 audit writer = 17 total,
-    # leaving headroom for startup migrations and psycopg2 scripts.
-    # The SPA fires ~20 concurrent API calls per page load; pool_size=5
-    # prevents connection starvation that caused widespread 500 errors.
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=5, max_overflow=3, max=8)")
+    # Railway has ~25 max connections. With numReplicas=1 in railway.toml,
+    # pool_size=5 + max_overflow=1 = 6 connections per process.
+    # During rolling deploys (2 containers briefly): 2 × 6 = 12 + advisory = 13 total.
+    # pool_size=5 is the minimum that handles SPA burst loads (~20 concurrent API calls).
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=5, max_overflow=1, max=6)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
         pool_size=5,
-        max_overflow=3,
+        max_overflow=1,
         pool_recycle=300,             # Recycle connections every 5min (prevents stale connections without excessive churn)
         pool_timeout=20,              # Wait max 20s for a connection (handles SPA burst loads)
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
