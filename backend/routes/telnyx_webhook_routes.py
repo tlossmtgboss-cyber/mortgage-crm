@@ -1197,7 +1197,7 @@ async def _aria_sms_ai_background_task(
                 db.execute(sa_text("""
                     UPDATE sms_ai_conversations
                     SET last_message_at = NOW(),
-                        message_count = COALESCE(message_count, 0) + 2,
+                        message_count = COALESCE(message_count, 0) + 1,
                         current_stage = CASE
                             WHEN current_stage = 'scheduling' THEN 'confirming'
                             ELSE current_stage
@@ -1209,63 +1209,47 @@ async def _aria_sms_ai_background_task(
                 db.rollback()
                 logger.error("aria_sms_bg: store reply/update state failed: %s", e)
 
-            # Send reply via Telnyx (async httpx)
+            # Send reply via centralized SMS chokepoint (compliance + retry)
             try:
-                _telnyx_key = os.environ.get("TELNYX_API_KEY", "")
-                _telnyx_from = os.environ.get(
-                    "TELNYX_FROM_NUMBER",
-                    os.environ.get("TELNYX_PHONE_NUMBER", ""),
+                from telephony.sms import send_sms_verified_async
+                _send_result = await send_sms_verified_async(
+                    to=normalized_from,
+                    text=_reply_text,
+                    user_id=context_data.get("user_id") or context_data.get("lo_id"),
+                    lead_id=lead_id,
+                    organization_id=org_id,
+                    db=db,
+                    bypass_compliance=True,
                 )
-                _telnyx_profile = os.environ.get(
-                    "TELNYX_MESSAGING_PROFILE_ID", "",
-                )
-                if _telnyx_key and _telnyx_from:
-                    async with httpx.AsyncClient(timeout=15) as _http_client:
-                        _send_resp = await _http_client.post(
-                            "https://api.telnyx.com/v2/messages",
-                            headers={
-                                "Authorization": f"Bearer {_telnyx_key}",
-                                "Content-Type": "application/json",
-                            },
-                            json={
-                                "from": _telnyx_from,
-                                "to": normalized_from,
-                                "text": _reply_text,
-                                "messaging_profile_id": _telnyx_profile,
-                            },
-                        )
-                    if _send_resp.status_code >= 400:
-                        logger.error(
-                            "aria_sms_bg: Telnyx rejected reply: status=%d, body=%s",
-                            _send_resp.status_code, _send_resp.text[:300],
-                        )
-                    else:
-                        logger.info(
-                            "aria_sms_bg: reply sent, status=%d, to=...%s, text='%s'",
-                            _send_resp.status_code, normalized_from[-4:], _reply_text[:50],
-                        )
-                        try:
-                            db.execute(sa_text("""
-                                INSERT INTO sms_panel_messages
-                                    (id, phone, organization_id, direction, body,
-                                     sender_name, sender_role, status, created_at)
-                                VALUES (:id, :phone, :org_id, 'outbound', :body,
-                                        'Aria', 'ai_assistant', 'sent', NOW())
-                                ON CONFLICT (id) DO NOTHING
-                            """), {
-                                "id": str(_uuid_bg.uuid4()),
-                                "phone": normalized_from,
-                                "org_id": org_id,
-                                "body": _reply_text,
-                            })
-                            db.commit()
-                        except Exception as _panel_err:
-                            db.rollback()
-                            logger.debug("aria_sms_bg: outbound panel write: %s", _panel_err)
-                elif not _telnyx_key:
-                    logger.error("aria_sms_bg: TELNYX_API_KEY not set")
+                if _send_result.get("status") == "blocked":
+                    logger.warning(
+                        "aria_sms_bg: reply blocked by compliance: %s", _send_result.get("reason"),
+                    )
+                elif _send_result.get("id"):
+                    logger.info(
+                        "aria_sms_bg: reply sent, msg_id=%s, to=...%s, text='%s'",
+                        _send_result["id"], normalized_from[-4:], _reply_text[:50],
+                    )
+                    try:
+                        db.execute(sa_text("""
+                            INSERT INTO sms_panel_messages
+                                (id, phone, organization_id, direction, body,
+                                 sender_name, sender_role, status, created_at)
+                            VALUES (:id, :phone, :org_id, 'outbound', :body,
+                                    'Aria', 'ai_assistant', 'sent', NOW())
+                            ON CONFLICT (id) DO NOTHING
+                        """), {
+                            "id": str(_uuid_bg.uuid4()),
+                            "phone": normalized_from,
+                            "org_id": org_id,
+                            "body": _reply_text,
+                        })
+                        db.commit()
+                    except Exception as _panel_err:
+                        db.rollback()
+                        logger.debug("aria_sms_bg: outbound panel write: %s", _panel_err)
                 else:
-                    logger.error("aria_sms_bg: TELNYX_FROM_NUMBER not set")
+                    logger.error("aria_sms_bg: send failed: %s", _send_result)
             except Exception as e:
                 logger.error("aria_sms_bg: send reply failed: %s", e)
 
@@ -1357,14 +1341,13 @@ async def _aria_sms_ai_background_task(
                                      appointment_type, title, status, notes, created_at)
                                     VALUES (:uid, :lid,
                                             CAST(:start AS timestamptz),
-                                            CAST(:end AS timestamptz),
+                                            CAST(:start AS timestamptz) + INTERVAL '30 minutes',
                                             :atype, :title, 'confirmed',
                                             :notes, NOW())
                                 """), {
                                     "uid": int(_lo_uid),
                                     "lid": int(context_data.get("lead_id") or 0) or None,
                                     "start": f"{_appt_date} {_appt_time}:00",
-                                    "end": f"{_appt_date} {_appt_time}:00",
                                     "atype": appt_type,
                                     "title": f"{appt_type.replace('_', ' ').title()} with {borrower_name}",
                                     "notes": f"Scheduled via SMS by Aria. Borrower: {borrower_name}",
@@ -1820,9 +1803,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             db.rollback()
             logger.warning("aria_sms_intercept: org lookup failed: %s", e)
 
-        # Query with org scope when available for tenant isolation,
-        # then fall back to unscoped lookup if org-scoped misses
-        # (handles misconfigured verified_caller_ids mappings)
+        # Tenant-isolated conversation lookup — never cross org boundaries
         _aria_conv = None
         if _aria_intercept_org_id:
             _aria_conv = db.execute(sa_text("""
@@ -1833,20 +1814,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 ORDER BY last_message_at DESC NULLS LAST
                 LIMIT 1
             """), {"phone": normalized_from, "org_id": _aria_intercept_org_id}).fetchone()
-        if not _aria_conv:
-            _aria_conv = db.execute(sa_text("""
-                SELECT id, organization_id, current_stage, context_data
-                FROM sms_ai_conversations
-                WHERE phone_number = :phone AND status = 'active'
-                ORDER BY last_message_at DESC NULLS LAST
-                LIMIT 1
-            """), {"phone": normalized_from}).fetchone()
-            if _aria_conv and _aria_intercept_org_id:
-                logger.warning(
-                    "aria_sms_intercept: org-scoped lookup missed, unscoped found conv in org=%s "
-                    "(verified_caller_ids mapped to org=%s) — phone=...%s",
-                    _aria_conv[1], _aria_intercept_org_id, normalized_from[-4:],
-                )
+        else:
+            logger.warning(
+                "aria_sms_intercept: no org resolved for phone=...%s — skipping conversation lookup",
+                normalized_from[-4:],
+            )
 
         if _aria_conv:
             _aria_conv_id = _aria_conv[0]
@@ -2323,15 +2295,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     _org_row[0],
                 )
         if not _org_row:
-            # Final fallback: use the default (first) organization
-            _org_row = db.execute(sa_text("""
-                SELECT id FROM organizations ORDER BY id LIMIT 1
-            """)).fetchone()
-            if _org_row:
-                logger.info(
-                    "Inbound SMS tenant resolved via fallback to default org_id=%s",
-                    _org_row[0],
-                )
+            logger.warning(
+                "Inbound SMS tenant unresolved: no org match via verified_caller_ids or lead phone for ...%s — "
+                "skipping panel storage and auto-responder",
+                normalized_from[-4:],
+            )
         if _org_row:
             _inbound_org_id = _org_row[0]
             logger.info(
@@ -2366,33 +2334,34 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         except Exception as e:
             logger.debug(f"Lead lookup for inbound SMS contact_id failed (non-critical): {e}")
 
-    try:
-        import uuid as _uuid
-        _panel_id = event.message_id or str(_uuid.uuid4())
-        db.execute(sa_text("""
-            INSERT INTO sms_panel_messages
-                (id, phone, contact_id, organization_id, direction, body,
-                 sender_name, status, media_urls,
-                 telnyx_message_id, created_at)
-            VALUES
-                (:id, :phone, :contact_id, :org_id, 'inbound', :body,
-                 :sender_name, 'received', '[]'::jsonb,
-                 :telnyx_id, NOW())
-            ON CONFLICT (id) DO NOTHING
-        """), {
-            "id": _panel_id,
-            "phone": normalized_from,
-            "contact_id": _inbound_contact_id,
-            "org_id": _inbound_org_id,
-            "body": message_body or "",
-            "sender_name": normalized_from,
-            "telnyx_id": event.message_id,
-        })
-        db.commit()
-        logger.warning(f"Inbound SMS stored in sms_panel_messages for phone=...{normalized_from[-4:]}, contact_id={_inbound_contact_id}, org_id={_inbound_org_id}")
-    except Exception as e:
-        logger.warning(f"Failed to store inbound SMS in sms_panel_messages: {e}")
-        db.rollback()
+    if _inbound_org_id:
+        try:
+            import uuid as _uuid
+            _panel_id = event.message_id or str(_uuid.uuid4())
+            db.execute(sa_text("""
+                INSERT INTO sms_panel_messages
+                    (id, phone, contact_id, organization_id, direction, body,
+                     sender_name, status, media_urls,
+                     telnyx_message_id, created_at)
+                VALUES
+                    (:id, :phone, :contact_id, :org_id, 'inbound', :body,
+                     :sender_name, 'received', '[]'::jsonb,
+                     :telnyx_id, NOW())
+                ON CONFLICT (id) DO NOTHING
+            """), {
+                "id": _panel_id,
+                "phone": normalized_from,
+                "contact_id": _inbound_contact_id,
+                "org_id": _inbound_org_id,
+                "body": message_body or "",
+                "sender_name": normalized_from,
+                "telnyx_id": event.message_id,
+            })
+            db.commit()
+            logger.info("Inbound SMS stored in sms_panel_messages for phone=...%s, org_id=%s", normalized_from[-4:], _inbound_org_id)
+        except Exception as e:
+            logger.warning("Failed to store inbound SMS in sms_panel_messages: %s", e)
+            db.rollback()
 
     # Link the sms_messages row to org/lead so it shows in client file timeline
     if _inbound_org_id or _inbound_contact_id:
