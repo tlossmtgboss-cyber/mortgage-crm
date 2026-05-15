@@ -190,6 +190,21 @@ export function attachInterceptors(api: AxiosInstance): void {
 
       // --- 429 Too Many Requests -- retry with exponential backoff ---
       if (error.response?.status === 429) {
+        // DON'T retry auth endpoints -- retries make rate limits worse
+        const requestUrl = error.config?.url || '';
+        const isAuthEndpoint = requestUrl.includes('/account/start') ||
+                                requestUrl.includes('/account/renew') ||
+                                requestUrl.includes('/auth/login') ||
+                                requestUrl.includes('/account/recover');
+        if (isAuthEndpoint) {
+          return Promise.reject(buildApiError(429,
+            error.response?.data?.detail || 'Too many login attempts. Please wait a minute and try again.', {
+            retryable: false,
+            code: 'ERR_RATE_LIMITED',
+            _axiosError: error,
+          }));
+        }
+
         // Respect Retry-After header if present
         const retryAfter = error.response.headers?.['retry-after'];
         if (retryAfter && !error.config._429RetryCount) {

@@ -43,13 +43,13 @@ router = APIRouter(tags=["Authentication"])
 
 # Rate limiter constants — per-minute windows
 _AUTH_RATE_WINDOW = 60  # seconds
-_AUTH_RATE_MAX_LOGIN = 5  # max login attempts per minute per IP
+_AUTH_RATE_MAX_LOGIN = 15  # max login attempts per minute per IP
 _AUTH_RATE_MAX_RESET = 3  # max password reset requests per minute per IP
 _AUTH_RATE_MAX_REGISTER = 3  # max registration attempts per minute per IP
 
 # Rate limiter constants — per-hour windows (brute force protection)
 _AUTH_RATE_WINDOW_HOUR = 3600  # seconds
-_AUTH_RATE_MAX_LOGIN_HOUR = 20  # max login attempts per hour per IP
+_AUTH_RATE_MAX_LOGIN_HOUR = 60  # max login attempts per hour per IP
 _AUTH_RATE_MAX_RESET_HOUR = 3  # max password reset requests per hour per IP
 _AUTH_RATE_MAX_REGISTER_HOUR = 3  # max registration attempts per hour per IP
 _AUTH_RATE_MAX_REFRESH = 30  # max token refreshes per minute per IP
@@ -113,14 +113,11 @@ def _check_auth_rate_limit(client_id: str, max_requests: int, window: int = _AUT
     if r is not None:
         try:
             key = f"{bucket}_rl:{client_id}"
-            current = r.get(key)
-            if current is None:
-                r.setex(key, window, 1)
-                return True
-            current = int(current)
-            if current >= max_requests:
+            count = r.incr(key)
+            if count == 1:
+                r.expire(key, window)  # Set TTL only on first increment
+            if count > max_requests:
                 return False
-            r.incr(key)
             return True
         except Exception as e:
             logger.warning(f"Redis rate limit error, falling back to in-memory: {e}")

@@ -125,9 +125,14 @@ function Login() {
       navigate(getPostLoginRoute(data));
     } catch (err) {
       console.error('Login error:', err);
-      let errorMessage = err.response?.data?.detail || err.response?.data?.error || err.message || 'Login failed. Please check your credentials and try again.';
-      if (err.retryable) {
-        errorMessage += ' (You can try again)';
+      let errorMessage;
+      if (err.status === 429 || err.code === 'ERR_RATE_LIMITED') {
+        errorMessage = 'Too many login attempts. Please wait a minute and try again.';
+      } else {
+        errorMessage = err.response?.data?.detail || err.response?.data?.error || err.message || 'Login failed. Please check your credentials and try again.';
+        if (err.retryable) {
+          errorMessage += ' (You can try again)';
+        }
       }
       setError(errorMessage);
       haptics.error();
