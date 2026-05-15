@@ -288,8 +288,8 @@ export default function AIGenerateModal({ open, onClose, onApply }) {
                   className="carousel-ai-preview-slide"
                   style={{
                     background: generatedSlides[previewIndex]?.suggested_background === 'gradient'
-                      ? `linear-gradient(135deg, ${(generatedSlides[previewIndex]?.suggested_colors || ['#217F8D', '#1a5f6a']).join(', ')})`
-                      : generatedSlides[previewIndex]?.suggested_colors?.[0] || '#217F8D',
+                      ? `linear-gradient(135deg, ${(generatedSlides[previewIndex]?.suggested_colors || ['#1F3D2E', '#1a5f6a']).join(', ')})`
+                      : generatedSlides[previewIndex]?.suggested_colors?.[0] || '#1F3D2E',
                   }}
                 >
                   <div className="carousel-ai-preview-content">
@@ -314,8 +314,8 @@ export default function AIGenerateModal({ open, onClose, onApply }) {
                       onClick={() => setPreviewIndex(index)}
                       style={{
                         background: slide.suggested_background === 'gradient'
-                          ? `linear-gradient(135deg, ${(slide.suggested_colors || ['#217F8D', '#1a5f6a']).join(', ')})`
-                          : slide.suggested_colors?.[0] || '#217F8D',
+                          ? `linear-gradient(135deg, ${(slide.suggested_colors || ['#1F3D2E', '#1a5f6a']).join(', ')})`
+                          : slide.suggested_colors?.[0] || '#1F3D2E',
                       }}
                     >
                       <span>{index + 1}</span>

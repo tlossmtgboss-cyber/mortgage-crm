@@ -29,7 +29,7 @@
 .error-state button {
   margin-top: 24px;
   padding: 12px 24px;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border: none;
   border-radius: 8px;
@@ -59,8 +59,8 @@
 
 .btn-back:hover {
   background: var(--color-bg-hover, rgba(139, 92, 68, 0.08));
-  border-color: var(--color-primary, #217F8D);
-  color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .bottleneck-header-content {
@@ -214,7 +214,7 @@
 }
 
 .loan-count {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   padding: 4px 12px;
   border-radius: 12px;
@@ -238,7 +238,7 @@
 }
 
 .loan-card:hover {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 4px 16px rgba(33, 127, 141, 0.12);
   transform: translateY(-2px);
 }
@@ -259,7 +259,7 @@
 .loan-number {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   font-family: var(--font-mono, monospace);
 }
 
@@ -333,7 +333,7 @@
 
 .btn-create-task {
   padding: 8px 16px;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border: none;
   border-radius: 6px;
@@ -395,8 +395,8 @@
 .btn-action {
   padding: 10px 24px;
   background: white;
-  color: var(--color-primary, #217F8D);
-  border: 2px solid var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
+  border: 2px solid var(--color-primary, #1F3D2E);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
@@ -405,7 +405,7 @@
 }
 
 .btn-action:hover {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
 }
 

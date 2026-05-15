@@ -41,14 +41,14 @@ function getStatusLabel(status) {
 
 function getStatusColor(status) {
   const map = {
-    scheduled: '#218D8D',
-    confirmed: '#10b981',
+    scheduled: '#1F3D2E',
+    confirmed: '#2D7A52',
     completed: '#6b7280',
     cancelled: '#ef4444',
     no_show: '#f59e0b',
-    rescheduled: '#8b5cf6',
+    rescheduled: '#B8924A',
   };
-  return map[status] || '#218D8D';
+  return map[status] || '#1F3D2E';
 }
 
 function getModeLabel(mode) {
@@ -70,7 +70,7 @@ function getModeIcon(mode) {
 
 function getTypeColor(event) {
   const type = (event.event_type || event.meeting_type || '').toLowerCase();
-  if (type.includes('consultation') || type.includes('discovery')) return '#667eea';
+  if (type.includes('consultation') || type.includes('discovery')) return '#1F3D2E';
   if (type.includes('closing') || type.includes('review')) return '#ed8936';
   if (type.includes('application') || type.includes('walkthrough')) return '#48bb78';
   if (type.includes('rate') || type.includes('lock')) return '#e53e3e';

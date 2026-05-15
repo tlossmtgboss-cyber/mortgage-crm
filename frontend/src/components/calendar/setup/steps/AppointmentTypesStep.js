@@ -39,15 +39,15 @@ const DURATION_OPTIONS = [
 
 const COLOR_PALETTE = [
   '#3b82f6', // blue
-  '#10b981', // green
-  '#8b5cf6', // purple
+  '#2D7A52', // green
+  '#B8924A', // purple
   '#f59e0b', // orange
   '#14b8a6', // teal
   '#ef4444', // red
   '#6b7280', // gray
-  '#218D8D', // brand teal
+  '#1F3D2E', // brand teal
   '#ec4899', // pink
-  '#6366f1', // indigo
+  '#B8924A', // indigo
 ];
 
 const MEETING_MODE_ICONS = {
@@ -76,7 +76,7 @@ const PREBUILT_TYPES = [
     _prebuiltKey: 'preapproval_review',
     type_name: 'Pre-Approval Review',
     duration_minutes: 45,
-    color: '#10b981',
+    color: '#2D7A52',
     description: 'Review documents, run pre-approval',
     location_type: 'virtual',
     is_public: true,
@@ -86,7 +86,7 @@ const PREBUILT_TYPES = [
     _prebuiltKey: 'application_walkthrough',
     type_name: 'Application Walkthrough',
     duration_minutes: 60,
-    color: '#8b5cf6',
+    color: '#B8924A',
     description: 'Guide borrower through full application',
     location_type: 'virtual',
     is_public: true,

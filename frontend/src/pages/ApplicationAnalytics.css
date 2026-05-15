@@ -20,7 +20,7 @@
   width: 48px;
   height: 48px;
   border: 3px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -44,7 +44,7 @@
 
 .analytics-error button {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -92,7 +92,7 @@
 
 .btn-refresh {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -103,7 +103,7 @@
 }
 
 .btn-refresh:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* Metrics Grid */
@@ -123,12 +123,12 @@
 }
 
 .metric-card.highlight {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
 }
 
 .metric-card.success {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .metric-card.warning {
@@ -325,7 +325,7 @@
 }
 
 .performance-table td.good {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 

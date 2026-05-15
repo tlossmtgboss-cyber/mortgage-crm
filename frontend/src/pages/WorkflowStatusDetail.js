@@ -7,15 +7,15 @@ const API_URL = process.env.REACT_APP_API_URL || '';
 
 // All workflow statuses for the tabs
 const ALL_STATUSES = [
-  { id: 'new', name: 'New', color: '#10b981' },
+  { id: 'new', name: 'New', color: '#2D7A52' },
   { id: 'attempted_contact', name: 'Attempted Contact', color: '#f59e0b' },
-  { id: 'prospect', name: 'Prospect', color: '#10b981' },
+  { id: 'prospect', name: 'Prospect', color: '#2D7A52' },
   { id: 'application', name: 'Application', color: '#f59e0b' },
-  { id: 'pre_qualified', name: 'Pre-Qualified', color: '#10b981' },
-  { id: 'pre_approved', name: 'Pre-Approved', color: '#10b981' },
+  { id: 'pre_qualified', name: 'Pre-Qualified', color: '#2D7A52' },
+  { id: 'pre_approved', name: 'Pre-Approved', color: '#2D7A52' },
   { id: 'under_contract', name: 'Under Contract', color: '#f59e0b' },
-  { id: 'long_term_nurture', name: 'Long-Term Nurture', color: '#10b981' },
-  { id: 'withdrawn', name: 'Withdrawn', color: '#10b981' },
+  { id: 'long_term_nurture', name: 'Long-Term Nurture', color: '#2D7A52' },
+  { id: 'withdrawn', name: 'Withdrawn', color: '#2D7A52' },
   { id: 'does_not_qualify', name: 'Does Not Qualify', color: '#ef4444' }
 ];
 

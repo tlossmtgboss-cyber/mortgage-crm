@@ -82,7 +82,7 @@ export const getMeetingModeColor = (mode) => {
     case 'VIDEO':
       return '#2563eb'; // Blue
     case 'PHONE':
-      return '#059669'; // Green
+      return '#2D7A52'; // Green
     case 'IN_PERSON':
       return '#dc2626'; // Red
     default:

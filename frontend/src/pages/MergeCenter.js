@@ -276,7 +276,7 @@ function MergeCenter() {
   };
 
   const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.85) return '#10b981';
+    if (confidence >= 0.85) return '#2D7A52';
     if (confidence >= 0.65) return '#f59e0b';
     return '#ef4444';
   };

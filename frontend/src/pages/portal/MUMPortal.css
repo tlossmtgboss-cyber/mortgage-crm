@@ -72,7 +72,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  color: #218D8D;
+  color: #1F3D2E;
   text-transform: uppercase;
 }
 
@@ -128,7 +128,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  color: #218D8D;
+  color: #1F3D2E;
   text-transform: uppercase;
   margin-bottom: 4px;
 }
@@ -348,7 +348,7 @@
 .action-icon-star { background: #fefce8; color: #eab308; }
 .action-icon-gift { background: #fdf2f8; color: #ec4899; }
 .action-icon-alert { background: #fef2f2; color: #ef4444; }
-.action-icon-calendar { background: #f5f3ff; color: #8b5cf6; }
+.action-icon-calendar { background: #FDF9F0; color: #B8924A; }
 .action-icon-check { background: #f0fdf4; color: #16a34a; }
 
 .action-item.completed .action-icon {
@@ -414,7 +414,7 @@
 .view-link {
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -423,7 +423,7 @@
 }
 
 .view-link:hover {
-  color: #1a7070;
+  color: #2A4F3D;
   text-decoration: underline;
 }
 
@@ -508,7 +508,7 @@
 
 .copy-btn {
   padding: 10px 18px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -518,7 +518,7 @@
 }
 
 .copy-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .referral-stats {
@@ -762,7 +762,7 @@
 }
 
 .servicer-phone a {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
   font-size: 14px;
 }
@@ -774,7 +774,7 @@
 .servicer-link {
   display: inline-block;
   padding: 8px 16px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
   border-radius: 6px;
   font-size: 13px;
@@ -783,7 +783,7 @@
 }
 
 .servicer-link:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 
@@ -858,7 +858,7 @@
 
 .contact-action-link {
   font-size: 13px;
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
 }
 
@@ -878,7 +878,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid #e2e8f0;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   margin: 0 auto 12px;

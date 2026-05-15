@@ -148,7 +148,7 @@
 .badge-doc_requested { background: #fef3c7; color: #92400e; }
 .badge-doc_overdue { background: #fce7f3; color: #9d174d; }
 .badge-doc_expiring { background: #ffedd5; color: #c2410c; }
-.badge-condition_added { background: #ede9fe; color: #5b21b6; }
+.badge-condition_added { background: #FAF3E5; color: #6B5424; }
 .badge-doc_rejected { background: #fee2e2; color: #991b1b; }
 .badge-manual { background: #e0f2fe; color: #0369a1; }
 
@@ -172,7 +172,7 @@
 .btn-clone:hover { background: #eff6ff; }
 .btn-edit { color: #0369a1; border-color: #bae6fd; }
 .btn-edit:hover { background: #f0f9ff; }
-.btn-activate { color: #059669; border-color: #a7f3d0; }
+.btn-activate { color: #2D7A52; border-color: #a7f3d0; }
 .btn-activate:hover { background: #ecfdf5; }
 .btn-deactivate { color: #dc2626; border-color: #fecaca; }
 .btn-deactivate:hover { background: #fef2f2; }
@@ -271,7 +271,7 @@
   color: #94a3b8;
 }
 .response-badge {
-  color: #059669;
+  color: #2D7A52;
   font-weight: 600;
 }
 
@@ -312,7 +312,7 @@
   border-left: 2px solid #e2e8f0;
 }
 .timeline-step:last-child { border-left-color: transparent; }
-.timeline-step--delivered { border-left-color: #10b981; }
+.timeline-step--delivered { border-left-color: #2D7A52; }
 .timeline-step--failed { border-left-color: #ef4444; }
 
 .timeline-dot {
@@ -325,7 +325,7 @@
   background: #e2e8f0;
   border: 2px solid #fff;
 }
-.timeline-step--delivered .timeline-dot { background: #10b981; }
+.timeline-step--delivered .timeline-dot { background: #2D7A52; }
 .timeline-step--failed .timeline-dot { background: #ef4444; }
 .timeline-step--pending .timeline-dot { background: #f59e0b; }
 
@@ -395,7 +395,7 @@
 }
 .channel-name { font-weight: 500; min-width: 150px; }
 .channel-sent { color: #64748b; font-size: 0.88em; }
-.channel-response { color: #059669; font-size: 0.88em; font-weight: 500; }
+.channel-response { color: #2D7A52; font-size: 0.88em; font-weight: 500; }
 
 .analytics-table {
   width: 100%;

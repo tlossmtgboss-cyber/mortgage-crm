@@ -6,10 +6,10 @@ import { getToken } from '../utils/tokenStore';
 const VERIFICATION_STATUSES = {
   'PENDING': { label: 'Pending Verification', color: '#6b7280', bgColor: '#f3f4f6' },
   'DOCUMENTS_RECEIVED': { label: 'Docs Received', color: '#d97706', bgColor: '#fef3c7' },
-  'VERIFIED': { label: 'Verified', color: '#059669', bgColor: '#d1fae5' },
+  'VERIFIED': { label: 'Verified', color: '#2D7A52', bgColor: '#d1fae5' },
   'NEEDS_VOE': { label: 'Needs VOE', color: '#dc2626', bgColor: '#fee2e2' },
-  'VOE_ORDERED': { label: 'VOE Ordered', color: '#7c3aed', bgColor: '#ede9fe' },
-  'VOE_COMPLETE': { label: 'VOE Complete', color: '#059669', bgColor: '#d1fae5' },
+  'VOE_ORDERED': { label: 'VOE Ordered', color: '#B8924A', bgColor: '#FAF3E5' },
+  'VOE_COMPLETE': { label: 'VOE Complete', color: '#2D7A52', bgColor: '#d1fae5' },
 };
 
 export default function EmploymentTab({ leadId, formData, onFieldChange, entityType = 'leads' }) {

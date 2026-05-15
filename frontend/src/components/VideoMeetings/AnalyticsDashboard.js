@@ -75,7 +75,7 @@ const AnalyticsDashboard = ({ userId, recordingId }) => {
     switch (priority) {
       case 'high': return '#ef4444';
       case 'medium': return '#f59e0b';
-      case 'low': return '#10b981';
+      case 'low': return '#2D7A52';
       default: return '#6b7280';
     }
   };

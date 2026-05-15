@@ -92,7 +92,7 @@ class SectionErrorBoundary extends React.Component {
               padding: '6px 14px',
               fontSize: '12px',
               fontWeight: 600,
-              color: 'var(--color-primary, #218d8d)',
+              color: 'var(--color-primary, #1F3D2E)',
               background: 'var(--color-bg-surface, #fff)',
               border: '1px solid var(--color-border, rgba(139, 92, 68, 0.15))',
               borderRadius: 'var(--radius-sm, 6px)',

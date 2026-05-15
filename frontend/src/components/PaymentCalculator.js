@@ -781,11 +781,11 @@ const PaymentCalculator = ({
         }
 
         .breakdown-item.success .item-label {
-          color: #10b981;
+          color: #2D7A52;
         }
 
         .success-text {
-          color: #10b981;
+          color: #2D7A52;
         }
 
         /* Mortgage Insurance Section Styles */

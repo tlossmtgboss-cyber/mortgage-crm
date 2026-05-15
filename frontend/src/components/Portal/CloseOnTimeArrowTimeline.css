@@ -16,7 +16,7 @@
 }
 
 .arrow-timeline.partner-view {
-  border: 2px solid #6366f1;
+  border: 2px solid #B8924A;
 }
 
 /* Header */
@@ -39,8 +39,8 @@
 .partner-badge {
   display: inline-block;
   padding: 2px 8px;
-  background: #ede9fe;
-  color: #6366f1;
+  background: #FAF3E5;
+  color: #B8924A;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -206,7 +206,7 @@
 }
 
 .status-dot.completed {
-  background: #10b981;
+  background: #2D7A52;
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
 }
 
@@ -347,7 +347,7 @@
 }
 
 .detail-row .value.completed {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .overdue-warning {

@@ -59,23 +59,23 @@ const PROVIDER_CONFIG = {
   },
   perennia: {
     name: 'Perennia Meet',
-    color: '#217F8D',
+    color: '#1F3D2E',
     bgColor: '#E0F4F5',
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="20" height="20" rx="4" fill="#217F8D"/>
+        <rect width="20" height="20" rx="4" fill="#1F3D2E"/>
         <path d="M5 7.5C5 6.67 5.67 6 6.5 6H13.5C14.33 6 15 6.67 15 7.5V12.5C15 13.33 14.33 14 13.5 14H6.5C5.67 14 5 13.33 5 12.5V7.5Z" fill="white"/>
-        <circle cx="10" cy="10" r="2" fill="#217F8D"/>
+        <circle cx="10" cy="10" r="2" fill="#1F3D2E"/>
       </svg>
     ),
   },
   manual: {
     name: 'External Link',
-    color: '#7C3AED',
+    color: '#B8924A',
     bgColor: '#F3E8FF',
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="20" height="20" rx="4" fill="#7C3AED"/>
+        <rect width="20" height="20" rx="4" fill="#B8924A"/>
         <path d="M8 7L12 10L8 13V7Z" fill="white"/>
         <rect x="4" y="5" width="12" height="10" rx="2" stroke="white" strokeWidth="1.5" fill="none"/>
       </svg>
@@ -518,7 +518,7 @@ const styles = {
     padding: '6px 16px',
     fontSize: '13px',
     color: '#FFFFFF',
-    backgroundColor: '#217F8D',
+    backgroundColor: '#1F3D2E',
     border: 'none',
     borderRadius: '6px 0 0 6px',
     cursor: 'pointer',
@@ -611,7 +611,7 @@ const styles = {
     fontSize: '12px',
     fontWeight: 600,
     color: '#FFFFFF',
-    backgroundColor: '#217F8D',
+    backgroundColor: '#1F3D2E',
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',

@@ -89,7 +89,7 @@ const RecoveryProgressBar = React.memo(({ step, optedOut }) => (
             background: optedOut && s > step
               ? '#fecaca'
               : s <= step
-                ? '#6366f1'
+                ? '#B8924A'
                 : '#e2e8f0',
             transition: 'background 0.3s ease',
           }}
@@ -341,9 +341,9 @@ function NoShowRecoveryDashboard({ token }) {
             style={{
               padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem',
               cursor: 'pointer', fontWeight: 500,
-              background: filter === f.key ? '#6366f1' : '#f1f5f9',
+              background: filter === f.key ? '#B8924A' : '#f1f5f9',
               color: filter === f.key ? '#fff' : '#64748b',
-              border: filter === f.key ? '1px solid #6366f1' : '1px solid #e2e8f0',
+              border: filter === f.key ? '1px solid #B8924A' : '1px solid #e2e8f0',
             }}
           >
             {f.label}

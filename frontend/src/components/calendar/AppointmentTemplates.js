@@ -141,7 +141,7 @@ function TemplateCard({ template, onEdit, onDuplicate, onDelete, onToggle }) {
           </span>
         )}
         {(template.buffer_before_minutes > 0 || template.buffer_after_minutes > 0) && (
-          <span style={{ padding: '2px 10px', borderRadius: 12, background: '#ede9fe', color: '#5b21b6', fontWeight: 500 }}>
+          <span style={{ padding: '2px 10px', borderRadius: 12, background: '#FAF3E5', color: '#6B5424', fontWeight: 500 }}>
             Buffer: {template.buffer_before_minutes}m / {template.buffer_after_minutes}m
           </span>
         )}

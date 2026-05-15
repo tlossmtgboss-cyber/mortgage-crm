@@ -47,12 +47,12 @@ const RecruitPortal = () => {
   const getStatusBadge = (status) => {
     const statusConfig = {
       new: { label: 'Application Received', color: '#3b82f6', icon: '📋' },
-      screening: { label: 'Under Review', color: '#8b5cf6', icon: '🔍' },
-      phone_screen: { label: 'Phone Screen', color: '#a855f7', icon: '📞' },
+      screening: { label: 'Under Review', color: '#B8924A', icon: '🔍' },
+      phone_screen: { label: 'Phone Screen', color: '#C9A44E', icon: '📞' },
       interview: { label: 'Interview Stage', color: '#f59e0b', icon: '🤝' },
       assessment: { label: 'Assessment', color: '#eab308', icon: '📝' },
       offer: { label: 'Offer Pending', color: '#22c55e', icon: '🎉' },
-      hired: { label: 'Hired!', color: '#10b981', icon: '✅' },
+      hired: { label: 'Hired!', color: '#2D7A52', icon: '✅' },
       rejected: { label: 'Not Selected', color: '#ef4444', icon: '❌' },
       withdrawn: { label: 'Withdrawn', color: '#6b7280', icon: '↩️' }
     };

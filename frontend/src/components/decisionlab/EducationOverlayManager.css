@@ -17,7 +17,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e5e7eb;
-  border-top-color: #217F8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -53,7 +53,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 10px;
@@ -336,8 +336,8 @@
 }
 
 .preview-toggle.active {
-  background: #217F8D;
-  border-color: #217F8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -419,8 +419,8 @@
 }
 
 .preview-tip {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #FAF3E5;
+  color: #6B5424;
 }
 
 .preview-takeaway {
@@ -484,7 +484,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
 }
 
@@ -516,7 +516,7 @@
 .checkbox-group input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #217F8D;
+  accent-color: #1F3D2E;
 }
 
 .checkbox-label {
@@ -551,7 +551,7 @@
 
 .save-button {
   padding: 12px 24px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 8px;

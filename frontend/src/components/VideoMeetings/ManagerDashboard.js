@@ -81,7 +81,7 @@ const ManagerDashboard = () => {
   };
 
   const getScoreColor = (score) => {
-    if (score >= 0.8) return '#10b981';
+    if (score >= 0.8) return '#2D7A52';
     if (score >= 0.6) return '#3b82f6';
     if (score >= 0.4) return '#f59e0b';
     return '#ef4444';
@@ -92,7 +92,7 @@ const ManagerDashboard = () => {
       case 'high':
       case 'critical': return '#ef4444';
       case 'medium': return '#f59e0b';
-      default: return '#10b981';
+      default: return '#2D7A52';
     }
   };
 
@@ -210,7 +210,7 @@ const ManagerDashboard = () => {
             </div>
             <div className="metric-card">
               <span className="metric-label">Avg Positive Sentiment</span>
-              <span className="metric-value" style={{ color: '#10b981' }}>
+              <span className="metric-value" style={{ color: '#2D7A52' }}>
                 {formatPercentage(dashboardData.team_averages?.positive_sentiment || 0)}
               </span>
             </div>

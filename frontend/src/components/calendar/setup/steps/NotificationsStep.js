@@ -312,7 +312,7 @@ function QuietHoursClock({ start, end, weekends }) {
         })}
 
         {/* Center label */}
-        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="7" fill="#218D8D" fontWeight="600">
+        <text x={cx} y={cy - 4} textAnchor="middle" fontSize="7" fill="#1F3D2E" fontWeight="600">
           Quiet
         </text>
         <text x={cx} y={cy + 5} textAnchor="middle" fontSize="6" fill="#6b7280">

@@ -2,25 +2,25 @@
 
 :root {
   /* ── Brand custom properties (overridden at runtime by BrandingContext) ── */
-  --brand-primary: #218d8d;
-  --brand-secondary: #7c3aed;
-  --brand-accent: #059669;
+  --brand-primary: #1F3D2E;
+  --brand-secondary: #B8924A;
+  --brand-accent: #2D7A52;
   --brand-header-bg: #ffffff;
   --brand-font: Inter, sans-serif;
 
   /* Color Palette — primary defers to brand color when set */
-  --color-primary: var(--brand-primary, #217F8D);
-  --color-primary-hover: #1a6670;
-  --color-success: #217F8D;
+  --color-primary: var(--brand-primary, #1F3D2E);
+  --color-primary-hover: #163127;
+  --color-success: #2D7A52;
   --color-error: #C0152F;
   --color-warning: #A84B2F;
   --color-info: #64748b;
 
   /* Background Colors */
-  --color-bg-base: #FCFCF9;
+  --color-bg-base: #FAF7F1;
   --color-bg-surface: #FFFFFF;
-  --color-bg-secondary: rgba(139, 92, 68, 0.05);
-  --color-bg-hover: rgba(139, 92, 68, 0.08);
+  --color-bg-secondary: rgba(31, 61, 46, 0.05);
+  --color-bg-hover: rgba(31, 61, 46, 0.08);
 
   /* Text Colors */
   --color-text-primary: #1a1a1a;
@@ -28,8 +28,8 @@
   --color-text-tertiary: #999999;
 
   /* Border Colors */
-  --color-border: rgba(139, 92, 68, 0.15);
-  --color-border-light: rgba(139, 92, 68, 0.08);
+  --color-border: rgba(31, 61, 46, 0.15);
+  --color-border-light: rgba(31, 61, 46, 0.08);
 
   /* Spacing */
   --space-xs: 4px;
@@ -52,7 +52,7 @@
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
 
   /* Typography */
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', sans-serif;
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'Berkeley Mono', 'Courier New', monospace;
 
   /* Font Sizes */
@@ -245,7 +245,7 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
+  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.1);
 }
 
 /* Badge Styles */
@@ -259,7 +259,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .badge-success {
-  background: rgba(33, 127, 141, 0.1);
+  background: rgba(45, 122, 82, 0.1);
   color: var(--color-success);
 }
 

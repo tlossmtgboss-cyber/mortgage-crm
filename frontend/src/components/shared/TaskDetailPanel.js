@@ -30,12 +30,12 @@ import { getToken } from '../../utils/tokenStore';
 
 // Lead stages (pre-contract, before becoming an active loan)
 const LEAD_STATUS_OPTIONS = [
-  { value: 'new', label: 'New', color: '#6366f1' },
-  { value: 'attempted_contact', label: 'Attempted Contact', color: '#8b5cf6' },
+  { value: 'new', label: 'New', color: '#B8924A' },
+  { value: 'attempted_contact', label: 'Attempted Contact', color: '#B8924A' },
   { value: 'prospect', label: 'Prospect', color: '#06b6d4' },
   { value: 'pre_qualified', label: 'Pre-Qualified', color: '#0ea5e9' },
-  { value: 'pre_approved', label: 'Pre-Approved', color: '#10b981' },
-  { value: 'long_term_nurture', label: 'Long-Term Nurture', color: '#a855f7' },
+  { value: 'pre_approved', label: 'Pre-Approved', color: '#2D7A52' },
+  { value: 'long_term_nurture', label: 'Long-Term Nurture', color: '#C9A44E' },
   { value: 'credit_repair', label: 'Credit Repair', color: '#f97316' },
   { value: 'do_not_call', label: 'Do Not Call', color: '#dc2626' }
 ];
@@ -43,10 +43,10 @@ const LEAD_STATUS_OPTIONS = [
 // Loan stages (active loans - from Application onwards)
 const LOAN_STATUS_OPTIONS = [
   { value: 'application', label: 'Application', color: '#f59e0b' },
-  { value: 'disclosed', label: 'Disclosed', color: '#8b5cf6' },
+  { value: 'disclosed', label: 'Disclosed', color: '#B8924A' },
   { value: 'processing', label: 'In Processing', color: '#f97316' },
   { value: 'in_underwriting', label: 'In Underwriting', color: '#0ea5e9' },
-  { value: 'approved', label: 'Approved', color: '#10b981' },
+  { value: 'approved', label: 'Approved', color: '#2D7A52' },
   { value: 'clear_to_close', label: 'Clear to Close', color: '#22c55e' },
   { value: 'suspended', label: 'Suspended', color: '#f59e0b' },
   { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' },
@@ -662,7 +662,7 @@ const TaskDetailPanel = ({
                 onClick={hasEntityLink ? handleNavigateToEntity : undefined}
                 style={{
                   cursor: hasEntityLink ? 'pointer' : 'default',
-                  color: hasEntityLink ? '#218D8D' : 'inherit',
+                  color: hasEntityLink ? '#1F3D2E' : 'inherit',
                   textDecoration: hasEntityLink ? 'underline' : 'none'
                 }}
               >
@@ -810,7 +810,7 @@ const TaskDetailPanel = ({
             {/* Workflow badge if applicable */}
             {task.workflow_name && (
               <p className="task-workflow-info">
-                <span className="workflow-badge" style={{ backgroundColor: task.workflow_color || '#218D8D' }}>
+                <span className="workflow-badge" style={{ backgroundColor: task.workflow_color || '#1F3D2E' }}>
                   {task.workflow_name}
                 </span>
                 {task.days_until_due !== undefined && (

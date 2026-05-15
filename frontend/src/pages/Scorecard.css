@@ -298,7 +298,7 @@
 
 .btn-export {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -309,7 +309,7 @@
 }
 
 .btn-export:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(33, 141, 141, 0.3);
 }
@@ -397,12 +397,12 @@
 
 .progress-fill {
   height: 100%;
-  background: #218D8D;
+  background: #1F3D2E;
   transition: width 0.5s ease;
 }
 
 .progress-fill.over-goal {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 /* Volume & Revenue Grid */
@@ -581,7 +581,7 @@
 
 .volume-amount {
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   font-variant-numeric: tabular-nums;
 }
 
@@ -737,7 +737,7 @@
 }
 
 .stat-value.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .stat-value.negative {
@@ -754,7 +754,7 @@
 
 .btn-primary {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -765,7 +765,7 @@
 }
 
 .btn-primary:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
 }
 
@@ -932,13 +932,13 @@
 }
 
 .tab-button:hover {
-  color: #218D8D;
+  color: #1F3D2E;
   background: #f8fafc;
 }
 
 .tab-button.active {
-  color: #218D8D;
-  border-bottom-color: #218D8D;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
 }
 
 .scorecard-content {

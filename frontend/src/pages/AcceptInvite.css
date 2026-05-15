@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   padding: 2rem;
 }
 
@@ -89,7 +89,7 @@
 
 .success-icon {
   background: #d1fae5;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .error-icon svg,
@@ -201,7 +201,7 @@
 .detail-value.role-badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #3b82f6, #B8924A);
   color: white;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -347,12 +347,12 @@
 }
 
 .password-requirements li.met {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .password-requirements li.met::before {
-  background: #10b981;
-  border-color: #10b981;
+  background: #2D7A52;
+  border-color: #2D7A52;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
   background-size: 10px;
   background-position: center;
@@ -396,7 +396,7 @@
 
 .btn-submit {
   width: 100%;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #3b82f6, #B8924A);
   color: white;
   padding: 0.875rem 1.5rem;
 }

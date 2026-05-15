@@ -11,15 +11,15 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 // The 10 workflow definitions matching backend
 const WORKFLOW_TABS = [
   { key: 'prospect', name: 'Prospect', color: '#3b82f6' },
-  { key: 'prequal', name: 'PreQual', color: '#8b5cf6' },
-  { key: 'pre_approved', name: 'Pre-Approval', color: '#10b981' },
+  { key: 'prequal', name: 'PreQual', color: '#B8924A' },
+  { key: 'pre_approved', name: 'Pre-Approval', color: '#2D7A52' },
   { key: 'under_contract', name: 'Under Contract', color: '#f59e0b' },
   { key: 'lead_purchase', name: 'Lead Purchase', color: '#ec4899' },
   { key: 'theme_day', name: 'Theme Day', color: '#06b6d4' },
   { key: 'last_mile', name: 'Last Mile', color: '#14b8a6' },
   { key: 'post_close', name: 'Post Close', color: '#22c55e' },
   { key: 'credit_repair', name: 'Credit Repair', color: '#f97316' },
-  { key: 'nurture', name: 'Nurture', color: '#6366f1' }
+  { key: 'nurture', name: 'Nurture', color: '#B8924A' }
 ];
 
 // View mode tabs

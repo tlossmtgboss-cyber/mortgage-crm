@@ -2722,7 +2722,7 @@ export default function PurchaseApplication() {
                 onClick={() => setCurrentStage('declarations')}
                 style={{
                   padding: '12px 32px',
-                  background: '#6366f1',
+                  background: '#B8924A',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
@@ -3296,7 +3296,7 @@ export default function PurchaseApplication() {
                 <div className="residence-progress-bar">
                   <div
                     className="residence-progress-fill"
-                    style={{ width: `${progressPercent}%`, backgroundColor: needsMore ? '#f59e0b' : '#10b981' }}
+                    style={{ width: `${progressPercent}%`, backgroundColor: needsMore ? '#f59e0b' : '#2D7A52' }}
                   />
                 </div>
                 <div className="residence-progress-text">

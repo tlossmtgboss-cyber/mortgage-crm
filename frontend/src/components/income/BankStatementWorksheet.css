@@ -50,7 +50,7 @@
 
 .bsw-success {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
   border: 1px solid #6ee7b7;
 }
 
@@ -247,7 +247,7 @@
 
 .bsw-doc-item .doc-status {
   font-size: 16px;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .bsw-no-docs {
@@ -413,12 +413,12 @@
 }
 
 .bsw-btn.download {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
 }
 
 .bsw-btn.download:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
 }

@@ -4,7 +4,7 @@
 
 .morning-briefing-card {
   background: linear-gradient(135deg, #f0fafa, #ffffff);
-  border: 1px solid #218d8d33;
+  border: 1px solid #1F3D2E33;
   border-radius: 12px;
   margin-bottom: 20px;
   overflow: hidden;
@@ -12,7 +12,7 @@
 }
 
 /* Health-tinted top border */
-.morning-briefing-card.health-green { border-top: 3px solid #10b981; }
+.morning-briefing-card.health-green { border-top: 3px solid #2D7A52; }
 .morning-briefing-card.health-yellow { border-top: 3px solid #f59e0b; }
 .morning-briefing-card.health-red { border-top: 3px solid #ef4444; }
 
@@ -54,7 +54,7 @@
   flex-shrink: 0;
 }
 
-.health-indicator.green { background: #10b981; box-shadow: 0 0 4px #10b98155; }
+.health-indicator.green { background: #2D7A52; box-shadow: 0 0 4px #2D7A5255; }
 .health-indicator.yellow { background: #f59e0b; box-shadow: 0 0 4px #f59e0b55; }
 .health-indicator.red { background: #ef4444; box-shadow: 0 0 4px #ef444455; animation: pulse-red 2s infinite; }
 
@@ -145,7 +145,7 @@
 .narrative-toggle {
   background: none;
   border: none;
-  color: #218d8d;
+  color: #1F3D2E;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -192,7 +192,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #218d8d;
+  color: #1F3D2E;
   text-align: left;
 }
 
@@ -211,8 +211,8 @@
 }
 
 .section-badge {
-  background: #218d8d18;
-  color: #218d8d;
+  background: #1F3D2E18;
+  color: #1F3D2E;
   font-size: 11px;
   font-weight: 700;
   padding: 1px 7px;
@@ -283,7 +283,7 @@
   margin-left: 4px;
 }
 
-.trend-arrow.up { color: #10b981; }
+.trend-arrow.up { color: #2D7A52; }
 .trend-arrow.down { color: #ef4444; }
 .trend-arrow.neutral { color: #8888a0; }
 
@@ -307,7 +307,7 @@
 }
 
 .stage-pill strong {
-  color: #218d8d;
+  color: #1F3D2E;
   margin-left: 3px;
 }
 
@@ -335,7 +335,7 @@
 }
 
 .item-link {
-  color: #218d8d;
+  color: #1F3D2E;
   text-decoration: none;
 }
 
@@ -405,7 +405,7 @@
 /* Appointments */
 .appt-time {
   font-weight: 600;
-  color: #218d8d;
+  color: #1F3D2E;
   min-width: 70px;
   font-size: 12px;
 }
@@ -443,7 +443,7 @@
   margin-right: 6px;
 }
 
-.health-dot.green { background: #10b981; }
+.health-dot.green { background: #2D7A52; }
 .health-dot.yellow { background: #f59e0b; }
 .health-dot.red { background: #ef4444; }
 

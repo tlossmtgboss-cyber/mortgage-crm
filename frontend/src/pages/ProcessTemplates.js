@@ -125,7 +125,7 @@ function ProcessTemplates() {
       case 'high': return '#ef4444';
       case 'medium': return '#f59e0b';
       case 'low': return '#3b82f6';
-      case 'info': return '#10b981';
+      case 'info': return '#2D7A52';
       default: return '#6b7280';
     }
   };
@@ -224,7 +224,7 @@ function ProcessTemplates() {
                         className="score-fill"
                         style={{
                           width: `${suggestion.efficiency_score}%`,
-                          backgroundColor: suggestion.efficiency_score >= 70 ? '#10b981' : '#f59e0b'
+                          backgroundColor: suggestion.efficiency_score >= 70 ? '#2D7A52' : '#f59e0b'
                         }}
                       />
                     </div>

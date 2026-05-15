@@ -374,7 +374,7 @@ export default function CalendarFeedSettings() {
             width: 10,
             height: 10,
             borderRadius: '50%',
-            background: isActive ? '#10b981' : '#d1d5db',
+            background: isActive ? '#2D7A52' : '#d1d5db',
           }} />
           <span style={{ fontSize: 15, fontWeight: 500, color: '#111827' }}>
             {isActive ? 'Feed Active' : 'Feed Not Configured'}

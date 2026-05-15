@@ -78,8 +78,8 @@
 }
 
 .section-tab.active {
-  background: #218D8D;
-  border-color: #218D8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -135,7 +135,7 @@
 }
 
 .image-preview:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #e6fffa;
 }
 
@@ -202,7 +202,7 @@
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .form-group input::placeholder,
@@ -245,7 +245,7 @@
 .btn-save-signature {
   width: 100%;
   padding: 14px 24px;
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 10px;

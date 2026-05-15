@@ -730,7 +730,7 @@ function MumClientDetail() {
             onClick={handleOpenClientFile}
             disabled={clientFileLoading}
             style={{
-              background: '#6366f1',
+              background: '#B8924A',
               color: 'white',
               border: 'none',
               padding: '8px 16px',

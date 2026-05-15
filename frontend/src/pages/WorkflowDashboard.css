@@ -17,7 +17,7 @@
 }
 
 .theme-day-badge {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   padding: 8px 16px;
   border-radius: 20px;
@@ -48,7 +48,7 @@
   padding: 20px;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid #667eea;
+  border-left: 4px solid #1F3D2E;
 }
 
 .metric-card.warning {
@@ -100,7 +100,7 @@
 }
 
 .workflow-tabs button.active {
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -207,7 +207,7 @@
   border-radius: 8px;
   margin-bottom: 8px;
   background: #f9fafb;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid #1F3D2E;
 }
 
 .task-item.priority-high, .alert-item.severity-high {
@@ -259,16 +259,16 @@
 }
 
 .btn-complete {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-complete:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .btn-acknowledge {
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -291,7 +291,7 @@
 
 .btn-primary {
   padding: 10px 20px;
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -361,13 +361,13 @@
 }
 
 .status-badge {
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: #F5EDD9;
+  color: #8A6D30;
 }
 
 .status-badge.sent {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-badge.draft {
@@ -399,7 +399,7 @@
 }
 
 .theme-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   padding: 20px;
   border-radius: 12px;
@@ -445,7 +445,7 @@
 /* View Button */
 .btn-view {
   padding: 6px 12px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -585,14 +585,14 @@
   padding: 12px 16px;
   background: #f9fafb;
   border-radius: 8px;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid #1F3D2E;
   position: relative;
 }
 
 .template-sequence {
   width: 28px;
   height: 28px;
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -666,7 +666,7 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   padding: 2px 6px;
   border-radius: 4px;
@@ -715,7 +715,7 @@
 /* Configure Workflow Button */
 .btn-configure-workflow {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #5a67d8 100%);
   color: white;
   border: none;
   border-radius: 6px;

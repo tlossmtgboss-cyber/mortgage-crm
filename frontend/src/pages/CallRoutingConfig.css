@@ -38,13 +38,13 @@
 }
 
 .routing-tabs button:hover {
-  color: #4f46e5;
-  background: #f5f3ff;
+  color: #8A6D30;
+  background: #FDF9F0;
 }
 
 .routing-tabs button.active {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: #8A6D30;
+  border-bottom-color: #8A6D30;
 }
 
 /* Overview Tab */
@@ -84,15 +84,15 @@
   padding: 16px;
   background: #f8fafc;
   border-radius: 8px;
-  border-left: 4px solid #4f46e5;
+  border-left: 4px solid #8A6D30;
 }
 
 .flow-step.receptionist {
-  border-left-color: #6366f1;
+  border-left-color: #B8924A;
 }
 
 .flow-step.lead {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
 }
 
 .flow-step.active-loan {
@@ -100,7 +100,7 @@
 }
 
 .flow-step.mum {
-  border-left-color: #8b5cf6;
+  border-left-color: #B8924A;
 }
 
 .flow-icon {
@@ -115,7 +115,7 @@
 }
 
 .flow-step.receptionist .flow-icon {
-  background: #e0e7ff;
+  background: #F5EDD9;
 }
 
 .flow-step.lead .flow-icon {
@@ -127,7 +127,7 @@
 }
 
 .flow-step.mum .flow-icon {
-  background: #ede9fe;
+  background: #FAF3E5;
 }
 
 .flow-content {
@@ -176,7 +176,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #4f46e5;
+  background: #8A6D30;
   color: white;
   border-radius: 50%;
   font-size: 14px;
@@ -214,11 +214,11 @@
 }
 
 .assistant-card.receptionist {
-  border-top: 4px solid #6366f1;
+  border-top: 4px solid #B8924A;
 }
 
 .assistant-card.lead {
-  border-top: 4px solid #10b981;
+  border-top: 4px solid #2D7A52;
 }
 
 .assistant-card.active_loan {
@@ -226,7 +226,7 @@
 }
 
 .assistant-card.mum {
-  border-top: 4px solid #8b5cf6;
+  border-top: 4px solid #B8924A;
 }
 
 .assistant-header {
@@ -247,7 +247,7 @@
 }
 
 .assistant-card.receptionist .assistant-icon {
-  background: #e0e7ff;
+  background: #F5EDD9;
 }
 
 .assistant-card.lead .assistant-icon {
@@ -259,7 +259,7 @@
 }
 
 .assistant-card.mum .assistant-icon {
-  background: #ede9fe;
+  background: #FAF3E5;
 }
 
 .assistant-info h4 {
@@ -326,8 +326,8 @@
 
 .assistant-id code {
   font-size: 11px;
-  color: #4f46e5;
-  background: #e0e7ff;
+  color: #8A6D30;
+  background: #F5EDD9;
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'Monaco', 'Menlo', monospace;
@@ -372,12 +372,12 @@
 
 .test-input-group input:focus {
   outline: none;
-  border-color: #4f46e5;
+  border-color: #8A6D30;
 }
 
 .test-input-group button {
   padding: 12px 24px;
-  background: #4f46e5;
+  background: #8A6D30;
   color: white;
   border: none;
   border-radius: 8px;
@@ -390,7 +390,7 @@
 }
 
 .test-input-group button:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 .test-input-group button:disabled {
@@ -531,8 +531,8 @@
 }
 
 .caller-type-badge.mum {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #FAF3E5;
+  color: #6B5424;
 }
 
 .caller-type-badge.unknown {
@@ -591,7 +591,7 @@
 .webhook-url code {
   flex: 1;
   font-size: 13px;
-  color: #4f46e5;
+  color: #8A6D30;
   font-family: 'Monaco', 'Menlo', monospace;
   word-break: break-all;
 }
@@ -612,7 +612,7 @@
 
 .setup-btn {
   padding: 12px 24px;
-  background: #4f46e5;
+  background: #8A6D30;
   color: white;
   border: none;
   border-radius: 8px;
@@ -625,7 +625,7 @@
 }
 
 .setup-btn:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 .setup-btn:disabled {
@@ -660,7 +660,7 @@
 }
 
 .setup-status.info {
-  background: #e0e7ff;
+  background: #F5EDD9;
   color: #3730a3;
 }
 
@@ -709,7 +709,7 @@
   width: 24px;
   height: 24px;
   border: 3px solid #e5e7eb;
-  border-top-color: #4f46e5;
+  border-top-color: #8A6D30;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-right: 12px;

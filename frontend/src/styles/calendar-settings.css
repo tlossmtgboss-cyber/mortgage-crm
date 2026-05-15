@@ -662,7 +662,7 @@
 }
 
 .time-block-card:hover {
-  border-color: var(--cal-accent, #4f46e5);
+  border-color: var(--cal-accent, #8A6D30);
 }
 
 .time-block-card.time-block-disabled {
@@ -690,7 +690,7 @@
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  accent-color: var(--cal-accent, #4f46e5);
+  accent-color: var(--cal-accent, #8A6D30);
   cursor: pointer;
 }
 
@@ -712,7 +712,7 @@
 }
 
 .time-block-label-input:focus {
-  border-bottom: 2px solid var(--cal-accent, #4f46e5);
+  border-bottom: 2px solid var(--cal-accent, #8A6D30);
 }
 
 .time-block-config {
@@ -765,13 +765,13 @@
 }
 
 .time-block-day-btn:hover:not(:disabled) {
-  border-color: var(--cal-accent, #4f46e5);
-  color: var(--cal-accent, #4f46e5);
+  border-color: var(--cal-accent, #8A6D30);
+  color: var(--cal-accent, #8A6D30);
 }
 
 .time-block-day-btn.active {
-  background: var(--cal-accent, #4f46e5);
-  border-color: var(--cal-accent, #4f46e5);
+  background: var(--cal-accent, #8A6D30);
+  border-color: var(--cal-accent, #8A6D30);
   color: white;
 }
 
@@ -788,7 +788,7 @@
   border: 1px dashed var(--cal-border);
   border-radius: 8px;
   background: none;
-  color: var(--cal-accent, #4f46e5);
+  color: var(--cal-accent, #8A6D30);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -797,7 +797,7 @@
 
 .btn-add-time-block:hover {
   background: var(--cal-bg-secondary);
-  border-color: var(--cal-accent, #4f46e5);
+  border-color: var(--cal-accent, #8A6D30);
 }
 
 .quiet-hours-row {
@@ -4998,7 +4998,7 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background-color: var(--cal-accent, #4f46e5);
+  background-color: var(--cal-accent, #8A6D30);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -5073,7 +5073,7 @@
 .btn-add-sm {
   background: none;
   border: 1px dashed var(--cal-border);
-  color: var(--cal-accent, #4f46e5);
+  color: var(--cal-accent, #8A6D30);
   padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;
@@ -5085,7 +5085,7 @@
 
 .btn-add-sm:hover {
   background: var(--cal-bg-secondary);
-  border-color: var(--cal-accent, #4f46e5);
+  border-color: var(--cal-accent, #8A6D30);
 }
 
 /* Setting row grid */
@@ -5178,7 +5178,7 @@
 }
 
 .btn-primary-sm {
-  background: var(--cal-accent, #4f46e5);
+  background: var(--cal-accent, #8A6D30);
   color: white;
   border: none;
   padding: 8px 16px;
@@ -5190,7 +5190,7 @@
 }
 
 .btn-primary-sm:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 .btn-secondary-sm {
@@ -5261,7 +5261,7 @@
 }
 
 .cadence-card-inline:hover {
-  border-color: var(--cal-accent, #4f46e5);
+  border-color: var(--cal-accent, #8A6D30);
 }
 
 .cadence-card-inline.inactive {
@@ -5359,7 +5359,7 @@
   border-radius: 4px;
   font-weight: 600;
   font-size: 11px;
-  color: var(--cal-accent, #4f46e5);
+  color: var(--cal-accent, #8A6D30);
 }
 
 .seq-ch {
@@ -5473,7 +5473,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  background: var(--cal-accent, #4f46e5);
+  background: var(--cal-accent, #8A6D30);
   color: white;
   border-radius: 50%;
   font-size: 12px;
@@ -5660,7 +5660,7 @@
   margin-bottom: 4px;
 }
 
-.cal-settings-test-result.success .test-result-header i { color: #059669; }
+.cal-settings-test-result.success .test-result-header i { color: #2D7A52; }
 .cal-settings-test-result.warning .test-result-header i { color: #d97706; }
 
 .test-result-header strong {

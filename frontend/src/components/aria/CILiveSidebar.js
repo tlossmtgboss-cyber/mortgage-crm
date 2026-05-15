@@ -130,7 +130,7 @@ const CILiveSidebar = ({
           animation-duration: 0.5s;
         }
         .ci-sb-rec--done {
-          background: #10b981;
+          background: #2D7A52;
           animation: none;
         }
         @keyframes ci-sb-blink {
@@ -164,7 +164,7 @@ const CILiveSidebar = ({
           font-weight: 600;
           color: #f87171;
         }
-        .ci-sb-timer--done { color: #10b981; }
+        .ci-sb-timer--done { color: #2D7A52; }
         .ci-sb-close {
           background: none;
           border: 1px solid rgba(255,255,255,0.1);
@@ -230,7 +230,7 @@ const CILiveSidebar = ({
           animation: ci-sb-blink 1s ease-in-out infinite;
         }
         .ci-quad__status--complete {
-          background: #10b981;
+          background: #2D7A52;
         }
         .ci-quad__status--idle {
           background: #475569;
@@ -354,7 +354,7 @@ const CILiveSidebar = ({
         }
         .ci-sb-evt__val {
           font-size: 11px;
-          color: #10b981;
+          color: #2D7A52;
           margin-top: 1px;
           font-weight: 500;
         }
@@ -364,7 +364,7 @@ const CILiveSidebar = ({
           flex-shrink: 0;
           font-family: 'SF Mono', monospace;
         }
-        .ci-sb-evt--complete .ci-sb-evt__msg { color: #10b981; }
+        .ci-sb-evt--complete .ci-sb-evt__msg { color: #2D7A52; }
         .ci-sb-evt--error .ci-sb-evt__msg { color: #f87171; }
 
         .ci-sb-empty {

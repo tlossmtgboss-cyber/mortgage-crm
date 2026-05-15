@@ -31,7 +31,7 @@
 }
 
 .checkin-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -84,7 +84,7 @@
 }
 
 .summary-card.highlight {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -160,7 +160,7 @@
 }
 
 .primary-btn {
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -189,12 +189,12 @@
 }
 
 .partner-card:hover {
-  border-color: #667eea;
+  border-color: #1F3D2E;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .partner-card.expanded {
-  border-color: #667eea;
+  border-color: #1F3D2E;
 }
 
 .partner-main {

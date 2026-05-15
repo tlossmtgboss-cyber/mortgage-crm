@@ -13,17 +13,17 @@
   /* Colors — Perennia AI brand */
   --pf-deep-space: #060A10;
   --pf-electric-blue: #7EB8F7;
-  --pf-primary: #218d8d;
-  --pf-secondary: #7c3aed;
-  --pf-accent: #059669;
+  --pf-primary: #1F3D2E;
+  --pf-secondary: #B8924A;
+  --pf-accent: #2D7A52;
   --pf-danger: #e74c3c;
   --pf-warning: #f39c12;
-  --pf-success: #27ae60;
+  --pf-success: #2D7A52;
 
   /* Typography */
-  --pf-font-display: 'Cormorant Garamond', serif;
+  --pf-font-display: 'Fraunces', Georgia, serif;
   --pf-font-mono: 'DM Mono', monospace;
-  --pf-font-body: 'DM Sans', 'Inter', sans-serif;
+  --pf-font-body: 'Inter', 'DM Sans', system-ui, sans-serif;
 
   /* Spacing */
   --pf-space-xs: 4px;

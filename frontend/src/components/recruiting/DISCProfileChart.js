@@ -24,7 +24,7 @@ const DISC_STYLES = {
   S: {
     label: 'Steadiness',
     shortLabel: 'S',
-    color: '#10b981',
+    color: '#2D7A52',
     description: 'Patient, reliable, team-oriented',
     traits: ['Supportive', 'Stable', 'Sincere', 'Steady'],
     loRelevance: 'Following through on process and client care'
@@ -308,7 +308,7 @@ export function DISCRadarChart({ scores = {}, showIdeal = true, size = 200 }) {
         <path
           d={pathD}
           fill="rgba(16, 185, 129, 0.2)"
-          stroke="#10b981"
+          stroke="#2D7A52"
           strokeWidth="2"
         />
 

@@ -73,8 +73,8 @@ const THEMES = [
 const COLOR_PRESETS = [
   { name: 'Classic Blue', primary: '#2563eb', secondary: '#1e40af' },
   { name: 'Bold Red', primary: '#dc2626', secondary: '#1e3a5f' },
-  { name: 'Forest Green', primary: '#059669', secondary: '#047857' },
-  { name: 'Royal Purple', primary: '#7c3aed', secondary: '#5b21b6' },
+  { name: 'Forest Green', primary: '#2D7A52', secondary: '#1F5A3A' },
+  { name: 'Royal Purple', primary: '#B8924A', secondary: '#6B5424' },
   { name: 'Warm Orange', primary: '#ea580c', secondary: '#c2410c' },
   { name: 'Elegant Gold', primary: '#ca8a04', secondary: '#854d0e' },
   { name: 'Ocean Teal', primary: '#0891b2', secondary: '#0e7490' },
@@ -486,7 +486,7 @@ const StepThemeSelection = ({ selectedTheme, onSelect }) => (
           {theme.recommended && <span className="recommended-badge">Recommended</span>}
 
           <div className="theme-preview">
-            <div className="theme-placeholder" style={{ background: theme.id === 'bold-impact' ? '#dc2626' : theme.id === 'professional-clean' ? '#2563eb' : theme.id === 'modern-gradient' ? 'linear-gradient(135deg, #7c3aed, #ec4899)' : '#475569' }}>
+            <div className="theme-placeholder" style={{ background: theme.id === 'bold-impact' ? '#dc2626' : theme.id === 'professional-clean' ? '#2563eb' : theme.id === 'modern-gradient' ? 'linear-gradient(135deg, #B8924A, #ec4899)' : '#475569' }}>
               <span>{theme.name.charAt(0)}</span>
             </div>
           </div>
@@ -742,7 +742,7 @@ const StepProfile = ({ data, onUpdate }) => {
               gap: '6px',
               padding: '6px 12px',
               fontSize: '13px',
-              background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+              background: 'linear-gradient(135deg, #B8924A, #B8924A)',
               color: 'white',
               border: 'none',
               borderRadius: '6px',

@@ -317,7 +317,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #10b981;
+  background: #2D7A52;
   flex-shrink: 0;
 }
 
@@ -384,7 +384,7 @@
 }
 
 .nav-item-icon.conditional {
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 .nav-category-badge {
@@ -1001,7 +1001,7 @@
 .conditional-toggle input {
   width: 16px;
   height: 16px;
-  accent-color: #8b5cf6;
+  accent-color: #B8924A;
 }
 
 .conditional-content {
@@ -1042,8 +1042,8 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: #ede9fe;
-  color: #6d28d9;
+  background: #FAF3E5;
+  color: #8A6D30;
   font-size: 11px;
   border-radius: 4px;
 }
@@ -1051,7 +1051,7 @@
 .conditional-value-chip button {
   background: none;
   border: none;
-  color: #8b5cf6;
+  color: #B8924A;
   cursor: pointer;
   padding: 0;
   font-size: 14px;
@@ -1059,7 +1059,7 @@
 }
 
 .conditional-value-chip button:hover {
-  color: #6d28d9;
+  color: #8A6D30;
 }
 
 .conditional-add-value {
@@ -1073,8 +1073,8 @@
 }
 
 .conditional-add-value:hover {
-  border-color: #8b5cf6;
-  color: #8b5cf6;
+  border-color: #B8924A;
+  color: #B8924A;
 }
 
 /* Move Buttons */
@@ -1226,12 +1226,12 @@
 
 /* Category Colors */
 .category-basic-info { background: #3b82f6; }
-.category-home-history { background: #10b981; }
+.category-home-history { background: #2D7A52; }
 .category-location { background: #f59e0b; }
 .category-personal { background: #ec4899; }
-.category-financial { background: #8b5cf6; }
-.category-military { background: #059669; }
-.category-employment { background: #6366f1; }
+.category-financial { background: #B8924A; }
+.category-military { background: #2D7A52; }
+.category-employment { background: #B8924A; }
 .category-credit { background: #ef4444; }
 .category-assets { background: #14b8a6; }
 .category-goals { background: #f97316; }

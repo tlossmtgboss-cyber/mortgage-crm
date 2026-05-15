@@ -2499,7 +2499,7 @@ const MeetingRoom = () => {
       {currentBreakoutRoom && (
         <div style={{
           position: 'fixed', bottom: '100px', left: '50%', transform: 'translateX(-50%)',
-          background: '#8b5cf6', color: 'white', padding: '8px 20px', borderRadius: '20px',
+          background: '#B8924A', color: 'white', padding: '8px 20px', borderRadius: '20px',
           fontSize: '13px', fontWeight: '600', zIndex: 99, display: 'flex', alignItems: 'center', gap: '10px'
         }}>
           <span>In Breakout: {breakoutRooms.find(r => r.id === currentBreakoutRoom)?.room_name || 'Room'}</span>
@@ -2786,7 +2786,7 @@ const MeetingRoom = () => {
                 onClick={() => submitParticipantConsent(true)}
                 style={{
                   padding: '8px 20px', borderRadius: '6px', border: 'none',
-                  background: '#10b981', color: 'white', fontWeight: '600', cursor: 'pointer'
+                  background: '#2D7A52', color: 'white', fontWeight: '600', cursor: 'pointer'
                 }}
               >
                 I Agree

@@ -256,7 +256,7 @@
 
 .status-badge.active {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-badge.inactive {
@@ -370,7 +370,7 @@
 }
 
 .webhook-stats .success {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .webhook-stats .failure {
@@ -716,7 +716,7 @@
 }
 
 .toast.success {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 

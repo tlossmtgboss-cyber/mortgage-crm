@@ -180,7 +180,7 @@ export function CarouselBuilderProvider({ children }) {
         title: 'New Slide',
         subtitle: '',
         background_type: 'solid',
-        background_color: '#217F8D',
+        background_color: '#1F3D2E',
         layout_template: 'centered',
         elements: [],
         ...slideData,

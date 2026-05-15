@@ -12,7 +12,7 @@ import './BlockedTimeManager.css';
 const BLOCK_TYPES = [
   { value: 'pto', label: 'PTO', icon: 'fa-umbrella-beach', color: '#0d9488' },
   { value: 'holiday', label: 'Holiday', icon: 'fa-gift', color: '#dc2626' },
-  { value: 'focus', label: 'Focus Time', icon: 'fa-bullseye', color: '#7c3aed' },
+  { value: 'focus', label: 'Focus Time', icon: 'fa-bullseye', color: '#B8924A' },
   { value: 'custom', label: 'Custom', icon: 'fa-clock', color: '#64748b' },
 ];
 

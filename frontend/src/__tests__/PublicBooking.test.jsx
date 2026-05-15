@@ -21,7 +21,7 @@ vi.mock('../hooks/useOrgBranding', () => ({
     branding: {
       org_name: 'Test Mortgage Co',
       logo_url: 'https://example.com/logo.png',
-      primary_color: '#217F8D',
+      primary_color: '#1F3D2E',
       accent_color: '#34a853',
       tagline: 'Your trusted mortgage partner',
       welcome_message: 'Welcome to our booking page',

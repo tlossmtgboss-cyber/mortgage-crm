@@ -10,18 +10,18 @@ const LEAD_STATUSES = {
   attempted_contact: { name: 'Attempted Contact', color: '#f59e0b' },
   prospect: { name: 'Prospect', color: '#3b82f6' },
   pre_qualified: { name: 'Pre-Qualified', color: '#06b6d4' },
-  pre_approved: { name: 'Pre-Approved', color: '#10b981' },
-  long_term_nurture: { name: 'Long-Term Nurture', color: '#8b5cf6' },
+  pre_approved: { name: 'Pre-Approved', color: '#2D7A52' },
+  long_term_nurture: { name: 'Long-Term Nurture', color: '#B8924A' },
   credit_repair: { name: 'Credit Repair', color: '#f97316' },
   do_not_call: { name: 'Do Not Call', color: '#dc2626' }
 };
 
 const ACTIVE_LOAN_STATUSES = {
-  application: { name: 'Application', color: '#8b5cf6' },
-  disclosed: { name: 'Disclosed', color: '#6366f1' },
+  application: { name: 'Application', color: '#B8924A' },
+  disclosed: { name: 'Disclosed', color: '#B8924A' },
   in_processing: { name: 'In Processing', color: '#3b82f6' },
-  underwriting_received: { name: 'Underwriting Received', color: '#8b5cf6' },
-  approved: { name: 'Approved', color: '#10b981' },
+  underwriting_received: { name: 'Underwriting Received', color: '#B8924A' },
+  approved: { name: 'Approved', color: '#2D7A52' },
   clear_to_close: { name: 'Clear to Close', color: '#f59e0b' },
   suspended: { name: 'Suspended', color: '#ef4444' },
   withdrawn: { name: 'Withdrawn', color: '#9ca3af' },
@@ -29,7 +29,7 @@ const ACTIVE_LOAN_STATUSES = {
 };
 
 const PORTFOLIO_STATUSES = {
-  closed_funded: { name: 'Closed and Funded', color: '#10b981' }
+  closed_funded: { name: 'Closed and Funded', color: '#2D7A52' }
 };
 
 const STAGE_CONFIG = {
@@ -75,7 +75,7 @@ const STAGE_CONFIG = {
   active_loan: {
     name: 'Active Loan',
     description: 'Loan processing and underwriting workflow',
-    color: '#10b981',
+    color: '#2D7A52',
     statuses: ACTIVE_LOAN_STATUSES,
     defaultTasksByStatus: {
       application: [
@@ -166,7 +166,7 @@ const STAGE_CONFIG = {
   portfolio: {
     name: 'Portfolio',
     description: 'Post-closing servicing and retention workflow',
-    color: '#8b5cf6',
+    color: '#B8924A',
     statuses: PORTFOLIO_STATUSES,
     defaultTasksByStatus: {
       closed_funded: [

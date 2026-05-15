@@ -32,8 +32,8 @@ const ROLE_ICONS = {
 
 const ROLE_COLORS = {
   loan_officer: '#3b82f6',
-  branch_manager: '#10b981',
-  area_manager: '#8b5cf6',
+  branch_manager: '#2D7A52',
+  area_manager: '#B8924A',
   regional_manager: '#f97316',
   production_assistant: '#ec4899',
   processor: '#06b6d4',
@@ -433,7 +433,7 @@ const PermissionsPage = () => {
               onClick={() => setActiveRole(role.key)}
               className={`role-tab ${isActive ? 'active' : ''}`}
               style={{
-                '--role-color': ROLE_COLORS[role.key] || '#6366f1',
+                '--role-color': ROLE_COLORS[role.key] || '#B8924A',
               }}
             >
               <span className="role-name">{role.name}</span>
@@ -446,7 +446,7 @@ const PermissionsPage = () => {
       {/* Active Role Header Card */}
       <div
         className="role-header-card"
-        style={{ '--role-color': ROLE_COLORS[activeRole] || '#6366f1' }}
+        style={{ '--role-color': ROLE_COLORS[activeRole] || '#B8924A' }}
       >
         <div className="role-header-content">
           <div className="role-header-left">
@@ -651,7 +651,7 @@ const PermissionsPage = () => {
                     key={role.key}
                     onClick={() => setCopyFromRole(role.key)}
                     className={`role-option ${isSelected ? 'selected' : ''}`}
-                    style={{ '--role-color': ROLE_COLORS[role.key] || '#6366f1' }}
+                    style={{ '--role-color': ROLE_COLORS[role.key] || '#B8924A' }}
                   >
                     <span className="role-option-name">{role.name}</span>
                     <span className="role-option-count">{stats.enabled} pages</span>

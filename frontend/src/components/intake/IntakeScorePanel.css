@@ -60,7 +60,7 @@
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border-radius: 10px;
   font-size: 11px;
@@ -113,7 +113,7 @@
 
 .score-band.band-green {
   background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  color: #2D7A52;
 }
 
 .score-band.band-yellow {
@@ -144,7 +144,7 @@
 }
 
 .score-value.score-green {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .score-value.score-yellow {
@@ -170,7 +170,7 @@
 }
 
 .score-bar-fill.score-green {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .score-bar-fill.score-yellow {

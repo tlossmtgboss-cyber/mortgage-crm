@@ -33,7 +33,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -51,8 +51,8 @@
 
 .btn-secondary {
   background: white;
-  color: #218D8D;
-  border: 2px solid #218D8D;
+  color: #1F3D2E;
+  border: 2px solid #1F3D2E;
   padding: 12px 24px;
   border-radius: var(--radius-md);
   font-weight: var(--weight-semibold);
@@ -61,7 +61,7 @@
 }
 
 .btn-secondary:hover {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .btn-load {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   padding: 6px 16px;
@@ -93,7 +93,7 @@
 }
 
 .btn-load:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .last-saved {
@@ -105,7 +105,7 @@
 /* History Panel */
 .history-panel {
   background: white;
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
   margin: var(--space-lg) 0;
@@ -124,7 +124,7 @@
 .history-header h3 {
   font-size: var(--font-xl);
   font-weight: var(--weight-bold);
-  color: #218D8D;
+  color: #1F3D2E;
   margin: 0;
 }
 
@@ -155,7 +155,7 @@
 }
 
 .history-item:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: var(--shadow-sm);
 }
 
@@ -214,7 +214,7 @@
 
 .key-box.calculated {
   background: #f3f4f6;
-  border-color: #059669;
+  border-color: #2D7A52;
 }
 
 /* Business Plans Container */
@@ -239,7 +239,7 @@
   margin-bottom: var(--space-xl);
   text-align: center;
   padding-bottom: var(--space-md);
-  border-bottom: 3px solid #218D8D;
+  border-bottom: 3px solid #1F3D2E;
 }
 
 .goal-sections {
@@ -264,7 +264,7 @@
 .goal-section h3 {
   font-size: var(--font-lg);
   font-weight: var(--weight-semibold);
-  color: #218D8D;
+  color: #1F3D2E;
   margin-bottom: var(--space-md);
   padding-bottom: var(--space-sm);
   border-bottom: 2px solid var(--color-border-light);
@@ -282,11 +282,11 @@
 .goal-summary-message {
   text-align: center;
   font-size: var(--font-xl);
-  color: #218D8D;
+  color: #1F3D2E;
   padding: var(--space-lg);
-  background: linear-gradient(135deg, #218D8D15 0%, #10b98115 100%);
+  background: linear-gradient(135deg, #1F3D2E15 0%, #2D7A5215 100%);
   border-radius: var(--radius-md);
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   margin-top: var(--space-lg);
 }
 
@@ -372,7 +372,7 @@
 .calculated-cell {
   background: #f3f4f6;
   font-weight: var(--weight-semibold);
-  color: #059669;
+  color: #2D7A52;
   padding: 8px var(--space-md);
   border-radius: 4px;
   width: 25%;
@@ -430,7 +430,7 @@
 }
 
 .metric-card {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   padding: var(--space-lg);
   border-radius: var(--radius-md);
@@ -464,8 +464,8 @@
 
 /* Summary Section */
 .summary-section {
-  background: linear-gradient(135deg, #218D8D15 0%, #10b98115 100%);
-  border: 2px solid #218D8D;
+  background: linear-gradient(135deg, #1F3D2E15 0%, #2D7A5215 100%);
+  border: 2px solid #1F3D2E;
 }
 
 .summary-grid {
@@ -477,7 +477,7 @@
 .summary-item strong {
   display: block;
   font-size: var(--font-lg);
-  color: #218D8D;
+  color: #1F3D2E;
   margin-bottom: var(--space-md);
 }
 
@@ -499,7 +499,7 @@
   content: '✓';
   position: absolute;
   left: 0;
-  color: #10b981;
+  color: #2D7A52;
   font-weight: var(--weight-bold);
 }
 
@@ -566,7 +566,7 @@
 .goal-value {
   font-size: 14px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   margin-bottom: 4px;
 }
 

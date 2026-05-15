@@ -15,8 +15,8 @@
   --mci-text-muted: #9ca3af;
   --mci-accent: #3b82f6;
   --mci-red: #ef4444;
-  --mci-green: #10b981;
-  --mci-purple: #8b5cf6;
+  --mci-green: #2D7A52;
+  --mci-purple: #B8924A;
   --mci-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
   --mci-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.05);
   --mci-radius: 12px;
@@ -282,7 +282,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, #3b82f6, #B8924A);
   color: #fff;
   font-size: 15px;
   font-weight: 700;

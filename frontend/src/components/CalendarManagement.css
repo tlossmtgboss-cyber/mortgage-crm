@@ -21,7 +21,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: cm-spin 0.8s linear infinite;
 }
@@ -179,7 +179,7 @@
 .user-avatar {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border-radius: 10px;
   display: flex;
@@ -233,7 +233,7 @@
 
 .url-link {
   font-size: 0.85rem;
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
   word-break: break-all;
 }
@@ -279,7 +279,7 @@
 
 .assignment-form select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -305,7 +305,7 @@
 
 .url-edit-form input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -317,7 +317,7 @@
 .btn-save {
   flex: 1;
   padding: 0.5rem 1rem;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -328,7 +328,7 @@
 }
 
 .btn-save:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-save:disabled {
@@ -356,8 +356,8 @@
   width: 100%;
   padding: 0.5rem 1rem;
   background: white;
-  color: #218D8D;
-  border: 1px dashed #218D8D;
+  color: #1F3D2E;
+  border: 1px dashed #1F3D2E;
   border-radius: 6px;
   font-size: 0.85rem;
   font-weight: 500;
@@ -406,7 +406,7 @@
 }
 
 .booking-link-preview a {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
   font-weight: 500;
 }
@@ -457,7 +457,7 @@
 .user-avatar-lg {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border-radius: 12px;
   display: flex;

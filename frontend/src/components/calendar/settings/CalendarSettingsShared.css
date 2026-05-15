@@ -3,7 +3,7 @@
  *
  * Layout, loading, header, buttons, tabs, section cards, form grid,
  * sticky save bar, toggle switch, empty states, and shared responsive rules.
- * Perennia brand colors (#218D8D).
+ * Perennia brand colors (#1F3D2E).
  */
 
 /* ============================================================================
@@ -32,7 +32,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: cal-spin 0.8s linear infinite;
   margin-bottom: 16px;
@@ -124,7 +124,7 @@
 }
 
 .cal-settings-page .btn-primary {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -187,12 +187,12 @@
 }
 
 .cal-settings-page .tab-btn:hover {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .cal-settings-page .tab-btn.active {
-  color: #218D8D;
-  border-bottom-color: #218D8D;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
 }
 
 .cal-settings-page .tab-btn i {
@@ -289,7 +289,7 @@
 .cal-settings-page .form-field select:focus,
 .cal-settings-page .form-field textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -339,7 +339,7 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background-color: #218D8D;
+  background-color: #1F3D2E;
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -420,7 +420,7 @@
 .checkbox-label input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 /* ============================================================================

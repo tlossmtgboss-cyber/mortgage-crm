@@ -1,7 +1,7 @@
 /* Modern Gradient Theme - Contemporary, animated microsite */
 
 .modern-gradient {
-  --theme-primary: #8b5cf6;
+  --theme-primary: #B8924A;
   --theme-secondary: #ec4899;
   --theme-gradient: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
   --theme-text: #1f2937;

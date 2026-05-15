@@ -6,8 +6,8 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Performance grade thresholds
 const getGrade = (score) => {
-  if (score >= 95) return { grade: 'A+', color: '#10b981' };
-  if (score >= 90) return { grade: 'A', color: '#10b981' };
+  if (score >= 95) return { grade: 'A+', color: '#2D7A52' };
+  if (score >= 90) return { grade: 'A', color: '#2D7A52' };
   if (score >= 85) return { grade: 'A-', color: '#22c55e' };
   if (score >= 80) return { grade: 'B+', color: '#84cc16' };
   if (score >= 75) return { grade: 'B', color: '#84cc16' };

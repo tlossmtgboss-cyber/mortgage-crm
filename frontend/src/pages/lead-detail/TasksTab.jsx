@@ -11,7 +11,7 @@ function TasksTab({ lead, workflowTasks, workflowTasksLoading, onShowTaskModal }
         <button
           onClick={onShowTaskModal}
           style={{
-            background: 'linear-gradient(135deg, #218D8D 0%, #10b981 100%)',
+            background: 'linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%)',
             color: 'white',
             border: 'none',
             padding: '10px 20px',

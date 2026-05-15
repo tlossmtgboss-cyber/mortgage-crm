@@ -28,12 +28,12 @@ const formatEventTime = (startTime, endTime) => {
 
 const getEventTypeColor = (eventType) => {
   const colors = {
-    meeting: 'var(--color-primary, #217f8d)',
+    meeting: 'var(--color-primary, #1F3D2E)',
     call: 'var(--color-info, #64748b)',
     appraisal: 'var(--color-warning, #a84b2f)',
     closing: '#22c55e',
-    pre_purchase_consultation: '#8b5cf6',
-    purchase_consultation: '#6366f1',
+    pre_purchase_consultation: '#B8924A',
+    purchase_consultation: '#B8924A',
   };
   return colors[eventType] || '#94a3b8';
 };

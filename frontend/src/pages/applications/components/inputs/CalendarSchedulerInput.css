@@ -23,7 +23,7 @@
 }
 
 .calendar-placeholder .cal-icon {
-  color: #218D8D;
+  color: #1F3D2E;
   margin-bottom: 16px;
 }
 
@@ -62,19 +62,19 @@
 }
 
 .time-slot:hover:not(.disabled) {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .time-slot:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.2);
 }
 
 .time-slot.selected {
-  border-color: #218D8D;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  border-color: #1F3D2E;
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
 }
 
@@ -162,7 +162,7 @@
   width: 20px;
   height: 20px;
   border: 2px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

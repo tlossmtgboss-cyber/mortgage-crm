@@ -124,7 +124,7 @@ const OverviewTab = ({ data, services, formatCurrency }) => {
   const costs = data?.costs || {};
   const alerts = data?.alerts || [];
 
-  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+  const COLORS = ['#2D7A52', '#3b82f6', '#f59e0b', '#ef4444', '#B8924A', '#ec4899'];
 
   // Prepare pie chart data for costs by category
   const costsByCategory = Object.entries(costs.by_category || {}).map(([name, value]) => ({
@@ -326,8 +326,8 @@ const RevenueTab = ({ data, formatCurrency }) => {
               type="monotone"
               dataKey="subscription"
               stackId="1"
-              stroke="#10b981"
-              fill="#10b981"
+              stroke="#2D7A52"
+              fill="#2D7A52"
               fillOpacity={0.6}
               name="Subscription"
             />
@@ -565,7 +565,7 @@ const ForecastingTab = ({ data, formatCurrency }) => {
             <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
             <Tooltip formatter={(value) => formatCurrency(value)} />
             <Legend />
-            <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} name="Revenue" />
+            <Line type="monotone" dataKey="revenue" stroke="#2D7A52" strokeWidth={2} name="Revenue" />
             <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} name="Expenses" />
             <Line type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" name="Net Profit" />
           </LineChart>
@@ -622,7 +622,7 @@ const MarketingTab = ({ formatCurrency }) => {
             <Tooltip formatter={(value) => formatCurrency(value)} />
             <Legend />
             <Bar dataKey="spend" fill="#ef4444" name="Spend" />
-            <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
+            <Bar dataKey="revenue" fill="#2D7A52" name="Revenue" />
           </BarChart>
         </ResponsiveContainer>
       </div>

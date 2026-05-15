@@ -57,7 +57,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #10b981);
+  background: linear-gradient(90deg, #3b82f6, #2D7A52);
   transition: width 0.5s ease;
   border-radius: 15px;
 }
@@ -87,7 +87,7 @@
 }
 
 .autopilot-status.enabled {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
@@ -283,7 +283,7 @@
 }
 
 .field-option.ai-suggested {
-  border-color: #10b981;
+  border-color: #2D7A52;
   border-style: dashed;
 }
 
@@ -414,7 +414,7 @@
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   display: flex;
   align-items: center;
@@ -472,7 +472,7 @@
 }
 
 .autopilot-unlocked {
-  background: linear-gradient(135deg, #10b981, #3b82f6);
+  background: linear-gradient(135deg, #2D7A52, #3b82f6);
   color: white;
   padding: 1.5rem;
   border-radius: 8px;
@@ -570,7 +570,7 @@
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   display: flex;
   align-items: center;

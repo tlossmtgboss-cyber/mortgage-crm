@@ -12,7 +12,7 @@
   width: 80px;
   height: 80px;
   margin: 0 auto 1.5rem;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #2D7A52, #2D7A52);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -100,7 +100,7 @@
 }
 
 .item-value.enabled {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .item-value.disabled {

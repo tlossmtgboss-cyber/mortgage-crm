@@ -10,7 +10,7 @@ import LabelManager from '../../components/calendar/LabelManager';
 import { calendarSettingsAPI } from '../../services/api';
 import { toast } from '../../utils/toast';
 
-const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+const DEFAULT_COLORS = ['#1F3D2E', '#3b82f6', '#B8924A', '#ec4899', '#f59e0b', '#2D7A52', '#ef4444', '#B8924A'];
 
 const TEMPLATE_CATEGORIES = [
   { value: 'pre_approval', label: 'Pre-Approval', icon: 'fa-file-signature' },
@@ -41,7 +41,7 @@ function TemplateForm({ initialData, labels, locations, categories, onSubmit, on
     location_id: initialData?.location_id || '',
     label_id: initialData?.label_id || '',
     category: initialData?.category || 'other',
-    color: initialData?.color || '#218D8D',
+    color: initialData?.color || '#1F3D2E',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -351,7 +351,7 @@ export default function LocationsLabelsSection({
                   {appointmentTypes.map(type => (
                     <div key={type.id} className="label-mapping-row">
                       <div className="mapping-type-name">
-                        <div className="mapping-color-dot" style={{ backgroundColor: type.color || '#218D8D' }} />
+                        <div className="mapping-color-dot" style={{ backgroundColor: type.color || '#1F3D2E' }} />
                         <span>{type.type_name}</span>
                       </div>
                       <select value={labelMappings[type.id] || ''} onChange={(e) => handleUpdateLabelMapping(type.id, e.target.value || null)} className="mapping-select">

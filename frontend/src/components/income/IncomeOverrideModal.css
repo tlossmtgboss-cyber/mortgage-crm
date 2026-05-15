@@ -197,7 +197,7 @@
 }
 
 .income-override-amount-input:focus {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
 }
 
@@ -280,7 +280,7 @@
 }
 
 .income-override-select:focus {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
 }
 
@@ -305,7 +305,7 @@
 }
 
 .income-override-notes:focus {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
 }
 
@@ -346,7 +346,7 @@
 }
 
 .income-override-btn--confirm {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: #fff;
 }
 

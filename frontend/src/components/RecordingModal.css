@@ -120,7 +120,7 @@
 
 .form-control:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
@@ -161,7 +161,7 @@
 .result-message.success {
   background: #d1fae5;
   color: #065f46;
-  border: 1px solid #10b981;
+  border: 1px solid #2D7A52;
 }
 
 .result-message.error {
@@ -248,13 +248,13 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #10b981 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #B8924A 100%);
   color: white;
   box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #8A6D30 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
 }

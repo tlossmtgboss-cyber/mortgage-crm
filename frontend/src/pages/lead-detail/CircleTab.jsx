@@ -140,7 +140,7 @@ function CircleTab({
                       {contact.leadId ? (
                         <span
                           onClick={() => navigate(`/leads/${contact.leadId}`)}
-                          style={{ fontWeight: '500', color: '#217f8d', cursor: 'pointer', textDecoration: 'none' }}
+                          style={{ fontWeight: '500', color: '#1F3D2E', cursor: 'pointer', textDecoration: 'none' }}
                           onMouseEnter={e => e.target.style.textDecoration = 'underline'}
                           onMouseLeave={e => e.target.style.textDecoration = 'none'}
                         >
@@ -162,7 +162,7 @@ function CircleTab({
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <button
                     onClick={() => handleEditCircleContact(contact)}
-                    style={{ background: 'none', border: 'none', color: '#217f8d', cursor: 'pointer', fontSize: '14px', padding: '4px 8px' }}
+                    style={{ background: 'none', border: 'none', color: '#1F3D2E', cursor: 'pointer', fontSize: '14px', padding: '4px 8px' }}
                     title="Edit contact"
                   >
                     ✏️

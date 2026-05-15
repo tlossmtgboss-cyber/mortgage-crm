@@ -806,7 +806,7 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
               <button
                 onClick={handleGeneratePortalLink}
                 style={{
-                  background: '#059669',
+                  background: '#2D7A52',
                   color: 'white',
                   border: 'none',
                   padding: '0.625rem 1.25rem',

@@ -23,7 +23,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border-top-color: #B8924A;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -68,7 +68,7 @@
 
 .video-recorder .retry-btn {
   padding: 10px 24px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -79,7 +79,7 @@
 }
 
 .video-recorder .retry-btn:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Video Container */
@@ -223,13 +223,13 @@
 
 /* Confirm Button */
 .confirm-btn {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   min-width: 140px;
 }
 
 .confirm-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Discard Button */

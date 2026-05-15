@@ -214,7 +214,7 @@ describe('getMeetingModeColor', () => {
   });
 
   it('returns green for PHONE', () => {
-    expect(getMeetingModeColor('PHONE')).toBe('#059669');
+    expect(getMeetingModeColor('PHONE')).toBe('#2D7A52');
   });
 
   it('returns red for IN_PERSON', () => {
@@ -227,7 +227,7 @@ describe('getMeetingModeColor', () => {
 
   it('is case-insensitive', () => {
     expect(getMeetingModeColor('video')).toBe('#2563eb');
-    expect(getMeetingModeColor('phone')).toBe('#059669');
+    expect(getMeetingModeColor('phone')).toBe('#2D7A52');
     expect(getMeetingModeColor('in_person')).toBe('#dc2626');
   });
 

@@ -50,7 +50,7 @@
    Failures:
      #f59e0b (amber-500, 2.1:1 on white) — warning/pending
      #eab308 (yellow-500, 1.9:1 on white)
-     #10b981 (emerald-500, 2.9:1 on white) — success
+     #2D7A52 (emerald-500, 2.9:1 on white) — success
      #22c55e (green-500, 2.4:1 on white) — success
      #ef4444 (red-500, 3.9:1 on white, fails normal text)
    ========================================================================= */
@@ -205,7 +205,7 @@ a,
 
 a:visited,
 .link:visited {
-  color: #6d28d9; /* violet-700 — 5.4:1 on white */
+  color: #8A6D30; /* violet-700 — 5.4:1 on white */
 }
 
 a:hover,
@@ -223,7 +223,7 @@ a:hover,
 
 .dark a:visited,
 [data-theme="dark"] a:visited {
-  color: #a78bfa; /* violet-400 — 4.5:1 on #1a1a2e */
+  color: #D4AD6A; /* violet-400 — 4.5:1 on #1a1a2e */
 }
 
 

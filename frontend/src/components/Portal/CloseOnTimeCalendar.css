@@ -197,7 +197,7 @@
   font-size: 12px;
   font-weight: 600;
   color: white;
-  background: #10b981;
+  background: #2D7A52;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -205,7 +205,7 @@
 }
 
 .complete-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .complete-btn:disabled {
@@ -216,7 +216,7 @@
 .completed-badge {
   font-size: 12px;
   font-weight: 600;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* =============================================================================
@@ -297,7 +297,7 @@
 
 .calendar-day.close-date {
   background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  border: 2px solid #10b981;
+  border: 2px solid #2D7A52;
 }
 
 .calendar-day.has-milestones::after {
@@ -346,7 +346,7 @@
 }
 
 .milestone-dot.completed {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 /* Calendar Legend */
@@ -432,16 +432,16 @@
   padding: 12px 24px;
   font-size: 14px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   background: white;
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .download-calendar-btn:hover:not(:disabled) {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 

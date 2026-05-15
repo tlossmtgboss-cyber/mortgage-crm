@@ -81,7 +81,7 @@ function NPSCard({ npsData }) {
   }
 
   const nps = npsData.nps;
-  const npsColor = nps >= 50 ? '#10b981' : nps >= 0 ? '#f59e0b' : '#ef4444';
+  const npsColor = nps >= 50 ? '#2D7A52' : nps >= 0 ? '#f59e0b' : '#ef4444';
   const npsLabel = nps >= 50 ? 'Excellent' : nps >= 0 ? 'Good' : 'Needs Improvement';
 
   return (
@@ -116,7 +116,7 @@ function RatingRow({ label, value }) {
 // ---------------------------------------------------------------------------
 
 function FeedbackItem({ feedback }) {
-  const ratingColor = feedback.overall_rating >= 4 ? '#10b981' : feedback.overall_rating >= 3 ? '#f59e0b' : '#ef4444';
+  const ratingColor = feedback.overall_rating >= 4 ? '#2D7A52' : feedback.overall_rating >= 3 ? '#f59e0b' : '#ef4444';
   const completedDate = feedback.completed_at ? new Date(feedback.completed_at).toLocaleDateString() : '';
 
   return (
@@ -124,9 +124,9 @@ function FeedbackItem({ feedback }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: '50%', background: '#e0e7ff',
+            width: 32, height: 32, borderRadius: '50%', background: '#F5EDD9',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 600, color: '#4338ca',
+            fontSize: 14, fontWeight: 600, color: '#6B5424',
           }}>
             {(feedback.borrower_name || '?')[0].toUpperCase()}
           </div>
@@ -204,7 +204,7 @@ export default function SurveyResults() {
 
   const responseRateColor = useMemo(() => {
     if (!data) return '#94a3b8';
-    if (data.response_rate >= 50) return '#10b981';
+    if (data.response_rate >= 50) return '#2D7A52';
     if (data.response_rate >= 25) return '#f59e0b';
     return '#ef4444';
   }, [data]);

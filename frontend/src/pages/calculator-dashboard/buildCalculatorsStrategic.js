@@ -34,7 +34,7 @@ function buildRepaymentStrategy(market, homePrices, monthlyIncome) {
   return {
     id: 'repayment-strategy',
     name: 'Repayment Strategy',
-    color: '#10b981',
+    color: '#2D7A52',
     shortDescription: 'Payoff options & wealth building',
     data: (() => {
       const loanAmount = homePrices.baseline * 0.95;
@@ -146,7 +146,7 @@ function buildExitStrategy(profile, market, homePrices, baselinePiti) {
   return {
     id: 'exit-strategy',
     name: 'Exit Strategy',
-    color: '#8b5cf6',
+    color: '#B8924A',
     shortDescription: 'Future scenarios & flexibility',
     data: (() => {
       const loanAmount = homePrices.baseline * 0.95;
@@ -245,7 +245,7 @@ function buildProgramOptions(profile, market, homePrices) {
   return {
     id: 'program-options',
     name: 'Program Options',
-    color: '#6366f1',
+    color: '#B8924A',
     shortDescription: 'Compare loan programs for you',
     data: (() => {
       const loanAmount = homePrices.baseline * 0.95;
@@ -579,7 +579,7 @@ function buildEquityVelocity(homePrices) {
   return {
     id: 'equity-velocity',
     name: 'Equity Velocity',
-    color: '#059669',
+    color: '#2D7A52',
     shortDescription: 'Wealth accumulation speed',
     data: (() => {
       const downPayment = homePrices.baseline * 0.05;

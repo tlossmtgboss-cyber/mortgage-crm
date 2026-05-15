@@ -168,7 +168,7 @@
 }
 
 .mcip-client-banner.matched {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: rgba(16, 185, 129, 0.08);
 }
 
@@ -293,7 +293,7 @@
 }
 
 .mcip-agent-card.complete {
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .mcip-agent-card.processing {
@@ -327,7 +327,7 @@
 }
 
 .mcip-agent-status.complete {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .mcip-agent-status.processing {
@@ -401,7 +401,7 @@
 
 .mcip-artifact-status-badge.approved {
   background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .mcip-artifact-status-badge.executed {
@@ -443,7 +443,7 @@
 
 .mcip-artifact-btn.approve {
   background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .mcip-artifact-btn.execute {
@@ -583,7 +583,7 @@
 }
 
 .mcip-connection-dot.connected {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .mcip-connection-dot.connecting {

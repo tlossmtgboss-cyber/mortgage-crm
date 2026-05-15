@@ -122,7 +122,7 @@ const RecordingPlayer = ({ transcript, participants, session }) => {
   // Get speaker color
   const getSpeakerColor = (speaker) => {
     if (!speaker) return '#6b7280';
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+    const colors = ['#3b82f6', '#2D7A52', '#f59e0b', '#B8924A', '#ec4899'];
     const index = speaker.charCodeAt(0) % colors.length;
     return colors[index];
   };

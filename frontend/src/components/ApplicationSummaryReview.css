@@ -46,7 +46,7 @@
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .stat-label {
@@ -287,7 +287,7 @@
 .field-edit select {
   flex: 1;
   padding: 8px 12px;
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   border-radius: 6px;
   font-size: 15px;
   color: #111827;
@@ -315,12 +315,12 @@
 }
 
 .edit-actions .save-btn {
-  background: #059669;
+  background: #2D7A52;
   color: white;
 }
 
 .edit-actions .save-btn:hover {
-  background: #047857;
+  background: #1F5A3A;
 }
 
 .edit-actions .cancel-btn {
@@ -368,7 +368,7 @@
 
 .submit-btn {
   padding: 14px 32px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 10px;
@@ -379,7 +379,7 @@
 }
 
 .submit-btn:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .submit-btn:disabled {
@@ -454,7 +454,7 @@
   content: "✓";
   position: absolute;
   left: 0;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .confirmation-actions {
@@ -480,7 +480,7 @@
 
 .confirmation-actions .confirm-btn {
   padding: 12px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -491,7 +491,7 @@
 }
 
 .confirmation-actions .confirm-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* Mobile Styles */
@@ -573,7 +573,7 @@
 
   .completion-stats {
     background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
-    border-color: #059669;
+    border-color: #2D7A52;
   }
 
   .stat-value {
@@ -616,7 +616,7 @@
   .field-edit input,
   .field-edit select {
     background: #374151;
-    border-color: #218D8D;
+    border-color: #1F3D2E;
     color: #f9fafb;
   }
 

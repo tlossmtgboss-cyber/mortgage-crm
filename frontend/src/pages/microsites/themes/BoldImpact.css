@@ -230,7 +230,7 @@
 }
 
 .login-option.client .login-option-desc {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .login-option.partner {
@@ -547,21 +547,21 @@
 }
 
 .sidebar-card-btn.refinance-btn {
-  background: #059669;
+  background: #2D7A52;
   color: white;
 }
 
 .sidebar-card-btn.refinance-btn:hover {
-  background: #047857;
+  background: #1F5A3A;
 }
 
 .sidebar-card-btn.purchase-btn {
-  background: #7c3aed;
+  background: #B8924A;
   color: white;
 }
 
 .sidebar-card-btn.purchase-btn:hover {
-  background: #6d28d9;
+  background: #8A6D30;
 }
 
 /* Specialties Section */
@@ -940,7 +940,7 @@
 .success-icon {
   width: 80px;
   height: 80px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border-radius: 50%;
   display: flex;

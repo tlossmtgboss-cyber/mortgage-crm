@@ -101,7 +101,7 @@
 
 .document-intake-manager .empty-state .check-icon {
   font-size: 48px;
-  color: #10b981;
+  color: #2D7A52;
   display: block;
   margin-bottom: 12px;
 }
@@ -194,7 +194,7 @@
 
 .document-intake-manager .matched-to {
   font-size: 12px;
-  color: #10b981;
+  color: #2D7A52;
   margin-top: 6px;
 }
 
@@ -310,7 +310,7 @@
 
 .document-intake-manager .match-icon {
   font-size: 18px;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .document-intake-manager .warning-icon {
@@ -405,7 +405,7 @@
 }
 
 .document-intake-manager .attachment-item.classified {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -541,7 +541,7 @@
 
 .document-intake-manager .classify-btn {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #2D7A52, #2D7A52);
   color: white;
   border: none;
   border-radius: 6px;

@@ -2566,7 +2566,7 @@
   margin-left: auto;
   font-size: 12px;
   font-weight: 500;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .urla-recap__status--incomplete {
@@ -2665,8 +2665,8 @@
 }
 
 .urla-cert.is-checked .urla-cert__box {
-  border-color: #10b981;
-  background: #10b981;
+  border-color: #2D7A52;
+  background: #2D7A52;
   color: white;
 }
 

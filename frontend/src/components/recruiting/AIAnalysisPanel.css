@@ -15,7 +15,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: white;
 }
 
@@ -189,7 +189,7 @@
 
 .ai-apply-all-btn {
   padding: 6px 14px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -200,7 +200,7 @@
 }
 
 .ai-apply-all-btn:hover:not(:disabled) {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .ai-apply-all-btn:disabled {
@@ -224,13 +224,13 @@
 }
 
 .ai-suggestion-card:hover {
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
 .ai-suggestion-card.applied {
   background: #f0fdf4;
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .ai-suggestion-header {
@@ -272,7 +272,7 @@
 }
 
 .ai-score-diff.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .ai-score-diff.negative {
@@ -309,8 +309,8 @@
 .ai-apply-btn {
   padding: 6px 12px;
   background: white;
-  border: 1px solid #6366f1;
-  color: #6366f1;
+  border: 1px solid #B8924A;
+  color: #B8924A;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
@@ -319,13 +319,13 @@
 }
 
 .ai-apply-btn:hover {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
 .ai-applied-badge {
   padding: 6px 12px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border-radius: 6px;
   font-size: 12px;
@@ -390,7 +390,7 @@
 
 .ai-disc-fill.d { background: #ef4444; }
 .ai-disc-fill.i { background: #f59e0b; }
-.ai-disc-fill.s { background: #10b981; }
+.ai-disc-fill.s { background: #2D7A52; }
 .ai-disc-fill.c { background: #3b82f6; }
 
 .ai-disc-value {
@@ -468,7 +468,7 @@
 }
 
 .ai-trait-item.positive {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
   background: #f0fdf4;
 }
 

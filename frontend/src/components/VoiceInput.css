@@ -13,7 +13,7 @@
 }
 
 .voice-input-box:focus-within {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -37,7 +37,7 @@
   position: absolute;
   bottom: 12px;
   right: 12px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   padding: 4px 12px;
   border-radius: 12px;
@@ -170,7 +170,7 @@
   justify-content: center;
   gap: 8px;
   padding: 12px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -182,7 +182,7 @@
 }
 
 .send-btn:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
 }

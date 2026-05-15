@@ -2,7 +2,7 @@
 
 .disc-assessment-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -26,7 +26,7 @@
   width: 50px;
   height: 50px;
   border: 4px solid #e5e7eb;
-  border-top-color: #667eea;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 20px;
@@ -48,7 +48,7 @@
   justify-content: center;
   width: 80px;
   height: 80px;
-  background: #10B981;
+  background: #2D7A52;
   color: #fff;
   border-radius: 50%;
   font-size: 40px;
@@ -160,7 +160,7 @@
 }
 
 .disc-label-most {
-  color: #10B981;
+  color: #2D7A52;
 }
 
 .disc-label-least {
@@ -215,8 +215,8 @@
 }
 
 .disc-option-most.selected {
-  background: #10B981;
-  border-color: #10B981;
+  background: #2D7A52;
+  border-color: #2D7A52;
   color: #fff;
 }
 
@@ -251,13 +251,13 @@
 }
 
 .disc-likert-option:hover {
-  border-color: #667eea;
+  border-color: #1F3D2E;
   background: #f0f0ff;
 }
 
 .disc-likert-option.selected {
-  background: #667eea;
-  border-color: #667eea;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: #fff;
 }
 
@@ -292,7 +292,7 @@
 
 .disc-nav-next {
   background: #fff;
-  color: #667eea;
+  color: #1F3D2E;
 }
 
 .disc-nav-next:hover:not(:disabled) {

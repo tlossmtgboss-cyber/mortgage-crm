@@ -29,7 +29,7 @@
 .error-state button {
   margin-top: 24px;
   padding: 12px 24px;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border: none;
   border-radius: 8px;
@@ -59,8 +59,8 @@
 
 .btn-back:hover {
   background: var(--color-bg-hover, rgba(139, 92, 68, 0.08));
-  border-color: var(--color-primary, #217F8D);
-  color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .stage-header-content {
@@ -199,7 +199,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   display: flex;
   align-items: center;

@@ -158,9 +158,9 @@ function SlideNavigator() {
                         className="carousel-thumb-preview"
                         style={{
                           aspectRatio,
-                          backgroundColor: slide.background_color || '#217F8D',
+                          backgroundColor: slide.background_color || '#1F3D2E',
                           backgroundImage: slide.background_gradient
-                            ? `linear-gradient(${slide.background_gradient.angle || 135}deg, ${(slide.background_gradient.colors || ['#667eea', '#764ba2']).join(', ')})`
+                            ? `linear-gradient(${slide.background_gradient.angle || 135}deg, ${(slide.background_gradient.colors || ['#1F3D2E', '#2D7A52']).join(', ')})`
                             : undefined,
                         }}
                       >

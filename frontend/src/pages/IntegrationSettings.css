@@ -184,7 +184,7 @@
 }
 
 .integration-card.connected {
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .integration-card .card-header {
@@ -258,7 +258,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   color: white;
   font-size: 20px;
   font-weight: 600;
@@ -289,7 +289,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   color: white;
   font-size: 24px;
   font-weight: 600;
@@ -342,7 +342,7 @@
 .status-badge.connected,
 .status-badge.status-connected {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-badge.disconnected,
@@ -514,7 +514,7 @@
 
 .feature-list li::before {
   content: '✓';
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 
@@ -615,13 +615,13 @@
 }
 
 .btn-success {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
 }
 
 .btn-success:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Sync Info */
@@ -724,7 +724,7 @@
 
 .sync-history-item .sync-icon.success {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .sync-history-item .sync-icon.error {
@@ -791,7 +791,7 @@
 }
 
 .toast.success {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
@@ -921,7 +921,7 @@
   font-size: 11px;
   font-weight: 600;
   border-radius: 9px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
@@ -1068,7 +1068,7 @@
 
 .sync-status.completed {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .sync-status.running {

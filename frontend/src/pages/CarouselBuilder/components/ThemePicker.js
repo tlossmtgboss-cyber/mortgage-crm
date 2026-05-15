@@ -67,7 +67,7 @@ export default function ThemePicker({ open, onClose }) {
 
     try {
       // Apply theme colors to all slides
-      const primaryColor = selectedTheme.colors?.primary || '#217F8D';
+      const primaryColor = selectedTheme.colors?.primary || '#1F3D2E';
       const secondaryColor = selectedTheme.colors?.secondary || '#1a5f6a';
 
       for (let i = 0; i < slides.length; i++) {
@@ -143,7 +143,7 @@ export default function ThemePicker({ open, onClose }) {
                   <div
                     className="carousel-theme-preview"
                     style={{
-                      background: `linear-gradient(135deg, ${theme.colors?.primary || '#217F8D'}, ${theme.colors?.secondary || '#1a5f6a'})`,
+                      background: `linear-gradient(135deg, ${theme.colors?.primary || '#1F3D2E'}, ${theme.colors?.secondary || '#1a5f6a'})`,
                     }}
                   >
                     <div className="carousel-theme-preview-content">

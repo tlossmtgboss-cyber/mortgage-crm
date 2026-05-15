@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 
 // ─── Color Palette ───────────────────────────────────────────────
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
+const COLORS = ['#3b82f6', '#2D7A52', '#f59e0b', '#B8924A', '#ef4444', '#06b6d4'];
 
 const STATUS_STYLES = {
   completed: { bg: '#dcfce7', color: '#166534', label: 'Completed' },
@@ -418,7 +418,7 @@ const formatDateTime = (dateStr) => {
 };
 
 const getScoreColor = (score) => {
-  if (score >= 80) return '#10b981';
+  if (score >= 80) return '#2D7A52';
   if (score >= 60) return '#f59e0b';
   return '#ef4444';
 };
@@ -622,7 +622,7 @@ const URLACallIntelligencePage = () => {
         </div>
 
         <div style={styles.metricCard}>
-          <div style={{ ...styles.metricIcon, background: '#dcfce7', color: '#10b981' }}>
+          <div style={{ ...styles.metricIcon, background: '#dcfce7', color: '#2D7A52' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
@@ -635,7 +635,7 @@ const URLACallIntelligencePage = () => {
         </div>
 
         <div style={styles.metricCard}>
-          <div style={{ ...styles.metricIcon, background: '#f3e8ff', color: '#8b5cf6' }}>
+          <div style={{ ...styles.metricIcon, background: '#f3e8ff', color: '#B8924A' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="20" x2="12" y2="10" />
               <line x1="18" y1="20" x2="18" y2="4" />
@@ -776,7 +776,7 @@ const URLACallIntelligencePage = () => {
               onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = '#f9fafb'; }}
             >
-              <div style={{ ...styles.quickActionIcon, background: '#dcfce7', color: '#10b981' }}>
+              <div style={{ ...styles.quickActionIcon, background: '#dcfce7', color: '#2D7A52' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
                   <polyline points="14 2 14 8 20 8" />
@@ -795,7 +795,7 @@ const URLACallIntelligencePage = () => {
               onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = '#f9fafb'; }}
             >
-              <div style={{ ...styles.quickActionIcon, background: '#f3e8ff', color: '#8b5cf6' }}>
+              <div style={{ ...styles.quickActionIcon, background: '#f3e8ff', color: '#B8924A' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                   <line x1="16" y1="2" x2="16" y2="6" />
@@ -1280,9 +1280,9 @@ const URLACallIntelligencePage = () => {
                   <Line
                     type="monotone"
                     dataKey="completed"
-                    stroke="#10b981"
+                    stroke="#2D7A52"
                     strokeWidth={2}
-                    dot={{ r: 3, fill: '#10b981' }}
+                    dot={{ r: 3, fill: '#2D7A52' }}
                     name="Completed"
                   />
                   <Line
@@ -1320,7 +1320,7 @@ const URLACallIntelligencePage = () => {
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="avg" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Avg Score" />
+                  <Bar dataKey="avg" fill="#B8924A" radius={[4, 4, 0, 0]} name="Avg Score" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

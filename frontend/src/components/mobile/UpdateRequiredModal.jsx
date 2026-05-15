@@ -42,7 +42,7 @@ function ForceUpdateScreen({ updateUrl, changelog }) {
         {/* Logo / icon */}
         <div className="update-modal-icon">
           <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect width="64" height="64" rx="14" fill="#4F46E5" />
+            <rect width="64" height="64" rx="14" fill="#8A6D30" />
             <path d="M32 16L32 40M32 40L22 30M32 40L42 30" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M20 46H44" stroke="white" strokeWidth="3.5" strokeLinecap="round" />
           </svg>

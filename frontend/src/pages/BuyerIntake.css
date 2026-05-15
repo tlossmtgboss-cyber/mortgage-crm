@@ -1,6 +1,6 @@
 .buyer-intake-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   padding: 40px 20px;
 }
 
@@ -14,7 +14,7 @@
 }
 
 .intake-header {
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   color: white;
   padding: 40px;
   text-align: center;
@@ -112,7 +112,7 @@
 .form-field select:focus,
 .form-field textarea:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
 }
 
@@ -162,13 +162,13 @@
 }
 
 .comm-btn:hover {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .comm-btn.active {
-  background: #217F8D;
-  border-color: #217F8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -216,7 +216,7 @@
 
 .submit-btn {
   padding: 14px 32px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -304,7 +304,7 @@
 .voice-btn.listening {
   background: #ffffff;
   border-color: #ffffff;
-  color: #217F8D;
+  color: #1F3D2E;
   animation: pulse 2s infinite;
 }
 

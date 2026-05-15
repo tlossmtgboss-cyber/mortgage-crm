@@ -55,12 +55,12 @@
 }
 
 .ivr-btn-primary {
-  background: #059669;
+  background: #2D7A52;
   color: white;
 }
 
 .ivr-btn-primary:hover:not(:disabled) {
-  background: #047857;
+  background: #1F5A3A;
 }
 
 .ivr-btn-secondary {
@@ -118,7 +118,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #059669;
+  border-top-color: #2D7A52;
   border-radius: 50%;
   animation: ivr-spin 1s linear infinite;
 }
@@ -189,12 +189,12 @@
 }
 
 .ivr-menu-card:hover {
-  border-color: #059669;
+  border-color: #2D7A52;
   background: #f0fdf4;
 }
 
 .ivr-menu-card.selected {
-  border-color: #059669;
+  border-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -387,7 +387,7 @@
 
 .ivr-greeting-edit textarea:focus {
   outline: none;
-  border-color: #059669;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
 }
 
@@ -425,7 +425,7 @@
 }
 
 .ivr-option-item:hover {
-  border-color: #059669;
+  border-color: #2D7A52;
 }
 
 .ivr-option-item.inactive {
@@ -442,7 +442,7 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #059669, #047857);
+  background: linear-gradient(135deg, #2D7A52, #1F5A3A);
   color: white;
   border-radius: 8px;
   font-size: 16px;
@@ -517,7 +517,7 @@
 .ivr-setting-item input:focus,
 .ivr-setting-item select:focus {
   outline: none;
-  border-color: #059669;
+  border-color: #2D7A52;
 }
 
 /* Preview Section */
@@ -543,7 +543,7 @@
   flex-shrink: 0;
   width: 24px;
   height: 24px;
-  background: #059669;
+  background: #2D7A52;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -644,7 +644,7 @@
 .ivr-form-group select:focus,
 .ivr-form-group textarea:focus {
   outline: none;
-  border-color: #059669;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
 }
 
@@ -688,7 +688,7 @@
 .ivr-checkbox input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #059669;
+  accent-color: #2D7A52;
 }
 
 .ivr-hint {
@@ -718,7 +718,7 @@
 }
 
 .ivr-template-card:hover {
-  border-color: #059669;
+  border-color: #2D7A52;
 }
 
 .ivr-template-card h3 {
@@ -755,7 +755,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  background: #059669;
+  background: #2D7A52;
   color: white;
   border-radius: 4px;
   font-size: 11px;

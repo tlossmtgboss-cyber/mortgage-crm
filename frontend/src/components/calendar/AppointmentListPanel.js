@@ -22,7 +22,7 @@ function formatDateHeader(dateStr) {
 
 function getEventColor(event) {
   const type = (event.event_type || event.meeting_type || '').toLowerCase();
-  if (type.includes('consultation') || type.includes('discovery')) return '#667eea';
+  if (type.includes('consultation') || type.includes('discovery')) return '#1F3D2E';
   if (type.includes('closing') || type.includes('review')) return '#ed8936';
   if (type.includes('application') || type.includes('walkthrough')) return '#48bb78';
   if (type.includes('rate') || type.includes('lock')) return '#e53e3e';

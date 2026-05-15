@@ -36,7 +36,7 @@
 
 .employer-details-item {
   font-size: 13px;
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 /* Override default EmployerAutocomplete styles */
@@ -49,7 +49,7 @@
 }
 
 .employer-input-wrapper .employer-autocomplete .employer-input:focus {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.15);
 }
 

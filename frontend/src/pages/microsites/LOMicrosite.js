@@ -429,7 +429,7 @@ const LOMicrosite = () => {
     <div className="lo-microsite" style={themeData?.themeConfig ? {
       '--lo-primary': themeData.themeConfig.primaryColor || '#c9a227',
       '--lo-secondary': themeData.themeConfig.secondaryColor || '#1f2937',
-      '--lo-accent': themeData.themeConfig.accentColor || '#059669',
+      '--lo-accent': themeData.themeConfig.accentColor || '#2D7A52',
       '--lo-background': themeData.themeConfig.backgroundColor || '#ffffff',
       '--lo-text': themeData.themeConfig.textColor || '#1a1a1a'
     } : {}}>

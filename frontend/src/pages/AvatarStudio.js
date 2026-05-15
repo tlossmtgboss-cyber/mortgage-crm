@@ -38,12 +38,12 @@ const StatusBadge = ({ status }) => {
     pending: { label: 'Pending', color: '#6b7280' },
     uploading: { label: 'Uploading', color: '#3b82f6' },
     processing: { label: 'Processing', color: '#f59e0b' },
-    training: { label: 'Training', color: '#8b5cf6' },
-    ready: { label: 'Ready', color: '#10b981' },
+    training: { label: 'Training', color: '#B8924A' },
+    ready: { label: 'Ready', color: '#2D7A52' },
     failed: { label: 'Failed', color: '#ef4444' },
-    generating_voice: { label: 'Generating Voice', color: '#8b5cf6' },
+    generating_voice: { label: 'Generating Voice', color: '#B8924A' },
     generating_lipsync: { label: 'Generating Lip Sync', color: '#3b82f6' },
-    completed: { label: 'Completed', color: '#10b981' },
+    completed: { label: 'Completed', color: '#2D7A52' },
   };
 
   const config = statusConfig[status] || { label: status, color: '#6b7280' };

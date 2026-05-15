@@ -29,8 +29,8 @@
 }
 
 .calendar-sidebar--collapsed:hover {
-  background: #eef2ff;
-  border-left-color: #6366f1;
+  background: #FDF9F0;
+  border-left-color: #B8924A;
 }
 
 .calendar-sidebar__expand-tab {
@@ -48,7 +48,7 @@
 }
 
 .calendar-sidebar--collapsed:hover .calendar-sidebar__expand-icon {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .calendar-sidebar__expand-label {
@@ -61,7 +61,7 @@
 }
 
 .calendar-sidebar--collapsed:hover .calendar-sidebar__expand-label {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 /* Collapse button inside expanded sidebar */
@@ -85,8 +85,8 @@
 }
 
 .calendar-sidebar__collapse-btn:hover {
-  background: #eef2ff;
-  color: #6366f1;
+  background: #FDF9F0;
+  color: #B8924A;
 }
 
 /* Drag and Drop Styles */

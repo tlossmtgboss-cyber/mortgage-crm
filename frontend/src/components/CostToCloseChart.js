@@ -181,8 +181,8 @@ const CostToCloseChart = ({
           >
             <defs>
               <linearGradient id="costGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
+                <stop offset="5%" stopColor="#2D7A52" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#2D7A52" stopOpacity={0.05}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -204,7 +204,7 @@ const CostToCloseChart = ({
             <Area
               type="monotone"
               dataKey="value"
-              stroke="#10b981"
+              stroke="#2D7A52"
               strokeWidth={2}
               fill="url(#costGradient)"
               animationDuration={300}

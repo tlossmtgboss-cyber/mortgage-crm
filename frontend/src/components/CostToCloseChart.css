@@ -37,7 +37,7 @@
   border-radius: 12px;
   font-size: 10px;
   font-weight: 600;
-  color: #059669;
+  color: #2D7A52;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -45,7 +45,7 @@
 .ctc-live-dot {
   width: 6px;
   height: 6px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
@@ -83,7 +83,7 @@
 }
 
 .ctc-value.down {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .ctc-trend-arrow {
@@ -96,7 +96,7 @@
 }
 
 .ctc-trend-arrow.down {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Chart Area */
@@ -126,7 +126,7 @@
 }
 
 .ctc-tooltip-value strong {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 
@@ -156,7 +156,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid #e5e7eb;
-  border-top-color: #10b981;
+  border-top-color: #2D7A52;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }

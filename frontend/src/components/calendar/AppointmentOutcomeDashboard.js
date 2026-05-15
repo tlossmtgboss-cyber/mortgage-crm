@@ -83,26 +83,26 @@ function AppointmentOutcomeDashboard() {
 
       {/* ROI Summary */}
       <div style={{
-        background: '#eef2ff', borderRadius: 12, padding: 20, marginBottom: 24,
-        border: '1px solid #c7d2fe',
+        background: '#FDF9F0', borderRadius: 12, padding: 20, marginBottom: 24,
+        border: '1px solid #EDE0C4',
       }}>
-        <h3 style={{ margin: '0 0 12px', color: '#4338ca' }}>AI Scheduling Impact</h3>
+        <h3 style={{ margin: '0 0 12px', color: '#6B5424' }}>AI Scheduling Impact</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           <div>
-            <div style={{ fontSize: '0.8rem', color: '#6366f1' }}>Additional Funded Loans</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4338ca' }}>
+            <div style={{ fontSize: '0.8rem', color: '#B8924A' }}>Additional Funded Loans</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#6B5424' }}>
               {roiMetrics.additionalFunded}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.8rem', color: '#6366f1' }}>Funded Volume (AI)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4338ca' }}>
+            <div style={{ fontSize: '0.8rem', color: '#B8924A' }}>Funded Volume (AI)</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#6B5424' }}>
               ${roiMetrics.fundedVolume}M
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.8rem', color: '#6366f1' }}>Days Faster to Fund</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4338ca' }}>
+            <div style={{ fontSize: '0.8rem', color: '#B8924A' }}>Days Faster to Fund</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#6B5424' }}>
               {roiMetrics.daysFaster}
             </div>
           </div>
@@ -142,12 +142,12 @@ function AppointmentOutcomeDashboard() {
 const ComparisonCard = React.memo(function ComparisonCard({ title, appointments, funded, conversionRate, noShowRate, avgDaysToFund, highlight }) {
   return (
     <div style={{
-      background: highlight ? '#eef2ff' : '#f8fafc',
-      border: `1px solid ${highlight ? '#c7d2fe' : '#e2e8f0'}`,
+      background: highlight ? '#FDF9F0' : '#f8fafc',
+      border: `1px solid ${highlight ? '#EDE0C4' : '#e2e8f0'}`,
       borderRadius: 12,
       padding: 20,
     }}>
-      <h4 style={{ margin: '0 0 12px', color: highlight ? '#4338ca' : '#1e293b' }}>{title}</h4>
+      <h4 style={{ margin: '0 0 12px', color: highlight ? '#6B5424' : '#1e293b' }}>{title}</h4>
       <div style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 2 }}>
         <div>Total: <strong>{appointments}</strong></div>
         <div>Funded: <strong style={{ color: '#22c55e' }}>{funded}</strong></div>

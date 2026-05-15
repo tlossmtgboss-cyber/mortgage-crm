@@ -26,8 +26,8 @@
 
 .btn-back:hover {
   background: #f5f5f5;
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .header-actions {
@@ -48,21 +48,21 @@
 }
 
 .btn-edit-header {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
 .btn-edit-header:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-save {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-save:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .btn-cancel {
@@ -76,7 +76,7 @@
 
 /* Green Header Bar with Tabs */
 .profile-green-bar {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   padding: 10px 24px;
   margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.2);
@@ -110,7 +110,7 @@
   height: 56px;
   border-radius: 50%;
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -205,7 +205,7 @@
 
 .profile-tabs-new .tab-btn.active {
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Impersonate Button */
@@ -244,7 +244,7 @@
 .member-info-card {
   display: flex;
   gap: 24px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   padding: 32px;
   border-radius: 12px;
   color: white;
@@ -261,7 +261,7 @@
   height: 120px;
   border-radius: 50%;
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -325,13 +325,13 @@
 }
 
 .tab-btn:hover {
-  color: #218D8D;
+  color: #1F3D2E;
   background: #f8fafc;
 }
 
 .tab-btn.active {
-  color: #218D8D;
-  border-bottom-color: #218D8D;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
   background: #f0fdfa;
 }
 
@@ -396,7 +396,7 @@
 .info-field textarea:focus,
 .info-field select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -431,7 +431,7 @@
 }
 
 .kpi-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   transform: translateY(-4px);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
 }
@@ -448,7 +448,7 @@
 .kpi-value {
   font-size: 36px;
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
   margin: 0 0 8px 0;
 }
 
@@ -506,11 +506,11 @@
 }
 
 .disc-card.steadiness {
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .disc-card.steadiness h3 {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .disc-card.conscientiousness {
@@ -538,7 +538,7 @@
 }
 
 .disc-card.steadiness input[type="range"]::-webkit-slider-thumb {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .disc-card.conscientiousness input[type="range"]::-webkit-slider-thumb {

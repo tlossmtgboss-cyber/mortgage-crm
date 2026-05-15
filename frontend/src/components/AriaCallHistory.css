@@ -91,9 +91,9 @@
 }
 
 .ach-filter-btn.active {
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .ach-search-input {
@@ -107,7 +107,7 @@
 }
 
 .ach-search-input:focus {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.15);
 }
 
@@ -121,7 +121,7 @@
 }
 
 .ach-date-input:focus {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 /* Call list */
@@ -163,7 +163,7 @@
 
 .ach-call-row.expanded {
   background: #f0f9f9;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 /* Direction icon */
@@ -286,13 +286,13 @@
 .ach-call-duration {
   font-size: 12px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Expanded detail panel */
 .ach-detail-panel {
   background: #fafefe;
-  border: 1px solid #218D8D;
+  border: 1px solid #1F3D2E;
   border-top: none;
   padding: 20px;
   margin-bottom: 2px;
@@ -309,7 +309,7 @@
 .ach-detail-section h3 {
   font-size: 13px;
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 10px 0;
@@ -323,7 +323,7 @@
   background: #fff;
   padding: 12px 16px;
   border-radius: 6px;
-  border-left: 3px solid #218D8D;
+  border-left: 3px solid #1F3D2E;
 }
 
 /* Transcript */
@@ -355,7 +355,7 @@
 }
 
 .ach-transcript-speaker.aria {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .ach-transcript-speaker.caller {
@@ -382,7 +382,7 @@
 
 .ach-recording-link {
   font-size: 12px;
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
 }
 
@@ -445,9 +445,9 @@
 }
 
 .ach-pagination button:hover:not(:disabled) {
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .ach-pagination button:disabled {

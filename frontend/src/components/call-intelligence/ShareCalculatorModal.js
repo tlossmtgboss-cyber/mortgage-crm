@@ -145,7 +145,7 @@ const ShareCalculatorModal = ({ artifact, onClose }) => {
         {/* Content Preview */}
         <div className="share-preview">
           <div className="preview-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#B8924A" strokeWidth="2">
               <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
               <line x1="8" y1="6" x2="16" y2="6" />
               <line x1="8" y1="10" x2="16" y2="10" />

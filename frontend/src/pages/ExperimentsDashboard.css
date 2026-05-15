@@ -246,12 +246,12 @@
 }
 
 .btn-start {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-start:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .btn-pause {
@@ -433,11 +433,11 @@
 }
 
 .analysis-item span.significant {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .analysis-item span.yes {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .analysis-item span.no {

@@ -7,20 +7,20 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Trend icons and colors
 const TREND_CONFIG = {
-  up: { icon: '📈', color: '#10b981', label: 'Trending Up' },
+  up: { icon: '📈', color: '#2D7A52', label: 'Trending Up' },
   down: { icon: '📉', color: '#ef4444', label: 'Trending Down' },
   stable: { icon: '➡️', color: '#6b7280', label: 'Stable' },
 };
 
 const RISK_CONFIG = {
-  ahead: { color: '#10b981', bg: '#ecfdf5', label: 'Ahead of Goal', icon: '🎯' },
+  ahead: { color: '#2D7A52', bg: '#ecfdf5', label: 'Ahead of Goal', icon: '🎯' },
   on_track: { color: '#3b82f6', bg: '#eff6ff', label: 'On Track', icon: '✓' },
   at_risk: { color: '#f59e0b', bg: '#fffbeb', label: 'At Risk', icon: '⚠️' },
   behind: { color: '#ef4444', bg: '#fef2f2', label: 'Behind', icon: '🚨' },
 };
 
 const CONFIDENCE_CONFIG = {
-  high: { color: '#10b981', bg: '#ecfdf5', label: 'High Confidence' },
+  high: { color: '#2D7A52', bg: '#ecfdf5', label: 'High Confidence' },
   medium: { color: '#f59e0b', bg: '#fffbeb', label: 'Medium Confidence' },
   low: { color: '#ef4444', bg: '#fef2f2', label: 'Low Confidence' },
 };
@@ -466,7 +466,7 @@ function ForecastView({ summary }) {
                   className="seasonality-bar"
                   style={{
                     height: `${factor * 50}px`,
-                    backgroundColor: factor > 1 ? '#10b981' : '#ef4444',
+                    backgroundColor: factor > 1 ? '#2D7A52' : '#ef4444',
                   }}
                 ></div>
                 <span className="month-label">{month.slice(0, 3)}</span>
@@ -513,7 +513,7 @@ function GoalView({ attainment }) {
                 className="progress-bar"
                 style={{
                   width: `${Math.min(100, attainment.units_progress_pct)}%`,
-                  backgroundColor: attainment.units_progress_pct >= attainment.units_on_track_pct ? '#10b981' : '#f59e0b',
+                  backgroundColor: attainment.units_progress_pct >= attainment.units_on_track_pct ? '#2D7A52' : '#f59e0b',
                 }}
               ></div>
               <div
@@ -548,7 +548,7 @@ function GoalView({ attainment }) {
                 className="progress-bar"
                 style={{
                   width: `${Math.min(100, attainment.volume_progress_pct)}%`,
-                  backgroundColor: attainment.volume_progress_pct >= attainment.volume_on_track_pct ? '#10b981' : '#f59e0b',
+                  backgroundColor: attainment.volume_progress_pct >= attainment.volume_on_track_pct ? '#2D7A52' : '#f59e0b',
                 }}
               ></div>
             </div>
@@ -645,7 +645,7 @@ function ConversionView({ conversions }) {
             <div
               className="benchmark-indicator"
               style={{
-                color: conversions.overall_conversion >= conversions.overall_benchmark ? '#10b981' : '#ef4444',
+                color: conversions.overall_conversion >= conversions.overall_benchmark ? '#2D7A52' : '#ef4444',
               }}
             >
               Benchmark: {conversions.overall_benchmark}%

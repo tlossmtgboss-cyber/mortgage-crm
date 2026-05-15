@@ -1306,7 +1306,7 @@ function ReconciliationCenter() {
   };
 
   const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.85) return '#10b981'; // green
+    if (confidence >= 0.85) return '#2D7A52'; // green
     if (confidence >= 0.65) return '#f59e0b'; // orange
     return '#ef4444'; // red
   };
@@ -1582,7 +1582,7 @@ function ReconciliationCenter() {
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'lead' && !createNewLoan ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          border: selectedEntityType === 'lead' && !createNewLoan ? '2px solid #2D7A52' : '1px solid #e5e7eb',
                           borderRadius: '8px',
                           background: selectedEntityType === 'lead' && !createNewLoan ? '#ecfdf5' : 'white',
                           cursor: 'pointer',
@@ -1636,9 +1636,9 @@ function ReconciliationCenter() {
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: createNewLoan ? '2px solid #8b5cf6' : '1px solid #e5e7eb',
+                          border: createNewLoan ? '2px solid #B8924A' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: createNewLoan ? '#f5f3ff' : 'white',
+                          background: createNewLoan ? '#FDF9F0' : 'white',
                           cursor: 'pointer',
                           fontWeight: createNewLoan ? '600' : '400'
                         }}
@@ -1691,7 +1691,7 @@ function ReconciliationCenter() {
                         style={{
                           padding: '6px 12px',
                           fontSize: '12px',
-                          background: '#10b981',
+                          background: '#2D7A52',
                           color: 'white',
                           border: 'none',
                           borderRadius: '6px',
@@ -1755,7 +1755,7 @@ function ReconciliationCenter() {
                             disabled={!newFieldKey || !newFieldValue}
                             style={{
                               padding: '8px 16px',
-                              background: newFieldKey && newFieldValue ? '#10b981' : '#d1d5db',
+                              background: newFieldKey && newFieldValue ? '#2D7A52' : '#d1d5db',
                               color: 'white',
                               border: 'none',
                               borderRadius: '6px',
@@ -1875,7 +1875,7 @@ function ReconciliationCenter() {
                               <span
                                 className="field-confidence-badge"
                                 style={{
-                                  backgroundColor: confidence > 0.8 ? '#10b981' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                                  backgroundColor: confidence > 0.8 ? '#2D7A52' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
                                   color: 'white',
                                   marginLeft: 'auto'
                                 }}
@@ -1934,7 +1934,7 @@ function ReconciliationCenter() {
                             </span>
                             <span
                               className="field-confidence-badge"
-                              style={{ backgroundColor: '#10b981', color: 'white', marginLeft: 'auto' }}
+                              style={{ backgroundColor: '#2D7A52', color: 'white', marginLeft: 'auto' }}
                             >
                               100%
                             </span>
@@ -1950,7 +1950,7 @@ function ReconciliationCenter() {
                               style={{
                                 flex: 1,
                                 padding: '8px 10px',
-                                border: '2px solid #10b981',
+                                border: '2px solid #2D7A52',
                                 borderRadius: '6px',
                                 fontSize: '14px',
                                 background: '#f0fdf4'
@@ -2070,7 +2070,7 @@ function ReconciliationCenter() {
                         <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#6b7280' }}>
                           Move this email to trash in your email inbox after processing.
                           {deleteFromInboxGlobal && deleteFromInboxOverride === null && (
-                            <span style={{ color: '#059669', fontStyle: 'italic' }}> (Enabled by default in Settings)</span>
+                            <span style={{ color: '#2D7A52', fontStyle: 'italic' }}> (Enabled by default in Settings)</span>
                           )}
                         </p>
                       </div>
@@ -2743,7 +2743,7 @@ function ReconciliationCenter() {
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'lead' && !createNewLoan ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          border: selectedEntityType === 'lead' && !createNewLoan ? '2px solid #2D7A52' : '1px solid #e5e7eb',
                           borderRadius: '8px',
                           background: selectedEntityType === 'lead' && !createNewLoan ? '#ecfdf5' : 'white',
                           cursor: 'pointer',
@@ -2797,9 +2797,9 @@ function ReconciliationCenter() {
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: createNewLoan ? '2px solid #8b5cf6' : '1px solid #e5e7eb',
+                          border: createNewLoan ? '2px solid #B8924A' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: createNewLoan ? '#f5f3ff' : 'white',
+                          background: createNewLoan ? '#FDF9F0' : 'white',
                           cursor: 'pointer',
                           fontWeight: createNewLoan ? '600' : '400'
                         }}
@@ -2858,9 +2858,9 @@ function ReconciliationCenter() {
                     <h3>Matched Entity</h3>
                     <div className="entity-match-info">
                       <div className="entity-type-badge" style={{
-                        background: createNewLoan ? '#8b5cf6' :
+                        background: createNewLoan ? '#B8924A' :
                                    (selectedEntityType || selectedItem.match_entity_type) === 'loan' ? '#3b82f6' :
-                                   '#10b981',
+                                   '#2D7A52',
                         color: 'white',
                         padding: '4px 12px',
                         borderRadius: '9999px',
@@ -2885,7 +2885,7 @@ function ReconciliationCenter() {
                         style={{
                           padding: '6px 12px',
                           fontSize: '12px',
-                          background: '#10b981',
+                          background: '#2D7A52',
                           color: 'white',
                           border: 'none',
                           borderRadius: '6px',
@@ -2949,7 +2949,7 @@ function ReconciliationCenter() {
                             disabled={!newFieldKey || !newFieldValue}
                             style={{
                               padding: '8px 16px',
-                              background: newFieldKey && newFieldValue ? '#10b981' : '#d1d5db',
+                              background: newFieldKey && newFieldValue ? '#2D7A52' : '#d1d5db',
                               color: 'white',
                               border: 'none',
                               borderRadius: '6px',
@@ -3068,7 +3068,7 @@ function ReconciliationCenter() {
                               <span
                                 className="field-confidence-badge"
                                 style={{
-                                  backgroundColor: confidence > 0.8 ? '#10b981' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                                  backgroundColor: confidence > 0.8 ? '#2D7A52' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
                                   color: 'white',
                                   marginLeft: 'auto'
                                 }}
@@ -3126,7 +3126,7 @@ function ReconciliationCenter() {
                             </span>
                             <span
                               className="field-confidence-badge"
-                              style={{ backgroundColor: '#10b981', color: 'white', marginLeft: 'auto' }}
+                              style={{ backgroundColor: '#2D7A52', color: 'white', marginLeft: 'auto' }}
                             >
                               100%
                             </span>
@@ -3142,7 +3142,7 @@ function ReconciliationCenter() {
                               style={{
                                 flex: 1,
                                 padding: '8px 10px',
-                                border: '2px solid #10b981',
+                                border: '2px solid #2D7A52',
                                 borderRadius: '6px',
                                 fontSize: '14px',
                                 background: '#f0fdf4'
@@ -3776,7 +3776,7 @@ function ReconciliationCenter() {
                       background: '#ecfdf5',
                       borderRadius: '6px',
                       fontSize: '13px',
-                      color: '#059669'
+                      color: '#2D7A52'
                     }}>
                       Selected: {selectedReferralPartner.name}
                       {(selectedReferralPartner.company || selectedReferralPartner.company_name) && ` (${selectedReferralPartner.company || selectedReferralPartner.company_name})`}
@@ -4066,7 +4066,7 @@ function ReconciliationCenter() {
                     padding: '10px 24px',
                     border: 'none',
                     borderRadius: '6px',
-                    background: '#10b981',
+                    background: '#2D7A52',
                     color: 'white',
                     cursor: 'pointer',
                     fontWeight: '600'
@@ -4084,7 +4084,7 @@ function ReconciliationCenter() {
       {showAppliedDataModal && appliedDataSummary && (
         <div className="dialog-overlay" style={{ zIndex: 2100 }}>
           <div className="dialog-content" style={{ maxWidth: '500px' }}>
-            <div className="dialog-header" style={{ background: '#d1fae5', borderBottom: '2px solid #10b981' }}>
+            <div className="dialog-header" style={{ background: '#d1fae5', borderBottom: '2px solid #2D7A52' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, color: '#065f46' }}>
                 <span style={{ fontSize: '24px' }}>✅</span>
                 {appliedDataSummary.isNewBorrower ? 'Borrower Added Successfully' : 'Data Applied Successfully'}
@@ -4207,7 +4207,7 @@ function ReconciliationCenter() {
                     padding: '10px 24px',
                     border: 'none',
                     borderRadius: '6px',
-                    background: '#10b981',
+                    background: '#2D7A52',
                     color: 'white',
                     cursor: 'pointer',
                     fontWeight: '600',

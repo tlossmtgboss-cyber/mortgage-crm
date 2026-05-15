@@ -40,7 +40,7 @@
 }
 
 .stat-card.fixed {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .stat-card.dismissed {
@@ -79,12 +79,12 @@
 
 .ai-feedback-filters select:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .refresh-btn {
   padding: 10px 20px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;

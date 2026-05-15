@@ -339,7 +339,7 @@ export default function NotificationsSection({
                       <path
                         d={describeArc(60, 60, 44, arc.startAngle, arc.endAngle)}
                         fill="none"
-                        stroke="#818cf8"
+                        stroke="#D4AD6A"
                         strokeWidth="10"
                         strokeLinecap="round"
                         opacity="0.3"

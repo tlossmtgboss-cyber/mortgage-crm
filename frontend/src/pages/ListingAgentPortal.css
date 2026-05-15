@@ -52,7 +52,7 @@
   width: 64px;
   height: 64px;
   margin: 0 auto 24px;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -110,7 +110,7 @@
 .brand-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -325,7 +325,7 @@
 
 .progress-bar .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+  background: linear-gradient(90deg, #3b82f6 0%, #2D7A52 100%);
   border-radius: 6px;
   transition: width 0.5s ease;
 }

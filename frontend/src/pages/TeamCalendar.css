@@ -111,7 +111,7 @@
 }
 
 .tc-today-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* Filters bar */
@@ -367,12 +367,12 @@
 
 .tc-appt-pre_purchase {
   background: rgba(139, 92, 246, 0.12);
-  border-left-color: #8b5cf6;
+  border-left-color: #B8924A;
 }
 
 .tc-appt-purchase {
   background: rgba(99, 102, 241, 0.12);
-  border-left-color: #6366f1;
+  border-left-color: #B8924A;
 }
 
 .tc-appt-booked {
@@ -527,7 +527,7 @@
 }
 
 .tc-btn-primary:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .tc-btn-primary:disabled {

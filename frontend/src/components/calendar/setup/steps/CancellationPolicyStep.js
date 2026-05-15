@@ -524,7 +524,7 @@ export default function CancellationPolicyStep({ onComplete, initialData }) {
                   </>
                 ) : (
                   <>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: '#218D8D' }}>Unlimited</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#1F3D2E' }}>Unlimited</span>
                     <button
                       type="button"
                       className="unlimited-toggle"
@@ -687,7 +687,7 @@ export default function CancellationPolicyStep({ onComplete, initialData }) {
             padding: '10px 28px',
             borderRadius: 8,
             border: 'none',
-            background: saving ? '#9ca3af' : '#218D8D',
+            background: saving ? '#9ca3af' : '#1F3D2E',
             color: '#fff',
             cursor: saving ? 'wait' : 'pointer',
             fontSize: 15,

@@ -492,7 +492,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
             </div>
             <h2 id={modalHeadingId}>Appointment Scheduled!</h2>
             {emailSent ? (
-              <p style={{ color: '#10b981' }}>A confirmation email has been sent to {borrower?.email || borrower?.borrower_email}</p>
+              <p style={{ color: '#2D7A52' }}>A confirmation email has been sent to {borrower?.email || borrower?.borrower_email}</p>
             ) : (
               <div style={{ color: '#f59e0b' }}>
                 <p>Appointment created, but email could not be sent.</p>

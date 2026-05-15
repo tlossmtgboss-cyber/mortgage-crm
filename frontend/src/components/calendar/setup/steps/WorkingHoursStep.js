@@ -666,7 +666,7 @@ export default function WorkingHoursStep({ stepData = {}, onChange, allStepData 
                 type="checkbox"
                 checked={block.enabled}
                 onChange={e => updateTimeBlock(block.id, 'enabled', e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: 'var(--cal-primary, #4f46e5)' }}
+                style={{ width: 18, height: 18, accentColor: 'var(--cal-primary, #8A6D30)' }}
               />
               <input
                 type="text"
@@ -719,7 +719,7 @@ export default function WorkingHoursStep({ stepData = {}, onChange, allStepData 
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '8px 16px', background: 'var(--cal-bg-secondary, #f8fafc)',
               border: '1px dashed var(--cal-border, #cbd5e1)', borderRadius: 8,
-              color: 'var(--cal-primary, #4f46e5)', cursor: 'pointer', fontSize: 14,
+              color: 'var(--cal-primary, #8A6D30)', cursor: 'pointer', fontSize: 14,
             }}
           >
             <i className="fas fa-plus" /> Add Time Block

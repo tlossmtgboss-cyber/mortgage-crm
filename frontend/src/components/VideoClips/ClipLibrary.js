@@ -138,7 +138,7 @@ const ClipLibrary = () => {
   // Get status badge color
   const getStatusColor = (status) => {
     switch (status) {
-      case 'ready': return '#10b981';
+      case 'ready': return '#2D7A52';
       case 'processing': return '#f59e0b';
       case 'uploading': return '#3b82f6';
       case 'failed': return '#ef4444';

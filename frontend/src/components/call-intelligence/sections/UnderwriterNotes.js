@@ -521,7 +521,7 @@ const UnderwriterNotes = ({
 // Helper functions for styling
 const getRiskColor = (level) => {
   const colors = {
-    low: '#10b981',
+    low: '#2D7A52',
     moderate: '#3b82f6',
     elevated: '#f59e0b',
     high: '#dc2626',
@@ -556,9 +556,9 @@ const getNoteColor = (category) => {
   const colors = {
     observation: '#6b7280',
     concern: '#f59e0b',
-    positive: '#10b981',
+    positive: '#2D7A52',
     action_needed: '#3b82f6',
-    mitigating_factor: '#10b981',
+    mitigating_factor: '#2D7A52',
   };
   return colors[category] || '#6b7280';
 };

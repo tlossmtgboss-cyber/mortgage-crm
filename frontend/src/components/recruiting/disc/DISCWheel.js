@@ -175,7 +175,7 @@ function DISCWheel({
         {/* Dimension labels at edges */}
         <text x={center} y={18} textAnchor="middle" className="disc-wheel-dim-label" fill="#DC2626">D</text>
         <text x={size - 18} y={center} textAnchor="middle" className="disc-wheel-dim-label" fill="#F59E0B">I</text>
-        <text x={center} y={size - 8} textAnchor="middle" className="disc-wheel-dim-label" fill="#10B981">S</text>
+        <text x={center} y={size - 8} textAnchor="middle" className="disc-wheel-dim-label" fill="#2D7A52">S</text>
         <text x={18} y={center} textAnchor="middle" className="disc-wheel-dim-label" fill="#3B82F6">C</text>
       </svg>
 

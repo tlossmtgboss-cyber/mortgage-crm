@@ -32,7 +32,7 @@
 }
 
 .ci-header-title h1 i {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .ci-header-title p {
@@ -104,7 +104,7 @@
 }
 
 .ci-tab.active {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
@@ -135,14 +135,14 @@
 
 .ci-loading-full i {
   font-size: 32px;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .ci-loading {
   display: flex;
   justify-content: center;
   padding: 32px;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .ci-loading i {
@@ -217,7 +217,7 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -314,7 +314,7 @@
 
 .ci-performer-rank {
   font-weight: 700;
-  color: #6366f1;
+  color: #B8924A;
   font-size: 14px;
   width: 24px;
 }
@@ -366,11 +366,11 @@
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: #e0e7ff;
+  background: #F5EDD9;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .ci-recording-mini-info {
@@ -404,7 +404,7 @@
   border: 1px dashed #e2e8f0;
   background: transparent;
   border-radius: 8px;
-  color: #6366f1;
+  color: #B8924A;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -417,7 +417,7 @@
 
 .ci-view-all-btn:hover {
   background: #f8fafc;
-  border-color: #6366f1;
+  border-color: #B8924A;
 }
 
 /* Recordings Tab */
@@ -553,12 +553,12 @@
 }
 
 .ci-btn-primary {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
 .ci-btn-primary:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .ci-btn-secondary {
@@ -599,7 +599,7 @@
 .ci-btn-link {
   background: none;
   border: none;
-  color: #6366f1;
+  color: #B8924A;
   padding: 0;
   cursor: pointer;
   font-size: 14px;
@@ -651,11 +651,11 @@
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #e0e7ff;
+  background: #F5EDD9;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6366f1;
+  color: #B8924A;
   font-size: 18px;
 }
 
@@ -827,7 +827,7 @@
 .ci-settings-form input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #6366f1;
+  accent-color: #B8924A;
 }
 
 .ci-rubrics-list {
@@ -968,7 +968,7 @@
 
 .ci-summary-filters select:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -995,7 +995,7 @@
 }
 
 .ci-summary-card:hover {
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
   transform: translateY(-2px);
 }
@@ -1017,7 +1017,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #B8924A, #B8924A);
   color: white;
   display: flex;
   align-items: center;
@@ -1132,7 +1132,7 @@
 
 .ci-view-details {
   font-size: 13px;
-  color: #6366f1;
+  color: #B8924A;
   font-weight: 500;
   display: flex;
   align-items: center;

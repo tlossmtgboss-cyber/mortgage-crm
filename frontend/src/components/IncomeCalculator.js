@@ -12,10 +12,10 @@ INCOME_TYPES.forEach(t => {
 });
 // Also keep legacy keys that the backend may still return
 if (!INCOME_TYPE_INFO['W2_WAGES']) INCOME_TYPE_INFO['W2_WAGES'] = { icon: '💼', label: 'W-2 Employment', color: '#3b82f6' };
-if (!INCOME_TYPE_INFO['SELF_EMPLOYMENT']) INCOME_TYPE_INFO['SELF_EMPLOYMENT'] = { icon: '🏢', label: 'Self-Employment', color: '#8b5cf6' };
-if (!INCOME_TYPE_INFO['RENTAL']) INCOME_TYPE_INFO['RENTAL'] = { icon: '🏠', label: 'Rental Income', color: '#10b981' };
+if (!INCOME_TYPE_INFO['SELF_EMPLOYMENT']) INCOME_TYPE_INFO['SELF_EMPLOYMENT'] = { icon: '🏢', label: 'Self-Employment', color: '#B8924A' };
+if (!INCOME_TYPE_INFO['RENTAL']) INCOME_TYPE_INFO['RENTAL'] = { icon: '🏠', label: 'Rental Income', color: '#2D7A52' };
 if (!INCOME_TYPE_INFO['PARTNERSHIP_SCORP']) INCOME_TYPE_INFO['PARTNERSHIP_SCORP'] = { icon: '🤝', label: 'K-1 Partnership/S-Corp', color: '#f59e0b' };
-if (!INCOME_TYPE_INFO['CCORP']) INCOME_TYPE_INFO['CCORP'] = { icon: '🏛️', label: 'C-Corporation', color: '#6366f1' };
+if (!INCOME_TYPE_INFO['CCORP']) INCOME_TYPE_INFO['CCORP'] = { icon: '🏛️', label: 'C-Corporation', color: '#B8924A' };
 if (!INCOME_TYPE_INFO['BANK_STATEMENT']) INCOME_TYPE_INFO['BANK_STATEMENT'] = { icon: '🏦', label: 'Bank Statement', color: '#ec4899' };
 
 const SEVERITY_STYLES = {

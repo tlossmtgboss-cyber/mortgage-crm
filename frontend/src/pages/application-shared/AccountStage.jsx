@@ -247,7 +247,7 @@ const AccountStage = ({
               onClick={() => setCurrentStage('declarations')}
               style={{
                 padding: '12px 32px',
-                background: '#6366f1',
+                background: '#B8924A',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',

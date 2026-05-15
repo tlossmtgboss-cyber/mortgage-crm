@@ -37,12 +37,12 @@ const CALCULATOR_CONFIG = {
   dti: {
     title: 'Debt-to-Income Calculator',
     icon: '📊',
-    color: '#8b5cf6',
+    color: '#B8924A',
   },
   ltv: {
     title: 'Loan-to-Value Calculator',
     icon: '📈',
-    color: '#10b981',
+    color: '#2D7A52',
   },
   affordability: {
     title: 'Affordability Calculator',
@@ -65,10 +65,10 @@ const CALCULATOR_CONFIG = {
 const PITIVisualization = ({ outputs }) => {
   const components = [
     { key: 'principal_interest', label: 'Principal & Interest', color: '#3b82f6' },
-    { key: 'property_taxes', label: 'Property Taxes', color: '#10b981' },
+    { key: 'property_taxes', label: 'Property Taxes', color: '#2D7A52' },
     { key: 'homeowners_insurance', label: 'Homeowners Insurance', color: '#f59e0b' },
     { key: 'mortgage_insurance', label: 'Mortgage Insurance (PMI)', color: '#ef4444' },
-    { key: 'hoa', label: 'HOA Dues', color: '#8b5cf6' },
+    { key: 'hoa', label: 'HOA Dues', color: '#B8924A' },
   ].filter((c) => outputs[c.key] > 0);
 
   const total = outputs.total_payment || 0;

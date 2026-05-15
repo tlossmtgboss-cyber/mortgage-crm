@@ -30,7 +30,7 @@
 
 .smart-docs-header .btn-request-doc {
   padding: 8px 16px;
-  background: #059669;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -41,7 +41,7 @@
 }
 
 .smart-docs-header .btn-request-doc:hover {
-  background: #047857;
+  background: #1F5A3A;
 }
 
 .smart-docs-header .btn-view-all {

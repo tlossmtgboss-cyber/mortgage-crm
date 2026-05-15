@@ -75,7 +75,7 @@ const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
   // Get status bar color for task list
   const getStatusColor = (task) => {
     if (task.source === 'reconciliation') return '#22c55e'; // green
-    if (task.source === 'workflow') return '#8b5cf6'; // purple
+    if (task.source === 'workflow') return '#B8924A'; // purple
     const priority = (task.priority || '').toLowerCase();
     if (priority === 'urgent' || priority === 'critical') return '#ef4444';
     if (priority === 'high') return '#f97316';

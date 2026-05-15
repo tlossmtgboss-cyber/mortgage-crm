@@ -57,7 +57,7 @@
 }
 
 .category-tasks-header .header-subtitle strong {
-  color: #218d8d;
+  color: #1F3D2E;
 }
 
 .category-tasks-header .modal-close-btn {
@@ -102,7 +102,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e5e7eb;
-  border-top-color: #218d8d;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -121,7 +121,7 @@
 .error-state button {
   margin-top: 16px;
   padding: 8px 16px;
-  background: #218d8d;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -202,7 +202,7 @@
 }
 
 .status-indicator.active {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .status-indicator.has-issues {

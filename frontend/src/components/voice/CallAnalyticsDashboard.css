@@ -50,7 +50,7 @@
 
 .ca-date-select:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -88,12 +88,12 @@
 }
 
 .ca-btn-primary {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
 .ca-btn-primary:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .ca-btn-secondary {
@@ -136,7 +136,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e2e8f0;
-  border-top-color: #6366f1;
+  border-top-color: #B8924A;
   border-radius: 50%;
   animation: ca-spin 1s linear infinite;
 }
@@ -204,7 +204,7 @@
 }
 
 .ca-stat-card.highlight {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #B8924A, #B8924A);
   color: white;
 }
 
@@ -285,7 +285,7 @@
 }
 
 .ca-metric-value.highlight {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 /* Trend Chart */
@@ -313,7 +313,7 @@
 
 .ca-trend-bar {
   width: 100%;
-  background: linear-gradient(to top, #6366f1, #8b5cf6);
+  background: linear-gradient(to top, #B8924A, #B8924A);
   border-radius: 4px 4px 0 0;
   min-height: 4px;
   display: flex;
@@ -466,7 +466,7 @@
 .ca-hourly-bar {
   width: 100%;
   max-width: 30px;
-  background: linear-gradient(to top, #6366f1, #a5b4fc);
+  background: linear-gradient(to top, #B8924A, #a5b4fc);
   border-radius: 3px 3px 0 0;
   display: flex;
   align-items: flex-start;
@@ -505,7 +505,7 @@
 }
 
 .ca-session-stat.highlight {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #B8924A, #B8924A);
   color: white;
 }
 
@@ -569,7 +569,7 @@
 .ca-session-id {
   font-family: monospace;
   font-size: 13px;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .ca-status-badge {
@@ -583,7 +583,7 @@
 
 .ca-status-badge.completed {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .ca-status-badge.active {

@@ -5,7 +5,7 @@
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 8px 0 0 8px;
@@ -110,13 +110,13 @@
 }
 
 .calculator-tab:hover {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .calculator-tab.active {
-  background: #217F8D;
-  border-color: #217F8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -224,7 +224,7 @@
 
 .calculate-btn {
   padding: 12px 20px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -267,7 +267,7 @@
 .result-item.highlight .result-value {
   font-size: 20px;
   font-weight: 700;
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .result-label {
@@ -357,7 +357,7 @@
 
 .detail-row.highlight span:last-child {
   font-weight: 700;
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .comparison-note {
@@ -477,7 +477,7 @@
 }
 
 .value-positive {
-  color: #059669 !important;
+  color: #2D7A52 !important;
 }
 
 .value-negative {

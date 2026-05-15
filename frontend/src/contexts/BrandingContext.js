@@ -23,11 +23,11 @@ const DEFAULTS = {
   brandName: 'Perennia AI',
   logoUrl: null,
   faviconUrl: null,
-  primaryColor: '#218d8d',
-  secondaryColor: '#7c3aed',
-  accentColor: '#059669',
+  primaryColor: '#1F3D2E',
+  secondaryColor: '#B8924A',
+  accentColor: '#2D7A52',
   headerBgColor: '#ffffff',
-  fontFamily: 'Inter, sans-serif',
+  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
 };
 
 const BrandingContext = createContext(null);

@@ -11,7 +11,7 @@
  *   - IncomeCalculatorTabs.js
  *
  * Design system colors reference CSS variables:
- *   --color-primary: #217F8D (teal)
+ *   --color-primary: #1F3D2E (teal)
  *   --color-success, --color-warning, --color-error
  */
 
@@ -56,7 +56,7 @@ export const INCOME_TYPES = [
     label: 'Overtime & Bonus',
     icon: 'trending-up',
     shortLabel: 'OT/Bonus',
-    color: '#8b5cf6',
+    color: '#B8924A',
     category: 'employment',
   },
   {
@@ -64,7 +64,7 @@ export const INCOME_TYPES = [
     label: 'Commission',
     icon: 'percent',
     shortLabel: 'Commission',
-    color: '#8b5cf6',
+    color: '#B8924A',
     category: 'employment',
   },
   {
@@ -80,7 +80,7 @@ export const INCOME_TYPES = [
     label: 'Social Security (Non-Taxable)',
     icon: 'shield',
     shortLabel: 'SS',
-    color: '#10b981',
+    color: '#2D7A52',
     category: 'nontaxable',
     grossUpFactor: 1.25,
   },
@@ -89,7 +89,7 @@ export const INCOME_TYPES = [
     label: 'Non-Taxable Other',
     icon: 'heart',
     shortLabel: 'Non-Tax',
-    color: '#10b981',
+    color: '#2D7A52',
     category: 'nontaxable',
     grossUpFactor: 1.25,
   },
@@ -199,7 +199,7 @@ export const VERIFICATION_STATUSES = {
   },
   CALCULATED: {
     label: 'Calculated',
-    color: '#217F8D',
+    color: '#1F3D2E',
     bgColor: 'rgba(33,127,141,0.08)',
   },
 };
@@ -226,7 +226,7 @@ export const CALCULATION_STATUSES = {
   },
   COMPLETED: {
     label: 'Completed',
-    color: '#10b981',
+    color: '#2D7A52',
   },
   NEEDS_REVIEW: {
     label: 'Needs Review',
@@ -234,7 +234,7 @@ export const CALCULATION_STATUSES = {
   },
   REVIEWED: {
     label: 'Reviewed',
-    color: '#217F8D',
+    color: '#1F3D2E',
   },
   APPROVED: {
     label: 'Approved',
@@ -344,7 +344,7 @@ export function getConfidenceLevel(score) {
     return { level: 'AUTO_APPROVE', label: 'Auto-Approve', color: '#065f46' };
   }
   if (score >= CONFIDENCE_THRESHOLDS.QUICK_REVIEW) {
-    return { level: 'QUICK_REVIEW', label: 'Quick Review', color: '#217F8D' };
+    return { level: 'QUICK_REVIEW', label: 'Quick Review', color: '#1F3D2E' };
   }
   if (score >= CONFIDENCE_THRESHOLDS.STANDARD_REVIEW) {
     return { level: 'STANDARD_REVIEW', label: 'Standard Review', color: '#f59e0b' };

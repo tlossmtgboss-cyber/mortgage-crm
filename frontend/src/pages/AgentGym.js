@@ -6,10 +6,10 @@ import './AgentGym.css';
 
 // Difficulty levels
 const DIFFICULTY_LEVELS = [
-  { value: 'beginner', label: 'Beginner', color: '#10b981', description: 'Basic scenarios for new agents' },
+  { value: 'beginner', label: 'Beginner', color: '#2D7A52', description: 'Basic scenarios for new agents' },
   { value: 'intermediate', label: 'Intermediate', color: '#f59e0b', description: 'Moderate complexity tasks' },
   { value: 'advanced', label: 'Advanced', color: '#ef4444', description: 'Complex multi-step scenarios' },
-  { value: 'expert', label: 'Expert', color: '#7c3aed', description: 'Challenging real-world simulations' },
+  { value: 'expert', label: 'Expert', color: '#B8924A', description: 'Challenging real-world simulations' },
 ];
 
 // Agent category mapping for auto-selection

@@ -13,13 +13,13 @@ const LOAN_STAGES = [
     code: 'active_loan',
     name: 'Active Loan',
     description: 'Processing, underwriting, closing, and rate locks',
-    color: '#10B981'
+    color: '#2D7A52'
   },
   {
     code: 'portfolio',
     name: 'Portfolio',
     description: 'Client retention, MUM, referrals, and anniversaries',
-    color: '#8B5CF6'
+    color: '#B8924A'
   }
 ];
 

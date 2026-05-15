@@ -43,7 +43,7 @@
 
 .ed-refresh-btn {
   padding: 8px 16px;
-  background: #4f46e5;
+  background: #8A6D30;
   color: white;
   border: none;
   border-radius: 8px;
@@ -53,7 +53,7 @@
 }
 
 .ed-refresh-btn:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 /* KPI Cards */
@@ -73,8 +73,8 @@
 }
 
 .ed-kpi-card.ed-kpi-highlight {
-  background: #eef2ff;
-  border-color: #c7d2fe;
+  background: #FDF9F0;
+  border-color: #EDE0C4;
 }
 
 .ed-kpi-value {
@@ -122,7 +122,7 @@
 
 .ed-rate-highlight {
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .ed-no-data {
@@ -182,7 +182,7 @@
 
 .ed-rank {
   font-weight: 700;
-  color: #4f46e5;
+  color: #8A6D30;
   width: 30px;
 }
 
@@ -244,8 +244,8 @@
 }
 
 .ed-badge-meeting {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #FAF3E5;
+  color: #6B5424;
 }
 
 .ed-feed-content {

@@ -415,7 +415,7 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(90deg, #3b82f6, #B8924A);
   transform: scaleX(0);
   transition: transform 0.2s ease;
 }
@@ -457,7 +457,7 @@
 .doc-type-badge[data-type="troubleshooting"] { background: #fee2e2; color: #991b1b; }
 
 .new-badge {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 12px;

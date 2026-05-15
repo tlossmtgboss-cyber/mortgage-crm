@@ -85,10 +85,10 @@
 }
 
 .sf-nav-item.active {
-  background: #eef2ff;
-  color: #4f46e5;
+  background: #FDF9F0;
+  color: #8A6D30;
   font-weight: 500;
-  border-left: 3px solid #4f46e5;
+  border-left: 3px solid #8A6D30;
 }
 
 .sf-nav-item:disabled {
@@ -299,7 +299,7 @@
 
 /* CTA Card */
 .sf-cta-card {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   color: #fff;
   border-radius: 12px;
   padding: 32px;
@@ -362,12 +362,12 @@
 }
 
 .sf-btn-primary {
-  background: #4f46e5;
+  background: #8A6D30;
   color: #fff;
 }
 
 .sf-btn-primary:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 .sf-btn-success {
@@ -376,7 +376,7 @@
 }
 
 .sf-btn-success:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .sf-btn-danger {
@@ -443,7 +443,7 @@
 }
 
 .sf-object-card.expanded {
-  background: #eef2ff;
+  background: #FDF9F0;
   border-bottom: none;
 }
 
@@ -514,7 +514,7 @@
   width: 16px;
   height: 16px;
   cursor: pointer;
-  accent-color: #4f46e5;
+  accent-color: #8A6D30;
 }
 
 .sf-toggle-label {
@@ -524,7 +524,7 @@
 /* Expanded field list */
 .sf-object-fields {
   background: #fff;
-  border-top: 1px solid #eef2ff;
+  border-top: 1px solid #FDF9F0;
   padding: 0;
   max-height: 400px;
   overflow-y: auto;
@@ -651,7 +651,7 @@
 }
 
 .sf-object-btn.active {
-  background: #4f46e5;
+  background: #8A6D30;
   color: #fff;
 }
 
@@ -728,7 +728,7 @@
 .sf-suggestion-target .sf-entity {
   display: block;
   font-size: 12px;
-  color: #4f46e5;
+  color: #8A6D30;
   text-transform: uppercase;
 }
 
@@ -795,7 +795,7 @@
 .sf-mapping-source .sf-object,
 .sf-mapping-target .sf-entity {
   font-size: 11px;
-  color: #4f46e5;
+  color: #8A6D30;
   text-transform: uppercase;
 }
 
@@ -810,7 +810,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #0d9f6e 0%, #059669 100%);
+  background: linear-gradient(135deg, #0d9f6e 0%, #2D7A52 100%);
   color: #fff;
   border-radius: 12px;
   margin-top: 24px;
@@ -931,7 +931,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e1e5eb;
-  border-top-color: #4f46e5;
+  border-top-color: #8A6D30;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }

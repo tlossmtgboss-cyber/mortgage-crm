@@ -187,7 +187,7 @@
 
 .requirement-card.accepted,
 .requirement-card.waived {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
   background: #f0fdf4;
 }
 
@@ -243,7 +243,7 @@
 
 .status-icon.completed {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-icon.pending {
@@ -415,7 +415,7 @@
 }
 
 .uploaded-doc .doc-status.approved {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .uploaded-doc .doc-status.rejected {

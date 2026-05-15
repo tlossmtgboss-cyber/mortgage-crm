@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import { calendarSettingsAPI } from '../../services/api';
 import { toast } from '../../utils/toast';
 
-const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+const DEFAULT_COLORS = ['#1F3D2E', '#3b82f6', '#B8924A', '#ec4899', '#f59e0b', '#2D7A52', '#ef4444', '#B8924A'];
 
 const ASSIGNMENT_STRATEGIES = [
   {
@@ -81,9 +81,9 @@ export default function TeamSection({
     overbooking_policy: 'warn',
   });
   const [teamRoles, setTeamRoles] = useState([
-    { id: 'lo', name: 'Loan Officer', color: '#218D8D', default_capacity: 8, appointment_types: [], auto_assign: true },
+    { id: 'lo', name: 'Loan Officer', color: '#1F3D2E', default_capacity: 8, appointment_types: [], auto_assign: true },
     { id: 'processor', name: 'Processor', color: '#3b82f6', default_capacity: 6, appointment_types: [], auto_assign: true },
-    { id: 'closer', name: 'Closer', color: '#8b5cf6', default_capacity: 4, appointment_types: [], auto_assign: false },
+    { id: 'closer', name: 'Closer', color: '#B8924A', default_capacity: 4, appointment_types: [], auto_assign: false },
   ]);
   const [editingRole, setEditingRole] = useState(null);
   const [showNewRoleForm, setShowNewRoleForm] = useState(false);

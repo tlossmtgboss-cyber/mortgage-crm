@@ -1,6 +1,6 @@
 /**
  * Availability Preferences Styles
- * Follows CalendarSettings.css patterns with Perennia brand colors (#218D8D).
+ * Follows CalendarSettings.css patterns with Perennia brand colors (#1F3D2E).
  */
 
 /* ============================================================================
@@ -96,7 +96,7 @@
 }
 
 .avail-toggle-switch input:checked + .avail-toggle-slider {
-  background-color: #218D8D;
+  background-color: #1F3D2E;
 }
 
 .avail-toggle-switch input:checked + .avail-toggle-slider::before {
@@ -140,7 +140,7 @@
 
 .avail-time-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -181,7 +181,7 @@
   gap: 6px;
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -257,7 +257,7 @@
   position: absolute;
   left: 2px;
   right: 2px;
-  background: #218D8D;
+  background: #1F3D2E;
   border-radius: 4px;
   opacity: 0.75;
   transition: all 0.3s ease;
@@ -320,7 +320,7 @@
 .avail-override-field input:focus,
 .avail-override-field select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -340,7 +340,7 @@
 }
 
 .avail-override-type-option input[type="radio"] {
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .avail-override-times {
@@ -354,7 +354,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -402,7 +402,7 @@
 }
 
 .avail-override-card.is-extra {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #2D7A52;
 }
 
 .avail-override-info {
@@ -515,7 +515,7 @@
 
 .avail-timezone-row select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 

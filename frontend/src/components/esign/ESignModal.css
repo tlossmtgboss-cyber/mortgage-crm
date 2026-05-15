@@ -343,7 +343,7 @@
 .success-icon {
   width: 64px;
   height: 64px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   font-size: 32px;
   font-weight: bold;
@@ -383,7 +383,7 @@
 
 .btn-done {
   padding: 10px 32px;
-  background: #10b981;
+  background: #2D7A52;
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -394,7 +394,7 @@
 }
 
 .btn-done:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Responsive */

@@ -187,7 +187,7 @@
 }
 
 .step-item.completed {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .step-item.disabled {
@@ -212,7 +212,7 @@
 }
 
 .step-item.completed .step-icon {
-  background: #059669;
+  background: #2D7A52;
   color: #fff;
 }
 
@@ -398,7 +398,7 @@
   align-items: center;
   justify-content: center;
   padding: 10px 20px;
-  background: #059669;
+  background: #2D7A52;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -409,7 +409,7 @@
 }
 
 .btn-prequal:hover {
-  background: #047857;
+  background: #1F5A3A;
 }
 
 .btn-prequal:disabled {
@@ -515,7 +515,7 @@
 .prequal-amount {
   font-size: 32px;
   font-weight: 700;
-  color: #059669;
+  color: #2D7A52;
   margin-bottom: 12px;
 }
 
@@ -711,7 +711,7 @@
 
 .verified-badge {
   font-size: 12px;
-  color: #059669;
+  color: #2D7A52;
   font-weight: 500;
 }
 
@@ -770,7 +770,7 @@
   width: 64px;
   height: 64px;
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
   font-size: 32px;
   border-radius: 50%;
   margin-bottom: 16px;
@@ -848,18 +848,18 @@
 }
 
 .review-section.prequal {
-  border-color: #059669;
+  border-color: #2D7A52;
   background: #ecfdf5;
 }
 
 .review-section.prequal .section-header {
   background: #d1fae5;
-  border-color: #059669;
+  border-color: #2D7A52;
 }
 
 .prequal-highlight {
   font-size: 18px !important;
-  color: #059669 !important;
+  color: #2D7A52 !important;
 }
 
 .completion-status {
@@ -890,7 +890,7 @@
 }
 
 .completion-status li.complete {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .completion-status li.incomplete {
@@ -921,11 +921,11 @@
   width: 100%;
   padding: 16px;
   font-size: 16px;
-  background: linear-gradient(135deg, #059669, #047857);
+  background: linear-gradient(135deg, #2D7A52, #1F5A3A);
 }
 
 .btn-submit:hover {
-  background: linear-gradient(135deg, #047857, #065f46);
+  background: linear-gradient(135deg, #1F5A3A, #065f46);
 }
 
 /* Responsive */
@@ -1415,7 +1415,7 @@
 }
 
 .mode-option.conversation:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .mode-option.traditional:hover {
@@ -1460,14 +1460,14 @@
   content: "✓";
   position: absolute;
   left: 0;
-  color: #059669;
+  color: #2D7A52;
   font-weight: bold;
 }
 
 .mode-select-btn {
   width: 100%;
   padding: 14px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 10px;
@@ -1478,7 +1478,7 @@
 }
 
 .mode-select-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .mode-select-btn.secondary {

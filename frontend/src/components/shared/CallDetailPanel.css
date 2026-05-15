@@ -114,7 +114,7 @@
 }
 
 .call-detail-panel .phone-number a {
-  color: #10b981;
+  color: #2D7A52;
   text-decoration: none;
   font-weight: 500;
 }
@@ -244,7 +244,7 @@
 }
 
 .call-detail-panel .status-in-progress {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .call-detail-panel .status-completed {
@@ -311,12 +311,12 @@
 .call-detail-panel .btn-dial {
   flex: 1;
   min-width: 120px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .call-detail-panel .btn-dial:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .call-detail-panel .btn-end-call {
@@ -331,12 +331,12 @@
 }
 
 .call-detail-panel .btn-next {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .call-detail-panel .btn-next:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .call-detail-panel .btn-next:disabled {

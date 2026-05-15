@@ -30,7 +30,7 @@
 
 .btn-analyze {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -215,7 +215,7 @@
 
 .severity-badge.info {
   background: #f0fdf4;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .suggestion-description {
@@ -568,7 +568,7 @@
 
 .btn-save {
   padding: 6px 16px;
-  background-color: #10b981;
+  background-color: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -578,7 +578,7 @@
 }
 
 .btn-save:hover {
-  background-color: #059669;
+  background-color: #2D7A52;
 }
 
 /* =============================================

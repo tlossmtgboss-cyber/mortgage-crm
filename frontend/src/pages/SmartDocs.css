@@ -43,7 +43,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #C9A44E 100%);
   border: none;
   border-radius: 8px;
   color: white;
@@ -55,7 +55,7 @@
 }
 
 .btn-batch-reminder:hover {
-  background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
@@ -196,7 +196,7 @@
 }
 
 .summary-card.completed {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .card-value {
@@ -312,7 +312,7 @@
 
 .tab-btn.active .tab-badge.completed {
   background: #a7f3d0;
-  color: #047857;
+  color: #1F5A3A;
 }
 
 /* Loading & Empty States */
@@ -551,7 +551,7 @@
 }
 
 .applicant-card.completed-card {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .applicant-header {
@@ -595,14 +595,14 @@
 }
 
 .stage-badge.stage-submitted {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
 }
 
 .stage-badge.stage-uw_received,
 .stage-badge.stage-uw-received {
   background: #f3e8ff;
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .stage-badge.stage-approved {
@@ -749,7 +749,7 @@
 
 .loan-complete-status {
   font-size: 0.8rem;
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 500;
 }
 
@@ -821,7 +821,7 @@
 }
 
 .priority-dot.low {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .request-title {
@@ -1114,7 +1114,7 @@
 
 .lead-badge {
   display: inline-block;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #8A6D30 100%);
   color: white;
   font-size: 0.65rem;
   font-weight: 600;
@@ -1184,7 +1184,7 @@
 }
 
 .queue-summary-card.good {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
   background: #f0fdf4;
 }
 
@@ -1227,7 +1227,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #2D7A52 0%, #2D7A52 100%);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -1260,7 +1260,7 @@
 
 .sla-badge.sla-good {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 /* Days Waiting */
@@ -1281,7 +1281,7 @@
 
 /* Reminder Indicators */
 .reminder-enabled {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 500;
   font-size: 0.85rem;
 }
@@ -1294,7 +1294,7 @@
 /* Send Reminder Button */
 .btn-send-reminder {
   padding: 6px 12px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1306,7 +1306,7 @@
 }
 
 .btn-send-reminder:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Tab badge for breaches */
@@ -1350,8 +1350,8 @@
 .docs-requested {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #4f46e5;
-  background: #eef2ff;
+  color: #8A6D30;
+  background: #FDF9F0;
   padding: 4px 10px;
   border-radius: 12px;
   display: inline-block;

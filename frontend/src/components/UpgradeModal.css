@@ -128,7 +128,7 @@
 }
 
 .feature-check {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 700;
 }
 
@@ -147,7 +147,7 @@
 .price-amount {
   font-size: 40px;
   font-weight: 800;
-  color: var(--color-primary, #218D8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .price-period {
@@ -171,7 +171,7 @@
 .trial-btn {
   width: 100%;
   padding: 14px 24px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #2D7A52, #2D7A52);
   color: white;
   border: none;
   border-radius: 10px;
@@ -182,7 +182,7 @@
 }
 
 .trial-btn:hover {
-  background: linear-gradient(135deg, #059669, #047857);
+  background: linear-gradient(135deg, #2D7A52, #1F5A3A);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
@@ -190,7 +190,7 @@
 .upgrade-btn {
   width: 100%;
   padding: 14px 24px;
-  background: linear-gradient(135deg, var(--color-primary, #218D8D), #1a7070);
+  background: linear-gradient(135deg, var(--color-primary, #1F3D2E), #2A4F3D);
   color: white;
   border: none;
   border-radius: 10px;
@@ -201,7 +201,7 @@
 }
 
 .upgrade-btn:hover {
-  background: linear-gradient(135deg, #1a7070, #155e5e);
+  background: linear-gradient(135deg, #2A4F3D, #155e5e);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.4);
 }

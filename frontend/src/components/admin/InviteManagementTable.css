@@ -72,7 +72,7 @@
 }
 
 .stat-card.pending { border-left-color: #f59e0b; }
-.stat-card.accepted { border-left-color: #10b981; }
+.stat-card.accepted { border-left-color: #2D7A52; }
 .stat-card.expired { border-left-color: #ef4444; }
 
 .stat-value {
@@ -283,7 +283,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #3b82f6, #B8924A);
   color: white;
   display: flex;
   align-items: center;
@@ -330,7 +330,7 @@
 
 .status-accepted {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-expired {
@@ -356,11 +356,11 @@
 
 .role-admin { background: #fce7f3; color: #be185d; }
 .role-site-admin { background: #fce7f3; color: #9d174d; }
-.role-leadership { background: #ede9fe; color: #7c3aed; }
+.role-leadership { background: #FAF3E5; color: #B8924A; }
 .role-management { background: #dbeafe; color: #2563eb; }
-.role-sales { background: #d1fae5; color: #059669; }
+.role-sales { background: #d1fae5; color: #2D7A52; }
 .role-processing { background: #fef3c7; color: #d97706; }
-.role-operations { background: #e0e7ff; color: #4f46e5; }
+.role-operations { background: #F5EDD9; color: #8A6D30; }
 
 /* Date Cell */
 .date-cell {

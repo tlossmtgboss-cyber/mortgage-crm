@@ -2,7 +2,7 @@
 
 .clickable-email,
 .clickable-phone {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
@@ -15,8 +15,8 @@
 
 .clickable-email:hover,
 .clickable-phone:hover {
-  color: #1a7070;
-  border-bottom-color: #1a7070;
+  color: #2A4F3D;
+  border-bottom-color: #2A4F3D;
 }
 
 .clickable-email:active,
@@ -120,7 +120,7 @@
 }
 
 .clickable-phone.success {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .clickable-phone.success::before {
@@ -140,7 +140,7 @@
 
 .phone-action-btn.call-btn.success {
   background: #dcfce7;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .phone-action-btn.call-btn.error {

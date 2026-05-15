@@ -13,14 +13,14 @@
 .lead-info {
   padding: 12px 16px;
   background: #f0f8ff;
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
   border-radius: 6px;
   font-size: 14px;
   color: #333;
 }
 
 .lead-info strong {
-  color: #218D8D;
+  color: #1F3D2E;
   margin-right: 8px;
 }
 
@@ -53,7 +53,7 @@
 .form-select:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -108,7 +108,7 @@
 
 .submit-button {
   padding: 10px 24px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 6px;

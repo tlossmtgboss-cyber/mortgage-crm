@@ -782,7 +782,7 @@ function ClientProfile() {
             onClick={handleOpenClientFile}
             disabled={clientFileLoading}
             style={{
-              background: '#6366f1',
+              background: '#B8924A',
               color: 'white',
               border: 'none',
               padding: '8px 16px',
@@ -1273,7 +1273,7 @@ function ClientProfile() {
             <button
               onClick={() => navigate('/tasks')}
               style={{
-                background: '#218D8D',
+                background: '#1F3D2E',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -1784,7 +1784,7 @@ function ClientProfile() {
             {/* Last Touched Date - auto-updated on any file change */}
             <div className="info-section" style={{
               background: 'linear-gradient(135deg, #f0f4ff 0%, #e8eeff 100%)',
-              border: '1px solid #c7d2fe',
+              border: '1px solid #EDE0C4',
               borderRadius: '10px',
               padding: '16px 20px',
               marginBottom: '1.5rem',
@@ -1796,7 +1796,7 @@ function ClientProfile() {
                 width: '40px',
                 height: '40px',
                 borderRadius: '10px',
-                background: '#6366f1',
+                background: '#B8924A',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1805,7 +1805,7 @@ function ClientProfile() {
                 <span style={{ color: '#fff', fontSize: '18px' }}>&#128197;</span>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#B8924A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Last Touched Date
                 </div>
                 <div style={{ fontSize: '16px', fontWeight: 600, color: '#1e1b4b', marginTop: '2px' }}>
@@ -2364,7 +2364,7 @@ function ClientProfile() {
               <button
                 onClick={() => setShowScheduleModal(true)}
                 style={{
-                  background: '#217F8D',
+                  background: '#1F3D2E',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
@@ -2446,7 +2446,7 @@ function ClientProfile() {
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px' }}>
                         <span style={{
                           background: apt.meeting_mode === 'video' ? '#dbeafe' : apt.meeting_mode === 'phone' ? '#dcfce7' : '#f3e8ff',
-                          color: apt.meeting_mode === 'video' ? '#1d4ed8' : apt.meeting_mode === 'phone' ? '#166534' : '#7c3aed',
+                          color: apt.meeting_mode === 'video' ? '#1d4ed8' : apt.meeting_mode === 'phone' ? '#166534' : '#B8924A',
                           padding: '2px 8px',
                           borderRadius: '4px'
                         }}>
@@ -2464,7 +2464,7 @@ function ClientProfile() {
                           style={{
                             display: 'inline-block',
                             marginTop: '8px',
-                            color: '#217F8D',
+                            color: '#1F3D2E',
                             fontSize: '12px',
                             textDecoration: 'none'
                           }}
@@ -2496,8 +2496,8 @@ function ClientProfile() {
                   style={{
                     marginTop: '12px',
                     background: 'none',
-                    border: '1px solid #217F8D',
-                    color: '#217F8D',
+                    border: '1px solid #1F3D2E',
+                    color: '#1F3D2E',
                     borderRadius: '6px',
                     padding: '8px 16px',
                     fontSize: '13px',
@@ -2656,7 +2656,7 @@ function ClientProfile() {
               <p style={{ marginBottom: '12px' }}>Share this link with the borrower:</p>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input type="text" readOnly value={applicationLink.url} style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
-                <button onClick={async () => { try { await navigator.clipboard.writeText(applicationLink.url); toast.success('Link copied!'); } catch { toast.error('Copy failed'); } }} style={{ padding: '8px 16px', backgroundColor: '#218D8D', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
+                <button onClick={async () => { try { await navigator.clipboard.writeText(applicationLink.url); toast.success('Link copied!'); } catch { toast.error('Copy failed'); } }} style={{ padding: '8px 16px', backgroundColor: '#1F3D2E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
               </div>
             </div>
           </div>
@@ -2676,7 +2676,7 @@ function ClientProfile() {
               <p style={{ marginBottom: '12px' }}><strong>Status:</strong> {clientPortalData.status}</p>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input type="text" readOnly value={clientPortalData.url} style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
-                <button onClick={async () => { try { await navigator.clipboard.writeText(clientPortalData.url); toast.success('Link copied!'); } catch { toast.error('Copy failed'); } }} style={{ padding: '8px 16px', backgroundColor: '#218D8D', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
+                <button onClick={async () => { try { await navigator.clipboard.writeText(clientPortalData.url); toast.success('Link copied!'); } catch { toast.error('Copy failed'); } }} style={{ padding: '8px 16px', backgroundColor: '#1F3D2E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copy</button>
               </div>
               <button onClick={() => window.open(clientPortalData.url, '_blank')} style={{ marginTop: '12px', padding: '8px 16px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', width: '100%' }}>Open Portal</button>
             </div>

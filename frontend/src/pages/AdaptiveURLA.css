@@ -58,17 +58,17 @@
 }
 
 .progress-chapter.current {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
 }
 
 .progress-chapter.complete {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .progress-chapter.complete .chapter-icon {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .progress-chapter.skipped {
@@ -108,7 +108,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(90deg, #1F3D2E 0%, #2D7A52 100%);
   border-radius: 6px;
   transition: width 0.5s ease;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
@@ -117,7 +117,7 @@
 .progress-text {
   font-size: 14px;
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
   min-width: 110px;
   background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
   padding: 6px 12px;
@@ -131,7 +131,7 @@
   top: 120px;
   left: 50%;
   transform: translateX(-50%);
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   padding: 16px 32px;
   border-radius: 50px;
@@ -213,7 +213,7 @@
 }
 
 .sidebar-header svg {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .sidebar-subtitle {
@@ -247,7 +247,7 @@
 }
 
 .doc-category.current .doc-category-title {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .doc-category.upcoming {
@@ -423,13 +423,13 @@
 }
 
 .declaration-option:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .declaration-option.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
@@ -528,20 +528,20 @@
 }
 
 .yes-no-btn:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fafa;
 }
 
 .yes-no-btn.selected {
-  border-color: #218D8D;
-  background: #218D8D;
+  border-color: #1F3D2E;
+  background: #1F3D2E;
   color: white;
 }
 
 /* Budget Summary Card */
 .budget-summary-card {
   background: linear-gradient(135deg, #f0fafa 0%, #e6f7f7 100%);
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   margin-bottom: 20px;
 }
 
@@ -555,14 +555,14 @@
 }
 
 .budget-summary-header svg {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .budget-summary-header h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1a7070;
+  color: #2A4F3D;
 }
 
 .budget-summary-grid {
@@ -580,7 +580,7 @@
 }
 
 .budget-item.highlight {
-  background: #218D8D;
+  background: #1F3D2E;
   grid-column: span 2;
 }
 
@@ -671,7 +671,7 @@
 
 .fun-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -706,7 +706,7 @@
 .calculated-hint {
   display: block;
   font-size: 13px;
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
   margin-top: 4px;
 }
@@ -746,13 +746,13 @@
 
 .income-card:hover,
 .purpose-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   transform: translateY(-2px);
 }
 
 .income-card.selected,
 .purpose-card.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
@@ -786,7 +786,7 @@
 .checkbox-label input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 /* Spouse Section */
@@ -830,7 +830,7 @@
 }
 
 .btn-connect-bank {
-  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   color: white;
   border: none;
   padding: 14px 28px;
@@ -937,7 +937,7 @@
 
 .total-assets-display strong {
   font-size: 24px;
-  color: #059669;
+  color: #2D7A52;
 }
 
 /* Property Card */
@@ -965,8 +965,8 @@
 }
 
 .btn-add-property:hover {
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 /* Property Type Pills */
@@ -992,12 +992,12 @@
 }
 
 .type-pill:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .type-pill.selected {
-  border-color: #218D8D;
-  background: #218D8D;
+  border-color: #1F3D2E;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -1005,7 +1005,7 @@
 .va-section {
   margin-top: 24px;
   padding: 24px;
-  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
+  background: linear-gradient(135deg, #dbeafe 0%, #FAF3E5 100%);
   border-radius: 12px;
 }
 
@@ -1052,18 +1052,18 @@
 }
 
 .program-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   transform: translateY(-2px);
 }
 
 .program-card.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .program-card.va {
-  border-color: #818cf8;
-  background: linear-gradient(135deg, #eef2ff 0%, #faf5ff 100%);
+  border-color: #D4AD6A;
+  background: linear-gradient(135deg, #FDF9F0 0%, #faf5ff 100%);
 }
 
 .program-badge {
@@ -1071,7 +1071,7 @@
   top: -10px;
   left: 50%;
   transform: translateX(-50%);
-  background: #818cf8;
+  background: #D4AD6A;
   color: white;
   font-size: 10px;
   font-weight: 700;
@@ -1090,7 +1090,7 @@
 .program-rate {
   display: block;
   font-size: 15px;
-  color: #059669;
+  color: #2D7A52;
   font-weight: 600;
   margin-bottom: 8px;
 }
@@ -1128,7 +1128,7 @@
 .edit-link {
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1150,8 +1150,8 @@
 
 .edit-btn:hover {
   background: #e5e7eb;
-  color: #218D8D;
-  border-color: #218D8D;
+  color: #1F3D2E;
+  border-color: #1F3D2E;
 }
 
 .edit-btn svg {
@@ -1180,7 +1180,7 @@
 
 /* Hero Summary Card */
 .review-hero-card {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 50%, #155858 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 50%, #155858 100%);
   border-radius: 20px;
   padding: 28px 32px;
   margin-bottom: 28px;
@@ -1326,8 +1326,8 @@
 }
 
 .review-card .card-icon.property-icon {
-  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
-  color: #4f46e5;
+  background: linear-gradient(135deg, #F5EDD9, #EDE0C4);
+  color: #8A6D30;
 }
 
 .review-card .card-icon.coborrower-icon {
@@ -1369,9 +1369,9 @@
 }
 
 .edit-btn-modern:hover {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .edit-btn-modern svg {
@@ -1607,7 +1607,7 @@
 
 .needs-category.assets {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .needs-category.property {
@@ -1621,8 +1621,8 @@
 }
 
 .needs-category.military {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: #FAF3E5;
+  color: #B8924A;
 }
 
 /* E-Consent Section */
@@ -1641,11 +1641,11 @@
   gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #218D8D;
+  border-bottom: 2px solid #1F3D2E;
 }
 
 .econsent-header svg {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .econsent-header h3 {
@@ -1721,7 +1721,7 @@
   padding: 12px 16px;
   border-radius: 8px;
   margin: 12px 0;
-  border-left: 3px solid #218D8D;
+  border-left: 3px solid #1F3D2E;
 }
 
 .econsent-contact p {
@@ -1751,8 +1751,8 @@
 
 .econsent-btn.agree {
   background: white;
-  border: 2px solid #10b981;
-  color: #10b981;
+  border: 2px solid #2D7A52;
+  color: #2D7A52;
 }
 
 .econsent-btn.agree:hover {
@@ -1760,7 +1760,7 @@
 }
 
 .econsent-btn.agree.selected {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
@@ -1825,7 +1825,7 @@
 .success-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1873,7 +1873,7 @@
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 18px 48px;
@@ -1924,7 +1924,7 @@
 }
 
 .btn-continue {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   padding: 14px 32px;
@@ -1979,7 +1979,7 @@
 .more-items {
   display: block;
   font-size: 12px;
-  color: #218D8D;
+  color: #1F3D2E;
   font-weight: 600;
   margin-top: 12px;
 }
@@ -1995,7 +1995,7 @@
   left: 0;
   right: 0;
   background: white;
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   z-index: 1000;
@@ -2022,7 +2022,7 @@
 
 .employer-option:hover {
   background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .employer-icon {
@@ -2105,7 +2105,7 @@
   display: flex;
   gap: 24px;
   background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   border-radius: 12px;
   padding: 20px;
   margin: 20px 0;
@@ -2129,7 +2129,7 @@
   display: block;
   font-size: 24px;
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Input Suffix (for % symbol) */
@@ -2240,7 +2240,7 @@
 
 .next-steps-list h3 {
   margin: 0 0 16px 0;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 18px;
 }
 
@@ -2352,13 +2352,13 @@
 }
 
 .time-slot:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .time-slot.selected {
-  border-color: #218D8D;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  border-color: #1F3D2E;
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
 }
 
@@ -2378,7 +2378,7 @@
   width: 100%;
   max-width: 300px;
   margin: 24px auto 0;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   padding: 16px 32px;
@@ -2439,7 +2439,7 @@
 
 .week-nav-btn:hover:not(:disabled) {
   background: #f3f4f6;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .week-nav-btn:disabled {
@@ -2468,13 +2468,13 @@
 }
 
 .booking-date-card:hover:not(.disabled) {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .booking-date-card.selected {
-  border-color: #218D8D;
-  background: #218D8D;
+  border-color: #1F3D2E;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -2489,7 +2489,7 @@
 }
 
 .booking-date-card.today {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .booking-day-name {
@@ -2535,13 +2535,13 @@
 }
 
 .booking-time-btn:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .booking-time-btn.selected {
-  border-color: #218D8D;
-  background: #218D8D;
+  border-color: #1F3D2E;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -2636,14 +2636,14 @@
 }
 
 .multi-select-option:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .multi-select-option.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.15);
 }
@@ -2654,7 +2654,7 @@
 }
 
 .multi-select-option.selected .option-icon {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .multi-select-option .option-label {
@@ -2665,7 +2665,7 @@
 }
 
 .multi-select-option.selected .option-label {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Philosophy Options - horizontal cards */
@@ -2690,25 +2690,25 @@
 }
 
 .philosophy-option:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .philosophy-option.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: white;
 }
 
 .philosophy-option.selected .option-icon {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .philosophy-option.selected .option-label {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .philosophy-option.selected .option-description {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .philosophy-option .option-icon {
@@ -2755,14 +2755,14 @@
 }
 
 .single-select-option:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .single-select-option.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.15);
 }
@@ -2774,7 +2774,7 @@
 }
 
 .single-select-option.selected .option-icon {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .single-select-option .option-label {
@@ -2784,7 +2784,7 @@
 }
 
 .single-select-option.selected .option-label {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Mobile responsiveness for planning */
@@ -2931,7 +2931,7 @@
   background: linear-gradient(135deg, rgba(33, 141, 141, 0.1), rgba(33, 141, 141, 0.05));
   border: 1px solid rgba(33, 141, 141, 0.2);
   border-radius: 8px;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 13px;
   font-weight: 500;
   margin-bottom: 20px;
@@ -2988,7 +2988,7 @@
 }
 
 .professional-contact-section h4 svg {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .section-divider {
@@ -3222,7 +3222,7 @@
   stroke-dashoffset: 166;
   stroke-width: 2;
   stroke-miterlimit: 10;
-  stroke: #10b981;
+  stroke: #2D7A52;
   fill: none;
   animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
 }
@@ -3233,7 +3233,7 @@
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke: #10b981;
+  stroke: #2D7A52;
   animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.4s forwards;
 }
 
@@ -3251,7 +3251,7 @@
   gap: 8px;
   margin-top: 32px;
   padding: 16px 32px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   font-size: 16px;
   font-weight: 600;
@@ -3403,7 +3403,7 @@
 }
 
 .success-text {
-  color: #059669;
+  color: #2D7A52;
   font-weight: 600;
   font-size: 14px;
 }

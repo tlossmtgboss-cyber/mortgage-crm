@@ -38,7 +38,7 @@ const CallDetailPanel = ({
       high: '#f59e0b',
       medium: '#ca8a04',
       normal: '#6b7280',
-      low: '#10b981'
+      low: '#2D7A52'
     };
     return colors[priority] || colors.normal;
   };

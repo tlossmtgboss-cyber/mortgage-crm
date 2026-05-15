@@ -267,8 +267,8 @@ export function getStatusInfo(status) {
   const statusMap = {
     active: { label: 'Active', color: '#3b82f6', bg: '#eff6ff' },
     pending: { label: 'Pending', color: '#f59e0b', bg: '#fffbeb' },
-    closing: { label: 'Closing', color: '#8b5cf6', bg: '#f5f3ff' },
-    closed: { label: 'Closed', color: '#10b981', bg: '#ecfdf5' },
+    closing: { label: 'Closing', color: '#B8924A', bg: '#FDF9F0' },
+    closed: { label: 'Closed', color: '#2D7A52', bg: '#ecfdf5' },
     cancelled: { label: 'Cancelled', color: '#ef4444', bg: '#fef2f2' },
     on_hold: { label: 'On Hold', color: '#6b7280', bg: '#f3f4f6' },
   };
@@ -282,7 +282,7 @@ export function getMilestoneStatusInfo(status) {
   const statusMap = {
     pending: { label: 'Pending', color: '#6b7280', icon: '○' },
     in_progress: { label: 'In Progress', color: '#3b82f6', icon: '◐' },
-    completed: { label: 'Completed', color: '#10b981', icon: '●' },
+    completed: { label: 'Completed', color: '#2D7A52', icon: '●' },
     skipped: { label: 'Skipped', color: '#9ca3af', icon: '—' },
     blocked: { label: 'Blocked', color: '#ef4444', icon: '!' },
   };

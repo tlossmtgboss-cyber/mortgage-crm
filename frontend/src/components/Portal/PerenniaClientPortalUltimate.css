@@ -8,13 +8,13 @@
    ============================================================================= */
 
 .perennia-portal-ultimate {
-  --primary-color: #10b981;
-  --primary-dark: #059669;
+  --primary-color: #2D7A52;
+  --primary-dark: #2D7A52;
   --secondary-color: #3b82f6;
-  --accent-color: #8b5cf6;
+  --accent-color: #B8924A;
   --warning-color: #f59e0b;
   --danger-color: #ef4444;
-  --success-color: #10b981;
+  --success-color: #2D7A52;
 
   --text-primary: #1f2937;
   --text-secondary: #6b7280;
@@ -188,8 +188,8 @@
 }
 
 .stage-badge.stage-mum {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #FAF3E5;
+  color: #6B5424;
 }
 
 .header-right {
@@ -846,7 +846,7 @@
 
 /* Home Value Summary Card */
 .home-value-summary {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border-radius: var(--border-radius);
   padding: 20px;

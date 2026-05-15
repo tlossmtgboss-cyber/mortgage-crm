@@ -9,9 +9,9 @@
 
 :root {
   /* ---- Brand Primary (Perennia Teal) ---- */
-  --cal-primary: #218D8D;
+  --cal-primary: #1F3D2E;
   --cal-primary-hover: #1a7a7a;
-  --cal-primary-dark: #1a7070;
+  --cal-primary-dark: #2A4F3D;
   --cal-primary-deeper: #155e5e;
   --cal-primary-light: #e6f5f5;
   --cal-primary-lighter: #f0fafa;
@@ -37,8 +37,8 @@
   --cal-border-input: #d1d5db;
 
   /* ---- Status: Success / Green ---- */
-  --cal-success: #10b981;
-  --cal-success-dark: #059669;
+  --cal-success: #2D7A52;
+  --cal-success-dark: #2D7A52;
   --cal-success-darker: #16a34a;
   --cal-success-text: #166534;
   --cal-success-light: #dcfce7;
@@ -72,22 +72,22 @@
   --cal-info-border: #bfdbfe;
 
   /* ---- Accent: Purple ---- */
-  --cal-purple: #8b5cf6;
-  --cal-purple-dark: #4f46e5;
-  --cal-purple-light: #eef2ff;
+  --cal-purple: #B8924A;
+  --cal-purple-dark: #8A6D30;
+  --cal-purple-light: #FDF9F0;
 
   /* ---- Accent: Orange ---- */
   --cal-orange: #ea580c;
   --cal-orange-light: #fff7ed;
 
   /* ---- Accent: Green (integration-specific) ---- */
-  --cal-green-meet: #059669;
+  --cal-green-meet: #2D7A52;
   --cal-green-meet-light: #ecfdf5;
 
   /* ---- Event type colors ---- */
   --cal-event-closing: #22c55e;
-  --cal-event-pre-purchase: #8b5cf6;
-  --cal-event-purchase: #6366f1;
+  --cal-event-pre-purchase: #B8924A;
+  --cal-event-purchase: #B8924A;
   --cal-event-other: #94a3b8;
 
   /* ---- Warning text shades (amber palette) ---- */
@@ -95,10 +95,10 @@
   --cal-warning-text-dark: #78350f;
 
   /* ---- Tour overlay (Indigo palette) ---- */
-  --cal-tour-primary: #6366f1;
-  --cal-tour-primary-dark: #4f46e5;
-  --cal-tour-accent: #8b5cf6;
-  --cal-tour-accent-light: #a78bfa;
+  --cal-tour-primary: #B8924A;
+  --cal-tour-primary-dark: #8A6D30;
+  --cal-tour-accent: #B8924A;
+  --cal-tour-accent-light: #D4AD6A;
 
   /* ---- Toggle switch ---- */
   --cal-toggle-off: #cbd5e1;
@@ -122,8 +122,8 @@
   --cal-shadow-save-bar: 0 -4px 12px rgba(0, 0, 0, 0.08);
 
   /* ---- Gradients ---- */
-  --cal-gradient-primary: linear-gradient(135deg, #218D8D 0%, #1a7070 50%, #10b981 100%);
-  --cal-gradient-cta: linear-gradient(135deg, #218D8D, #10b981);
+  --cal-gradient-primary: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 50%, #2D7A52 100%);
+  --cal-gradient-cta: linear-gradient(135deg, #1F3D2E, #2D7A52);
 
   /* ---- Border Radius ---- */
   --cal-radius-xs: 3px;

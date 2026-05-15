@@ -374,8 +374,8 @@
 }
 
 .difficulty-badge.expert {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #FAF3E5;
+  color: #6B5424;
 }
 
 .pass-rate {
@@ -1041,7 +1041,7 @@
 .chat-btn,
 .start-chat-btn {
   padding: 12px 24px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 8px;
@@ -1057,7 +1057,7 @@
 
 .chat-btn:hover,
 .start-chat-btn:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .start-chat-section {
@@ -1160,7 +1160,7 @@
 }
 
 .chat-message.assistant .message-avatar {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 

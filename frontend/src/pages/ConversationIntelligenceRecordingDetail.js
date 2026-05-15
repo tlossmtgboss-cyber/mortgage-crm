@@ -103,8 +103,8 @@ function ConversationIntelligenceRecordingDetail() {
 
   const getSpeakerColor = (speaker) => {
     const colors = {
-      agent: '#6366f1',
-      customer: '#10b981',
+      agent: '#B8924A',
+      customer: '#2D7A52',
       unknown: '#64748b',
     };
     return colors[speaker?.toLowerCase()] || colors.unknown;

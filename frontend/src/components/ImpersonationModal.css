@@ -98,7 +98,7 @@
   height: 56px;
   border-radius: 50%;
   overflow: hidden;
-  background: #10b981;
+  background: #2D7A52;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -170,7 +170,7 @@
 }
 
 .radio-option:hover {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -183,7 +183,7 @@
 }
 
 .radio-option input[type="radio"]:checked + .radio-content {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .radio-content {
@@ -204,7 +204,7 @@
 }
 
 .radio-option:has(input[type="radio"]:checked) {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -221,12 +221,12 @@
 }
 
 .form-select:hover {
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .form-select:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
@@ -308,12 +308,12 @@
 }
 
 .btn-start {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-start:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }

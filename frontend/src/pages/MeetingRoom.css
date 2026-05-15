@@ -730,7 +730,7 @@
 .recording-indicator.screen-rec {
   background: rgba(139, 92, 246, 0.2);
   border-color: rgba(139, 92, 246, 0.5);
-  color: #a78bfa;
+  color: #D4AD6A;
   margin-left: 8px;
 }
 
@@ -845,7 +845,7 @@
   justify-content: center;
   width: 72px;
   height: 72px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   border-radius: 50%;
   font-size: 36px;
   margin-bottom: 20px;
@@ -1005,7 +1005,7 @@
   border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: 8px;
   font-size: 13px;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Waiting Room Panel (Host) */
@@ -1052,7 +1052,7 @@
 
 .admit-all-btn {
   padding: 8px 16px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1063,7 +1063,7 @@
 }
 
 .admit-all-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .waiting-list {
@@ -1122,12 +1122,12 @@
 }
 
 .admit-btn {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .admit-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .reject-btn {
@@ -1178,7 +1178,7 @@
 .generate-summary-btn {
   width: 100%;
   padding: 14px 24px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   border: none;
   border-radius: 8px;
   color: white;
@@ -1189,7 +1189,7 @@
 }
 
 .generate-summary-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #8A6D30 100%);
   transform: translateY(-1px);
 }
 
@@ -1200,13 +1200,13 @@
 }
 
 .generate-summary-btn.generated {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
 }
 
 .email-summary-success {
   margin-top: 14px;
   font-size: 14px;
-  color: #10b981;
+  color: #2D7A52;
   text-align: center;
 }
 
@@ -1488,7 +1488,7 @@
 }
 
 .control-btn.virtual-bg.active {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 /* Breakout room panel */
@@ -1519,7 +1519,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 .breakout-room-item {
@@ -1548,7 +1548,7 @@
 
 .breakout-join-btn {
   padding: 6px 14px;
-  background: #8b5cf6;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1558,7 +1558,7 @@
 }
 
 .breakout-join-btn:hover {
-  background: #7c3aed;
+  background: #B8924A;
 }
 
 .create-breakout-btn {
@@ -1576,6 +1576,6 @@
 
 .create-breakout-btn:hover {
   background: rgba(139, 92, 246, 0.1);
-  border-color: #8b5cf6;
-  color: #8b5cf6;
+  border-color: #B8924A;
+  color: #B8924A;
 }

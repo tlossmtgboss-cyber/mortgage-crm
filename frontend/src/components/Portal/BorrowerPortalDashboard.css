@@ -103,7 +103,7 @@
   transform: translate(-50%, -50%);
   font-size: 24px;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .progress-stats {
@@ -315,7 +315,7 @@
 
 .doc-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #2D7A52 0%, #2D7A52 100%);
   border-radius: 4px;
   transition: width 0.5s ease;
 }
@@ -492,8 +492,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #eef2ff;
-  color: #4338ca;
+  background: #FDF9F0;
+  color: #6B5424;
   border-radius: 20px;
   font-size: 14px;
   font-weight: 600;
@@ -552,7 +552,7 @@
 
 .change-badge.positive {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .change-badge.negative {
@@ -582,7 +582,7 @@
 }
 
 .equity-fill {
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #2D7A52 0%, #2D7A52 100%);
   transition: width 0.5s ease;
 }
 

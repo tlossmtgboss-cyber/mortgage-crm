@@ -301,8 +301,8 @@ export const ACCESSIBLE_PALETTE = Object.freeze({
   // -----------------------------------------------------------------------
   linkOnWhite: '#1d4ed8', // blue-700   — 6.7:1
   linkOnDark: '#60a5fa', // blue-400   — 6.7:1
-  linkVisitedOnWhite: '#6d28d9', // violet-700 — 7.1:1
-  linkVisitedOnDark: '#a78bfa', // violet-400 — 6.3:1
+  linkVisitedOnWhite: '#8A6D30', // violet-700 — 7.1:1
+  linkVisitedOnDark: '#D4AD6A', // violet-400 — 6.3:1
 
   // -----------------------------------------------------------------------
   // Disabled / placeholder

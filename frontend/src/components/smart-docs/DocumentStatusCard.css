@@ -11,7 +11,7 @@
 }
 
 .document-status-card.status-approved {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .document-status-card.status-rejected {
@@ -157,7 +157,7 @@
 
 .confidence-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f59e0b, #10b981);
+  background: linear-gradient(90deg, #f59e0b, #2D7A52);
   border-radius: 3px;
   transition: width 0.3s;
 }

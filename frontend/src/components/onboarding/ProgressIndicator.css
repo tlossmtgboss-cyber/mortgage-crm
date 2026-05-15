@@ -74,9 +74,9 @@
 }
 
 .progress-step.completed .step-circle {
-  background-color: #10b981;
+  background-color: #2D7A52;
   color: white;
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .checkmark {
@@ -105,7 +105,7 @@
 }
 
 .progress-step.completed .step-name {
-  color: #059669;
+  color: #2D7A52;
 }
 
 /* Mobile responsive */

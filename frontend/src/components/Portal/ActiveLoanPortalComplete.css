@@ -44,8 +44,8 @@
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
 }
 
 .stage-badge.under_contract {
@@ -65,7 +65,7 @@
 
 .stage-badge.funded {
   background: #d1fae5;
-  color: #047857;
+  color: #1F5A3A;
 }
 
 .header-right {
@@ -143,8 +143,8 @@
 }
 
 .tab-btn.active {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: #8A6D30;
+  border-bottom-color: #8A6D30;
 }
 
 /* Portal Content */
@@ -241,7 +241,7 @@
   transform: translate(-50%, -50%);
   font-size: 20px;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .progress-stats {
@@ -314,7 +314,7 @@
 
 .doc-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #2D7A52 0%, #2D7A52 100%);
   border-radius: 4px;
   transition: width 0.5s ease;
 }
@@ -341,7 +341,7 @@
 }
 
 .doc-stat.approved .doc-value {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .doc-stat.pending .doc-value {
@@ -531,13 +531,13 @@
 }
 
 .quick-action-btn.primary {
-  background: #4f46e5;
-  border-color: #4f46e5;
+  background: #8A6D30;
+  border-color: #8A6D30;
   color: white;
 }
 
 .quick-action-btn.primary:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 .action-icon {
@@ -595,7 +595,7 @@
 
 .retry-btn {
   padding: 10px 24px;
-  background: #4f46e5;
+  background: #8A6D30;
   color: white;
   border: none;
   border-radius: 8px;
@@ -605,7 +605,7 @@
 }
 
 .retry-btn:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 /* Skeleton Loader */

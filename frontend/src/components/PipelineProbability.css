@@ -204,7 +204,7 @@
   text-transform: uppercase;
 }
 
-.risk-badge.risk-low { background: #10b981; }
+.risk-badge.risk-low { background: #2D7A52; }
 .risk-badge.risk-medium { background: #f59e0b; }
 .risk-badge.risk-high { background: #ef4444; }
 .risk-badge.risk-critical { background: #dc2626; }
@@ -215,7 +215,7 @@
   font-weight: 600;
 }
 
-.trend-indicator.trend-improving { color: #10b981; }
+.trend-indicator.trend-improving { color: #2D7A52; }
 .trend-indicator.trend-stable { color: #6b7280; }
 .trend-indicator.trend-declining { color: #ef4444; }
 
@@ -254,7 +254,7 @@
   transition: width 0.3s ease;
 }
 
-.risk-bar-fill.low { background: #10b981; }
+.risk-bar-fill.low { background: #2D7A52; }
 .risk-bar-fill.medium { background: #f59e0b; }
 .risk-bar-fill.high { background: #ef4444; }
 .risk-bar-fill.critical { background: #dc2626; }
@@ -351,7 +351,7 @@
   font-size: 18px;
 }
 
-.pp-trend-item:first-child .trend-icon { color: #10b981; }
+.pp-trend-item:first-child .trend-icon { color: #2D7A52; }
 .pp-trend-item:last-child .trend-icon { color: #ef4444; }
 
 .trend-count {
@@ -811,7 +811,7 @@
 
 .pp-factor-item.strength {
   background: #ecfdf5;
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #2D7A52;
 }
 
 .factor-header {
@@ -833,7 +833,7 @@
 }
 
 .factor-impact.success {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .factor-desc {
@@ -902,7 +902,7 @@
 
 .action-impact {
   font-size: 12px;
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 

@@ -48,7 +48,7 @@ const T = {
   green: '#4ADE80',
   amber: '#FBBF24',
   red: '#F87171',
-  purple: '#A78BFA',
+  purple: '#D4AD6A',
   orange: '#FB923C',
   textPrimary: 'rgba(255,255,255,0.95)',
   textSecondary: 'rgba(255,255,255,0.55)',

@@ -48,7 +48,7 @@ function TaskWorkflowManager() {
     active_loan: {
       name: 'Active Loan',
       description: 'Loan processing and underwriting workflow',
-      color: '#10b981',
+      color: '#2D7A52',
       tasks: [
         { id: 9, title: 'Application Submitted', description: 'Formal loan application received', order: 1, auto_trigger: 'on_conversion', days_offset: 0 },
         { id: 10, title: 'Order Appraisal', description: 'Request property appraisal', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
@@ -65,7 +65,7 @@ function TaskWorkflowManager() {
     portfolio: {
       name: 'Portfolio',
       description: 'Post-closing servicing and retention workflow',
-      color: '#8b5cf6',
+      color: '#B8924A',
       tasks: [
         { id: 19, title: 'Welcome to Portfolio', description: 'Send post-closing welcome package', order: 1, auto_trigger: 'on_portfolio_add', days_offset: 0 },
         { id: 20, title: '30-Day Check-In', description: 'First payment follow-up call', order: 2, auto_trigger: 'scheduled', days_offset: 30 },

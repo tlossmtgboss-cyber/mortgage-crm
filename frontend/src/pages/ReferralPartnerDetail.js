@@ -228,7 +228,7 @@ function ReferralPartnerDetail() {
   };
 
   const getROIStatus = (roi) => {
-    if (roi >= 300) return { label: 'Excellent', color: '#10b981' };
+    if (roi >= 300) return { label: 'Excellent', color: '#2D7A52' };
     if (roi >= 150) return { label: 'Strong', color: '#3b82f6' };
     if (roi >= 50) return { label: 'Good', color: '#f59e0b' };
     return { label: 'Needs Improvement', color: '#ef4444' };
@@ -712,7 +712,7 @@ function ReferralPartnerDetail() {
                     {/* Cost Per Funded Loan */}
                     <div className="roi-metric-large">
                       <div className="metric-label">COST PER FUNDED LOAN</div>
-                      <div className="metric-value-big" style={{ color: '#10b981' }}>
+                      <div className="metric-value-big" style={{ color: '#2D7A52' }}>
                         ${metrics.costPerLoan.toLocaleString()}
                       </div>
                       <div className="metric-status" style={{ color: roiStatus.color }}>
@@ -743,7 +743,7 @@ function ReferralPartnerDetail() {
                     <div className="roi-bottom-metrics">
                       <div className="roi-metric-box-large">
                         <div className="metric-label-small">Annual ROI</div>
-                        <div className="metric-value-huge" style={{ color: '#10b981' }}>
+                        <div className="metric-value-huge" style={{ color: '#2D7A52' }}>
                           +{metrics.annualROI}%
                         </div>
                         <div className="metric-sublabel" style={{ color: roiStatus.color }}>
@@ -752,7 +752,7 @@ function ReferralPartnerDetail() {
                       </div>
                       <div className="roi-metric-box-large">
                         <div className="metric-label-small">Annual Profit</div>
-                        <div className="metric-value-huge" style={{ color: '#10b981' }}>
+                        <div className="metric-value-huge" style={{ color: '#2D7A52' }}>
                           +${metrics.annualProfit.toLocaleString()}
                         </div>
                         <div className="metric-sublabel">Annual profit</div>

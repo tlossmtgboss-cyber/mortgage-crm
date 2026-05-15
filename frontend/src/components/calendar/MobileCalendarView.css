@@ -106,7 +106,7 @@
 }
 
 .mobile-day-chip.selected {
-  background: var(--color-primary, #217f8d);
+  background: var(--color-primary, #1F3D2E);
 }
 
 .mobile-day-chip.today:not(.selected) {
@@ -140,7 +140,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--color-primary, #217f8d);
+  background: var(--color-primary, #1F3D2E);
   margin-top: 2px;
 }
 
@@ -179,8 +179,8 @@
 }
 
 .mobile-filter-tab.active {
-  background: var(--color-primary, #217f8d);
-  border-color: var(--color-primary, #217f8d);
+  background: var(--color-primary, #1F3D2E);
+  border-color: var(--color-primary, #1F3D2E);
   color: white;
   font-weight: 600;
 }
@@ -247,7 +247,7 @@
 
 .mobile-empty-add-btn {
   padding: 10px 24px;
-  background: var(--color-primary, #217f8d);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border: none;
   border-radius: 8px;
@@ -266,7 +266,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid var(--color-border-light, #e2e8f0);
-  border-top-color: var(--color-primary, #217f8d);
+  border-top-color: var(--color-primary, #1F3D2E);
   border-radius: 50%;
   animation: spin 700ms linear infinite;
   margin-bottom: 16px;
@@ -385,7 +385,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--color-primary, #217f8d);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border: none;
   display: flex;
@@ -481,7 +481,7 @@
 
 .mobile-input:focus {
   outline: none;
-  border-color: var(--color-primary, #217f8d);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
 }
 
@@ -515,9 +515,9 @@
 }
 
 .mobile-mode-btn.active {
-  border-color: var(--color-primary, #217f8d);
+  border-color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.08);
-  color: var(--color-primary, #217f8d);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .mobile-bottom-sheet-actions {
@@ -544,7 +544,7 @@
   flex: 1;
   padding: 14px;
   border: none;
-  background: var(--color-primary, #217f8d);
+  background: var(--color-primary, #1F3D2E);
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
@@ -612,7 +612,7 @@
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  color: var(--color-primary, #217f8d);
+  color: var(--color-primary, #1F3D2E);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -698,7 +698,7 @@
 }
 
 .mobile-action-edit {
-  background: var(--color-primary, #217f8d);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border: none;
 }

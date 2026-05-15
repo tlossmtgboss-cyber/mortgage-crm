@@ -31,17 +31,17 @@ const MILESTONE_CONFIG = [
 const ARROW_GRADIENTS = [
   'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',   // Cyan
   'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',   // Blue
-  'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',   // Indigo
-  'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',   // Violet
-  'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)',   // Purple
+  'linear-gradient(135deg, #B8924A 0%, #8A6D30 100%)',   // Indigo
+  'linear-gradient(135deg, #B8924A 0%, #B8924A 100%)',   // Violet
+  'linear-gradient(135deg, #C9A44E 0%, #B8924A 100%)',   // Purple
   'linear-gradient(135deg, #d946ef 0%, #c026d3 100%)',   // Fuchsia
   'linear-gradient(135deg, #ec4899 0%, #db2777 100%)',   // Pink
   'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',   // Orange
-  'linear-gradient(135deg, #10b981 0%, #059669 100%)',   // Emerald
+  'linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%)',   // Emerald
 ];
 
 const URGENCY_STYLES = {
-  normal: { border: '#10b981', bg: '#d1fae5', text: '#065f46', label: 'On Track' },
+  normal: { border: '#2D7A52', bg: '#d1fae5', text: '#065f46', label: 'On Track' },
   attention: { border: '#f59e0b', bg: '#fef3c7', text: '#92400e', label: 'Attention' },
   warning: { border: '#f97316', bg: '#ffedd5', text: '#9a3412', label: 'Warning' },
   critical: { border: '#ef4444', bg: '#fee2e2', text: '#991b1b', label: 'Critical' },
@@ -138,7 +138,7 @@ export default function CloseOnTimeArrowTimeline({
             className="progress-fill"
             style={{
               width: `${progressPercent}%`,
-              background: `linear-gradient(90deg, #10b981 0%, ${urgencyStyle.border} 100%)`
+              background: `linear-gradient(90deg, #2D7A52 0%, ${urgencyStyle.border} 100%)`
             }}
           />
         </div>
@@ -188,7 +188,7 @@ export default function CloseOnTimeArrowTimeline({
               className="arrow-point"
               style={{
                 borderLeftColor: milestone.status === 'completed'
-                  ? ARROW_GRADIENTS[index % ARROW_GRADIENTS.length].split(' ')[2]?.replace(',', '') || '#10b981'
+                  ? ARROW_GRADIENTS[index % ARROW_GRADIENTS.length].split(' ')[2]?.replace(',', '') || '#2D7A52'
                   : '#d1d5db'
               }}
             />

@@ -83,7 +83,7 @@
 }
 
 .needs-item.status-fulfilled {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
   background: #f0fdf4;
 }
 
@@ -194,12 +194,12 @@
 }
 
 .btn-fulfill {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-fulfill:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Header Actions */
@@ -210,7 +210,7 @@
 
 .add-request-btn {
   padding: 10px 20px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -220,7 +220,7 @@
 }
 
 .add-request-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Modal Overlay */
@@ -495,7 +495,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -506,7 +506,7 @@
 }
 
 .docusign-btn:hover {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
@@ -540,23 +540,23 @@
 }
 
 .type-option:hover {
-  border-color: #c7d2fe;
+  border-color: #EDE0C4;
   background: #f8fafc;
 }
 
 .type-option input {
   margin-right: 12px;
   margin-top: 4px;
-  accent-color: #6366f1;
+  accent-color: #B8924A;
 }
 
 .type-option input:checked + .type-label {
-  color: #4f46e5;
+  color: #8A6D30;
 }
 
 .type-option:has(input:checked) {
-  border-color: #6366f1;
-  background: #eef2ff;
+  border-color: #B8924A;
+  background: #FDF9F0;
 }
 
 .type-label {
@@ -621,7 +621,7 @@
 .loe-fields input:focus,
 .loe-fields textarea:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -653,7 +653,7 @@
   align-items: center;
   gap: 6px;
   padding: 10px 24px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -663,7 +663,7 @@
 }
 
 .send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
 }
 
 .send-btn:disabled {

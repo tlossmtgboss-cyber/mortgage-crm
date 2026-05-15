@@ -4,7 +4,7 @@
 
 /* ---- Brand accent ---- */
 :root {
-  --mbn-accent: #218D8D;
+  --mbn-accent: #1F3D2E;
   --mbn-accent-light: rgba(33, 141, 141, 0.10);
   --mbn-inactive: #6b7280;
   --mbn-bg: #ffffff;
@@ -203,7 +203,7 @@
 
 /* Aria center button — blue-to-purple gradient */
 .mbn__fab-circle--aria {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   box-shadow:
     0 4px 16px rgba(139, 92, 246, 0.4),
     0 1px 4px rgba(0, 0, 0, 0.12);
@@ -300,7 +300,7 @@
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: var(--dial-color, #218D8D);
+  background: var(--dial-color, #1F3D2E);
   display: flex;
   align-items: center;
   justify-content: center;

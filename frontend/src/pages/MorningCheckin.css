@@ -1,6 +1,6 @@
 .morning-checkin {
   min-height: calc(100vh - 60px);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   padding: 40px 20px;
   display: flex;
   align-items: center;
@@ -60,12 +60,12 @@
 }
 
 .progress-step.active {
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
 }
 
 .progress-step.completed {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .progress-step.completed::before {
@@ -113,7 +113,7 @@
 /* Welcome Phase */
 .checkin-date {
   font-size: 14px;
-  color: #667eea;
+  color: #1F3D2E;
   font-weight: 500;
 }
 
@@ -175,7 +175,7 @@
 .checkin-form select:focus,
 .checkin-form textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
@@ -206,7 +206,7 @@
 
 .added-item {
   font-size: 13px;
-  color: #047857;
+  color: #1F5A3A;
   padding: 4px 0;
 }
 
@@ -233,7 +233,7 @@
   width: 120px;
   text-align: center;
   border: none;
-  border-bottom: 3px solid #667eea;
+  border-bottom: 3px solid #1F3D2E;
   padding: 8px;
   font-weight: 600;
   color: #111827;
@@ -241,7 +241,7 @@
 
 .hours-input:focus {
   outline: none;
-  border-bottom-color: #764ba2;
+  border-bottom-color: #2D7A52;
 }
 
 .hours-label {
@@ -268,13 +268,13 @@
 }
 
 .quick-hour-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .quick-hour-btn.selected {
-  background: #667eea;
-  border-color: #667eea;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -301,7 +301,7 @@
 .stat-value {
   font-size: 32px;
   font-weight: 700;
-  color: #667eea;
+  color: #1F3D2E;
 }
 
 .stat-label {
@@ -318,7 +318,7 @@
 
 /* Buttons */
 .primary-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 14px 28px;
@@ -343,8 +343,8 @@
 
 .secondary-btn {
   background: white;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: #1F3D2E;
+  border: 2px solid #1F3D2E;
   padding: 12px 24px;
   border-radius: 8px;
   font-size: 14px;
@@ -365,7 +365,7 @@
 .skip-btn {
   background: none;
   border: none;
-  color: #667eea;
+  color: #1F3D2E;
   font-size: 14px;
   cursor: pointer;
   padding: 12px;

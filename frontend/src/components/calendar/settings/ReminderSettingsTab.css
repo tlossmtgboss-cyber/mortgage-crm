@@ -2,7 +2,7 @@
  * Calendar Settings - Reminder Tab Styles
  *
  * Reminder timeline visualization with markers, labels, and tracks.
- * Perennia brand colors (#218D8D).
+ * Perennia brand colors (#1F3D2E).
  */
 
 /* ============================================================================
@@ -63,11 +63,11 @@
 }
 
 .marker-sms {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 .marker-event {
-  background: #218D8D;
+  background: #1F3D2E;
   width: 14px;
   height: 14px;
   margin-top: 5px;

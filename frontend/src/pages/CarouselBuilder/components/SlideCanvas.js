@@ -48,7 +48,7 @@ function TextElement({ element, isSelected, onSelect, onChange }) {
     lineHeight: element.styles?.lineHeight || 1.3,
     fontFamily: element.styles?.fontFamily || 'Inter, sans-serif',
     cursor: isEditing ? 'text' : 'pointer',
-    outline: isSelected ? '2px solid #217F8D' : 'none',
+    outline: isSelected ? '2px solid #1F3D2E' : 'none',
     outlineOffset: '4px',
     padding: '8px',
     borderRadius: '4px',
@@ -340,7 +340,7 @@ export default function SlideCanvas() {
   const backgroundStyles = {};
   if (selectedSlide.background_type === 'gradient' && selectedSlide.background_gradient) {
     const angle = parseInt(selectedSlide.background_gradient.angle, 10) || 135;
-    const colors = (selectedSlide.background_gradient.colors || ['#667eea', '#764ba2'])
+    const colors = (selectedSlide.background_gradient.colors || ['#1F3D2E', '#2D7A52'])
       .map(c => sanitizeCSS(c));
     backgroundStyles.background = `linear-gradient(${angle}deg, ${colors.join(', ')})`;
   } else if (selectedSlide.background_type === 'image' && selectedSlide.background_image_url) {
@@ -350,10 +350,10 @@ export default function SlideCanvas() {
       backgroundStyles.backgroundSize = 'cover';
       backgroundStyles.backgroundPosition = 'center';
     } else {
-      backgroundStyles.backgroundColor = '#217F8D';
+      backgroundStyles.backgroundColor = '#1F3D2E';
     }
   } else {
-    backgroundStyles.backgroundColor = sanitizeCSS(selectedSlide.background_color) || '#217F8D';
+    backgroundStyles.backgroundColor = sanitizeCSS(selectedSlide.background_color) || '#1F3D2E';
   }
 
   return (

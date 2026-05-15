@@ -21,7 +21,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e5e7eb;
-  border-top-color: #218d8d;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: fsSpin 1s linear infinite;
   margin-bottom: 16px;
@@ -75,7 +75,7 @@
 }
 
 .fs-stat.highlight {
-  color: #218d8d;
+  color: #1F3D2E;
 }
 
 .fs-stat-value {
@@ -86,7 +86,7 @@
 }
 
 .fs-stat.highlight .fs-stat-value {
-  color: #218d8d;
+  color: #1F3D2E;
 }
 
 .fs-stat-label {
@@ -156,7 +156,7 @@
 .fs-category-count {
   font-size: 14px;
   font-weight: 500;
-  color: #218d8d;
+  color: #1F3D2E;
   background: #e0f2f1;
   padding: 4px 12px;
   border-radius: 12px;
@@ -175,8 +175,8 @@
 }
 
 .fs-select-all-btn:hover {
-  background: #218d8d;
-  border-color: #218d8d;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -211,12 +211,12 @@
 }
 
 .fs-feature:hover {
-  border-color: #218d8d;
+  border-color: #1F3D2E;
   background: #f0fdfb;
 }
 
 .fs-feature.selected {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: linear-gradient(to right, #f0fdf4 0%, white 100%);
 }
 
@@ -228,7 +228,7 @@
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: #10b981;
+  accent-color: #2D7A52;
 }
 
 .fs-feature-content {
@@ -270,8 +270,8 @@
 }
 
 .fs-badge.premium {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
 }
 
 .fs-feature-content p {

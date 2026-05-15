@@ -43,8 +43,8 @@ const MarketingTab = ({
   // Get emotion badge color
   const getEmotionColor = (emotion) => {
     const colors = {
-      excitement: '#10b981',
-      gratitude: '#6366f1',
+      excitement: '#2D7A52',
+      gratitude: '#B8924A',
       determination: '#f59e0b',
       hope: '#3b82f6',
       relief: '#06b6d4',

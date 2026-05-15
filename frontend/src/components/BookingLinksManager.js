@@ -339,7 +339,7 @@ const BookingLinksManager = () => {
                           checked={form.appointment_type_ids.includes(type.id)}
                           onChange={() => toggleAppointmentType(type.id)}
                         />
-                        <span className="blm-type-dot" style={{ backgroundColor: type.color || '#218D8D' }} />
+                        <span className="blm-type-dot" style={{ backgroundColor: type.color || '#1F3D2E' }} />
                         <span>{type.type_name}</span>
                         <span className="blm-type-duration">{type.duration_minutes} min</span>
                       </label>

@@ -20,12 +20,12 @@ import './MasterManager.css';
 
 const CANDIDATE_STATUSES = [
   { value: 'new', label: 'New', color: '#3b82f6' },
-  { value: 'screening', label: 'Screening', color: '#8b5cf6' },
-  { value: 'phone_screen', label: 'Phone Screen', color: '#a855f7' },
+  { value: 'screening', label: 'Screening', color: '#B8924A' },
+  { value: 'phone_screen', label: 'Phone Screen', color: '#C9A44E' },
   { value: 'interview', label: 'Interview', color: '#f59e0b' },
   { value: 'assessment', label: 'Assessment', color: '#eab308' },
   { value: 'offer', label: 'Offer', color: '#22c55e' },
-  { value: 'hired', label: 'Hired', color: '#10b981' },
+  { value: 'hired', label: 'Hired', color: '#2D7A52' },
   { value: 'rejected', label: 'Rejected', color: '#ef4444' },
   { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' }
 ];
@@ -33,10 +33,10 @@ const CANDIDATE_STATUSES = [
 const PARTNER_STATUSES = [
   { value: 'new', label: 'New', color: '#3b82f6' },
   { value: 'active', label: 'Active', color: '#22c55e' },
-  { value: 'contacted', label: 'Contacted', color: '#8b5cf6' },
+  { value: 'contacted', label: 'Contacted', color: '#B8924A' },
   { value: 'meeting_scheduled', label: 'Meeting Scheduled', color: '#f59e0b' },
   { value: 'in_negotiation', label: 'In Negotiation', color: '#eab308' },
-  { value: 'onboarded', label: 'Onboarded', color: '#10b981' },
+  { value: 'onboarded', label: 'Onboarded', color: '#2D7A52' },
   { value: 'inactive', label: 'Inactive', color: '#6b7280' },
   { value: 'declined', label: 'Declined', color: '#ef4444' }
 ];
@@ -479,7 +479,7 @@ const RecruitingDashboard = () => {
                       className="mm-capacity-bar"
                       style={{
                         width: `${metrics.conversion_rates?.apply_to_screen || 0}%`,
-                        backgroundColor: '#8b5cf6'
+                        backgroundColor: '#B8924A'
                       }}
                     />
                   </div>
@@ -509,7 +509,7 @@ const RecruitingDashboard = () => {
                       className="mm-capacity-bar"
                       style={{
                         width: `${metrics.conversion_rates?.overall || 0}%`,
-                        backgroundColor: '#10b981'
+                        backgroundColor: '#2D7A52'
                       }}
                     />
                   </div>
@@ -853,7 +853,7 @@ const RecruitingDashboard = () => {
                 <div className="mm-stat-label">New This Week</div>
               </div>
               <div className="mm-card mm-stat-card">
-                <div className="mm-stat-value" style={{ color: '#8b5cf6' }}>
+                <div className="mm-stat-value" style={{ color: '#B8924A' }}>
                   {partnerStats.contacted || 0}
                 </div>
                 <div className="mm-stat-label">Contacted</div>
@@ -865,7 +865,7 @@ const RecruitingDashboard = () => {
                 <div className="mm-stat-label">Meeting Scheduled</div>
               </div>
               <div className="mm-card mm-stat-card">
-                <div className="mm-stat-value" style={{ color: '#10b981' }}>
+                <div className="mm-stat-value" style={{ color: '#2D7A52' }}>
                   {partnerStats.onboarded || 0}
                 </div>
                 <div className="mm-stat-label">Onboarded</div>
@@ -894,7 +894,7 @@ const RecruitingDashboard = () => {
                       className="mm-capacity-bar"
                       style={{
                         width: `${partnerStats.conversion_rates?.new_to_contacted || 0}%`,
-                        backgroundColor: '#8b5cf6'
+                        backgroundColor: '#B8924A'
                       }}
                     />
                   </div>
@@ -924,7 +924,7 @@ const RecruitingDashboard = () => {
                       className="mm-capacity-bar"
                       style={{
                         width: `${partnerStats.conversion_rates?.overall || 0}%`,
-                        backgroundColor: '#10b981'
+                        backgroundColor: '#2D7A52'
                       }}
                     />
                   </div>

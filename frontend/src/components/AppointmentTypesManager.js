@@ -42,8 +42,8 @@ const MODE_OPTIONS = [
 ];
 
 const COLOR_PRESETS = [
-  '#218D8D', '#3B82F6', '#8B5CF6', '#EC4899',
-  '#F59E0B', '#10B981', '#EF4444', '#6366F1',
+  '#1F3D2E', '#3B82F6', '#B8924A', '#EC4899',
+  '#F59E0B', '#2D7A52', '#EF4444', '#B8924A',
   '#14B8A6', '#F97316', '#84CC16', '#06B6D4',
 ];
 
@@ -57,7 +57,7 @@ const EMPTY_FORM = {
   buffer_before: 0,
   buffer_after: 0,
   max_per_day: '',
-  color: '#218D8D',
+  color: '#1F3D2E',
   requires_loan: false,
   requires_lead: false,
   is_public: true,
@@ -102,7 +102,7 @@ const TypeCard = ({
     <div className="atm-card-drag-handle" title="Drag to reorder">
       <i className="fas fa-grip-vertical"></i>
     </div>
-    <div className="atm-card-accent" style={{ backgroundColor: type.color || '#218D8D' }} />
+    <div className="atm-card-accent" style={{ backgroundColor: type.color || '#1F3D2E' }} />
     <div className="atm-card-body">
       <div className="atm-card-top">
         <div className="atm-card-info">
@@ -616,7 +616,7 @@ const AppointmentTypesManager = () => {
       buffer_before: type.buffer_before || 0,
       buffer_after: type.buffer_after || 0,
       max_per_day: type.max_per_day || '',
-      color: type.color || '#218D8D',
+      color: type.color || '#1F3D2E',
       requires_loan: type.requires_loan ?? type.requires_loan_id ?? false,
       requires_lead: type.requires_lead ?? type.requires_lead_id ?? false,
       is_public: type.is_public ?? true,

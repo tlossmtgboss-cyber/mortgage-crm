@@ -1,7 +1,7 @@
 /* ===========================================================================
    PublicBooking.css — Organization-branded booking page styles
    Uses CSS custom properties for dynamic org branding:
-     --booking-primary    (set by useOrgBranding hook, fallback #217F8D)
+     --booking-primary    (set by useOrgBranding hook, fallback #1F3D2E)
      --booking-accent     (set by useOrgBranding hook, fallback #34a853)
      --booking-primary-dark  (darker shade for hovers)
      --booking-accent-dark   (darker shade for hovers)
@@ -9,7 +9,7 @@
 
 /* Fallback values when no org branding is applied */
 :root {
-  --booking-primary: #217F8D;
+  --booking-primary: #1F3D2E;
   --booking-accent: #34a853;
   --booking-primary-dark: #1a6670;
   --booking-accent-dark: #2d8f47;

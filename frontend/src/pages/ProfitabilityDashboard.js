@@ -772,7 +772,7 @@ const ProfitabilityDashboard = () => {
                     type="monotone"
                     dataKey="revenue"
                     stackId="1"
-                    stroke="#10b981"
+                    stroke="#2D7A52"
                     fill="#d1fae5"
                     name="Revenue"
                   />

@@ -55,7 +55,7 @@
 
 .member-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .member-select:hover {
@@ -102,9 +102,9 @@
 }
 
 .add-member-btn:hover:not(:disabled) {
-  background: #e8f5f5;
-  border-color: #218D8D;
-  color: #218D8D;
+  background: #E5EDE6;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .add-member-btn:disabled {

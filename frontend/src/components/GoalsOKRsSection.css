@@ -274,11 +274,11 @@
 }
 
 .kr-progress-fill.kr-on_track {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .kr-progress-fill.kr-ahead {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .kr-progress-fill.kr-at_risk {
@@ -322,7 +322,7 @@
 }
 
 .manager-assessment {
-  border-left-color: #8b5cf6;
+  border-left-color: #B8924A;
 }
 
 .assessment h5 {

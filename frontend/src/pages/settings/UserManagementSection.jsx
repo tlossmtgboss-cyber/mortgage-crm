@@ -447,7 +447,7 @@ const UserManagementSection = () => {
                 <button type="button" onClick={() => setShowAddUserModal(false)}
                   style={{ padding: '10px 20px', background: '#f3f4f6', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>Cancel</button>
                 <button type="submit" disabled={addingUser}
-                  style={{ padding: '10px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', opacity: addingUser ? 0.7 : 1 }}>
+                  style={{ padding: '10px 20px', background: '#8A6D30', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500', opacity: addingUser ? 0.7 : 1 }}>
                   {addingUser ? 'Sending Invite...' : 'Send Invitation'}
                 </button>
               </div>

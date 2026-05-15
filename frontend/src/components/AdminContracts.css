@@ -58,7 +58,7 @@
 }
 
 .summary-card.signed .card-value {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .summary-card.pending .card-value {
@@ -98,7 +98,7 @@
 
 .contracts-search:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -106,7 +106,7 @@
   padding: 10px 20px;
   font-size: 0.9rem;
   font-weight: 600;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 8px;
@@ -115,7 +115,7 @@
 }
 
 .btn-create-contract:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Tabs */
@@ -145,8 +145,8 @@
 }
 
 .contracts-tabs .tab-btn.active {
-  color: #6366f1;
-  border-bottom-color: #6366f1;
+  color: #B8924A;
+  border-bottom-color: #B8924A;
   font-weight: 600;
 }
 
@@ -233,8 +233,8 @@
   font-size: 0.78rem;
   font-weight: 500;
   border-radius: 6px;
-  background: #eef2ff;
-  color: #4338ca;
+  background: #FDF9F0;
+  color: #6B5424;
 }
 
 /* Action buttons */
@@ -256,13 +256,13 @@
 }
 
 .action-btn.primary {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
-  border-color: #6366f1;
+  border-color: #B8924A;
 }
 
 .action-btn.primary:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .action-btn.danger {
@@ -364,7 +364,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -407,7 +407,7 @@
   padding: 10px 20px;
   font-size: 0.9rem;
   font-weight: 600;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 8px;
@@ -415,7 +415,7 @@
 }
 
 .btn-submit:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .btn-submit:disabled {

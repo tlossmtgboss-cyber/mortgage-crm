@@ -26,24 +26,24 @@
 }
 
 .boolean-option:hover:not(.disabled) {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.05);
 }
 
 .boolean-option:focus {
   outline: none;
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.15);
 }
 
 .boolean-option.selected {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.1);
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .boolean-option.selected .boolean-icon {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: #ffffff;
 }
 

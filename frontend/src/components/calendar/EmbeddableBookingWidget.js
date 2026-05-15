@@ -50,7 +50,7 @@ const SKELETON_STYLES = `
     overflow: hidden;
     z-index: 100;
     padding: 8px 16px;
-    background: #6366f1;
+    background: #B8924A;
     color: #fff;
     font-size: 14px;
     text-decoration: none;
@@ -121,16 +121,16 @@ const WIDGET_STYLES = {
   },
   dateBtn: (selected) => ({
     padding: '12px 8px',
-    border: `2px solid ${selected ? '#6366f1' : '#e2e8f0'}`,
+    border: `2px solid ${selected ? '#B8924A' : '#e2e8f0'}`,
     borderRadius: 8,
-    background: selected ? '#eef2ff' : '#fff',
+    background: selected ? '#FDF9F0' : '#fff',
     cursor: 'pointer',
     textAlign: 'center',
     fontSize: '0.85rem',
     outline: 'none',
   }),
   dateBtnFocus: {
-    boxShadow: '0 0 0 2px #6366f1',
+    boxShadow: '0 0 0 2px #B8924A',
   },
   timeGrid: {
     display: 'grid',
@@ -140,9 +140,9 @@ const WIDGET_STYLES = {
   },
   timeBtn: (selected, unavailable) => ({
     padding: '10px',
-    border: `2px solid ${selected ? '#6366f1' : unavailable ? '#f1f5f9' : '#e2e8f0'}`,
+    border: `2px solid ${selected ? '#B8924A' : unavailable ? '#f1f5f9' : '#e2e8f0'}`,
     borderRadius: 8,
-    background: selected ? '#eef2ff' : unavailable ? '#f8fafc' : '#fff',
+    background: selected ? '#FDF9F0' : unavailable ? '#f8fafc' : '#fff',
     cursor: unavailable ? 'not-allowed' : 'pointer',
     textAlign: 'center',
     fontSize: '0.9rem',
@@ -154,7 +154,7 @@ const WIDGET_STYLES = {
   submitBtn: {
     width: '100%',
     padding: '14px',
-    background: '#6366f1',
+    background: '#B8924A',
     color: '#fff',
     border: 'none',
     borderRadius: 8,
@@ -193,7 +193,7 @@ const WIDGET_STYLES = {
   backBtn: {
     background: 'none',
     border: 'none',
-    color: '#6366f1',
+    color: '#B8924A',
     cursor: 'pointer',
     marginBottom: 12,
     padding: '4px 0',

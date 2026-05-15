@@ -55,13 +55,13 @@ function fmtPct(n) {
 // Color palette
 // ---------------------------------------------------------------------------
 const COLORS = {
-  primary: '#218D8D',
+  primary: '#1F3D2E',
   secondary: '#d97757',
   success: '#22c55e',
   warning: '#f59e0b',
   danger: '#ef4444',
   muted: '#94a3b8',
-  purple: '#8b5cf6',
+  purple: '#B8924A',
   blue: '#3b82f6',
 };
 

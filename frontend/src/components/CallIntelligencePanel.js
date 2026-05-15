@@ -35,7 +35,7 @@ const AGENT_CONFIG = [
     id: 'junior_lo',
     name: 'Jr. Loan Officer',
     icon: '👔',
-    color: '#8b5cf6',
+    color: '#B8924A',
     description: 'Pricing & Documents',
     artifacts: ['document_request', 'intake_field', 'pricing_scenario']
   },
@@ -51,7 +51,7 @@ const AGENT_CONFIG = [
     id: 'calculator',
     name: 'AI Calculator',
     icon: '🧮',
-    color: '#10b981',
+    color: '#2D7A52',
     description: 'Mortgage Calculations',
     artifacts: ['calculator_result', 'payment_scenario']
   },

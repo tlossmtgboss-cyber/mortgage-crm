@@ -172,7 +172,7 @@ const MonthlyPaymentView = ({ data }) => {
     propertyTax: '#22c55e',
     insurance: '#f59e0b',
     pmi: '#ef4444',
-    mip: '#8b5cf6',
+    mip: '#B8924A',
   };
 
   const calculateMonthlyPI = (principal, annualRate, termYears = 30) => {
@@ -190,9 +190,9 @@ const MonthlyPaymentView = ({ data }) => {
 
     const scenarios = [
       { id: 'conv-3', label: '3% Down', type: 'Conventional', downPct: 3, rate: convRate, color: '#3b82f6' },
-      { id: 'fha-3.5', label: '3.5% Down', type: 'FHA', downPct: 3.5, rate: fhaRate, color: '#8b5cf6' },
+      { id: 'fha-3.5', label: '3.5% Down', type: 'FHA', downPct: 3.5, rate: fhaRate, color: '#B8924A' },
       { id: 'conv-5', label: '5% Down', type: 'Conventional', downPct: 5, rate: convRate, color: '#3b82f6', recommended: true },
-      { id: 'fha-5', label: '5% Down', type: 'FHA', downPct: 5, rate: fhaRate, color: '#8b5cf6' },
+      { id: 'fha-5', label: '5% Down', type: 'FHA', downPct: 5, rate: fhaRate, color: '#B8924A' },
     ];
 
     return scenarios.map(scenario => {

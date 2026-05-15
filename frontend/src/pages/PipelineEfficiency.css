@@ -67,11 +67,11 @@
 
 .time-range-selector:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .btn-export {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 10px 20px;
@@ -89,7 +89,7 @@
 
 /* Overall Score Card */
 .efficiency-score-card {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   padding: 40px;
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
@@ -274,7 +274,7 @@
 }
 
 .stage-table tbody tr:hover .view-arrow {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   transform: translateX(3px);
 }
@@ -359,7 +359,7 @@
 }
 
 .team-performance-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
   transform: translateY(-4px);
 }
@@ -458,7 +458,7 @@
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #e2e8f0;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 14px;
   font-weight: 600;
   text-align: right;
@@ -503,7 +503,7 @@
 }
 
 .bottleneck-stage {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   padding: 6px 12px;
   border-radius: 6px;
@@ -544,7 +544,7 @@
 }
 
 .bottleneck-action strong {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Trends Chart */
@@ -595,7 +595,7 @@
 }
 
 .score-bar {
-  background: linear-gradient(to top, #218D8D, #10b981);
+  background: linear-gradient(to top, #1F3D2E, #2D7A52);
 }
 
 .volume-bar {
@@ -631,7 +631,7 @@
 }
 
 .score-color {
-  background: linear-gradient(to right, #218D8D, #10b981);
+  background: linear-gradient(to right, #1F3D2E, #2D7A52);
 }
 
 .volume-color {
@@ -734,7 +734,7 @@
 .drilldown-header {
   padding: 24px 30px;
   border-bottom: 2px solid #e2e8f0;
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   display: flex;
   justify-content: space-between;
@@ -770,7 +770,7 @@
 
 .btn-close-modal:hover {
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   transform: rotate(90deg);
 }
 
@@ -795,7 +795,7 @@
 }
 
 .affected-loan-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.15);
 }
 
@@ -824,7 +824,7 @@
 .loan-amount {
   font-size: 24px;
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .loan-card-info {
@@ -903,7 +903,7 @@
 }
 
 .btn-create-task {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -961,14 +961,14 @@
 .team-performance-card.clickable:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 20px rgba(33, 141, 141, 0.2);
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .click-to-view-team {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #e2e8f0;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 14px;
   font-weight: 600;
   text-align: center;

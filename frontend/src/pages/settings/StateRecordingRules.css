@@ -34,12 +34,12 @@
 }
 
 .btn-primary {
-  background: #4f46e5;
+  background: #8A6D30;
   color: white;
 }
 
 .btn-primary:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 .btn-secondary {
@@ -109,13 +109,13 @@
 }
 
 .rules-tabs button:hover {
-  color: #4f46e5;
-  background: #f5f3ff;
+  color: #8A6D30;
+  background: #FDF9F0;
 }
 
 .rules-tabs button.active {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: #8A6D30;
+  border-bottom-color: #8A6D30;
 }
 
 /* Overview Tab */
@@ -162,7 +162,7 @@
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .info-card.warning {
@@ -334,7 +334,7 @@
 .all-party-card .state-code {
   font-size: 24px;
   font-weight: 700;
-  color: #4f46e5;
+  color: #8A6D30;
 }
 
 .all-party-card .state-name {
@@ -540,7 +540,7 @@
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #4f46e5;
+  border-color: #8A6D30;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
@@ -575,7 +575,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e5e7eb;
-  border-top-color: #4f46e5;
+  border-top-color: #8A6D30;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }

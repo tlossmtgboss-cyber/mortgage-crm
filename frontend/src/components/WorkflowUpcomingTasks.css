@@ -58,23 +58,23 @@
 }
 
 .filter-btn.active {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .filter-btn.get-tasks-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .filter-btn.get-tasks-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%);
 }
 
 .filter-btn.get-tasks-btn.active {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
@@ -383,7 +383,7 @@
 }
 
 .capacity-table td.completed {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 

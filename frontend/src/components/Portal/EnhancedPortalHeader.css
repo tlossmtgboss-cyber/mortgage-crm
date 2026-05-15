@@ -136,7 +136,7 @@
 
 .milestone-progress-bar.simple .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981, #34d399);
+  background: linear-gradient(90deg, #2D7A52, #34d399);
   border-radius: 4px;
   transition: width 0.5s ease;
 }
@@ -174,7 +174,7 @@
 }
 
 .progress-step.complete .step-dot {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .progress-step.active .step-dot {
@@ -207,7 +207,7 @@
 }
 
 .step-line.completed {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .progress-labels {

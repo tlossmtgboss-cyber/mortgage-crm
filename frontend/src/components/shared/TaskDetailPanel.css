@@ -60,7 +60,7 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  color: #217F8D;
+  color: #1F3D2E;
   letter-spacing: 0.5px;
 }
 
@@ -100,7 +100,7 @@
 }
 
 .task-detail-panel .ai-confidence-badge.high {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
@@ -168,7 +168,7 @@
 .task-detail-panel .info-item .client-link,
 .task-detail-panel .info-item .stage-link,
 .task-detail-panel .info-item .source-link {
-  color: #217F8D;
+  color: #1F3D2E;
   cursor: pointer;
   font-weight: 500;
 }
@@ -246,14 +246,14 @@
 }
 
 .task-detail-panel .send-btn:hover {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .task-detail-panel .send-btn.active {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .task-detail-panel .send-btn.complete {
@@ -454,7 +454,7 @@
 
 .task-detail-panel .edit-message-btn {
   padding: 6px 12px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -482,7 +482,7 @@
 .task-detail-panel .ai-draft-edit {
   width: 100%;
   padding: 12px;
-  border: 1px solid #217F8D;
+  border: 1px solid #1F3D2E;
   border-radius: 8px;
   font-size: 13px;
   font-family: inherit;
@@ -559,7 +559,7 @@
 .task-detail-panel .history-type {
   font-size: 11px;
   font-weight: 600;
-  color: #217F8D;
+  color: #1F3D2E;
   text-transform: uppercase;
 }
 
@@ -613,14 +613,14 @@
 }
 
 .task-detail-panel .action-bar-btn:hover {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .task-detail-panel .action-bar-btn.send-email {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .task-detail-panel .action-bar-btn.send-email:hover {
@@ -638,13 +638,13 @@
 }
 
 .task-detail-panel .action-bar-btn.change-status {
-  background: #8b5cf6;
+  background: #B8924A;
   color: white;
-  border-color: #8b5cf6;
+  border-color: #B8924A;
 }
 
 .task-detail-panel .action-bar-btn.change-status:hover {
-  background: #7c3aed;
+  background: #B8924A;
 }
 
 .task-detail-panel .action-bar-btn.complete-task {
@@ -753,7 +753,7 @@
 
 .task-detail-panel .status-option.current {
   background: #f0f9fa;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 /* SLA Milestone Section */
@@ -883,7 +883,7 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  color: #217F8D;
+  color: #1F3D2E;
   letter-spacing: 0.5px;
 }
 
@@ -909,7 +909,7 @@
 
 .task-detail-panel .detail-value.client-link,
 .task-detail-panel .clickable-link {
-  color: #217F8D;
+  color: #1F3D2E;
   cursor: pointer;
   font-weight: 500;
 }
@@ -962,14 +962,14 @@
 }
 
 .task-detail-panel .comm-method-btn:hover {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .task-detail-panel .comm-method-btn.active {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 /* Task Description Section (What to Accomplish) */
@@ -1050,15 +1050,15 @@
 }
 
 .task-detail-panel .guidance-action {
-  border-left: 3px solid #218D8D;
+  border-left: 3px solid #1F3D2E;
 }
 
 .task-detail-panel .guidance-goal {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #2D7A52;
 }
 
 .task-detail-panel .guidance-talking-points {
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid #B8924A;
 }
 
 .task-detail-panel .guidance-tips {
@@ -1113,7 +1113,7 @@
   content: '•';
   position: absolute;
   left: -14px;
-  color: #6366f1;
+  color: #B8924A;
   font-weight: bold;
 }
 
@@ -1196,7 +1196,7 @@
 
 .task-detail-panel .ai-badge {
   padding: 2px 8px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 4px;
   font-size: 10px;
@@ -1313,7 +1313,7 @@
 .task-detail-panel .ai-response-label {
   font-size: 11px;
   font-weight: 600;
-  color: #217F8D;
+  color: #1F3D2E;
   text-transform: uppercase;
   flex: 1;
 }
@@ -1374,7 +1374,7 @@
 
 .task-detail-panel .btn-edit-message {
   padding: 8px 14px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1416,7 +1416,7 @@
 
 .task-detail-panel .message-editor:focus {
   outline: none;
-  box-shadow: inset 0 0 0 2px #217F8D;
+  box-shadow: inset 0 0 0 2px #1F3D2E;
 }
 
 /* Recommended Action Section */
@@ -1519,7 +1519,7 @@
 .task-detail-panel .history-type {
   font-size: 11px;
   font-weight: 600;
-  color: #217F8D;
+  color: #1F3D2E;
   text-transform: uppercase;
 }
 
@@ -1609,7 +1609,7 @@
 
 .task-detail-panel .btn-detail-send {
   padding: 10px 16px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1646,7 +1646,7 @@
 
 .task-detail-panel .btn-detail-status {
   padding: 10px 16px;
-  background: #8b5cf6;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1660,7 +1660,7 @@
 }
 
 .task-detail-panel .btn-detail-status:hover {
-  background: #7c3aed;
+  background: #B8924A;
   transform: translateY(-1px);
 }
 
@@ -1680,8 +1680,8 @@
 }
 
 .task-detail-panel .btn-detail-secondary:hover {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .task-detail-panel .btn-detail-complete {
@@ -1823,14 +1823,14 @@
 }
 
 .task-detail-panel .team-member-option:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f0f9fa;
 }
 
 .task-detail-panel .member-avatar {
   width: 36px;
   height: 36px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 50%;
   display: flex;

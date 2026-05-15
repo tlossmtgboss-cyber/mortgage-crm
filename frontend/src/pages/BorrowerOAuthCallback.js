@@ -141,7 +141,7 @@ const styles = {
     width: '48px',
     height: '48px',
     border: '3px solid #e5e7eb',
-    borderTopColor: '#218D8D',
+    borderTopColor: '#1F3D2E',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
     margin: '0 auto 24px',
@@ -149,7 +149,7 @@ const styles = {
   successIcon: {
     width: '64px',
     height: '64px',
-    background: '#10b981',
+    background: '#2D7A52',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
@@ -176,7 +176,7 @@ const styles = {
   },
   button: {
     padding: '12px 24px',
-    background: '#218D8D',
+    background: '#1F3D2E',
     border: 'none',
     borderRadius: '8px',
     color: 'white',

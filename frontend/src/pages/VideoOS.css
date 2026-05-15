@@ -348,7 +348,7 @@
 
 .status-badge.viewed {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-badge.sent {
@@ -776,7 +776,7 @@
 }
 
 .analytics-trend.positive {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .analytics-trend.negative {

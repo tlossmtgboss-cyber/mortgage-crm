@@ -167,7 +167,7 @@
 }
 
 .create-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
@@ -320,7 +320,7 @@
 }
 
 .publish-btn.publish {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
 }
 

@@ -101,7 +101,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #10b981;
+  background: #2D7A52;
   flex-shrink: 0;
   box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
   animation: mac-pulse-dot 2.5s ease-in-out infinite;
@@ -506,12 +506,12 @@
 }
 
 .mac__feedback-btn--active-positive {
-  color: #10b981;
+  color: #2D7A52;
   background: rgba(16, 185, 129, 0.1);
 }
 
 .mac__feedback-btn--active-positive:hover {
-  color: #10b981;
+  color: #2D7A52;
   background: rgba(16, 185, 129, 0.15);
 }
 

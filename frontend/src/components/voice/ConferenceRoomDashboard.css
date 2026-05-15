@@ -55,12 +55,12 @@
 }
 
 .cr-btn-primary {
-  background: #8b5cf6;
+  background: #B8924A;
   color: white;
 }
 
 .cr-btn-primary:hover:not(:disabled) {
-  background: #7c3aed;
+  background: #B8924A;
 }
 
 .cr-btn-secondary {
@@ -75,12 +75,12 @@
 
 .cr-btn-outline {
   background: transparent;
-  color: #8b5cf6;
-  border: 1px solid #8b5cf6;
+  color: #B8924A;
+  border: 1px solid #B8924A;
 }
 
 .cr-btn-outline:hover:not(:disabled) {
-  background: #f5f3ff;
+  background: #FDF9F0;
 }
 
 .cr-btn-join {
@@ -133,7 +133,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #8b5cf6;
+  border-top-color: #B8924A;
   border-radius: 50%;
   animation: cr-spin 1s linear infinite;
 }
@@ -181,7 +181,7 @@
 }
 
 .cr-stat-highlight {
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  background: linear-gradient(135deg, #B8924A, #8A6D30);
   color: white;
 }
 
@@ -255,7 +255,7 @@
 }
 
 .cr-card-selected {
-  border-color: #8b5cf6;
+  border-color: #B8924A;
 }
 
 .cr-card-active {
@@ -301,8 +301,8 @@
 }
 
 .cr-badge-ready {
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: #F5EDD9;
+  color: #8A6D30;
 }
 
 .cr-badge-ended {
@@ -594,7 +594,7 @@
 
 .cr-form-group input:focus {
   outline: none;
-  border-color: #8b5cf6;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
@@ -621,7 +621,7 @@
 .cr-checkbox input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #8b5cf6;
+  accent-color: #B8924A;
 }
 
 .cr-form-error {

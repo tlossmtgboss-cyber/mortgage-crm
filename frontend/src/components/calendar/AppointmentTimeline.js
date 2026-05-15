@@ -528,7 +528,7 @@ const styles = {
   },
   sourceTag: {
     fontSize: '9px',
-    color: '#8b5cf6',
+    color: '#B8924A',
     backgroundColor: '#f3e8ff',
     padding: '1px 5px',
     borderRadius: '4px',

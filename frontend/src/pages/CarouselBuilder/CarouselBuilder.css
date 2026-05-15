@@ -13,7 +13,7 @@
    ============================================================================= */
 
 .carousel-builder-page {
-  --carousel-primary: #217F8D;
+  --carousel-primary: #1F3D2E;
   --carousel-primary-dark: #1a6570;
   --carousel-secondary: #c9a227;
   --carousel-danger: #ef4444;
@@ -129,7 +129,7 @@
 }
 
 .carousel-project-preview {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   cursor: pointer;
   position: relative;
   max-height: 200px;
@@ -1453,7 +1453,7 @@
 
 /* AI Generate Button in Toolbar */
 .btn-ai-generate {
-  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  background: linear-gradient(135deg, #B8924A, #B8924A);
   color: white;
   border: none;
   padding: 8px 16px;
@@ -1468,7 +1468,7 @@
 }
 
 .btn-ai-generate:hover {
-  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  background: linear-gradient(135deg, #B8924A, #8A6D30);
   transform: translateY(-1px);
 }
 
@@ -1999,14 +1999,14 @@
 
 /* Template/Theme button styles */
 .btn-templates {
-  background: linear-gradient(135deg, #10b981, #059669);
-  border-color: #059669;
+  background: linear-gradient(135deg, #2D7A52, #2D7A52);
+  border-color: #2D7A52;
   color: white;
 }
 
 .btn-templates:hover {
-  background: linear-gradient(135deg, #059669, #047857);
-  border-color: #047857;
+  background: linear-gradient(135deg, #2D7A52, #1F5A3A);
+  border-color: #1F5A3A;
   color: white;
 }
 

@@ -331,7 +331,7 @@
   padding: 8px 18px;
   border: none;
   border-radius: 6px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   font-weight: 600;
   font-size: 14px;
@@ -340,7 +340,7 @@
 }
 
 .calc-add-buyer-form button:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .calc-add-buyer-form button:disabled {

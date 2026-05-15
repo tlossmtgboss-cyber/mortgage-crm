@@ -132,8 +132,8 @@
 }
 
 .status-application {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
 }
 
 .status-suspended {
@@ -216,8 +216,8 @@
 
 .borrower-tab.active {
   background: white;
-  color: #218D8D;
-  border-color: #218D8D;
+  color: #1F3D2E;
+  border-color: #1F3D2E;
   border-bottom-color: white;
   z-index: 1;
 }
@@ -248,7 +248,7 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -258,7 +258,7 @@
 }
 
 .add-borrower-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: scale(1.05);
 }
 
@@ -377,7 +377,7 @@
 
 .rate-lock-badge.guidance.float {
   background: #ecfdf5;
-  color: #059669;
+  color: #2D7A52;
   border: 1px solid #a7f3d0;
 }
 
@@ -474,7 +474,7 @@
 /* Status option colors */
 .status-dropdown-option.status-disclosed:hover {
   background: rgba(139, 92, 246, 0.1);
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .status-dropdown-option.status-processing:hover {
@@ -489,7 +489,7 @@
 
 .status-dropdown-option.status-approved:hover {
   background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-dropdown-option.status-ctc:hover {
@@ -509,7 +509,7 @@
 
 .status-dropdown-option.status-nurture:hover {
   background: rgba(168, 85, 247, 0.1);
-  color: #9333ea;
+  color: #B8924A;
 }
 
 .status-dropdown-option.status-withdrawn:hover {
@@ -524,7 +524,7 @@
 
 .status-dropdown-option.status-application:hover {
   background: rgba(67, 56, 202, 0.1);
-  color: #4338ca;
+  color: #6B5424;
 }
 
 .status-dropdown-option.status-closing:hover {
@@ -565,7 +565,7 @@
 
 .status-badge.status-nurture {
   background: #f3e8ff;
-  color: #9333ea;
+  color: #B8924A;
 }
 
 .status-badge.status-not-qualified {
@@ -574,8 +574,8 @@
 }
 
 .status-badge.status-application {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
 }
 
 .status-badge.status-closing {

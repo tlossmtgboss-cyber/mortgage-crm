@@ -33,13 +33,13 @@
 
 /* Threshold colors — badge */
 .icb-badge--auto-approved {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: #fff;
 }
 
 .icb-badge--high {
   background: rgba(33, 127, 141, 0.12);
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .icb-badge--medium {
@@ -129,17 +129,17 @@
 
 /* Threshold colors — bar fill + text */
 .icb-bar--auto-approved .icb-bar__fill {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
 }
 .icb-bar--auto-approved .icb-bar__text {
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .icb-bar--high .icb-bar__fill {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
 }
 .icb-bar--high .icb-bar__text {
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .icb-bar--medium .icb-bar__fill {

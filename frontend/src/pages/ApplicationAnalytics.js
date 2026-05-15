@@ -9,7 +9,7 @@ import './ApplicationAnalytics.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-const COLORS = ['#218D8D', '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'];
+const COLORS = ['#1F3D2E', '#2D7A52', '#3b82f6', '#B8924A', '#f59e0b', '#ef4444'];
 
 export default function ApplicationAnalytics() {
   const [loading, setLoading] = useState(true);
@@ -181,16 +181,16 @@ export default function ApplicationAnalytics() {
                   type="monotone"
                   dataKey="total"
                   name="Started"
-                  stroke="#218D8D"
-                  fill="#218D8D"
+                  stroke="#1F3D2E"
+                  fill="#1F3D2E"
                   fillOpacity={0.2}
                 />
                 <Area
                   type="monotone"
                   dataKey="submitted"
                   name="Submitted"
-                  stroke="#10b981"
-                  fill="#10b981"
+                  stroke="#2D7A52"
+                  fill="#2D7A52"
                   fillOpacity={0.3}
                 />
               </AreaChart>
@@ -265,8 +265,8 @@ export default function ApplicationAnalytics() {
                 <XAxis type="number" stroke="#9ca3af" />
                 <YAxis type="category" dataKey="device" stroke="#9ca3af" width={80} />
                 <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
-                <Bar dataKey="count" name="Applications" fill="#218D8D" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="submitted" name="Submitted" fill="#10b981" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" name="Applications" fill="#1F3D2E" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="submitted" name="Submitted" fill="#2D7A52" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

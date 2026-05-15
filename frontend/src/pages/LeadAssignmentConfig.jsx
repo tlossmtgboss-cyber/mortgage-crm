@@ -941,8 +941,8 @@ function KPI({ value, label }) {
 //  STYLES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const BRAND = '#218D8D';
-const BRAND_BG = '#e8f5f5';
+const BRAND = '#1F3D2E';
+const BRAND_BG = '#E5EDE6';
 
 const s = {
   // Page layout

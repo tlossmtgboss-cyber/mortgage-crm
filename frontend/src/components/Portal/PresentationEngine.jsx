@@ -38,7 +38,7 @@ const SCENARIO_CONFIG = {
     title: 'Cash-Out Refinance',
     subtitle: 'Access your home equity',
     icon: '💰',
-    color: '#10b981',
+    color: '#2D7A52',
     benefits: ['Home improvements', 'Debt consolidation', 'Major purchases'],
   },
   [SCENARIOS.HELOC]: {
@@ -46,7 +46,7 @@ const SCENARIO_CONFIG = {
     title: 'Home Equity Line',
     subtitle: 'Flexible access to equity',
     icon: '🏦',
-    color: '#8b5cf6',
+    color: '#B8924A',
     benefits: ['Draw as needed', 'Interest only on what you use', 'Keeps first mortgage'],
   },
   [SCENARIOS.SELL]: {

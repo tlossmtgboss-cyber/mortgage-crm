@@ -7,12 +7,12 @@ import './MotivatorsBarchart.css';
 const MOTIVATOR_INFO = {
   aesthetic: {
     label: 'Aesthetic',
-    color: '#8B5CF6',
+    color: '#B8924A',
     description: 'Beauty, balance, harmony'
   },
   economic: {
     label: 'Economic',
-    color: '#10B981',
+    color: '#2D7A52',
     description: 'ROI, practicality, results'
   },
   individualistic: {
@@ -32,7 +32,7 @@ const MOTIVATOR_INFO = {
   },
   regulatory: {
     label: 'Regulatory',
-    color: '#6366F1',
+    color: '#B8924A',
     description: 'Order, structure, tradition'
   },
   theoretical: {

@@ -44,7 +44,7 @@
 .dashboard-header .back-btn {
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 14px;
   cursor: pointer;
   padding: 0;
@@ -88,12 +88,12 @@
 }
 
 .metric-tab:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .metric-tab.active {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.15);
 }
@@ -107,7 +107,7 @@
 }
 
 .metric-tab.active .metric-tab-name {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .metric-tab-value {
@@ -123,7 +123,7 @@
 }
 
 .metric-tab-change.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .metric-tab-change.warning {
@@ -162,7 +162,7 @@
 .btn-close-detail {
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 14px;
   cursor: pointer;
 }
@@ -204,7 +204,7 @@
 }
 
 .detail-change.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .detail-change.warning {
@@ -262,7 +262,7 @@
 }
 
 .breakdown-row span.positive {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 500;
 }
 
@@ -479,7 +479,7 @@
 
 .metric-badge.positive {
   background: rgba(16, 185, 129, 0.2);
-  color: #059669;
+  color: #2D7A52;
 }
 
 .metric-badge.negative {
@@ -529,7 +529,7 @@
 
 /* Status Colors */
 .positive {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .negative {
@@ -588,7 +588,7 @@
 }
 
 .gap-gain-card.gain {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
 }
 
 .gap-gain-card .card-header {
@@ -612,7 +612,7 @@
 
 .type-badge.gain {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .priority-badge {
@@ -734,7 +734,7 @@
 
 .status-badge.profitable {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-badge.unprofitable {
@@ -845,7 +845,7 @@
 }
 
 .insight-card.opportunity {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
 }
 
 .insight-header {
@@ -870,14 +870,14 @@
 
 .insight-type.gain {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .insight-type.trend,
 .insight-type.recommendation,
 .insight-type.alert {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
 }
 
 .insight-severity.info {
@@ -897,7 +897,7 @@
 
 .insight-severity.opportunity {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .insight-card h4 {
@@ -1189,7 +1189,7 @@
 }
 
 .recommendation-card.priority-low {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
   background: #ecfdf5;
 }
 
@@ -1226,7 +1226,7 @@
 
 .priority-badge.low {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .rec-action {
@@ -1238,7 +1238,7 @@
 .rec-impact {
   margin: 8px 0;
   font-size: 13px;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .rec-rationale {

@@ -212,7 +212,7 @@ function CelebrationOverlay({ onDismiss }) {
               style={{
                 '--x': `${Math.random() * 100}%`,
                 '--delay': `${Math.random() * 0.5}s`,
-                '--color': ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'][i % 5],
+                '--color': ['#3b82f6', '#2D7A52', '#f59e0b', '#ec4899', '#B8924A'][i % 5],
               }}
             />
           ))}

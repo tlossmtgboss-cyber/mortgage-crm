@@ -214,7 +214,7 @@ function AIReceptionistDashboard() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'active': return '#10b981';
+      case 'active': return '#2D7A52';
       case 'degraded': return '#f59e0b';
       case 'down': return '#ef4444';
       default: return '#6b7280';
@@ -523,7 +523,7 @@ function AIReceptionistDashboard() {
                         className="progress-fill"
                         style={{
                           width: `${skill.accuracy_score * 100}%`,
-                          backgroundColor: skill.accuracy_score > 0.8 ? '#10b981' : skill.accuracy_score > 0.6 ? '#f59e0b' : '#ef4444'
+                          backgroundColor: skill.accuracy_score > 0.8 ? '#2D7A52' : skill.accuracy_score > 0.6 ? '#f59e0b' : '#ef4444'
                         }}
                       ></div>
                     </div>

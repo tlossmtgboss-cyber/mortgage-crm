@@ -141,7 +141,7 @@
 .flag-action {
   margin: 0;
   font-size: 13px;
-  color: #059669;
+  color: #2D7A52;
   background: white;
   padding: 8px 12px;
   border-radius: 6px;
@@ -194,7 +194,7 @@
 }
 
 .no-items.success {
-  color: #059669;
+  color: #2D7A52;
 }
 
 /* Concern Cards */
@@ -217,7 +217,7 @@
 }
 
 .concern-card.severity-low {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -404,7 +404,7 @@
 .handling-tips {
   margin: 0;
   font-size: 13px;
-  color: #059669;
+  color: #2D7A52;
   background: #d1fae5;
   padding: 10px 12px;
   border-radius: 6px;
@@ -470,7 +470,7 @@
 }
 
 .signal.positive {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .signal.negative {

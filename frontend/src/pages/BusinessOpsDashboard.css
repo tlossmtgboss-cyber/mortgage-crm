@@ -205,7 +205,7 @@
 }
 
 .kpi-change.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .kpi-change.negative {
@@ -413,13 +413,13 @@
 }
 
 .category-badge.ai {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
 }
 
 .category-badge.communications {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .category-badge.storage {
@@ -439,7 +439,7 @@
 
 .category-badge.payments {
   background: #f3e8ff;
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 /* Budget Progress Bar */
@@ -458,7 +458,7 @@
 }
 
 .budget-bar.healthy {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .budget-bar.warning {
@@ -572,7 +572,7 @@
 }
 
 .forecast-card.highlight {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -696,7 +696,7 @@
 }
 
 .marketing-value.good {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .marketing-value.warning {
@@ -756,7 +756,7 @@
 
 .status-badge.active {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-badge.paused {
@@ -780,7 +780,7 @@
 
 .roi-badge.positive {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .roi-badge.negative {
@@ -816,7 +816,7 @@
 }
 
 .pnl-row.total .pnl-value.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .pnl-row.total .pnl-value.negative {
@@ -851,7 +851,7 @@
 }
 
 .runway-value.healthy {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .runway-value.warning {
@@ -921,7 +921,7 @@
 
 /* Status Colors */
 .positive {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .negative {

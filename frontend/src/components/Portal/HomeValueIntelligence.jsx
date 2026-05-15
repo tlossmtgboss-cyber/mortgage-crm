@@ -580,10 +580,10 @@ function InsightsView({ data, loanId, onDismiss }) {
 
 function InsightCard({ insight, onDismiss }) {
   const typeConfig = {
-    opportunity: { icon: '💡', color: '#10b981', bg: '#d1fae5' },
+    opportunity: { icon: '💡', color: '#2D7A52', bg: '#d1fae5' },
     alert: { icon: '⚠️', color: '#f59e0b', bg: '#fef3c7' },
     info: { icon: 'ℹ️', color: '#3b82f6', bg: '#dbeafe' },
-    action: { icon: '🎯', color: '#8b5cf6', bg: '#ede9fe' },
+    action: { icon: '🎯', color: '#B8924A', bg: '#FAF3E5' },
   };
 
   const config = typeConfig[insight.type] || typeConfig.info;

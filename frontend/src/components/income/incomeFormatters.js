@@ -147,7 +147,7 @@ export function getConfidenceBadgeClass(confidence) {
  */
 export function getConfidenceColor(confidence) {
   const pct = Number(confidence);
-  if (pct >= 90) return '#217F8D';
+  if (pct >= 90) return '#1F3D2E';
   if (pct >= 70) return '#A84B2F';
   return '#C0152F';
 }

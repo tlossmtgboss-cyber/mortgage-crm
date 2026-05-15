@@ -132,7 +132,7 @@
 .scenario-name-input:focus {
   outline: none;
   background: white;
-  border: 1px solid #217F8D;
+  border: 1px solid #1F3D2E;
 }
 
 .remove-scenario-btn {
@@ -150,7 +150,7 @@
 }
 
 .add-scenario-btn {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -228,7 +228,7 @@
 
 .cell-input:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: white;
 }
 
@@ -248,7 +248,7 @@
 }
 
 .savings-cell .positive {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .savings-cell .negative {
@@ -332,7 +332,7 @@
 }
 
 .breakdown-row.total span:last-child {
-  color: #217F8D;
+  color: #1F3D2E;
   font-size: 16px;
 }
 

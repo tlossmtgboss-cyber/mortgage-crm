@@ -70,7 +70,7 @@
   justify-content: center;
   gap: 10px;
   padding: 14px 20px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 10px;
@@ -82,7 +82,7 @@
 }
 
 .video-start-now-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%);
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
 }
@@ -180,13 +180,13 @@
 }
 
 .video-schedule-date-card:hover:not(:disabled) {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #f0fdf4;
 }
 
 .video-schedule-date-card.selected {
-  background: #10b981;
-  border-color: #10b981;
+  background: #2D7A52;
+  border-color: #2D7A52;
   color: white;
 }
 
@@ -202,7 +202,7 @@
 }
 
 .video-schedule-date-card.today {
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .video-schedule-day-name {
@@ -264,7 +264,7 @@
 
 .video-schedule-time-dropdown:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
@@ -288,7 +288,7 @@
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
   border-radius: 8px;
-  color: #059669;
+  color: #2D7A52;
   font-size: 14px;
   font-weight: 500;
 }
@@ -329,7 +329,7 @@
 
 .video-schedule-team-dropdown:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
@@ -395,7 +395,7 @@
 .video-schedule-success .success-icon {
   width: 64px;
   height: 64px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   display: flex;
   align-items: center;

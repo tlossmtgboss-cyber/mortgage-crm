@@ -3954,7 +3954,7 @@ export default function RefinanceApplication() {
                   border: '1px solid #e2e8f0', fontSize: '15px',
                   outline: 'none', transition: 'border-color 0.2s',
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#218D8D'}
+                onFocus={(e) => e.target.style.borderColor = '#1F3D2E'}
                 onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
               />
             </div>
@@ -3964,7 +3964,7 @@ export default function RefinanceApplication() {
               disabled={emailSending || !userAccount.email || !userAccount.email.includes('@')}
               style={{
                 width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
-                background: userAccount.email?.includes('@') && !emailSending ? 'linear-gradient(135deg, #218D8D 0%, #1a7070 100%)' : '#e2e8f0',
+                background: userAccount.email?.includes('@') && !emailSending ? 'linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%)' : '#e2e8f0',
                 color: userAccount.email?.includes('@') && !emailSending ? 'white' : '#94a3b8',
                 fontSize: '16px', fontWeight: '600', cursor: userAccount.email?.includes('@') && !emailSending ? 'pointer' : 'not-allowed',
                 transition: 'all 0.2s',
@@ -4002,7 +4002,7 @@ export default function RefinanceApplication() {
   return (
     <div className="adaptive-urla">
       {isDemoMode && (
-        <div className="demo-banner" style={{ background: 'linear-gradient(135deg, #218D8D 0%, #1a7070 100%)' }}>
+        <div className="demo-banner" style={{ background: 'linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%)' }}>
           <span className="demo-badge">DEMO</span>
           Refinance Application
         </div>
@@ -4043,7 +4043,7 @@ export default function RefinanceApplication() {
                 color: '#64748b', fontSize: '13px', fontWeight: '500',
                 cursor: 'pointer', transition: 'all 0.2s',
               }}
-              onMouseOver={(e) => { e.currentTarget.style.borderColor = '#218D8D'; e.currentTarget.style.color = '#218D8D'; }}
+              onMouseOver={(e) => { e.currentTarget.style.borderColor = '#1F3D2E'; e.currentTarget.style.color = '#1F3D2E'; }}
               onMouseOut={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
             >
               <Icon name="save" size={16} />
@@ -4216,7 +4216,7 @@ export default function RefinanceApplication() {
                 disabled={!saveEmail || !saveEmail.includes('@')}
                 style={{
                   flex: 1, padding: '12px', borderRadius: '8px', border: 'none',
-                  background: saveEmail?.includes('@') ? 'linear-gradient(135deg, #218D8D 0%, #1a7070 100%)' : '#e2e8f0',
+                  background: saveEmail?.includes('@') ? 'linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%)' : '#e2e8f0',
                   color: saveEmail?.includes('@') ? 'white' : '#94a3b8',
                   fontSize: '14px', fontWeight: '500',
                   cursor: saveEmail?.includes('@') ? 'pointer' : 'not-allowed',

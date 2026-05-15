@@ -323,7 +323,7 @@ function OverviewTab({ portalData, closeOnTimeData, showCloseOnTime, loanId, act
               <svg viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="45" fill="none" stroke="#e5e7eb" strokeWidth="10" />
                 <circle
-                  cx="50" cy="50" r="45" fill="none" stroke="#10b981" strokeWidth="10"
+                  cx="50" cy="50" r="45" fill="none" stroke="#2D7A52" strokeWidth="10"
                   strokeDasharray={`${(milestoneProgress?.progress_percent || 0) * 2.83} 283`}
                   strokeLinecap="round"
                   transform="rotate(-90 50 50)"

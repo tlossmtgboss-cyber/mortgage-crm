@@ -42,8 +42,8 @@
 .btn-back,
 .btn-next {
   padding: 10px 20px;
-  background: #218D8D;
-  border: 1px solid #218D8D;
+  background: #1F3D2E;
+  border: 1px solid #1F3D2E;
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -56,8 +56,8 @@
 
 .btn-back:hover,
 .btn-next:hover {
-  background: #1a7070;
-  border-color: #1a7070;
+  background: #2A4F3D;
+  border-color: #2A4F3D;
 }
 
 .btn-back:disabled,
@@ -99,21 +99,21 @@
 }
 
 .btn-edit-header {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
 .btn-edit-header:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-save {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-save:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .btn-cancel {
@@ -197,7 +197,7 @@
 .loan-field input:focus,
 .loan-field select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -237,15 +237,15 @@
 
 .borrower-btn:hover {
   background: #e9ecef;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   transform: translateY(-2px);
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
 .borrower-btn.active {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .borrower-badge {
@@ -271,11 +271,11 @@ button.borrower-btn.add-borrower-btn {
   justify-content: center !important;
   padding: 10px 16px !important;
   background: transparent !important;
-  border: 2px dashed #218D8D !important;
+  border: 2px dashed #1F3D2E !important;
   border-radius: 6px !important;
   font-size: 14px !important;
   font-weight: 600 !important;
-  color: #218D8D !important;
+  color: #1F3D2E !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
   margin-left: auto !important;
@@ -290,8 +290,8 @@ button.borrower-btn.add-borrower-btn {
 .borrower-selector .borrower-btn.add-borrower-btn:hover,
 button.borrower-btn.add-borrower-btn:hover {
   background: #e9f5f5 !important;
-  border-color: #1a7070 !important;
-  color: #1a7070 !important;
+  border-color: #2A4F3D !important;
+  color: #2A4F3D !important;
   transform: translateY(-2px) !important;
 }
 
@@ -383,13 +383,13 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .tab-btn:hover {
-  color: #218D8D;
+  color: #1F3D2E;
   background: #f8f9fa;
 }
 
 .tab-btn.active {
-  color: #218D8D;
-  border-bottom-color: #218D8D;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
   background: transparent;
 }
 
@@ -412,19 +412,19 @@ button.borrower-btn.add-borrower-btn:hover {
   justify-content: center;
   padding: 24px;
   background: #f8f9fa;
-  border: 2px dashed #218D8D;
+  border: 2px dashed #1F3D2E;
   border-radius: 8px;
   transition: all 0.2s ease;
 }
 
 .documents-upload-area:hover {
   background: #e9f5f5;
-  border-color: #1a7070;
+  border-color: #2A4F3D;
 }
 
 .btn-upload-document {
   padding: 12px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -435,7 +435,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .btn-upload-document:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(33, 141, 141, 0.3);
 }
@@ -498,7 +498,7 @@ button.borrower-btn.add-borrower-btn:hover {
   background: #f8fafc;
   border-radius: 6px;
   border: 1px solid #e2e8f0;
-  border-left: 3px solid #218D8D;
+  border-left: 3px solid #1F3D2E;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -563,7 +563,7 @@ button.borrower-btn.add-borrower-btn:hover {
   background: #f8fafc;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
 }
 
 .circle-grid {
@@ -605,7 +605,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .btn-add-circle {
   padding: 6px 14px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -616,7 +616,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .btn-add-circle:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
 }
@@ -634,7 +634,7 @@ button.borrower-btn.add-borrower-btn:hover {
   background: #f8fafc;
   padding: 12px;
   border-radius: 6px;
-  border-left: 3px solid #218d8d;
+  border-left: 3px solid #1F3D2E;
 }
 
 .circle-contact-item .contact-name {
@@ -737,12 +737,12 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .info-field input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
 .phone-link {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
   font-weight: 500;
 }
@@ -764,9 +764,9 @@ button.borrower-btn.add-borrower-btn:hover {
   padding: 16px;
   background: #f8fafc;
   border-radius: 8px;
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
   border: 1px solid #e2e8f0;
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
 }
 
 .activity-header {
@@ -783,7 +783,7 @@ button.borrower-btn.add-borrower-btn:hover {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -823,13 +823,13 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .add-note-form textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
 .add-note-form button {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -841,7 +841,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .add-note-form button:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
 }
@@ -870,12 +870,12 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .ai-chat-form textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .ai-chat-form button {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -887,7 +887,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .ai-chat-form button:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .ai-chat-form button:disabled {
@@ -1023,8 +1023,8 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.application,
 .action-btn.record-video,
 .action-btn.portal {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
-  border-color: #218D8D;
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
+  border-color: #1F3D2E;
   color: white;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
@@ -1041,8 +1041,8 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.application:hover:not(:disabled),
 .action-btn.record-video:hover:not(:disabled),
 .action-btn.portal:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
-  border-color: #1a7070;
+  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
+  border-color: #2A4F3D;
   box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
 }
 
@@ -1053,15 +1053,15 @@ button.borrower-btn.add-borrower-btn:hover {
 
 /* Salesforce button - unified teal theme */
 .action-btn.salesforce {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
-  border-color: #218D8D;
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
+  border-color: #1F3D2E;
   color: white;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
 
 .action-btn.salesforce:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
-  border-color: #1a7070;
+  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
+  border-color: #2A4F3D;
   box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
 }
 
@@ -1078,15 +1078,15 @@ button.borrower-btn.add-borrower-btn:hover {
 
 /* Salesforce Pull button - unified teal theme */
 .action-btn.salesforce-pull {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
-  border-color: #218D8D;
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
+  border-color: #1F3D2E;
   color: white;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
 
 .action-btn.salesforce-pull:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
-  border-color: #1a7070;
+  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
+  border-color: #2A4F3D;
   box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
 }
 
@@ -1269,7 +1269,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .stats-overview .stat-card.highlight {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
 }
@@ -1299,7 +1299,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .opportunity-badge {
   display: inline-block;
   padding: 6px 12px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border-radius: 6px;
   font-size: 14px;
@@ -1309,14 +1309,14 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .opportunity-alert {
   background: #f0fdf4;
-  border: 2px solid #10b981;
+  border: 2px solid #2D7A52;
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 24px;
 }
 
 .opportunity-alert h3 {
-  color: #059669;
+  color: #2D7A52;
   margin: 0 0 8px 0;
   font-size: 16px;
 }
@@ -1392,7 +1392,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .tab-content .form-group select:focus,
 .tab-content .form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.1);
 }
 
@@ -1472,7 +1472,7 @@ button.borrower-btn.add-borrower-btn:hover {
   justify-content: space-between;
   align-items: center;
   background: white;
-  border: 2px solid #10b981;
+  border: 2px solid #2D7A52;
   border-radius: 8px;
   padding: 16px;
 }
@@ -1550,12 +1550,12 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .member-select:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .member-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -1588,7 +1588,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .btn-add-condition {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   padding: 10px 20px;
@@ -1600,7 +1600,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .btn-add-condition:hover {
-  background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
 }
@@ -1688,11 +1688,11 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .condition-item.status-received {
-  border-left-color: #8b5cf6;
+  border-left-color: #B8924A;
 }
 
 .condition-item.status-approved {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -1709,7 +1709,7 @@ button.borrower-btn.add-borrower-btn:hover {
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #10b981;
+  accent-color: #2D7A52;
 }
 
 .condition-info {
@@ -1781,7 +1781,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .condition-priority.priority-optional {
-  background: #e0e7ff;
+  background: #F5EDD9;
   color: #3730a3;
 }
 
@@ -1810,12 +1810,12 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .status-select.status-received {
-  border-color: #8b5cf6;
-  color: #6d28d9;
+  border-color: #B8924A;
+  color: #8A6D30;
 }
 
 .status-select.status-approved {
-  border-color: #10b981;
+  border-color: #2D7A52;
   color: #065f46;
   background: #ecfdf5;
 }
@@ -1919,7 +1919,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .toggle-label input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 /* Important Dates Tab Styles */
@@ -2053,12 +2053,12 @@ button.borrower-btn.add-borrower-btn:hover {
 .sla-section-header {
   font-size: 13px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 10px;
   padding-bottom: 4px;
-  border-bottom: 2px solid #218D8D;
+  border-bottom: 2px solid #1F3D2E;
   display: inline-block;
 }
 
@@ -2106,7 +2106,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .date-field input[type="date"]:focus,
 .date-field input[type="datetime-local"]:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.1);
 }
 
@@ -2142,10 +2142,10 @@ button.borrower-btn.add-borrower-btn:hover {
 .dates-section-title {
   font-size: 9px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   margin-bottom: 3px;
   padding-bottom: 2px;
-  border-bottom: 1px solid #218D8D;
+  border-bottom: 1px solid #1F3D2E;
   display: inline-block;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2198,7 +2198,7 @@ button.borrower-btn.add-borrower-btn:hover {
   color: #1a1a1a;
   margin: 0 0 16px 0;
   padding-bottom: 12px;
-  border-bottom: 2px solid #218D8D;
+  border-bottom: 2px solid #1F3D2E;
 }
 
 
@@ -2206,7 +2206,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .btn-voicemail-drop,
 .btn-voicemail {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -2296,12 +2296,12 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .email-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
 }
 
 .email-card.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.15);
 }
@@ -2395,7 +2395,7 @@ button.borrower-btn.add-borrower-btn:hover {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #218D8D;
+  color: #1F3D2E;
   background: #f0fdfa;
   padding: 6px 12px;
   border-radius: 6px;
@@ -2442,7 +2442,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .meta-value.status-sent {
-  color: #059669;
+  color: #2D7A52;
   font-weight: 500;
 }
 
@@ -2496,13 +2496,13 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .btn-reply {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
 }
 
 .btn-reply:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-forward {
@@ -2539,7 +2539,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 /* Tab Badge */
 .tab-badge {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   font-size: 11px;
   font-weight: 600;
@@ -2609,9 +2609,9 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .archive-sub-tab {
   padding: 10px 20px;
-  border: 1px solid #218D8D;
+  border: 1px solid #1F3D2E;
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
@@ -2624,7 +2624,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .archive-sub-tab.active {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -2665,7 +2665,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .archive-item:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
 }
 
@@ -2742,7 +2742,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .sms-item.outbound .sms-bubble {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-bottom-right-radius: 4px;
 }
@@ -2863,7 +2863,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .compose-btn {
   padding: 12px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -2874,7 +2874,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .compose-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .loading-state {
@@ -2924,7 +2924,7 @@ button.borrower-btn.add-borrower-btn:hover {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #218D8D;
+  background: #1F3D2E;
   border: 3px solid #e0f2f2;
   z-index: 1;
 }
@@ -2965,13 +2965,13 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .arrow {
-  color: #218D8D;
+  color: #1F3D2E;
   font-weight: bold;
   font-size: 16px;
 }
 
 .to-stage {
-  color: #218D8D;
+  color: #1F3D2E;
   background: #e0f2f2;
   padding: 4px 10px;
   border-radius: 4px;
@@ -2998,7 +2998,7 @@ button.borrower-btn.add-borrower-btn:hover {
   background: #f9f9f9;
   padding: 8px 12px;
   border-radius: 4px;
-  border-left: 3px solid #218D8D;
+  border-left: 3px solid #1F3D2E;
 }
 
 /* Application Link Modal */
@@ -3035,7 +3035,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .copy-link-btn {
   padding: 10px 16px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -3047,7 +3047,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .copy-link-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .application-actions {
@@ -3084,7 +3084,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .share-btn:hover:not(:disabled) {
   background: #f3f4f6;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .share-btn:disabled {
@@ -3093,9 +3093,9 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .share-btn.email-share {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .share-btn.sms-share {
-  color: #218D8D;
+  color: #1F3D2E;
 }

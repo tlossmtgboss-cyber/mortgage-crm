@@ -36,7 +36,7 @@ const CALCULATOR_CONFIG = {
         <path d="M6 20v-6" />
       </svg>
     ),
-    color: '#8b5cf6',
+    color: '#B8924A',
   },
   ltv: {
     label: 'Loan-to-Value Ratio',
@@ -47,7 +47,7 @@ const CALCULATOR_CONFIG = {
         <path d="M12 8h.01" />
       </svg>
     ),
-    color: '#10b981',
+    color: '#2D7A52',
   },
   pmi: {
     label: 'Mortgage Insurance',
@@ -87,7 +87,7 @@ const CALCULATOR_CONFIG = {
         <line x1="6" y1="20" x2="6" y2="16" />
       </svg>
     ),
-    color: '#6366f1',
+    color: '#B8924A',
   },
 };
 

@@ -33,11 +33,11 @@
 
 .toggle-btn:hover {
   background: rgba(33, 127, 141, 0.05);
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .toggle-btn.active {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -54,7 +54,7 @@
   width: 50px;
   height: 50px;
   border: 4px solid #e0e0e0;
-  border-top-color: #217F8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -121,13 +121,13 @@
 }
 
 .voice-card:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   box-shadow: 0 6px 20px rgba(33, 127, 141, 0.15);
   transform: translateY(-2px);
 }
 
 .voice-card.selected {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: rgba(33, 127, 141, 0.02);
   box-shadow: 0 6px 20px rgba(33, 127, 141, 0.2);
 }
@@ -168,7 +168,7 @@
 }
 
 .selected-badge {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   padding: 3px 10px;
   border-radius: 10px;
@@ -180,7 +180,7 @@
 .play-btn {
   width: 36px;
   height: 36px;
-  border: 2px solid #217F8D;
+  border: 2px solid #1F3D2E;
   background: white;
   border-radius: 50%;
   font-size: 14px;
@@ -189,11 +189,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .play-btn:hover:not(:disabled) {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   transform: scale(1.1);
 }
@@ -272,7 +272,7 @@
 
 .btn-save {
   padding: 14px 40px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -351,7 +351,7 @@
 
 .selected-voice-badge {
   background: rgba(33, 127, 141, 0.1);
-  color: #217F8D;
+  color: #1F3D2E;
   padding: 6px 14px;
   border-radius: 16px;
   font-size: 13px;
@@ -414,7 +414,7 @@
 }
 
 .message.user {
-  background: #e0e7ff;
+  background: #F5EDD9;
   align-self: flex-end;
   margin-left: 20%;
 }

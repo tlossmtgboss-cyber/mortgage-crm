@@ -160,7 +160,7 @@
 }
 
 .metric-trend.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .metric-trend.neutral {
@@ -405,7 +405,7 @@
 }
 
 .comparison-value.target {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Participant Analytics Card (for recording view) */

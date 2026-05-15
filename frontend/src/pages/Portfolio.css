@@ -21,7 +21,7 @@
 }
 
 .portfolio-title {
-  color: #18a0a6;
+  color: #1F3D2E;
   font-size: 32px;
   font-weight: 600;
   margin: 0;
@@ -35,7 +35,7 @@
 
 .btn-totals {
   padding: 10px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -53,7 +53,7 @@
 
 .btn-add {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -63,7 +63,7 @@
 }
 
 .btn-add:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .portfolio-stats {
@@ -150,7 +150,7 @@
 }
 
 .mum-count-badge {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   padding: 4px 12px;
   border-radius: 12px;
@@ -171,7 +171,7 @@
   padding: 14px;
   background: #f8f9fa;
   border-radius: 8px;
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
   transition: all 0.2s;
 }
 
@@ -204,7 +204,7 @@
 
 .btn-mum-action {
   padding: 8px 18px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -216,7 +216,7 @@
 }
 
 .btn-mum-action:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
@@ -244,12 +244,12 @@
 }
 
 .portfolio-tabs button:hover {
-  color: #18a0a6;
+  color: #1F3D2E;
 }
 
 .portfolio-tabs button.active {
-  color: #18a0a6;
-  border-bottom-color: #18a0a6;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
   font-weight: 600;
 }
 
@@ -278,7 +278,7 @@
   background: #f5f5f5;
   font-weight: 600;
   color: #333;
-  border-bottom: 2px solid #18a0a6;
+  border-bottom: 2px solid #1F3D2E;
 }
 
 .loans-table td {
@@ -295,7 +295,7 @@
 
 .status-active {
   background: #d4f1f4;
-  color: #18a0a6;
+  color: #1F3D2E;
 }
 
 .status-closed {
@@ -337,9 +337,9 @@
 }
 
 .filter-bar button.active {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .filter-bar button:hover:not(.active) {
@@ -433,7 +433,7 @@
 
 .btn-contact {
   padding: 6px 12px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 4px;
@@ -443,7 +443,7 @@
 }
 
 .btn-contact:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-delete-small {
@@ -564,7 +564,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .form-actions {
@@ -589,12 +589,12 @@
 }
 
 .form-actions .btn-primary {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
 .form-actions .btn-primary:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* MUM Dashboard Styles */
@@ -608,12 +608,12 @@
   text-align: center;
   margin: 32px 0 24px 0;
   padding: 16px 0;
-  border-bottom: 2px solid #18a0a6;
+  border-bottom: 2px solid #1F3D2E;
 }
 
 .dashboard-section-header h2 {
   margin: 0 0 4px 0;
-  color: #18a0a6;
+  color: #1F3D2E;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -728,14 +728,14 @@
 
 /* Opportunity Cards */
 .opportunity-card {
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
   background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);
 }
 
 .opportunity-highlight {
   margin-top: 8px;
   padding: 4px 12px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 12px;
   font-size: 11px;
@@ -745,7 +745,7 @@
 
 /* Segment Cards */
 .segment-card {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -765,7 +765,7 @@
   border-radius: 8px;
   padding: 24px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
 }
 
 .ai-suggestion-item {
@@ -782,7 +782,7 @@
 }
 
 .ai-bullet {
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 20px;
   font-weight: bold;
   line-height: 1.5;
@@ -795,7 +795,7 @@
 }
 
 .ai-suggestion-text strong {
-  color: #18a0a6;
+  color: #1F3D2E;
   font-weight: 700;
 }
 

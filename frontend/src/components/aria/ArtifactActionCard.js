@@ -5,16 +5,16 @@ const TYPE_COLORS = {
   scribe_recap: '#3b82f6',
   action_item: '#f59e0b',
   task: '#f59e0b',
-  document_request: '#8b5cf6',
+  document_request: '#B8924A',
   risk_flag: '#ef4444',
   uw_note: '#ef4444',
-  intake_field: '#10b981',
+  intake_field: '#2D7A52',
   scheduled_appointment: '#06b6d4',
   follow_up_call: '#06b6d4',
   calendar_action: '#06b6d4',
   follow_up_draft: '#ec4899',
   pricing_scenario: '#f59e0b',
-  calculator_result: '#10b981',
+  calculator_result: '#2D7A52',
   borrower_story_note: '#f59e0b',
   content_idea: '#ec4899',
 };
@@ -40,8 +40,8 @@ const TYPE_ICONS = {
 
 const STATUS_STYLES = {
   pending: { bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', text: 'Pending' },
-  approved: { bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', text: 'Approved' },
-  auto_approved: { bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', text: 'Auto' },
+  approved: { bg: 'rgba(16, 185, 129, 0.15)', color: '#2D7A52', text: 'Approved' },
+  auto_approved: { bg: 'rgba(16, 185, 129, 0.15)', color: '#2D7A52', text: 'Auto' },
   rejected: { bg: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', text: 'Rejected' },
   executed: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', text: 'Done' },
 };
@@ -151,7 +151,7 @@ const ArtifactActionCard = ({
           alignItems: 'center',
           justifyContent: swipeOffset > 0 ? 'flex-start' : 'flex-end',
           padding: '0 20px',
-          color: swipeAction === 'approve' ? '#10b981' : swipeAction === 'reject' ? '#ef4444' : 'transparent',
+          color: swipeAction === 'approve' ? '#2D7A52' : swipeAction === 'reject' ? '#ef4444' : 'transparent',
           fontWeight: '600',
           fontSize: '14px',
         }}>
@@ -303,7 +303,7 @@ const ArtifactActionCard = ({
                 borderRadius: '8px',
                 border: 'none',
                 background: 'rgba(16, 185, 129, 0.2)',
-                color: '#10b981',
+                color: '#2D7A52',
                 fontWeight: '600',
                 fontSize: '13px',
                 cursor: 'pointer',

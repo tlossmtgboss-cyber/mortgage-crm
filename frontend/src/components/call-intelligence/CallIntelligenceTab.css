@@ -226,7 +226,7 @@
 .call-badge.status-review_pending { background: #dbeafe; color: #1e40af; }
 .call-badge.status-completed { background: #f3f4f6; color: #374151; }
 
-.call-badge.mode-mobile_app { background: #e0e7ff; color: #3730a3; }
+.call-badge.mode-mobile_app { background: #F5EDD9; color: #3730a3; }
 .call-badge.mode-crm_web_call { background: #d1fae5; color: #065f46; }
 .call-badge.mode-ambient_mic { background: #fef3c7; color: #92400e; }
 .call-badge.mode-video_call { background: #fce7f3; color: #9d174d; }
@@ -360,7 +360,7 @@
 }
 
 .task-card.approved {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #2D7A52;
 }
 
 .task-card .task-header {
@@ -398,7 +398,7 @@
 }
 
 .task-card .approve-btn {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   padding: 6px 12px;
@@ -408,7 +408,7 @@
 }
 
 .task-card .approve-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Document Requests */
@@ -476,7 +476,7 @@
 .risk-flag.severity-critical { border-left: 3px solid #dc2626; }
 .risk-flag.severity-high { border-left: 3px solid #f59e0b; }
 .risk-flag.severity-medium { border-left: 3px solid #3b82f6; }
-.risk-flag.severity-low { border-left: 3px solid #10b981; }
+.risk-flag.severity-low { border-left: 3px solid #2D7A52; }
 
 .risk-flag .flag-header {
   display: flex;
@@ -502,7 +502,7 @@
 .flag-severity.critical { background: #fee2e2; color: #dc2626; }
 .flag-severity.high { background: #fef3c7; color: #f59e0b; }
 .flag-severity.medium { background: #dbeafe; color: #3b82f6; }
-.flag-severity.low { background: #dcfce7; color: #10b981; }
+.flag-severity.low { background: #dcfce7; color: #2D7A52; }
 
 .risk-flag .flag-content {
   font-size: 0.8rem;
@@ -1899,7 +1899,7 @@
 }
 
 .document-item.priority-low {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
 }
 
 .document-item .doc-header {
@@ -2323,7 +2323,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: linear-gradient(135deg, #fdf2f8, #ede9fe);
+  background: linear-gradient(135deg, #fdf2f8, #FAF3E5);
   border-radius: 12px;
   flex-wrap: wrap;
   gap: 16px;
@@ -2647,7 +2647,7 @@
 }
 
 .content-idea-card .type-badge.type-social_post {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 .content-idea-card .type-badge.type-video_script {
@@ -3139,7 +3139,7 @@
 
 .calendar-action-card .action-type-badge {
   padding: 4px 10px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border-radius: 4px;
   font-size: 0.7rem;

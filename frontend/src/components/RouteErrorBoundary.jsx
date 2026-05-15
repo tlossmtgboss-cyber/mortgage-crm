@@ -210,7 +210,7 @@ class RouteErrorBoundary extends React.Component {
                 type="button"
                 style={{
                   padding: '10px 24px',
-                  background: 'var(--color-primary, #218d8d)',
+                  background: 'var(--color-primary, #1F3D2E)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 'var(--radius-base, 8px)',

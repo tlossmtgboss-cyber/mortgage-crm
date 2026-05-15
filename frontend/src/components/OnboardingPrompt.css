@@ -1,5 +1,5 @@
 .onboarding-prompt {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   border-radius: 8px;
   padding: 14px 20px;
   margin: 12px auto;
@@ -62,7 +62,7 @@
 
 .btn-start-onboarding {
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   border: none;
   border-radius: 6px;
   padding: 8px 20px;

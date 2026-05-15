@@ -16,9 +16,9 @@ import ImageUploader from './ImageUploader';
 
 function ColorPicker({ value, onChange, label }) {
   const presetColors = [
-    '#217F8D', '#c9a227', '#1a1a1a', '#ffffff',
+    '#1F3D2E', '#c9a227', '#1a1a1a', '#ffffff',
     '#ef4444', '#f97316', '#eab308', '#22c55e',
-    '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280',
+    '#3b82f6', '#B8924A', '#ec4899', '#6b7280',
   ];
 
   return (
@@ -27,12 +27,12 @@ function ColorPicker({ value, onChange, label }) {
       <div className="carousel-color-input">
         <input
           type="color"
-          value={value || '#217F8D'}
+          value={value || '#1F3D2E'}
           onChange={(e) => onChange(e.target.value)}
         />
         <input
           type="text"
-          value={value || '#217F8D'}
+          value={value || '#1F3D2E'}
           onChange={(e) => onChange(e.target.value)}
           placeholder="#000000"
         />
@@ -57,7 +57,7 @@ function ColorPicker({ value, onChange, label }) {
 // =============================================================================
 
 function GradientEditor({ value, onChange }) {
-  const gradient = value || { angle: 135, colors: ['#667eea', '#764ba2'] };
+  const gradient = value || { angle: 135, colors: ['#1F3D2E', '#2D7A52'] };
 
   const updateGradient = (updates) => {
     onChange({ ...gradient, ...updates });
@@ -119,7 +119,7 @@ function SlideProperties() {
   const handleBackgroundTypeChange = (type) => {
     const updates = { background_type: type };
     if (type === 'gradient' && !selectedSlide.background_gradient) {
-      updates.background_gradient = { angle: 135, colors: ['#667eea', '#764ba2'] };
+      updates.background_gradient = { angle: 135, colors: ['#1F3D2E', '#2D7A52'] };
     }
     updateSlide(selectedSlide.id, updates);
   };

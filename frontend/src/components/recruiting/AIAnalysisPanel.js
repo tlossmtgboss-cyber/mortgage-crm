@@ -75,7 +75,7 @@ const AIAnalysisPanel = ({
   }, [analysis, onApplyScores, onRefresh]);
 
   const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.8) return '#10b981';
+    if (confidence >= 0.8) return '#2D7A52';
     if (confidence >= 0.6) return '#eab308';
     return '#f97316';
   };
@@ -91,7 +91,7 @@ const AIAnalysisPanel = ({
       case 'strong_hire':
         return { bg: '#dcfce7', color: '#166534', label: 'Strong Hire' };
       case 'hire':
-        return { bg: '#d1fae5', color: '#047857', label: 'Hire' };
+        return { bg: '#d1fae5', color: '#1F5A3A', label: 'Hire' };
       case 'maybe':
         return { bg: '#fef3c7', color: '#92400e', label: 'Maybe' };
       case 'no_hire':

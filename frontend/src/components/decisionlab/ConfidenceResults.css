@@ -17,7 +17,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e5e7eb;
-  border-top-color: #217F8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -141,7 +141,7 @@
 }
 
 .category-card.expanded {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: white;
 }
 
@@ -313,7 +313,7 @@
   gap: 6px;
   margin-top: 12px;
   padding: 8px 16px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -365,7 +365,7 @@
 }
 
 .primary-action {
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   border: none;
   color: white;
   box-shadow: 0 4px 12px rgba(33, 127, 141, 0.3);

@@ -51,13 +51,13 @@ const SPEED_DIAL_ACTIONS = [
     key: 'add-lead',
     label: 'Add Lead',
     path: '/leads?action=new',
-    color: '#10b981',
+    color: '#2D7A52',
   },
   {
     key: 'upload-doc',
     label: 'Upload Doc',
     path: '/smart-docs?action=upload',
-    color: '#6366f1',
+    color: '#B8924A',
   },
   {
     key: 'make-call',
@@ -75,7 +75,7 @@ const SPEED_DIAL_ACTIONS = [
     key: 'notifications',
     label: 'Notifications',
     path: '/aria/notifications',
-    color: '#8b5cf6',
+    color: '#B8924A',
   },
 ];
 
@@ -86,7 +86,7 @@ const SPEED_DIAL_ACTIONS = [
 function HomeIcon({ active }) {
   if (active) {
     return (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="#218D8D" stroke="none">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#1F3D2E" stroke="none">
         <path d="M12 2.1L1 12h3v9h6v-6h4v6h6v-9h3L12 2.1z" />
       </svg>
     );
@@ -102,7 +102,7 @@ function HomeIcon({ active }) {
 function PipelineIcon({ active }) {
   if (active) {
     return (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="#218D8D" stroke="none">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#1F3D2E" stroke="none">
         <path d="M3 4h18v2H3V4zm2 5h14v2H5V9zm3 5h8v2H8v-2zm2 5h4v2h-4v-2z" />
       </svg>
     );
@@ -148,7 +148,7 @@ function AriaSparkleIcon({ active }) {
 function ContactsIcon({ active }) {
   if (active) {
     return (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="#218D8D" stroke="none">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#1F3D2E" stroke="none">
         <circle cx="9" cy="7" r="4" />
         <path d="M17 21v-2c0-2.21-3.58-4-8-4s-8 1.79-8 4v2h16z" />
         <circle cx="19" cy="7" r="3" />
@@ -167,7 +167,7 @@ function ContactsIcon({ active }) {
 }
 
 function MoreIcon({ active }) {
-  const color = active ? '#218D8D' : '#6b7280';
+  const color = active ? '#1F3D2E' : '#6b7280';
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill={color} stroke="none">
       <rect x="3" y="3" width="7" height="7" rx="1.5" />

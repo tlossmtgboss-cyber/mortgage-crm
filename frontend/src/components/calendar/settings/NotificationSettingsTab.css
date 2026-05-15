@@ -3,7 +3,7 @@
  *
  * Notification grid, enhanced collapsible sections, event alerts,
  * digest settings, quiet hours enhanced, browser notifications.
- * Perennia brand colors (#218D8D).
+ * Perennia brand colors (#1F3D2E).
  */
 
 /* ============================================================================
@@ -33,7 +33,7 @@
 }
 
 .notif-column h3 i {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .toggle-row {
@@ -51,7 +51,7 @@
   height: 18px;
   margin: 0;
   cursor: pointer;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .event-notif-list {
@@ -71,7 +71,7 @@
 }
 
 .notif-enhanced-section h2 i {
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 20px;
 }
 
@@ -112,7 +112,7 @@
 
 .notif-section-header-left > i {
   font-size: 18px;
-  color: #218D8D;
+  color: #1F3D2E;
   width: 24px;
   text-align: center;
   flex-shrink: 0;
@@ -229,14 +229,14 @@
 }
 
 .event-alert-chip:hover {
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .event-alert-chip.active {
   background: #e6f5f5;
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
   font-weight: 500;
 }
 
@@ -302,7 +302,7 @@
 
 .digest-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -316,7 +316,7 @@
 
 .digest-time-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -438,7 +438,7 @@
 
 .quiet-hours-time-field input[type="time"]:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -451,7 +451,7 @@
   margin-top: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #818cf8;
+  color: #D4AD6A;
 }
 
 /* ============================================================================

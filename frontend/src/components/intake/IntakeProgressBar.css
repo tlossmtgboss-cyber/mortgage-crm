@@ -36,7 +36,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -44,7 +44,7 @@
 .progress-percentage {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   min-width: 40px;
   text-align: right;
 }

@@ -273,14 +273,14 @@ function VoicemailSettings() {
 
   const statusColor = (status) => {
     switch (status) {
-      case 'delivered': return '#10b981';
+      case 'delivered': return '#2D7A52';
       case 'calling': case 'pending': case 'queued': return '#f59e0b';
       case 'failed': case 'cancelled': return '#ef4444';
       case 'human_answered': return '#3b82f6';
-      case 'running': return '#10b981';
+      case 'running': return '#2D7A52';
       case 'paused': return '#f59e0b';
       case 'completed': return '#6b7280';
-      case 'draft': case 'scheduled': return '#8b5cf6';
+      case 'draft': case 'scheduled': return '#B8924A';
       default: return '#6b7280';
     }
   };
@@ -334,10 +334,10 @@ function VoicemailSettings() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
           {[
             { label: 'Total Sent', value: analytics.total_sent, color: '#111827' },
-            { label: 'Delivered', value: analytics.delivered, color: '#10b981' },
+            { label: 'Delivered', value: analytics.delivered, color: '#2D7A52' },
             { label: 'Failed', value: analytics.failed, color: '#ef4444' },
             { label: 'Callbacks', value: analytics.callbacks_received, color: '#3b82f6' },
-            { label: 'Delivery Rate', value: `${analytics.delivery_rate}%`, color: '#10b981' },
+            { label: 'Delivery Rate', value: `${analytics.delivery_rate}%`, color: '#2D7A52' },
             { label: 'Callback Rate', value: `${analytics.callback_rate}%`, color: '#3b82f6' },
           ].map((stat, i) => (
             <div key={i} style={{
@@ -482,7 +482,7 @@ function VoicemailSettings() {
                         {categoryLabels[t.category] || t.category}
                         {t.is_default && <span style={{ marginLeft: '8px', color: '#006B6B', fontWeight: '500' }}>Default</span>}
                         {t.delivery_method === 'ringless' && (
-                          <span style={{ marginLeft: '8px', color: '#8b5cf6', fontWeight: '500' }}>RVM</span>
+                          <span style={{ marginLeft: '8px', color: '#B8924A', fontWeight: '500' }}>RVM</span>
                         )}
                       </div>
                     </div>
@@ -671,7 +671,7 @@ function VoicemailSettings() {
                   {/* Stats */}
                   <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '13px', color: '#6b7280' }}>
                     <span>Sent: <strong style={{ color: '#111827' }}>{c.sent_count}</strong></span>
-                    <span>Delivered: <strong style={{ color: '#10b981' }}>{c.delivered_count}</strong></span>
+                    <span>Delivered: <strong style={{ color: '#2D7A52' }}>{c.delivered_count}</strong></span>
                     <span>Failed: <strong style={{ color: '#ef4444' }}>{c.failed_count}</strong></span>
                     <span>Callbacks: <strong style={{ color: '#3b82f6' }}>{c.callback_count}</strong></span>
                     {c.scheduled_at && (

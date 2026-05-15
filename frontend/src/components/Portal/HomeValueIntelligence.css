@@ -7,13 +7,13 @@
    ============================================================================= */
 
 .home-value-intelligence {
-  --primary-color: #10b981;
-  --primary-dark: #059669;
+  --primary-color: #2D7A52;
+  --primary-dark: #2D7A52;
   --secondary-color: #3b82f6;
-  --accent-color: #8b5cf6;
+  --accent-color: #B8924A;
   --warning-color: #f59e0b;
   --danger-color: #ef4444;
-  --success-color: #10b981;
+  --success-color: #2D7A52;
 
   --text-primary: #1f2937;
   --text-secondary: #6b7280;
@@ -45,7 +45,7 @@
    ============================================================================= */
 
 .hvi-header {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   padding: 24px;
   display: flex;
@@ -244,7 +244,7 @@
 }
 
 .stat-card.highlight {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -352,7 +352,7 @@
 }
 
 .breakdown-fill.equity {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
 }
 
 .breakdown-fill.loan {

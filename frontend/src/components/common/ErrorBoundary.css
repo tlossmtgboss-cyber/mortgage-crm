@@ -97,7 +97,7 @@
 }
 
 .eb-btn-primary {
-  background: #218d8d;
+  background: #1F3D2E;
   color: #fff;
 }
 
@@ -147,7 +147,7 @@
 .ceb-icon {
   width: 56px;
   height: 56px;
-  color: #218d8d;
+  color: #1F3D2E;
   margin-bottom: 16px;
 }
 
@@ -202,7 +202,7 @@
 .web-retry {
   background: none;
   border: none;
-  color: #218d8d;
+  color: #1F3D2E;
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;

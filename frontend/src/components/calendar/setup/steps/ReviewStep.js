@@ -414,7 +414,7 @@ export default function ReviewStep({
                   '--delay': `${Math.random() * 0.6}s`,
                   '--drift': `${(Math.random() - 0.5) * 200}px`,
                   '--fall': `${600 + Math.random() * 400}px`,
-                  '--color': ['#218D8D', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'][i % 6],
+                  '--color': ['#1F3D2E', '#3b82f6', '#2D7A52', '#f59e0b', '#ec4899', '#B8924A'][i % 6],
                 }}
               />
             ))}
@@ -605,7 +605,7 @@ export default function ReviewStep({
                   <div key={type.id || idx} className="rvs-type-item">
                     <span
                       className="rvs-type-dot"
-                      style={{ backgroundColor: type.color || '#218D8D' }}
+                      style={{ backgroundColor: type.color || '#1F3D2E' }}
                       aria-hidden="true"
                     />
                     <span className="rvs-type-name">{type.type_name}</span>
@@ -630,7 +630,7 @@ export default function ReviewStep({
             <div className="rvs-booking-preview-mini">
               <div
                 className="rvs-booking-preview-bar"
-                style={{ backgroundColor: branding.primary_color || '#218D8D' }}
+                style={{ backgroundColor: branding.primary_color || '#1F3D2E' }}
               >
                 {branding.logo_url && (
                   <img

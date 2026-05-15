@@ -59,16 +59,16 @@ export default function ExportModal({ open, onClose }) {
         let backgroundStyle = '';
         if (slide.background_type === 'gradient' && slide.background_gradient) {
           const angle = parseInt(slide.background_gradient.angle, 10) || 135;
-          const colors = (slide.background_gradient.colors || ['#667eea', '#764ba2'])
+          const colors = (slide.background_gradient.colors || ['#1F3D2E', '#2D7A52'])
             .map(c => sanitizeCSSValue(c));
           backgroundStyle = `background: linear-gradient(${angle}deg, ${colors.join(', ')});`;
         } else if (slide.background_type === 'image' && slide.background_image_url) {
           const safeUrl = sanitizeCSSUrl(slide.background_image_url);
           backgroundStyle = safeUrl
             ? `background-image: url(${safeUrl}); background-size: cover; background-position: center;`
-            : `background-color: #217F8D;`;
+            : `background-color: #1F3D2E;`;
         } else {
-          backgroundStyle = `background-color: ${sanitizeCSSValue(slide.background_color) || '#217F8D'};`;
+          backgroundStyle = `background-color: ${sanitizeCSSValue(slide.background_color) || '#1F3D2E'};`;
         }
 
         // Sanitize text color

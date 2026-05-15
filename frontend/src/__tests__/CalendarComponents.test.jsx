@@ -103,7 +103,7 @@ describe('calendarUtils', () => {
     });
 
     it('returns green for PHONE', () => {
-      expect(getMeetingModeColor('PHONE')).toBe('#059669');
+      expect(getMeetingModeColor('PHONE')).toBe('#2D7A52');
     });
 
     it('returns red for IN_PERSON', () => {

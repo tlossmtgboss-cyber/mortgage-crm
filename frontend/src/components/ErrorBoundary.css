@@ -110,7 +110,7 @@
 }
 
 .eb-fullpage-btn-primary {
-  background: var(--color-primary, #218d8d);
+  background: var(--color-primary, #1F3D2E);
   color: #fff;
 }
 
@@ -132,7 +132,7 @@
 .eb-fullpage-home-link {
   display: inline-block;
   font-size: var(--font-sm, 13px);
-  color: var(--color-primary, #218d8d);
+  color: var(--color-primary, #1F3D2E);
   text-decoration: none;
   font-weight: var(--weight-medium, 500);
 }

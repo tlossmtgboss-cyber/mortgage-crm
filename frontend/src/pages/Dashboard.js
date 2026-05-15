@@ -1130,7 +1130,7 @@ function Dashboard() {
               </div>
             </div>
             <div className="it-ticket-metric" onClick={() => navigate('/support')}>
-              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
+              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #B8924A, #8A6D30)' }}>
                 <span>📅</span>
               </div>
               <div className="metric-content">
@@ -1139,7 +1139,7 @@ function Dashboard() {
               </div>
             </div>
             <div className="it-ticket-metric" onClick={() => navigate('/support?status=open')}>
-              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+              <div className="metric-icon" style={{ background: 'linear-gradient(135deg, #2D7A52, #2D7A52)' }}>
                 <span>🎫</span>
               </div>
               <div className="metric-content">
@@ -1177,7 +1177,7 @@ function Dashboard() {
       {/* Role Preview Banner */}
       {isRolePreview && rolePreview && (
         <div style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: 'linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%)',
           color: 'white',
           padding: '12px 20px',
           display: 'flex',
@@ -1200,7 +1200,7 @@ function Dashboard() {
             onClick={exitRolePreview}
             style={{
               background: 'white',
-              color: '#667eea',
+              color: '#1F3D2E',
               border: 'none',
               padding: '8px 16px',
               borderRadius: '6px',

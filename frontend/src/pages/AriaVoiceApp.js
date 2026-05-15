@@ -719,16 +719,16 @@ const AriaVoiceApp = () => {
 
 // Action Card Component
 const ACTION_CONFIG = {
-  send_sms:              { icon: '\u{1F4AC}', label: 'Text Message Sent', color: '#10b981' },
+  send_sms:              { icon: '\u{1F4AC}', label: 'Text Message Sent', color: '#2D7A52' },
   send_email:            { icon: '\u{1F4E7}', label: 'Email Sent',        color: '#3b82f6' },
   create_task:           { icon: '\u{1F4CB}', label: 'Task Created',      color: '#f59e0b' },
-  complete_task:         { icon: '\u2713',     label: 'Task Completed',    color: '#10b981' },
-  schedule_appointment:  { icon: '\u{1F4C5}', label: 'Appointment Set',   color: '#8b5cf6' },
+  complete_task:         { icon: '\u2713',     label: 'Task Completed',    color: '#2D7A52' },
+  schedule_appointment:  { icon: '\u{1F4C5}', label: 'Appointment Set',   color: '#B8924A' },
   send_preapproval:      { icon: '\u{1F4C4}', label: 'Pre-Approval Sent', color: '#06b6d4' },
-  start_scheduling_workflow: { icon: '\u{1F4C5}', label: 'Scheduling Started', color: '#8b5cf6' },
+  start_scheduling_workflow: { icon: '\u{1F4C5}', label: 'Scheduling Started', color: '#B8924A' },
   start_call_recording:    { icon: '\u{1F9E0}', label: 'Recording Started', color: '#ef4444' },
   stop_call_recording:     { icon: '\u{1F9E0}', label: 'Recording Stopped', color: '#f59e0b' },
-  approve_artifact:        { icon: '\u2705', label: 'Artifact Approved', color: '#10b981' },
+  approve_artifact:        { icon: '\u2705', label: 'Artifact Approved', color: '#2D7A52' },
   execute_artifacts:       { icon: '\u26A1', label: 'Actions Executed',  color: '#3b82f6' },
 };
 
@@ -746,7 +746,7 @@ const ActionCard = ({ msg }) => {
       </div>
       <span className="aria-action-status">
         {msg.status === 'pending' && <span className="aria-action-spinner" aria-label="Loading" />}
-        {msg.status === 'success' && <span style={{ color: '#10b981' }}>Done</span>}
+        {msg.status === 'success' && <span style={{ color: '#2D7A52' }}>Done</span>}
         {msg.status === 'error' && <span style={{ color: '#ef4444' }}>Failed</span>}
       </span>
     </div>

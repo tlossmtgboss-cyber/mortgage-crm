@@ -229,7 +229,7 @@
 }
 
 .mapping-check {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
   font-size: 16px;
 }
@@ -500,7 +500,7 @@
 .success-icon.large {
   width: 80px;
   height: 80px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border-radius: 50%;
   display: flex;

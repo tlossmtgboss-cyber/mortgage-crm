@@ -251,8 +251,8 @@
 }
 
 .section-count {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
   padding: 2px 8px;
   border-radius: 10px;
   font-size: 12px;
@@ -368,7 +368,7 @@
 }
 
 .comparison-table tr.different .extracted-value {
-  color: #059669;
+  color: #2D7A52;
 }
 
 /* Footer */

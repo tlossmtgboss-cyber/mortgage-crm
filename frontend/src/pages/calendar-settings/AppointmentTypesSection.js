@@ -8,14 +8,14 @@ import { calendarSettingsAPI } from '../../services/api.js';
 import { toast } from '../../utils/toast';
 import AIGenerateButton from '../../components/common/AIGenerateButton.js';
 
-const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+const DEFAULT_COLORS = ['#1F3D2E', '#3b82f6', '#B8924A', '#ec4899', '#f59e0b', '#2D7A52', '#ef4444', '#B8924A'];
 
 function EditTypeForm({ type, onSave, onCancel }) {
   const [form, setForm] = useState({
     type_name: type.type_name || '',
     description: type.description || '',
     duration_minutes: type.duration_minutes || 30,
-    color: type.color || '#218D8D',
+    color: type.color || '#1F3D2E',
     is_public: type.is_public !== false,
   });
 
@@ -108,7 +108,7 @@ export default function AppointmentTypesSection({
   const [editingType, setEditingType] = useState(null);
   const [showNewTypeForm, setShowNewTypeForm] = useState(false);
   const [newType, setNewType] = useState({
-    type_name: '', description: '', duration_minutes: 30, color: '#218D8D', icon: 'fa-calendar', is_public: true,
+    type_name: '', description: '', duration_minutes: 30, color: '#1F3D2E', icon: 'fa-calendar', is_public: true,
   });
 
   const handleCreateType = async () => {
@@ -116,7 +116,7 @@ export default function AppointmentTypesSection({
       await calendarSettingsAPI.createAppointmentType(newType);
       toast.success('Appointment type created');
       setShowNewTypeForm(false);
-      setNewType({ type_name: '', description: '', duration_minutes: 30, color: '#218D8D', icon: 'fa-calendar', is_public: true });
+      setNewType({ type_name: '', description: '', duration_minutes: 30, color: '#1F3D2E', icon: 'fa-calendar', is_public: true });
       loadTabData('appointment-types');
     } catch (err) {
       toast.error('Failed to create appointment type');
@@ -265,7 +265,7 @@ export default function AppointmentTypesSection({
         )}
         {appointmentTypes.map((type, idx) => (
           <div key={type.id} className="type-card">
-            <div className="type-color-bar" style={{ backgroundColor: type.color || '#218D8D' }} />
+            <div className="type-color-bar" style={{ backgroundColor: type.color || '#1F3D2E' }} />
             <div className="type-content">
               {editingType === type.id ? (
                 <EditTypeForm

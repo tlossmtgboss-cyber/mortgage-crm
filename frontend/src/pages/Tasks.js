@@ -17,11 +17,11 @@ const API_BASE = process.env.REACT_APP_API_URL || '';
 
 // Lead status options — values match backend LeadStage enum (Title Case)
 const LEAD_STAGES = [
-  { value: 'New', label: 'New', color: '#6366f1' },
-  { value: 'Attempted Contact', label: 'Attempted Contact', color: '#8b5cf6' },
+  { value: 'New', label: 'New', color: '#B8924A' },
+  { value: 'Attempted Contact', label: 'Attempted Contact', color: '#B8924A' },
   { value: 'Prospect', label: 'Prospect', color: '#06b6d4' },
   { value: 'Pre-Qualified', label: 'Pre-Qualified', color: '#0ea5e9' },
-  { value: 'Pre-Approved', label: 'Pre-Approved', color: '#10b981' },
+  { value: 'Pre-Approved', label: 'Pre-Approved', color: '#2D7A52' },
   { value: 'Application', label: 'Application', color: '#f59e0b' },
   { value: 'Document Fulfillment', label: 'Document Fulfillment', color: '#f97316' },
   { value: 'Under Contract', label: 'Under Contract', color: '#22c55e' },

@@ -41,11 +41,11 @@ const CHANNELS = [
 ];
 
 const STATUS_COLORS = {
-  ACTIVE: '#10b981',
+  ACTIVE: '#2D7A52',
   PAUSED: '#f59e0b',
   COMPLETED: '#6b7280',
   CANCELLED: '#ef4444',
-  ESCALATED: '#8b5cf6',
+  ESCALATED: '#B8924A',
 };
 
 // ---------------------------------------------------------------------------

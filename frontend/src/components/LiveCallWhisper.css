@@ -49,7 +49,7 @@
 
 .connection-status.connected {
   background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .connection-status.connecting {
@@ -93,7 +93,7 @@
 }
 
 .ask-ai-btn {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #B8924A, #B8924A);
   color: white;
 }
 
@@ -137,7 +137,7 @@
 
 .ask-ai-input input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
@@ -145,7 +145,7 @@
   padding: 10px 20px;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #B8924A, #B8924A);
   color: white;
   font-weight: 500;
   cursor: pointer;
@@ -190,13 +190,13 @@
   font-size: 14px;
 }
 
-.context-item .value.stage-opening { color: #6366f1; }
-.context-item .value.stage-discovery { color: #8b5cf6; }
+.context-item .value.stage-opening { color: #B8924A; }
+.context-item .value.stage-discovery { color: #B8924A; }
 .context-item .value.stage-presentation { color: #06b6d4; }
 .context-item .value.stage-objection { color: #f59e0b; }
-.context-item .value.stage-closing { color: #10b981; }
+.context-item .value.stage-closing { color: #2D7A52; }
 
-.context-item .value.sentiment-positive { color: #10b981; }
+.context-item .value.sentiment-positive { color: #2D7A52; }
 .context-item .value.sentiment-neutral { color: #6b7280; }
 .context-item .value.sentiment-negative { color: #f59e0b; }
 .context-item .value.sentiment-frustrated { color: #ef4444; }
@@ -229,7 +229,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #6366f1;
+  background: #B8924A;
   animation: pulse-animation 1.5s ease-in-out infinite;
 }
 
@@ -354,7 +354,7 @@
 
 .use-btn {
   background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .use-btn:hover {
@@ -468,7 +468,7 @@
   padding: 12px 24px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #B8924A, #B8924A);
   color: white;
   font-size: 16px;
   font-weight: 600;

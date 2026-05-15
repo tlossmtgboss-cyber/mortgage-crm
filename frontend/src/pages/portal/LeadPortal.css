@@ -85,7 +85,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  color: #218D8D;
+  color: #1F3D2E;
   text-transform: uppercase;
   margin-bottom: 4px;
 }
@@ -145,8 +145,8 @@
 }
 
 .lead-portal .stepper-step.complete .step-circle {
-  background: #218D8D;
-  border-color: #218D8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: #fff;
 }
 
@@ -156,8 +156,8 @@
 }
 
 .lead-portal .stepper-step.current .step-circle {
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
   background: #fff;
   box-shadow: 0 0 0 4px rgba(33, 141, 141, 0.15);
 }
@@ -183,7 +183,7 @@
 }
 
 .lead-portal .stepper-line.complete {
-  background: #218D8D;
+  background: #1F3D2E;
 }
 
 
@@ -293,12 +293,12 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
 }
 
 .lead-portal .btn-schedule:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .lead-portal .btn-schedule svg {
@@ -316,13 +316,13 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
   margin-top: 12px;
 }
 
 .lead-portal .btn-schedule-sm:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 
@@ -427,7 +427,7 @@
 .lead-portal .view-link {
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -436,7 +436,7 @@
 }
 
 .lead-portal .view-link:hover {
-  color: #1a7070;
+  color: #2A4F3D;
   text-decoration: underline;
 }
 
@@ -580,7 +580,7 @@
 
 .lead-portal .contact-action-link {
   font-size: 13px;
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
 }
 

@@ -248,7 +248,7 @@ const CIStatusStrip = ({
         }
         .ci-event__value {
           font-size: 11px;
-          color: #10b981;
+          color: #2D7A52;
           margin-top: 1px;
         }
         .ci-event__time {
@@ -257,7 +257,7 @@ const CIStatusStrip = ({
           flex-shrink: 0;
           margin-top: 2px;
         }
-        .ci-event--complete .ci-event__msg { color: #10b981; }
+        .ci-event--complete .ci-event__msg { color: #2D7A52; }
         .ci-event--error .ci-event__msg { color: #f87171; }
         .ci-panel__empty {
           padding: 24px 14px;
@@ -271,8 +271,8 @@ const CIStatusStrip = ({
           animation: ci-rec-blink 0.5s ease-in-out infinite;
         }
         .ci-strip--completed { border-bottom-color: rgba(16,185,129,0.3); }
-        .ci-strip--completed .ci-strip__rec-dot { background: #10b981; animation: none; }
-        .ci-strip--completed .ci-strip__timer { color: #10b981; }
+        .ci-strip--completed .ci-strip__rec-dot { background: #2D7A52; animation: none; }
+        .ci-strip--completed .ci-strip__timer { color: #2D7A52; }
       `}</style>
 
       <div

@@ -159,7 +159,7 @@
 
 .message-input-container textarea:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -199,7 +199,7 @@
 
 .send-btn {
   padding: 10px 24px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -210,7 +210,7 @@
 }
 
 .send-btn:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Uploading Step */
@@ -248,7 +248,7 @@
 
 .progress-fill {
   height: 100%;
-  background: #6366f1;
+  background: #B8924A;
   border-radius: 3px;
   transition: width 0.3s ease;
 }
@@ -274,7 +274,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   font-size: 28px;
   font-weight: bold;
@@ -304,7 +304,7 @@
 
 .done-btn {
   padding: 10px 32px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -315,7 +315,7 @@
 }
 
 .done-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Error Step */
@@ -363,7 +363,7 @@
 
 .error-actions .retry-btn {
   padding: 10px 24px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -374,7 +374,7 @@
 }
 
 .error-actions .retry-btn:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .error-actions .cancel-btn {

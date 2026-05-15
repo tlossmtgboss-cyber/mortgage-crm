@@ -33,7 +33,7 @@ const formatCurrency = (amount) => {
 // Risk level badge component
 const RiskBadge = ({ level }) => {
   const colors = {
-    low: '#10b981',
+    low: '#2D7A52',
     medium: '#f59e0b',
     high: '#ef4444',
     critical: '#dc2626'
@@ -67,7 +67,7 @@ const TrendIndicator = ({ trend }) => {
 // Probability bar component
 const ProbabilityBar = ({ value, showLabel = true }) => {
   const getColor = (val) => {
-    if (val >= 80) return '#10b981';
+    if (val >= 80) return '#2D7A52';
     if (val >= 60) return '#3b82f6';
     if (val >= 40) return '#f59e0b';
     return '#ef4444';
@@ -537,7 +537,7 @@ export const PipelineProbabilityPage = () => {
           <div className="pp-detail-content">
             <div className="pp-detail-score">
               <div className="score-circle" style={{
-                borderColor: selectedLoan.close_probability >= 70 ? '#10b981' :
+                borderColor: selectedLoan.close_probability >= 70 ? '#2D7A52' :
                              selectedLoan.close_probability >= 50 ? '#f59e0b' : '#ef4444'
               }}>
                 <span className="score-value">{selectedLoan.close_probability}%</span>

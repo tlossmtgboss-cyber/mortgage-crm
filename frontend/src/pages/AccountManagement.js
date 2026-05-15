@@ -963,7 +963,7 @@ const InviteSubscriberModal = ({ isOpen, onClose, onSubmit, loading }) => {
             />
             {isPromoCodeValid && (
               <div className="promo-valid" style={{
-                color: '#10b981',
+                color: '#2D7A52',
                 fontSize: '13px',
                 marginTop: '8px',
                 display: 'flex',

@@ -16,7 +16,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #18a0a6 0%, #136b6f 100%);
+  background: linear-gradient(90deg, #1F3D2E 0%, #162E22 100%);
   transition: width 0.5s ease;
 }
 
@@ -102,7 +102,7 @@
 .welcome-feature h3 {
   font-size: 18px;
   margin: 0 0 8px 0;
-  color: #18a0a6;
+  color: #1F3D2E;
 }
 
 .welcome-feature p {
@@ -144,7 +144,7 @@
 }
 
 .upload-label:hover {
-  border-color: #18a0a6;
+  border-color: #1F3D2E;
   background-color: #f0f9fa;
 }
 
@@ -174,7 +174,7 @@
   width: 40px;
   height: 40px;
   border: 4px solid #e5e7eb;
-  border-top-color: #18a0a6;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   margin: 0 auto 16px;
   animation: spin 1s linear infinite;
@@ -259,7 +259,7 @@
 .add-member-form input:focus,
 .add-member-form textarea:focus {
   outline: none;
-  border-color: #18a0a6;
+  border-color: #1F3D2E;
 }
 
 .add-member-form textarea {
@@ -270,7 +270,7 @@
 .btn-add-member {
   width: 100%;
   padding: 12px 24px;
-  background-color: #18a0a6;
+  background-color: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -281,7 +281,7 @@
 }
 
 .btn-add-member:hover {
-  background-color: #136b6f;
+  background-color: #162E22;
 }
 
 .team-members-list h3 {
@@ -301,7 +301,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #18a0a6 0%, #136b6f 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #162E22 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -320,7 +320,7 @@
 
 .member-role {
   font-size: 14px;
-  color: #18a0a6;
+  color: #1F3D2E;
   margin-bottom: 8px;
 }
 
@@ -366,7 +366,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background-color: #18a0a6;
+  background-color: #1F3D2E;
   animation: dotPulse 1.5s ease-in-out infinite;
 }
 
@@ -425,7 +425,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background-color: #18a0a6;
+  background-color: #1F3D2E;
   color: white;
   display: flex;
   align-items: center;
@@ -456,7 +456,7 @@
 
 .automated-badge {
   background-color: #d4f1f4;
-  color: #18a0a6;
+  color: #1F3D2E;
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 11px;
@@ -499,7 +499,7 @@
 .summary-item strong {
   display: block;
   font-size: 32px;
-  color: #18a0a6;
+  color: #1F3D2E;
   margin-bottom: 4px;
 }
 
@@ -538,7 +538,7 @@
   padding: 16px 48px;
   font-size: 18px;
   font-weight: 600;
-  background-color: #18a0a6;
+  background-color: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -547,7 +547,7 @@
 }
 
 .btn-primary-large:hover {
-  background-color: #136b6f;
+  background-color: #162E22;
   transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(24, 160, 166, 0.2);
 }
@@ -577,12 +577,12 @@
 }
 
 .btn-next {
-  background-color: #18a0a6;
+  background-color: #1F3D2E;
   color: white;
 }
 
 .btn-next:hover {
-  background-color: #136b6f;
+  background-color: #162E22;
 }
 
 .btn-back {

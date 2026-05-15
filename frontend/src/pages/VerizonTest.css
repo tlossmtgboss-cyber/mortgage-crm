@@ -60,7 +60,7 @@
 
 .config-field input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -129,7 +129,7 @@
 }
 
 .test-btn.call-btn:hover {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -144,7 +144,7 @@
 }
 
 .test-btn.all-btn {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   border: none;
   color: white;
 }
@@ -281,7 +281,7 @@
 
 .result-item.success {
   background: #f0fdf4;
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
 }
 
 .result-item.error {
@@ -360,7 +360,7 @@
   right: 20px;
   width: 40px;
   height: 40px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -393,7 +393,7 @@
 
 /* Telnyx Setup Section */
 .telnyx-setup-section {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   border-radius: 12px;
   padding: 40px;
   margin-bottom: 30px;
@@ -441,7 +441,7 @@
 .btn-setup-telnyx {
   padding: 15px 30px;
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   border: none;
   border-radius: 8px;
   font-size: 16px;

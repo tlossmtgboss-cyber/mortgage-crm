@@ -29,7 +29,7 @@
 }
 
 .header-left h1 i {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .header-left .subtitle {
@@ -74,7 +74,7 @@
 }
 
 .launch-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: white;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
@@ -120,7 +120,7 @@
 
 .stat-icon.blue { background: #dbeafe; color: #2563eb; }
 .stat-icon.green { background: #dcfce7; color: #16a34a; }
-.stat-icon.purple { background: #ede9fe; color: #7c3aed; }
+.stat-icon.purple { background: #FAF3E5; color: #B8924A; }
 .stat-icon.orange { background: #ffedd5; color: #ea580c; }
 .stat-icon.teal { background: #ccfbf1; color: #0d9488; }
 .stat-icon.pink { background: #fce7f3; color: #db2777; }
@@ -197,7 +197,7 @@
 }
 
 .card-header h2 i {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .card-content {
@@ -278,7 +278,7 @@
 
 .status-badge.active { background: #dcfce7; color: #16a34a; }
 .status-badge.paused { background: #fef3c7; color: #d97706; }
-.status-badge.completed { background: #e0e7ff; color: #4f46e5; }
+.status-badge.completed { background: #F5EDD9; color: #8A6D30; }
 .status-badge.launching { background: #dbeafe; color: #2563eb; }
 .status-badge.error { background: #fee2e2; color: #dc2626; }
 
@@ -318,10 +318,10 @@
   min-width: 60px;
 }
 
-.funnel-bar.leads { background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%); }
-.funnel-bar.meetings { background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%); }
+.funnel-bar.leads { background: linear-gradient(90deg, #B8924A 0%, #D4AD6A 100%); }
+.funnel-bar.meetings { background: linear-gradient(90deg, #B8924A 0%, #D4AD6A 100%); }
 .funnel-bar.applications { background: linear-gradient(90deg, #ec4899 0%, #f472b6 100%); }
-.funnel-bar.funded { background: linear-gradient(90deg, #10b981 0%, #34d399 100%); }
+.funnel-bar.funded { background: linear-gradient(90deg, #2D7A52 0%, #34d399 100%); }
 
 .funnel-count {
   font-size: 14px;
@@ -522,7 +522,7 @@
 }
 
 .modal-header h2 i {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .modal-close {
@@ -567,7 +567,7 @@
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -596,8 +596,8 @@
 }
 
 .blueprint-option.selected {
-  border-color: #6366f1;
-  background: #eef2ff;
+  border-color: #B8924A;
+  background: #FDF9F0;
 }
 
 .blueprint-option .name {
@@ -640,7 +640,7 @@
 }
 
 .btn-launch {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: white;
 }
 
@@ -669,7 +669,7 @@
 
 .loading-spinner i {
   font-size: 48px;
-  color: #6366f1;
+  color: #B8924A;
   margin-bottom: 16px;
 }
 
@@ -707,7 +707,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 8px;
@@ -717,7 +717,7 @@
 }
 
 .retry-btn:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Empty State */
@@ -739,7 +739,7 @@
 
 /* View All Link */
 .view-all-link {
-  color: #6366f1;
+  color: #B8924A;
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
@@ -749,7 +749,7 @@
 }
 
 .view-all-link:hover {
-  color: #4f46e5;
+  color: #8A6D30;
 }
 
 /* Responsive */

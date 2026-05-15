@@ -297,7 +297,7 @@ function PURLWidget({ leadId, loanId, contactData }) {
                   title="Copy Portal Link"
                 >
                   {copiedToken === latestToken.token ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2D7A52" strokeWidth="2">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   ) : (

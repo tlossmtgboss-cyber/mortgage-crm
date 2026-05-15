@@ -348,7 +348,7 @@
 
 .change.positive {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .change.negative {
@@ -431,7 +431,7 @@
 }
 
 .recommendation.positive h4 {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .recommendation.negative h4 {
@@ -520,7 +520,7 @@
 }
 
 .scenario-summary .positive {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .scenario-summary .negative {

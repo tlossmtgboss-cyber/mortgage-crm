@@ -1316,7 +1316,7 @@ function ProgressCircle({ percent }) {
       <svg viewBox="0 0 100 100">
         <circle cx="50" cy="50" r="45" fill="none" stroke="#e5e7eb" strokeWidth="10" />
         <circle
-          cx="50" cy="50" r="45" fill="none" stroke="#10b981" strokeWidth="10"
+          cx="50" cy="50" r="45" fill="none" stroke="#2D7A52" strokeWidth="10"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
@@ -1370,7 +1370,7 @@ function InsightCard({ insight }) {
 
 function DocumentCard({ document }) {
   const statusColors = {
-    approved: '#10b981',
+    approved: '#2D7A52',
     pending: '#f59e0b',
     rejected: '#ef4444',
     uploaded: '#3b82f6',

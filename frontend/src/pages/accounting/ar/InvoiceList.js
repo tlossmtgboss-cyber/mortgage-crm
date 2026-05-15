@@ -50,7 +50,7 @@ function InvoiceList() {
     { value: 'all', label: 'All Status' },
     { value: 'draft', label: 'Draft', color: '#6b7280' },
     { value: 'sent', label: 'Sent', color: '#3b82f6' },
-    { value: 'viewed', label: 'Viewed', color: '#8b5cf6' },
+    { value: 'viewed', label: 'Viewed', color: '#B8924A' },
     { value: 'partial', label: 'Partial', color: '#f97316' },
     { value: 'paid', label: 'Paid', color: '#22c55e' },
     { value: 'overdue', label: 'Overdue', color: '#ef4444' },

@@ -19,7 +19,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #f3f4f6;
-  border-top-color: #667eea;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -51,7 +51,7 @@
 }
 
 .header-left h1 svg {
-  color: #667eea;
+  color: #1F3D2E;
 }
 
 .header-subtitle {
@@ -68,7 +68,7 @@
 
 /* Buttons */
 .btn-primary {
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
   padding: 10px 20px;
   border: none;
@@ -167,11 +167,11 @@
 }
 
 .bg-blue {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
 }
 
 .bg-green {
-  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
 }
 
 .bg-yellow {
@@ -179,7 +179,7 @@
 }
 
 .bg-purple {
-  background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #D4AD6A 100%);
 }
 
 .metric-content {
@@ -264,7 +264,7 @@
 
 .tab.active {
   background: white;
-  color: #667eea;
+  color: #1F3D2E;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -380,7 +380,7 @@
 }
 
 .badge-post_close {
-  background: #e0e7ff;
+  background: #F5EDD9;
   color: #3730a3;
 }
 
@@ -399,7 +399,7 @@
 }
 
 .status-submitted {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-in_review {

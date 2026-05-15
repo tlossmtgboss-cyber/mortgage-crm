@@ -42,7 +42,7 @@ function ChartOfAccounts() {
   const accountTypes = [
     { value: 'asset', label: 'Asset', icon: 'fa-building', color: '#3b82f6' },
     { value: 'liability', label: 'Liability', icon: 'fa-credit-card', color: '#ef4444' },
-    { value: 'equity', label: 'Equity', icon: 'fa-landmark', color: '#8b5cf6' },
+    { value: 'equity', label: 'Equity', icon: 'fa-landmark', color: '#B8924A' },
     { value: 'revenue', label: 'Revenue', icon: 'fa-arrow-trend-up', color: '#22c55e' },
     { value: 'expense', label: 'Expense', icon: 'fa-arrow-trend-down', color: '#f97316' },
   ];

@@ -37,7 +37,7 @@
 }
 
 .logo-ai {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -55,7 +55,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #2D7A52 0%, #2D7A52 100%);
   transition: width 0.3s ease;
   border-radius: 3px;
 }
@@ -99,7 +99,7 @@
 }
 
 .step-indicator.active .step-number {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -115,7 +115,7 @@
 }
 
 .step-indicator.active .step-name {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Main Content */
@@ -219,7 +219,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
@@ -275,7 +275,7 @@
 }
 
 .checkbox-label a {
-  color: #10b981;
+  color: #2D7A52;
   text-decoration: none;
 }
 
@@ -285,7 +285,7 @@
 
 /* Buttons */
 .btn-primary {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   padding: 0.875rem 1.5rem;
@@ -335,7 +335,7 @@
 .btn-text {
   background: none;
   border: none;
-  color: #10b981;
+  color: #2D7A52;
   padding: 0.875rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -347,7 +347,7 @@
 }
 
 .btn-add {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   padding: 0.75rem 1rem;
@@ -383,7 +383,7 @@
 
 /* Plan Card (Step 1) */
 .plan-card {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   padding: 1.5rem;
   border-radius: 12px;
@@ -476,7 +476,7 @@
 }
 
 .logo-upload:hover {
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .upload-placeholder {
@@ -525,7 +525,7 @@
 .seats-used {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .seats-divider {
@@ -589,7 +589,7 @@
 
 .base-package {
   background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  border: 2px solid #10b981;
+  border: 2px solid #2D7A52;
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 2rem;
@@ -603,7 +603,7 @@
 }
 
 .base-package .package-badge {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
@@ -622,7 +622,7 @@
 .base-package .package-price {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .base-package .package-price span {
@@ -695,7 +695,7 @@
 }
 
 .module-card.selected {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #ecfdf5;
 }
 
@@ -715,8 +715,8 @@
 }
 
 .module-card.selected .module-checkbox {
-  background: #10b981;
-  border-color: #10b981;
+  background: #2D7A52;
+  border-color: #2D7A52;
 }
 
 .module-icon {
@@ -761,7 +761,7 @@
 .module-price {
   font-size: 1rem;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1060,7 +1060,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e2e8f0;
-  border-top-color: #10b981;
+  border-top-color: #2D7A52;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }

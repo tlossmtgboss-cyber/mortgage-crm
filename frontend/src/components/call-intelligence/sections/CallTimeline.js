@@ -71,7 +71,7 @@ const CallTimeline = ({ calls, selectedCall, onSelectCall }) => {
             )}
 
             {call.artifact_count > 0 && (
-              <span className="call-badge" style={{ background: '#e0e7ff', color: '#3730a3' }}>
+              <span className="call-badge" style={{ background: '#F5EDD9', color: '#3730a3' }}>
                 {call.artifact_count} items
               </span>
             )}

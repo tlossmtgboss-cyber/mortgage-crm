@@ -32,7 +32,7 @@ const CallIntelligenceButton = ({
       boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)',
     },
     complete: {
-      background: 'linear-gradient(135deg, #059669, #10b981)',
+      background: 'linear-gradient(135deg, #2D7A52, #2D7A52)',
       boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
     },
   };

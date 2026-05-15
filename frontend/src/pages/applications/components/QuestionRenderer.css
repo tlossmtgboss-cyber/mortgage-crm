@@ -79,7 +79,7 @@
   border: 1px solid rgba(33, 127, 141, 0.2);
   border-radius: var(--radius-lg, 12px);
   font-size: 15px;
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   line-height: 1.6;
 }
 
@@ -113,7 +113,7 @@
 
 .nav-btn-next {
   flex: 1;
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   border: 2px solid transparent;
   color: #ffffff;
 }
@@ -326,7 +326,7 @@
 }
 
 .econsent-btn.agree {
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   color: #ffffff;
   border-color: transparent;
 }
@@ -338,7 +338,7 @@
 
 .econsent-btn.agree.selected {
   background: linear-gradient(135deg, #145259 0%, #0f3f44 100%);
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.2);
 }
 
@@ -413,7 +413,7 @@
 }
 
 .credit-auth-btn.authorize {
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   color: #ffffff;
   border-color: transparent;
 }
@@ -425,7 +425,7 @@
 
 .credit-auth-btn.authorize.selected {
   background: linear-gradient(135deg, #145259 0%, #0f3f44 100%);
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.2);
 }
 

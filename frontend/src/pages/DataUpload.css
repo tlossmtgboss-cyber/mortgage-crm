@@ -109,7 +109,7 @@
 }
 
 .file-dropzone:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f9fafb;
 }
 
@@ -130,7 +130,7 @@
 
 .btn-select-file {
   display: inline-block;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   padding: 10px 24px;
   border-radius: 8px;
@@ -141,7 +141,7 @@
 }
 
 .btn-select-file:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .file-hint {
@@ -191,7 +191,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 24px;
@@ -300,13 +300,13 @@
 }
 
 .choice-btn:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f9fafb;
 }
 
 .choice-btn.selected {
-  border-color: #218D8D;
-  background: #eef2ff;
+  border-color: #1F3D2E;
+  background: #FDF9F0;
 }
 
 .choice-icon {
@@ -336,7 +336,7 @@
 
 .text-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .mapping-info {
@@ -417,7 +417,7 @@
 
 .mapping-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .step-actions {
@@ -439,12 +439,12 @@
 }
 
 .btn-primary {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .btn-primary:disabled {
@@ -470,7 +470,7 @@
 .success-icon {
   width: 64px;
   height: 64px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -508,7 +508,7 @@
 }
 
 .result-stat.success .stat-value {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .result-stat.error .stat-value {
@@ -678,7 +678,7 @@
 
 .mode-tab.active {
   background: white;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.15);
 }
 
@@ -701,7 +701,7 @@
 }
 
 .mode-tab.active .mode-title {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .mode-desc {
@@ -710,7 +710,7 @@
 }
 
 .mode-tab.active .mode-desc {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Responsive adjustments */

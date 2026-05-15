@@ -64,7 +64,7 @@
 }
 
 .roi-card.highlight {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -149,7 +149,7 @@
 
 .bar {
   width: 80%;
-  background: linear-gradient(180deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(180deg, #1F3D2E 0%, #2D7A52 100%);
   border-radius: 8px 8px 0 0;
   transition: all 0.3s;
   position: relative;
@@ -167,7 +167,7 @@
 }
 
 .bar.current-year {
-  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(180deg, #2D7A52 0%, #2D7A52 100%);
   box-shadow: 0 -4px 12px rgba(16, 185, 129, 0.3);
 }
 
@@ -267,7 +267,7 @@
   display: inline-block;
   margin-left: 8px;
   padding: 2px 8px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   font-size: 10px;
   font-weight: 700;
@@ -277,7 +277,7 @@
 }
 
 .positive {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 

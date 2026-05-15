@@ -370,7 +370,7 @@ export default function QuickAddLeadModal({ isOpen, onClose, onLeadAdded }) {
                 height="32"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#10b981"
+                stroke="#2D7A52"
                 strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"

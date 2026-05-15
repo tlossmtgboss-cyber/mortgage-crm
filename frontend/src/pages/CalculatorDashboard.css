@@ -15,16 +15,16 @@
   --phase-1-border: #bfdbfe;
 
   /* Phase 2: What Does This Cost? - Purple */
-  --phase-2-primary: #8b5cf6;
-  --phase-2-secondary: #7c3aed;
-  --phase-2-accent: #6d28d9;
-  --phase-2-bg: #f5f3ff;
-  --phase-2-border: #ddd6fe;
+  --phase-2-primary: #B8924A;
+  --phase-2-secondary: #B8924A;
+  --phase-2-accent: #8A6D30;
+  --phase-2-bg: #FDF9F0;
+  --phase-2-border: #F5EDD9;
 
   /* Phase 3: Smart Long-Term? - Green */
-  --phase-3-primary: #10b981;
-  --phase-3-secondary: #059669;
-  --phase-3-accent: #047857;
+  --phase-3-primary: #2D7A52;
+  --phase-3-secondary: #2D7A52;
+  --phase-3-accent: #1F5A3A;
   --phase-3-bg: #ecfdf5;
   --phase-3-border: #a7f3d0;
 }
@@ -41,7 +41,7 @@
 }
 
 .dashboard-header {
-  background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #1e40af 0%, #B8924A 100%);
   color: white;
   padding: 24px 32px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -510,7 +510,7 @@
   gap: 8px;
   margin-top: 32px;
   padding: 14px 28px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -612,7 +612,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #059669;
+  color: #2D7A52;
   margin-bottom: 8px;
 }
 
@@ -1107,7 +1107,7 @@
    ============================================================================ */
 
 .savings-display {
-  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  background: linear-gradient(135deg, #dbeafe 0%, #F5EDD9 100%);
   border-radius: 12px;
   padding: 20px 24px;
   text-align: center;
@@ -1116,7 +1116,7 @@
 
 .savings-label {
   font-size: 13px;
-  color: #4338ca;
+  color: #6B5424;
   margin-bottom: 4px;
 }
 
@@ -1396,7 +1396,7 @@
 .slider-value {
   font-size: 28px;
   font-weight: 700;
-  color: #667eea;
+  color: #1F3D2E;
 }
 
 .price-slider {
@@ -1415,7 +1415,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
   transition: transform 0.2s ease;
@@ -1429,7 +1429,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   cursor: pointer;
   border: none;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
@@ -1465,7 +1465,7 @@
 }
 
 .loan-type-header.fha {
-  border-left: 4px solid #8b5cf6;
+  border-left: 4px solid #B8924A;
 }
 
 .type-badge {
@@ -1481,8 +1481,8 @@
 }
 
 .type-badge.fha {
-  background: #ede9fe;
-  color: #6d28d9;
+  background: #FAF3E5;
+  color: #8A6D30;
 }
 
 .type-rate {
@@ -1536,7 +1536,7 @@
 }
 
 .payment-card.fha .payment-card-header {
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  background: linear-gradient(135deg, #FDF9F0 0%, #FAF3E5 100%);
 }
 
 .payment-card.conventional {
@@ -1566,7 +1566,7 @@
 
 /* MIP Note Styles */
 .footer-row.mip-note {
-  color: #7c3aed;
+  color: #B8924A;
   font-weight: 500;
 }
 
@@ -1824,7 +1824,7 @@
 }
 
 .dti-summary-card.highlight {
-  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  background: linear-gradient(135deg, #dbeafe 0%, #F5EDD9 100%);
   border-color: #93c5fd;
 }
 
@@ -2155,7 +2155,7 @@
 }
 
 .breakdown-row.remaining-row {
-  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  background: linear-gradient(135deg, #dbeafe 0%, #F5EDD9 100%);
 }
 
 .breakdown-row.remaining-row .row-label {
@@ -3091,7 +3091,7 @@
   display: flex;
   gap: 16px;
   padding: 24px;
-  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  background: linear-gradient(135deg, #dbeafe 0%, #F5EDD9 100%);
   border: 2px solid #3b82f6;
   border-radius: 16px;
 }
@@ -3168,7 +3168,7 @@
 }
 
 .summary-card.highlight {
-  background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #1e40af 0%, #B8924A 100%);
   border: none;
   color: white;
 }
@@ -4004,7 +4004,7 @@
 
 /* AI Recommendation Banner */
 .ai-recommendation-banner {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   border-radius: 16px;
   padding: 24px;
   color: white;
@@ -4084,18 +4084,18 @@
 }
 
 .program-summary-card.selected {
-  border-color: #6366f1;
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border-color: #B8924A;
+  background: linear-gradient(135deg, #FDF9F0 0%, #FAF3E5 100%);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
 }
 
 .program-summary-card.recommended {
-  border-color: #10b981;
+  border-color: #2D7A52;
   border-width: 2px;
 }
 
 .program-summary-card.recommended.selected {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 }
@@ -4104,7 +4104,7 @@
   position: absolute;
   top: -12px;
   right: 16px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   padding: 6px 14px;
   border-radius: 20px;
@@ -4163,7 +4163,7 @@
 
 .score-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #10b981);
+  background: linear-gradient(90deg, #B8924A, #2D7A52);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -4220,8 +4220,8 @@
 }
 
 .eligibility-card.selected {
-  border-color: #6366f1;
-  background: #f5f3ff;
+  border-color: #B8924A;
+  background: #FDF9F0;
 }
 
 .eligibility-header {
@@ -4267,7 +4267,7 @@
 
 .highlight-value {
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
   font-size: 20px;
 }
 
@@ -4325,8 +4325,8 @@
 
 /* Program AI Insight */
 .program-ai-insight {
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-  border: 1px solid #c7d2fe;
+  background: linear-gradient(135deg, #FDF9F0 0%, #FAF3E5 100%);
+  border: 1px solid #EDE0C4;
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 24px;
@@ -4335,7 +4335,7 @@
 .insight-label {
   font-size: 11px;
   font-weight: 700;
-  color: #6366f1;
+  color: #B8924A;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -4416,7 +4416,7 @@
 }
 
 .insurance-row .positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .insurance-row .negative {
@@ -4459,7 +4459,7 @@
 }
 
 .requirement-value.met {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .requirement-value.not-met {
@@ -4488,7 +4488,7 @@
 }
 
 .pros-section h4 {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .cons-section h4 {
@@ -4524,7 +4524,7 @@
   width: 16px;
   height: 16px;
   background: #dcfce7;
-  color: #10b981;
+  color: #2D7A52;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -4607,7 +4607,7 @@
 
 .program-comparison-table th.recommended {
   background: #ecfdf5;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .program-comparison-table td {
@@ -4615,7 +4615,7 @@
 }
 
 .program-comparison-table td.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .program-comparison-table td.negative {
@@ -4627,7 +4627,7 @@
 }
 
 .program-comparison-table tr.suitability-row td.best {
-  color: #10b981;
+  color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -4696,7 +4696,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #B8924A 100%);
   border-radius: 12px;
   padding: 16px 24px;
   margin-bottom: 24px;
@@ -4755,7 +4755,7 @@
 .section-header-data .section-total {
   font-size: 14px;
   font-weight: 600;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 /* Data Grid */
@@ -4793,7 +4793,7 @@
 .data-field input:focus,
 .data-field select:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -4833,7 +4833,7 @@
 
 .input-with-prefix:focus-within,
 .input-with-suffix:focus-within {
-  border-color: #6366f1;
+  border-color: #B8924A;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
@@ -4883,7 +4883,7 @@
   flex: 1;
   -webkit-appearance: none;
   height: 8px;
-  background: linear-gradient(to right, #ef4444 0%, #f59e0b 33%, #22c55e 66%, #10b981 100%);
+  background: linear-gradient(to right, #ef4444 0%, #f59e0b 33%, #22c55e 66%, #2D7A52 100%);
   border-radius: 4px;
   outline: none;
 }
@@ -4893,7 +4893,7 @@
   width: 24px;
   height: 24px;
   background: white;
-  border: 3px solid #6366f1;
+  border: 3px solid #B8924A;
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -4919,7 +4919,7 @@
 
 .credit-score-badge.good {
   background: #d1fae5;
-  color: #047857;
+  color: #1F5A3A;
 }
 
 .credit-score-badge.fair {
@@ -5010,7 +5010,7 @@
 
 .add-debt-btn {
   padding: 8px 16px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 6px;
@@ -5021,7 +5021,7 @@
 }
 
 .add-debt-btn:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Auto-calculated Section */
@@ -5090,7 +5090,7 @@
 .calc-auto-value {
   font-size: 18px;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .calc-monthly {
@@ -5122,8 +5122,8 @@
 }
 
 .points-btn.active {
-  background: #6366f1;
-  border-color: #6366f1;
+  background: #B8924A;
+  border-color: #B8924A;
   color: white;
 }
 
@@ -5183,7 +5183,7 @@
 }
 
 .budget-income-bar {
-  background: linear-gradient(90deg, #10b981, #6366f1);
+  background: linear-gradient(90deg, #2D7A52, #B8924A);
   color: white;
   padding: 12px 16px;
   border-radius: 6px;
@@ -5258,8 +5258,8 @@
 }
 
 .price-point-card.active {
-  border-color: #6366f1;
-  background: #f5f3ff;
+  border-color: #B8924A;
+  background: #FDF9F0;
 }
 
 .price-point-label {
@@ -5283,19 +5283,19 @@
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #6366f1;
+  color: #B8924A;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .use-price-btn:hover {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
 .price-point-card.active .use-price-btn {
-  background: #6366f1;
-  border-color: #6366f1;
+  background: #B8924A;
+  border-color: #B8924A;
   color: white;
   cursor: default;
 }
@@ -5396,7 +5396,7 @@
 .client-avatar {
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -5482,9 +5482,9 @@
 }
 
 .stat-icon.home-icon svg { color: #60a5fa; }
-.stat-icon.down-icon svg { color: #a78bfa; }
+.stat-icon.down-icon svg { color: #D4AD6A; }
 .stat-icon.loan-icon svg { color: #f472b6; }
-.stat-icon.rate-icon svg { color: #818cf8; }
+.stat-icon.rate-icon svg { color: #D4AD6A; }
 .stat-icon.payment-icon svg { color: #34d399; }
 .stat-icon.credit-icon svg { color: #94a3b8; }
 .stat-icon.credit-icon.excellent svg { color: #22c55e; }
@@ -5580,8 +5580,8 @@
 }
 
 .client-data-tab.active {
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  border-color: #c7d2fe;
+  background: linear-gradient(135deg, #FDF9F0 0%, #F5EDD9 100%);
+  border-color: #EDE0C4;
 }
 
 .tab-icon {
@@ -5603,7 +5603,7 @@
 }
 
 .client-data-tab.active .tab-icon {
-  background: #6366f1;
+  background: #B8924A;
 }
 
 .client-data-tab.active .tab-icon svg {
@@ -5633,7 +5633,7 @@
 }
 
 .client-data-tab.active .tab-description {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .tab-active-indicator {
@@ -5643,7 +5643,7 @@
   transform: translateX(-50%);
   width: 24px;
   height: 3px;
-  background: #6366f1;
+  background: #B8924A;
   border-radius: 2px;
 }
 
@@ -5690,8 +5690,8 @@
   font-size: 12px;
   font-weight: 600;
   padding: 4px 10px;
-  background: #eef2ff;
-  color: #6366f1;
+  background: #FDF9F0;
+  color: #B8924A;
   border-radius: 20px;
   margin-left: auto;
 }
@@ -5752,7 +5752,7 @@
   width: 28px;
   height: 28px;
   background: white;
-  border: 4px solid #6366f1;
+  border: 4px solid #B8924A;
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -5810,7 +5810,7 @@
 
 .debt-item-modern .debt-amount {
   font-weight: 600;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .debt-remove-btn {
@@ -5850,7 +5850,7 @@
 
 .add-debt-row input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #B8924A;
 }
 
 .input-with-prefix.compact {
@@ -5869,7 +5869,7 @@
 
 .add-debt-btn-modern {
   padding: 10px 20px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 8px;
@@ -5879,7 +5879,7 @@
 }
 
 .add-debt-btn-modern:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Property Tab */
@@ -5906,7 +5906,7 @@
 
 .down-payment-control .down-amount {
   font-weight: 600;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .down-payment-presets {
@@ -5932,9 +5932,9 @@
 }
 
 .preset-btn.active {
-  background: #eef2ff;
-  border-color: #6366f1;
-  color: #6366f1;
+  background: #FDF9F0;
+  border-color: #B8924A;
+  color: #B8924A;
 }
 
 .property-type-selector {
@@ -5957,14 +5957,14 @@
 }
 
 .property-type-btn:hover {
-  border-color: #c7d2fe;
+  border-color: #EDE0C4;
   background: #f1f5f9;
 }
 
 .property-type-btn.active {
-  background: #eef2ff;
-  border-color: #6366f1;
-  color: #6366f1;
+  background: #FDF9F0;
+  border-color: #B8924A;
+  color: #B8924A;
 }
 
 .inline-field {
@@ -6070,7 +6070,7 @@
 }
 
 .override-switch input:checked + .switch-slider {
-  background: #6366f1;
+  background: #B8924A;
 }
 
 .override-switch input:checked + .switch-slider::after {
@@ -6095,7 +6095,7 @@
 .ti-monthly {
   font-size: 14px;
   font-weight: 600;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 /* Loan Tab */
@@ -6158,14 +6158,14 @@
   align-items: center;
   margin-top: 16px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  background: linear-gradient(135deg, #FDF9F0 0%, #F5EDD9 100%);
   border-radius: 12px;
   font-size: 16px;
 }
 
 .loan-amount-display strong {
   font-size: 20px;
-  color: #4f46e5;
+  color: #8A6D30;
 }
 
 /* Loan Programs Grid */
@@ -6190,13 +6190,13 @@
 }
 
 .loan-program-btn:hover {
-  border-color: #c7d2fe;
-  background: #f5f3ff;
+  border-color: #EDE0C4;
+  background: #FDF9F0;
 }
 
 .loan-program-btn.active {
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  border-color: #6366f1;
+  background: linear-gradient(135deg, #FDF9F0 0%, #F5EDD9 100%);
+  border-color: #B8924A;
 }
 
 .loan-program-btn .program-name {
@@ -6206,7 +6206,7 @@
 }
 
 .loan-program-btn.active .program-name {
-  color: #4f46e5;
+  color: #8A6D30;
 }
 
 .loan-program-btn .program-desc {
@@ -6238,7 +6238,7 @@
 }
 
 .rate-option:hover {
-  border-color: #c7d2fe;
+  border-color: #EDE0C4;
 }
 
 .rate-option.selected {
@@ -6324,12 +6324,12 @@
 }
 
 .term-btn:hover {
-  border-color: #c7d2fe;
+  border-color: #EDE0C4;
 }
 
 .term-btn.active {
-  background: #eef2ff;
-  border-color: #6366f1;
+  background: #FDF9F0;
+  border-color: #B8924A;
 }
 
 .term-btn .term-years {
@@ -6339,7 +6339,7 @@
 }
 
 .term-btn.active .term-years {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .term-btn .term-label {
@@ -6376,12 +6376,12 @@
 }
 
 .point-btn:hover {
-  border-color: #c7d2fe;
+  border-color: #EDE0C4;
 }
 
 .point-btn.active {
-  background: #6366f1;
-  border-color: #6366f1;
+  background: #B8924A;
+  border-color: #B8924A;
   color: white;
 }
 
@@ -6412,7 +6412,7 @@
 }
 
 .loan-summary-card {
-  background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #1e40af 0%, #B8924A 100%);
   border-radius: 12px;
   padding: 20px;
   margin-top: 24px;
@@ -6456,7 +6456,7 @@
 .budget-header-card {
   display: flex;
   justify-content: space-between;
-  background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #1e40af 0%, #B8924A 100%);
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 24px;
@@ -6584,13 +6584,13 @@
 }
 
 .scenario-card:hover {
-  border-color: #c7d2fe;
+  border-color: #EDE0C4;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .scenario-card.active {
-  border-color: #6366f1;
-  background: #f5f3ff;
+  border-color: #B8924A;
+  background: #FDF9F0;
 }
 
 .active-badge {
@@ -6598,7 +6598,7 @@
   top: -10px;
   right: 16px;
   padding: 4px 12px;
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   font-size: 11px;
   font-weight: 600;
@@ -6616,7 +6616,7 @@
 }
 
 .scenario-card.active .scenario-label {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .scenario-price {
@@ -6650,7 +6650,7 @@
 }
 
 .scenario-detail.highlight .detail-value {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .use-scenario-btn {
@@ -6668,7 +6668,7 @@
 }
 
 .use-scenario-btn:hover {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
@@ -7089,7 +7089,7 @@
 }
 
 .breakdown-fill.extra {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 /* Lost Opportunity */
@@ -7199,7 +7199,7 @@
 }
 
 .winner-banner.prepay {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #8A6D30 100%);
   color: white;
 }
 
@@ -7373,7 +7373,7 @@
 .ai-analysis-btn {
   width: 100%;
   padding: 14px 20px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: white;
   border: none;
   border-radius: 10px;
@@ -7390,8 +7390,8 @@
 
 .ai-analysis-content {
   margin-top: 16px;
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-  border: 1px solid #c7d2fe;
+  background: linear-gradient(135deg, #FDF9F0 0%, #FAF3E5 100%);
+  border: 1px solid #EDE0C4;
   border-radius: 12px;
   padding: 20px;
 }
@@ -7399,7 +7399,7 @@
 .analysis-header {
   font-size: 12px;
   font-weight: 700;
-  color: #6366f1;
+  color: #B8924A;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 16px;
@@ -7495,7 +7495,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   border: none;
   color: white;
   font-size: 24px;
@@ -8884,7 +8884,7 @@
 }
 
 .tax-card.highlight {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   border: none;
   color: white;
 }
@@ -9382,13 +9382,13 @@
 }
 
 .program-btn.active.fha {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
+  border-color: #B8924A;
 }
 
 .program-btn.active.va {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-color: #10b981;
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
+  border-color: #2D7A52;
 }
 
 .program-btn.active.usda {
@@ -9397,8 +9397,8 @@
 }
 
 .program-btn.active.jumbo {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  border-color: #6366f1;
+  background: linear-gradient(135deg, #B8924A 0%, #8A6D30 100%);
+  border-color: #B8924A;
 }
 
 .program-btn.active.allinone {
@@ -9429,13 +9429,13 @@
 }
 
 .down-btn:hover {
-  border-color: #10b981;
-  color: #10b981;
+  border-color: #2D7A52;
+  color: #2D7A52;
 }
 
 .down-btn.active {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-color: #10b981;
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
+  border-color: #2D7A52;
   color: white;
 }
 
@@ -9491,13 +9491,13 @@
 }
 
 .term-btn:hover {
-  border-color: #8b5cf6;
-  color: #8b5cf6;
+  border-color: #B8924A;
+  color: #B8924A;
 }
 
 .term-btn.active {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
+  border-color: #B8924A;
   color: white;
 }
 
@@ -9610,14 +9610,14 @@
 
 .marker-line {
   width: 3px;
-  background: #10b981;
+  background: #2D7A52;
   margin: 0 auto;
 }
 
 .marker-label {
   font-size: 12px;
   font-weight: 600;
-  color: #10b981;
+  color: #2D7A52;
   white-space: nowrap;
 }
 
@@ -9639,7 +9639,7 @@
 
 .velocity-bar {
   flex: 1;
-  background: linear-gradient(to top, #10b981, #34d399);
+  background: linear-gradient(to top, #2D7A52, #34d399);
   border-radius: 8px 8px 0 0;
   transition: all 0.3s ease;
   position: relative;

@@ -18,7 +18,7 @@
   width: 48px;
   height: 48px;
   border: 3px solid #e5e7eb;
-  border-top-color: #218d8d;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -63,7 +63,7 @@
 
 .btn-setup {
   padding: 14px 32px;
-  background: linear-gradient(135deg, #218d8d 0%, #1a6f6f 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6f6f 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -127,7 +127,7 @@
   display: block;
   font-size: 28px;
   font-weight: 700;
-  color: #218d8d;
+  color: #1F3D2E;
 }
 
 .stat-label {
@@ -189,13 +189,13 @@
 }
 
 .filter-btn:hover {
-  border-color: #218d8d;
-  color: #218d8d;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .filter-btn.active {
-  background: #218d8d;
-  border-color: #218d8d;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -267,12 +267,12 @@
 }
 
 .feature-card:hover {
-  border-color: #218d8d;
+  border-color: #1F3D2E;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .feature-card.enabled {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: linear-gradient(to bottom, #f0fdf4 0%, white 100%);
 }
 
@@ -400,7 +400,7 @@
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .toggle-switch input:checked + .toggle-slider::before {

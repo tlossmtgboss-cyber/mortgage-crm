@@ -145,7 +145,7 @@
 
 .recruit-call-btn {
   padding: 4px 12px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #2D7A52, #2D7A52);
   border: none;
   border-radius: 16px;
   color: white;
@@ -157,7 +157,7 @@
 }
 
 .recruit-call-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669, #047857);
+  background: linear-gradient(135deg, #2D7A52, #1F5A3A);
   transform: scale(1.05);
 }
 
@@ -1151,13 +1151,13 @@
 }
 
 .recruit-quick-action-btn.recruit-portal-btn {
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
+  border-color: #B8924A;
 }
 
 .recruit-quick-action-btn.recruit-portal-btn:hover {
-  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-  border-color: #7c3aed;
+  background: linear-gradient(135deg, #B8924A 0%, #8A6D30 100%);
+  border-color: #B8924A;
 }
 
 /* Social Feed Styles */
@@ -1394,7 +1394,7 @@
 }
 
 .recruit-interview-score {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .recruit-interview-notes {
@@ -1562,14 +1562,14 @@
   gap: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .recruit-ai-status-badge.active::before {
   content: '';
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 2s infinite;
 }

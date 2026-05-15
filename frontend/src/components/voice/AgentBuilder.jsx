@@ -868,8 +868,8 @@ Guidelines:
         }
 
         .tool-tag {
-          background: #e0e7ff;
-          color: #4338ca;
+          background: #F5EDD9;
+          color: #6B5424;
           padding: 4px 8px;
           border-radius: 4px;
           font-size: 12px;

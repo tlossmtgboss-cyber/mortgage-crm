@@ -18,7 +18,7 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const URGENCY_CONFIG = {
   normal: {
-    color: '#10b981',
+    color: '#2D7A52',
     bgColor: '#d1fae5',
     label: 'On Track',
   },

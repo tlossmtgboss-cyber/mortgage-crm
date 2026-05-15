@@ -243,11 +243,11 @@ const PartnerRecruitingDashboard = () => {
           style={{
             padding: '10px 24px',
             border: 'none',
-            borderBottom: activeCategory === 'employee' ? '2px solid #8b5cf6' : '2px solid transparent',
+            borderBottom: activeCategory === 'employee' ? '2px solid #B8924A' : '2px solid transparent',
             background: 'none',
             cursor: 'pointer',
             fontWeight: activeCategory === 'employee' ? 600 : 400,
-            color: activeCategory === 'employee' ? '#8b5cf6' : '#6b7280',
+            color: activeCategory === 'employee' ? '#B8924A' : '#6b7280',
             fontSize: '14px',
             marginBottom: '-2px'
           }}
@@ -335,7 +335,7 @@ const PartnerRecruitingDashboard = () => {
                 onClick={() => { setStatusFilter(isEmployee ? 'hired' : 'onboarded'); setActiveTab('candidates'); }}
                 title={`View ${isEmployee ? 'hired' : 'onboarded'}`}
               >
-                <div className="pr-stat-value" style={{ color: '#10b981' }}>
+                <div className="pr-stat-value" style={{ color: '#2D7A52' }}>
                   {stats.onboarded_total || 0}
                 </div>
                 <div className="pr-stat-label">{isEmployee ? 'Hired' : 'Onboarded'}</div>
@@ -360,7 +360,7 @@ const PartnerRecruitingDashboard = () => {
                       className="pr-progress-bar"
                       style={{
                         width: `${metrics.conversion_rates?.overall_conversion || 0}%`,
-                        backgroundColor: '#10b981'
+                        backgroundColor: '#2D7A52'
                       }}
                     />
                   </div>
@@ -377,7 +377,7 @@ const PartnerRecruitingDashboard = () => {
                       className="pr-progress-bar"
                       style={{
                         width: `${metrics.conversion_rates?.contact_rate || 0}%`,
-                        backgroundColor: '#8b5cf6'
+                        backgroundColor: '#B8924A'
                       }}
                     />
                   </div>

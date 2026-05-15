@@ -130,7 +130,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   border: none;
   border-radius: 8px;
   color: white;
@@ -141,7 +141,7 @@
 }
 
 .request-doc-btn:hover {
-  background: linear-gradient(135deg, #047857 0%, #059669 100%);
+  background: linear-gradient(135deg, #1F5A3A 0%, #2D7A52 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
@@ -152,7 +152,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #C9A44E 100%);
   border: none;
   border-radius: 8px;
   color: white;
@@ -163,7 +163,7 @@
 }
 
 .send-needs-btn:hover {
-  background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
@@ -402,7 +402,7 @@
 
 .doc-status.open { color: #6b7280; }
 .doc-status.pending { color: #d97706; }
-.doc-status.accepted { color: #059669; }
+.doc-status.accepted { color: #2D7A52; }
 .doc-status.rejected { color: #dc2626; }
 .doc-status.expired { color: #dc2626; }
 
@@ -522,7 +522,7 @@
   text-transform: capitalize;
 }
 
-.info-group .status-value.accepted { color: #059669; }
+.info-group .status-value.accepted { color: #2D7A52; }
 .info-group .status-value.pending { color: #d97706; }
 .info-group .status-value.rejected { color: #dc2626; }
 .info-group .status-value.expired { color: #dc2626; }
@@ -589,12 +589,12 @@
 }
 
 .edit-btn.save-btn {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .edit-btn.save-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .edit-btn.cancel-btn {
@@ -805,13 +805,13 @@
 }
 
 .action-btn.approve-btn {
-  background: #059669;
+  background: #2D7A52;
   color: white;
   border: none;
 }
 
 .action-btn.approve-btn:hover {
-  background: #047857;
+  background: #1F5A3A;
 }
 
 .action-btn.reject-btn {

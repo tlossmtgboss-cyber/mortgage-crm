@@ -221,7 +221,7 @@ function AIUnderwriter() {
 
   const getGradeColor = (grade) => {
     switch (grade) {
-      case 'A': return '#10b981';
+      case 'A': return '#2D7A52';
       case 'B': return '#3b82f6';
       case 'C': return '#f59e0b';
       case 'D': return '#ef4444';

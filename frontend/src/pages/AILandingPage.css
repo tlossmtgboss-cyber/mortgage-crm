@@ -89,7 +89,7 @@
   top: 12px;
   width: 44px;
   height: 44px;
-  background: #217F8D;
+  background: #1F3D2E;
   border: 2px solid #1a6670;
   border-radius: 12px;
   cursor: pointer;
@@ -285,7 +285,7 @@
 
 .ai-pane-divider:hover,
 .ai-pane-divider.dragging {
-  background: #217F8D;
+  background: #1F3D2E;
 }
 
 /* Header - minimal Claude style */
@@ -378,8 +378,8 @@
 
 .ai-clear-conversation:hover {
   background: #fff;
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 /* Welcome State - Claude.ai style */
@@ -445,7 +445,7 @@
 }
 
 .ai-example-prompts-new button:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
@@ -521,7 +521,7 @@
 .ai-status-dot {
   width: 8px;
   height: 8px;
-  background: #217F8D;
+  background: #1F3D2E;
   border-radius: 50%;
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
@@ -539,7 +539,7 @@
 
 .ai-streaming-cursor {
   display: inline-block;
-  color: #217F8D;
+  color: #1F3D2E;
   font-weight: bold;
   animation: blink-cursor 1s step-end infinite;
   margin-left: 2px;
@@ -622,7 +622,7 @@
 .ai-typing-indicator-new span {
   width: 8px;
   height: 8px;
-  background: #217F8D;
+  background: #1F3D2E;
   border-radius: 50%;
   animation: typing 1.4s infinite ease-in-out;
 }
@@ -733,7 +733,7 @@
 }
 
 .ai-input-container-new:focus-within {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 2px rgba(33, 127, 141, 0.1);
 }
 
@@ -810,7 +810,7 @@
 
 /* Send Button - CRM style */
 .ai-send-btn-new {
-  background: #217F8D;
+  background: #1F3D2E;
   border: none;
   color: white;
   width: 36px;
@@ -876,8 +876,8 @@
 
 .ai-back-to-crm-new:hover {
   background: #f0f0f0;
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 /* Search Box */
@@ -896,7 +896,7 @@
 
 .ai-search-box input:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 /* Empty List */
@@ -965,7 +965,7 @@
 }
 
 .ai-markdown-content blockquote {
-  border-left: 3px solid #217F8D;
+  border-left: 3px solid #1F3D2E;
   padding-left: 16px;
   margin: 16px 0;
   color: #666;
@@ -1002,7 +1002,7 @@
 
 .ai-reports-list.drop-target-area {
   background: #f0f9fa;
-  border: 2px dashed #217F8D;
+  border: 2px dashed #1F3D2E;
   border-radius: 8px;
 }
 
@@ -1019,11 +1019,11 @@
 }
 
 .ai-report-item:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .ai-report-item.active {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f0f9fa;
 }
 
@@ -1072,14 +1072,14 @@
 /* Drop target styles for nav button */
 .ai-nav-btn.drop-target {
   background: #f0f9fa !important;
-  border: 2px dashed #217F8D !important;
-  color: #217F8D !important;
+  border: 2px dashed #1F3D2E !important;
+  color: #1F3D2E !important;
 }
 
 .drop-hint {
   font-size: 10px;
   margin-left: 4px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   padding: 2px 6px;
   border-radius: 4px;
@@ -1423,7 +1423,7 @@
 }
 
 .ai-sidebar-task-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
 }
 
@@ -1446,7 +1446,7 @@
 
 .ai-sidebar-task-client {
   font-size: 13px;
-  color: #218D8D;
+  color: #1F3D2E;
   margin-bottom: 4px;
 }
 
@@ -1480,7 +1480,7 @@
 .ai-message-new.ai-message-assistant .hasSidebarContent::after {
   content: '→';
   margin-left: 8px;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* ============================================
@@ -1520,7 +1520,7 @@
 
 .ai-email-field input[type="text"]:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -1583,7 +1583,7 @@
 
 .ai-recipient-type {
   font-size: 11px;
-  color: #218D8D;
+  color: #1F3D2E;
   background: rgba(33, 141, 141, 0.1);
   padding: 2px 8px;
   border-radius: 10px;
@@ -1599,7 +1599,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   padding: 8px 12px;
   border-radius: 20px;
@@ -1657,7 +1657,7 @@
 
 .ai-email-body-field textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -1692,7 +1692,7 @@
 
 .ai-email-send-btn {
   padding: 12px 28px;
-  background: #218D8D;
+  background: #1F3D2E;
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -1703,7 +1703,7 @@
 }
 
 .ai-email-send-btn:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .ai-email-send-btn:disabled {
@@ -1765,7 +1765,7 @@
 }
 
 .ai-conv-message.user .ai-conv-content {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border-bottom-right-radius: 4px;
 }
@@ -1846,7 +1846,7 @@
 }
 
 .ai-conv-text blockquote {
-  border-left: 3px solid #217F8D;
+  border-left: 3px solid #1F3D2E;
   margin: 8px 0;
   padding: 4px 12px;
   color: #555;
@@ -1968,7 +1968,7 @@
 }
 
 .task-count-badge {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   padding: 4px 12px;
   border-radius: 16px;
@@ -2025,12 +2025,12 @@
 }
 
 .task-list-item:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f9fafb;
 }
 
 .task-list-item.selected {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f0f9fa;
   box-shadow: 0 2px 6px rgba(33, 127, 141, 0.12);
 }
@@ -2077,7 +2077,7 @@
 }
 
 .task-client {
-  color: #217F8D;
+  color: #1F3D2E;
   font-weight: 500;
 }
 
@@ -2204,14 +2204,14 @@
 }
 
 .task-send-btn:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f0f9fa;
 }
 
 .task-send-btn.active {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 /* Action Buttons */
@@ -2236,7 +2236,7 @@
 }
 
 .task-action-btn.primary {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -2341,7 +2341,7 @@
 }
 
 .task-count-pill {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   padding: 2px 10px;
   border-radius: 12px;
@@ -2354,12 +2354,12 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
   flex-shrink: 0;
 }
 
 .task-email-layout .task-checkbox:focus {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: 2px;
 }
 
@@ -2421,7 +2421,7 @@
 
 .inbox-task-item.selected {
   background: #dbeafe;
-  border-left: 4px solid #217F8D;
+  border-left: 4px solid #1F3D2E;
   padding-left: 12px;
 }
 
@@ -2456,7 +2456,7 @@
 
 .inbox-task-client {
   font-size: 13px;
-  color: #217F8D;
+  color: #1F3D2E;
   font-weight: 500;
 }
 
@@ -2589,13 +2589,13 @@
 }
 
 .send-via-btn:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f0f9fa;
 }
 
 .send-via-btn.active {
-  background: #217F8D;
-  border-color: #217F8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -2722,7 +2722,7 @@
 }
 
 .detail-action-btn.send {
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   color: white;
   flex: 1;
 }
@@ -2733,12 +2733,12 @@
 }
 
 .detail-action-btn.approve {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .detail-action-btn.approve:hover {
-  background: #059669;
+  background: #2D7A52;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
@@ -2877,7 +2877,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid #e5e7eb;
-  border-top-color: #217F8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -2889,7 +2889,7 @@
 .refresh-btn {
   margin-top: 16px;
   padding: 8px 16px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -2946,7 +2946,7 @@
 
 .reconciliation-item.selected {
   background: #e0f2f1;
-  border-left: 3px solid #217F8D;
+  border-left: 3px solid #1F3D2E;
 }
 
 .reconciliation-item .item-name {
@@ -2970,7 +2970,7 @@
 }
 
 .reconciliation-item .item-match {
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .reconciliation-item .item-source {
@@ -3014,7 +3014,7 @@
 
 .match-badge.matched {
   background: #e0f2f1;
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .match-badge.new {
@@ -3084,12 +3084,12 @@
 }
 
 .reconciliation-actions .action-btn.approve {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .reconciliation-actions .action-btn.approve:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .reconciliation-actions .action-btn.reject {
@@ -3143,7 +3143,7 @@
 
 .ai-feedback-thanks {
   font-size: 12px;
-  color: #10b981;
+  color: #2D7A52;
   font-style: italic;
 }
 
@@ -3261,14 +3261,14 @@
 }
 
 .ai-feedback-type-btn:hover {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .ai-feedback-type-btn.active {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .ai-feedback-text-input {
@@ -3295,7 +3295,7 @@
 
 .ai-feedback-text-input textarea:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .ai-feedback-modal-footer {
@@ -3324,7 +3324,7 @@
   padding: 10px 20px;
   border: none;
   border-radius: 8px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   cursor: pointer;
   font-size: 14px;
@@ -3936,7 +3936,7 @@
   transform: translateY(-50%);
   width: 48px;
   height: 48px;
-  background: #217F8D;
+  background: #1F3D2E;
   border: none;
   border-radius: 12px;
   cursor: pointer;

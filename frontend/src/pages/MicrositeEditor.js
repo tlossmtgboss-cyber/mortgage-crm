@@ -727,14 +727,14 @@ const MicrositeEditor = () => {
                     <div className="color-input-wrapper">
                       <input
                         type="color"
-                        value={brandingJson.accent_color || '#059669'}
+                        value={brandingJson.accent_color || '#2D7A52'}
                         onChange={(e) => handleBrandingChange('accent_color', e.target.value)}
                       />
                       <input
                         type="text"
-                        value={brandingJson.accent_color || '#059669'}
+                        value={brandingJson.accent_color || '#2D7A52'}
                         onChange={(e) => handleBrandingChange('accent_color', e.target.value)}
-                        placeholder="#059669"
+                        placeholder="#2D7A52"
                       />
                     </div>
                   </div>

@@ -23,8 +23,8 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 const COLOR_PRESETS = [
   { name: 'Classic Blue', primary: '#2563eb', secondary: '#1e40af' },
   { name: 'Bold Red', primary: '#dc2626', secondary: '#1e3a5f' },
-  { name: 'Modern Purple', primary: '#8b5cf6', secondary: '#ec4899' },
-  { name: 'Forest Green', primary: '#059669', secondary: '#047857' },
+  { name: 'Modern Purple', primary: '#B8924A', secondary: '#ec4899' },
+  { name: 'Forest Green', primary: '#2D7A52', secondary: '#1F5A3A' },
   { name: 'Warm Orange', primary: '#ea580c', secondary: '#c2410c' },
   { name: 'Elegant Gold', primary: '#ca8a04', secondary: '#854d0e' },
   { name: 'Slate Gray', primary: '#475569', secondary: '#334155' },

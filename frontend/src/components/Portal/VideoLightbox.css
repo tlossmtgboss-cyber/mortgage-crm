@@ -91,7 +91,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -124,7 +124,7 @@
 }
 
 .new-video-badge {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   font-size: 11px;
   font-weight: 600;
@@ -178,7 +178,7 @@
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: #10b981;
+  background: #2D7A52;
   border: none;
   display: flex;
   align-items: center;

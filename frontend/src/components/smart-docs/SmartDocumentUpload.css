@@ -25,7 +25,7 @@
 }
 
 .drop-zone.has-file {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #f0fdf4;
   padding: 16px;
 }
@@ -285,7 +285,7 @@
 }
 
 .processing-steps li.complete {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .processing-steps li.active {
@@ -322,7 +322,7 @@
 }
 
 .upload-guidelines li .check {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .upload-guidelines li .warning {
@@ -374,7 +374,7 @@
 }
 
 .status-icon.success {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
@@ -503,7 +503,7 @@
 }
 
 .progress-bar-track--complete .progress-bar-fill {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .progress-bar-track--error .progress-bar-fill {

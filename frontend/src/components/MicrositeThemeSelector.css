@@ -52,7 +52,7 @@
 
 .publish-btn {
   padding: 10px 20px;
-  background: var(--color-success, #10b981);
+  background: var(--color-success, #2D7A52);
   color: white;
   border: none;
   border-radius: 8px;
@@ -63,7 +63,7 @@
 }
 
 .publish-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .publish-btn:disabled {
@@ -74,7 +74,7 @@
 .published-badge {
   padding: 8px 16px;
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
@@ -301,7 +301,7 @@
 }
 
 .select-btn.selected {
-  background: var(--color-success, #10b981);
+  background: var(--color-success, #2D7A52);
 }
 
 .select-btn:disabled {
@@ -427,7 +427,7 @@
 
 .category-badge.modern {
   background: #f3e8ff;
-  color: #9333ea;
+  color: #B8924A;
 }
 
 .category-badge.minimal {

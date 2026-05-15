@@ -80,7 +80,7 @@ export const themeMetadata = {
       animationStyle: ['subtle', 'dynamic', 'none'],
     },
     defaultConfig: {
-      primaryColor: '#8b5cf6',
+      primaryColor: '#B8924A',
       secondaryColor: '#ec4899',
       gradientDirection: 'diagonal',
       animationStyle: 'subtle',

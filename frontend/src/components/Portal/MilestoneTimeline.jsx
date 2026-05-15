@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
     label: 'In Progress',
   },
   COMPLETED: {
-    color: '#10B981',
+    color: '#2D7A52',
     bgColor: '#D1FAE5',
     icon: '●',
     label: 'Completed',
@@ -39,7 +39,7 @@ const STATUS_CONFIG = {
 const TASK_STATUS_CONFIG = {
   PENDING: { color: '#9CA3AF', icon: '○' },
   IN_PROGRESS: { color: '#3B82F6', icon: '◐' },
-  COMPLETED: { color: '#10B981', icon: '✓' },
+  COMPLETED: { color: '#2D7A52', icon: '✓' },
   BLOCKED: { color: '#EF4444', icon: '!' },
 };
 

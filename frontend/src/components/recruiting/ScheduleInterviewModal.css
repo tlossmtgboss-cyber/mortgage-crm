@@ -244,7 +244,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, #3b82f6, #B8924A);
   color: white;
   display: flex;
   align-items: center;
@@ -259,7 +259,7 @@
 }
 
 .selected-check {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
   margin-left: 4px;
 }

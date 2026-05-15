@@ -29,7 +29,7 @@
 .error-state button {
   margin-top: 24px;
   padding: 12px 24px;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   border: none;
   border-radius: 8px;
@@ -59,8 +59,8 @@
 
 .btn-back:hover {
   background: var(--color-bg-hover, rgba(139, 92, 68, 0.08));
-  border-color: var(--color-primary, #217F8D);
-  color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .employee-header-content {
@@ -81,7 +81,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   display: flex;
   align-items: center;
@@ -287,7 +287,7 @@
 .loan-number {
   font-weight: 600;
   font-family: var(--font-mono, monospace);
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .outcome-icon {
@@ -420,7 +420,7 @@
 }
 
 .analysis-card.recommendations {
-  border-left: 4px solid var(--color-primary, #217F8D);
+  border-left: 4px solid var(--color-primary, #1F3D2E);
 }
 
 .analysis-header {
@@ -542,13 +542,13 @@
 }
 
 .loan-tab:hover {
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.05);
 }
 
 .loan-tab.active {
-  color: var(--color-primary, #217F8D);
-  border-bottom-color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
+  border-bottom-color: var(--color-primary, #1F3D2E);
   font-weight: 600;
 }
 
@@ -565,7 +565,7 @@
 }
 
 .loan-tab.active .tab-count {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
 }
 

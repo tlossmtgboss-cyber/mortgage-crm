@@ -136,8 +136,8 @@ function CallRoutingConfig() {
   const getCallerTypeColor = (type) => {
     switch (type) {
       case 'lead': return '#3b82f6';
-      case 'active_loan': return '#10b981';
-      case 'mum': return '#8b5cf6';
+      case 'active_loan': return '#2D7A52';
+      case 'mum': return '#B8924A';
       case 'unknown': return '#6b7280';
       default: return '#6b7280';
     }
@@ -295,13 +295,13 @@ function CallRoutingConfig() {
                   <div className="rule-assistant">→ Lead Assistant</div>
                 </div>
                 <div className="rule-card">
-                  <div className="rule-icon" style={{ backgroundColor: '#10b981' }}>📋</div>
+                  <div className="rule-icon" style={{ backgroundColor: '#2D7A52' }}>📋</div>
                   <h4>Active Loans</h4>
                   <p>Processing, underwriting, closing</p>
                   <div className="rule-assistant">→ Active Loan Assistant</div>
                 </div>
                 <div className="rule-card">
-                  <div className="rule-icon" style={{ backgroundColor: '#8b5cf6' }}>🏆</div>
+                  <div className="rule-icon" style={{ backgroundColor: '#B8924A' }}>🏆</div>
                   <h4>MUM Clients</h4>
                   <p>Past clients in post-closing program</p>
                   <div className="rule-assistant">→ MUM Concierge</div>
@@ -339,7 +339,7 @@ function CallRoutingConfig() {
                         className="bar-fill"
                         style={{
                           width: `${(status.today_stats.active_loans / Math.max(status.today_stats.total, 1)) * 100}%`,
-                          backgroundColor: '#10b981'
+                          backgroundColor: '#2D7A52'
                         }}
                       ></div>
                     </div>
@@ -352,7 +352,7 @@ function CallRoutingConfig() {
                         className="bar-fill"
                         style={{
                           width: `${(status.today_stats.mum_clients / Math.max(status.today_stats.total, 1)) * 100}%`,
-                          backgroundColor: '#8b5cf6'
+                          backgroundColor: '#B8924A'
                         }}
                       ></div>
                     </div>

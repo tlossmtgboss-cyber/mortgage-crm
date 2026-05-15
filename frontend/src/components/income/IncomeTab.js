@@ -22,10 +22,10 @@ const INCOME_TYPES = [
 const VERIFICATION_STATUSES = {
   'PENDING': { label: 'Pending', color: '#6b7280', bgColor: '#f3f4f6' },
   'DOCUMENTS_RECEIVED': { label: 'Docs Received', color: '#d97706', bgColor: '#fef3c7' },
-  'VERIFIED': { label: 'Verified', color: '#059669', bgColor: '#d1fae5' },
+  'VERIFIED': { label: 'Verified', color: '#2D7A52', bgColor: '#d1fae5' },
   'NEEDS_ADDITIONAL_DOCS': { label: 'Needs Docs', color: '#dc2626', bgColor: '#fee2e2' },
-  'VERBAL_VOE_COMPLETE': { label: 'VOE Complete', color: '#059669', bgColor: '#d1fae5' },
-  'WRITTEN_VOE_COMPLETE': { label: 'Written VOE', color: '#059669', bgColor: '#d1fae5' },
+  'VERBAL_VOE_COMPLETE': { label: 'VOE Complete', color: '#2D7A52', bgColor: '#d1fae5' },
+  'WRITTEN_VOE_COMPLETE': { label: 'Written VOE', color: '#2D7A52', bgColor: '#d1fae5' },
   'REJECTED': { label: 'Rejected', color: '#dc2626', bgColor: '#fee2e2' },
 };
 

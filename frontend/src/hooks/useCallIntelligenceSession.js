@@ -38,7 +38,7 @@ export const AGENT_CONFIG = {
   identity:      { label: 'Identity',      icon: '\u{1F464}', color: '#60A5FA' },
   property:      { label: 'Property',      icon: '\u{1F3E0}', color: '#34D399' },
   financial:     { label: 'Financial',     icon: '\u{1F4B0}', color: '#FBBF24' },
-  employment:    { label: 'Employment',    icon: '\u{1F4BC}', color: '#A78BFA' },
+  employment:    { label: 'Employment',    icon: '\u{1F4BC}', color: '#D4AD6A' },
   compliance:    { label: 'Compliance',    icon: '⚖️', color: '#F87171' },
   intent:        { label: 'Intent',        icon: '\u{1F3AF}', color: '#FB923C' },
 };

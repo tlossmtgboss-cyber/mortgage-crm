@@ -44,7 +44,7 @@ export default function AIGenerateButton({ fieldType, context = {}, currentValue
     padding: size === 'sm' ? '4px 10px' : '6px 14px',
     fontSize: size === 'sm' ? '12px' : '13px',
     fontWeight: 600,
-    color: '#8b5cf6',
+    color: '#B8924A',
     background: 'rgba(139, 92, 246, 0.08)',
     border: '1px solid rgba(139, 92, 246, 0.25)',
     borderRadius: '6px',
@@ -66,7 +66,7 @@ export default function AIGenerateButton({ fieldType, context = {}, currentValue
     >
       {loading ? (
         <>
-          <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(139,92,246,0.3)', borderTopColor: '#8b5cf6', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+          <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(139,92,246,0.3)', borderTopColor: '#B8924A', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
           Generating...
         </>
       ) : (

@@ -98,7 +98,7 @@
 }
 
 .label-filter-toggle.active {
-  background: var(--label-bg, #eef2ff);
+  background: var(--label-bg, #FDF9F0);
   border-color: var(--label-color, #4A90D9);
   color: var(--label-color, #4A90D9);
 }

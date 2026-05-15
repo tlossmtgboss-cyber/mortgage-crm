@@ -84,7 +84,7 @@ function DISCResultsSummary({
         <div className="disc-summary-bars">
           <DISCMiniBar label="D" value={adapted_d} color="#DC2626" />
           <DISCMiniBar label="I" value={adapted_i} color="#F59E0B" />
-          <DISCMiniBar label="S" value={adapted_s} color="#10B981" />
+          <DISCMiniBar label="S" value={adapted_s} color="#2D7A52" />
           <DISCMiniBar label="C" value={adapted_c} color="#3B82F6" />
         </div>
 

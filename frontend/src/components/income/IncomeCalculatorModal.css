@@ -240,7 +240,7 @@
 }
 
 .income-tab-btn.has-income {
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .income-tab-btn.has-income:not(.active) {
@@ -261,7 +261,7 @@
 .tab-amount {
   font-size: 11px;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
   background: #d1fae5;
   padding: 2px 8px;
   border-radius: 4px;
@@ -426,7 +426,7 @@
 }
 
 .income-box.qualifying {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #ecfdf5;
 }
 
@@ -446,7 +446,7 @@
 }
 
 .income-box.qualifying .amount {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .calculation-method {
@@ -561,7 +561,7 @@
 }
 
 .doc-status .extracted {
-  color: #10b981;
+  color: #2D7A52;
   font-size: 12px;
   font-weight: 600;
 }

@@ -300,7 +300,7 @@ describe('validateHexColor', () => {
   // ---------- Valid cases ----------
 
   it('accepts 6-digit hex color', () => {
-    expect(validateHexColor('#218D8D').valid).toBe(true);
+    expect(validateHexColor('#1F3D2E').valid).toBe(true);
   });
 
   it('accepts 3-digit hex color', () => {
@@ -308,7 +308,7 @@ describe('validateHexColor', () => {
   });
 
   it('accepts 8-digit hex color (with alpha)', () => {
-    expect(validateHexColor('#218D8DFF').valid).toBe(true);
+    expect(validateHexColor('#1F3D2EFF').valid).toBe(true);
   });
 
   it('accepts lowercase hex', () => {

@@ -7,13 +7,13 @@
    ============================================================================= */
 
 .presentation-engine {
-  --primary-color: #10b981;
-  --primary-dark: #059669;
+  --primary-color: #2D7A52;
+  --primary-dark: #2D7A52;
   --secondary-color: #3b82f6;
-  --accent-color: #8b5cf6;
+  --accent-color: #B8924A;
   --warning-color: #f59e0b;
   --danger-color: #ef4444;
-  --success-color: #10b981;
+  --success-color: #2D7A52;
 
   --text-primary: #1f2937;
   --text-secondary: #6b7280;
@@ -77,7 +77,7 @@
   display: inline-flex;
   flex-direction: column;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   border-radius: var(--border-radius);
   color: white;
 }
@@ -326,7 +326,7 @@
 }
 
 .payment-box.new {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -553,7 +553,7 @@
 .heloc-limit {
   text-align: center;
   padding: 24px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   border-radius: var(--border-radius);
   color: white;
   margin-bottom: 24px;
@@ -689,7 +689,7 @@
 }
 
 .visual-fill.equity {
-  background: linear-gradient(90deg, #10b981, #059669);
+  background: linear-gradient(90deg, #2D7A52, #2D7A52);
 }
 
 .visual-fill.costs {

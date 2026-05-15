@@ -48,8 +48,8 @@
 }
 
 .bp-tab.active {
-  color: #218d8d;
-  border-bottom-color: #218d8d;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
 }
 
 /* ---------- Tab Content ---------- */
@@ -93,7 +93,7 @@
 }
 
 .bp-btn-primary {
-  background: #218d8d;
+  background: #1F3D2E;
   color: #fff;
 }
 
@@ -144,7 +144,7 @@
   flex-shrink: 0;
 }
 
-.briefing-page .health-indicator.green { background: #10b981; box-shadow: 0 0 4px #10b98155; }
+.briefing-page .health-indicator.green { background: #2D7A52; box-shadow: 0 0 4px #2D7A5255; }
 .briefing-page .health-indicator.yellow { background: #f59e0b; box-shadow: 0 0 4px #f59e0b55; }
 .briefing-page .health-indicator.red { background: #ef4444; box-shadow: 0 0 4px #ef444455; }
 
@@ -206,7 +206,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #218d8d;
+  color: #1F3D2E;
   text-align: left;
 }
 
@@ -224,8 +224,8 @@
 }
 
 .briefing-page .section-badge {
-  background: #218d8d18;
-  color: #218d8d;
+  background: #1F3D2E18;
+  color: #1F3D2E;
   font-size: 11px;
   font-weight: 700;
   padding: 1px 7px;
@@ -304,7 +304,7 @@
 }
 
 .briefing-page .stage-pill strong {
-  color: #218d8d;
+  color: #1F3D2E;
   margin-left: 3px;
 }
 
@@ -330,7 +330,7 @@
 }
 
 .briefing-page .item-link {
-  color: #218d8d;
+  color: #1F3D2E;
   text-decoration: none;
 }
 
@@ -398,7 +398,7 @@
 
 .briefing-page .appt-time {
   font-weight: 600;
-  color: #218d8d;
+  color: #1F3D2E;
   min-width: 70px;
   font-size: 12px;
 }
@@ -434,7 +434,7 @@
   margin-right: 6px;
 }
 
-.briefing-page .health-dot.green { background: #10b981; }
+.briefing-page .health-dot.green { background: #2D7A52; }
 .briefing-page .health-dot.yellow { background: #f59e0b; }
 .briefing-page .health-dot.red { background: #ef4444; }
 
@@ -476,7 +476,7 @@
 }
 
 .bp-history-item.expanded {
-  border-color: #218d8d44;
+  border-color: #1F3D2E44;
 }
 
 .bp-history-row {
@@ -519,8 +519,8 @@
 }
 
 .bp-history-level.leadership {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: #FAF3E5;
+  color: #B8924A;
 }
 
 .bp-history-status {
@@ -533,7 +533,7 @@
 
 .bp-history-status.delivered {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .bp-history-status.pending {
@@ -574,7 +574,7 @@
   margin: 0 0 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #218d8d;
+  color: #1F3D2E;
 }
 
 .bp-detail-section p {
@@ -630,7 +630,7 @@
 .bp-toggle-row input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #218d8d;
+  accent-color: #1F3D2E;
   cursor: pointer;
 }
 
@@ -646,8 +646,8 @@
 
 .bp-input-number:focus {
   outline: none;
-  border-color: #218d8d;
-  box-shadow: 0 0 0 2px #218d8d22;
+  border-color: #1F3D2E;
+  box-shadow: 0 0 0 2px #1F3D2E22;
 }
 
 .bp-select {
@@ -662,8 +662,8 @@
 
 .bp-select:focus {
   outline: none;
-  border-color: #218d8d;
-  box-shadow: 0 0 0 2px #218d8d22;
+  border-color: #1F3D2E;
+  box-shadow: 0 0 0 2px #1F3D2E22;
 }
 
 .bp-pref-actions {

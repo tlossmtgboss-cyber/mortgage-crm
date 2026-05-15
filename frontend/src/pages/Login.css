@@ -65,7 +65,7 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: var(--brand-primary, #218D8D);
+  border-color: var(--brand-primary, #1F3D2E);
 }
 
 .form-group input:disabled {
@@ -109,7 +109,7 @@
 }
 
 .forgot-password-link a {
-  color: var(--brand-primary, #218D8D);
+  color: var(--brand-primary, #1F3D2E);
   font-size: 14px;
   text-decoration: none;
   font-weight: 500;
@@ -131,7 +131,7 @@
 }
 
 .back-to-login a:hover {
-  color: var(--brand-primary, #218D8D);
+  color: var(--brand-primary, #1F3D2E);
   text-decoration: underline;
 }
 
@@ -143,7 +143,7 @@
 .success-message .success-icon {
   width: 60px;
   height: 60px;
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   border-radius: 50%;
   color: white;
   font-size: 32px;
@@ -179,7 +179,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
 }
 
@@ -195,8 +195,8 @@
 
 .btn-secondary {
   background: var(--color-bg-surface, white);
-  color: var(--brand-primary, #218D8D);
-  border: 2px solid var(--brand-primary, #218D8D);
+  color: var(--brand-primary, #1F3D2E);
+  border: 2px solid var(--brand-primary, #1F3D2E);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -232,9 +232,9 @@
 
 .btn-quick-test {
   padding: 14px;
-  border: 2px solid #10b981;
+  border: 2px solid #2D7A52;
   background: var(--color-bg-surface, white);
-  color: #10b981;
+  color: #2D7A52;
   border-radius: 8px;
   font-size: 16px;
   font-weight: 600;
@@ -243,7 +243,7 @@
 }
 
 .btn-quick-test:hover:not(:disabled) {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
@@ -268,7 +268,7 @@
 }
 
 .login-footer a {
-  color: var(--brand-primary, #218D8D);
+  color: var(--brand-primary, #1F3D2E);
   text-decoration: none;
   font-weight: 600;
 }
@@ -310,9 +310,9 @@
 .btn-biometric {
   width: 100%;
   padding: 14px;
-  border: 2px solid var(--brand-primary, #218D8D);
+  border: 2px solid var(--brand-primary, #1F3D2E);
   background: var(--color-bg-surface, white);
-  color: var(--brand-primary, #218D8D);
+  color: var(--brand-primary, #1F3D2E);
   border-radius: 8px;
   font-size: 16px;
   font-weight: 600;
@@ -325,7 +325,7 @@
 }
 
 .btn-biometric:hover:not(:disabled) {
-  background: var(--brand-primary, #218D8D);
+  background: var(--brand-primary, #1F3D2E);
   color: white;
 }
 

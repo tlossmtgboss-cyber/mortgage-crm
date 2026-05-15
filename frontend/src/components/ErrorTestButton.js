@@ -45,7 +45,7 @@ function ErrorTestButton() {
       bottom: '20px',
       right: '20px',
       zIndex: 9999,
-      background: 'linear-gradient(135deg, #218D8D 0%, #10b981 100%)',
+      background: 'linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%)',
       padding: '15px 25px',
       borderRadius: '8px',
       boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',

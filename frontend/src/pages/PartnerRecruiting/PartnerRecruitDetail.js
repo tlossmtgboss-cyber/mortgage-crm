@@ -479,7 +479,7 @@ const PartnerRecruitDetail = () => {
           <div className="pr-score-display">
             <div
               className="pr-score-circle"
-              style={{ borderColor: partner.overall_score >= 70 ? '#10b981' : partner.overall_score >= 50 ? '#f59e0b' : '#ef4444' }}
+              style={{ borderColor: partner.overall_score >= 70 ? '#2D7A52' : partner.overall_score >= 50 ? '#f59e0b' : '#ef4444' }}
             >
               <span className="pr-score-value">
                 {partner.overall_score ? Math.round(partner.overall_score) : '-'}

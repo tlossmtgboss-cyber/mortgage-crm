@@ -7,8 +7,8 @@ import './CandidateGradeCircle.css';
  */
 export const getGrade = (score) => {
   if (score === null || score === undefined) return { grade: 'N/A', color: '#9ca3af' };
-  if (score >= 95) return { grade: 'A+', color: '#10b981' };
-  if (score >= 90) return { grade: 'A', color: '#10b981' };
+  if (score >= 95) return { grade: 'A+', color: '#2D7A52' };
+  if (score >= 90) return { grade: 'A', color: '#2D7A52' };
   if (score >= 85) return { grade: 'A-', color: '#22c55e' };
   if (score >= 80) return { grade: 'B+', color: '#84cc16' };
   if (score >= 75) return { grade: 'B', color: '#84cc16' };
@@ -154,8 +154,8 @@ export function GradeBadge({ score, grade: propGrade, size = 'sm' }) {
  */
 export function GradeLegend({ compact = false }) {
   const grades = [
-    { grade: 'A+', min: 95, color: '#10b981' },
-    { grade: 'A', min: 90, color: '#10b981' },
+    { grade: 'A+', min: 95, color: '#2D7A52' },
+    { grade: 'A', min: 90, color: '#2D7A52' },
     { grade: 'A-', min: 85, color: '#22c55e' },
     { grade: 'B+', min: 80, color: '#84cc16' },
     { grade: 'B', min: 75, color: '#84cc16' },

@@ -92,7 +92,7 @@ export const DEFAULT_NOTIFICATIONS = {
 
 export const DEFAULT_BOOKING_PAGE = {
   branding: {
-    logo_url: null, primary_color: '#218D8D', secondary_color: '#e6f5f5',
+    logo_url: null, primary_color: '#1F3D2E', secondary_color: '#e6f5f5',
     tagline: '', welcome_message: 'Schedule a time to meet with us', show_branding: true,
   },
   booking_links: [],

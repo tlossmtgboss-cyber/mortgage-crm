@@ -137,8 +137,8 @@
 }
 
 .stage-checkbox.checked {
-  background: #10B981;
-  border-color: #10B981;
+  background: #2D7A52;
+  border-color: #2D7A52;
   color: white;
 }
 
@@ -441,7 +441,7 @@
 .category-count {
   font-size: 12px;
   font-weight: 500;
-  color: #10B981;
+  color: #2D7A52;
   background: #D1FAE5;
   padding: 2px 8px;
   border-radius: 10px;
@@ -471,7 +471,7 @@
 }
 
 .feature-card.enabled {
-  border-color: #10B981;
+  border-color: #2D7A52;
   background: #F0FDF4;
 }
 
@@ -484,7 +484,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #10B981;
+  accent-color: #2D7A52;
 }
 
 .feature-info {
@@ -510,7 +510,7 @@
 }
 
 .feature-card.enabled .feature-description {
-  color: #047857;
+  color: #1F5A3A;
 }
 
 /* Navigation */
@@ -544,14 +544,14 @@
 }
 
 .continue-btn {
-  background: #10B981;
+  background: #2D7A52;
   color: white;
   border: none;
   margin-left: auto;
 }
 
 .continue-btn:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .continue-btn:disabled {

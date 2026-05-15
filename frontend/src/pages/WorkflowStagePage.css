@@ -574,7 +574,7 @@
 
 .done-edit-btn {
   align-self: flex-end;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -587,7 +587,7 @@
 }
 
 .done-edit-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Edit form actions row */

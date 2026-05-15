@@ -664,7 +664,7 @@ const UserProfileSettings = () => {
                           <input type="checkbox" checked={isEnabled} onChange={() => toggleWorkDay(day.id)} style={{ opacity: 0, width: 0, height: 0 }} />
                           <span style={{
                             position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-                            backgroundColor: isEnabled ? '#217F8D' : '#d1d5db', borderRadius: '18px', transition: 'background-color 0.2s'
+                            backgroundColor: isEnabled ? '#1F3D2E' : '#d1d5db', borderRadius: '18px', transition: 'background-color 0.2s'
                           }}>
                             <span style={{
                               position: 'absolute', height: '14px', width: '14px', left: isEnabled ? '18px' : '2px', bottom: '2px',
@@ -735,8 +735,8 @@ const UserProfileSettings = () => {
                               <button key={d} type="button" onClick={() => toggleBlockedDay(idx, fullDay)}
                                 style={{
                                   padding: '1px 5px', fontSize: '10px', borderRadius: '3px', cursor: 'pointer',
-                                  border: '1px solid', borderColor: sel ? '#217F8D' : '#d1d5db',
-                                  background: sel ? 'rgba(33,127,141,0.1)' : '#fff', color: sel ? '#217F8D' : '#999',
+                                  border: '1px solid', borderColor: sel ? '#1F3D2E' : '#d1d5db',
+                                  background: sel ? 'rgba(33,127,141,0.1)' : '#fff', color: sel ? '#1F3D2E' : '#999',
                                   fontWeight: sel ? '600' : '400'
                                 }}>
                                 {d}
@@ -775,7 +775,7 @@ const UserProfileSettings = () => {
                 <button type="button" onClick={addBlockedTime}
                   style={{
                     padding: '8px 16px', background: '#fff', border: '2px dashed #d1d5db', borderRadius: '8px',
-                    cursor: 'pointer', fontSize: '13px', color: '#217F8D', fontWeight: '500',
+                    cursor: 'pointer', fontSize: '13px', color: '#1F3D2E', fontWeight: '500',
                     display: 'flex', alignItems: 'center', gap: '6px'
                   }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>

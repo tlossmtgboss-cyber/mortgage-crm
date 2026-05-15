@@ -51,9 +51,9 @@ const QUICK_COMMANDS = [
 // Map action types to display config
 const ACTION_CONFIG = {
   sms_sent: {
-    color: '#10b981',
+    color: '#2D7A52',
     bg: '#f0fdf4',
-    border: '#10b981',
+    border: '#2D7A52',
     label: 'SMS Sent',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -73,9 +73,9 @@ const ACTION_CONFIG = {
     ),
   },
   appointment_scheduled: {
-    color: '#7c3aed',
-    bg: '#f5f3ff',
-    border: '#7c3aed',
+    color: '#B8924A',
+    bg: '#FDF9F0',
+    border: '#B8924A',
     label: 'Appointment Scheduled',
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

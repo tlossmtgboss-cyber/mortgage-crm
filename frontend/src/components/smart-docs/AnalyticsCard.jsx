@@ -89,10 +89,10 @@ function AnalyticsCard({
 
   // Sparkline color based on status
   const sparklineColor = useMemo(() => {
-    if (status === 'success') return 'var(--color-success, #217F8D)';
+    if (status === 'success') return 'var(--color-success, #1F3D2E)';
     if (status === 'warning') return 'var(--color-warning, #A84B2F)';
     if (status === 'error') return 'var(--color-error, #C0152F)';
-    return 'var(--color-primary, #217F8D)';
+    return 'var(--color-primary, #1F3D2E)';
   }, [status]);
 
   return (

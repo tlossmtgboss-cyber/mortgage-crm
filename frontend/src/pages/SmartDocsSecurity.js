@@ -26,7 +26,7 @@ const PERIOD_OPTIONS = [
 const ACTION_COLORS = {
   view: { bg: '#dbeafe', color: '#1d4ed8' },
   download: { bg: '#dcfce7', color: '#15803d' },
-  upload: { bg: '#ede9fe', color: '#6d28d9' },
+  upload: { bg: '#FAF3E5', color: '#8A6D30' },
   delete: { bg: '#fee2e2', color: '#dc2626' },
   share: { bg: '#fef3c7', color: '#92400e' },
   edit: { bg: '#ffedd5', color: '#c2410c' },

@@ -34,7 +34,7 @@
 
 .address-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.15);
 }
 
@@ -63,7 +63,7 @@
   width: 20px;
   height: 20px;
   border: 2px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -213,7 +213,7 @@
 
 /* Accessibility - Focus visible */
 .suggestion-item:focus-visible {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: -2px;
 }
 

@@ -587,7 +587,7 @@ const SLASettings = () => {
           cursor: 'grab',
           transition: 'all 0.2s ease',
           background: hasPendingChanges ? '#fffbeb' : dragOverItem === measure.id ? '#e0f2f1' : undefined,
-          borderTop: dragOverItem === measure.id ? '3px solid #218D8D' : undefined
+          borderTop: dragOverItem === measure.id ? '3px solid #1F3D2E' : undefined
         }}
       >
         <td>
@@ -612,7 +612,7 @@ const SLASettings = () => {
                 style={{
                   width: '50px',
                   padding: '4px 6px',
-                  border: '1px solid #218D8D',
+                  border: '1px solid #1F3D2E',
                   borderRadius: '4px',
                   fontSize: '13px'
                 }}
@@ -627,7 +627,7 @@ const SLASettings = () => {
                 onChange={(e) => handleInlineEdit(measure.id, 'target_unit', e.target.value)}
                 style={{
                   padding: '4px 6px',
-                  border: '1px solid #218D8D',
+                  border: '1px solid #1F3D2E',
                   borderRadius: '4px',
                   fontSize: '13px'
                 }}
@@ -640,7 +640,7 @@ const SLASettings = () => {
                 onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'target'); }}
                 style={{
                   padding: '4px 8px',
-                  background: '#218D8D',
+                  background: '#1F3D2E',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -687,7 +687,7 @@ const SLASettings = () => {
                 onChange={(e) => handleInlineEdit(measure.id, 'trigger_from', e.target.value)}
                 style={{
                   padding: '4px 6px',
-                  border: '1px solid #218D8D',
+                  border: '1px solid #1F3D2E',
                   borderRadius: '4px',
                   fontSize: '13px',
                   maxWidth: '150px'
@@ -706,7 +706,7 @@ const SLASettings = () => {
                 onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'trigger'); }}
                 style={{
                   padding: '4px 8px',
-                  background: '#218D8D',
+                  background: '#1F3D2E',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -771,7 +771,7 @@ const SLASettings = () => {
                 style={{
                   width: '50px',
                   padding: '4px 6px',
-                  border: '1px solid #218D8D',
+                  border: '1px solid #1F3D2E',
                   borderRadius: '4px',
                   fontSize: '13px'
                 }}
@@ -786,7 +786,7 @@ const SLASettings = () => {
                 onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'warning'); }}
                 style={{
                   padding: '4px 8px',
-                  background: '#218D8D',
+                  background: '#1F3D2E',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -833,7 +833,7 @@ const SLASettings = () => {
                 onChange={(e) => handleInlineEdit(measure.id, 'workflow_configuration_id', e.target.value ? parseInt(e.target.value) : null)}
                 style={{
                   padding: '4px 6px',
-                  border: '1px solid #218D8D',
+                  border: '1px solid #1F3D2E',
                   borderRadius: '4px',
                   fontSize: '13px',
                   minWidth: '120px'
@@ -853,7 +853,7 @@ const SLASettings = () => {
                 onClick={(e) => { e.stopPropagation(); saveInlineEdit(measure.id, 'workflow'); }}
                 style={{
                   padding: '4px 8px',
-                  background: '#218D8D',
+                  background: '#1F3D2E',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
@@ -1189,7 +1189,7 @@ const SLASettings = () => {
               style={{
                 marginLeft: 'auto',
                 padding: '8px 16px',
-                background: '#218D8D',
+                background: '#1F3D2E',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -1431,7 +1431,7 @@ const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSen
           <>
             <div className="trend-stats" style={{ marginBottom: '24px' }}>
               <div className="trend-stat">
-                <div className="value" style={{ color: runRates.summary?.health_score >= 80 ? '#10b981' : runRates.summary?.health_score >= 60 ? '#f59e0b' : '#ef4444' }}>
+                <div className="value" style={{ color: runRates.summary?.health_score >= 80 ? '#2D7A52' : runRates.summary?.health_score >= 60 ? '#f59e0b' : '#ef4444' }}>
                   {runRates.summary?.health_score || 100}
                 </div>
                 <div className="label">Health Score</div>
@@ -1488,7 +1488,7 @@ const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSen
                         <td>{rr.weekly_run_rate}</td>
                         <td>
                           <span style={{
-                            color: rr.on_time_rate >= 85 ? '#10b981' : rr.on_time_rate >= 70 ? '#f59e0b' : '#ef4444'
+                            color: rr.on_time_rate >= 85 ? '#2D7A52' : rr.on_time_rate >= 70 ? '#f59e0b' : '#ef4444'
                           }}>
                             {rr.on_time_rate}%
                           </span>
@@ -1547,7 +1547,7 @@ const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSen
                       borderRadius: '6px',
                       marginBottom: '8px',
                       cursor: 'pointer',
-                      border: selectedRecipients.find(r => r.email === member.email) ? '1px solid #218D8D' : '1px solid transparent'
+                      border: selectedRecipients.find(r => r.email === member.email) ? '1px solid #1F3D2E' : '1px solid transparent'
                     }}
                   >
                     <input
@@ -1622,7 +1622,7 @@ const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSen
                         alignItems: 'center',
                         gap: '6px',
                         padding: '4px 10px',
-                        background: '#218D8D',
+                        background: '#1F3D2E',
                         color: 'white',
                         borderRadius: '16px',
                         fontSize: '12px'
@@ -1688,7 +1688,7 @@ const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSen
               disabled={sendingReport || selectedRecipients.length === 0}
               style={{
                 padding: '12px 24px',
-                background: selectedRecipients.length === 0 ? '#9ca3af' : '#218D8D',
+                background: selectedRecipients.length === 0 ? '#9ca3af' : '#1F3D2E',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
@@ -2057,10 +2057,10 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
 
   const getStatusColor = () => {
     switch (type) {
-      case 'on_track': return '#10b981';
+      case 'on_track': return '#2D7A52';
       case 'at_risk': return '#f59e0b';
       case 'overdue': return '#ef4444';
-      case 'health': return '#8b5cf6';
+      case 'health': return '#B8924A';
       default: return '#6b7280';
     }
   };
@@ -2164,7 +2164,7 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                 <td style={{ padding: '10px 12px' }}>
                   <div style={{
                     fontWeight: '500',
-                    color: loan.is_overdue ? '#ef4444' : loan.is_at_risk ? '#f59e0b' : '#10b981'
+                    color: loan.is_overdue ? '#ef4444' : loan.is_at_risk ? '#f59e0b' : '#2D7A52'
                   }}>
                     {formatTimeRemaining(loan.hours_remaining)}
                   </div>
@@ -2182,7 +2182,7 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                     <div style={{
                       width: `${Math.min(loan.pct_used || 0, 100)}%`,
                       height: '100%',
-                      background: loan.is_overdue ? '#ef4444' : loan.is_at_risk ? '#f59e0b' : '#10b981',
+                      background: loan.is_overdue ? '#ef4444' : loan.is_at_risk ? '#f59e0b' : '#2D7A52',
                       borderRadius: '4px',
                       transition: 'width 0.3s'
                     }}></div>
@@ -2237,7 +2237,7 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                 <div style={{
                   fontSize: '64px',
                   fontWeight: '700',
-                  color: (runRates?.summary?.health_score || 100) >= 80 ? '#10b981' :
+                  color: (runRates?.summary?.health_score || 100) >= 80 ? '#2D7A52' :
                          (runRates?.summary?.health_score || 100) >= 60 ? '#f59e0b' : '#ef4444'
                 }}>
                   {runRates?.summary?.health_score || 100}
@@ -2261,7 +2261,7 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
                   <div style={{
                     fontSize: '24px',
                     fontWeight: '600',
-                    color: (summary?.overall_on_time_rate || 0) >= 85 ? '#10b981' : '#f59e0b'
+                    color: (summary?.overall_on_time_rate || 0) >= 85 ? '#2D7A52' : '#f59e0b'
                   }}>
                     {(summary?.overall_on_time_rate || 0).toFixed(1)}%
                   </div>

@@ -287,8 +287,8 @@ export const getGradeFromScore = (score) => {
   }
 
   const grades = [
-    { min: 95, grade: 'A+', color: '#10b981', description: 'Exceptional' },
-    { min: 90, grade: 'A', color: '#10b981', description: 'Excellent' },
+    { min: 95, grade: 'A+', color: '#2D7A52', description: 'Exceptional' },
+    { min: 90, grade: 'A', color: '#2D7A52', description: 'Excellent' },
     { min: 85, grade: 'A-', color: '#22c55e', description: 'Very Good' },
     { min: 80, grade: 'B+', color: '#84cc16', description: 'Good' },
     { min: 75, grade: 'B', color: '#84cc16', description: 'Above Average' },

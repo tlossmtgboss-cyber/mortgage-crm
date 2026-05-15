@@ -29,7 +29,7 @@ const CATEGORY_OPTIONS = [
 const CATEGORY_COLORS = {
   scheduling: { bg: '#e0f2fe', text: '#0369a1' },
   question: { bg: '#fef3c7', text: '#92400e' },
-  document_request: { bg: '#ede9fe', text: '#6d28d9' },
+  document_request: { bg: '#FAF3E5', text: '#8A6D30' },
   status_update: { bg: '#d1fae5', text: '#065f46' },
   rate_inquiry: { bg: '#fce7f3', text: '#9d174d' },
   general: { bg: '#f3f4f6', text: '#374151' },

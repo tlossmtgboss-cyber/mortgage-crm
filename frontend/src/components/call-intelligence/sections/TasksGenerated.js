@@ -46,7 +46,7 @@ const TasksGenerated = ({ tasks, actionItems, onApprove }) => {
           <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Pending</div>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#10b981' }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#2D7A52' }}>
             {approvedItems.length}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Approved</div>

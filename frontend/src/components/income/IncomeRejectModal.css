@@ -197,7 +197,7 @@
 
 .income-reject-select:focus {
   outline: none;
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
 }
 
@@ -224,7 +224,7 @@
 
 .income-reject-textarea:focus {
   outline: none;
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
 }
 
@@ -269,7 +269,7 @@
 .income-reject-checkbox-row input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: var(--color-primary, #217F8D);
+  accent-color: var(--color-primary, #1F3D2E);
   flex-shrink: 0;
   cursor: pointer;
 }

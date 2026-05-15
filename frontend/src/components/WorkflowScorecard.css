@@ -173,7 +173,7 @@
   color: #1f2937;
 }
 
-.kpi-item.success .kpi-value { color: #10b981; }
+.kpi-item.success .kpi-value { color: #2D7A52; }
 .kpi-item.warning .kpi-value { color: #f59e0b; }
 .kpi-item.danger .kpi-value { color: #ef4444; }
 
@@ -233,7 +233,7 @@
 }
 
 .role-abbr {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   padding: 6px 10px;
   border-radius: 6px;
@@ -282,7 +282,7 @@
   color: #1f2937;
 }
 
-.role-metrics .metric.success .value { color: #10b981; }
+.role-metrics .metric.success .value { color: #2D7A52; }
 .role-metrics .metric.warning .value { color: #f59e0b; }
 .role-metrics .metric.danger .value { color: #ef4444; }
 
@@ -339,7 +339,7 @@
   color: #1f2937;
 }
 
-.role-stats .stat-value.success { color: #10b981; }
+.role-stats .stat-value.success { color: #2D7A52; }
 .role-stats .stat-value.warning { color: #f59e0b; }
 .role-stats .stat-value.danger { color: #ef4444; }
 
@@ -380,7 +380,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -433,7 +433,7 @@
   color: #1f2937;
 }
 
-.mini-stat.success .value { color: #10b981; }
+.mini-stat.success .value { color: #2D7A52; }
 .mini-stat.danger .value { color: #ef4444; }
 
 .mini-stat .label {
@@ -499,7 +499,7 @@
   color: #1f2937;
 }
 
-.employee-kpis .kpi-card.success .kpi-value { color: #10b981; }
+.employee-kpis .kpi-card.success .kpi-value { color: #2D7A52; }
 .employee-kpis .kpi-card.warning .kpi-value { color: #f59e0b; }
 .employee-kpis .kpi-card.danger .kpi-value { color: #ef4444; }
 
@@ -555,7 +555,7 @@
 
 .status-badge.completed {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-badge.late {
@@ -857,7 +857,7 @@
 
 .consistency-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981, #34d399);
+  background: linear-gradient(90deg, #2D7A52, #34d399);
   border-radius: 10px;
 }
 
@@ -872,7 +872,7 @@
 }
 
 .capacity-leaderboard-table td.positive {
-  color: #059669;
+  color: #2D7A52;
   font-weight: 600;
 }
 

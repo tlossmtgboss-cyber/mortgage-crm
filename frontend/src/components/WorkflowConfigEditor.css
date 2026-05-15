@@ -63,7 +63,7 @@
   align-items: flex-start;
   padding-bottom: 16px;
   margin-bottom: 20px;
-  border-bottom: 3px solid #667eea;
+  border-bottom: 3px solid #1F3D2E;
 }
 
 .editor-title h2 {
@@ -84,13 +84,13 @@
 }
 
 .saving-indicator {
-  color: #667eea;
+  color: #1F3D2E;
   font-size: 13px;
   font-weight: 500;
 }
 
 .save-success {
-  color: #10b981;
+  color: #2D7A52;
   font-size: 13px;
   font-weight: 500;
   animation: fadeIn 0.3s ease-in-out;
@@ -108,7 +108,7 @@
 
 .btn-save {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -224,7 +224,7 @@
 }
 
 .role-assignment-card:hover {
-  border-color: #667eea;
+  border-color: #1F3D2E;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
 }
 
@@ -266,14 +266,14 @@
 .role-user select {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid #667eea;
+  border: 1px solid #1F3D2E;
   border-radius: 4px;
   font-size: 13px;
   background: white;
 }
 
 .role-user .assigned {
-  color: #059669;
+  color: #2D7A52;
   font-weight: 500;
   font-size: 13px;
 }
@@ -453,13 +453,13 @@
 }
 
 .checkbox-wrapper input:checked + .custom-checkbox {
-  background: #667eea;
-  border-color: #667eea;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
 }
 
 .checkbox-wrapper input:checked + .custom-checkbox.checked {
-  background: #667eea;
-  border-color: #667eea;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
 }
 
 /* Row States */
@@ -500,8 +500,8 @@
 }
 
 .btn-edit-day:hover {
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: #F5EDD9;
+  color: #8A6D30;
 }
 
 .btn-delete-day {
@@ -525,7 +525,7 @@
 
 .btn-add-day {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #5a67d8 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -567,13 +567,13 @@
 .input-day-label:focus,
 .input-day-value:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .btn-save-day {
   padding: 10px 20px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -583,7 +583,7 @@
 }
 
 .btn-save-day:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .btn-save-day:disabled {
@@ -665,7 +665,7 @@
 
 .btn-retry {
   padding: 10px 20px;
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -683,7 +683,7 @@
 
 .btn-add-role {
   padding: 8px 16px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -774,7 +774,7 @@
 .modal-content .form-group input:focus,
 .modal-content .form-group select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
@@ -787,7 +787,7 @@
 
 .btn-save {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #5a67d8 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -897,7 +897,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #667eea;
+  accent-color: #1F3D2E;
 }
 
 .form-group.checkbox-group .checkbox-text {

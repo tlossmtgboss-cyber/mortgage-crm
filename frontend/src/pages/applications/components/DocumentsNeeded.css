@@ -37,7 +37,7 @@
 }
 
 .document-count {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   padding: 4px 12px;
   border-radius: 12px;
@@ -50,7 +50,7 @@
   padding: 8px;
   background: rgba(33, 127, 141, 0.1);
   border-radius: var(--radius-sm, 6px);
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   font-size: 13px;
   margin-bottom: 16px;
 }
@@ -107,7 +107,7 @@
 }
 
 .document-item:hover {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 2px 6px rgba(33, 127, 141, 0.15);
 }
 
@@ -139,7 +139,7 @@
 
 .badge-optional {
   background: rgba(33, 127, 141, 0.1);
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 11px;

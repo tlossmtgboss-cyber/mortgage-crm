@@ -13,11 +13,11 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Category metadata for grouping
 const CATEGORY_META = {
-  ai_tools: { label: 'AI Tools', icon: '🤖', color: '#7c3aed' },
+  ai_tools: { label: 'AI Tools', icon: '🤖', color: '#B8924A' },
   communication: { label: 'Communication', icon: '💬', color: '#0ea5e9' },
-  analytics: { label: 'Analytics', icon: '📊', color: '#10b981' },
+  analytics: { label: 'Analytics', icon: '📊', color: '#2D7A52' },
   operations: { label: 'Operations', icon: '⚙️', color: '#f59e0b' },
-  administration: { label: 'Administration', icon: '🛡️', color: '#6366f1' },
+  administration: { label: 'Administration', icon: '🛡️', color: '#B8924A' },
   integrations: { label: 'Integrations', icon: '🔌', color: '#ec4899' }
 };
 
@@ -25,7 +25,7 @@ const CATEGORY_META = {
 const STATUS_BADGES = {
   development: { label: 'Development', color: '#ef4444', description: 'Hidden from all users' },
   beta: { label: 'BETA', color: '#f59e0b', description: 'Visible with beta badge' },
-  stable: { label: 'Stable', color: '#10b981', description: 'Production ready' }
+  stable: { label: 'Stable', color: '#2D7A52', description: 'Production ready' }
 };
 
 function FeatureManagement({ companyId = 1 }) {

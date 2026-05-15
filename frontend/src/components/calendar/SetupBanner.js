@@ -21,7 +21,7 @@ const SetupBanner = React.memo(function SetupBanner({ onDismiss }) {
       className="calendar-setup-banner"
       role="status"
       style={{
-        background: 'linear-gradient(135deg, #218D8D 0%, #1a7575 100%)',
+        background: 'linear-gradient(135deg, #1F3D2E 0%, #1a7575 100%)',
         color: '#fff',
         padding: '12px 20px',
         display: 'flex',
@@ -47,7 +47,7 @@ const SetupBanner = React.memo(function SetupBanner({ onDismiss }) {
           to="/calendar/setup"
           style={{
             background: '#fff',
-            color: '#218D8D',
+            color: '#1F3D2E',
             padding: '6px 16px',
             borderRadius: '6px',
             fontWeight: 600,

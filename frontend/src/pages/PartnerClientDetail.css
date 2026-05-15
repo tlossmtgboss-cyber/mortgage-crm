@@ -30,7 +30,7 @@
   width: 48px;
   height: 48px;
   border: 3px solid #e2e8f0;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -68,7 +68,7 @@
 
 .btn-back {
   padding: 0.875rem 1.75rem;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 10px;
@@ -79,7 +79,7 @@
 }
 
 .btn-back:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
 }
 
@@ -110,7 +110,7 @@
 }
 
 .back-btn:hover {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* ============================================
@@ -141,7 +141,7 @@
 .client-avatar-large {
   width: 64px;
   height: 64px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 16px;
   display: flex;
@@ -192,7 +192,7 @@
 .stage-badge .badge-dot {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 2s ease-in-out infinite;
 }
@@ -219,8 +219,8 @@
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
   background: white;
-  color: #218D8D;
-  border: 1px solid #218D8D;
+  color: #1F3D2E;
+  border: 1px solid #1F3D2E;
   border-radius: 8px;
   font-weight: 600;
   font-size: 0.875rem;
@@ -261,7 +261,7 @@
   transform: translate(-50%, -50%);
   font-size: 1.5rem;
   font-weight: 800;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Legacy progress circle (for header) */
@@ -407,7 +407,7 @@
 
 .activity-badge {
   padding: 0.25rem 0.625rem;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -416,7 +416,7 @@
 
 .card-badge {
   padding: 0.25rem 0.625rem;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -479,7 +479,7 @@
 }
 
 .progress-stat .stat-number.received {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .progress-stat .stat-number.total {
@@ -514,7 +514,7 @@
 .progress-bar-fill {
   height: 100%;
   border-radius: 5px;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #2D7A52 0%, #2D7A52 100%);
   transition: width 0.5s ease;
 }
 
@@ -765,7 +765,7 @@
   width: 100%;
   margin-top: 1rem;
   padding: 0.875rem 1rem;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 10px;
@@ -780,7 +780,7 @@
 }
 
 .btn-view-docs:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
 }
 
@@ -789,7 +789,7 @@
   width: 100%;
   margin-top: 1rem;
   padding: 0.875rem 1rem;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 10px;
@@ -804,7 +804,7 @@
 }
 
 .view-all-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
 }
 
@@ -882,7 +882,7 @@
 
 .note-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -893,7 +893,7 @@
 
 .add-note-btn {
   padding: 0.75rem 1.25rem;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -905,7 +905,7 @@
 }
 
 .add-note-btn:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .add-note-btn:disabled {
@@ -1042,7 +1042,7 @@
 .timeline-icon.note { background: #e0f2fe; color: #0284c7; }
 .timeline-icon.status { background: #dcfce7; color: #16a34a; }
 .timeline-icon.email { background: #fef3c7; color: #d97706; }
-.timeline-icon.call { background: #f3e8ff; color: #9333ea; }
+.timeline-icon.call { background: #f3e8ff; color: #B8924A; }
 .timeline-icon.document { background: #ccfbf1; color: #0d9488; }
 .timeline-icon.default { background: #f1f5f9; color: #64748b; }
 
@@ -1132,7 +1132,7 @@
 }
 
 .contact-row a {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
 }
 
@@ -1158,7 +1158,7 @@
 .lo-avatar {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border-radius: 12px;
   display: flex;
@@ -1186,7 +1186,7 @@
   align-items: center;
   gap: 0.375rem;
   font-size: 0.85rem;
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
 }
 
@@ -1218,7 +1218,7 @@
 .contact-avatar {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border-radius: 12px;
   display: flex;
@@ -1251,7 +1251,7 @@
 }
 
 .contact-info .detail a {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
 }
 
@@ -1434,14 +1434,14 @@
 
 .status-blue { background: #e0f2fe; color: #0369a1; }
 .status-yellow { background: #fef3c7; color: #b45309; }
-.status-purple { background: #f3e8ff; color: #7c3aed; }
+.status-purple { background: #f3e8ff; color: #B8924A; }
 .status-orange { background: #ffedd5; color: #c2410c; }
 .status-cyan { background: #cffafe; color: #0891b2; }
 .status-teal { background: #ccfbf1; color: #0d9488; }
 .status-green { background: #dcfce7; color: #16a34a; }
-.status-emerald { background: #d1fae5; color: #059669; }
-.status-indigo { background: #e0e7ff; color: #4f46e5; }
-.status-violet { background: #ede9fe; color: #7c3aed; }
+.status-emerald { background: #d1fae5; color: #2D7A52; }
+.status-indigo { background: #F5EDD9; color: #8A6D30; }
+.status-violet { background: #FAF3E5; color: #B8924A; }
 .status-gray { background: #f1f5f9; color: #475569; }
 .status-red { background: #fee2e2; color: #dc2626; }
 
@@ -1594,7 +1594,7 @@
   padding: 0.75rem 1rem;
   background: #f8fafc;
   border-radius: 10px;
-  border-left: 3px solid #218D8D;
+  border-left: 3px solid #1F3D2E;
 }
 
 .important-date-item .date-icon {
@@ -1617,7 +1617,7 @@
 
 .important-date-item .date-value {
   font-size: 0.875rem;
-  color: #218D8D;
+  color: #1F3D2E;
   font-weight: 700;
 }
 
@@ -1682,7 +1682,7 @@
   }
 
   .welcome-header {
-    background: #218D8D !important;
+    background: #1F3D2E !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

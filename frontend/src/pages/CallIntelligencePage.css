@@ -206,7 +206,7 @@
 
 .metric-card.active .metric-icon {
   background: #dcfce7;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .metric-card.active .metric-icon.pulse {
@@ -225,7 +225,7 @@
 
 .metric-card.conversion .metric-icon {
   background: #f3e8ff;
-  color: #a855f7;
+  color: #C9A44E;
 }
 
 .metric-content .metric-value {
@@ -351,7 +351,7 @@
 }
 
 .status-dot.status-active {
-  background: #10b981;
+  background: #2D7A52;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
@@ -447,7 +447,7 @@
 .live-indicator {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
@@ -461,7 +461,7 @@
 .active-call-card .call-duration {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #059669;
+  color: #2D7A52;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -925,7 +925,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: #10b981;
+  background: #2D7A52;
   border: none;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -935,7 +935,7 @@
 }
 
 .crp-approve-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .crp-reject-btn {
@@ -1102,7 +1102,7 @@
 .acm-panel-header .live-dot {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
@@ -1250,7 +1250,7 @@
   gap: 8px;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #059669;
+  color: #2D7A52;
   margin-top: 4px;
 }
 
@@ -1263,14 +1263,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 500;
 }
 
 .pulse-dot {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 1.5s infinite;
 }
@@ -1377,7 +1377,7 @@
 }
 
 .speaker-label.client {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .transcript-text {
@@ -1430,7 +1430,7 @@
 
 .lca-suggestion.priority-low {
   background: #f0fdf4;
-  border-color: #10b981;
+  border-color: #2D7A52;
 }
 
 .suggestion-icon {
@@ -1916,7 +1916,7 @@
   font-weight: 600;
 }
 
-.completeness-value.good { color: #10b981; }
+.completeness-value.good { color: #2D7A52; }
 .completeness-value.ok { color: #f59e0b; }
 .completeness-value.low { color: #dc2626; }
 
@@ -1934,7 +1934,7 @@
   transition: width 0.3s;
 }
 
-.completeness-fill.good { background: #10b981; }
+.completeness-fill.good { background: #2D7A52; }
 .completeness-fill.ok { background: #f59e0b; }
 .completeness-fill.low { background: #dc2626; }
 
@@ -1964,7 +1964,7 @@
 }
 
 .legend-item.extracted .legend-dot {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .legend-item.required .legend-dot {
@@ -2054,7 +2054,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .field-input {

@@ -102,12 +102,12 @@
 }
 
 .update-modal-button--primary {
-  background: #4F46E5;
+  background: #8A6D30;
   color: #ffffff;
 }
 
 .update-modal-button--primary:hover {
-  background: #4338CA;
+  background: #6B5424;
 }
 
 /* --------------------------------------------------------------------------
@@ -125,8 +125,8 @@
   gap: 8px;
   padding: 10px 16px;
   padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
-  background: #EEF2FF;
-  border-bottom: 1px solid #C7D2FE;
+  background: #FDF9F0;
+  border-bottom: 1px solid #EDE0C4;
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
   animation: update-banner-slide-down 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
@@ -170,17 +170,17 @@
 }
 
 .update-banner-btn--update {
-  background: #4F46E5;
+  background: #8A6D30;
   color: #ffffff;
 }
 
 .update-banner-btn--update:hover {
-  background: #4338CA;
+  background: #6B5424;
 }
 
 .update-banner-btn--later {
   background: transparent;
-  color: #6366F1;
+  color: #B8924A;
 }
 
 .update-banner-btn--later:hover {

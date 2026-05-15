@@ -88,7 +88,7 @@
 }
 
 .appt-detail-attendee--link {
-  color: #218D8D;
+  color: #1F3D2E;
   cursor: pointer;
   font-weight: 500;
 }
@@ -144,7 +144,7 @@
 }
 
 .appt-detail-link {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: none;
   font-weight: 500;
 }
@@ -205,12 +205,12 @@
 }
 
 .appt-detail-btn--primary {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
 }
 
 .appt-detail-btn--primary:hover {
-  background: linear-gradient(135deg, #1a7070 0%, #155a5a 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #155a5a 100%);
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
 }

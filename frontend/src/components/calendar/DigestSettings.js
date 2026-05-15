@@ -133,7 +133,7 @@ export default function DigestSettings({ digest, onChange }) {
               <p>Sent {d.frequency === 'weekly' ? `every ${DAY_OPTIONS.find(o => o.value === d.day_of_week)?.label || 'Monday'}` : d.frequency === 'weekdays' ? 'Mon-Fri' : 'every day'} at {formatTime(d.send_time)}</p>
               <div className="digest-preview-items">
                 <div className="digest-preview-item">
-                  <span className="digest-dot" style={{ background: '#218D8D' }}></span>
+                  <span className="digest-dot" style={{ background: '#1F3D2E' }}></span>
                   <span>3 upcoming appointments</span>
                 </div>
                 {d.include_cancelled && (

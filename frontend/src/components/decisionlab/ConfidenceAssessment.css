@@ -18,7 +18,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e5e7eb;
-  border-top-color: #217F8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -83,7 +83,7 @@
 .progress-percent {
   font-size: 14px;
   font-weight: 600;
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .progress-bar {
@@ -95,7 +95,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #217F8D 0%, #34d399 100%);
+  background: linear-gradient(90deg, #1F3D2E 0%, #34d399 100%);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -143,7 +143,7 @@
 .category-badge.process_understanding,
 .category-badge.process {
   background: #f3e8ff;
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .category-badge.emotional_readiness,
@@ -193,7 +193,7 @@
 
 .answer-option.selected {
   background: #e0f2fe;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .option-indicator {
@@ -212,7 +212,7 @@
 }
 
 .answer-option.selected .option-indicator {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -225,7 +225,7 @@
 .check-icon {
   width: 20px;
   height: 20px;
-  color: #217F8D;
+  color: #1F3D2E;
   margin-left: 12px;
 }
 
@@ -261,7 +261,7 @@
 
 .scale-option.selected {
   background: #e0f2fe;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .scale-number {
@@ -271,7 +271,7 @@
 }
 
 .scale-option.selected .scale-number {
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .scale-label-text {
@@ -325,7 +325,7 @@
 
 .number-input:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 /* Confidence Selector */
@@ -367,7 +367,7 @@
 }
 
 .confidence-option.selected {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #e0f2fe;
 }
 
@@ -423,7 +423,7 @@
 
 .submit-button {
   padding: 12px 32px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 8px;

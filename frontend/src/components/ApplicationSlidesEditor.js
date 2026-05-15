@@ -97,9 +97,9 @@ const getCategoryClass = (category) => {
 // Helper to get category color
 const getCategoryColor = (category) => {
   const colors = {
-    'Basic Info': '#3b82f6', 'Home History': '#10b981', 'Location': '#f59e0b',
-    'Personal': '#ec4899', 'Financial': '#8b5cf6', 'Military': '#059669',
-    'Employment': '#6366f1', 'Credit': '#ef4444', 'Assets': '#14b8a6',
+    'Basic Info': '#3b82f6', 'Home History': '#2D7A52', 'Location': '#f59e0b',
+    'Personal': '#ec4899', 'Financial': '#B8924A', 'Military': '#2D7A52',
+    'Employment': '#B8924A', 'Credit': '#ef4444', 'Assets': '#14b8a6',
     'Goals': '#f97316', 'Property': '#0ea5e9'
   };
   return colors[category] || '#6b7280';

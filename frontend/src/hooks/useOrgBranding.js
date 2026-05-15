@@ -8,7 +8,7 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 const DEFAULT_BRANDING = {
   org_name: 'Perennia AI',
   logo_url: null,
-  primary_color: '#217F8D',
+  primary_color: '#1F3D2E',
   accent_color: '#34a853',
   tagline: null,
   welcome_message: null,
@@ -40,7 +40,7 @@ export default function useOrgBranding(orgSlug, loSlug) {
   // Apply CSS custom properties to document root
   const applyBranding = useCallback((data) => {
     const root = document.documentElement;
-    root.style.setProperty('--booking-primary', data.primary_color || '#217F8D');
+    root.style.setProperty('--booking-primary', data.primary_color || '#1F3D2E');
     root.style.setProperty('--booking-accent', data.accent_color || '#34a853');
 
     // Compute a darker shade for hover states
@@ -51,7 +51,7 @@ export default function useOrgBranding(orgSlug, loSlug) {
       const b = Math.max(0, (num & 0x0000FF) - amount);
       return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
     };
-    root.style.setProperty('--booking-primary-dark', darken(data.primary_color || '#217F8D', 25));
+    root.style.setProperty('--booking-primary-dark', darken(data.primary_color || '#1F3D2E', 25));
     root.style.setProperty('--booking-accent-dark', darken(data.accent_color || '#34a853', 25));
 
     // Inject custom CSS if provided.

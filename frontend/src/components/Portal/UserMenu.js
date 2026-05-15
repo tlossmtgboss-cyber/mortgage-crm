@@ -69,12 +69,12 @@ const UserMenu = ({
     if (!name) return '#94a3b8';
     const colors = [
       '#3b82f6', // blue
-      '#8b5cf6', // violet
+      '#B8924A', // violet
       '#ec4899', // pink
       '#f59e0b', // amber
-      '#10b981', // emerald
+      '#2D7A52', // emerald
       '#06b6d4', // cyan
-      '#6366f1', // indigo
+      '#B8924A', // indigo
       '#f43f5e', // rose
     ];
     const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);

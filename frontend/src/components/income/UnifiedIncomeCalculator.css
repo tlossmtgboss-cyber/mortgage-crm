@@ -432,7 +432,7 @@
 }
 
 .queue-stat.in-review .stat-value {
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 /* Empty State */
@@ -783,7 +783,7 @@
 }
 
 .sources-count {
-  background: #10b981;
+  background: #2D7A52;
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -816,13 +816,13 @@
 }
 
 .existing-source-card:hover {
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
   transform: translateY(-1px);
 }
 
 .existing-source-card.active {
-  border-color: #10b981;
+  border-color: #2D7A52;
   background: #f0fdf4;
 }
 
@@ -862,7 +862,7 @@
 .source-amount {
   font-size: 13px;
   font-weight: 600;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .source-status {
@@ -893,7 +893,7 @@
 .existing-sources-hint {
   margin-top: 12px;
   font-size: 12px;
-  color: #059669;
+  color: #2D7A52;
   text-align: center;
   font-style: italic;
 }
@@ -1142,14 +1142,14 @@
 .uic-results .income-box .amount {
   font-size: 24px;
   font-weight: 700;
-  color: #059669;
+  color: #2D7A52;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
 }
 
 .uic-results .results-method {
   text-align: center;
   font-size: 13px;
-  color: #059669;
+  color: #2D7A52;
   margin-bottom: 16px;
 }
 
@@ -1189,7 +1189,7 @@
 }
 
 .uic-results .step-item .step-num {
-  color: #059669;
+  color: #2D7A52;
   font-weight: 600;
   min-width: 20px;
 }
@@ -1201,7 +1201,7 @@
 
 .uic-results .step-item .step-result {
   font-weight: 600;
-  color: #059669;
+  color: #2D7A52;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
 }
 
@@ -1287,7 +1287,7 @@
 
 .uic-review-queue .queue-item .item-amount {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-  color: #059669;
+  color: #2D7A52;
   font-weight: 500;
 }
 

@@ -27,8 +27,8 @@ const SOURCE_CONFIG = {
   },
   jrlo: {
     label: 'JR LO',
-    color: '#8b5cf6',
-    bgColor: '#f5f3ff',
+    color: '#B8924A',
+    bgColor: '#FDF9F0',
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <line x1="12" y1="1" x2="12" y2="23" />

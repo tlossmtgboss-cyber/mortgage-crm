@@ -44,7 +44,7 @@ const getPriorityColor = (priority) => {
     case 'urgent': return '#ef4444';
     case 'high': return '#f59e0b';
     case 'medium': return '#3b82f6';
-    case 'low': return '#10b981';
+    case 'low': return '#2D7A52';
     default: return '#6b7280';
   }
 };
@@ -288,7 +288,7 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
                           style={{
                             width: `${Math.min(100, user.capacityUtilization)}%`,
                             backgroundColor: user.capacityUtilization > 100 ? '#ef4444' :
-                                           user.capacityUtilization > 80 ? '#f59e0b' : '#10b981'
+                                           user.capacityUtilization > 80 ? '#f59e0b' : '#2D7A52'
                           }}
                         />
                         <span className="utilization-text">{user.capacityUtilization}%</span>

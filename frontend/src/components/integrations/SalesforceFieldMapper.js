@@ -79,11 +79,11 @@ const SLA_MILESTONES = [
 ];
 
 const PHASES = {
-  lead: { label: "Lead", icon: "\uD83C\uDFAF", color: "#6366f1", gradient: "linear-gradient(135deg, #6366f1, #818cf8)" },
+  lead: { label: "Lead", icon: "\uD83C\uDFAF", color: "#B8924A", gradient: "linear-gradient(135deg, #B8924A, #D4AD6A)" },
   processing: { label: "Processing", icon: "\uD83D\uDCCB", color: "#0891b2", gradient: "linear-gradient(135deg, #0891b2, #22d3ee)" },
   third_party: { label: "Third Party", icon: "\uD83C\uDFD7\uFE0F", color: "#d97706", gradient: "linear-gradient(135deg, #d97706, #fbbf24)" },
-  underwriting: { label: "Underwriting", icon: "\uD83D\uDD0D", color: "#7c3aed", gradient: "linear-gradient(135deg, #7c3aed, #a78bfa)" },
-  closing: { label: "Closing", icon: "\uD83C\uDFE0", color: "#059669", gradient: "linear-gradient(135deg, #059669, #34d399)" },
+  underwriting: { label: "Underwriting", icon: "\uD83D\uDD0D", color: "#B8924A", gradient: "linear-gradient(135deg, #B8924A, #D4AD6A)" },
+  closing: { label: "Closing", icon: "\uD83C\uDFE0", color: "#2D7A52", gradient: "linear-gradient(135deg, #2D7A52, #34d399)" },
 };
 
 // CRM Standard Fields (non-SLA) by stage
@@ -91,7 +91,7 @@ const CRM_FIELDS = {
   lead: {
     label: "Lead",
     icon: "\uD83C\uDFAF",
-    color: "#6366f1",
+    color: "#B8924A",
     sections: [
       {
         title: "Contact Info",
@@ -151,7 +151,7 @@ const CRM_FIELDS = {
   active_loan: {
     label: "Active Loan",
     icon: "\uD83D\uDCCB",
-    color: "#059669",
+    color: "#2D7A52",
     sections: [
       {
         title: "Borrower",
@@ -318,7 +318,7 @@ const TypeBadge = ({ type }) => {
     integer: { bg: "#f0fdf4", fg: "#15803d", t: "Number" },
     datetime: { bg: "#fff7ed", fg: "#c2410c", t: "DateTime" },
     date: { bg: "#fff7ed", fg: "#c2410c", t: "Date" },
-    user: { bg: "#f5f3ff", fg: "#6d28d9", t: "User" },
+    user: { bg: "#FDF9F0", fg: "#8A6D30", t: "User" },
     sensitive: { bg: "#fef2f2", fg: "#b91c1c", t: "PII" },
   }[type] || { bg: "#f3f4f6", fg: "#374151", t: type };
   return <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: c.bg, color: c.fg, letterSpacing: "0.03em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{c.t}</span>;
@@ -379,7 +379,7 @@ const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled, pl
   return (
     <div ref={ref} style={{ position: "relative", flex: 1, minWidth: 0, zIndex: open ? 1001 : "auto" }}>
       <button onClick={() => !disabled && setOpen(!open)} disabled={disabled} style={{
-        width: "100%", padding: "7px 10px", border: value ? "1.5px solid #059669" : "1.5px solid #d1d5db",
+        width: "100%", padding: "7px 10px", border: value ? "1.5px solid #2D7A52" : "1.5px solid #d1d5db",
         borderRadius: 6, background: value ? "#f0fdf4" : "#fff", cursor: disabled ? "not-allowed" : "pointer",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         fontSize: 13, color: value ? "#065f46" : "#9ca3af", fontFamily: "inherit", minHeight: 34, transition: "all 0.15s",
@@ -396,7 +396,7 @@ const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled, pl
           <div style={{ padding: 6, borderBottom: "1px solid #f3f4f6" }}>
             <input ref={inputRef} type="text" placeholder="Search by name, label, or object... (e.g. ssn, social, phone)" value={search} onChange={e => setSearch(e.target.value)}
               style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #e5e7eb", borderRadius: 6, fontSize: 12, outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
-              onFocus={e => { e.target.style.borderColor = "#6366f1"; }} onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }} />
+              onFocus={e => { e.target.style.borderColor = "#B8924A"; }} onBlur={e => { e.target.style.borderColor = "#e5e7eb"; }} />
             {search && <div style={{ fontSize: 10, color: "#9ca3af", padding: "2px 4px" }}>{filtered.length} result{filtered.length !== 1 ? "s" : ""}</div>}
           </div>
           <div style={{ overflowY: "auto", flex: 1 }}>
@@ -412,15 +412,15 @@ const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled, pl
               const showLabel = f.label && f.label !== f.apiName;
               return (
                 <button key={k} onClick={() => { onChange(k); setOpen(false); setSearch(""); }}
-                  style={{ width: "100%", padding: "7px 10px", border: "none", background: value === k ? "#ede9fe" : isSug && !search ? "#f0fdf4" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, textAlign: "left", fontFamily: "inherit", borderBottom: "1px solid #f9fafb" }}
+                  style={{ width: "100%", padding: "7px 10px", border: "none", background: value === k ? "#FAF3E5" : isSug && !search ? "#f0fdf4" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, textAlign: "left", fontFamily: "inherit", borderBottom: "1px solid #f9fafb" }}
                   onMouseEnter={e => { if (value !== k) e.currentTarget.style.background = "#f3f4f6"; }}
                   onMouseLeave={e => { if (value !== k) e.currentTarget.style.background = isSug && !search ? "#f0fdf4" : "transparent"; }}>
                   <span style={{ color: "#9ca3af", fontSize: 10, minWidth: 72, flexShrink: 0 }}>{f.object}</span>
                   <span style={{ fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.apiName}</span>
                   {showLabel && <span style={{ color: "#6b7280", fontSize: 10, flexShrink: 0, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>({f.label})</span>}
-                  {f.custom && <span style={{ fontSize: 7, fontWeight: 700, color: "#7c3aed", background: "#f5f3ff", padding: "1px 4px", borderRadius: 3, flexShrink: 0 }}>CUSTOM</span>}
-                  {isSug && <span style={{ fontSize: 8, fontWeight: 800, color: "#059669", background: "#d1fae5", padding: "1px 5px", borderRadius: 3, flexShrink: 0 }}>MATCH</span>}
-                  {value === k && <span style={{ color: "#6366f1", fontWeight: 700 }}>{"\u2713"}</span>}
+                  {f.custom && <span style={{ fontSize: 7, fontWeight: 700, color: "#B8924A", background: "#FDF9F0", padding: "1px 4px", borderRadius: 3, flexShrink: 0 }}>CUSTOM</span>}
+                  {isSug && <span style={{ fontSize: 8, fontWeight: 800, color: "#2D7A52", background: "#d1fae5", padding: "1px 5px", borderRadius: 3, flexShrink: 0 }}>MATCH</span>}
+                  {value === k && <span style={{ color: "#B8924A", fontWeight: 700 }}>{"\u2713"}</span>}
                 </button>
               );
             })}
@@ -788,10 +788,10 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
   return (
     <div style={{ fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif" }}>
       {/* HEADER */}
-      <div style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", padding: "16px 24px", borderRadius: "8px 8px 0 0", borderBottom: "3px solid #6366f1" }}>
+      <div style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", padding: "16px 24px", borderRadius: "8px 8px 0 0", borderBottom: "3px solid #B8924A" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>{"\u26A1"}</div>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg, #B8924A, #B8924A)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>{"\u26A1"}</div>
             <div>
               <h3 style={{ color: "#fff", fontSize: 16, fontWeight: 700, margin: 0 }}>Salesforce Field Mapper</h3>
               <p style={{ color: "#64748b", fontSize: 11, margin: 0 }}>Map CRM fields & SLA milestones {"\u2192"} Salesforce</p>
@@ -805,7 +805,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
               <div style={{ color: "#64748b", fontSize: 9 }}>{sfFields.filter(f => f.custom).length} custom</div>
             </div>
             <button onClick={refreshSchema} disabled={refreshingSchema || loadingSfFields}
-              style={{ padding: "7px 14px", borderRadius: 7, border: "1.5px solid #6366f1", background: "transparent", color: "#818cf8", fontSize: 11, fontWeight: 700, cursor: (refreshingSchema || loadingSfFields) ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: (refreshingSchema || loadingSfFields) ? 0.5 : 1, whiteSpace: "nowrap" }}>
+              style={{ padding: "7px 14px", borderRadius: 7, border: "1.5px solid #B8924A", background: "transparent", color: "#D4AD6A", fontSize: 11, fontWeight: 700, cursor: (refreshingSchema || loadingSfFields) ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: (refreshingSchema || loadingSfFields) ? 0.5 : 1, whiteSpace: "nowrap" }}>
               {refreshingSchema ? "\u21BB Refreshing..." : "\u21BB Refresh Schema"}
             </button>
             <div style={{ width: 1, height: 28, background: "#334155" }} />
@@ -814,7 +814,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
               <div style={{ color: "#64748b", fontSize: 10 }}>Total Mapped</div>
             </div>
             <button onClick={handleSaveAll} disabled={saving}
-              style={{ padding: "8px 16px", borderRadius: 7, border: "1.5px solid #059669", background: "transparent", color: "#34d399", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: saving ? 0.6 : 1 }}>
+              style={{ padding: "8px 16px", borderRadius: 7, border: "1.5px solid #2D7A52", background: "transparent", color: "#34d399", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: saving ? 0.6 : 1 }}>
               {saving ? "Saving..." : "\uD83D\uDCBE Save All"}
             </button>
           </div>
@@ -853,9 +853,9 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
             { key: "fields", label: `CRM Fields (${Object.values(fieldStats).reduce((s,v) => s+v.mapped, 0)}/${Object.values(fieldStats).reduce((s,v) => s+v.total, 0)})`, icon: "\uD83D\uDCCB" },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: "10px 20px", border: "none", borderBottom: tab === t.key ? "3px solid #6366f1" : "3px solid transparent",
+              padding: "10px 20px", border: "none", borderBottom: tab === t.key ? "3px solid #B8924A" : "3px solid transparent",
               background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit",
-              color: tab === t.key ? "#6366f1" : "#6b7280", marginBottom: -2, transition: "all 0.15s",
+              color: tab === t.key ? "#B8924A" : "#6b7280", marginBottom: -2, transition: "all 0.15s",
             }}>{t.icon} {t.label}</button>
           ))}
         </div>
@@ -866,8 +866,8 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
             {/* Phase filter pills */}
             <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
               <button onClick={() => setActivePhase("all")} style={{
-                padding: "6px 14px", borderRadius: 100, border: activePhase === "all" ? "1.5px solid #6366f1" : "1.5px solid #d1d5db",
-                background: activePhase === "all" ? "#eef2ff" : "#fff", color: activePhase === "all" ? "#4338ca" : "#6b7280",
+                padding: "6px 14px", borderRadius: 100, border: activePhase === "all" ? "1.5px solid #B8924A" : "1.5px solid #d1d5db",
+                background: activePhase === "all" ? "#FDF9F0" : "#fff", color: activePhase === "all" ? "#6B5424" : "#6b7280",
                 fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               }}>All ({SLA_MILESTONES.length})</button>
               {Object.entries(PHASES).map(([k, p]) => {
@@ -890,7 +890,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                 fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               }}>{filterUnmapped ? "\u2713 " : ""}Unmapped only</button>
               <button onClick={() => autoMapPhase(activePhase)} disabled={fieldsDisabled} style={{
-                padding: "6px 14px", borderRadius: 100, border: "none", background: fieldsDisabled ? "#94a3b8" : "#6366f1", color: "#fff",
+                padding: "6px 14px", borderRadius: 100, border: "none", background: fieldsDisabled ? "#94a3b8" : "#B8924A", color: "#fff",
                 fontSize: 11, fontWeight: 700, cursor: fieldsDisabled ? "not-allowed" : "pointer", fontFamily: "inherit", marginLeft: "auto",
               }}>{"\u26A1"} Auto-Map All</button>
             </div>
@@ -900,15 +900,15 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "#374151" }}>SLA Coverage</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: slaStats.mapped === slaStats.total ? "#059669" : "#dc2626" }}>{slaStats.total > 0 ? Math.round(slaStats.mapped / slaStats.total * 100) : 0}%</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: slaStats.mapped === slaStats.total ? "#2D7A52" : "#dc2626" }}>{slaStats.total > 0 ? Math.round(slaStats.mapped / slaStats.total * 100) : 0}%</span>
                 </div>
                 <div style={{ height: 5, background: "#fee2e2", borderRadius: 100, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${slaStats.total > 0 ? (slaStats.mapped / slaStats.total) * 100 : 0}%`, background: "linear-gradient(90deg, #dc2626, #059669)", borderRadius: 100, transition: "width 0.4s" }} />
+                  <div style={{ height: "100%", width: `${slaStats.total > 0 ? (slaStats.mapped / slaStats.total) * 100 : 0}%`, background: "linear-gradient(90deg, #dc2626, #2D7A52)", borderRadius: 100, transition: "width 0.4s" }} />
                 </div>
               </div>
               <div style={{ width: 1, height: 28, background: "#e2e8f0" }} />
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: slaStats.activeMapped === slaStats.active ? "#059669" : "#f59e0b" }}>{slaStats.activeMapped}/{slaStats.active}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: slaStats.activeMapped === slaStats.active ? "#2D7A52" : "#f59e0b" }}>{slaStats.activeMapped}/{slaStats.active}</div>
                 <div style={{ fontSize: 9, color: "#6b7280" }}>Active SLAs</div>
               </div>
             </div>
@@ -932,12 +932,12 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                       <span style={{ fontSize: 11, color: "#9ca3af" }}>({milestones.length} milestones)</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: mapped === milestones.length ? "#059669" : "#6b7280", background: mapped === milestones.length ? "#d1fae5" : "#f3f4f6", padding: "2px 8px", borderRadius: 100 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: mapped === milestones.length ? "#2D7A52" : "#6b7280", background: mapped === milestones.length ? "#d1fae5" : "#f3f4f6", padding: "2px 8px", borderRadius: 100 }}>
                         {mapped}/{milestones.length}
                       </span>
                       {mapped < milestones.length && !fieldsDisabled && (
                         <button onClick={e => { e.stopPropagation(); autoMap(milestones, "sla_"); }}
-                          style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #d1d5db", background: "#fff", fontSize: 10, fontWeight: 700, color: "#6366f1", cursor: "pointer", fontFamily: "inherit" }}>
+                          style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #d1d5db", background: "#fff", fontSize: 10, fontWeight: 700, color: "#B8924A", cursor: "pointer", fontFamily: "inherit" }}>
                           Accept All
                         </button>
                       )}
@@ -955,7 +955,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                       }}>
                         <div style={{
                           width: 7, height: 7, borderRadius: 100, flexShrink: 0,
-                          background: isMapped ? "#059669" : m.status === "active" ? "#f59e0b" : "#d1d5db",
+                          background: isMapped ? "#2D7A52" : m.status === "active" ? "#f59e0b" : "#d1d5db",
                           boxShadow: isMapped ? "0 0 0 3px #d1fae5" : m.status === "active" && !isMapped ? "0 0 0 3px #fef3c7" : "none",
                         }} />
                         <div style={{ width: 185, flexShrink: 0 }}>
@@ -976,7 +976,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                         <div style={{ width: 120, flexShrink: 0, fontSize: 11, color: "#6b7280" }}>
                           {"\u2190"} {m.triggerFrom}
                         </div>
-                        <div style={{ color: isMapped ? "#059669" : "#d1d5db", fontSize: 13, flexShrink: 0 }}>{"\u2192"}</div>
+                        <div style={{ color: isMapped ? "#2D7A52" : "#d1d5db", fontSize: 13, flexShrink: 0 }}>{"\u2192"}</div>
                         <SearchableSelect
                           value={mappings[k] || null}
                           onChange={val => setMapping(k, val)}
@@ -1063,13 +1063,13 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {!allCalculated && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: mapped === mappableFields.length ? "#059669" : "#6b7280", background: mapped === mappableFields.length ? "#d1fae5" : "#f3f4f6", padding: "2px 8px", borderRadius: 100 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: mapped === mappableFields.length ? "#2D7A52" : "#6b7280", background: mapped === mappableFields.length ? "#d1fae5" : "#f3f4f6", padding: "2px 8px", borderRadius: 100 }}>
                           {mapped}/{mappableFields.length}
                         </span>
                       )}
                       {!allCalculated && mapped < mappableFields.length && !fieldsDisabled && (
                         <button onClick={e => { e.stopPropagation(); autoMapSection(mappableFields); }}
-                          style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #d1d5db", background: "#fff", fontSize: 10, fontWeight: 700, color: "#6366f1", cursor: "pointer", fontFamily: "inherit" }}>
+                          style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #d1d5db", background: "#fff", fontSize: 10, fontWeight: 700, color: "#B8924A", cursor: "pointer", fontFamily: "inherit" }}>
                           Accept All
                         </button>
                       )}
@@ -1108,22 +1108,22 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                       <div key={f.key} style={{
                         display: "flex", alignItems: "center", gap: 10, padding: "9px 14px",
                         borderTop: "1px solid #f3f4f6",
-                        background: isInherited ? "#f5f3ff" : isMapped ? "#fafffe" : f.required && !isMapped ? "#fffbeb" : "transparent",
+                        background: isInherited ? "#FDF9F0" : isMapped ? "#fafffe" : f.required && !isMapped ? "#fffbeb" : "transparent",
                       }}>
                         <div style={{
                           width: 7, height: 7, borderRadius: 100, flexShrink: 0,
-                          background: isMapped ? (isInherited ? "#6366f1" : "#059669") : f.required ? "#f59e0b" : "#d1d5db",
-                          boxShadow: isMapped ? (isInherited ? "0 0 0 3px #e0e7ff" : "0 0 0 3px #d1fae5") : f.required && !isMapped ? "0 0 0 3px #fef3c7" : "none",
+                          background: isMapped ? (isInherited ? "#B8924A" : "#2D7A52") : f.required ? "#f59e0b" : "#d1d5db",
+                          boxShadow: isMapped ? (isInherited ? "0 0 0 3px #F5EDD9" : "0 0 0 3px #d1fae5") : f.required && !isMapped ? "0 0 0 3px #fef3c7" : "none",
                         }} />
                         <div style={{ width: 170, flexShrink: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                             <span style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{f.label}</span>
                             {f.required && <span style={{ fontSize: 8, fontWeight: 800, color: "#dc2626" }}>REQ</span>}
-                            {isInherited && <span style={{ fontSize: 7, fontWeight: 700, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 3 }}>{MUM_TO_ACTIVE[f.key] ? "FROM ACTIVE" : "FROM LEAD"}</span>}
+                            {isInherited && <span style={{ fontSize: 7, fontWeight: 700, color: "#B8924A", background: "#FDF9F0", padding: "1px 5px", borderRadius: 3 }}>{MUM_TO_ACTIVE[f.key] ? "FROM ACTIVE" : "FROM LEAD"}</span>}
                           </div>
                           <TypeBadge type={f.type} />
                         </div>
-                        <div style={{ color: isMapped ? (isInherited ? "#6366f1" : "#059669") : "#d1d5db", fontSize: 13, flexShrink: 0 }}>{"\u2192"}</div>
+                        <div style={{ color: isMapped ? (isInherited ? "#B8924A" : "#2D7A52") : "#d1d5db", fontSize: 13, flexShrink: 0 }}>{"\u2192"}</div>
                         <SearchableSelect value={effectiveMappings[f.key] || null} onChange={val => setMapping(f.key, val)} suggestedSF={f.suggestedSF} sfFields={sfFields} disabled={fieldsDisabled} placeholderText={fieldsPlaceholder} />
                       </div>
                     );
@@ -1154,7 +1154,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
           <button onClick={handleSaveAll} disabled={saving}
             style={{
               padding: "9px 20px", borderRadius: 8, border: "none",
-              background: saving ? "#334155" : "linear-gradient(135deg, #059669, #10b981)",
+              background: saving ? "#334155" : "linear-gradient(135deg, #2D7A52, #2D7A52)",
               color: saving ? "#64748b" : "#fff",
               fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit",
             }}>

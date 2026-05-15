@@ -136,8 +136,8 @@
 }
 
 .calendar-day.today .day-number {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
   border-radius: 50%;
   width: 28px;
   height: 28px;
@@ -147,7 +147,7 @@
 }
 
 .calendar-day.selected {
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
 }
 
@@ -164,7 +164,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #218D8D;
+  background: #1F3D2E;
   position: absolute;
   bottom: 4px;
 }
@@ -191,7 +191,7 @@
 }
 
 .legend-dot.available {
-  background: #218D8D;
+  background: #1F3D2E;
 }
 
 .legend-dot.unavailable {
@@ -236,13 +236,13 @@
 
 .time-slot:hover {
   background: #f0fdfa;
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .time-slot.selected {
-  background: #218D8D;
-  border-color: #218D8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: #fff;
 }
 
@@ -289,7 +289,7 @@
 .confirmation-icon {
   width: 24px;
   height: 24px;
-  background: #10b981;
+  background: #2D7A52;
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -321,7 +321,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 16px;
@@ -355,7 +355,7 @@
 
 .scheduler-error button {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -366,7 +366,7 @@
 }
 
 .scheduler-error button:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* ==========================================================================
@@ -496,7 +496,7 @@
    ========================================================================== */
 
 .calendar-day:focus {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: -2px;
   z-index: 1;
 }
@@ -506,13 +506,13 @@
 }
 
 .calendar-day:focus-visible {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: -2px;
   z-index: 1;
 }
 
 .time-slot:focus {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: -2px;
 }
 
@@ -521,12 +521,12 @@
 }
 
 .time-slot:focus-visible {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: -2px;
 }
 
 .mobile-back-btn:focus-visible {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: -2px;
 }
 
@@ -759,7 +759,7 @@
 
   .calendar-day.selected:hover,
   .calendar-day.selected:active {
-    background: #218D8D;
+    background: #1F3D2E;
   }
 
   .time-slot:hover {
@@ -770,8 +770,8 @@
   }
 
   .time-slot.selected:hover {
-    background: #218D8D;
-    border-color: #218D8D;
+    background: #1F3D2E;
+    border-color: #1F3D2E;
     color: #fff;
   }
 

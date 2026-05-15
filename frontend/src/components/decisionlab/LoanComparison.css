@@ -18,7 +18,7 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e5e7eb;
-  border-top-color: #217F8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -48,7 +48,7 @@
 .comparison-error button {
   margin-top: 16px;
   padding: 10px 20px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -74,7 +74,7 @@
 }
 
 .back-link:hover {
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .back-link svg {
@@ -136,7 +136,7 @@
 
 .product-tab.active {
   background: #e0f2fe;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   color: #0369a1;
 }
 
@@ -172,7 +172,7 @@
 }
 
 .view-toggle button.active svg {
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 /* Comparison Cards */
@@ -338,7 +338,7 @@
 }
 
 .bar-segment.pi {
-  background: #217F8D;
+  background: #1F3D2E;
 }
 
 .bar-segment.tax {
@@ -346,7 +346,7 @@
 }
 
 .bar-segment.insurance {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 .bar-segment.pmi {
@@ -374,9 +374,9 @@
   border-radius: 50%;
 }
 
-.legend-item .dot.pi { background: #217F8D; }
+.legend-item .dot.pi { background: #1F3D2E; }
 .legend-item .dot.tax { background: #f59e0b; }
-.legend-item .dot.insurance { background: #8b5cf6; }
+.legend-item .dot.insurance { background: #B8924A; }
 .legend-item .dot.pmi { background: #ef4444; }
 
 .no-option {
@@ -514,7 +514,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 10px;

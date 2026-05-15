@@ -86,8 +86,8 @@
 }
 
 .schedule-week-nav:hover:not(:disabled) {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .schedule-week-nav:disabled {
@@ -137,12 +137,12 @@
 
 .schedule-date-card:hover:not(.disabled) {
   background: #fff;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .schedule-date-card.selected {
-  background: #217F8D;
-  border-color: #217F8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
 }
 
 .schedule-date-card.selected .schedule-day-name,
@@ -162,7 +162,7 @@
 }
 
 .schedule-date-card.today:not(.selected) {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .schedule-day-name {
@@ -229,7 +229,7 @@
 
 .schedule-time-dropdown:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .schedule-dropdown-arrow {
@@ -266,13 +266,13 @@
 }
 
 .schedule-mode-btn:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .schedule-mode-btn.active {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: rgba(33, 127, 141, 0.08);
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .schedule-mode-btn svg {
@@ -311,7 +311,7 @@
 
 .schedule-team-dropdown:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 /* Borrower Info */
@@ -341,7 +341,7 @@
 .schedule-submit-btn {
   width: 100%;
   padding: 14px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;

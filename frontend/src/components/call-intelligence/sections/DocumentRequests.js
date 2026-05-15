@@ -51,7 +51,7 @@ const DocumentRequests = ({ requests, intakeFields, onApprove }) => {
                       onClick={() => onApprove([doc.id])}
                       style={{
                         padding: '4px 12px',
-                        background: '#10b981',
+                        background: '#2D7A52',
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
@@ -77,11 +77,11 @@ const DocumentRequests = ({ requests, intakeFields, onApprove }) => {
 
           {approvedDocs.length > 0 && (
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#10b981', marginBottom: '8px', fontWeight: '500' }}>
+              <div style={{ fontSize: '0.75rem', color: '#2D7A52', marginBottom: '8px', fontWeight: '500' }}>
                 Approved ({approvedDocs.length})
               </div>
               {approvedDocs.map((doc) => (
-                <div key={doc.id} className="doc-request-card" style={{ marginBottom: '8px', borderLeft: '3px solid #10b981' }}>
+                <div key={doc.id} className="doc-request-card" style={{ marginBottom: '8px', borderLeft: '3px solid #2D7A52' }}>
                   <div className="doc-header">
                     <span className="doc-title">
                       {doc.title || doc.structured_data?.document_name}
@@ -131,7 +131,7 @@ const DocumentRequests = ({ requests, intakeFields, onApprove }) => {
                   background: '#f9fafb',
                   padding: '12px',
                   borderRadius: '8px',
-                  borderLeft: field.approval_status === 'pending' ? '3px solid #f59e0b' : '3px solid #10b981',
+                  borderLeft: field.approval_status === 'pending' ? '3px solid #f59e0b' : '3px solid #2D7A52',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -167,7 +167,7 @@ const DocumentRequests = ({ requests, intakeFields, onApprove }) => {
                     <div>
                       <span style={{ color: '#6b7280' }}>Confidence: </span>
                       <span style={{
-                        color: field.confidence > 0.8 ? '#10b981' : field.confidence > 0.6 ? '#f59e0b' : '#6b7280'
+                        color: field.confidence > 0.8 ? '#2D7A52' : field.confidence > 0.6 ? '#f59e0b' : '#6b7280'
                       }}>
                         {Math.round(field.confidence * 100)}%
                       </span>

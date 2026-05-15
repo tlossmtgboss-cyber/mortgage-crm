@@ -31,9 +31,9 @@ export const CALCULATOR_PHASES = [
     name: 'What Does This Really Cost?',
     subtitle: 'True Cost Analysis',
     icon: '\u{1F4B0}',
-    colorPrimary: '#8b5cf6',
-    colorBg: '#f5f3ff',
-    colorBorder: '#ddd6fe',
+    colorPrimary: '#B8924A',
+    colorBg: '#FDF9F0',
+    colorBorder: '#F5EDD9',
     calculators: [
       'monthly-payment',
       'closing-costs',
@@ -48,7 +48,7 @@ export const CALCULATOR_PHASES = [
     name: 'Is This Smart Long-Term?',
     subtitle: 'Strategic Planning',
     icon: '\u{1F4C8}',
-    colorPrimary: '#10b981',
+    colorPrimary: '#2D7A52',
     colorBg: '#ecfdf5',
     colorBorder: '#a7f3d0',
     calculators: [

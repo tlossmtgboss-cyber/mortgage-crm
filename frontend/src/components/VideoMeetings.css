@@ -821,15 +821,15 @@
 
 .scheduler-tabs .tab.tutorial-tab {
   margin-left: auto;
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 .scheduler-tabs .tab.tutorial-tab.active {
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 .scheduler-tabs .tab.tutorial-tab.active::after {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 /* Scheduler Content */
@@ -899,7 +899,7 @@
 .scheduler-types-view .type-card {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
   border-radius: 10px;
   padding: 16px;
   transition: all 0.2s ease;
@@ -1520,7 +1520,7 @@
 
 .scheduler-reminders-view .confirmation-timing {
   font-size: 13px;
-  color: #059669;
+  color: #2D7A52;
   font-weight: 500;
 }
 

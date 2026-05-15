@@ -365,7 +365,7 @@ function GoalTracker() {
 
   const renderGoalActualCell = (goal, actual, formatter = formatNumber) => {
     const progress = calculateProgress(actual, goal);
-    const progressColor = progress >= 100 ? '#10b981' : progress >= 75 ? '#f59e0b' : '#ef4444';
+    const progressColor = progress >= 100 ? '#2D7A52' : progress >= 75 ? '#f59e0b' : '#ef4444';
 
     return (
       <td className="goal-actual-cell">

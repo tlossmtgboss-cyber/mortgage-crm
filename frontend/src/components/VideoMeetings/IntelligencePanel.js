@@ -75,7 +75,7 @@ const IntelligencePanel = ({ recordingId }) => {
       case 'critical':
       case 'high': return '#ef4444';
       case 'medium': return '#f59e0b';
-      case 'low': return '#10b981';
+      case 'low': return '#2D7A52';
       default: return '#6b7280';
     }
   };
@@ -83,7 +83,7 @@ const IntelligencePanel = ({ recordingId }) => {
   const getRiskScoreColor = (score) => {
     if (score >= 0.6) return '#ef4444';
     if (score >= 0.3) return '#f59e0b';
-    return '#10b981';
+    return '#2D7A52';
   };
 
   if (loading) {

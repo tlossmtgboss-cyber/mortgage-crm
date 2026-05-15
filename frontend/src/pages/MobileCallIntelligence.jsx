@@ -49,7 +49,7 @@ const ARTIFACT_TYPE_META = {
   },
   action_item: {
     label: 'Action Item',
-    borderColor: '#10b981',
+    borderColor: '#2D7A52',
     badgeColor: '#d1fae5',
     badgeText: '#065f46',
     icon: (
@@ -74,9 +74,9 @@ const ARTIFACT_TYPE_META = {
   },
   follow_up: {
     label: 'Follow-Up',
-    borderColor: '#8b5cf6',
-    badgeColor: '#ede9fe',
-    badgeText: '#5b21b6',
+    borderColor: '#B8924A',
+    badgeColor: '#FAF3E5',
+    badgeText: '#6B5424',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="17 1 21 5 17 9" />
@@ -88,9 +88,9 @@ const ARTIFACT_TYPE_META = {
   },
   follow_up_draft: {
     label: 'Follow-Up Draft',
-    borderColor: '#8b5cf6',
-    badgeColor: '#ede9fe',
-    badgeText: '#5b21b6',
+    borderColor: '#B8924A',
+    badgeColor: '#FAF3E5',
+    badgeText: '#6B5424',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="17 1 21 5 17 9" />
@@ -116,7 +116,7 @@ const ARTIFACT_TYPE_META = {
   },
   pricing_scenario: {
     label: 'Pricing Scenario',
-    borderColor: '#10b981',
+    borderColor: '#2D7A52',
     badgeColor: '#d1fae5',
     badgeText: '#065f46',
     icon: (

@@ -29,16 +29,16 @@ const LIFECYCLE_STAGES = {
   // Main pipeline stages
   new: { label: 'New', color: '#3b82f6', icon: '✨' },
   new_lead: { label: 'New', color: '#3b82f6', icon: '✨' },
-  attempted_contact: { label: 'Attempted Contact', color: '#8b5cf6', icon: '📞' },
-  contacted: { label: 'Attempted Contact', color: '#8b5cf6', icon: '📞' },
+  attempted_contact: { label: 'Attempted Contact', color: '#B8924A', icon: '📞' },
+  contacted: { label: 'Attempted Contact', color: '#B8924A', icon: '📞' },
   prospect: { label: 'Prospect', color: '#06b6d4', icon: '👤' },
   application: { label: 'Application', color: '#0ea5e9', icon: '📋' },
   pre_qualified: { label: 'Pre-Qualified', color: '#14b8a6', icon: '✅' },
   prequalified: { label: 'Pre-Qualified', color: '#14b8a6', icon: '✅' },
   qualified: { label: 'Pre-Qualified', color: '#14b8a6', icon: '✅' },
-  pre_approved: { label: 'Pre-Approved', color: '#10b981', icon: '🎯' },
-  preapproval: { label: 'Pre-Approved', color: '#10b981', icon: '🎯' },
-  preapproved: { label: 'Pre-Approved', color: '#10b981', icon: '🎯' },
+  pre_approved: { label: 'Pre-Approved', color: '#2D7A52', icon: '🎯' },
+  preapproval: { label: 'Pre-Approved', color: '#2D7A52', icon: '🎯' },
+  preapproved: { label: 'Pre-Approved', color: '#2D7A52', icon: '🎯' },
 
   // Exit stages
   nurture: { label: 'Nurture', color: '#f59e0b', icon: '🌱' },
@@ -49,17 +49,17 @@ const LIFECYCLE_STAGES = {
 
 // Activity type configuration
 const ACTIVITY_CONFIG = {
-  note: { label: 'Note', icon: '📝', color: '#6366f1' },
-  call: { label: 'Call', icon: '📞', color: '#10b981' },
+  note: { label: 'Note', icon: '📝', color: '#B8924A' },
+  call: { label: 'Call', icon: '📞', color: '#2D7A52' },
   email: { label: 'Email', icon: '✉️', color: '#3b82f6' },
-  sms: { label: 'SMS', icon: '💬', color: '#8b5cf6' },
+  sms: { label: 'SMS', icon: '💬', color: '#B8924A' },
   meeting: { label: 'Meeting', icon: '🤝', color: '#f59e0b' },
   task: { label: 'Task', icon: '✓', color: '#ef4444' },
   document: { label: 'Document', icon: '📄', color: '#06b6d4' },
-  status_change: { label: 'Status Update', icon: '🔄', color: '#218D8D' },
-  stage_change: { label: 'Stage Change', icon: '📊', color: '#218D8D' },
+  status_change: { label: 'Status Update', icon: '🔄', color: '#1F3D2E' },
+  stage_change: { label: 'Stage Change', icon: '📊', color: '#1F3D2E' },
   sarah_ai_user: { label: 'Client Message', icon: '👤', color: '#64748b' },
-  sarah_ai_assistant: { label: 'Sarah AI', icon: '🤖', color: '#218D8D' },
+  sarah_ai_assistant: { label: 'Sarah AI', icon: '🤖', color: '#1F3D2E' },
 };
 
 // Format relative time
@@ -144,7 +144,7 @@ const ProgressCircle = ({ percentage }) => {
           cy="50"
           r={radius}
           fill="none"
-          stroke="#218D8D"
+          stroke="#1F3D2E"
           strokeWidth="8"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}

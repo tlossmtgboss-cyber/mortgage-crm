@@ -22,7 +22,7 @@
 }
 
 .back-link:hover {
-  color: #217F8D;
+  color: #1F3D2E;
 }
 
 .back-link svg {
@@ -101,7 +101,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #217F8D;
+  background: #1F3D2E;
   border: none;
   border-radius: 8px;
   color: white;
@@ -141,7 +141,7 @@
 }
 
 .scenario-item.active {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #e0f2fe;
 }
 
@@ -261,7 +261,7 @@
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
 }
 
@@ -350,7 +350,7 @@
 .checkbox-label input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #217F8D;
+  accent-color: #1F3D2E;
 }
 
 .checkbox-label span {
@@ -384,7 +384,7 @@
 
 .submit-btn {
   padding: 12px 28px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -459,7 +459,7 @@
 }
 
 .loan-option-card.recommended {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: white;
 }
 
@@ -468,7 +468,7 @@
   top: -10px;
   left: 20px;
   padding: 4px 12px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 12px;
   font-size: 11px;
@@ -627,7 +627,7 @@
 
 .create-btn {
   padding: 12px 24px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 10px;

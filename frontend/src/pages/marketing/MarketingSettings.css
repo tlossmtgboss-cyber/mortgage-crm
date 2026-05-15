@@ -59,7 +59,7 @@
 }
 
 .status-badge.active {
-  color: #10b981;
+  color: #2D7A52;
   background: #d1fae5;
 }
 
@@ -83,7 +83,7 @@
 .btn-primary {
   flex: 1;
   padding: 8px 16px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -94,7 +94,7 @@
 }
 
 .btn-primary:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-secondary {
@@ -143,7 +143,7 @@
 
 .btn-add {
   padding: 10px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -154,7 +154,7 @@
 }
 
 .btn-add:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .add-page-section {
@@ -165,7 +165,7 @@
 
 /* Microsite Settings */
 .microsite-banner {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   border-radius: 12px;
   padding: 24px 32px;
   color: white;
@@ -195,7 +195,7 @@
 
 .btn-copy {
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
@@ -318,9 +318,9 @@
 }
 
 .tab-btn.active {
-  color: #218D8D;
+  color: #1F3D2E;
   background: #f0fdfa;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 /* New Badge */
@@ -329,7 +329,7 @@
   font-size: 10px;
   font-weight: 600;
   color: white;
-  background: #10b981;
+  background: #2D7A52;
   padding: 2px 6px;
   border-radius: 4px;
   margin-left: 8px;
@@ -338,7 +338,7 @@
 
 /* Highlight Card */
 .landing-page-card.highlight {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -357,7 +357,7 @@
 
 .btn-embed:hover {
   background: #e5e7eb;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Embed Generator */
@@ -378,7 +378,7 @@
 .info-icon {
   width: 40px;
   height: 40px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -447,7 +447,7 @@
 .config-item input:focus,
 .config-item select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -487,16 +487,16 @@
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 500;
-  color: #218D8D;
+  color: #1F3D2E;
   background: white;
-  border: 1px solid #218D8D;
+  border: 1px solid #1F3D2E;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-copy-small:hover {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -543,7 +543,7 @@
   font-size: 13px;
   font-weight: 500;
   color: white;
-  background: #218D8D;
+  background: #1F3D2E;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -551,11 +551,11 @@
 }
 
 .btn-copy:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-copy.copied {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .embed-instructions {
@@ -650,13 +650,13 @@
 
 .pos-settings__link-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
 .pos-settings__copy-btn {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -668,14 +668,14 @@
 }
 
 .pos-settings__copy-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* Inline link button */
 .pos-settings__link-btn {
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: inherit;
   font-weight: 500;
   cursor: pointer;
@@ -684,7 +684,7 @@
 }
 
 .pos-settings__link-btn:hover {
-  color: #1a7070;
+  color: #2A4F3D;
 }
 
 /* Team grid */
@@ -708,7 +708,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   display: flex;
   align-items: center;
@@ -736,7 +736,7 @@
 
 .pos-settings__member-roles {
   font-size: 12px;
-  color: #218D8D;
+  color: #1F3D2E;
   font-weight: 500;
 }
 
@@ -797,7 +797,7 @@
 .pos-settings__calendar-note svg {
   flex-shrink: 0;
   margin-top: 1px;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* How-it-works flow */
@@ -824,7 +824,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   display: flex;
   align-items: center;

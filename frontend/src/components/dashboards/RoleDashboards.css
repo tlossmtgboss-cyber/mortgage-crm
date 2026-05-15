@@ -102,7 +102,7 @@
 }
 
 .kpi-card.success {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .kpi-card.alert {
@@ -322,7 +322,7 @@
 }
 
 .queue-count.success {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .workload-list {
@@ -382,7 +382,7 @@
 }
 
 .decision-bar.approved {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .decision-bar.conditioned {
@@ -417,7 +417,7 @@
 
 .risk-item.low {
   background: rgba(16, 185, 129, 0.1);
-  border: 1px solid #10b981;
+  border: 1px solid #2D7A52;
 }
 
 .risk-label {
@@ -434,7 +434,7 @@
 
 .risk-item.high .risk-count { color: #ef4444; }
 .risk-item.medium .risk-count { color: #f59e0b; }
-.risk-item.low .risk-count { color: #10b981; }
+.risk-item.low .risk-count { color: #2D7A52; }
 
 /* ============================================================================
    CLOSER DASHBOARD SPECIFICS
@@ -458,7 +458,7 @@
 
 .flow-stage.success {
   background: rgba(16, 185, 129, 0.1);
-  border: 1px solid #10b981;
+  border: 1px solid #2D7A52;
 }
 
 .stage-name {
@@ -475,7 +475,7 @@
 }
 
 .flow-stage.success .stage-count {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .flow-arrow {
@@ -911,7 +911,7 @@
 }
 
 .efficiency-metric .metric-value.success {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .efficiency-metric .metric-value.warning {
@@ -979,7 +979,7 @@
 }
 
 .stage-bar-item .stage-bar-fill.good {
-  background: linear-gradient(90deg, #10b981, #059669);
+  background: linear-gradient(90deg, #2D7A52, #2D7A52);
 }
 
 .stage-bar-item .stage-bar-fill.warning {
@@ -1140,7 +1140,7 @@
 }
 
 .metric-indicator.good {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .metric-indicator.warning {
@@ -1173,7 +1173,7 @@
 }
 
 .stage-bar.good {
-  background: linear-gradient(90deg, #10b981, #059669);
+  background: linear-gradient(90deg, #2D7A52, #2D7A52);
 }
 
 .stage-bar.medium {
@@ -1286,7 +1286,7 @@
 }
 
 .no-issues {
-  color: #10b981;
+  color: #2D7A52;
   font-size: 13px;
 }
 
@@ -1336,7 +1336,7 @@
 }
 
 .partner-score .received {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
   font-size: 13px;
 }
@@ -1517,7 +1517,7 @@
 }
 
 .score-change.positive {
-  color: #10b981;
+  color: #2D7A52;
   background: rgba(16, 185, 129, 0.1);
 }
 
@@ -1581,7 +1581,7 @@
 }
 
 .efficiency-metric-card .metric-change.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .efficiency-metric-card .metric-change.negative {
@@ -1703,7 +1703,7 @@
 }
 
 .bar-fill.good {
-  background: linear-gradient(90deg, #10b981, #059669);
+  background: linear-gradient(90deg, #2D7A52, #2D7A52);
 }
 
 .bar-fill.warning {
@@ -1848,7 +1848,7 @@
 }
 
 .workflow-card .progress-fill.good {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .workflow-card .progress-fill.warning {

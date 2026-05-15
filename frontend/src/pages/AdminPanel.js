@@ -2026,7 +2026,7 @@ const AdminPanel = () => {
                   {cleanupLoading ? 'Cleaning...' : 'Cleanup Sample Data'}
                 </button>
                 {cleanupResult && (
-                  <div style={{marginTop: '12px', fontSize: '0.85rem', color: cleanupResult.success ? '#059669' : '#dc2626'}}>
+                  <div style={{marginTop: '12px', fontSize: '0.85rem', color: cleanupResult.success ? '#2D7A52' : '#dc2626'}}>
                     {cleanupResult.message}
                   </div>
                 )}

@@ -37,7 +37,7 @@ const LoadingState = () => (
       width: '48px',
       height: '48px',
       border: '3px solid #e5e7eb',
-      borderTopColor: '#217F8D',
+      borderTopColor: '#1F3D2E',
       borderRadius: '50%',
       animation: 'spin 1s linear infinite'
     }} />
@@ -67,7 +67,7 @@ const ErrorState = ({ message }) => (
       style={{
         marginTop: '24px',
         padding: '10px 20px',
-        background: '#217F8D',
+        background: '#1F3D2E',
         color: 'white',
         border: 'none',
         borderRadius: '6px',
@@ -87,7 +87,7 @@ const PreviewBanner = ({ onClose }) => (
     top: 0,
     left: 0,
     right: 0,
-    background: 'linear-gradient(90deg, #217F8D, #1a6670)',
+    background: 'linear-gradient(90deg, #1F3D2E, #1a6670)',
     color: 'white',
     padding: '12px 24px',
     display: 'flex',

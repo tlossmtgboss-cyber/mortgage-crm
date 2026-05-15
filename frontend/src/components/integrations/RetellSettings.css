@@ -68,7 +68,7 @@
   width: 80px;
   height: 80px;
   margin: 0 auto 24px;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   border-radius: 20px;
   display: flex;
   align-items: center;
@@ -325,7 +325,7 @@
 
 .retell-stat-icon.success {
   background: #f3e8ff;
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 .retell-stat-content {

@@ -29,7 +29,7 @@
 .cird-error i,
 .cird-not-found i {
   font-size: 48px;
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .cird-error i {
@@ -129,7 +129,7 @@
 }
 
 .cird-info-value i {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .cird-status-badge {
@@ -149,7 +149,7 @@
 
 .cird-status-badge.transcribed,
 .cird-status-badge.analyzed {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 .cird-status-badge.processing {
@@ -210,7 +210,7 @@
 }
 
 .cird-tab.active {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
@@ -244,7 +244,7 @@
 }
 
 .cird-processing-state i {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .cird-error-state i {
@@ -287,16 +287,16 @@
 }
 
 .cird-btn-primary {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
 }
 
 .cird-btn-primary:hover {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 .cird-btn-primary:disabled {
-  background: #c7d2fe;
+  background: #EDE0C4;
   cursor: not-allowed;
 }
 
@@ -356,7 +356,7 @@
 
 .cird-segment.selected {
   background: #eff6ff;
-  border-left-color: #6366f1;
+  border-left-color: #B8924A;
 }
 
 .cird-segment-header {
@@ -416,7 +416,7 @@
 }
 
 .cird-analysis-section h4 i {
-  color: #6366f1;
+  color: #B8924A;
 }
 
 .cird-analysis-section p {
@@ -433,8 +433,8 @@
 
 .cird-topic-tag {
   padding: 6px 12px;
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
   border-radius: 16px;
   font-size: 13px;
   font-weight: 500;
@@ -483,7 +483,7 @@
 }
 
 .cird-talk-ratio-agent {
-  background: #6366f1;
+  background: #B8924A;
   color: white;
   font-size: 12px;
   font-weight: 500;
@@ -493,7 +493,7 @@
 }
 
 .cird-talk-ratio-customer {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   font-size: 12px;
   font-weight: 500;
@@ -518,7 +518,7 @@
 }
 
 .cird-action-items li i {
-  color: #6366f1;
+  color: #B8924A;
   font-size: 8px;
   margin-top: 6px;
 }
@@ -606,7 +606,7 @@
 
 .cird-question-answer {
   padding: 8px 12px;
-  background: #e0e7ff;
+  background: #F5EDD9;
   border-radius: 6px;
   font-size: 13px;
   color: #3730a3;
@@ -735,7 +735,7 @@
 
 .cird-qa-item-bar {
   height: 100%;
-  background: #6366f1;
+  background: #B8924A;
   border-radius: 4px;
   transition: width 0.3s ease;
 }

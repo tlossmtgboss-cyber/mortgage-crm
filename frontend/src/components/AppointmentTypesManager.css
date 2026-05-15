@@ -20,7 +20,7 @@
   width: 36px;
   height: 36px;
   border: 3px solid #e2e8f0;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: atm-spin 0.8s linear infinite;
   margin-bottom: 12px;
@@ -60,7 +60,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -131,7 +131,7 @@
   padding: 6px 0;
   background: none;
   border: none;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -274,7 +274,7 @@
 
 .atm-card.dragging {
   opacity: 0.4;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.15);
 }
 
@@ -446,7 +446,7 @@
 }
 
 .atm-toggle input:checked + .atm-toggle-slider {
-  background: #218D8D;
+  background: #1F3D2E;
 }
 
 .atm-toggle input:checked + .atm-toggle-slider::before {
@@ -580,7 +580,7 @@
 .atm-form-group textarea:focus,
 .atm-form-group select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -635,7 +635,7 @@
 }
 
 .atm-mode-check.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #e6f5f5;
   color: #176b6b;
 }
@@ -696,7 +696,7 @@
 }
 
 .atm-checkbox input[type="checkbox"] {
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 /* ============================================================================

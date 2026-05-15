@@ -38,10 +38,10 @@ const getConfidenceBadge = (confidence) => {
 const PITIVisualization = ({ outputs }) => {
   const components = [
     { key: 'principal_interest', label: 'P&I', color: '#3b82f6' },
-    { key: 'property_taxes', label: 'Taxes', color: '#10b981' },
+    { key: 'property_taxes', label: 'Taxes', color: '#2D7A52' },
     { key: 'homeowners_insurance', label: 'Insurance', color: '#f59e0b' },
     { key: 'mortgage_insurance', label: 'PMI', color: '#ef4444' },
-    { key: 'hoa', label: 'HOA', color: '#8b5cf6' },
+    { key: 'hoa', label: 'HOA', color: '#B8924A' },
   ].filter((c) => outputs[c.key] > 0);
 
   const total = outputs.total_payment || 0;

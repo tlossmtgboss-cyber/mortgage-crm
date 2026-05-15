@@ -18,7 +18,7 @@
   --pf-cf-bg-hover: #e9ecef;
 
   /* Accent — teal to match CRM */
-  --pf-cf-accent: #218D8D;
+  --pf-cf-accent: #1F3D2E;
   --pf-cf-accent-dim: rgba(33, 141, 141, 0.7);
   --pf-cf-accent-bg: rgba(33, 141, 141, 0.08);
   --pf-cf-accent-bg-hover: rgba(33, 141, 141, 0.14);
@@ -37,7 +37,7 @@
   --pf-cf-border-accent: rgba(33, 141, 141, 0.30);
 
   /* Semantic */
-  --pf-cf-success: #10b981;
+  --pf-cf-success: #2D7A52;
   --pf-cf-success-bg: rgba(16, 185, 129, 0.08);
   --pf-cf-warning: #f59e0b;
   --pf-cf-warning-bg: rgba(245, 158, 11, 0.08);
@@ -45,7 +45,7 @@
   --pf-cf-danger-bg: rgba(239, 68, 68, 0.08);
 
   /* Agent attribution */
-  --pf-cf-agent: #7c3aed;
+  --pf-cf-agent: #B8924A;
   --pf-cf-agent-bg: rgba(124, 58, 237, 0.06);
   --pf-cf-agent-border: rgba(124, 58, 237, 0.20);
 
@@ -1445,7 +1445,7 @@
 }
 
 .pf-cf-btn--accent:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
   box-shadow: 0 2px 6px rgba(33, 141, 141, 0.35);
   transform: translateY(-0.5px);
 }
@@ -1500,7 +1500,7 @@
 }
 
 .pf-cf-btn--success:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
   box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);
   transform: translateY(-0.5px);
 }

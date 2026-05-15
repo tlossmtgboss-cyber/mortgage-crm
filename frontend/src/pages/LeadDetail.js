@@ -1356,7 +1356,7 @@ function LeadDetail() {
             onClick={handleOpenClientFile}
             disabled={clientFileLoading}
             style={{
-              background: '#6366f1', color: 'white', border: 'none', padding: '8px 16px',
+              background: '#B8924A', color: 'white', border: 'none', padding: '8px 16px',
               borderRadius: '8px', cursor: 'pointer', fontWeight: '500', fontSize: '13px',
               opacity: clientFileLoading ? 0.7 : 1,
             }}

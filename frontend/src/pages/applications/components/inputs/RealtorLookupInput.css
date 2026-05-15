@@ -21,7 +21,7 @@
 
 .search-input:focus {
   outline: none;
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.15);
 }
 
@@ -30,7 +30,7 @@
 }
 
 .search-input.agent-selected {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.05);
 }
 
@@ -46,7 +46,7 @@
   width: 20px;
   height: 20px;
   border: 2px solid var(--color-border, rgba(139, 92, 68, 0.15));
-  border-top-color: var(--color-primary, #217F8D);
+  border-top-color: var(--color-primary, #1F3D2E);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -64,7 +64,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;

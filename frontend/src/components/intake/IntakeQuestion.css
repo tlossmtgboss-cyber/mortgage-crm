@@ -50,7 +50,7 @@
 
 .intake-input:focus {
   outline: none;
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
 }
 
@@ -110,15 +110,15 @@
 }
 
 .intake-visual-option:hover:not(:disabled) {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.05);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .intake-visual-option.selected {
-  border-color: var(--color-primary, #217F8D);
-  background: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
+  background: var(--color-primary, #1F3D2E);
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(33, 127, 141, 0.3);
@@ -167,13 +167,13 @@
 }
 
 .intake-option:hover:not(:disabled) {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.05);
 }
 
 .intake-option.selected {
-  border-color: var(--color-primary, #217F8D);
-  background: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
+  background: var(--color-primary, #1F3D2E);
   color: white;
 }
 
@@ -202,14 +202,14 @@
 }
 
 .intake-checkbox:hover {
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
 }
 
 .intake-checkbox input[type="checkbox"] {
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: var(--color-primary, #217F8D);
+  accent-color: var(--color-primary, #1F3D2E);
 }
 
 .checkbox-label {

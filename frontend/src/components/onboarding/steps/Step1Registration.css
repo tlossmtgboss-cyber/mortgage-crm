@@ -116,12 +116,12 @@
 }
 
 .input-with-button button.verified {
-  background-color: #10b981;
+  background-color: #2D7A52;
   cursor: default;
 }
 
 .input-with-button button.verified:hover {
-  background-color: #059669;
+  background-color: #2D7A52;
 }
 
 /* Business Hours Styling */

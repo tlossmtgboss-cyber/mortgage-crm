@@ -55,7 +55,7 @@
 }
 
 .source-badge {
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   padding: 4px 10px;
   border-radius: 4px;
@@ -211,13 +211,13 @@
 }
 
 .action-btn:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f0f9fa;
 }
 
 .action-btn.selected {
-  border-color: #217F8D;
-  background: #217F8D;
+  border-color: #1F3D2E;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -310,12 +310,12 @@
 }
 
 .result-item:hover {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #f0f9fa;
 }
 
 .result-item.selected {
-  border-color: #217F8D;
+  border-color: #1F3D2E;
   background: #e0f2f4;
 }
 
@@ -444,7 +444,7 @@
 .btn-approve {
   flex: 1;
   padding: 14px 24px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;

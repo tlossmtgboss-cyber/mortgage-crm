@@ -226,7 +226,7 @@
   display: flex;
   gap: 12px;
   padding: 16px;
-  background: linear-gradient(135deg, #ede9fe 0%, #e9d5ff 100%);
+  background: linear-gradient(135deg, #FAF3E5 0%, #e9d5ff 100%);
   border-radius: 12px;
   margin-bottom: 20px;
 }
@@ -245,12 +245,12 @@
 .tip-icon svg {
   width: 20px;
   height: 20px;
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .tip-content {
   font-size: 14px;
-  color: #5b21b6;
+  color: #6B5424;
   line-height: 1.6;
 }
 
@@ -302,7 +302,7 @@
   gap: 8px;
   width: 100%;
   padding: 14px 24px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 10px;

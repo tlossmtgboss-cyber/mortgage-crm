@@ -1,6 +1,6 @@
 /* ============================================================
    AnalyticsCard — reusable metric display card
-   Design system: --color-primary: #217F8D, --color-success: #217F8D,
+   Design system: --color-primary: #1F3D2E, --color-success: #1F3D2E,
    --color-warning: #A84B2F, --color-error: #C0152F
    ============================================================ */
 
@@ -20,7 +20,7 @@
 
 /* ── Status modifiers ── */
 .analytics-card--success {
-  border-left-color: var(--color-success, #217F8D);
+  border-left-color: var(--color-success, #1F3D2E);
 }
 
 .analytics-card--warning {
@@ -48,7 +48,7 @@
 }
 
 .analytics-card--clickable:focus-visible {
-  outline: 2px solid var(--color-primary, #217F8D);
+  outline: 2px solid var(--color-primary, #1F3D2E);
   outline-offset: 2px;
 }
 
@@ -134,9 +134,9 @@
 }
 
 .analytics-card__tooltip-trigger:hover {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: #fff;
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
 }
 
 /* ── Body: value + subtitle + comparison ── */
@@ -175,7 +175,7 @@
 }
 
 .analytics-card__comparison-arrow--up {
-  color: var(--color-success, #217F8D);
+  color: var(--color-success, #1F3D2E);
 }
 
 .analytics-card__comparison-arrow--down {
@@ -199,7 +199,7 @@
 }
 
 .analytics-card__trend--positive {
-  color: var(--color-success, #217F8D);
+  color: var(--color-success, #1F3D2E);
   background: rgba(33, 127, 141, 0.08);
 }
 

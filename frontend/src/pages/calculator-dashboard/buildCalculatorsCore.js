@@ -32,7 +32,7 @@ export function buildCoreCalculators(profile, market, propertyData, homePrices, 
     {
       id: 'monthly-payment',
       name: 'Monthly Payment (PITI)',
-      color: '#8b5cf6',
+      color: '#B8924A',
       shortDescription: 'Compare payments by down payment',
       data: {
         homePrice: homePrices.baseline,
@@ -540,7 +540,7 @@ function buildLifestyleFitCalculator(profile, homePrices, baselinePiti, monthlyI
   return {
     id: 'lifestyle-fit',
     name: 'Lifestyle Fit Index',
-    color: '#7c3aed',
+    color: '#B8924A',
     shortDescription: 'Post-purchase spending power',
     data: (() => {
       // Current budget as renter

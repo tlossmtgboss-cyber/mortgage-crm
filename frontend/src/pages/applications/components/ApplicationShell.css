@@ -77,7 +77,7 @@
 }
 
 .save-status.saved {
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .save-status.unsaved {
@@ -105,7 +105,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #217F8D, #1a6670);
+  background: linear-gradient(90deg, #1F3D2E, #1a6670);
   border-radius: var(--radius-full, 9999px);
   transition: width 0.5s ease-out;
 }
@@ -162,12 +162,12 @@
 }
 
 .stage-item.completed .stage-indicator {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: #ffffff;
 }
 
 .stage-item.current .stage-indicator {
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   color: #ffffff;
   box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.2);
 }
@@ -195,12 +195,12 @@
 }
 
 .stage-item.current .stage-label {
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   font-weight: 600;
 }
 
 .stage-item.completed .stage-label {
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 /* Main content */
@@ -309,7 +309,7 @@
   gap: 8px;
   width: 100%;
   padding: 14px 16px;
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   border: none;
   border-radius: var(--radius-lg, 12px) 0 0 var(--radius-lg, 12px);
   color: #ffffff;
@@ -540,12 +540,12 @@
 }
 
 .btn-cancel-exit {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
 .btn-cancel-exit:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .restore-prompt .btn-confirm-exit {
@@ -609,7 +609,7 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  background: var(--bt-primary, #218D8D);
+  background: var(--bt-primary, #1F3D2E);
   color: white;
   border: none;
   border-radius: 28px;

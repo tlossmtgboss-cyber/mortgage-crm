@@ -38,12 +38,12 @@ const QUIZ_REQUIRED_DISPOSITIONS = ['screening', 'phone_screen', 'interview', 'a
 
 const CANDIDATE_STATUSES = [
   { value: 'new', label: 'New', color: '#3b82f6', icon: '📥' },
-  { value: 'screening', label: 'Screening', color: '#8b5cf6', icon: '🔍' },
-  { value: 'phone_screen', label: 'Phone Screen', color: '#a855f7', icon: '📞' },
+  { value: 'screening', label: 'Screening', color: '#B8924A', icon: '🔍' },
+  { value: 'phone_screen', label: 'Phone Screen', color: '#C9A44E', icon: '📞' },
   { value: 'interview', label: 'Interview', color: '#f59e0b', icon: '🎯' },
   { value: 'assessment', label: 'Assessment', color: '#eab308', icon: '📋' },
   { value: 'offer', label: 'Offer', color: '#22c55e', icon: '📝' },
-  { value: 'hired', label: 'Hired', color: '#10b981', icon: '✅' },
+  { value: 'hired', label: 'Hired', color: '#2D7A52', icon: '✅' },
   { value: 'rejected', label: 'Rejected', color: '#ef4444', icon: '❌' },
   { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280', icon: '🚫' }
 ];
@@ -523,7 +523,7 @@ const RecruitDetail = () => {
   // Color based on 0-100 score scale
   const getScoreColor = (score) => {
     if (!score && score !== 0) return '#6b7280';
-    if (score >= 80) return '#10b981'; // Green - B+ and above
+    if (score >= 80) return '#2D7A52'; // Green - B+ and above
     if (score >= 60) return '#f59e0b'; // Yellow - C to B
     if (score >= 40) return '#ef4444'; // Red - D to C-
     return '#6b7280';

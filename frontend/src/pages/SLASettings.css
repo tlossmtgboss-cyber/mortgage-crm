@@ -39,7 +39,7 @@
 }
 
 .summary-card.on-track {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .summary-card.at-risk {
@@ -51,7 +51,7 @@
 }
 
 .summary-card.alerts {
-  border-left: 4px solid #8b5cf6;
+  border-left: 4px solid #B8924A;
 }
 
 .summary-card .card-label {
@@ -100,7 +100,7 @@
 }
 
 .sla-tabs button.active {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -193,7 +193,7 @@
 }
 
 .status-indicator.active .dot {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .status-indicator.inactive .dot {
@@ -279,12 +279,12 @@
 }
 
 .alert-actions .btn-resolve {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .alert-actions .btn-resolve:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Performance Chart */
@@ -315,7 +315,7 @@
 }
 
 .trend-stat .value.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .trend-stat .value.negative {
@@ -472,7 +472,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .form-row {
@@ -509,13 +509,13 @@
 }
 
 .modal-footer .btn-save {
-  background: #218D8D;
+  background: #1F3D2E;
   border: none;
   color: white;
 }
 
 .modal-footer .btn-save:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* Empty State */
@@ -544,7 +544,7 @@
 
 .empty-state button {
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -564,7 +564,7 @@
   width: 32px;
   height: 32px;
   border: 3px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-right: 12px;
@@ -594,7 +594,7 @@
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
 }
 
 .run-rate-card h4 {
@@ -733,7 +733,7 @@
 .team-member-checkbox input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .team-member-checkbox .name {
@@ -770,7 +770,7 @@
 
 .custom-email-section input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .content-options {
@@ -793,7 +793,7 @@
   width: 18px;
   height: 18px;
   margin-top: 2px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .content-option .option-label {
@@ -820,7 +820,7 @@
 
 .send-report-btn {
   padding: 12px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -834,7 +834,7 @@
 }
 
 .send-report-btn:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .send-report-btn:disabled {
@@ -848,7 +848,7 @@
 }
 
 .send-status.success {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .send-status.error {
@@ -924,7 +924,7 @@
 }
 
 .summary-card.on-track.clickable:hover {
-  border-left-color: #059669;
+  border-left-color: #2D7A52;
   background: linear-gradient(135deg, white 0%, #ecfdf5 100%);
 }
 
@@ -939,8 +939,8 @@
 }
 
 .summary-card.alerts.clickable:hover {
-  border-left-color: #7c3aed;
-  background: linear-gradient(135deg, white 0%, #f5f3ff 100%);
+  border-left-color: #B8924A;
+  background: linear-gradient(135deg, white 0%, #FDF9F0 100%);
 }
 
 .card-drill-hint {
@@ -990,7 +990,7 @@
 
 .draggable-row.drag-over {
   background: #e0f2f1 !important;
-  border-top: 3px solid #218D8D !important;
+  border-top: 3px solid #1F3D2E !important;
 }
 
 .draggable-row:active {
@@ -1016,7 +1016,7 @@
 
 .draggable-row:active .drag-handle,
 .draggable-row.dragging .drag-handle {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 

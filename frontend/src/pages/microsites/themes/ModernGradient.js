@@ -32,7 +32,7 @@ const ModernGradient = ({ user, profile, themeConfig = {} }) => {
 
   // Extract config with defaults
   const config = {
-    primaryColor: themeConfig.primaryColor || '#8b5cf6',
+    primaryColor: themeConfig.primaryColor || '#B8924A',
     secondaryColor: themeConfig.secondaryColor || '#ec4899',
     gradientDirection: themeConfig.gradientDirection || 'diagonal',
     animationStyle: themeConfig.animationStyle || 'subtle',

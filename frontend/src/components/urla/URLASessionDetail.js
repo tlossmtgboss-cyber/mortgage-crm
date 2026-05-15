@@ -16,7 +16,7 @@ import { sanitizeHTML } from '../../utils/sanitize';
 
 // ── Score color helper ──────────────────────────────────────
 const getScoreColor = (score) => {
-  if (score >= 80) return '#10b981';
+  if (score >= 80) return '#2D7A52';
   if (score >= 60) return '#f59e0b';
   return '#ef4444';
 };
@@ -173,7 +173,7 @@ const ScoreGauge = ({ label, score, size = 80 }) => {
 // ═══════════════════════════════════════════════════════════
 const ProgressBar = ({ completed, total, label }) => {
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const color = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+  const color = pct >= 80 ? '#2D7A52' : pct >= 50 ? '#f59e0b' : '#ef4444';
 
   return (
     <div style={{ marginBottom: '16px' }}>
@@ -841,10 +841,10 @@ const URLASessionDetail = ({ loanId, onClose }) => {
           <div style={{
             padding: '20px',
             textAlign: 'center',
-            color: '#10b981',
+            color: '#2D7A52',
             fontSize: '0.8rem',
           }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" width="24" height="24" style={{ display: 'block', margin: '0 auto 8px' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#2D7A52" strokeWidth="2" width="24" height="24" style={{ display: 'block', margin: '0 auto 8px' }}>
               <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>

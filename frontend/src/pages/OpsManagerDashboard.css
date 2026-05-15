@@ -51,12 +51,12 @@
 }
 
 .ops-btn-primary {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
 .ops-btn-primary:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .ops-btn-secondary {
@@ -86,7 +86,7 @@
 }
 
 .ops-kpi-card.highlight {
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
 }
 
@@ -103,7 +103,7 @@
 }
 
 .ops-kpi-card.success {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .ops-kpi-value {
@@ -314,7 +314,7 @@
   width: 48px;
   height: 48px;
   border: 3px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: ops-spin 0.8s linear infinite;
 }

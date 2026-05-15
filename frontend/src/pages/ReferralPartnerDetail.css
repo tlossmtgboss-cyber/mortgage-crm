@@ -22,8 +22,8 @@
 
 .btn-back:hover {
   background: #f5f5f5;
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .partner-title-section {
@@ -225,7 +225,7 @@
 .count-badge {
   display: inline-block;
   padding: 4px 12px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 12px;
   font-size: 12px;
@@ -236,7 +236,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   font-size: 20px;
@@ -251,7 +251,7 @@
 }
 
 .btn-add-to-category:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: scale(1.1);
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
@@ -272,13 +272,13 @@
 
 .referral-item:hover {
   background: #e9ecef;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   transform: translateX(4px);
 }
 
 .referral-name {
   font-weight: 600;
-  color: #18a0a6;
+  color: #1F3D2E;
   margin-bottom: 4px;
   font-size: 15px;
 }
@@ -314,14 +314,14 @@
 
 .status-prospect {
   background: rgba(33, 141, 141, 0.1);
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .status-application,
 .status-pre-qualified,
 .status-pre-approved {
   background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .status-completed {
@@ -457,7 +457,7 @@
 
 .search-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -486,13 +486,13 @@
 
 .search-result-item:hover {
   background: #e9ecef;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   transform: translateX(4px);
 }
 
 .search-result-item .result-name {
   font-weight: 600;
-  color: #18a0a6;
+  color: #1F3D2E;
   margin-bottom: 4px;
   font-size: 15px;
 }
@@ -547,13 +547,13 @@
 }
 
 .partner-tab:hover {
-  color: #218D8D;
+  color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .partner-tab.active {
-  color: #218D8D;
-  border-bottom-color: #218D8D;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
 }
 
 /* ROI Calculator */
@@ -642,7 +642,7 @@
 
 .roi-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .roi-slider {
@@ -650,7 +650,7 @@
   height: 8px;
   -webkit-appearance: none;
   appearance: none;
-  background: linear-gradient(to right, #db2777 0%, #f59e0b 50%, #10b981 100%);
+  background: linear-gradient(to right, #db2777 0%, #f59e0b 50%, #2D7A52 100%);
   border-radius: 4px;
   outline: none;
 }
@@ -661,7 +661,7 @@
   width: 20px;
   height: 20px;
   background: white;
-  border: 3px solid #218D8D;
+  border: 3px solid #1F3D2E;
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -671,7 +671,7 @@
   width: 20px;
   height: 20px;
   background: white;
-  border: 3px solid #218D8D;
+  border: 3px solid #1F3D2E;
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -690,7 +690,7 @@
   gap: 8px;
   padding: 12px;
   background: #ecfdf5;
-  border: 1px solid #10b981;
+  border: 1px solid #2D7A52;
   border-radius: 8px;
   margin-top: 24px;
 }
@@ -698,7 +698,7 @@
 .live-dot {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
@@ -714,7 +714,7 @@
 
 .live-text {
   font-size: 13px;
-  color: #047857;
+  color: #1F5A3A;
   font-weight: 600;
 }
 
@@ -803,7 +803,7 @@
 
 .roi-metric-box-large {
   background: white;
-  border: 2px solid #10b981;
+  border: 2px solid #2D7A52;
   border-radius: 12px;
   padding: 24px;
   text-align: center;
@@ -923,7 +923,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding-bottom: 8px;
@@ -971,7 +971,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -995,7 +995,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1006,7 +1006,7 @@
 }
 
 .btn-edit-partner:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-cancel {
@@ -1028,7 +1028,7 @@
 
 .btn-save {
   padding: 10px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -1039,7 +1039,7 @@
 }
 
 .btn-save:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-save:disabled {

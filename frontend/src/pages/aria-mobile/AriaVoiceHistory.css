@@ -165,7 +165,7 @@
 
 .avh-call-pill--tools {
   background: rgba(167, 139, 250, 0.1);
-  color: #A78BFA;
+  color: #D4AD6A;
 }
 
 .avh-call-pill--msgs {
@@ -222,7 +222,7 @@
 }
 
 .avh-msg--assistant .avh-msg-role {
-  color: #A78BFA;
+  color: #D4AD6A;
 }
 
 .avh-msg-text {
@@ -248,7 +248,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #A78BFA;
+  color: #D4AD6A;
   margin: 0 0 8px;
 }
 
@@ -262,5 +262,5 @@
 .avh-tool-name {
   font-family: 'DM Mono', monospace;
   font-size: 12px;
-  color: #A78BFA;
+  color: #D4AD6A;
 }

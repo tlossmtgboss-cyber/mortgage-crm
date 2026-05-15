@@ -166,7 +166,7 @@ function CategoryTasksModal({ isOpen, onClose, category, selectedRoleId, onTasks
   const getCommunicationBadges = (day) => {
     const badges = [];
     if (day.phone_enabled) badges.push({ key: 'phone', label: 'Phone', color: '#3b82f6' });
-    if (day.text_enabled) badges.push({ key: 'text', label: 'Text', color: '#10b981' });
+    if (day.text_enabled) badges.push({ key: 'text', label: 'Text', color: '#2D7A52' });
     if (day.email_enabled) badges.push({ key: 'email', label: 'Email', color: '#f59e0b' });
     if (day.referral_partner_enabled) badges.push({ key: 'referral', label: 'Referral', color: '#ec4899' });
     return badges;

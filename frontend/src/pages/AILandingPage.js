@@ -3737,7 +3737,7 @@ function TaskPrioritiesComponent({ content, tasks, onCompleteTask, onViewDetails
       background: '#faf5ff',
       border: '1px solid #e9d5ff',
       borderRadius: '6px',
-      color: '#7c3aed',
+      color: '#B8924A',
       fontSize: '13px',
       fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
       textDecoration: 'none',
@@ -3796,7 +3796,7 @@ function TaskPrioritiesComponent({ content, tasks, onCompleteTask, onViewDetails
     },
     completeBtn: {
       padding: '6px 14px',
-      background: '#10b981',
+      background: '#2D7A52',
       color: 'white',
       border: 'none',
       borderRadius: '6px',
@@ -3809,7 +3809,7 @@ function TaskPrioritiesComponent({ content, tasks, onCompleteTask, onViewDetails
       display: 'inline-flex',
       alignItems: 'center',
       gap: '4px',
-      color: '#10b981',
+      color: '#2D7A52',
       fontSize: '13px',
       fontWeight: 500
     }

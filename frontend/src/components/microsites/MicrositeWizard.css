@@ -105,8 +105,8 @@
 }
 
 .progress-step.completed .step-indicator {
-  background: #059669;
-  border-color: #059669;
+  background: #2D7A52;
+  border-color: #2D7A52;
   color: #fff;
 }
 
@@ -123,7 +123,7 @@
 }
 
 .progress-step.completed .step-name {
-  color: #059669;
+  color: #2D7A52;
 }
 
 /* =============================================================================
@@ -1015,13 +1015,13 @@
 }
 
 .nav-btn.publish {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%);
   color: #fff;
   border: none;
 }
 
 .nav-btn.publish:hover:not(:disabled) {
-  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  background: linear-gradient(135deg, #1F5A3A 0%, #065f46 100%);
 }
 
 .nav-btn:disabled {

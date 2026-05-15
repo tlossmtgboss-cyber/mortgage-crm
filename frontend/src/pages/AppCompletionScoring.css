@@ -1,6 +1,6 @@
 /* =============================================================================
    AppCompletionScoring.css — ACO Scoring Dashboard
-   Light theme, 8px base spacing, teal primary (#218D8D)
+   Light theme, 8px base spacing, teal primary (#1F3D2E)
    ============================================================================= */
 
 /* Page layout */
@@ -67,7 +67,7 @@
 
 .aco-search-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.12);
 }
 
@@ -81,7 +81,7 @@
   width: 18px;
   height: 18px;
   border: 2px solid #e5e7eb;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: aco-spin 0.6s linear infinite;
 }
@@ -152,7 +152,7 @@
 
 .aco-result-number {
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   min-width: 100px;
 }
 
@@ -272,7 +272,7 @@
 
 .aco-loan-banner-number {
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
   font-size: 0.95rem;
 }
 
@@ -318,18 +318,18 @@
 }
 
 .aco-btn-primary {
-  background: #218D8D;
+  background: #1F3D2E;
   color: #ffffff;
 }
 
 .aco-btn-primary:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .aco-btn-outline {
   background: #ffffff;
-  color: #218D8D;
-  border: 1px solid #218D8D;
+  color: #1F3D2E;
+  border: 1px solid #1F3D2E;
 }
 
 .aco-btn-outline:hover:not(:disabled) {
@@ -343,12 +343,12 @@
 }
 
 .aco-btn-success {
-  background: #10B981;
+  background: #2D7A52;
   color: #ffffff;
 }
 
 .aco-btn-success:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .aco-btn-info {
@@ -521,7 +521,7 @@
 .aco-next-action-label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   display: block;
@@ -572,8 +572,8 @@
 }
 
 .aco-severity-tab.active {
-  color: #218D8D;
-  border-bottom-color: #218D8D;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
 }
 
 .aco-severity-tab.active[data-severity="critical"] {
@@ -607,7 +607,7 @@
 
 .aco-severity-tab.active .aco-tab-count {
   background: rgba(33, 141, 141, 0.1);
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* Items list */
@@ -767,7 +767,7 @@
 
 .aco-resolve-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.1);
 }
 
@@ -979,11 +979,11 @@
 }
 
 .aco-comm-dot[data-channel="sms"] {
-  background: #10B981;
+  background: #2D7A52;
 }
 
 .aco-comm-dot[data-channel="call"] {
-  background: #8B5CF6;
+  background: #B8924A;
 }
 
 .aco-comm-body {

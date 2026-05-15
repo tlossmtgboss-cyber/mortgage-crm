@@ -95,7 +95,7 @@
 }
 
 .mark-all-read:hover {
-  background: #e0e7ff;
+  background: #F5EDD9;
 }
 
 .notification-list {
@@ -183,7 +183,7 @@
 
 .notification-icon.message {
   background: #f3e8ff;
-  color: #9333ea;
+  color: #B8924A;
 }
 
 .notification-icon.approval {

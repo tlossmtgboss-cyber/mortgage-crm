@@ -10,7 +10,7 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
 const TIER_DISPLAY = {
   trial: { name: 'Trial', color: '#6b7280', price: 0 },
   lead_management: { name: 'Lead Management', color: '#3b82f6', price: 99 },
-  lead_and_active: { name: 'Lead & Active', color: '#8b5cf6', price: 249 },
+  lead_and_active: { name: 'Lead & Active', color: '#B8924A', price: 249 },
   full_pipeline: { name: 'Full Pipeline', color: '#f59e0b', price: 499 },
 };
 
@@ -179,7 +179,7 @@ const BillingSettings = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginTop: '16px' }}>
                 <div>
                   <div style={{ fontSize: '12px', color: '#6b7280', textTransform: 'uppercase' }}>Status</div>
-                  <div style={{ fontWeight: '600', color: subscription.status === 'active' ? '#10b981' : '#f59e0b' }}>
+                  <div style={{ fontWeight: '600', color: subscription.status === 'active' ? '#2D7A52' : '#f59e0b' }}>
                     {subscription.status || 'Active'}
                   </div>
                 </div>
@@ -202,7 +202,7 @@ const BillingSettings = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 {Object.entries(features).map(([key, value]) => (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0' }}>
-                    <span style={{ color: value ? '#10b981' : '#d1d5db', fontSize: '16px' }}>
+                    <span style={{ color: value ? '#2D7A52' : '#d1d5db', fontSize: '16px' }}>
                       {value ? '\u2713' : '\u2717'}
                     </span>
                     <span style={{ fontSize: '14px', color: value ? '#111827' : '#9ca3af' }}>
@@ -353,7 +353,7 @@ const BillingSettings = () => {
                       <div style={{ height: '8px', background: '#f3f4f6', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{
                           height: '100%', borderRadius: '4px', width: `${pct}%`,
-                          background: pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#10b981',
+                          background: pct > 90 ? '#ef4444' : pct > 70 ? '#f59e0b' : '#2D7A52',
                           transition: 'width 0.3s',
                         }} />
                       </div>

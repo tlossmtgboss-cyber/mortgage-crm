@@ -272,7 +272,7 @@ const IntegrationDetails = ({
             <input type="checkbox" checked={emailProcessingSettings.delete_from_inbox_after_processing} onChange={(e) => {
               const newSettings = { ...emailProcessingSettings, delete_from_inbox_after_processing: e.target.checked };
               saveEmailProcessingSettings(newSettings);
-            }} disabled={savingEmailSettings} style={{ width: '20px', height: '20px', marginTop: '2px', accentColor: '#218D8D' }} />
+            }} disabled={savingEmailSettings} style={{ width: '20px', height: '20px', marginTop: '2px', accentColor: '#1F3D2E' }} />
             <div>
               <span style={{fontWeight: '500', color: '#1f2937', display: 'block'}}>Delete emails from inbox after processing</span>
               <span style={{fontSize: '13px', color: '#6b7280', marginTop: '4px', display: 'block'}}>When you approve or reject emails in the Reconciliation Center, they will also be moved to trash in your inbox. You can override this per-email when processing.</span>

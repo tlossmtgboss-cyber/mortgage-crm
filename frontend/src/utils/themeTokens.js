@@ -19,7 +19,7 @@ export const THEME_TOKENS = {
   light: {
     // Backgrounds
     bgPrimary: '#ffffff',
-    bgSecondary: '#f5f7fa',
+    bgSecondary: '#FAF7F1',
     bgTertiary: '#f0f2f5',
     bgCard: '#ffffff',
     bgModal: '#ffffff',
@@ -41,13 +41,13 @@ export const THEME_TOKENS = {
     // Borders
     borderLight: '#e5e7eb',
     borderMedium: '#d1d5db',
-    borderFocus: '#218d8d',
+    borderFocus: '#1F3D2E',
 
     // Brand -- synced with existing --brand-primary / --color-primary
-    brandPrimary: '#218d8d',
-    brandPrimaryHover: '#1a7070',
-    brandSecondary: '#7c3aed',
-    brandAccent: '#059669',
+    brandPrimary: '#1F3D2E',
+    brandPrimaryHover: '#2A4F3D',
+    brandSecondary: '#B8924A',
+    brandAccent: '#2D7A52',
 
     // Status
     statusSuccess: '#16a34a',
@@ -79,7 +79,7 @@ export const THEME_TOKENS = {
 
     // Spinner
     spinnerTrack: '#e5e7eb',
-    spinnerActive: '#218d8d',
+    spinnerActive: '#1F3D2E',
 
     // Scrollbar (if shown)
     scrollbarThumb: 'rgba(0, 0, 0, 0.2)',
@@ -114,10 +114,10 @@ export const THEME_TOKENS = {
     borderFocus: '#4a9eff',
 
     // Brand -- brighter variants for dark backgrounds (maintain contrast)
-    brandPrimary: '#2cb8b8',      // Brighter teal for dark bg
-    brandPrimaryHover: '#38d4d4',
-    brandSecondary: '#a78bfa',
-    brandAccent: '#34d399',
+    brandPrimary: '#3D7A5E',
+    brandPrimaryHover: '#4A8F6E',
+    brandSecondary: '#D4AD6A',
+    brandAccent: '#4AA876',
 
     // Status -- brighter for dark backgrounds
     statusSuccess: '#22c55e',
@@ -149,7 +149,7 @@ export const THEME_TOKENS = {
 
     // Spinner
     spinnerTrack: '#2d2d4a',
-    spinnerActive: '#2cb8b8',
+    spinnerActive: '#3D7A5E',
 
     // Scrollbar (if shown)
     scrollbarThumb: 'rgba(255, 255, 255, 0.2)',

@@ -114,14 +114,14 @@
   align-items: center;
   gap: 8px;
   font-size: 0.8rem;
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 
 .live-dot {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 2s ease-in-out infinite;
 }

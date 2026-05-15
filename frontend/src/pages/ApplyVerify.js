@@ -38,14 +38,14 @@ export default function ApplyVerify() {
         textAlign: 'center',
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
       }}>
-        <h2 style={{ color: '#218D8D', marginBottom: '16px' }}>Verifying your login...</h2>
+        <h2 style={{ color: '#1F3D2E', marginBottom: '16px' }}>Verifying your login...</h2>
         <p style={{ color: '#6b7280' }}>Please wait while we verify your secure link.</p>
         <div style={{
           marginTop: '24px',
           width: '40px',
           height: '40px',
           border: '4px solid #e5e7eb',
-          borderTopColor: '#218D8D',
+          borderTopColor: '#1F3D2E',
           borderRadius: '50%',
           animation: 'spin 1s linear infinite',
           margin: '24px auto 0'

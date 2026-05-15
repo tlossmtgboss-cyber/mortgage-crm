@@ -14,12 +14,12 @@ import './BorrowerPortalDashboard.css';
 const LIFECYCLE_STAGES = {
   PROSPECT: { label: 'Prospect', color: '#9CA3AF' },
   LEAD: { label: 'Lead', color: '#3B82F6' },
-  PREAPPROVAL: { label: 'Pre-Approval', color: '#8B5CF6' },
+  PREAPPROVAL: { label: 'Pre-Approval', color: '#B8924A' },
   UNDER_CONTRACT: { label: 'Under Contract', color: '#F59E0B' },
   PROCESSING: { label: 'Processing', color: '#EC4899' },
-  CLEAR_TO_CLOSE: { label: 'Clear to Close', color: '#10B981' },
-  FUNDED: { label: 'Funded', color: '#059669' },
-  MUM: { label: 'Member Until Maturity', color: '#6366F1' },
+  CLEAR_TO_CLOSE: { label: 'Clear to Close', color: '#2D7A52' },
+  FUNDED: { label: 'Funded', color: '#2D7A52' },
+  MUM: { label: 'Member Until Maturity', color: '#B8924A' },
   ANNUAL_REFRESH: { label: 'Annual Refresh', color: '#F97316' },
 };
 
@@ -97,7 +97,7 @@ export default function BorrowerPortalDashboard({ loanId, borrowerName }) {
                   cy="50"
                   r="45"
                   fill="none"
-                  stroke="#10b981"
+                  stroke="#2D7A52"
                   strokeWidth="10"
                   strokeDasharray={`${milestoneProgress.progress_percent * 2.83} 283`}
                   strokeLinecap="round"

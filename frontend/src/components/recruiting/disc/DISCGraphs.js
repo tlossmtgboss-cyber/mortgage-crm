@@ -7,7 +7,7 @@ import './DISCGraphs.css';
 const DISC_COLORS = {
   D: { color: '#DC2626', label: 'Dominance', short: 'D' },
   I: { color: '#F59E0B', label: 'Influence', short: 'I' },
-  S: { color: '#10B981', label: 'Steadiness', short: 'S' },
+  S: { color: '#2D7A52', label: 'Steadiness', short: 'S' },
   C: { color: '#3B82F6', label: 'Conscientiousness', short: 'C' }
 };
 

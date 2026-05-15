@@ -11,7 +11,7 @@
 
 /* Header */
 .partner-header {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   color: white;
   padding: 24px;
 }
@@ -64,7 +64,7 @@
 .live-dot {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: #2D7A52;
   border-radius: 50%;
   animation: pulse 2s infinite;
 }
@@ -306,7 +306,7 @@
   height: 64px;
   border-radius: 50%;
   overflow: hidden;
-  background: #4f46e5;
+  background: #8A6D30;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -366,12 +366,12 @@
 }
 
 .contact-btn.phone {
-  background: #4f46e5;
+  background: #8A6D30;
   color: white;
 }
 
 .contact-btn.phone:hover {
-  background: #4338ca;
+  background: #6B5424;
 }
 
 .contact-btn.email {

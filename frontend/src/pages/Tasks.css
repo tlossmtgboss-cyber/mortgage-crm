@@ -276,7 +276,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #e8f5f5;
+  background: #E5EDE6;
   border-radius: 6px;
   font-size: 13px;
 }
@@ -292,7 +292,7 @@
 
 .btn-approve-sm {
   padding: 6px 16px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -303,7 +303,7 @@
 }
 
 .btn-approve-sm:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
 }
 
@@ -317,7 +317,7 @@
 .btn-complete {
   flex: 1;
   padding: 8px 16px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -328,7 +328,7 @@
 }
 
 .btn-complete:hover {
-  background: #059669;
+  background: #2D7A52;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
@@ -336,8 +336,8 @@
 .btn-task-action {
   padding: 8px 16px;
   background: white;
-  color: #218D8D;
-  border: 2px solid #218D8D;
+  color: #1F3D2E;
+  border: 2px solid #1F3D2E;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
@@ -346,7 +346,7 @@
 }
 
 .btn-task-action:hover {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -401,7 +401,7 @@
 }
 
 .ai-count-badge {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   padding: 4px 12px;
   border-radius: var(--radius-full);
@@ -427,7 +427,7 @@
 }
 
 .ai-task-card:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: var(--shadow-md);
 }
 
@@ -446,7 +446,7 @@
 }
 
 .confidence-badge {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   padding: 4px 10px;
   border-radius: 6px;
@@ -470,7 +470,7 @@
 }
 
 .ai-confidence-meter.high {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
 }
@@ -502,7 +502,7 @@
 .btn-approve {
   flex: 1;
   padding: 8px 16px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -513,7 +513,7 @@
 }
 
 .btn-approve:hover {
-  background: #059669;
+  background: #2D7A52;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
@@ -522,8 +522,8 @@
 .btn-coach {
   padding: 8px 16px;
   background: white;
-  color: #218D8D;
-  border: 2px solid #218D8D;
+  color: #1F3D2E;
+  border: 2px solid #1F3D2E;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
@@ -533,7 +533,7 @@
 
 .btn-fix:hover,
 .btn-coach:hover {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -550,7 +550,7 @@
 }
 
 .ai-task-simple:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: var(--shadow-sm);
 }
 
@@ -581,12 +581,12 @@
 }
 
 .btn-quick-approve {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-quick-approve:hover {
-  background: #059669;
+  background: #2D7A52;
   transform: scale(1.1);
 }
 
@@ -884,7 +884,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border-radius: 20px;
   font-size: 14px;
@@ -950,7 +950,7 @@
 
 .btn-mum-action {
   padding: 10px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -962,7 +962,7 @@
 }
 
 .btn-mum-action:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
 }
@@ -1139,7 +1139,7 @@
 
 .power-dial-btn {
   padding: 8px 16px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -1154,7 +1154,7 @@
 }
 
 .power-dial-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
 }
@@ -1195,7 +1195,7 @@
 
 .power-dial-progress .progress-contact {
   font-weight: 600;
-  color: #047857;
+  color: #1F5A3A;
 }
 
 .power-dial-progress .progress-bar {
@@ -1207,7 +1207,7 @@
 
 .power-dial-progress .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #2D7A52 0%, #2D7A52 100%);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
@@ -1217,12 +1217,12 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
   flex-shrink: 0;
 }
 
 .task-checkbox:focus {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: 2px;
 }
 
@@ -1259,7 +1259,7 @@
 
 .inbox-item.selected {
   background: #dbeafe;
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
   padding-left: 16px;
 }
 
@@ -1404,14 +1404,14 @@
 }
 
 .detail-value.clickable-link {
-  color: #218D8D;
+  color: #1F3D2E;
   text-decoration: underline;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .detail-value.clickable-link:hover {
-  color: #1a7070;
+  color: #2A4F3D;
   text-decoration-thickness: 2px;
 }
 
@@ -1523,7 +1523,7 @@
 
 .btn-detail-complete {
   padding: 10px 16px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 8px;
@@ -1538,7 +1538,7 @@
 }
 
 .btn-detail-complete:hover {
-  background: #059669;
+  background: #2D7A52;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
@@ -1681,12 +1681,12 @@
 }
 
 .detail-owner-select:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .detail-owner-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -2293,13 +2293,13 @@
 }
 
 .comm-method-btn:hover {
-  border-color: #18a0a6;
+  border-color: #1F3D2E;
   background: #f0f9ff;
 }
 
 .comm-method-btn.active {
-  border-color: #18a0a6;
-  background: #18a0a6;
+  border-color: #1F3D2E;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -2483,7 +2483,7 @@
 }
 
 .btn-modal-primary {
-  background: linear-gradient(135deg, #18a0a6 0%, #136b6f 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #162E22 100%);
   color: white;
   border: none;
   padding: 12px 32px;
@@ -2495,13 +2495,13 @@
 }
 
 .btn-modal-primary:hover {
-  background: linear-gradient(135deg, #136b6f 0%, #0f5154 100%);
+  background: linear-gradient(135deg, #162E22 0%, #0f5154 100%);
   transform: translateY(-1px);
 }
 
 /* Updated Button Styles */
 .btn-detail-send {
-  background: linear-gradient(135deg, #18a0a6 0%, #136b6f 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #162E22 100%);
   color: white;
   border: none;
   padding: 10px 16px;
@@ -2637,7 +2637,7 @@
 }
 
 .team-member-btn:hover {
-  border-color: #18a0a6;
+  border-color: #1F3D2E;
   background: #f0f9ff;
 }
 
@@ -2654,7 +2654,7 @@
 /* Change Status Button */
 .btn-detail-status {
   padding: 10px 16px;
-  background: #8b5cf6;
+  background: #B8924A;
   color: white;
   border: none;
   border-radius: 8px;
@@ -2669,7 +2669,7 @@
 }
 
 .btn-detail-status:hover {
-  background: #7c3aed;
+  background: #B8924A;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
@@ -2827,7 +2827,7 @@
 
 .filter-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 /* Match tags in inbox items */
@@ -2907,7 +2907,7 @@
 .phone-number {
   font-family: 'SF Mono', Monaco, 'Courier New', monospace;
   font-weight: 500;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Disposition Modal */
@@ -2950,12 +2950,12 @@
 }
 
 .disposition-option:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .disposition-option.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #e6f7f5;
 }
 
@@ -2998,30 +2998,30 @@
 
 .task-title-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 /* Dial button special styling */
 .btn-detail-primary[style*="background: rgb(16, 185, 129)"],
 .btn-detail-primary[style*="background-color: rgb(16, 185, 129)"] {
-  background: #10b981 !important;
+  background: #2D7A52 !important;
 }
 
 .btn-detail-primary[style*="background: rgb(16, 185, 129)"]:hover,
 .btn-detail-primary[style*="background-color: rgb(16, 185, 129)"]:hover {
-  background: #059669 !important;
+  background: #2D7A52 !important;
 }
 
 /* Complete Task Button in Send Via row */
 .complete-task-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%) !important;
   color: white !important;
   border: none !important;
   font-weight: 600;
 }
 
 .complete-task-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%) !important;
   transform: translateY(-1px);
 }
 

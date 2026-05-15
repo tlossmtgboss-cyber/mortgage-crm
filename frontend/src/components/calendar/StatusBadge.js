@@ -17,7 +17,7 @@ const STATUS_CONFIG = {
   booked:      { label: 'Booked',      bg: '#dbeafe', color: '#1d4ed8', border: '#93c5fd' },
   confirmed:   { label: 'Confirmed',   bg: '#dcfce7', color: '#166534', border: '#86efac' },
   reminded:    { label: 'Reminded',    bg: '#fef9c3', color: '#854d0e', border: '#fde047' },
-  checked_in:  { label: 'Checked In',  bg: '#f3e8ff', color: '#6b21a8', border: '#c084fc' },
+  checked_in:  { label: 'Checked In',  bg: '#f3e8ff', color: '#6b21a8', border: '#D4AD6A' },
   completed:   { label: 'Completed',   bg: '#f3f4f6', color: '#374151', border: '#d1d5db' },
   cancelled:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' },
   no_show:     { label: 'No Show',     bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' },

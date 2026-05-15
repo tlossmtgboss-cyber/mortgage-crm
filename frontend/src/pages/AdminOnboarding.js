@@ -1148,7 +1148,7 @@ function PaymentStep({
         </div>
 
         <div className="free-access-card" style={{
-          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          background: 'linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%)',
           borderRadius: '16px',
           padding: '32px',
           color: 'white',
@@ -1171,7 +1171,7 @@ function PaymentStep({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
             {['Full CRM Platform', 'AI Assistant', 'Advanced Automation', 'Unlimited Leads', 'Email Integration', 'Team Collaboration'].map(feature => (
               <div key={feature} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: '#10b981' }}>✓</span>
+                <span style={{ color: '#2D7A52' }}>✓</span>
                 <span>{feature}</span>
               </div>
             ))}
@@ -1187,7 +1187,7 @@ function PaymentStep({
             className="btn-primary btn-pay"
             onClick={handleFreeAccessComplete}
             disabled={processing}
-            style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%)' }}
           >
             {processing ? 'Activating...' : 'Activate Free Access'}
           </button>
@@ -1241,7 +1241,7 @@ function PaymentStep({
                 >
                   Apply
                 </button>
-                {promoValidated && <span style={{ color: '#10b981', fontWeight: 'bold' }}>Valid - No payment required!</span>}
+                {promoValidated && <span style={{ color: '#2D7A52', fontWeight: 'bold' }}>Valid - No payment required!</span>}
               </div>
             </div>
 
@@ -1318,7 +1318,7 @@ function PaymentStep({
                   className="btn-primary btn-pay"
                   onClick={handleFreeAccessComplete}
                   disabled={processing}
-                  style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                  style={{ background: 'linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%)' }}
                 >
                   {processing ? 'Activating...' : 'Activate Free Access'}
                 </button>

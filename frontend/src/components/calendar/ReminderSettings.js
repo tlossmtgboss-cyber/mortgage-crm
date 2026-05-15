@@ -35,7 +35,7 @@ const TEMPLATE_VARIABLES = [
 ];
 
 const STATUS_COLORS = {
-  sent: '#10b981',
+  sent: '#2D7A52',
   failed: '#ef4444',
   skipped: '#f59e0b',
 };

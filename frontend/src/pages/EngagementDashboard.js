@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import './EngagementDashboard.css';
 
-const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#8A6D30', '#06b6d4', '#2D7A52', '#f59e0b', '#ef4444', '#B8924A'];
 
 function EngagementDashboard() {
   const [loading, setLoading] = useState(true);
@@ -136,7 +136,7 @@ function EngagementDashboard() {
               <XAxis dataKey="name" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="total" fill="#4f46e5" name="Total" />
+              <Bar dataKey="total" fill="#8A6D30" name="Total" />
               <Bar dataKey="leads" fill="#06b6d4" name="Unique Leads" />
             </BarChart>
           </ResponsiveContainer>
@@ -152,7 +152,7 @@ function EngagementDashboard() {
                   <XAxis type="number" />
                   <YAxis dataKey="name" type="category" width={80} />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#10b981" />
+                  <Bar dataKey="value" fill="#2D7A52" />
                 </BarChart>
               </ResponsiveContainer>
               <div className="ed-funnel-rates">

@@ -64,7 +64,7 @@
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   display: flex;
   align-items: center;
@@ -127,7 +127,7 @@
 
 .btn-edit {
   padding: 12px 24px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -138,7 +138,7 @@
 }
 
 .btn-edit:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
 }
@@ -196,12 +196,12 @@
 .form-input:focus,
 .form-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .btn-save {
   padding: 12px 24px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 8px;
@@ -212,7 +212,7 @@
 }
 
 .btn-save:hover {
-  background: #059669;
+  background: #2D7A52;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
@@ -238,7 +238,7 @@
 .current-user-badge {
   display: inline-block;
   padding: 4px 12px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   font-size: 12px;
   font-weight: 600;
@@ -250,8 +250,8 @@
 .role-badge {
   display: inline-block;
   padding: 6px 12px;
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #F5EDD9;
+  color: #6B5424;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
@@ -267,7 +267,7 @@
 }
 
 .status-badge.active {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
@@ -285,7 +285,7 @@
 }
 
 .verify-badge.verified {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
@@ -362,7 +362,7 @@
 
 /* View-as-User Banner */
 .view-as-banner {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   padding: 16px 40px;
   display: flex;
@@ -412,7 +412,7 @@
 
 .banner-btn:hover {
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
 }
@@ -436,7 +436,7 @@
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -487,7 +487,7 @@
 }
 
 .status-badge.completed {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   padding: 8px 16px;
   border-radius: 8px;
@@ -508,7 +508,7 @@
 .btn-view-as-user,
 .btn-exit-view-as {
   padding: 14px 28px;
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 10px;
@@ -592,8 +592,8 @@
 
 .user-profile-container .role-badge {
   padding: 8px 16px;
-  background: linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%);
-  color: #4338ca;
+  background: linear-gradient(135deg, #F5EDD9 0%, #F5EDD9 100%);
+  color: #6B5424;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
@@ -673,7 +673,7 @@
 }
 
 .task-card-profile:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.1);
   transform: translateY(-2px);
 }
@@ -688,7 +688,7 @@
 .task-index {
   width: 28px;
   height: 28px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -733,8 +733,8 @@
 }
 
 .task-meta-badge.ai {
-  background: linear-gradient(135deg, #ddd6fe 0%, #e0e7ff 100%);
-  color: #5b21b6;
+  background: linear-gradient(135deg, #F5EDD9 0%, #F5EDD9 100%);
+  color: #6B5424;
 }
 
 .task-meta-badge.required {

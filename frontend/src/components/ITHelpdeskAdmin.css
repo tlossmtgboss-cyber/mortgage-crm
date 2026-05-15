@@ -64,7 +64,7 @@
 }
 
 .stat-card.resolved .stat-value {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Filters */
@@ -105,12 +105,12 @@
 .filter-input:focus,
 .filter-select:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .btn-refresh {
   padding: 8px 16px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -167,7 +167,7 @@
 
 .ticket-card.selected {
   background: #f0f9ff;
-  border-left: 3px solid #217F8D;
+  border-left: 3px solid #1F3D2E;
 }
 
 .ticket-card-header {
@@ -236,13 +236,13 @@
 }
 
 .status-fixing {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: #FAF3E5;
+  color: #B8924A;
 }
 
 .status-resolved {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-failed {
@@ -379,7 +379,7 @@
 }
 
 .risk-low {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 
@@ -487,7 +487,7 @@
 
 .action-select:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .note-input {
@@ -502,12 +502,12 @@
 
 .note-input:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: #1F3D2E;
 }
 
 .btn-action {
   padding: 10px 20px;
-  background: #217F8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;

@@ -1,7 +1,7 @@
 /**
  * CancellationPolicyStep Styles
  * Step 7 of Smart Calendar guided setup.
- * Follows Perennia brand (#218D8D) and CalendarSettings patterns.
+ * Follows Perennia brand (#1F3D2E) and CalendarSettings patterns.
  */
 
 /* ============================================================================
@@ -125,7 +125,7 @@
 
 .policy-card .card-icon.custom {
   background: #f3e8ff;
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .policy-card .card-check {

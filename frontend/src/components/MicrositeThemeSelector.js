@@ -255,7 +255,7 @@ const MicrositeThemeSelector = ({ onThemeSelect }) => {
                   flex: 1,
                   minWidth: '140px',
                   padding: '12px 20px',
-                  background: '#10b981',
+                  background: '#2D7A52',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',

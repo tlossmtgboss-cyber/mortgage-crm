@@ -111,7 +111,7 @@
 }
 
 .recommendation-item.priority-low {
-  border-left-color: #10b981;
+  border-left-color: #2D7A52;
   background: #ecfdf5;
 }
 
@@ -168,7 +168,7 @@
 }
 
 .rec-impact span {
-  color: #059669;
+  color: #2D7A52;
   font-weight: 500;
 }
 

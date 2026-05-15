@@ -74,7 +74,7 @@
 
 .btn-publish {
   padding: 8px 16px;
-  background: #059669;
+  background: #2D7A52;
   border: none;
   border-radius: 6px;
   color: white;
@@ -87,7 +87,7 @@
 }
 
 .btn-publish:hover {
-  background: #047857;
+  background: #1F5A3A;
 }
 
 .btn-publish:disabled {
@@ -224,7 +224,7 @@
 
 .preview-header .browser-dots span:nth-child(1) { background: #ef4444; }
 .preview-header .browser-dots span:nth-child(2) { background: #f59e0b; }
-.preview-header .browser-dots span:nth-child(3) { background: #10b981; }
+.preview-header .browser-dots span:nth-child(3) { background: #2D7A52; }
 
 .preview-header .preview-url {
   flex: 1;
@@ -274,7 +274,7 @@
 
 .template-thumbnail {
   height: 160px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -741,7 +741,7 @@
 }
 
 .toast.success {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .toast.error {

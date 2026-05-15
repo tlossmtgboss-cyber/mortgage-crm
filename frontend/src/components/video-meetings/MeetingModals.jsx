@@ -157,7 +157,7 @@ export const MeetingTypeModal = ({
   ];
 
   const colorOptions = [
-    '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b',
+    '#2D7A52', '#3b82f6', '#B8924A', '#f59e0b',
     '#ef4444', '#ec4899', '#06b6d4', '#84cc16'
   ];
 

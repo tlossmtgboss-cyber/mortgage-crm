@@ -8,7 +8,7 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 // Communication method columns - default for most workflows (uses "Realtor")
 const DEFAULT_COMMUNICATION_METHODS = [
   { key: 'phone', label: 'Phone', color: '#3b82f6' },
-  { key: 'text', label: 'Text', color: '#10b981' },
+  { key: 'text', label: 'Text', color: '#2D7A52' },
   { key: 'email', label: 'Email', color: '#f59e0b' },
   { key: 'referral_partner', label: 'Realtor', color: '#ec4899' }
 ];
@@ -16,7 +16,7 @@ const DEFAULT_COMMUNICATION_METHODS = [
 // Theme Day workflow uses "Stakeholder" instead of "Realtor"
 const THEME_DAY_COMMUNICATION_METHODS = [
   { key: 'phone', label: 'Phone', color: '#3b82f6' },
-  { key: 'text', label: 'Text', color: '#10b981' },
+  { key: 'text', label: 'Text', color: '#2D7A52' },
   { key: 'email', label: 'Email', color: '#f59e0b' },
   { key: 'referral_partner', label: 'Stakeholder', color: '#ec4899' }
 ];
@@ -25,8 +25,8 @@ const THEME_DAY_COMMUNICATION_METHODS = [
 const LEAD_PURCHASE_COMMUNICATION_METHODS = [
   { key: 'phone_am', label: 'AM Phone', color: '#3b82f6' },
   { key: 'phone_pm', label: 'PM Phone', color: '#2563eb' },
-  { key: 'text_am', label: 'AM Text', color: '#10b981' },
-  { key: 'text_pm', label: 'PM Text', color: '#059669' },
+  { key: 'text_am', label: 'AM Text', color: '#2D7A52' },
+  { key: 'text_pm', label: 'PM Text', color: '#2D7A52' },
   { key: 'email', label: 'Email', color: '#f59e0b' }
 ];
 

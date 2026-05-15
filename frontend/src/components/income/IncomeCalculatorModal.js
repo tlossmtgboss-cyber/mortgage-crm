@@ -120,9 +120,9 @@ const INCOME_TABS = [
 const VERIFICATION_STATUSES = {
   'PENDING': { label: 'Pending', color: '#f59e0b', bgColor: '#fef3c7' },
   'DOCUMENTS_RECEIVED': { label: 'Docs Received', color: '#3b82f6', bgColor: '#dbeafe' },
-  'VERIFIED': { label: 'Verified', color: '#10b981', bgColor: '#d1fae5' },
+  'VERIFIED': { label: 'Verified', color: '#2D7A52', bgColor: '#d1fae5' },
   'NEEDS_ADDITIONAL_DOCS': { label: 'Needs Docs', color: '#ef4444', bgColor: '#fee2e2' },
-  'CALCULATED': { label: 'Calculated', color: '#8b5cf6', bgColor: '#ede9fe' },
+  'CALCULATED': { label: 'Calculated', color: '#B8924A', bgColor: '#FAF3E5' },
 };
 
 export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowerId, borrowerName, onSave }) {

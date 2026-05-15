@@ -59,7 +59,7 @@
 }
 
 .admin-type-badge.platform-admin {
-  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #8A6D30 100%);
   color: white;
   box-shadow: 0 2px 4px rgba(124, 58, 237, 0.3);
 }
@@ -286,7 +286,7 @@
 .stat-icon.realtors { background: #fef3c7; color: #d97706; }
 .stat-icon.leads { background: #dbeafe; color: #2563eb; }
 .stat-icon.loans { background: #dcfce7; color: #16a34a; }
-.stat-icon.volume { background: #f3e8ff; color: #7c3aed; }
+.stat-icon.volume { background: #f3e8ff; color: #B8924A; }
 
 .stat-content {
   display: flex;
@@ -982,7 +982,7 @@
 
 .auto-refresh-badge {
   font-size: 11px;
-  color: #059669;
+  color: #2D7A52;
   background: #d1fae5;
   padding: 4px 8px;
   border-radius: 12px;
@@ -1476,7 +1476,7 @@
 }
 
 .config-value.success {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .config-value.warning {
@@ -1628,7 +1628,7 @@
 }
 
 .account-metric-card .metric-growth.positive {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .account-metric-card .metric-growth.negative {
@@ -2609,7 +2609,7 @@
    ======================================== */
 
 .btn-test-account {
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: white;
   border: none;
   padding: 10px 18px;
@@ -2622,7 +2622,7 @@
 }
 
 .btn-test-account:hover {
-  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #8A6D30 100%);
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
   transform: translateY(-1px);
 }
@@ -2642,25 +2642,25 @@
 }
 
 .test-account-info p {
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  background: linear-gradient(135deg, #FAF3E5 0%, #F5EDD9 100%);
   border: 1px solid #c4b5fd;
   border-radius: 8px;
   padding: 14px 18px;
   font-size: 14px;
-  color: #5b21b6;
+  color: #6B5424;
   margin: 0;
 }
 
 .test-account-note {
-  background: #f5f3ff;
-  border: 1px solid #ddd6fe;
+  background: #FDF9F0;
+  border: 1px solid #F5EDD9;
   border-radius: 8px;
   padding: 16px;
   margin-top: 16px;
 }
 
 .test-account-note strong {
-  color: #6d28d9;
+  color: #8A6D30;
   display: block;
   margin-bottom: 8px;
 }
@@ -2672,7 +2672,7 @@
 
 .test-account-note li {
   font-size: 13px;
-  color: #4c1d95;
+  color: #5A461D;
   padding: 4px 0;
 }
 
@@ -2781,7 +2781,7 @@
 }
 
 .financial-metric-card .metric-value.green {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .financial-metric-card .metric-value.blue {

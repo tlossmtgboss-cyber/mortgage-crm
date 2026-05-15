@@ -278,7 +278,7 @@
   display: block;
   font-size: 48px;
   margin-bottom: 16px;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .empty-alerts h3 {
@@ -492,8 +492,8 @@
 }
 
 .action-btn.resolve {
-  border-color: #10b981;
-  color: #10b981;
+  border-color: #2D7A52;
+  color: #2D7A52;
 }
 
 .action-btn.resolve:hover {
@@ -501,12 +501,12 @@
 }
 
 .action-btn.view-loan {
-  border-color: #8b5cf6;
-  color: #8b5cf6;
+  border-color: #B8924A;
+  color: #B8924A;
 }
 
 .action-btn.view-loan:hover {
-  background: #f5f3ff;
+  background: #FDF9F0;
 }
 
 .snooze-dropdown {
@@ -824,7 +824,7 @@
 .empty-state .empty-icon {
   display: block;
   font-size: 32px;
-  color: #10b981;
+  color: #2D7A52;
   margin-bottom: 8px;
 }
 
@@ -1098,7 +1098,7 @@
   font-size: 28px;
   line-height: 1;
   margin-bottom: 4px;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .deal-alerts-embedded .summary-stat .stat-label {

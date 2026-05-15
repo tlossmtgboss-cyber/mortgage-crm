@@ -99,7 +99,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 50%, #1F5A3A 100%);
   padding: 24px;
   position: relative;
   overflow: hidden;
@@ -185,7 +185,7 @@
 .continue-btn {
   padding: 16px 40px;
   background: white;
-  color: #059669;
+  color: #2D7A52;
   border: none;
   border-radius: 12px;
   font-size: 18px;
@@ -246,7 +246,7 @@
 .confetti:nth-child(5) {
   left: 90%;
   animation-delay: 2s;
-  background: #a78bfa;
+  background: #D4AD6A;
 }
 
 @keyframes confetti-fall {

@@ -1,7 +1,7 @@
 /* ===========================================================================
    BookingConfirmation.css — Polished booking confirmation page
    Uses the same CSS custom properties as PublicBooking.css:
-     --booking-primary    (fallback #217F8D)
+     --booking-primary    (fallback #1F3D2E)
      --booking-accent     (fallback #34a853)
      --booking-primary-dark  (fallback #1a6670)
    =========================================================================== */
@@ -130,7 +130,7 @@
 .bc-conf-value {
   font-size: 18px;
   font-weight: 700;
-  color: var(--booking-primary, #217F8D);
+  color: var(--booking-primary, #1F3D2E);
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
   letter-spacing: 0.05em;
 }
@@ -171,7 +171,7 @@
   height: 52px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid var(--booking-primary, #217F8D);
+  border: 2px solid var(--booking-primary, #1F3D2E);
   flex-shrink: 0;
 }
 
@@ -179,13 +179,13 @@
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--booking-primary, #217F8D) 12%, white);
-  border: 2px solid var(--booking-primary, #217F8D);
+  background: color-mix(in srgb, var(--booking-primary, #1F3D2E) 12%, white);
+  border: 2px solid var(--booking-primary, #1F3D2E);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--booking-primary, #217F8D);
+  color: var(--booking-primary, #1F3D2E);
   font-size: 20px;
   font-weight: 700;
 }
@@ -230,7 +230,7 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: var(--booking-primary, #217F8D);
+  color: var(--booking-primary, #1F3D2E);
   margin-top: 1px;
 }
 
@@ -266,7 +266,7 @@
   gap: 8px;
   width: 100%;
   padding: 14px 20px;
-  background: var(--booking-primary, #217F8D);
+  background: var(--booking-primary, #1F3D2E);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -334,9 +334,9 @@
 }
 
 .bc-cal-btn:hover {
-  border-color: var(--booking-primary, #217F8D);
-  background: color-mix(in srgb, var(--booking-primary, #217F8D) 5%, white);
-  color: var(--booking-primary, #217F8D);
+  border-color: var(--booking-primary, #1F3D2E);
+  background: color-mix(in srgb, var(--booking-primary, #1F3D2E) 5%, white);
+  color: var(--booking-primary, #1F3D2E);
 }
 
 .bc-cal-btn-icon {
@@ -436,7 +436,7 @@
   gap: 6px;
   background: none;
   border: none;
-  color: var(--booking-primary, #217F8D);
+  color: var(--booking-primary, #1F3D2E);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -481,7 +481,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #f0f0f0;
-  border-top-color: var(--booking-primary, #217F8D);
+  border-top-color: var(--booking-primary, #1F3D2E);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -526,7 +526,7 @@
 
 .bc-error-retry {
   padding: 10px 24px;
-  background: var(--booking-primary, #217F8D);
+  background: var(--booking-primary, #1F3D2E);
   color: #fff;
   border: none;
   border-radius: 6px;

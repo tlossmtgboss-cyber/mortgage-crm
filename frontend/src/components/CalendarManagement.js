@@ -350,7 +350,7 @@ const CalendarManagement = () => {
             <div className="users-grid">
               {bookingLinks.map(link => (
                 <div key={link.id} className="user-card">
-                  <div className="user-avatar-lg" style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}>
+                  <div className="user-avatar-lg" style={{ background: 'linear-gradient(135deg, #B8924A, #8A6D30)' }}>
                     B
                   </div>
                   <div className="user-details">

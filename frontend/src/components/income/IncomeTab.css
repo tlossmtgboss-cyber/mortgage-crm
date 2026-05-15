@@ -289,8 +289,8 @@
 .type-icon {
   width: 32px;
   height: 32px;
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: #F5EDD9;
+  color: #8A6D30;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -500,8 +500,8 @@
 .income-type-option .type-icon {
   width: 48px;
   height: 48px;
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: #F5EDD9;
+  color: #8A6D30;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -551,7 +551,7 @@
 
 .detail-row span.amount {
   font-size: 16px;
-  color: #059669;
+  color: #2D7A52;
   font-weight: 600;
 }
 
@@ -568,7 +568,7 @@
 }
 
 .detail-row span.trend.stable {
-  background: #e0e7ff;
+  background: #F5EDD9;
   color: #3730a3;
 }
 

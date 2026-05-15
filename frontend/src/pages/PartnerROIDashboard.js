@@ -56,7 +56,7 @@ const PartnerROIDashboard = () => {
   };
 
   const getRoiColor = (roi) => {
-    if (roi >= 200) return '#10b981';
+    if (roi >= 200) return '#2D7A52';
     if (roi >= 100) return '#3b82f6';
     if (roi >= 0) return '#f59e0b';
     return '#ef4444';
@@ -204,7 +204,7 @@ const PartnerROIDashboard = () => {
                       </div>
                       <div className="detail-item">
                         <span className="detail-label">Net Profit</span>
-                        <span className="detail-value" style={{ color: partner.net_profit >= 0 ? '#10b981' : '#ef4444' }}>
+                        <span className="detail-value" style={{ color: partner.net_profit >= 0 ? '#2D7A52' : '#ef4444' }}>
                           {formatCurrency(partner.net_profit)}
                         </span>
                       </div>

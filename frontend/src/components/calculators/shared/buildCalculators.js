@@ -111,7 +111,7 @@ function buildMonthlyPaymentCalc(homePrices, downPaymentScenarios, market) {
   return {
     id: 'monthly-payment',
     name: 'Monthly Payment (PITI)',
-    color: '#8b5cf6',
+    color: '#B8924A',
     shortDescription: 'Compare payments by down payment',
     data: {
       homePrice: homePrices.baseline,
@@ -367,7 +367,7 @@ function buildRepaymentStrategyCalc(homePrices, market, monthlyIncome) {
   };
 
   return {
-    id: 'repayment-strategy', name: 'Repayment Strategy', color: '#10b981',
+    id: 'repayment-strategy', name: 'Repayment Strategy', color: '#2D7A52',
     shortDescription: 'Payoff options & wealth building',
     data: { loanAmount, interestRate: market.interestRate, standard30, extra200, extra500, biweekly, fifteenYear, monthlyIncome },
   };
@@ -417,7 +417,7 @@ function buildExitStrategyCalc(homePrices, market, baselinePiti, profile) {
   };
 
   return {
-    id: 'exit-strategy', name: 'Exit Strategy', color: '#8b5cf6',
+    id: 'exit-strategy', name: 'Exit Strategy', color: '#B8924A',
     shortDescription: 'Future scenarios & flexibility',
     data: { homePrice: homePrices.baseline, loanAmount, downPayment, closingCostsBuy, interestRate: market.interestRate, equityTimeline, refinanceScenarios, rentalScenario, currentPayment: baselinePiti.total },
   };
@@ -514,7 +514,7 @@ function buildProgramOptionsCalc(homePrices, market, profile) {
   const bestMatch = eligiblePrograms.reduce((best, p) => p.suitabilityScore > best.suitabilityScore ? p : best, eligiblePrograms[0]);
 
   return {
-    id: 'program-options', name: 'Program Options', color: '#6366f1',
+    id: 'program-options', name: 'Program Options', color: '#B8924A',
     shortDescription: 'Compare loan programs for you',
     data: {
       homePrice: homePrices.baseline, programs, bestMatch,
@@ -666,7 +666,7 @@ function buildLifestyleFitCalc(homePrices, profile, baselinePiti, monthlyIncome)
   else fitLevel = 'strained';
 
   return {
-    id: 'lifestyle-fit', name: 'Lifestyle Fit Index', color: '#7c3aed',
+    id: 'lifestyle-fit', name: 'Lifestyle Fit Index', color: '#B8924A',
     shortDescription: 'Post-purchase spending power',
     data: {
       monthlyIncome, currentBudget, homeownerBudget,
@@ -745,7 +745,7 @@ function buildEquityVelocityCalc(homePrices) {
   const peakVelocityYear = timeline.reduce((max, t) => t.velocityThisYear > (max?.velocityThisYear || 0) ? t : max, timeline[0]);
 
   return {
-    id: 'equity-velocity', name: 'Equity Velocity', color: '#059669',
+    id: 'equity-velocity', name: 'Equity Velocity', color: '#2D7A52',
     shortDescription: 'Wealth accumulation speed',
     data: { initialEquity: downPayment, timeline, year5Equity: timeline[4].totalEquity, year10Equity: timeline[9].totalEquity, peakVelocityYear: peakVelocityYear.year, peakVelocity: peakVelocityYear.velocityThisYear },
   };

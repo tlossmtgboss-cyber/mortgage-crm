@@ -185,7 +185,7 @@ const ReviewApproveModal = ({ artifacts, onSubmit, onClose }) => {
                       <div style={{
                         marginTop: '8px',
                         fontSize: '0.7rem',
-                        color: artifact.confidence > 0.8 ? '#10b981' : '#6b7280',
+                        color: artifact.confidence > 0.8 ? '#2D7A52' : '#6b7280',
                       }}>
                         Confidence: {Math.round(artifact.confidence * 100)}%
                       </div>

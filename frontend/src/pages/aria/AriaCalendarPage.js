@@ -14,8 +14,8 @@ const getEventColor = (type) => {
   const colors = {
     'Initial Discovery Meeting': '#ef4444',
     'Annual Mortgage Review': '#22c55e',
-    'Pre-Purchase Consultation': '#8b5cf6',
-    'Purchase Consultation': '#6366f1',
+    'Pre-Purchase Consultation': '#B8924A',
+    'Purchase Consultation': '#B8924A',
     'Refinance Consultation': '#f59e0b',
     'Closing': '#22c55e',
   };

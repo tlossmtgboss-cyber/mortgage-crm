@@ -49,7 +49,7 @@
 }
 
 .sync-button {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #8A6D30 0%, #B8924A 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -75,7 +75,7 @@
 }
 
 .sync-button.syncing {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
 }
 
 .sync-icon {
@@ -112,7 +112,7 @@
 
 .sync-status.success {
   background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
+  color: #2D7A52;
   border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
@@ -737,12 +737,12 @@
 }
 
 .btn-approve {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
 }
 
 .btn-approve:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #1F5A3A 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
@@ -869,7 +869,7 @@
 }
 
 .btn-bulk-approve {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -968,7 +968,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #4f46e5;
+  accent-color: #8A6D30;
 }
 
 .item-checkbox input[type="checkbox"]:disabled {
@@ -1021,7 +1021,7 @@
 }
 
 .btn-success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -1130,7 +1130,7 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
-  accent-color: #4f46e5;
+  accent-color: #8A6D30;
 }
 
 .select-all-label {
@@ -1215,7 +1215,7 @@
 
 /* Completed Items Styling */
 .reconciliation-item.approved-item {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .reconciliation-item.rejected-item {
@@ -1232,7 +1232,7 @@
 
 .status-badge.approved {
   background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .status-badge.rejected {
@@ -1247,7 +1247,7 @@
 
 .status-badge.auto-processing {
   background: rgba(139, 92, 246, 0.2);
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 .status-text {
@@ -1256,7 +1256,7 @@
 
 .status-text.approved,
 .status-text.applied {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .status-text.rejected {
@@ -1400,14 +1400,14 @@
 }
 
 .item-detail-panel .comm-method-btn.active {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .item-detail-panel .comm-method-btn:hover {
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .item-detail-panel .comm-method-btn.active:hover {
@@ -1607,7 +1607,7 @@
 .btn-approve-recon {
   flex: 1;
   padding: 14px 20px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 8px;
@@ -1618,7 +1618,7 @@
 }
 
 .btn-approve-recon:hover:not(:disabled) {
-  background: #059669;
+  background: #2D7A52;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }

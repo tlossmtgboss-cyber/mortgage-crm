@@ -14,7 +14,7 @@
 
 /* Border color based on status */
 .goal-card.status-on_track {
-  border-left: 4px solid #10b981;
+  border-left: 4px solid #2D7A52;
 }
 
 .goal-card.status-at_risk {
@@ -203,7 +203,7 @@
 }
 
 .manager-assessment {
-  border-left: 3px solid #8b5cf6;
+  border-left: 3px solid #B8924A;
 }
 
 .assessment-header {

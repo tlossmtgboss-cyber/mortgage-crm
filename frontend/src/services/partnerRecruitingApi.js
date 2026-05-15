@@ -32,13 +32,13 @@ export const PARTNER_TYPES = [
 
 export const PARTNER_STATUSES = [
   { value: 'new', label: 'New', color: '#3b82f6', icon: 'plus-circle' },
-  { value: 'contacted', label: 'Contacted', color: '#8b5cf6', icon: 'phone' },
-  { value: 'qualified', label: 'Qualified', color: '#a855f7', icon: 'check-circle' },
+  { value: 'contacted', label: 'Contacted', color: '#B8924A', icon: 'phone' },
+  { value: 'qualified', label: 'Qualified', color: '#C9A44E', icon: 'check-circle' },
   { value: 'meeting_scheduled', label: 'Meeting Scheduled', color: '#f59e0b', icon: 'calendar' },
   { value: 'met', label: 'Met', color: '#eab308', icon: 'users' },
   { value: 'proposal_sent', label: 'Proposal Sent', color: '#22c55e', icon: 'file-text' },
   { value: 'negotiating', label: 'Negotiating', color: '#14b8a6', icon: 'message-circle' },
-  { value: 'onboarded', label: 'Onboarded', color: '#10b981', icon: 'check' },
+  { value: 'onboarded', label: 'Onboarded', color: '#2D7A52', icon: 'check' },
   { value: 'declined', label: 'Declined', color: '#ef4444', icon: 'x-circle' },
   { value: 'inactive', label: 'Inactive', color: '#6b7280', icon: 'pause-circle' }
 ];
@@ -53,11 +53,11 @@ export const MEETING_TYPES = [
 ];
 
 export const MEETING_OUTCOMES = [
-  { value: 'very_positive', label: 'Very Positive', color: '#10b981' },
+  { value: 'very_positive', label: 'Very Positive', color: '#2D7A52' },
   { value: 'positive', label: 'Positive', color: '#22c55e' },
   { value: 'neutral', label: 'Neutral', color: '#f59e0b' },
   { value: 'negative', label: 'Negative', color: '#ef4444' },
-  { value: 'needs_followup', label: 'Needs Follow-up', color: '#8b5cf6' }
+  { value: 'needs_followup', label: 'Needs Follow-up', color: '#B8924A' }
 ];
 
 export const CALL_OUTCOMES = [
@@ -92,14 +92,14 @@ export const EMPLOYEE_ROLES = [
 
 export const EMPLOYEE_STATUSES = [
   { value: 'new', label: 'New', color: '#3b82f6', icon: 'plus-circle' },
-  { value: 'contacted', label: 'Contacted', color: '#8b5cf6', icon: 'phone' },
-  { value: 'qualified', label: 'Qualified', color: '#a855f7', icon: 'check-circle' },
+  { value: 'contacted', label: 'Contacted', color: '#B8924A', icon: 'phone' },
+  { value: 'qualified', label: 'Qualified', color: '#C9A44E', icon: 'check-circle' },
   { value: 'meeting_scheduled', label: 'Meeting Scheduled', color: '#f59e0b', icon: 'calendar' },
   { value: 'met', label: 'Met', color: '#eab308', icon: 'users' },
   { value: 'screening', label: 'Screening', color: '#f97316', icon: 'search' },
   { value: 'interview', label: 'Interview', color: '#ec4899', icon: 'mic' },
   { value: 'offer', label: 'Offer Extended', color: '#14b8a6', icon: 'file-text' },
-  { value: 'hired', label: 'Hired', color: '#10b981', icon: 'check' },
+  { value: 'hired', label: 'Hired', color: '#2D7A52', icon: 'check' },
   { value: 'declined', label: 'Declined', color: '#ef4444', icon: 'x-circle' },
   { value: 'withdrawn', label: 'Withdrawn', color: '#9ca3af', icon: 'arrow-left' },
   { value: 'inactive', label: 'Inactive', color: '#6b7280', icon: 'pause-circle' }

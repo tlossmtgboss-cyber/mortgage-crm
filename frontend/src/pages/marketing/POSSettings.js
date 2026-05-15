@@ -240,7 +240,7 @@ function POSSettings() {
             ))}
           </div>
           {calendarSaving && (
-            <div style={{ fontSize: 12, color: '#218D8D', marginTop: 8 }}>Saving...</div>
+            <div style={{ fontSize: 12, color: '#1F3D2E', marginTop: 8 }}>Saving...</div>
           )}
         </div>
 

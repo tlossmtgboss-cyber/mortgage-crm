@@ -150,7 +150,7 @@
 }
 
 .status-badge.ssl-pending {
-  background: #e0e7ff;
+  background: #F5EDD9;
   color: #3730a3;
 }
 
@@ -194,7 +194,7 @@
 }
 
 .ssl-badge.renewing {
-  background: #e0e7ff;
+  background: #F5EDD9;
   color: #3730a3;
 }
 
@@ -225,12 +225,12 @@
 }
 
 .btn-action.btn-info {
-  background: #e0e7ff;
+  background: #F5EDD9;
   color: #3730a3;
 }
 
 .btn-action.btn-info:hover:not(:disabled) {
-  background: #c7d2fe;
+  background: #EDE0C4;
 }
 
 .btn-action.btn-setup {
@@ -598,7 +598,7 @@
 }
 
 .status-indicator.yes {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-indicator.no {
@@ -646,7 +646,7 @@
 
 .check-icon.pass {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .check-icon.fail {

@@ -154,8 +154,8 @@
 }
 
 .send-app-channel-pill.active {
-  border-color: #218D8D;
-  background: #218D8D;
+  border-color: #1F3D2E;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -218,7 +218,7 @@
 
 .send-app-subject-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -240,7 +240,7 @@
 
 .send-app-textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -304,7 +304,7 @@
 .send-app-send-btn {
   padding: 10px 24px;
   border: none;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border-radius: 8px;
   font-size: 14px;
@@ -318,7 +318,7 @@
 }
 
 .send-app-send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1a7070 0%, #155a5a 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #155a5a 100%);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(33, 141, 141, 0.4);
 }

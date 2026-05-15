@@ -130,7 +130,7 @@
 }
 
 .strength-bar.strong .strength-fill {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .strength-label {
@@ -148,7 +148,7 @@
 }
 
 .strength-label.strong {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Password Requirements */
@@ -187,12 +187,12 @@
 }
 
 .password-requirements li.met {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .password-requirements li.met::before {
   content: '✓';
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Error Message */
@@ -249,7 +249,7 @@
 .activate-content.success .success-icon {
   width: 80px;
   height: 80px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -291,7 +291,7 @@
   content: '✓';
   position: absolute;
   left: 0;
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Error State */

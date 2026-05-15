@@ -199,7 +199,7 @@
 }
 
 .progress-step.complete span {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
@@ -554,7 +554,7 @@
 .confirm-icon {
   width: 64px;
   height: 64px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border-radius: 50%;
   display: flex;

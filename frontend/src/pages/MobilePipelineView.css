@@ -74,7 +74,7 @@
 }
 
 .mp-search:focus-within {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.12);
 }
 
@@ -157,8 +157,8 @@
 }
 
 .mp-tabs__tab--active {
-  color: #218D8D;
-  border-bottom-color: #218D8D;
+  color: #1F3D2E;
+  border-bottom-color: #1F3D2E;
 }
 
 .mp-tabs__tab:active:not(.mp-tabs__tab--active) {
@@ -181,7 +181,7 @@
 }
 
 .mp-tabs__tab--active .mp-tabs__badge {
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
 }
 
@@ -195,11 +195,11 @@
 }
 
 .mp-tabs__tab--active.mp-tabs__tab--purple {
-  color: #7c3aed;
-  border-bottom-color: #7c3aed;
+  color: #B8924A;
+  border-bottom-color: #B8924A;
 }
 .mp-tabs__tab--active.mp-tabs__tab--purple .mp-tabs__badge {
-  background: #7c3aed;
+  background: #B8924A;
 }
 
 .mp-tabs__tab--active.mp-tabs__tab--green {
@@ -227,11 +227,11 @@
 }
 
 .mp-tabs__tab--active.mp-tabs__tab--indigo {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: #8A6D30;
+  border-bottom-color: #8A6D30;
 }
 .mp-tabs__tab--active.mp-tabs__tab--indigo .mp-tabs__badge {
-  background: #4f46e5;
+  background: #8A6D30;
 }
 
 /* Suspended tab always shows amber hint even when inactive */
@@ -269,7 +269,7 @@
 .mp-summary__volume {
   font-size: 13px;
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 /* ---------- Sort ---------- */
@@ -336,7 +336,7 @@
 }
 
 .mp-sort__option--active {
-  color: #218D8D;
+  color: #1F3D2E;
   font-weight: 600;
 }
 
@@ -385,7 +385,7 @@
 }
 
 .mp-card:active {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.15);
 }
 
@@ -439,7 +439,7 @@
   display: block;
   font-size: 18px;
   font-weight: 700;
-  color: #218D8D;
+  color: #1F3D2E;
   margin-bottom: 4px;
 }
 
@@ -473,7 +473,7 @@
 .mp-card__action {
   flex: 1;
   font-size: 13px;
-  color: #218D8D;
+  color: #1F3D2E;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -497,17 +497,17 @@
   gap: 5px;
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px dashed #e0e7ff;
+  border-top: 1px dashed #F5EDD9;
 }
 
 .mp-card__aria-icon {
   flex-shrink: 0;
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 .mp-card__aria-insight {
   font-size: 12px;
-  color: #5b21b6;
+  color: #6B5424;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -520,12 +520,12 @@
   gap: 4px;
   margin: 4px 16px 10px;
   padding: 5px 12px;
-  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
-  border: 1px solid #ddd6fe;
+  background: linear-gradient(135deg, #eff6ff 0%, #FDF9F0 100%);
+  border: 1px solid #F5EDD9;
   border-radius: 16px;
   font-size: 12px;
   font-weight: 500;
-  color: #7c3aed;
+  color: #B8924A;
   cursor: pointer;
   transition: opacity 0.15s ease;
   align-self: flex-start;
@@ -636,7 +636,7 @@
   padding: 0 24px;
   border: none;
   border-radius: 10px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
   font-size: 15px;
   font-weight: 600;
@@ -645,7 +645,7 @@
 }
 
 .mp-error__retry:active {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 /* ---------- Spin animation ---------- */

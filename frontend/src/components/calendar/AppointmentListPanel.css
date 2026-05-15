@@ -32,7 +32,7 @@
 }
 
 .appt-list-count {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   font-size: 12px;
   font-weight: 600;
@@ -44,7 +44,7 @@
 
 .appt-list-add-btn {
   padding: 8px 16px;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -55,7 +55,7 @@
 }
 
 .appt-list-add-btn:hover {
-  background: linear-gradient(135deg, #1a7070 0%, #155a5a 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #155a5a 100%);
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
 }
@@ -81,7 +81,7 @@
 }
 
 .appt-list-search-input:focus {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
   background: white;
 }
@@ -149,7 +149,7 @@
 
 .appt-list-item--selected {
   background: #dbeafe;
-  border-left: 4px solid #218D8D;
+  border-left: 4px solid #1F3D2E;
   padding-left: 16px;
 }
 
@@ -207,7 +207,7 @@
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .appt-list-item-status-dot[data-status="cancelled"] {
@@ -223,7 +223,7 @@
 }
 
 .appt-list-item-status-dot[data-status="rescheduled"] {
-  background: #8b5cf6;
+  background: #B8924A;
 }
 
 @media (max-width: 1024px) {

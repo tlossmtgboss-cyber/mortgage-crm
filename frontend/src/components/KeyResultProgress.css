@@ -123,12 +123,12 @@
 }
 
 .btn-save {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 
 .btn-save:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 .btn-cancel {
@@ -161,7 +161,7 @@
 }
 
 .kr-progress-bar.on-track .kr-progress-fill {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .kr-progress-bar.progress .kr-progress-fill {

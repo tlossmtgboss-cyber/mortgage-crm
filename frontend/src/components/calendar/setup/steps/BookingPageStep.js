@@ -27,9 +27,9 @@ import { getUserData } from '../../../../utils/tokenStore';
 // ============================================================================
 
 const PRESET_COLORS = [
-  { hex: '#218D8D', name: 'Perennia Teal' },
+  { hex: '#1F3D2E', name: 'Perennia Teal' },
   { hex: '#2563eb', name: 'Blue' },
-  { hex: '#7c3aed', name: 'Purple' },
+  { hex: '#B8924A', name: 'Purple' },
   { hex: '#dc2626', name: 'Red' },
   { hex: '#ea580c', name: 'Orange' },
   { hex: '#16a34a', name: 'Green' },
@@ -104,7 +104,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
   const [welcomeMessage, setWelcomeMessage] = useState('Schedule a time to meet with us');
 
   // Branding
-  const [primaryColor, setPrimaryColor] = useState('#218D8D');
+  const [primaryColor, setPrimaryColor] = useState('#1F3D2E');
   const [showPoweredBy, setShowPoweredBy] = useState(true);
 
   // Photo
@@ -373,7 +373,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
     return (
       <div className="bps-container" style={{ justifyContent: 'center', minHeight: 300 }}>
         <div style={{ textAlign: 'center', color: '#64748b', gridColumn: '1 / -1' }}>
-          <div className="spinner" style={{ margin: '0 auto 12px', width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#218D8D', borderRadius: '50%', animation: 'cal-spin 0.8s linear infinite' }} />
+          <div className="spinner" style={{ margin: '0 auto 12px', width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#1F3D2E', borderRadius: '50%', animation: 'cal-spin 0.8s linear infinite' }} />
           <p>Loading booking page settings...</p>
         </div>
       </div>
@@ -487,7 +487,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
                     markDirty();
                   }
                 }}
-                placeholder="#218D8D"
+                placeholder="#1F3D2E"
                 maxLength={7}
                 aria-label="Custom color hex value"
               />
@@ -631,7 +631,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
             style={{
               flex: 1,
               padding: '12px 24px',
-              background: '#218D8D',
+              background: '#1F3D2E',
               color: '#fff',
               border: 'none',
               borderRadius: 8,

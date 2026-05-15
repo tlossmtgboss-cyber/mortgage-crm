@@ -18,13 +18,13 @@ import { getToken } from '../utils/tokenStore';
 
 // Activity type configuration
 const ACTIVITY_TYPE_CONFIG = {
-  note: { label: 'Note', color: '#6366f1' },
-  call: { label: 'Call', color: '#10b981' },
+  note: { label: 'Note', color: '#B8924A' },
+  call: { label: 'Call', color: '#2D7A52' },
   email: { label: 'Email', color: '#3b82f6' },
-  sms: { label: 'SMS', color: '#8b5cf6' },
+  sms: { label: 'SMS', color: '#B8924A' },
   meeting: { label: 'Meeting', color: '#f59e0b' },
-  stage_change: { label: 'Status Update', color: '#218D8D' },
-  new_lead: { label: 'New Lead', color: '#10b981' },
+  stage_change: { label: 'Status Update', color: '#1F3D2E' },
+  new_lead: { label: 'New Lead', color: '#2D7A52' },
   progress: { label: 'In Progress', color: '#3b82f6' },
   closed: { label: 'Closed', color: '#22c55e' },
 };
@@ -83,7 +83,7 @@ const LOAN_PROGRAMS = [
   {
     id: 'fha',
     name: 'FHA',
-    color: '#10b981',
+    color: '#2D7A52',
     minCredit: 580,
     minDown: '3.5%',
     maxDTI: '50%',
@@ -93,7 +93,7 @@ const LOAN_PROGRAMS = [
   {
     id: 'va',
     name: 'VA',
-    color: '#8b5cf6',
+    color: '#B8924A',
     minCredit: 580,
     minDown: '0%',
     maxDTI: '41%',
@@ -531,7 +531,7 @@ function DashboardTab({ partner, stats, categories, activities = [], partnerId, 
           <QuickActionCard
             title="Request Pre-Approval"
             description="Generate a pre-approval letter"
-            color="#10b981"
+            color="#2D7A52"
             onClick={() => handleQuickAction('preapproval')}
           />
           <QuickActionCard
@@ -543,7 +543,7 @@ function DashboardTab({ partner, stats, categories, activities = [], partnerId, 
           <QuickActionCard
             title="Contact LO"
             description="Message your loan officer"
-            color="#8b5cf6"
+            color="#B8924A"
             onClick={() => handleQuickAction('contact')}
           />
         </div>
@@ -1079,8 +1079,8 @@ function ClientCard({ client, onViewDetails, categoryId }) {
     all: '#64748b',
     leads: '#f59e0b',
     active: '#3b82f6',
-    closed: '#10b981',
-    nurtured: '#8b5cf6',
+    closed: '#2D7A52',
+    nurtured: '#B8924A',
     credit_challenged: '#ef4444',
     another_lender: '#6b7280',
     not_interested: '#9ca3af',
@@ -1327,7 +1327,7 @@ function MicropageTab({ partner, partnerId }) {
     bio: partner.micropage_bio || '',
     showPhoto: partner.micropage_show_photo !== false,
     showTestimonials: partner.micropage_show_testimonials !== false,
-    primaryColor: partner.micropage_primary_color || '#218D8D',
+    primaryColor: partner.micropage_primary_color || '#1F3D2E',
     phoneNumber: partner.phone || '',
     email: partner.email || '',
   });

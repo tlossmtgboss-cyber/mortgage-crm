@@ -470,7 +470,7 @@ const ListingAgentPortal = () => {
                               <div
                                 className="timeline-line"
                                 style={{
-                                  backgroundColor: isCompleted ? '#10b981' : '#e2e8f0',
+                                  backgroundColor: isCompleted ? '#2D7A52' : '#e2e8f0',
                                 }}
                               ></div>
                             )}

@@ -383,7 +383,7 @@
 .shared-affordability .affordability-main {
   text-align: center;
   padding: 24px;
-  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+  background: linear-gradient(135deg, #eff6ff 0%, #F5EDD9 100%);
   border-radius: 12px;
   margin-bottom: 20px;
 }
@@ -445,7 +445,7 @@
 .shared-closing-costs .total-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .shared-closing-costs .costs-breakdown {

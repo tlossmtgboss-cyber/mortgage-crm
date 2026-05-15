@@ -65,7 +65,7 @@ function EventErrorFallback({ event, error, onRetry }) {
           style={{
             background: 'none',
             border: 'none',
-            color: '#218d8d',
+            color: '#1F3D2E',
             fontWeight: 600,
             fontSize: '12px',
             cursor: 'pointer',

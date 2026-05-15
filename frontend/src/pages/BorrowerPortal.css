@@ -401,11 +401,11 @@
 }
 
 .milestone-step.completed:not(:last-child)::after {
-  background: #10b981;
+  background: #2D7A52;
 }
 
 .milestone-step.active:not(:last-child)::after {
-  background: linear-gradient(90deg, #10b981 50%, #e2e8f0 50%);
+  background: linear-gradient(90deg, #2D7A52 50%, #e2e8f0 50%);
 }
 
 .step-indicator {
@@ -426,7 +426,7 @@
 }
 
 .milestone-step.completed .step-indicator {
-  background: #10b981;
+  background: #2D7A52;
   color: white;
 }
 

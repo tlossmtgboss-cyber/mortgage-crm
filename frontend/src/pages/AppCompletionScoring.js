@@ -17,13 +17,13 @@ const SEVERITY_TABS = [
 // Item type badge colors
 const TYPE_COLORS = {
   FIELD: '#3B82F6',
-  DOC: '#8B5CF6',
+  DOC: '#B8924A',
   CLARIFICATION: '#F59E0B',
 };
 
 // Score color thresholds
 function getScoreColor(score) {
-  if (score >= 90) return '#10B981';
+  if (score >= 90) return '#2D7A52';
   if (score >= 75) return '#F59E0B';
   if (score >= 50) return '#F97316';
   return '#EF4444';
@@ -188,12 +188,12 @@ function TrendChart({ data }) {
         <path d={areaPath} fill="rgba(33, 141, 141, 0.08)" />
 
         {/* Line */}
-        <path d={linePath} fill="none" stroke="#218D8D" strokeWidth="2.5" strokeLinejoin="round" />
+        <path d={linePath} fill="none" stroke="#1F3D2E" strokeWidth="2.5" strokeLinejoin="round" />
 
         {/* Points */}
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r="4" fill="#218D8D" stroke="white" strokeWidth="2" />
+            <circle cx={p.x} cy={p.y} r="4" fill="#1F3D2E" stroke="white" strokeWidth="2" />
             {/* Date labels on bottom */}
             {(i === 0 || i === points.length - 1 || i % Math.ceil(points.length / 5) === 0) && (
               <text
@@ -715,8 +715,8 @@ function AppCompletionScoring() {
             <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
               <rect x="8" y="6" width="32" height="36" rx="4" stroke="#d1d5db" strokeWidth="2" />
               <path d="M16 18h16M16 26h12M16 34h8" stroke="#d1d5db" strokeWidth="2" strokeLinecap="round" />
-              <circle cx="36" cy="36" r="10" fill="white" stroke="#218D8D" strokeWidth="2" />
-              <path d="M33 36h6M36 33v6" stroke="#218D8D" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="36" cy="36" r="10" fill="white" stroke="#1F3D2E" strokeWidth="2" />
+              <path d="M33 36h6M36 33v6" stroke="#1F3D2E" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </div>
           <h2 className="aco-empty-title">Search for a Loan</h2>
@@ -800,14 +800,14 @@ function AppCompletionScoring() {
                       value={scoring.data_consistency ?? scoring.consistency ?? 0}
                       maxValue={100}
                       weight={25}
-                      color="#8B5CF6"
+                      color="#B8924A"
                     />
                     <BreakdownBar
                       label="Document Readiness"
                       value={scoring.document_readiness ?? scoring.doc_readiness ?? 0}
                       maxValue={100}
                       weight={15}
-                      color="#10B981"
+                      color="#2D7A52"
                     />
                   </div>
                   {scoring.next_action && (

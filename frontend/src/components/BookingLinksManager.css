@@ -16,7 +16,7 @@
   width: 36px;
   height: 36px;
   border: 3px solid #e2e8f0;
-  border-top-color: #218D8D;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: blm-spin 0.8s linear infinite;
   margin-bottom: 12px;
@@ -52,7 +52,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -260,7 +260,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #218D8D;
+  color: #1F3D2E;
   font-family: 'SF Mono', monospace;
   margin-top: 4px;
 }
@@ -367,7 +367,7 @@
 .blm-form-group input:focus,
 .blm-form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -402,7 +402,7 @@
 }
 
 .blm-slug-input:focus-within {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -435,11 +435,11 @@
 }
 
 .blm-type-check input[type="checkbox"] {
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .blm-type-check.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #e6f5f5;
 }
 
@@ -467,7 +467,7 @@
 }
 
 .blm-checkbox input[type="checkbox"] {
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .blm-checkbox-hint {

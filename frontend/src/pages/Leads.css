@@ -13,14 +13,14 @@
 }
 
 .lead-name.clickable {
-  color: #18a0a6;
+  color: #1F3D2E;
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
 }
 
 .lead-name.clickable:hover {
-  color: #157d87;
+  color: #2A4F3D;
   text-decoration: underline;
 }
 
@@ -257,7 +257,7 @@
 
 .status-purple {
   background: rgba(147, 51, 234, 0.1);
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .table-actions {
@@ -408,7 +408,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%);
   color: white;
   padding: 12px 24px;
   border: none;
@@ -424,8 +424,8 @@
 
 .btn-secondary {
   background: white;
-  color: #218D8D;
-  border: 2px solid #218D8D;
+  color: #1F3D2E;
+  border: 2px solid #1F3D2E;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -525,7 +525,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .form-group textarea {
@@ -615,8 +615,8 @@
 
 .borrower-tab.active {
   background: white;
-  color: #218D8D;
-  border-color: #218D8D;
+  color: #1F3D2E;
+  border-color: #1F3D2E;
   border-bottom-color: white;
   z-index: 1;
 }
@@ -649,7 +649,7 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 8px;
@@ -661,7 +661,7 @@
 }
 
 .add-borrower-btn:hover {
-  background: #1a7070;
+  background: #2A4F3D;
   transform: scale(1.05);
 }
 
@@ -697,7 +697,7 @@
 
 .form-section-tab.active {
   background: white;
-  color: #218D8D;
+  color: #1F3D2E;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -899,7 +899,7 @@
 
 .status-dropdown-option.status-purple:hover {
   background: rgba(147, 51, 234, 0.1);
-  color: #7c3aed;
+  color: #B8924A;
 }
 
 .status-dropdown-option.status-red:hover {

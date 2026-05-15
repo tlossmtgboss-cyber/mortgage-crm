@@ -297,7 +297,7 @@ const ProfileSettings = ({ activeSection }) => {
                             setUserProfile({ ...userProfile, work_days: [...workDays, day] });
                           }
                         }} style={{ opacity: 0, width: 0, height: 0 }} />
-                        <span style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: isEnabled ? '#217F8D' : '#d1d5db', borderRadius: '20px', transition: 'background-color 0.2s' }}>
+                        <span style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: isEnabled ? '#1F3D2E' : '#d1d5db', borderRadius: '20px', transition: 'background-color 0.2s' }}>
                           <span style={{ position: 'absolute', height: '16px', width: '16px', left: isEnabled ? '18px' : '2px', bottom: '2px', backgroundColor: 'white', borderRadius: '50%', transition: 'left 0.2s' }} />
                         </span>
                       </label>
@@ -359,8 +359,8 @@ const ProfileSettings = ({ activeSection }) => {
                               updated[idx] = { ...updated[idx], days: isSelected ? blockDays.filter(x => x !== fullDay) : [...blockDays, fullDay] };
                               setUserProfile({ ...userProfile, blocked_times: updated });
                             }} style={{ padding: '2px 6px', fontSize: '11px', borderRadius: '4px', cursor: 'pointer', border: '1px solid', transition: 'all 0.1s',
-                              borderColor: isSelected ? '#217F8D' : '#d1d5db', background: isSelected ? 'rgba(33, 127, 141, 0.1)' : 'white',
-                              color: isSelected ? '#217F8D' : '#999', fontWeight: isSelected ? '600' : '400' }}>{d}</button>
+                              borderColor: isSelected ? '#1F3D2E' : '#d1d5db', background: isSelected ? 'rgba(33, 127, 141, 0.1)' : 'white',
+                              color: isSelected ? '#1F3D2E' : '#999', fontWeight: isSelected ? '600' : '400' }}>{d}</button>
                           );
                         })}
                       </div>
@@ -400,14 +400,14 @@ const ProfileSettings = ({ activeSection }) => {
               <button type="button" onClick={() => {
                 const newBlock = { id: Math.random().toString(36).substr(2, 8), label: '', days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'], start: '12:00', end: '13:00' };
                 setUserProfile({ ...userProfile, blocked_times: [...(userProfile.blocked_times || []), newBlock] });
-              }} style={{ padding: '10px 18px', background: 'white', border: '2px dashed #d1d5db', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', color: '#217F8D', fontWeight: '500', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              }} style={{ padding: '10px 18px', background: 'white', border: '2px dashed #d1d5db', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', color: '#1F3D2E', fontWeight: '500', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
                 Add Time Block
               </button>
             </div>
 
             <div style={{ background: '#e8f4f6', borderRadius: '8px', padding: '16px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#217F8D" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F3D2E" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
                 <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
               </svg>
               <div>

@@ -523,7 +523,7 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
         }
 
         .message.user {
-          background: #e0e7ff;
+          background: #F5EDD9;
           margin-left: 20px;
         }
 

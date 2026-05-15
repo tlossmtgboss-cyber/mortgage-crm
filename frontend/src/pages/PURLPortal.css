@@ -20,10 +20,10 @@
   --portal-primary-light: #14b8a6;
   --portal-primary-dark: #0d5c56;
   --portal-secondary: #3b82f6;
-  --portal-accent: #8b5cf6;
+  --portal-accent: #B8924A;
 
   /* Status colors */
-  --portal-success: #10b981;
+  --portal-success: #2D7A52;
   --portal-warning: #f59e0b;
   --portal-error: #ef4444;
   --portal-info: #3b82f6;
@@ -594,7 +594,7 @@
 .status-blue { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
 .status-yellow { background: rgba(251, 191, 36, 0.15); color: #b45309; }
 .status-green { background: rgba(34, 197, 94, 0.1); color: #16a34a; }
-.status-emerald { background: rgba(16, 185, 129, 0.1); color: #059669; }
+.status-emerald { background: rgba(16, 185, 129, 0.1); color: #2D7A52; }
 .status-gray { background: rgba(156, 163, 175, 0.15); color: #4b5563; }
 .status-orange { background: rgba(251, 146, 60, 0.15); color: #c2410c; }
 
@@ -934,9 +934,9 @@
 }
 
 .activity-icon.document { background: #3b82f6; }
-.activity-icon.task { background: #8b5cf6; }
+.activity-icon.task { background: #B8924A; }
 .activity-icon.message { background: #f59e0b; }
-.activity-icon.milestone { background: #10b981; }
+.activity-icon.milestone { background: #2D7A52; }
 .activity-icon.status { background: #ec4899; }
 
 .activity-content {
@@ -1160,7 +1160,7 @@
    Success Banner - Elegant
    ======================================== */
 .submit-success-banner {
-  background: linear-gradient(135deg, var(--portal-success) 0%, #047857 100%);
+  background: linear-gradient(135deg, var(--portal-success) 0%, #1F5A3A 100%);
   padding: 20px 24px;
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
 }
@@ -1375,7 +1375,7 @@
   width: 64px;
   height: 64px;
   margin: 0 auto 16px;
-  background: linear-gradient(135deg, var(--portal-success) 0%, #10b981 100%);
+  background: linear-gradient(135deg, var(--portal-success) 0%, #2D7A52 100%);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -2004,7 +2004,7 @@
 
 .task-status-badge.status-completed {
   background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  color: #2D7A52;
 }
 
 .task-status-badge.status-overdue {
@@ -2034,7 +2034,7 @@
 
 .priority-badge.priority-low {
   background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  color: #2D7A52;
 }
 
 .overdue-date {
@@ -2177,7 +2177,7 @@
 
 .doc-status-badge.status-approved {
   background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  color: #2D7A52;
 }
 
 .doc-status-badge.status-pending {
@@ -3307,7 +3307,7 @@
 
 .application-status .status-value.status-submitted {
   background: rgba(16, 185, 129, 0.15);
-  color: #047857;
+  color: #1F5A3A;
 }
 
 .application-status .status-value.status-processing {

@@ -160,8 +160,8 @@
 }
 
 .conflict-batch-btn.keep-mine {
-  border-color: #218D8D;
-  color: #218D8D;
+  border-color: #1F3D2E;
+  color: #1F3D2E;
 }
 
 .conflict-batch-btn.keep-mine:hover {
@@ -244,8 +244,8 @@
 }
 
 .conflict-entity-badge.note {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #FAF3E5;
+  color: #6B5424;
 }
 
 .conflict-entity-label {
@@ -286,7 +286,7 @@
 }
 
 .conflict-side.local .conflict-side-label {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .conflict-side.server .conflict-side-label {
@@ -350,12 +350,12 @@
 }
 
 .conflict-action-btn.keep-mine {
-  background: #218D8D;
+  background: #1F3D2E;
   color: #fff;
 }
 
 .conflict-action-btn.keep-mine:hover {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .conflict-action-btn.keep-theirs {
@@ -368,25 +368,25 @@
 }
 
 .conflict-action-btn.merge {
-  background: #ede9fe;
-  color: #5b21b6;
+  background: #FAF3E5;
+  color: #6B5424;
 }
 
 .conflict-action-btn.merge:hover {
-  background: #ddd6fe;
+  background: #F5EDD9;
 }
 
 /* ---- Merge field picker ---- */
 .conflict-merge-picker {
   padding: 10px 14px;
   background: #faf5ff;
-  border-top: 1px solid #ede9fe;
+  border-top: 1px solid #FAF3E5;
 }
 
 .merge-picker-title {
   font-size: 12px;
   font-weight: 700;
-  color: #5b21b6;
+  color: #6B5424;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 10px;
@@ -427,13 +427,13 @@
 }
 
 .merge-option:hover {
-  border-color: #a78bfa;
+  border-color: #D4AD6A;
 }
 
 .merge-option.selected {
-  border-color: #7c3aed;
-  background: #f5f3ff;
-  color: #5b21b6;
+  border-color: #B8924A;
+  background: #FDF9F0;
+  color: #6B5424;
   font-weight: 600;
 }
 
@@ -442,7 +442,7 @@
 }
 
 .merge-option.local-opt.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #e6f7f7;
   color: #166c6c;
 }
@@ -464,7 +464,7 @@
   padding: 10px;
   border: none;
   border-radius: 8px;
-  background: #7c3aed;
+  background: #B8924A;
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -473,7 +473,7 @@
 }
 
 .merge-apply-btn:hover {
-  background: #6d28d9;
+  background: #8A6D30;
 }
 
 .merge-apply-btn:disabled {
@@ -490,7 +490,7 @@
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: #059669;
+  color: #2D7A52;
   background: #ecfdf5;
 }
 

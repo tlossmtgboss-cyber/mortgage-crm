@@ -53,8 +53,8 @@ const ReviewQueue = ({
   // Get capture mode display
   const getModeDisplay = (mode) => {
     const modes = {
-      mobile_app: { label: 'Mobile', color: '#6366f1' },
-      crm_web_call: { label: 'CRM Call', color: '#10b981' },
+      mobile_app: { label: 'Mobile', color: '#B8924A' },
+      crm_web_call: { label: 'CRM Call', color: '#2D7A52' },
       ambient_mic: { label: 'Ambient', color: '#f59e0b' },
       video_call: { label: 'Video', color: '#ec4899' },
     };

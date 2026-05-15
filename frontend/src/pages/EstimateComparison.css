@@ -125,7 +125,7 @@
 }
 
 .estimate-card.winner {
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
 }
 
@@ -144,7 +144,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: #fff;
   padding: 6px 12px;
   border-radius: 20px;
@@ -255,7 +255,7 @@
 }
 
 .file-info .file-icon {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: bold;
 }
 
@@ -549,7 +549,7 @@
 }
 
 .col-a.better, .col-b.better {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: 600;
 }
 
@@ -560,7 +560,7 @@
 }
 
 .col-diff.positive {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .col-diff.negative {
@@ -680,7 +680,7 @@
 }
 
 .cta-subheadline strong {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .cta-savings-highlight {
@@ -705,7 +705,7 @@
 .cta-savings-highlight .savings-value {
   font-size: 32px;
   font-weight: 700;
-  color: #10b981;
+  color: #2D7A52;
   line-height: 1.2;
 }
 
@@ -733,7 +733,7 @@
 }
 
 .trust-item .trust-icon {
-  color: #10b981;
+  color: #2D7A52;
   font-weight: bold;
 }
 
@@ -751,7 +751,7 @@
   align-items: center;
   gap: 12px;
   padding: 18px 32px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: #fff;
   border: none;
   border-radius: 12px;

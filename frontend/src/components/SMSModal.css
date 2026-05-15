@@ -202,7 +202,7 @@
 .btn-calendar-link.added {
   background: #ecfdf5;
   border-color: #6ee7b7;
-  color: #059669;
+  color: #2D7A52;
   cursor: default;
 }
 
@@ -272,7 +272,7 @@
 .result-message.success {
   background: #d1fae5;
   color: #065f46;
-  border: 1px solid #10b981;
+  border: 1px solid #2D7A52;
 }
 
 .result-message.error {
@@ -485,7 +485,7 @@
 
 .ai-task-input:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: #2D7A52;
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
@@ -551,7 +551,7 @@
   gap: 12px;
   padding: 12px 16px;
   background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
-  border: 1px solid #c084fc;
+  border: 1px solid #D4AD6A;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -567,7 +567,7 @@
 .ai-complete-badge {
   padding: 12px 16px;
   background: #d1fae5;
-  border: 1px solid #10b981;
+  border: 1px solid #2D7A52;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;

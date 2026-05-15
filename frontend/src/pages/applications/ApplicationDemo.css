@@ -28,7 +28,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
   background: rgba(33, 127, 141, 0.1);
   border-radius: 9999px;
   margin-bottom: 1rem;
@@ -73,7 +73,7 @@
 .demo-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
-  border-color: var(--color-primary, #217F8D);
+  border-color: var(--color-primary, #1F3D2E);
 }
 
 .card-icon {
@@ -93,12 +93,12 @@
 
 .purchase-icon {
   background: linear-gradient(135deg, rgba(33, 127, 141, 0.15) 0%, rgba(33, 127, 141, 0.25) 100%);
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .refinance-icon {
   background: linear-gradient(135deg, rgba(33, 127, 141, 0.1) 0%, rgba(33, 127, 141, 0.2) 100%);
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .card-title {
@@ -134,7 +134,7 @@
   content: '';
   width: 6px;
   height: 6px;
-  background: var(--color-primary, #217F8D);
+  background: var(--color-primary, #1F3D2E);
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -155,7 +155,7 @@
 }
 
 .purchase-button {
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   color: #fff;
 }
 
@@ -166,7 +166,7 @@
 }
 
 .refinance-button {
-  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #1a6670 100%);
   color: #fff;
 }
 
@@ -223,7 +223,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #1F3D2E);
 }
 
 .feature-icon svg {

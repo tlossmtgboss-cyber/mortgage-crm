@@ -51,7 +51,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #218D8D 0%, #2aa3a3 100%);
+  background: linear-gradient(90deg, #1F3D2E 0%, #2aa3a3 100%);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
@@ -68,12 +68,12 @@
 }
 
 .progress-step.active {
-  color: #218D8D;
+  color: #1F3D2E;
   font-weight: 600;
 }
 
 .progress-step.completed {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 /* Error Display */
@@ -168,7 +168,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
@@ -229,7 +229,7 @@
 .checkbox-option input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
   cursor: pointer;
 }
 
@@ -243,7 +243,7 @@
 .radio-option:has(input:checked),
 .checkbox-option:has(input:checked) {
   background: #f0fdfa;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 /* Review Summary */
@@ -262,7 +262,7 @@
 .summary-section h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   margin: 0 0 12px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -299,16 +299,16 @@
   padding: 12px 24px;
   font-size: 15px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   background: white;
-  border: 2px solid #218D8D;
+  border: 2px solid #1F3D2E;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-schedule:hover {
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
 }
 
@@ -342,13 +342,13 @@
 }
 
 .slot-btn:hover {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
 }
 
 .slot-btn.selected {
-  background: #218D8D;
-  border-color: #218D8D;
+  background: #1F3D2E;
+  border-color: #1F3D2E;
   color: white;
 }
 
@@ -397,7 +397,7 @@
   width: 20px;
   height: 20px;
   margin-top: 2px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
   flex-shrink: 0;
 }
 
@@ -438,13 +438,13 @@
 
 .btn-next {
   flex: 1;
-  background: #218D8D;
+  background: #1F3D2E;
   color: white;
   border: none;
 }
 
 .btn-next:hover:not(:disabled) {
-  background: #1a7070;
+  background: #2A4F3D;
 }
 
 .btn-next:disabled {
@@ -454,14 +454,14 @@
 
 .btn-submit {
   flex: 1;
-  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   color: white;
   border: none;
   font-size: 16px;
 }
 
 .btn-submit:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1a7070 0%, #145858 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #145858 100%);
 }
 
 .btn-submit:disabled {
@@ -505,7 +505,7 @@
 .success-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #2D7A52 100%);
   color: white;
   font-size: 40px;
   border-radius: 50%;

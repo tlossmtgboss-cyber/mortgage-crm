@@ -17,7 +17,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #e2e8f0;
-  border-top-color: #667eea;
+  border-top-color: #1F3D2E;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -65,7 +65,7 @@
 }
 
 .status-tab.active {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #f0fdfa;
   box-shadow: 0 2px 8px rgba(33, 141, 141, 0.15);
 }
@@ -79,7 +79,7 @@
 }
 
 .status-tab.active .tab-name {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .status-tab .tab-score {
@@ -88,7 +88,7 @@
 }
 
 .status-tab .tab-score.healthy {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .status-tab .tab-score.warning {
@@ -117,7 +117,7 @@
 .back-btn {
   background: none;
   border: none;
-  color: #667eea;
+  color: #1F3D2E;
   font-size: 14px;
   cursor: pointer;
   padding: 8px 0;
@@ -154,7 +154,7 @@
 
 .status-health-badge.healthy {
   background: #d1fae5;
-  color: #059669;
+  color: #2D7A52;
 }
 
 .status-health-badge.warning {
@@ -198,7 +198,7 @@
 }
 
 .summary-card .card-value.score.healthy {
-  color: #059669;
+  color: #2D7A52;
 }
 
 .summary-card .card-value.score.warning {
@@ -306,7 +306,7 @@
 }
 
 .health-indicator.healthy {
-  color: #10b981;
+  color: #2D7A52;
 }
 
 .health-indicator.warning {
@@ -319,7 +319,7 @@
 
 .view-loan-btn {
   padding: 6px 12px;
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
   border: none;
   border-radius: 6px;
@@ -354,9 +354,9 @@
 }
 
 .filter-btn.active {
-  background: #667eea;
+  background: #1F3D2E;
   color: white;
-  border-color: #667eea;
+  border-color: #1F3D2E;
 }
 
 .tasks-list {
@@ -451,7 +451,7 @@
 
 .complete-task-btn {
   padding: 8px 14px;
-  background: #10b981;
+  background: #2D7A52;
   color: white;
   border: none;
   border-radius: 6px;
@@ -462,7 +462,7 @@
 }
 
 .complete-task-btn:hover {
-  background: #059669;
+  background: #2D7A52;
 }
 
 /* Responsive */

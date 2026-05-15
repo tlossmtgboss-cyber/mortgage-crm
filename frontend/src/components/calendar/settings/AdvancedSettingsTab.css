@@ -4,7 +4,7 @@
  * Team strategy options, team table, capacity inputs.
  * Also covers Locations & Labels collapsible sections, label mappings,
  * and appointment templates.
- * Perennia brand colors (#218D8D).
+ * Perennia brand colors (#1F3D2E).
  */
 
 /* ============================================================================
@@ -33,13 +33,13 @@
 }
 
 .strategy-option.selected {
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   background: #e6f5f5;
 }
 
 .strategy-option input[type="radio"] {
   margin-top: 2px;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .strategy-content {
@@ -112,7 +112,7 @@
 
 .capacity-input:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
 }
 
 .upcoming-count {
@@ -150,7 +150,7 @@
 }
 
 .loc-labels-section .collapsible-header:hover h2 {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .loc-labels-section .collapsible-header-left {
@@ -171,7 +171,7 @@
 }
 
 .loc-labels-section .collapsible-header:hover .collapsible-chevron {
-  color: #218D8D;
+  color: #1F3D2E;
 }
 
 .loc-labels-section .collapsible-badge {
@@ -265,7 +265,7 @@
 
 .mapping-select:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 

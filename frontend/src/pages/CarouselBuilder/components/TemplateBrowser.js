@@ -270,13 +270,13 @@ function TemplateSlidePreview({ template, slideIndex }) {
 
   // For the preview, we'll use the template's category color
   const categoryColors = {
-    just_closed: ['#217F8D', '#1a5f6a'],
+    just_closed: ['#1F3D2E', '#1a5f6a'],
     rate_update: ['#0284c7', '#0369a1'],
-    educational: ['#7c3aed', '#5b21b6'],
+    educational: ['#B8924A', '#6B5424'],
     marketing: ['#166534', '#14532d'],
   };
 
-  const colors = categoryColors[template.category] || ['#217F8D', '#1a5f6a'];
+  const colors = categoryColors[template.category] || ['#1F3D2E', '#1a5f6a'];
   const bgIndex = slideIndex % 2;
 
   return (

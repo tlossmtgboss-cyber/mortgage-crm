@@ -2,7 +2,7 @@
  * Calendar Settings - Availability Tab Styles
  *
  * Business hours grid, day rows, time inputs, lunch break, quiet hours rows.
- * Perennia brand colors (#218D8D).
+ * Perennia brand colors (#1F3D2E).
  */
 
 /* ============================================================================
@@ -43,7 +43,7 @@
   height: 18px;
   margin: 0;
   cursor: pointer;
-  accent-color: #218D8D;
+  accent-color: #1F3D2E;
 }
 
 .cal-settings-page .day-name {
@@ -69,7 +69,7 @@
 
 .cal-settings-page .time-inputs input[type="time"]:focus {
   outline: none;
-  border-color: #218D8D;
+  border-color: #1F3D2E;
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 

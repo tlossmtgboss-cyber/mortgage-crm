@@ -44,7 +44,7 @@
 
 .mlc__action-right {
   right: 0;
-  background: #7c3aed;
+  background: #B8924A;
   border-radius: 0 12px 12px 0;
 }
 
@@ -107,7 +107,7 @@
 .mlc__source--referral { background: #fef3c7; color: #92400e; }
 .mlc__source--website { background: #dbeafe; color: #1e40af; }
 .mlc__source--zillow { background: #d1fae5; color: #065f46; }
-.mlc__source--realtor { background: #ede9fe; color: #5b21b6; }
+.mlc__source--realtor { background: #FAF3E5; color: #6B5424; }
 .mlc__source--social { background: #fce7f3; color: #9d174d; }
 .mlc__source--default { background: #f3f4f6; color: #4b5563; }
 
@@ -230,10 +230,10 @@
 }
 
 .mlc__action-btn--call { color: #16a34a; }
-.mlc__action-btn--text { color: #7c3aed; }
+.mlc__action-btn--text { color: #B8924A; }
 .mlc__action-btn--email { color: #1a73e8; }
 .mlc__action-btn--note { color: #f59e0b; }
-.mlc__action-btn--aria { color: #8b5cf6; }
+.mlc__action-btn--aria { color: #B8924A; }
 
 /* ── AI hint for high-score leads ── */
 .mlc__ai-hint {
@@ -242,8 +242,8 @@
   gap: 4px;
   font-size: 12px;
   font-weight: 500;
-  color: #7c3aed;
-  background: #f5f3ff;
+  color: #B8924A;
+  background: #FDF9F0;
   border-radius: 6px;
   padding: 4px 8px;
   margin-bottom: 8px;
@@ -251,7 +251,7 @@
 
 .mlc__ai-hint-icon {
   flex-shrink: 0;
-  color: #8b5cf6;
+  color: #B8924A;
 }
 
 /* ── Skeleton loader ── */

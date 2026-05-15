@@ -82,15 +82,15 @@
 }
 .mhd-stat-card--success .mhd-stat-card__icon {
   background: #d1fae5;
-  color: #047857;
+  color: #1F5A3A;
 }
 .mhd-stat-card--warning .mhd-stat-card__icon {
   background: #fef3c7;
   color: #b45309;
 }
 .mhd-stat-card--info .mhd-stat-card__icon {
-  background: #ede9fe;
-  color: #6d28d9;
+  background: #FAF3E5;
+  color: #8A6D30;
 }
 .mhd-stat-card--workflow .mhd-stat-card__icon {
   background: #fce7f3;
@@ -168,7 +168,7 @@
   gap: 2px;
   font-size: 13px;
   font-weight: 500;
-  color: #218D8D;
+  color: #1F3D2E;
   background: none;
   border: none;
   padding: 8px 4px;
@@ -293,7 +293,7 @@
   gap: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #218D8D;
+  color: #1F3D2E;
   white-space: nowrap;
   min-width: 72px;
 }
@@ -376,12 +376,12 @@
 }
 
 .mhd-quick-action__circle--green {
-  background: linear-gradient(135deg, #059669 0%, #34d399 100%);
+  background: linear-gradient(135deg, #2D7A52 0%, #34d399 100%);
   box-shadow: 0 3px 8px rgba(5, 150, 105, 0.3);
 }
 
 .mhd-quick-action__circle--purple {
-  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  background: linear-gradient(135deg, #B8924A 0%, #D4AD6A 100%);
   box-shadow: 0 3px 8px rgba(124, 58, 237, 0.3);
 }
 
@@ -391,7 +391,7 @@
 }
 
 .mhd-quick-action__circle--aria {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   box-shadow: 0 3px 8px rgba(139, 92, 246, 0.35);
 }
 
@@ -410,14 +410,14 @@
 }
 
 .mhd-aria-sparkle {
-  color: #8b5cf6;
+  color: #B8924A;
   display: flex;
   align-items: center;
 }
 
 .mhd-aria-insight-card {
-  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
-  border: 1px solid #ddd6fe;
+  background: linear-gradient(135deg, #eff6ff 0%, #FDF9F0 100%);
+  border: 1px solid #F5EDD9;
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -437,7 +437,7 @@
   align-items: center;
   gap: 6px;
   align-self: flex-start;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #B8924A 100%);
   color: #fff;
   border: none;
   border-radius: 20px;
@@ -636,7 +636,7 @@
 }
 
 .mhd-workflow-task-item:focus-visible {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: 2px;
 }
 
@@ -746,7 +746,7 @@
 .mhd-schedule-item:focus-visible,
 .mhd-quick-action:focus-visible,
 .mhd-section__link:focus-visible {
-  outline: 2px solid #218D8D;
+  outline: 2px solid #1F3D2E;
   outline-offset: 2px;
 }
 
