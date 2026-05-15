@@ -16,6 +16,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional
 from datetime import datetime, timezone
 import logging
@@ -749,7 +750,7 @@ async def get_loans(
         query = query.filter(Loan.deleted_at.is_(None))
 
         if stage:
-            query = query.filter(Loan.stage == stage)
+            query = query.filter(func.lower(Loan.stage) == stage.lower())
 
         total = query.count()
         loans = query.order_by(Loan.created_at.desc()).offset(skip).limit(limit).all()

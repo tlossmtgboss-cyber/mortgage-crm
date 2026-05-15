@@ -638,9 +638,9 @@ function Loans() {
     // Show only active (non-funded/inactive) loans
     filteredLoans = safeLoans.filter(loan => !isInactiveLoan(loan));
   } else {
-    // Use the mapping to match filter name to actual API stage values
-    const stageValues = filterToStage[activeFilter] || [activeFilter];
-    filteredLoans = safeLoans.filter(loan => stageValues.includes(loan.stage));
+    // Use the mapping to match filter name to actual API stage values (case-insensitive)
+    const stageValues = (filterToStage[activeFilter] || [activeFilter]).map(s => s.toLowerCase());
+    filteredLoans = safeLoans.filter(loan => stageValues.includes((loan.stage || '').toLowerCase()));
   }
 
   // Filter by search query

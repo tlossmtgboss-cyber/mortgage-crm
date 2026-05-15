@@ -274,13 +274,13 @@ async def get_leads(
         query = query.filter(Lead.deleted_at.is_(None))
 
         if stage:
-            # Cast to text to avoid PostgreSQL enum type mismatch
-            query = query.filter(cast(Lead.stage, String) == stage)
+            # Case-insensitive stage match (DB may store 'NEW', 'New', etc.)
+            query = query.filter(func.lower(cast(Lead.stage, String)) == stage.lower())
         elif pipeline != 'all':
             # Default: exclude Active Loan and MUM stages from the leads list
-            # Cast to text to avoid PostgreSQL enum type mismatch (DB may have leadstage enum)
-            excluded = MUM_STAGES + ACTIVE_LOAN_ENTRY_STAGES
-            query = query.filter(or_(cast(Lead.stage, String).notin_(excluded), Lead.stage == None))
+            # Case-insensitive to handle mixed casing from different sources
+            excluded = [s.lower() for s in MUM_STAGES + ACTIVE_LOAN_ENTRY_STAGES]
+            query = query.filter(or_(func.lower(cast(Lead.stage, String)).notin_(excluded), Lead.stage == None))
 
         total = query.count()
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
@@ -313,10 +313,11 @@ async def get_leads(
         # Convert to dict manually to avoid Pydantic validation issues
         result = []
         for lead in leads:
-            # Handle stage value - it might be an enum or a string depending on DB content
+            # Handle stage value - normalize to title case for consistent frontend display
             stage_value = None
             if lead.stage:
-                stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+                raw = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+                stage_value = raw.title() if raw == raw.upper() or raw == raw.lower() else raw
 
             def _num(val):
                 """Convert Numeric/Decimal to float for JSON serialization."""

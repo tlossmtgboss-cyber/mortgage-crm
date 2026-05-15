@@ -29,7 +29,7 @@ export const useLeads = (options = {}) => {
   return useQuery({
     queryKey: ['leads'],
     queryFn: async () => {
-      const data = await fetchWithAuth('/api/v1/leads/');
+      const data = await fetchWithAuth('/api/v1/leads/?limit=500');
       return Array.isArray(data) ? data : (data?.items ?? []);
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -66,7 +66,7 @@ export const useLoans = (options = {}) => {
   return useQuery({
     queryKey: ['loans'],
     queryFn: async () => {
-      const data = await fetchWithAuth('/api/v1/loans/');
+      const data = await fetchWithAuth('/api/v1/loans/?limit=500');
       return Array.isArray(data) ? data : (data?.items ?? []);
     },
     staleTime: 1000 * 60 * 2,

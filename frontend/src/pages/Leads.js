@@ -105,9 +105,10 @@ function Leads() {
   ];
 
   // Stages that belong on the Leads page — once a file has an application it moves to Active Loans
+  // Use lowercase keys so the lookup is case-insensitive (DB may store 'NEW', 'New', etc.)
   const LEAD_PIPELINE_STAGES = new Set([
-    'New', 'Attempted Contact', 'Prospect', 'Pre-Qualified', 'Pre-Approved',
-    'Long-Term Nurture', 'Nurture', 'Credit Repair', 'Do Not Call',
+    'new', 'attempted contact', 'prospect', 'pre-qualified', 'pre-approved',
+    'long-term nurture', 'nurture', 'credit repair', 'do not call',
   ]);
 
   const statusOptions = [
@@ -284,31 +285,32 @@ function Leads() {
   // Exclude leads that belong on Active Loans or MUM pages (Funded, Closed, Disclosed, etc.)
   const safeLeads = (Array.isArray(leads) ? leads : []).filter(lead => {
     if (!lead.stage) return true; // Show leads with no stage
-    return LEAD_PIPELINE_STAGES.has(lead.stage);
+    return LEAD_PIPELINE_STAGES.has(lead.stage.toLowerCase());
   });
 
-  // Count leads per filter tab
+  // Count leads per filter tab (case-insensitive stage comparison)
+  const stageMatch = (stage, target) => stage?.toLowerCase() === target.toLowerCase();
   const filterCounts = useMemo(() => {
     const counts = { All: safeLeads.length };
     filters.forEach(f => {
       if (f === 'All') return;
       if (f === 'Nurture') {
-        counts[f] = safeLeads.filter(l => l.stage === 'Nurture' || l.stage === 'Long-Term Nurture').length;
+        counts[f] = safeLeads.filter(l => stageMatch(l.stage, 'Nurture') || stageMatch(l.stage, 'Long-Term Nurture')).length;
       } else {
-        counts[f] = safeLeads.filter(l => l.stage === f).length;
+        counts[f] = safeLeads.filter(l => stageMatch(l.stage, f)).length;
       }
     });
     return counts;
   }, [safeLeads]);
 
-  // Filter by stage
+  // Filter by stage (case-insensitive)
   let filteredLeads;
   if (activeFilter === 'All') {
     filteredLeads = safeLeads;
   } else if (activeFilter === 'Nurture') {
-    filteredLeads = safeLeads.filter(lead => lead.stage === 'Nurture' || lead.stage === 'Long-Term Nurture');
+    filteredLeads = safeLeads.filter(lead => stageMatch(lead.stage, 'Nurture') || stageMatch(lead.stage, 'Long-Term Nurture'));
   } else {
-    filteredLeads = safeLeads.filter(lead => lead.stage === activeFilter);
+    filteredLeads = safeLeads.filter(lead => stageMatch(lead.stage, activeFilter));
   }
 
   // Filter by search query
