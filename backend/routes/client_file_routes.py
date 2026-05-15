@@ -586,82 +586,126 @@ def list_timeline(
     cf = _get_cf(db, client_file_id, current_user.organization_id)
     org_id = current_user.organization_id
     lead_id = cf.lead_id
-    if not lead_id:
-        return []
+    client_phone = cf.primary_phone
 
-    from database.models.communication import Activity, Email, EmailMessage, SMSMessage
+    from database.models.communication import Activity, Email, EmailMessage, SMSMessage, SMSConversation
     from database.enums import ActivityType
 
     events: list[dict] = []
 
     # ── Activities (notes, calls, meetings, docs) ───────────────────────
-    activity_q = select(Activity).where(
-        Activity.lead_id == lead_id,
-        Activity.organization_id == org_id,
-    )
-    if category == "notes":
-        activity_q = activity_q.where(Activity.type == ActivityType.NOTE)
-    elif category == "calls":
-        activity_q = activity_q.where(Activity.type == ActivityType.CALL)
-    elif category == "texts":
-        activity_q = activity_q.where(Activity.type == ActivityType.SMS)
-    elif category == "emails":
-        activity_q = activity_q.where(Activity.type == ActivityType.EMAIL)
-
-    kind_map = {
-        ActivityType.NOTE: "note_added",
-        ActivityType.CALL: "call_outbound",
-        ActivityType.EMAIL: "message_sent_email",
-        ActivityType.SMS: "message_sent_sms",
-        ActivityType.MEETING: "appointment_booked",
-        ActivityType.DOCUMENT: "document_uploaded",
-    }
-    cat_map = {
-        ActivityType.NOTE: "notes",
-        ActivityType.CALL: "calls",
-        ActivityType.EMAIL: "emails",
-        ActivityType.SMS: "texts",
-        ActivityType.MEETING: "activity",
-        ActivityType.DOCUMENT: "documents",
-    }
-    for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
-        events.append(_make_timeline_event(
-            id=f"act-{a.id}",
-            client_file_id=str(client_file_id),
-            org_id=str(org_id),
-            kind=kind_map.get(a.type, "note_added"),
-            event_category=cat_map.get(a.type, "activity"),
-            occurred_at=a.created_at,
-            headline=a.type.value if a.type else "Activity",
-            body=a.content,
-            actor_user_id=str(a.user_id) if a.user_id else None,
-        ))
-
-    # ── SMS messages ────────────────────────────────────────────────────
-    if category in ("all", "texts"):
-        sms_q = (
-            select(SMSMessage)
-            .where(SMSMessage.lead_id == lead_id, SMSMessage.organization_id == org_id)
-            .order_by(SMSMessage.created_at.desc())
-            .limit(limit)
+    if lead_id:
+        activity_q = select(Activity).where(
+            Activity.lead_id == lead_id,
+            Activity.organization_id == org_id,
         )
-        for s in db.execute(sms_q).scalars():
-            inbound = s.direction == "inbound"
+        if category == "notes":
+            activity_q = activity_q.where(Activity.type == ActivityType.NOTE)
+        elif category == "calls":
+            activity_q = activity_q.where(Activity.type == ActivityType.CALL)
+        elif category == "texts":
+            activity_q = activity_q.where(Activity.type == ActivityType.SMS)
+        elif category == "emails":
+            activity_q = activity_q.where(Activity.type == ActivityType.EMAIL)
+
+        kind_map = {
+            ActivityType.NOTE: "note_added",
+            ActivityType.CALL: "call_outbound",
+            ActivityType.EMAIL: "message_sent_email",
+            ActivityType.SMS: "message_sent_sms",
+            ActivityType.MEETING: "appointment_booked",
+            ActivityType.DOCUMENT: "document_uploaded",
+        }
+        cat_map = {
+            ActivityType.NOTE: "notes",
+            ActivityType.CALL: "calls",
+            ActivityType.EMAIL: "emails",
+            ActivityType.SMS: "texts",
+            ActivityType.MEETING: "activity",
+            ActivityType.DOCUMENT: "documents",
+        }
+        for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
             events.append(_make_timeline_event(
-                id=f"sms-{s.id}",
+                id=f"act-{a.id}",
                 client_file_id=str(client_file_id),
                 org_id=str(org_id),
-                kind="message_received_sms" if inbound else "message_sent_sms",
-                event_category="texts",
-                occurred_at=s.created_at,
-                headline="Text received" if inbound else "Text sent",
-                body=s.message,
-                actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
-                related_message_id=s.provider_message_id,
+                kind=kind_map.get(a.type, "note_added"),
+                event_category=cat_map.get(a.type, "activity"),
+                occurred_at=a.created_at,
+                headline=a.type.value if a.type else "Activity",
+                body=a.content,
+                actor_user_id=str(a.user_id) if a.user_id else None,
             ))
 
+    # ── SMS messages (by lead_id + phone-based via conversation) ────────
+    if category in ("all", "texts"):
+        seen_sms_ids: set[int] = set()
+
+        if lead_id:
+            sms_q = (
+                select(SMSMessage)
+                .where(SMSMessage.lead_id == lead_id, SMSMessage.organization_id == org_id)
+                .order_by(SMSMessage.created_at.desc())
+                .limit(limit)
+            )
+            for s in db.execute(sms_q).scalars():
+                seen_sms_ids.add(s.id)
+                inbound = s.direction == "inbound"
+                events.append(_make_timeline_event(
+                    id=f"sms-{s.id}",
+                    client_file_id=str(client_file_id),
+                    org_id=str(org_id),
+                    kind="message_received_sms" if inbound else "message_sent_sms",
+                    event_category="texts",
+                    occurred_at=s.created_at,
+                    headline="Text received" if inbound else "Text sent",
+                    body=s.message,
+                    actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
+                    related_message_id=s.provider_message_id,
+                ))
+
+        if client_phone:
+            normalized = client_phone.strip().replace("-", "").replace("(", "").replace(")", "").replace(" ", "")
+            if not normalized.startswith("+"):
+                normalized = "+1" + normalized if len(normalized) == 10 else "+" + normalized
+            conv_ids = [
+                c.id for c in db.execute(
+                    select(SMSConversation.id).where(
+                        SMSConversation.organization_id == org_id,
+                        SMSConversation.phone_number == normalized,
+                    )
+                ).scalars()
+            ]
+            if conv_ids:
+                phone_sms_q = (
+                    select(SMSMessage)
+                    .where(
+                        SMSMessage.conversation_id.in_(conv_ids),
+                        SMSMessage.organization_id == org_id,
+                    )
+                    .order_by(SMSMessage.created_at.desc())
+                    .limit(limit)
+                )
+                for s in db.execute(phone_sms_q).scalars():
+                    if s.id in seen_sms_ids:
+                        continue
+                    seen_sms_ids.add(s.id)
+                    inbound = s.direction == "inbound"
+                    events.append(_make_timeline_event(
+                        id=f"sms-{s.id}",
+                        client_file_id=str(client_file_id),
+                        org_id=str(org_id),
+                        kind="message_received_sms" if inbound else "message_sent_sms",
+                        event_category="texts",
+                        occurred_at=s.created_at,
+                        headline="Text received" if inbound else "Text sent",
+                        body=s.message,
+                        actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
+                        related_message_id=s.provider_message_id,
+                    ))
+
     # ── Emails (outbound via email_messages + inbound via emails) ──────
-    if category in ("all", "emails"):
+    if category in ("all", "emails") and lead_id:
         for em in db.execute(
             select(EmailMessage)
             .where(EmailMessage.lead_id == lead_id, EmailMessage.organization_id == org_id)
