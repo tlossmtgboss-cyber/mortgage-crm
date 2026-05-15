@@ -75,6 +75,37 @@
   --weight-medium: 500;
   --weight-semibold: 550;
   --weight-bold: 600;
+
+  /* ── Cream Design System (bt-* tokens) ── */
+  --bt-font-display: 'Fraunces', Georgia, serif;
+  --bt-font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --bt-bg-page: #FAF7F1;
+  --bt-bg-surface: #FFFFFF;
+  --bt-bg-sidebar: #F6F2EA;
+  --bt-bg-elevated: #F2EDE2;
+  --bt-bg-soft: #FBF8F2;
+  --bt-border: #ECE6D8;
+  --bt-border-strong: #D8D0BD;
+  --bt-text-primary: #1A1F1B;
+  --bt-text-secondary: #4F554E;
+  --bt-text-muted: #8B8A7E;
+  --bt-text-faint: #B5B2A4;
+  --bt-primary: #1F3D2E;
+  --bt-primary-hover: #2A4F3D;
+  --bt-primary-light: #E5EDE6;
+  --bt-primary-tint: #EFF3EE;
+  --bt-accent: #B8924A;
+  --bt-accent-light: #F5EDD9;
+  --bt-success: #2D7A52;
+  --bt-warning: #B25F18;
+  --bt-error: #9B2C2C;
+  --bt-info: #3182CE;
+  --bt-radius-sm: 6px;
+  --bt-radius-md: 10px;
+  --bt-radius-lg: 14px;
+  --bt-shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --bt-shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  --bt-shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
 }
 
 /* Dark Mode — applied via data-theme attribute set by ThemeContext */
@@ -97,6 +128,27 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+
+  --bt-bg-page: #111214;
+  --bt-bg-surface: #1a1c1f;
+  --bt-bg-sidebar: #16171a;
+  --bt-bg-elevated: #222428;
+  --bt-bg-soft: #1e2023;
+  --bt-border: rgba(255, 255, 255, 0.10);
+  --bt-border-strong: rgba(255, 255, 255, 0.16);
+  --bt-text-primary: #e8e8ec;
+  --bt-text-secondary: #9b9ba7;
+  --bt-text-muted: #6b6b78;
+  --bt-text-faint: #4a4a55;
+  --bt-primary: #3D7A5E;
+  --bt-primary-hover: #4A9070;
+  --bt-primary-light: rgba(61, 122, 94, 0.15);
+  --bt-primary-tint: rgba(61, 122, 94, 0.08);
+  --bt-accent: #D4AD6A;
+  --bt-accent-light: rgba(212, 173, 106, 0.12);
+  --bt-shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+  --bt-shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+  --bt-shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
 
   color-scheme: dark;
 }

@@ -1,0 +1,31 @@
+.app-layout.has-sidebar {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-layout.has-sidebar .navigation {
+  display: none;
+}
+
+.app-layout.has-sidebar .app-main {
+  margin-left: 240px;
+  flex: 1;
+  padding: 28px 32px;
+  min-height: 100vh;
+  background: var(--bt-bg-page, #FAF7F1);
+}
+
+@media (max-width: 768px) {
+  .app-layout.has-sidebar .navigation {
+    display: flex;
+  }
+
+  .app-layout.has-sidebar .app-main {
+    margin-left: 0;
+    padding: 16px;
+  }
+
+  .app-layout.has-sidebar {
+    flex-direction: column;
+  }
+}

@@ -1,7 +1,9 @@
 import { Suspense } from 'react';
 import Navigation from '../components/Navigation';
+import AppSidebar from '../components/AppSidebar';
 import CoachCorner from '../components/CoachCorner';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
+import './MainLayout.css';
 
 // Simple loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -44,7 +46,8 @@ function MainLayout({
   showCoach = true,
 }) {
   return (
-    <div className="app-layout">
+    <div className="app-layout has-sidebar">
+      <AppSidebar taskCounts={taskCounts} />
       <Navigation
         onToggleAssistant={onToggleAssistant}
         onToggleCoach={onToggleCoach}

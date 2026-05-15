@@ -1172,95 +1172,341 @@ function Dashboard() {
     );
   }
 
-  return (
-    <div className="dashboard">
-      {/* Role Preview Banner */}
-      {isRolePreview && rolePreview && (
-        <div style={{
-          background: 'linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%)',
-          color: 'white',
-          padding: '12px 20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '1rem',
-          borderRadius: '8px',
-          boxShadow: '0 2px 10px rgba(102, 126, 234, 0.3)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '18px' }}>👁️</span>
-            <span style={{ fontWeight: '600' }}>
-              Previewing as: <strong>{rolePreview.role_name}</strong>
-            </span>
-            <span style={{ opacity: 0.8, fontSize: '14px' }}>
-              (This is how a {rolePreview.role_name} sees their dashboard)
-            </span>
+  const userData = getUserData();
+  const firstName = userData?.first_name || 'there';
+  const todayFormatted = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const todayShort = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const goalData = loadGoalTrackerData();
+  const annualPct = goalData.annualGoal > 0 ? Math.round((production.annualActual || 0) / goalData.annualGoal * 100) : (production.annualProgress || 0);
+  const monthlyPct = goalData.monthlyGoal > 0 ? Math.round((production.monthlyActual || 0) / goalData.monthlyGoal * 100) : (production.monthlyProgress || 0);
+  const weeklyPct = goalData.weeklyGoal > 0 ? Math.round((production.weeklyActual || 0) / goalData.weeklyGoal * 100) : (production.weeklyProgress || 0);
+  const dailyPct = goalData.dailyGoal > 0 ? Math.round((production.dailyActual || 0) / goalData.dailyGoal * 100) : (production.dailyProgress || 0);
+
+  if (dashboardView === 'manager' && isManagerOrAdmin) {
+    return (
+      <div className="dashboard">
+        <div className="dashboard-header-compact">
+          <h1>Manager Command Center</h1>
+          <div className="header-actions">
+            <div className="dashboard-view-toggle">
+              <button className="view-toggle-btn" onClick={() => handleViewToggle('personal')}>My Dashboard</button>
+              <button className="view-toggle-btn active" onClick={() => handleViewToggle('manager')}>Manager Dashboard</button>
+            </div>
           </div>
-          <button
-            onClick={exitRolePreview}
-            style={{
-              background: 'white',
-              color: '#1F3D2E',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'transform 0.2s'
-            }}
-            onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
-            onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
-          >
-            Exit Preview
-          </button>
+        </div>
+        {(hasPermission('team.manage_permissions') || userRole === 'management') && (
+          <div style={{ marginBottom: '2rem' }}><PendingPermissionRequests /></div>
+        )}
+        <div className="draggable-containers-wrapper">
+          {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dashboard cream-dashboard">
+      {isRolePreview && rolePreview && (
+        <div className="cream-role-preview-banner">
+          <div className="preview-info">
+            Previewing as: <strong>{rolePreview.role_name}</strong>
+            <span className="preview-hint">(This is how a {rolePreview.role_name} sees their dashboard)</span>
+          </div>
+          <button className="btn btn-outline" onClick={exitRolePreview}>Exit Preview</button>
         </div>
       )}
 
-      <BriefingErrorBoundary><MorningBriefingCard /></BriefingErrorBoundary>
-
-      <div className="dashboard-header-compact">
-        <h1>{dashboardView === 'manager' ? 'Manager Command Center' : "Today's Command Center"}</h1>
-        <div className="header-actions">
+      <div className="cream-page-header">
+        <div>
+          <div className="cream-page-title">Dashboard</div>
+          <div className="cream-page-subtitle">Good morning, {firstName}. Here's your pipeline at a glance.</div>
+        </div>
+        <div className="cream-header-actions">
           {isManagerOrAdmin && (
             <div className="dashboard-view-toggle">
-              <button
-                className={`view-toggle-btn ${dashboardView === 'personal' ? 'active' : ''}`}
-                onClick={() => handleViewToggle('personal')}
-              >
-                My Dashboard
-              </button>
-              <button
-                className={`view-toggle-btn ${dashboardView === 'manager' ? 'active' : ''}`}
-                onClick={() => handleViewToggle('manager')}
-              >
-                Manager Dashboard
-              </button>
+              <button className="view-toggle-btn active" onClick={() => handleViewToggle('personal')}>My Dashboard</button>
+              <button className="view-toggle-btn" onClick={() => handleViewToggle('manager')}>Manager Dashboard</button>
             </div>
           )}
-          <div className="header-date">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          <button className="btn btn-outline btn-sm" onClick={() => navigate('/briefing')}>View Morning Briefing</button>
+        </div>
+      </div>
+
+      {/* AI Alerts */}
+      <div className="cream-card cream-clickable" onClick={() => navigate('/tasks')} style={{ marginBottom: 16 }}>
+        <div className="cream-card-header"><h3>AI Alerts</h3></div>
+        <div className="cream-card-body" style={{ padding: 0 }}>
+          {(leadMetrics.alerts || []).filter(a => a).length > 0 ? (
+            (leadMetrics.alerts || []).filter(a => a).map((alert, idx) => (
+              <div key={idx} className="cream-alert-row">
+                <span className={`cream-alert-dot ${idx === 0 ? 'red' : idx === 1 ? 'amber' : idx === 2 ? 'green' : 'blue'}`}></span>
+                <span>{alert}</span>
+              </div>
+            ))
+          ) : (
+            <div className="cream-alert-row">
+              <span className="cream-alert-dot green"></span>
+              <span>No active alerts. Your pipeline is looking healthy!</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Production Tracker */}
+      <div className="cream-card cream-clickable" onClick={() => navigate('/goal-tracker')} style={{ marginBottom: 16 }}>
+        <div className="cream-card-header"><h3>Monthly Production Tracker</h3></div>
+        <div className="cream-card-body">
+          <div className="cream-metrics-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Annual Goal</div>
+              <div className="cream-metric-value" style={{ fontSize: 22 }}>{formatGoalNumber(goalData.annualGoal || production.annualGoal)}</div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--bt-text-muted)', marginBottom: 3 }}>
+                  <span>Actual: {formatGoalNumber(production.annualActual)}</span><span>{annualPct}%</span>
+                </div>
+                <div className="cream-progress-bar"><div className="cream-progress-fill green" style={{ width: `${Math.min(annualPct, 100)}%` }}></div></div>
+              </div>
+            </div>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Monthly Goal</div>
+              <div className="cream-metric-value" style={{ fontSize: 22 }}>{formatGoalNumber(goalData.monthlyGoal || production.monthlyGoal)}</div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--bt-text-muted)', marginBottom: 3 }}>
+                  <span>Actual: {formatGoalNumber(production.monthlyActual)}</span><span>{monthlyPct}%</span>
+                </div>
+                <div className="cream-progress-bar"><div className="cream-progress-fill green" style={{ width: `${Math.min(monthlyPct, 100)}%` }}></div></div>
+              </div>
+            </div>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Weekly Goal</div>
+              <div className="cream-metric-value" style={{ fontSize: 22 }}>{formatGoalNumber(goalData.weeklyGoal || production.weeklyGoal)}</div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--bt-text-muted)', marginBottom: 3 }}>
+                  <span>Actual: {formatGoalNumber(production.weeklyActual)}</span><span>{weeklyPct}%</span>
+                </div>
+                <div className="cream-progress-bar"><div className="cream-progress-fill green" style={{ width: `${Math.min(weeklyPct, 100)}%` }}></div></div>
+              </div>
+            </div>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Daily Goal</div>
+              <div className="cream-metric-value" style={{ fontSize: 22 }}>{formatGoalNumber(goalData.dailyGoal || production.dailyGoal)}</div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--bt-text-muted)', marginBottom: 3 }}>
+                  <span>Actual: {formatGoalNumber(production.dailyActual)}</span><span>{dailyPct}%</span>
+                </div>
+                <div className="cream-progress-bar"><div className="cream-progress-fill green" style={{ width: `${Math.min(dailyPct, 100)}%` }}></div></div>
+              </div>
+            </div>
           </div>
-          <button
-            className="ai-landing-btn"
-            onClick={() => navigate('/ai')}
-            title="Open AI Assistant"
-          >
-            AI Assistant
-          </button>
+          {annualPct < 75 && (
+            <div className="cream-alert-row" style={{ background: 'var(--bt-primary-tint)', borderRadius: 'var(--bt-radius-sm)', marginTop: 8 }}>
+              <span className="cream-alert-dot blue"></span>
+              <span style={{ fontSize: 12 }}><strong>AI Coaching:</strong> You're at {annualPct}% of your annual goal. Maintain your current pace and focus on converting pipeline deals to stay on track.</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Permission Requests Widget - Users with team.manage_permissions or managers */}
-      {(hasPermission('team.manage_permissions') || userRole === 'management') && (
-        <div style={{ marginBottom: '2rem' }}>
-          <PendingPermissionRequests />
+      {/* Mortgages Under Management */}
+      <div className="cream-card cream-clickable" onClick={() => navigate('/portfolio')} style={{ marginBottom: 16 }}>
+        <div className="cream-card-header"><h3>Mortgages Under Management</h3></div>
+        <div className="cream-card-body">
+          <div className="cream-metrics-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Total Clients</div>
+              <div className="cream-metric-value">{mumSummary.loan_count || 0}</div>
+            </div>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Portfolio Volume</div>
+              <div className="cream-metric-value" style={{ fontSize: 20 }}>
+                {mumSummary.total_volume > 0 ? `$${(mumSummary.total_volume / 1000000).toFixed(1)}M` : '$0'}
+              </div>
+            </div>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Monthly Payments</div>
+              <div className="cream-metric-value" style={{ fontSize: 20 }}>
+                {mumSummary.monthly_payments > 0 ? `$${(mumSummary.monthly_payments / 1000).toFixed(1)}K` : '$0'}
+              </div>
+            </div>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Refi Opportunities</div>
+              <div className="cream-metric-value" style={{ color: 'var(--bt-success)' }}>{mumSummary.refi_opportunities || 0}</div>
+            </div>
+            <div className="cream-metric-card">
+              <div className="cream-metric-label">Commission Opp.</div>
+              <div className="cream-metric-value" style={{ fontSize: 20 }}>
+                {mumSummary.annual_commission > 0 ? `$${Math.round(mumSummary.annual_commission / 1000)}K` : '$0'}
+              </div>
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* Draggable Containers */}
-      <div className="draggable-containers-wrapper">
-        {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
       </div>
+
+      {/* Pipeline Efficiency + Today's Activity side by side */}
+      <div className="cream-dash-grid">
+        {/* Pipeline Efficiency */}
+        <div className="cream-card cream-clickable" onClick={() => navigate('/scorecard')}>
+          <div className="cream-card-header"><h3>Pipeline Efficiency Monitor</h3></div>
+          <div className="cream-card-body">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 14 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div className={`cream-score-circle ${(efficiency.overallScore || 0) >= 80 ? '' : (efficiency.overallScore || 0) >= 60 ? 'warning' : 'critical'}`}>
+                  {efficiency.overallScore || 0}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--bt-text-muted)' }}>Overall Score</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className="cream-metrics-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <div className="cream-metric-label">Avg Time to Close</div>
+                    <div style={{ fontWeight: 600 }}>{efficiency.avgTimeToClose || 0} days</div>
+                    <div className={`cream-metric-change ${(efficiency.avgTimeToCloseChange || 0) < 0 ? 'up' : 'down'}`}>
+                      {(efficiency.avgTimeToCloseChange || 0) < 0 ? '' : '+'}{efficiency.avgTimeToCloseChange || 0} days
+                    </div>
+                  </div>
+                  <div>
+                    <div className="cream-metric-label">Pull-Through Rate</div>
+                    <div style={{ fontWeight: 600 }}>{efficiency.pullThroughRate || 0}%</div>
+                    <div className={`cream-metric-change ${(efficiency.pullThroughRateChange || 0) >= 0 ? 'up' : 'down'}`}>
+                      {(efficiency.pullThroughRateChange || 0) >= 0 ? '+' : ''}{efficiency.pullThroughRateChange || 0}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="cream-metric-label">Loans Falling Behind</div>
+                    <div style={{ fontWeight: 600, color: (efficiency.loansFallingBehind || 0) > 0 ? 'var(--bt-warning)' : undefined }}>
+                      {efficiency.loansFallingBehind || 0}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="cream-metric-label">Automation Rate</div>
+                    <div style={{ fontWeight: 600 }}>{efficiency.automationRate || 0}%</div>
+                    <div className={`cream-metric-change ${(efficiency.automationRateChange || 0) >= 0 ? 'up' : 'down'}`}>
+                      {(efficiency.automationRateChange || 0) >= 0 ? '+' : ''}{efficiency.automationRateChange || 0}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              {(efficiency.stages || []).map((stage, idx) => (
+                <div key={idx} className="cream-eff-row">
+                  <span className="cream-eff-label">{stage.name}</span>
+                  <div className="cream-eff-bar-bg">
+                    <div className={`cream-eff-bar ${stage.status}`} style={{ width: `${stage.efficiency}%` }}></div>
+                  </div>
+                  <span className="cream-eff-pct">{stage.efficiency}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Today's Activity */}
+        <div className="cream-card cream-clickable" onClick={() => navigate('/calendar')}>
+          <div className="cream-card-header">
+            <h3>Today's Activity</h3>
+            <span style={{ fontSize: 11, color: 'var(--bt-text-muted)' }}>{todayShort}</span>
+          </div>
+          <div className="cream-card-body" style={{ padding: 0 }}>
+            {(prioritizedTasks || []).slice(0, 5).map((task, idx) => {
+              const colors = ['var(--bt-error)', 'var(--bt-accent)', 'var(--bt-primary)', 'var(--bt-info)', 'var(--bt-success)'];
+              return (
+                <div key={idx} className="cream-task-item" style={{ borderLeft: `3px solid ${colors[idx % colors.length]}` }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="cream-task-title">{task.title}</div>
+                    <div className="cream-task-meta">
+                      {task.borrower && <span>{task.borrower}</span>}
+                      {task.stage && <span>{task.stage}</span>}
+                      {task.urgency && <span style={{ color: task.urgency === 'Critical' ? 'var(--bt-error)' : undefined }}>{task.urgency}</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {(prioritizedTasks || []).length === 0 && (
+              <div style={{ padding: '16px', fontSize: 13, color: 'var(--bt-text-muted)', textAlign: 'center' }}>
+                No tasks scheduled for today
+              </div>
+            )}
+            {(prioritizedTasks || []).length > 5 && (
+              <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--bt-text-muted)', textAlign: 'center', borderTop: '1px solid var(--bt-border)' }}>
+                {prioritizedTasks.length - 5} more items on your calendar
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Workflow Scorecards */}
+      <div className="cream-card cream-clickable" onClick={() => navigate('/loans')} style={{ marginBottom: 16 }}>
+        <div className="cream-card-header">
+          <h3>Workflow Scorecards</h3>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>
+            Overall: <span style={{ color: (workflowScores.overallScore || 0) >= 80 ? 'var(--bt-success)' : (workflowScores.overallScore || 0) >= 60 ? 'var(--bt-warning)' : 'var(--bt-error)' }}>
+              {workflowScores.overallScore || 0}%
+            </span>
+          </span>
+        </div>
+        <div className="cream-card-body">
+          <div className="cream-workflow-grid">
+            {(workflowScores.statuses || []).slice(0, 5).map((status, idx) => (
+              <div key={idx} className={`cream-workflow-card ${status.health}`}>
+                <div className="wf-name">{status.name}</div>
+                <div className="wf-score" style={{ color: status.health === 'good' ? 'var(--bt-success)' : status.health === 'warning' ? 'var(--bt-warning)' : 'var(--bt-error)' }}>
+                  {status.score}%
+                </div>
+                <div className="wf-meta">{status.activeLoans} loans &middot; {status.tasksCompleted}/{status.tasksDue} tasks</div>
+              </div>
+            ))}
+          </div>
+          {(workflowScores.statuses || []).length > 5 && (
+            <div className="cream-workflow-grid">
+              {(workflowScores.statuses || []).slice(5, 10).map((status, idx) => (
+                <div key={idx} className={`cream-workflow-card ${status.health}`}>
+                  <div className="wf-name">{status.name}</div>
+                  <div className="wf-score" style={{ color: status.health === 'good' ? 'var(--bt-success)' : status.health === 'warning' ? 'var(--bt-warning)' : 'var(--bt-error)' }}>
+                    {status.score}%
+                  </div>
+                  <div className="wf-meta">{status.activeLoans} loans &middot; {status.tasksCompleted}/{status.tasksDue} tasks</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Referral Scoreboard */}
+      <div className="cream-dash-grid">
+        <div className="cream-card cream-clickable" onClick={() => navigate('/referral-partners')}>
+          <div className="cream-card-header"><h3>Referral Scoreboard</h3></div>
+          <div className="cream-card-body">
+            <table className="cream-data-table">
+              <thead>
+                <tr><th>Partner</th><th>Referrals</th><th>Closed</th><th>Pipeline</th></tr>
+              </thead>
+              <tbody>
+                {(referralStats.top_partners || []).filter(p => p && p.name).slice(0, 5).map((partner, idx) => (
+                  <tr key={idx}>
+                    <td className="name-cell">{partner.name}</td>
+                    <td>{partner.received || 0}</td>
+                    <td>{partner.closed || partner.sent || 0}</td>
+                    <td>{partner.pipeline_volume ? `$${(partner.pipeline_volume / 1000).toFixed(0)}K` : '-'}</td>
+                  </tr>
+                ))}
+                {(referralStats.top_partners || []).filter(p => p && p.name).length === 0 && (
+                  <tr><td colSpan="4" style={{ textAlign: 'center', color: 'var(--bt-text-muted)' }}>No referral partners yet</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Morning Briefing Card */}
+      <BriefingErrorBoundary>
+        <MorningBriefingCard />
+      </BriefingErrorBoundary>
     </div>
   );
 }

@@ -99,6 +99,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
     _DEV_ORIGINS: Set[str] = {
         "http://localhost",
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:5173",
     }
 
