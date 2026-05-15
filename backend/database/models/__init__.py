@@ -691,6 +691,9 @@ from .contact_card import ContactCardMember
 # AI Cost Records (persistent dollar-cost tracking for AI API calls)
 from .ai_cost_record import AICostRecord
 
+# Builder Application models (CMG Builder Portal submissions)
+from .builder_application import BuilderApplication, BuilderDocument
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1429,4 +1432,10 @@ __all__ = [
     # AI Cost Records
     # =====================
     "AICostRecord",
+
+    # =====================
+    # Builder Application
+    # =====================
+    "BuilderApplication",
+    "BuilderDocument",
 ]

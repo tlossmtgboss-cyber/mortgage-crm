@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { partnersAPI, leadsAPI } from '../services/api';
+import { partnersAPI, leadsAPI, builderApplicationsAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './ReferralPartnerDetail.css';
@@ -41,6 +41,11 @@ function ReferralPartnerDetail() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
+
+  // Builder application state
+  const [builderApps, setBuilderApps] = useState([]);
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [loadingApp, setLoadingApp] = useState(false);
 
   // ROI Calculator states
   const [monthlyMarketingSpend, setMonthlyMarketingSpend] = useState(() => {
@@ -404,6 +409,23 @@ function ReferralPartnerDetail() {
         >
           Overview
         </button>
+        {partner && partner.category === 'builder' && (
+          <button
+            className={`partner-tab ${activeTab === 'builderapp' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('builderapp');
+              if (builderApps.length === 0 && !loadingApp) {
+                setLoadingApp(true);
+                builderApplicationsAPI.list().then(apps => {
+                  const filtered = apps.filter(a => a.contact_email === partner.email);
+                  setBuilderApps(filtered);
+                }).catch(() => {}).finally(() => setLoadingApp(false));
+              }
+            }}
+          >
+            Builder Application
+          </button>
+        )}
         <button
           className={`partner-tab ${activeTab === 'roi' ? 'active' : ''}`}
           onClick={() => setActiveTab('roi')}
@@ -775,6 +797,151 @@ function ReferralPartnerDetail() {
               })()}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Builder Application Tab */}
+      {activeTab === 'builderapp' && (
+        <div className="referrals-section">
+          <h2>Builder Applications</h2>
+          {loadingApp && <p style={{ color: 'var(--text-muted)', padding: '16px 0' }}>Loading applications...</p>}
+          {!loadingApp && builderApps.length === 0 && (
+            <p style={{ color: 'var(--text-muted)', padding: '16px 0' }}>No builder applications found for this partner.</p>
+          )}
+          {builderApps.map(app => (
+            <div key={app.id} style={{
+              border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 12,
+              background: 'var(--bg-card)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <strong>{app.company_name}</strong>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 12,
+                  background: app.status === 'APPROVED' ? '#d4edda' : app.status === 'REJECTED' ? '#f8d7da' : app.status === 'SUBMITTED' ? '#fff3cd' : '#e2e3e5',
+                  color: app.status === 'APPROVED' ? '#155724' : app.status === 'REJECTED' ? '#721c24' : app.status === 'SUBMITTED' ? '#856404' : '#383d41',
+                }}>{app.status}</span>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                {app.contact_name} &middot; {app.contact_email} &middot; {app.doc_count} docs
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Submitted: {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : 'Draft'}
+              </div>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                <button
+                  className="btn-sm"
+                  style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-card)', cursor: 'pointer' }}
+                  onClick={async () => {
+                    try {
+                      setLoadingApp(true);
+                      const detail = await builderApplicationsAPI.getById(app.id);
+                      setSelectedApp(detail);
+                    } catch { toast.error('Failed to load application'); }
+                    finally { setLoadingApp(false); }
+                  }}
+                >View Details</button>
+                {(app.status === 'SUBMITTED' || app.status === 'UNDER_REVIEW') && (
+                  <>
+                    <button
+                      style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: 'none', background: '#27ae60', color: '#fff', cursor: 'pointer' }}
+                      onClick={async () => {
+                        try {
+                          await builderApplicationsAPI.review(app.id, { action: 'approve' });
+                          toast.success('Application approved');
+                          setBuilderApps(prev => prev.map(a => a.id === app.id ? { ...a, status: 'APPROVED' } : a));
+                        } catch { toast.error('Failed to approve'); }
+                      }}
+                    >Approve</button>
+                    <button
+                      style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: 'none', background: '#e74c3c', color: '#fff', cursor: 'pointer' }}
+                      onClick={async () => {
+                        const notes = prompt('Rejection reason (optional):');
+                        try {
+                          await builderApplicationsAPI.review(app.id, { action: 'reject', notes: notes || undefined });
+                          toast.success('Application rejected');
+                          setBuilderApps(prev => prev.map(a => a.id === app.id ? { ...a, status: 'REJECTED' } : a));
+                        } catch { toast.error('Failed to reject'); }
+                      }}
+                    >Reject</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Application Detail Modal */}
+          {selectedApp && (
+            <div style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+            }} onClick={() => setSelectedApp(null)}>
+              <div style={{
+                background: '#fff', borderRadius: 12, maxWidth: 720, width: '100%',
+                maxHeight: '80vh', overflow: 'auto', padding: 32,
+              }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <h3 style={{ margin: 0 }}>{selectedApp.company_name}</h3>
+                  <button onClick={() => setSelectedApp(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}>&times;</button>
+                </div>
+                <div style={{ fontSize: 13, marginBottom: 16, color: '#666' }}>
+                  {selectedApp.contact_first} {selectedApp.contact_last} &middot; {selectedApp.contact_email}
+                  {selectedApp.contact_phone && <> &middot; {selectedApp.contact_phone}</>}
+                  {selectedApp.ein && <> &middot; EIN: {selectedApp.ein}</>}
+                </div>
+
+                {/* Signature */}
+                {selectedApp.signature_data && selectedApp.signature_data.name && (
+                  <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                    <strong>E-Signature:</strong> {selectedApp.signature_data.name} &mdash; {selectedApp.signature_data.date ? new Date(selectedApp.signature_data.date).toLocaleString() : ''}
+                    {selectedApp.signature_data.contentHash && <div style={{ fontSize: 11, color: '#999', marginTop: 4, fontFamily: 'monospace' }}>Hash: {selectedApp.signature_data.contentHash.substring(0, 16)}...</div>}
+                  </div>
+                )}
+
+                {/* Application Data */}
+                {selectedApp.application_data && Object.keys(selectedApp.application_data).length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <h4 style={{ marginBottom: 8 }}>Application Data</h4>
+                    <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
+                      {Object.entries(selectedApp.application_data).filter(([k]) => !k.startsWith('_')).map(([key, val]) => (
+                        <div key={key} style={{ marginBottom: 4 }}>
+                          <span style={{ fontWeight: 500, color: '#333' }}>{key}:</span>{' '}
+                          <span style={{ color: '#666' }}>{typeof val === 'object' ? JSON.stringify(val) : String(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Documents */}
+                {selectedApp.documents && selectedApp.documents.length > 0 && (
+                  <div>
+                    <h4 style={{ marginBottom: 8 }}>Documents ({selectedApp.documents.length})</h4>
+                    {selectedApp.documents.map(doc => (
+                      <div key={doc.id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '8px 12px', border: '1px solid #eee', borderRadius: 6, marginBottom: 4, fontSize: 13,
+                      }}>
+                        <div>
+                          <strong>{doc.doc_type}</strong>
+                          <span style={{ color: '#999', marginLeft: 8 }}>{doc.file_name}</span>
+                          <span style={{ color: '#bbb', marginLeft: 8 }}>{(doc.file_size / 1024).toFixed(0)} KB</span>
+                        </div>
+                        <button
+                          style={{ fontSize: 12, padding: '3px 10px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}
+                          onClick={async () => {
+                            try {
+                              const result = await builderApplicationsAPI.getDownloadUrl(selectedApp.id, doc.id);
+                              window.open(result.download_url, '_blank');
+                            } catch { toast.error('Failed to get download link'); }
+                          }}
+                        >Download</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

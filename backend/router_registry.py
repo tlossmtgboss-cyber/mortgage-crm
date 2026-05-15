@@ -1289,6 +1289,14 @@ def _register_post_legacy_routes(
 def _register_new_routes(app, get_db, get_current_user, get_current_user_flexible):
     """New route registrations: security, dashboard, CRM, telephony, compliance."""
 
+    # Builder Portal (CMG Builder Application submissions)
+    try:
+        from routes.builder_portal_routes import router as builder_portal_router
+        app.include_router(builder_portal_router, tags=["Builder Portal"])
+        logger.info("Builder portal routes loaded")
+    except Exception as e:
+        logger.warning(f"Builder portal routes skipped: {e}")
+
     # Security Audit
     try:
         from routes.security_audit_routes import router as security_audit_router
@@ -1730,6 +1738,12 @@ def _setup_client_file_tables(engine):
         from database.models.contact_card import ContactCardMember
         ContactCardMember.__table__.create(engine, checkfirst=True)
         logger.info("Contact Card Members table verified/created")
+
+        # Builder Application + Documents tables
+        from database.models.builder_application import BuilderApplication as _BA, BuilderDocument as _BD
+        _BA.__table__.create(engine, checkfirst=True)
+        _BD.__table__.create(engine, checkfirst=True)
+        logger.info("Builder Application tables verified/created")
 
         # Ensure all ClientFile columns exist
         try:

@@ -4165,6 +4165,25 @@ export function isOffline() {
  * @param {any} err
  * @returns {boolean} true if err has the structured API error shape
  */
+export const builderApplicationsAPI = {
+  list: async (params = {}) => {
+    const response = await api.get('/api/v1/builder-applications', { params });
+    return response.data;
+  },
+  getById: async (id) => {
+    const response = await api.get(`/api/v1/builder-applications/${id}`);
+    return response.data;
+  },
+  getDownloadUrl: async (appId, docId) => {
+    const response = await api.get(`/api/v1/builder-applications/${appId}/documents/${docId}/download`);
+    return response.data;
+  },
+  review: async (appId, data) => {
+    const response = await api.patch(`/api/v1/builder-applications/${appId}/review`, data);
+    return response.data;
+  },
+};
+
 export function isApiError(err) {
   return err && err.error === true && typeof err.status === 'number';
 }
