@@ -81,19 +81,19 @@
   background: linear-gradient(135deg, #B8924A 0%, #B8924A 100%);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.25);
 }
 
 .nav-link.admin-link:hover {
   background: linear-gradient(135deg, #8A6D30 0%, #8A6D30 100%);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 4px 12px rgba(31, 61, 46, 0.35);
   transform: translateY(-1px);
   color: #ffffff;
 }
 
 .nav-link.admin-link.active {
   background: linear-gradient(135deg, #6B5424 0%, #6B5424 100%);
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.4);
 }
 
 /* Locked navigation item - module not enabled */
@@ -223,13 +223,13 @@
 .role-preview-selector select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.2);
+  box-shadow: 0 0 0 2px rgba(31, 61, 46, 0.2);
 }
 
 /* Active state - when viewing as different role */
 .role-preview-selector.active select {
   border-color: var(--color-primary);
-  background-color: rgba(33, 141, 141, 0.1);
+  background-color: rgba(31, 61, 46, 0.1);
   color: var(--color-primary);
 }
 
@@ -281,22 +281,22 @@
 
 /* Command Center Link - Primary landing page */
 .command-center-link {
-  background: linear-gradient(135deg, #1F3D2E 0%, #2aa3a3 100%) !important;
+  background: linear-gradient(135deg, #1F3D2E 0%, #2D7A52 100%) !important;
   color: #ffffff !important;
   font-weight: 600 !important;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.3);
   border: none;
 }
 
 .command-center-link:hover {
-  background: linear-gradient(135deg, #2aa3a3 0%, #1F3D2E 100%) !important;
-  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.4) !important;
+  background: linear-gradient(135deg, #2D7A52 0%, #1F3D2E 100%) !important;
+  box-shadow: 0 4px 12px rgba(31, 61, 46, 0.4) !important;
   transform: translateY(-1px);
 }
 
 .command-center-link.active {
   background: linear-gradient(135deg, #2A4F3D 0%, #1F3D2E 100%) !important;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.4);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.4);
 }
 
 /* Coach Link Special Styling */
@@ -351,12 +351,12 @@
 .action-items-btn:hover {
   background: linear-gradient(135deg, #8A6D30, #B8924A);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 12px rgba(31, 61, 46, 0.4);
 }
 
 .action-items-btn.active {
   background: linear-gradient(135deg, #8A6D30, #8A6D30);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 2px rgba(31, 61, 46, 0.5);
 }
 
 .action-items-badge {
@@ -501,7 +501,7 @@
 }
 
 .dropdown-item.active {
-  background: rgba(33, 141, 141, 0.1);
+  background: rgba(31, 61, 46, 0.1);
   color: var(--color-primary);
 }
 
@@ -616,7 +616,7 @@
 }
 
 .nav-dropdown-item.active {
-  background: var(--color-primary-light, rgba(33, 141, 141, 0.1));
+  background: var(--color-primary-light, rgba(31, 61, 46, 0.1));
   color: var(--color-primary);
 }
 
@@ -794,7 +794,7 @@
 }
 
 .mobile-menu-item.active {
-  background: rgba(33, 127, 141, 0.08);
+  background: rgba(31, 61, 46, 0.08);
   color: var(--color-primary);
   font-weight: 600;
   border-right: 3px solid var(--color-primary);

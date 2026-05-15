@@ -41,7 +41,7 @@ function LoanDetail() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(true);
   const [formData, setFormData] = useState({});
-  const [activeTab, setActiveTab] = useState('loan-details');
+  const [activeTab, setActiveTab] = useState('personal');
   const [borrowers, setBorrowers] = useState([]);
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [saveTimeout, setSaveTimeout] = useState(null);

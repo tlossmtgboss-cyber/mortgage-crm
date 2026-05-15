@@ -132,19 +132,19 @@
   padding: 10px 16px;
   margin-bottom: 16px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
 }
 
 .toolbar-header {
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #ECE6D8;
 }
 
 .toolbar-header h3 {
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -165,7 +165,7 @@
 .loan-field label {
   font-size: 10px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -173,11 +173,11 @@
 .loan-field .value {
   font-size: 12px;
   font-weight: 500;
-  color: #1a202c;
+  color: #1A1F1B;
   padding: 4px 8px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   min-height: 28px;
   display: flex;
   align-items: center;
@@ -186,7 +186,7 @@
 .loan-field input,
 .loan-field select {
   padding: 4px 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-radius: 4px;
   font-size: 12px;
   font-family: inherit;
@@ -198,7 +198,7 @@
 .loan-field select:focus {
   outline: none;
   border-color: #1F3D2E;
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.1);
 }
 
 /* Borrower Selector */
@@ -207,9 +207,9 @@
   gap: 10px;
   margin-bottom: 12px;
   padding: 12px 16px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   align-items: center;
   justify-content: space-between;
 }
@@ -225,8 +225,8 @@
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: #f8f9fa;
-  border: 2px solid #e0e0e0;
+  background: #FAF7F1;
+  border: 2px solid #ECE6D8;
   border-radius: 6px;
   font-size: 15px;
   font-weight: 600;
@@ -289,7 +289,7 @@ button.borrower-btn.add-borrower-btn {
 .borrower-selector .add-borrower-btn:hover,
 .borrower-selector .borrower-btn.add-borrower-btn:hover,
 button.borrower-btn.add-borrower-btn:hover {
-  background: #e9f5f5 !important;
+  background: #EFF3EE !important;
   border-color: #2A4F3D !important;
   color: #2A4F3D !important;
   transform: translateY(-2px) !important;
@@ -332,7 +332,7 @@ button.borrower-btn.add-borrower-btn:hover {
   padding: 3px 6px;
   min-height: 24px;
   font-weight: 600;
-  color: #1a202c;
+  color: #1A1F1B;
 }
 
 @media (max-width: 1200px) {
@@ -364,7 +364,7 @@ button.borrower-btn.add-borrower-btn:hover {
   display: flex;
   gap: 4px;
   margin-bottom: 8px;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid #ECE6D8;
   padding-bottom: 0;
 }
 
@@ -384,7 +384,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .tab-btn:hover {
   color: #1F3D2E;
-  background: #f8f9fa;
+  background: #FAF7F1;
 }
 
 .tab-btn.active {
@@ -411,14 +411,14 @@ button.borrower-btn.add-borrower-btn:hover {
   display: flex;
   justify-content: center;
   padding: 24px;
-  background: #f8f9fa;
+  background: #FAF7F1;
   border: 2px dashed #1F3D2E;
   border-radius: 8px;
   transition: all 0.2s ease;
 }
 
 .documents-upload-area:hover {
-  background: #e9f5f5;
+  background: #EFF3EE;
   border-color: #2A4F3D;
 }
 
@@ -437,7 +437,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .btn-upload-document:hover {
   background: #2A4F3D;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 4px 8px rgba(31, 61, 46, 0.3);
 }
 
 .documents-grid {
@@ -448,7 +448,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .document-category {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-radius: 8px;
   padding: 20px;
   transition: all 0.2s ease;
@@ -457,7 +457,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .document-category:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  border-color: #cbd5e0;
+  border-color: #D8D0BD;
   transform: translateY(-2px);
 }
 
@@ -467,13 +467,13 @@ button.borrower-btn.add-borrower-btn:hover {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #ECE6D8;
 }
 
 .document-category .category-header h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #1a202c;
+  color: #1A1F1B;
   margin: 0;
 }
 
@@ -481,7 +481,7 @@ button.borrower-btn.add-borrower-btn:hover {
   font-size: 12px;
   font-weight: 600;
   color: #666;
-  background: #f0f0f0;
+  background: #ECE6D8;
   padding: 4px 10px;
   border-radius: 12px;
 }
@@ -495,9 +495,9 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .document-item {
   padding: 12px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-left: 3px solid #1F3D2E;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -529,7 +529,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .doc-name {
   font-weight: 500;
-  color: #1e293b;
+  color: #1A1F1B;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -538,7 +538,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .doc-meta {
   font-size: 11px;
-  color: #64748b;
+  color: #8B8A7E;
   margin-top: 2px;
 }
 
@@ -546,7 +546,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .error-state {
   padding: 40px;
   text-align: center;
-  color: #64748b;
+  color: #8B8A7E;
   font-size: 14px;
 }
 
@@ -556,13 +556,13 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .circle-description {
   font-size: 14px;
-  color: #64748b;
+  color: #8B8A7E;
   line-height: 1.6;
   margin: 0;
   padding: 20px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-left: 4px solid #1F3D2E;
 }
 
@@ -574,7 +574,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .circle-card {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-radius: 8px;
   padding: 20px;
   transition: all 0.2s ease;
@@ -583,7 +583,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .circle-card:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  border-color: #cbd5e0;
+  border-color: #D8D0BD;
   transform: translateY(-2px);
 }
 
@@ -593,13 +593,13 @@ button.borrower-btn.add-borrower-btn:hover {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #ECE6D8;
 }
 
 .circle-header h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #1a202c;
+  color: #1A1F1B;
   margin: 0;
 }
 
@@ -618,7 +618,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .btn-add-circle:hover {
   background: #2A4F3D;
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 2px 6px rgba(31, 61, 46, 0.3);
 }
 
 .circle-list {
@@ -631,7 +631,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .circle-contact-item {
-  background: #f8fafc;
+  background: #FAF7F1;
   padding: 12px;
   border-radius: 6px;
   border-left: 3px solid #1F3D2E;
@@ -671,17 +671,17 @@ button.borrower-btn.add-borrower-btn:hover {
   border-radius: 8px;
   padding: 16px 20px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   width: 100%;
 }
 
 .info-section h2 {
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   margin: 0 0 12px 0;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #ECE6D8;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -709,18 +709,18 @@ button.borrower-btn.add-borrower-btn:hover {
 .info-field label {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .info-field .value {
   font-size: 14px;
-  color: #1a202c;
+  color: #1A1F1B;
   padding: 10px 12px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   min-height: 40px;
   display: flex;
   align-items: center;
@@ -728,7 +728,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .info-field input {
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
@@ -738,7 +738,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .info-field input:focus {
   outline: none;
   border-color: #1F3D2E;
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.1);
 }
 
 .phone-link {
@@ -762,10 +762,10 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .activity-item {
   padding: 16px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 8px;
   border-left: 4px solid #1F3D2E;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-left: 4px solid #1F3D2E;
 }
 
@@ -805,9 +805,9 @@ button.borrower-btn.add-borrower-btn:hover {
   gap: 12px;
   margin-bottom: 24px;
   padding: 20px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 8px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #ECE6D8;
 }
 
 .add-note-form textarea {
@@ -824,7 +824,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .add-note-form textarea:focus {
   outline: none;
   border-color: #1F3D2E;
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.1);
 }
 
 .add-note-form button {
@@ -843,7 +843,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .add-note-form button:hover:not(:disabled) {
   background: #2A4F3D;
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 2px 6px rgba(31, 61, 46, 0.3);
 }
 
 .add-note-form button:disabled {
@@ -908,17 +908,17 @@ button.borrower-btn.add-borrower-btn:hover {
   border-radius: 8px;
   padding: 24px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
 }
 
 .actions-card h3,
 .email-history-card h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   margin: 0 0 20px 0;
   padding-bottom: 12px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #ECE6D8;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -927,13 +927,13 @@ button.borrower-btn.add-borrower-btn:hover {
 .email-history-section {
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #ECE6D8;
 }
 
 .email-history-section h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   margin: 0 0 1rem 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -960,7 +960,7 @@ button.borrower-btn.add-borrower-btn:hover {
   width: 100%;
   box-sizing: border-box;
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ECE6D8;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1007,7 +1007,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-  background: #f9fafb;
+  background: #FAF7F1;
 }
 
 /* All Action Buttons - Unified Teal Color Scheme */
@@ -1026,7 +1026,7 @@ button.borrower-btn.add-borrower-btn:hover {
   background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   border-color: #1F3D2E;
   color: white;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.3);
 }
 
 .action-btn.call:hover:not(:disabled),
@@ -1041,9 +1041,9 @@ button.borrower-btn.add-borrower-btn:hover {
 .action-btn.application:hover:not(:disabled),
 .action-btn.record-video:hover:not(:disabled),
 .action-btn.portal:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #2A4F3D 100%);
   border-color: #2A4F3D;
-  box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
+  box-shadow: 0 8px 24px rgba(31, 61, 46, 0.4);
 }
 
 .action-btn .icon {
@@ -1056,13 +1056,13 @@ button.borrower-btn.add-borrower-btn:hover {
   background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   border-color: #1F3D2E;
   color: white;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.3);
 }
 
 .action-btn.salesforce:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #2A4F3D 100%);
   border-color: #2A4F3D;
-  box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
+  box-shadow: 0 8px 24px rgba(31, 61, 46, 0.4);
 }
 
 .action-btn.salesforce.loading {
@@ -1081,13 +1081,13 @@ button.borrower-btn.add-borrower-btn:hover {
   background: linear-gradient(135deg, #1F3D2E 0%, #2A4F3D 100%);
   border-color: #1F3D2E;
   color: white;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.3);
 }
 
 .action-btn.salesforce-pull:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #2A4F3D 100%);
   border-color: #2A4F3D;
-  box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
+  box-shadow: 0 8px 24px rgba(31, 61, 46, 0.4);
 }
 
 .action-btn.salesforce-pull.loading {
@@ -1112,12 +1112,12 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .email-item {
   padding: 16px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  border: 1px solid #e2e8f0;
-  border-left: 4px solid #3b82f6;
+  border: 1px solid #ECE6D8;
+  border-left: 4px solid #B8924A;
 }
 
 .email-item:hover {
@@ -1264,7 +1264,7 @@ button.borrower-btn.add-borrower-btn:hover {
   background: white;
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ECE6D8;
   text-align: center;
 }
 
@@ -1367,7 +1367,7 @@ button.borrower-btn.add-borrower-btn:hover {
   display: block;
   font-size: 10px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   margin-bottom: 2px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -1380,10 +1380,10 @@ button.borrower-btn.add-borrower-btn:hover {
   padding: 4px 8px;
   font-size: 12px;
   line-height: 1.3;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-radius: 3px;
   background: white;
-  color: #1a202c;
+  color: #1A1F1B;
   transition: all 0.2s;
   height: 28px;
 }
@@ -1393,7 +1393,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .tab-content .form-group textarea:focus {
   outline: none;
   border-color: #1F3D2E;
-  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 0 0 2px rgba(31, 61, 46, 0.1);
 }
 
 .tab-content .form-group textarea {
@@ -1430,15 +1430,15 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .team-role-section {
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
+  background: #FAF7F1;
+  border: 2px solid #ECE6D8;
   border-radius: 12px;
   padding: 20px;
   transition: all 0.2s ease;
 }
 
 .team-role-section:hover {
-  border-color: #cbd5e1;
+  border-color: #D8D0BD;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -1448,21 +1448,21 @@ button.borrower-btn.add-borrower-btn:hover {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #ECE6D8;
 }
 
 .team-role-header h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #1a202c;
+  color: #1A1F1B;
   margin: 0;
 }
 
 .member-count {
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
-  background: #e2e8f0;
+  color: #8B8A7E;
+  background: #ECE6D8;
   padding: 4px 12px;
   border-radius: 12px;
 }
@@ -1486,14 +1486,14 @@ button.borrower-btn.add-borrower-btn:hover {
 .member-name {
   font-size: 15px;
   font-weight: 600;
-  color: #1a202c;
+  color: #1A1F1B;
 }
 
 .member-contact {
   display: flex;
   gap: 16px;
   font-size: 13px;
-  color: #64748b;
+  color: #8B8A7E;
 }
 
 .member-email,
@@ -1541,10 +1541,10 @@ button.borrower-btn.add-borrower-btn:hover {
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 500;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #ECE6D8;
   border-radius: 8px;
   background: white;
-  color: #1a202c;
+  color: #1A1F1B;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -1556,21 +1556,21 @@ button.borrower-btn.add-borrower-btn:hover {
 .member-select:focus {
   outline: none;
   border-color: #1F3D2E;
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.1);
 }
 
 .team-description {
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: #eff6ff;
-  border-left: 4px solid #3b82f6;
+  background: #EFF3EE;
+  border-left: 4px solid #B8924A;
   border-radius: 6px;
 }
 
 .team-description p {
   margin: 0;
   font-size: 14px;
-  color: #1e40af;
+  color: #8A6D30;
 }
 
 /* Conditions Tab Styles */
@@ -1584,7 +1584,7 @@ button.borrower-btn.add-borrower-btn:hover {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #ECE6D8;
 }
 
 .btn-add-condition {
@@ -1600,9 +1600,9 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .btn-add-condition:hover {
-  background: linear-gradient(135deg, #2A4F3D 0%, #155858 100%);
+  background: linear-gradient(135deg, #2A4F3D 0%, #2A4F3D 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
+  box-shadow: 0 4px 12px rgba(31, 61, 46, 0.3);
 }
 
 .conditions-summary {
@@ -1623,8 +1623,8 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .condition-count.received {
-  background: #dbeafe;
-  color: #1e40af;
+  background: #E5EDE6;
+  color: #8A6D30;
 }
 
 .condition-count.approved {
@@ -1635,9 +1635,9 @@ button.borrower-btn.add-borrower-btn:hover {
 .empty-conditions {
   text-align: center;
   padding: 60px 40px;
-  background: #f8fafc;
+  background: #FAF7F1;
   border-radius: 12px;
-  border: 2px dashed #e2e8f0;
+  border: 2px dashed #ECE6D8;
 }
 
 .empty-conditions .empty-icon {
@@ -1647,13 +1647,13 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .empty-conditions h3 {
   font-size: 18px;
-  color: #334155;
+  color: #2C312D;
   margin: 0 0 12px 0;
 }
 
 .empty-conditions p {
   font-size: 14px;
-  color: #64748b;
+  color: #8B8A7E;
   margin: 0 0 8px 0;
 }
 
@@ -1669,7 +1669,7 @@ button.borrower-btn.add-borrower-btn:hover {
   gap: 16px;
   padding: 16px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   border-radius: 8px;
   border-left: 4px solid #94a3b8;
   transition: all 0.2s;
@@ -1684,7 +1684,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .condition-item.status-requested {
-  border-left-color: #3b82f6;
+  border-left-color: #B8924A;
 }
 
 .condition-item.status-received {
@@ -1720,7 +1720,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .condition-name {
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1A1F1B;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1738,7 +1738,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .condition-description {
   font-size: 13px;
-  color: #64748b;
+  color: #8B8A7E;
   margin-top: 4px;
 }
 
@@ -1751,15 +1751,15 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .condition-category {
-  background: #f1f5f9;
-  color: #475569;
+  background: #F6F2EA;
+  color: #4F554E;
   padding: 2px 8px;
   border-radius: 4px;
   text-transform: capitalize;
 }
 
 .condition-due {
-  color: #64748b;
+  color: #8B8A7E;
 }
 
 .condition-priority {
@@ -1792,7 +1792,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .status-select {
   padding: 6px 12px;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #ECE6D8;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -1805,8 +1805,8 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .status-select.status-requested {
-  border-color: #3b82f6;
-  color: #1e40af;
+  border-color: #B8924A;
+  color: #8A6D30;
 }
 
 .status-select.status-received {
@@ -1855,7 +1855,7 @@ button.borrower-btn.add-borrower-btn:hover {
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #ECE6D8;
 }
 
 .modal-header h3 {
@@ -1888,8 +1888,8 @@ button.borrower-btn.add-borrower-btn:hover {
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-top: 1px solid #ECE6D8;
+  background: #FAF7F1;
 }
 
 /* Condition Modal */
@@ -1913,7 +1913,7 @@ button.borrower-btn.add-borrower-btn:hover {
   gap: 8px;
   cursor: pointer;
   font-size: 14px;
-  color: #475569;
+  color: #4F554E;
 }
 
 .toggle-label input[type="checkbox"] {
@@ -1926,7 +1926,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 /* SLA Metrics Dashboard */
 .sla-metrics-section {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: linear-gradient(135deg, #FAF7F1 0%, #F6F2EA 100%);
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 24px;
@@ -1974,8 +1974,8 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .sla-card.sla-in-progress {
-  border-left-color: #3b82f6;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-left-color: #B8924A;
+  background: linear-gradient(135deg, #EFF3EE 0%, #E5EDE6 100%);
 }
 
 .sla-card.sla-at-risk .sla-value {
@@ -1983,7 +1983,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .sla-card.sla-in-progress .sla-value {
-  color: #2563eb;
+  color: #1F3D2E;
 }
 
 .sla-card-header {
@@ -2000,7 +2000,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .sla-title {
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: #8B8A7E;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2008,7 +2008,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .sla-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1A1F1B;
   margin-bottom: 8px;
 }
 
@@ -2022,7 +2022,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .sla-target {
   font-size: 12px;
-  color: #64748b;
+  color: #8B8A7E;
 }
 
 /* SLA Dates Tab - Ultra Compact Full-Page Layout (No Scroll) */
@@ -2107,11 +2107,11 @@ button.borrower-btn.add-borrower-btn:hover {
 .date-field input[type="datetime-local"]:focus {
   outline: none;
   border-color: #1F3D2E;
-  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 0 0 2px rgba(31, 61, 46, 0.1);
 }
 
 .date-field input[type="date"]:disabled {
-  background: #f5f5f5;
+  background: #F6F2EA;
   cursor: not-allowed;
 }
 
@@ -2164,7 +2164,7 @@ button.borrower-btn.add-borrower-btn:hover {
   font-size: 11px;
   color: #888;
   padding: 8px;
-  background: #f9f9f9;
+  background: #FAF7F1;
   border-radius: 4px;
   text-align: center;
 }
@@ -2233,7 +2233,7 @@ button.borrower-btn.add-borrower-btn:hover {
    ============================================ */
 
 .email-history-tab {
-  background: #f8f9fa;
+  background: #FAF7F1;
   border-radius: 12px;
   padding: 0;
   min-height: 600px;
@@ -2250,14 +2250,14 @@ button.borrower-btn.add-borrower-btn:hover {
 /* Email List Panel (Left) */
 .email-list-panel {
   background: white;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid #ECE6D8;
   display: flex;
   flex-direction: column;
 }
 
 .email-list-header {
   padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #ECE6D8;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2273,7 +2273,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .email-count {
   font-size: 13px;
   color: #6b7280;
-  background: #f3f4f6;
+  background: #F6F2EA;
   padding: 4px 10px;
   border-radius: 12px;
 }
@@ -2287,7 +2287,7 @@ button.borrower-btn.add-borrower-btn:hover {
 /* Individual Email Card */
 .email-card {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ECE6D8;
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 10px;
@@ -2297,13 +2297,13 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .email-card:hover {
   border-color: #1F3D2E;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.1);
 }
 
 .email-card.selected {
   border-color: #1F3D2E;
-  background: #f0fdfa;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.15);
+  background: #EFF3EE;
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.15);
 }
 
 .email-card-header {
@@ -2396,7 +2396,7 @@ button.borrower-btn.add-borrower-btn:hover {
   gap: 6px;
   font-size: 13px;
   color: #1F3D2E;
-  background: #f0fdfa;
+  background: #EFF3EE;
   padding: 6px 12px;
   border-radius: 6px;
   margin-bottom: 12px;
@@ -2410,7 +2410,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .email-detail-meta {
-  background: #f9fafb;
+  background: #FAF7F1;
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 24px;
@@ -2420,7 +2420,7 @@ button.borrower-btn.add-borrower-btn:hover {
   display: flex;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #ECE6D8;
 }
 
 .meta-row:last-child {
@@ -2461,7 +2461,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .email-body-content {
-  background: #f9fafb;
+  background: #FAF7F1;
   border-radius: 8px;
   padding: 20px;
   font-size: 14px;
@@ -2479,7 +2479,7 @@ button.borrower-btn.add-borrower-btn:hover {
   display: flex;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #ECE6D8;
 }
 
 .btn-reply,
@@ -2508,12 +2508,12 @@ button.borrower-btn.add-borrower-btn:hover {
 .btn-forward {
   background: white;
   color: #374151;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ECE6D8;
 }
 
 .btn-forward:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: #FAF7F1;
+  border-color: #D8D0BD;
 }
 
 /* Empty State */
@@ -2556,7 +2556,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
   .email-list-panel {
     border-right: none;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid #ECE6D8;
     max-height: 300px;
   }
 }
@@ -2578,7 +2578,7 @@ button.borrower-btn.add-borrower-btn:hover {
   height: 32px;
   border-radius: 50%;
   border: none;
-  background: #f3f4f6;
+  background: #F6F2EA;
   color: #374151;
   font-size: 20px;
   cursor: pointer;
@@ -2590,7 +2590,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .modal-close-btn:hover {
-  background: #e5e7eb;
+  background: #ECE6D8;
   color: #1f2937;
 }
 
@@ -2604,7 +2604,7 @@ button.borrower-btn.add-borrower-btn:hover {
   gap: 8px;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid #ECE6D8;
 }
 
 .archive-sub-tab {
@@ -2657,8 +2657,8 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .archive-item {
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
+  background: #FAF7F1;
+  border: 1px solid #ECE6D8;
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s ease;
@@ -2666,7 +2666,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .archive-item:hover {
   border-color: #1F3D2E;
-  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.1);
 }
 
 .archive-item-header {
@@ -2716,7 +2716,7 @@ button.borrower-btn.add-borrower-btn:hover {
   max-height: 500px;
   overflow-y: auto;
   padding: 16px;
-  background: #f5f5f5;
+  background: #F6F2EA;
   border-radius: 8px;
 }
 
@@ -2750,7 +2750,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .sms-item.inbound .sms-bubble {
   background: white;
   color: #333;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #ECE6D8;
   border-bottom-left-radius: 4px;
 }
 
@@ -2778,7 +2778,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 /* Call Archive Styles */
 .call-item .call-duration {
-  background: #f0f0f0;
+  background: #ECE6D8;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -2796,7 +2796,7 @@ button.borrower-btn.add-borrower-btn:hover {
   font-size: 12px;
   color: #666;
   padding: 2px 8px;
-  background: #e0e0e0;
+  background: #ECE6D8;
   border-radius: 4px;
 }
 
@@ -2813,7 +2813,7 @@ button.borrower-btn.add-borrower-btn:hover {
   padding: 12px;
   background: white;
   border-radius: 6px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #ECE6D8;
 }
 
 .call-recording audio {
@@ -2889,9 +2889,9 @@ button.borrower-btn.add-borrower-btn:hover {
   text-align: center;
   padding: 32px;
   color: #666;
-  background: #f9fafb;
+  background: #FAF7F1;
   border-radius: 8px;
-  border: 1px dashed #e0e0e0;
+  border: 1px dashed #ECE6D8;
 }
 
 .empty-timeline p {
@@ -2925,14 +2925,14 @@ button.borrower-btn.add-borrower-btn:hover {
   height: 12px;
   border-radius: 50%;
   background: #1F3D2E;
-  border: 3px solid #e0f2f2;
+  border: 3px solid #E5EDE6;
   z-index: 1;
 }
 
 .marker-line {
   width: 2px;
   flex-grow: 1;
-  background: #e0e0e0;
+  background: #ECE6D8;
   min-height: 40px;
 }
 
@@ -2958,7 +2958,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .from-stage {
   color: #666;
-  background: #f0f0f0;
+  background: #ECE6D8;
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 13px;
@@ -2972,7 +2972,7 @@ button.borrower-btn.add-borrower-btn:hover {
 
 .to-stage {
   color: #1F3D2E;
-  background: #e0f2f2;
+  background: #E5EDE6;
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 13px;
@@ -2995,7 +2995,7 @@ button.borrower-btn.add-borrower-btn:hover {
   margin-top: 8px;
   font-size: 13px;
   color: #555;
-  background: #f9f9f9;
+  background: #FAF7F1;
   padding: 8px 12px;
   border-radius: 4px;
   border-left: 3px solid #1F3D2E;
@@ -3026,11 +3026,11 @@ button.borrower-btn.add-borrower-btn:hover {
 .application-link-input {
   flex: 1;
   padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #D8D0BD;
   border-radius: 6px;
   font-size: 13px;
   color: #374151;
-  background: #f9fafb;
+  background: #FAF7F1;
 }
 
 .copy-link-btn {
@@ -3051,7 +3051,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .application-actions {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #ECE6D8;
   padding-top: 20px;
 }
 
@@ -3069,7 +3069,7 @@ button.borrower-btn.add-borrower-btn:hover {
 .share-btn {
   flex: 1;
   padding: 12px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #D8D0BD;
   border-radius: 6px;
   background: white;
   font-size: 14px;
@@ -3083,7 +3083,7 @@ button.borrower-btn.add-borrower-btn:hover {
 }
 
 .share-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: #F6F2EA;
   border-color: #1F3D2E;
 }
 

@@ -31,7 +31,7 @@ function MumClientDetail() {
   const [editing, setEditing] = useState(true); // Always in edit mode
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
-  const [activeTab, setActiveTab] = useState('loan-details');
+  const [activeTab, setActiveTab] = useState('personal');
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
   const [isFundedLoan, setIsFundedLoan] = useState(false);

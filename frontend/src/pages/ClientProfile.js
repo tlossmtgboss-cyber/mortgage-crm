@@ -84,6 +84,23 @@ function ClientProfile() {
     'Funded',
   ];
 
+  // Compute a display name from whichever fields are available on the data object.
+  // Handles both Lead (first_name/last_name/name) and Loan (borrower_name) shapes.
+  // Skips placeholder values like "Unknown".
+  const getDisplayName = (data, fallback = 'Client') => {
+    if (!data) return fallback;
+    const skip = (v) => !v || v === 'Unknown' || v.trim() === '';
+    // Try borrower_name first (Loan records)
+    if (!skip(data.borrower_name)) return data.borrower_name;
+    // Try first + last (Lead records or enriched payloads)
+    if (!skip(data.first_name) && !skip(data.last_name)) return `${data.first_name} ${data.last_name}`.trim();
+    if (!skip(data.first_name)) return data.first_name;
+    if (!skip(data.last_name)) return data.last_name;
+    // Try generic name field
+    if (!skip(data.name)) return data.name;
+    return fallback;
+  };
+
   const getStatusColor = (status) => {
     const colors = {
       'New': '#2196F3', 'Attempted Contact': '#FF9800', 'Prospect': '#9C27B0',
@@ -218,9 +235,7 @@ function ClientProfile() {
       setActivities(activitiesData || []);
 
       // Initialize borrowers array
-      const primaryName = loanData.first_name && loanData.last_name
-        ? `${loanData.first_name} ${loanData.last_name}`
-        : loanData.name || 'Primary Borrower';
+      const primaryName = getDisplayName(loanData, 'Primary Borrower');
 
       const borrowersList = [
         {
@@ -363,9 +378,7 @@ function ClientProfile() {
 
       // Update the borrowers array
       if (activeBorrower === 1 && updatedLead.co_applicant_name) {
-        const primaryName = updatedLead.first_name && updatedLead.last_name
-          ? `${updatedLead.first_name} ${updatedLead.last_name}`
-          : updatedLead.name || 'Primary Borrower';
+        const primaryName = getDisplayName(updatedLead, 'Primary Borrower');
 
         const coborrowerParts = (updatedLead.co_applicant_name || '').split(' ');
         const updatedBorrowers = [
@@ -540,9 +553,7 @@ function ClientProfile() {
         setClient(loanData);
 
         // Rebuild borrowers array with the new co-borrower
-        const primaryName = loanData.first_name && loanData.last_name
-          ? `${loanData.first_name} ${loanData.last_name}`
-          : loanData.name || 'Primary Borrower';
+        const primaryName = getDisplayName(loanData, 'Primary Borrower');
 
         const updatedBorrowers = [
           {
@@ -688,7 +699,7 @@ function ClientProfile() {
         return;
       }
 
-      const borrowerName = client.borrower_name || client.name || '';
+      const borrowerName = getDisplayName(client, '');
       const createData = { lead_id: client.id || parseInt(id), borrower_name: borrowerName, first_name: client.first_name, last_name: client.last_name, email: client.borrower_email || client.email, phone: client.borrower_phone || client.phone };
       const response = await purlAPI.createWorkspace(createData);
       const newWorkspace = response.workspace || response;
@@ -818,7 +829,7 @@ function ClientProfile() {
         gap: '16px',
       }}>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#1a1a2e' }}>
-          {formData.borrower_name || client?.borrower_name || client?.name || 'Client'}
+          {getDisplayName(formData) || getDisplayName(client)}
         </h2>
 
         {/* Status Dropdown */}
@@ -1294,7 +1305,7 @@ function ClientProfile() {
               borrowerId={client?.id}
               loanId={client?.loan_id || client?.id}
               borrowerEmail={client?.borrower_email || client?.email || ''}
-              borrowerName={client?.borrower_name || client?.name || `${client?.first_name || ''} ${client?.last_name || ''}`.trim()}
+              borrowerName={getDisplayName(client)}
               borrowerPhone={client?.borrower_phone || client?.phone || ''}
             />
           </div>
@@ -1768,7 +1779,7 @@ function ClientProfile() {
               loanId={parseInt(id)}
               borrowerId={activeBorrower + 1}
               borrowerEmail={client?.borrower_email || client?.email || ''}
-              borrowerName={client?.borrower_name || client?.name || `${client?.first_name || ''} ${client?.last_name || ''}`.trim()}
+              borrowerName={getDisplayName(client)}
               borrowerPhone={client?.borrower_phone || client?.phone || ''}
               onRequestUpdated={() => {
                 // Optionally refresh any related data when documents change
@@ -2514,12 +2525,6 @@ function ClientProfile() {
           <div className="actions-card">
             <h3>QUICK ACTIONS</h3>
             <div className="action-buttons">
-              <button className="action-btn sms" onClick={() => handleAction('sms')} disabled={!(client.borrower_phone || client.phone)} title="Send SMS">
-                <span>SMS Text</span>
-              </button>
-              <button className="action-btn email" onClick={() => handleAction('email')} disabled={!(client.borrower_email || client.email)} title="Send email">
-                <span>Send Email</span>
-              </button>
               <button className="action-btn task" onClick={() => handleAction('task')} title="Create task">
                 <span>Create Task</span>
               </button>
@@ -2575,7 +2580,7 @@ function ClientProfile() {
           onClose={() => setShowSendVideoModal(false)}
           recipientType="client"
           recipientId={clientPortalData.workspace_id}
-          recipientName={client?.borrower_name || client?.name || 'Client'}
+          recipientName={getDisplayName(client)}
           onSuccess={() => {
             console.log('Video sent successfully');
           }}
@@ -2595,7 +2600,7 @@ function ClientProfile() {
       {client && showVoicemailDrop && (
         <VoicemailDrop
           phoneNumber={client.borrower_phone || client.phone}
-          recipientName={client.borrower_name || client.name}
+          recipientName={getDisplayName(client)}
           onClose={() => setShowVoicemailDrop(false)}
         />
       )}
@@ -2633,7 +2638,7 @@ function ClientProfile() {
         isOpen={showEmailComposer}
         onClose={() => setShowEmailComposer(false)}
         recipient={{
-          name: client?.borrower_name || client?.name,
+          name: getDisplayName(client),
           email: client?.borrower_email || client?.email
         }}
         entityType="client"
@@ -2686,7 +2691,7 @@ function ClientProfile() {
       {client && (client.borrower_phone || client.phone) && (
         <SMSAccordionPanel
           contactId={client.id}
-          contactName={client.borrower_name || client.name || `${client.first_name || ''} ${client.last_name || ''}`.trim()}
+          contactName={getDisplayName(client)}
           phone={client.borrower_phone || client.phone}
           pageType="client"
           assignedUser={client.owner_id || client.loan_officer_id}

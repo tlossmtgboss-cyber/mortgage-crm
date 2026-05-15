@@ -147,7 +147,7 @@
 }
 
 .status-cancelled, .status-dead {
-  background: #f3f4f6;
+  background: #F6F2EA;
   color: #6b7280;
 }
 
@@ -183,7 +183,7 @@
 /* Borrower Tabs Styles */
 .borrower-tabs {
   margin-bottom: 24px;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid #ECE6D8;
 }
 
 .tabs-row {
@@ -199,8 +199,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: #f8f9fa;
-  border: 2px solid #e0e0e0;
+  background: #FAF7F1;
+  border: 2px solid #ECE6D8;
   border-bottom: none;
   border-radius: 8px 8px 0 0;
   font-weight: 600;
@@ -268,7 +268,7 @@
   color: #1a1a1a;
   margin: 24px 0 16px;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid #ECE6D8;
 }
 
 @media (max-width: 768px) {
@@ -292,7 +292,7 @@
   width: 100%;
   padding: 12px 40px 12px 16px;
   font-size: 15px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid #ECE6D8;
   border-radius: 8px;
   transition: all 0.2s;
   font-family: inherit;
@@ -300,8 +300,8 @@
 
 .search-bar:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #1F3D2E;
+  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.1);
 }
 
 .search-bar::placeholder {
@@ -316,7 +316,7 @@
   width: 28px;
   height: 28px;
   border: none;
-  background: #e5e7eb;
+  background: #ECE6D8;
   color: #6b7280;
   border-radius: 50%;
   font-size: 20px;
@@ -429,7 +429,7 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ECE6D8;
   z-index: 1000;
   min-width: 180px;
   overflow: hidden;
@@ -440,8 +440,8 @@
   font-weight: 600;
   font-size: 13px;
   color: #6b7280;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: #FAF7F1;
+  border-bottom: 1px solid #ECE6D8;
 }
 
 .status-dropdown-options {
@@ -468,7 +468,7 @@
 }
 
 .status-dropdown-option:hover {
-  background: #f3f4f6;
+  background: #F6F2EA;
 }
 
 /* Status option colors */
@@ -584,12 +584,12 @@
 }
 
 .status-badge.status-cancelled {
-  background: #f3f4f6;
+  background: #F6F2EA;
   color: #6b7280;
 }
 
 .status-badge.status-dead {
-  background: #f3f4f6;
+  background: #F6F2EA;
   color: #9ca3af;
 }
 
@@ -713,11 +713,11 @@
 }
 
 .loans-table tr.selected {
-  background-color: #e8f4fd !important;
+  background-color: #E5EDE6 !important;
 }
 
 .loans-table tr.selected:hover {
-  background-color: #d0e8f9 !important;
+  background-color: #DCE5DD !important;
 }
 
 .btn-danger {
