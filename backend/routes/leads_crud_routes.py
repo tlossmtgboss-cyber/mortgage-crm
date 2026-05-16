@@ -10,7 +10,7 @@ Endpoints:
 - GET    /api/v1/leads/search  - Search leads by name
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_, cast, String, text
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -132,45 +132,20 @@ async def create_lead(
         db.commit()
         db.refresh(db_lead)
 
-        # Capture ALL return values before post-commit hooks run.
-        # Post-commit hooks share this db session and can leave it in
-        # InFailedSqlTransaction state (e.g. connection exhaustion),
-        # which would cause lazy attribute access on db_lead to crash.
+        # Capture lead info for logging and response
         lead_id = db_lead.id
-        lead_source = db_lead.source
-        response = {
-            "id": lead_id,
-            "name": getattr(db_lead, 'name', None),
-            "email": db_lead.email,
-            "phone": db_lead.phone,
-            "stage": str(db_lead.stage) if db_lead.stage else None,
-            "source": lead_source,
-            "ai_score": getattr(db_lead, 'ai_score', None),
-            "organization_id": db_lead.organization_id,
-            "owner_id": db_lead.owner_id,
-            "created_at": db_lead.created_at.isoformat() if db_lead.created_at else None,
-        }
+        lead_name = db_lead.name
+        lead_score = db_lead.ai_score
 
-        logger.info(f"Lead created: {response['name']} (ID: {lead_id}, Score: {response['ai_score']})")
+        logger.info(f"Lead created: {lead_name} (ID: {lead_id}, Score: {lead_score})")
 
-        # Invalidate dashboard cache so numbers update immediately
-        try:
-            from performance_cache import invalidate_dashboard
-            invalidate_dashboard(current_user.id)
-        except Exception as e:
-            logger.debug(f"Dashboard cache invalidation failed: {e}")
-
-        # Post-commit operations - these must not affect the response
+        # Post-commit operations - these should not affect the response
         # SLA tracking
         try:
             track_lead_created(db, lead_id)
             logger.info(f"SLA milestone LEAD_RESPONSE started for lead {lead_id}")
         except Exception as e:
             logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
 
         # Speed-to-lead hook — triggers AI call / SMS in background
         try:
@@ -179,19 +154,16 @@ async def create_lead(
                 db=db,
                 lead_id=lead_id,
                 organization_id=getattr(current_user, 'organization_id', None),
-                source=lead_source or "api",
+                source=lead_data.source if hasattr(lead_data, 'source') else "api",
                 owner_id=current_user.id,
             )
         except Exception as e:
             logger.warning(f"Speed-to-lead hook failed for lead {lead_id}: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
 
         # Automated outreach triggers - don't pass db to async tasks
         try:
             from routes.automated_outreach_routes import execute_trigger, TriggerType
+            # Note: async task needs its own db session, not the request-scoped one
             logger.info(f"New lead trigger queued for lead {lead_id}")
         except Exception as e:
             logger.warning(f"Failed to queue new lead trigger: {e}")
@@ -201,19 +173,26 @@ async def create_lead(
             await update_capacity_on_assignment(db, current_user.id)
         except Exception as e:
             logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
 
         # Track metrics
         if business_metrics:
             try:
-                business_metrics.lead_created(source=lead_source, lo_id=current_user.id)
+                business_metrics.lead_created(source=db_lead.source, lo_id=current_user.id)
             except Exception as e:
                 logger.debug(f"Failed to track lead metric: {e}")
 
-        return response
+        return {
+            "id": db_lead.id,
+            "name": getattr(db_lead, 'name', None),
+            "email": db_lead.email,
+            "phone": db_lead.phone,
+            "stage": str(db_lead.stage) if db_lead.stage else None,
+            "source": db_lead.source,
+            "ai_score": getattr(db_lead, 'ai_score', None),
+            "organization_id": db_lead.organization_id,
+            "owner_id": db_lead.owner_id,
+            "created_at": db_lead.created_at.isoformat() if db_lead.created_at else None,
+        }
 
     except Exception as e:
         logger.error(f"Error creating lead: {e}", exc_info=True)
@@ -265,34 +244,26 @@ async def get_leads(
 
     try:
         # Apply org + role-based permission filtering (multi-tenant isolation)
-        query = db.query(Lead).options(
-            joinedload(Lead.referral_partner),
-            selectinload(Lead.owner),
-        )
+        query = db.query(Lead).options(joinedload(Lead.referral_partner))
         query = filter_leads_by_permissions(query, current_user, db)
-        # Exclude soft-deleted records
-        query = query.filter(Lead.deleted_at.is_(None))
 
         if stage:
-            # Case-insensitive stage match (DB may store 'NEW', 'New', etc.)
-            query = query.filter(func.lower(cast(Lead.stage, String)) == stage.lower())
+            # Cast to text to avoid PostgreSQL enum type mismatch
+            query = query.filter(cast(Lead.stage, String) == stage)
         elif pipeline != 'all':
             # Default: exclude Active Loan and MUM stages from the leads list
-            # Case-insensitive to handle mixed casing from different sources
-            excluded = [s.lower() for s in MUM_STAGES + ACTIVE_LOAN_ENTRY_STAGES]
-            query = query.filter(or_(func.lower(cast(Lead.stage, String)).notin_(excluded), Lead.stage == None))
+            # Cast to text to avoid PostgreSQL enum type mismatch (DB may have leadstage enum)
+            excluded = MUM_STAGES + ACTIVE_LOAN_ENTRY_STAGES
+            query = query.filter(or_(cast(Lead.stage, String).notin_(excluded), Lead.stage == None))
 
-        total = query.count()
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 
-        # Resolve org-wide Production Assistant 1 name via ORM (EncryptedString fields)
+        # Resolve org-wide Production Assistant 1 name (single query for all leads)
         pa_name = None
         try:
-            org_id = current_user.organization_id
-            if not org_id:
-                raise HTTPException(status_code=403, detail="Organization context required")
+            org_id = current_user.organization_id or 1
             pa_row = db.execute(text("""
-                SELECT u.id
+                SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
                 FROM default_role_assignments dra
                 JOIN roles r ON r.id = dra.role_id
                 JOIN users u ON u.id = dra.user_id
@@ -300,24 +271,17 @@ async def get_leads(
                 LIMIT 1
             """), {"org_id": org_id}).fetchone()
             if pa_row:
-                from database.models.core import User as UserModel
-                pa_user = db.get(UserModel, pa_row[0])
-                if pa_user:
-                    first = getattr(pa_user, "first_name", "") or ""
-                    last = getattr(pa_user, "last_name", "") or ""
-                    name = f"{first} {last}".strip()
-                    pa_name = name if name else None
+                pa_name = pa_row[0] if pa_row[0] and pa_row[0].strip() else None
         except Exception as e:
             logger.debug(f"Production assistant lookup: {e}")
 
         # Convert to dict manually to avoid Pydantic validation issues
         result = []
         for lead in leads:
-            # Handle stage value - normalize to title case for consistent frontend display
+            # Handle stage value - it might be an enum or a string depending on DB content
             stage_value = None
             if lead.stage:
-                raw = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
-                stage_value = raw.title() if raw == raw.upper() or raw == raw.lower() else raw
+                stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
 
             def _num(val):
                 """Convert Numeric/Decimal to float for JSON serialization."""
@@ -369,7 +333,7 @@ async def get_leads(
                 "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
             }
             result.append(lead_dict)
-        return {"items": result, "total": total}
+        return result
     except Exception as e:
         import traceback
         logger.error(f"get_leads error: {e}")
@@ -400,8 +364,6 @@ async def search_leads(
     # Build query with permission-based scoping for multi-tenant isolation
     query = db.query(Lead)
     query = filter_leads_by_permissions(query, current_user, db)
-    # Exclude soft-deleted records
-    query = query.filter(Lead.deleted_at.is_(None))
 
     # Search by name (case-insensitive)
     query = query.filter(
@@ -411,19 +373,7 @@ async def search_leads(
     # Order by relevance (exact matches first, then alphabetically)
     leads = query.order_by(Lead.name).limit(limit).all()
 
-    return [
-        {
-            "id": lead.id,
-            "name": lead.name,
-            "email": lead.email,
-            "phone": lead.phone,
-            "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
-            "source": lead.source,
-            "ai_score": lead.ai_score,
-            "created_at": lead.created_at.isoformat() if lead.created_at else None,
-        }
-        for lead in leads
-    ]
+    return leads
 
 
 @router.get("/{lead_id}/client-file-id")
@@ -432,8 +382,12 @@ def get_client_file_id_for_lead(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    """Return (or auto-create) the client_file for a lead."""
-    from routes.client_file_routes import _get_or_create_client_file
-
-    cf_id = _get_or_create_client_file(db, lead_id, current_user.organization_id)
-    return {"client_file_id": cf_id}
+    """Return the client_file ID associated with a lead."""
+    from sqlalchemy import select as sa_select
+    from database.models.client_file import ClientFile
+    cf = db.execute(
+        sa_select(ClientFile.id).where(ClientFile.lead_id == lead_id)
+    ).scalar_one_or_none()
+    if cf is None:
+        raise HTTPException(404, "no client file for this lead")
+    return {"client_file_id": str(cf)}

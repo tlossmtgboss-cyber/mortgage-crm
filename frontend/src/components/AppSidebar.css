@@ -26,6 +26,11 @@
   top: 0;
   background: var(--bt-bg-sidebar, #F6F2EA);
   z-index: 2;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.s-head:hover {
+  opacity: 0.8;
 }
 
 .s-logo {
@@ -123,6 +128,11 @@
   position: sticky;
   bottom: 0;
   background: var(--bt-bg-sidebar, #F6F2EA);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.s-user:hover {
+  opacity: 0.8;
 }
 
 .s-av {

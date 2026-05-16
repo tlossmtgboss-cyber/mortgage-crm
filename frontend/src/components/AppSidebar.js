@@ -103,10 +103,10 @@ function AppSidebar({ taskCounts = {} }) {
 
   return (
     <aside className="app-sidebar">
-      <div className="s-head">
+      <Link to="/" className="s-head" style={{ textDecoration: 'none', color: 'inherit' }}>
         <span className="s-logo">Aria</span>
         <span className="s-version">{roleBadge}</span>
-      </div>
+      </Link>
 
       <nav className="s-nav">
         {sections.map((section) => (
@@ -141,13 +141,13 @@ function AppSidebar({ taskCounts = {} }) {
 
       <div className="s-spacer" />
 
-      <div className="s-user">
+      <Link to="/settings" className="s-user" style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className="s-av">{initials}</div>
         <div>
           <div style={{ fontWeight: 600, color: 'var(--bt-text-primary, #1A1F1B)' }}>{displayName}</div>
           <div style={{ fontSize: 11, color: 'var(--bt-text-muted, #8B8A7E)' }}>{roleLabel}</div>
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }
