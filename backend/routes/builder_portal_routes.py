@@ -20,6 +20,8 @@ import logging
 import os
 import uuid
 import secrets
+import time
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -32,6 +34,22 @@ from db import get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Builder Portal"])
+
+_register_rate_limits: Dict[str, List[float]] = defaultdict(list)
+REGISTER_RATE_LIMIT = 5
+REGISTER_RATE_WINDOW = 300
+
+
+def _check_register_rate_limit(request: Request):
+    ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    _register_rate_limits[ip] = [
+        t for t in _register_rate_limits[ip] if now - t < REGISTER_RATE_WINDOW
+    ]
+    if len(_register_rate_limits[ip]) >= REGISTER_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many registration attempts. Try again later.")
+    _register_rate_limits[ip].append(now)
+
 
 # S3 config (shared with portal_document_routes)
 S3_BUCKET = os.getenv('PERENNIA_DOCS_S3_BUCKET', 'perennia-documents')
@@ -81,6 +99,10 @@ def _require_builder_token(request: Request, db: Session) -> "BuilderApplication
     ).first()
     if not app:
         raise HTTPException(status_code=401, detail="Invalid submission token")
+
+    if app.created_at and (datetime.now(timezone.utc) - app.created_at) > timedelta(days=30):
+        raise HTTPException(status_code=401, detail="Submission token expired")
+
     return app
 
 
@@ -197,6 +219,8 @@ async def register_builder(body: RegisterRequest, request: Request, db: Session 
     Register a builder and create a draft application.
     Returns a submission token for subsequent API calls.
     """
+    _check_register_rate_limit(request)
+
     from database.models.core import User
     from database.models.builder_application import BuilderApplication
     from database.models.referral import ReferralPartner
@@ -314,22 +338,22 @@ async def initiate_builder_upload(
     db.refresh(doc)
 
     s3 = _get_s3()
-    if s3:
-        try:
-            upload_url = s3.generate_presigned_url(
-                'put_object',
-                Params={
-                    'Bucket': S3_BUCKET,
-                    'Key': storage_key,
-                    'ContentType': body.mime_type,
-                },
-                ExpiresIn=3600,
-            )
-        except Exception as e:
-            logger.error(f"Presigned URL generation failed: {e}")
-            upload_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{storage_key}?presigned=mock"
-    else:
-        upload_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{storage_key}?presigned=mock"
+    if not s3:
+        raise HTTPException(status_code=503, detail="Storage service unavailable")
+
+    try:
+        upload_url = s3.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': S3_BUCKET,
+                'Key': storage_key,
+                'ContentType': body.mime_type,
+            },
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        logger.error(f"Presigned URL generation failed: {e}")
+        raise HTTPException(status_code=503, detail="Failed to generate upload URL")
 
     return InitiateUploadResponse(
         document_id=doc.id,
@@ -362,6 +386,36 @@ async def confirm_builder_upload(
     return {"status": "confirmed", "document_id": doc.id}
 
 
+@router.delete("/api/v1/builder-portal/documents/{doc_id}")
+async def delete_builder_document(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Delete a builder document (removes S3 object and DB record)."""
+    app = _require_builder_token(request, db)
+
+    from database.models.builder_application import BuilderDocument
+    doc = db.query(BuilderDocument).filter(
+        BuilderDocument.id == doc_id,
+        BuilderDocument.application_id == app.id,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    s3 = _get_s3()
+    if s3 and doc.storage_key:
+        try:
+            s3.delete_object(Bucket=S3_BUCKET, Key=doc.storage_key)
+        except Exception as e:
+            logger.error(f"S3 delete failed for {doc.storage_key}: {e}")
+
+    db.delete(doc)
+    db.commit()
+
+    return {"status": "deleted", "document_id": doc_id}
+
+
 @router.post("/api/v1/builder-portal/submit")
 async def submit_builder_application(
     body: SubmitRequest,
@@ -374,7 +428,14 @@ async def submit_builder_application(
     """
     app = _require_builder_token(request, db)
 
-    if app.status not in ("DRAFT", "SUBMITTED"):
+    if app.status == "SUBMITTED":
+        return {
+            "status": "submitted",
+            "application_id": app.id,
+            "submitted_at": app.submitted_at.isoformat() if app.submitted_at else None,
+        }
+
+    if app.status != "DRAFT":
         raise HTTPException(status_code=400, detail=f"Cannot submit — status is {app.status}")
 
     app.application_data = body.application_data
@@ -383,6 +444,21 @@ async def submit_builder_application(
     app.submitted_at = datetime.now(timezone.utc)
     app.updated_at = datetime.now(timezone.utc)
     db.commit()
+
+    try:
+        from database.models.core import Notification
+        notif = Notification(
+            user_id=app.lo_user_id,
+            organization_id=app.organization_id,
+            type="builder_submission",
+            title="Builder Application Submitted",
+            message=f"{app.contact_first} {app.contact_last} ({app.company_name}) submitted their builder application",
+            link=f"/referral-partners/{app.partner_id}",
+        )
+        db.add(notif)
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to create builder submission notification: {e}")
 
     logger.info(f"Builder application {app.id} submitted by {app.contact_email}")
 

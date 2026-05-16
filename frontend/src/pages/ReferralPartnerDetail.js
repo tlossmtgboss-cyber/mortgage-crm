@@ -46,6 +46,8 @@ function ReferralPartnerDetail() {
   const [builderApps, setBuilderApps] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);
   const [loadingApp, setLoadingApp] = useState(false);
+  const [rejectAppId, setRejectAppId] = useState(null);
+  const [rejectNotes, setRejectNotes] = useState('');
 
   // ROI Calculator states
   const [monthlyMarketingSpend, setMonthlyMarketingSpend] = useState(() => {
@@ -418,7 +420,7 @@ function ReferralPartnerDetail() {
                 setLoadingApp(true);
                 builderApplicationsAPI.list({ partner_id: partner.id }).then(apps => {
                   setBuilderApps(apps || []);
-                }).catch(() => {}).finally(() => setLoadingApp(false));
+                }).catch(() => toast.error('Failed to load builder applications')).finally(() => setLoadingApp(false));
               }
             }}
           >
@@ -853,20 +855,50 @@ function ReferralPartnerDetail() {
                     >Approve</button>
                     <button
                       style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: 'none', background: '#e74c3c', color: '#fff', cursor: 'pointer' }}
-                      onClick={async () => {
-                        const notes = prompt('Rejection reason (optional):');
-                        try {
-                          await builderApplicationsAPI.review(app.id, { action: 'reject', notes: notes || undefined });
-                          toast.success('Application rejected');
-                          setBuilderApps(prev => prev.map(a => a.id === app.id ? { ...a, status: 'REJECTED' } : a));
-                        } catch { toast.error('Failed to reject'); }
-                      }}
+                      onClick={() => setRejectAppId(app.id)}
                     >Reject</button>
                   </>
                 )}
               </div>
             </div>
           ))}
+
+          {rejectAppId && (
+            <div style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1001,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+            }} onClick={() => { setRejectAppId(null); setRejectNotes(''); }}>
+              <div style={{
+                background: '#fff', borderRadius: 12, maxWidth: 420, width: '100%', padding: 24,
+              }} onClick={e => e.stopPropagation()}>
+                <h4 style={{ margin: '0 0 12px' }}>Reject Application</h4>
+                <textarea
+                  placeholder="Rejection reason (optional)"
+                  value={rejectNotes}
+                  onChange={e => setRejectNotes(e.target.value)}
+                  style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 6, border: '1px solid #ddd', fontSize: 13, resize: 'vertical' }}
+                />
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+                  <button
+                    style={{ fontSize: 13, padding: '8px 16px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}
+                    onClick={() => { setRejectAppId(null); setRejectNotes(''); }}
+                  >Cancel</button>
+                  <button
+                    style={{ fontSize: 13, padding: '8px 16px', borderRadius: 6, border: 'none', background: '#e74c3c', color: '#fff', cursor: 'pointer' }}
+                    onClick={async () => {
+                      try {
+                        await builderApplicationsAPI.review(rejectAppId, { action: 'reject', notes: rejectNotes || undefined });
+                        toast.success('Application rejected');
+                        setBuilderApps(prev => prev.map(a => a.id === rejectAppId ? { ...a, status: 'REJECTED' } : a));
+                      } catch { toast.error('Failed to reject'); }
+                      setRejectAppId(null);
+                      setRejectNotes('');
+                    }}
+                  >Reject Application</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Application Detail Modal */}
           {selectedApp && (
@@ -900,13 +932,45 @@ function ReferralPartnerDetail() {
                 {selectedApp.application_data && Object.keys(selectedApp.application_data).length > 0 && (
                   <div style={{ marginBottom: 16 }}>
                     <h4 style={{ marginBottom: 8 }}>Application Data</h4>
-                    <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
-                      {Object.entries(selectedApp.application_data).filter(([k]) => !k.startsWith('_')).map(([key, val]) => (
-                        <div key={key} style={{ marginBottom: 4 }}>
-                          <span style={{ fontWeight: 500, color: '#333' }}>{key}:</span>{' '}
-                          <span style={{ color: '#666' }}>{typeof val === 'object' ? JSON.stringify(val) : String(val)}</span>
-                        </div>
-                      ))}
+                    <div style={{ background: '#f8f9fa', padding: 12, borderRadius: 8, fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
+                      {Object.entries(selectedApp.application_data).filter(([k]) => !k.startsWith('_')).map(([key, val]) => {
+                        if (val && typeof val === 'object' && !Array.isArray(val)) {
+                          return (
+                            <div key={key} style={{ marginBottom: 8 }}>
+                              <div style={{ fontWeight: 600, color: '#333', marginBottom: 4, textTransform: 'capitalize' }}>{key.replace(/([A-Z])/g, ' $1').trim()}</div>
+                              {Object.entries(val).map(([k2, v2]) => (
+                                <div key={k2} style={{ marginLeft: 12, marginBottom: 2 }}>
+                                  <span style={{ fontWeight: 500, color: '#555' }}>{k2}:</span>{' '}
+                                  <span style={{ color: '#666' }}>{typeof v2 === 'object' ? JSON.stringify(v2) : String(v2 ?? '')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
+                        if (Array.isArray(val)) {
+                          return (
+                            <div key={key} style={{ marginBottom: 8 }}>
+                              <div style={{ fontWeight: 600, color: '#333', marginBottom: 4, textTransform: 'capitalize' }}>{key.replace(/([A-Z])/g, ' $1').trim()} ({val.length})</div>
+                              {val.map((item, idx) => (
+                                <div key={idx} style={{ marginLeft: 12, marginBottom: 4, paddingBottom: 4, borderBottom: idx < val.length - 1 ? '1px solid #e9ecef' : 'none' }}>
+                                  {typeof item === 'object' && item ? Object.entries(item).map(([k3, v3]) => (
+                                    <div key={k3} style={{ marginBottom: 1 }}>
+                                      <span style={{ fontWeight: 500, color: '#555' }}>{k3}:</span>{' '}
+                                      <span style={{ color: '#666' }}>{String(v3 ?? '')}</span>
+                                    </div>
+                                  )) : <span style={{ color: '#666' }}>{String(item ?? '')}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={key} style={{ marginBottom: 4 }}>
+                            <span style={{ fontWeight: 500, color: '#333' }}>{key}:</span>{' '}
+                            <span style={{ color: '#666' }}>{String(val ?? '')}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

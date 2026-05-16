@@ -1,54 +1,50 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { portfolioAPI, mumAPI } from '../services/api';
-import CalendarSidebar from '../components/CalendarSidebar';
-import RateMonitorWidget from '../components/RateMonitorWidget';
-import { getUserEffectiveRole } from '../config/roleConfig';
-import './Portfolio.css';
+import api from '../services/api';
 import { toast } from '../utils/toast';
-import { getUserData } from '../utils/tokenStore';
+import './Portfolio.css';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
+
+const formatCurrencyK = (amount) => {
+  if (!amount) return '$0';
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(0)}K`;
+  return formatCurrency(amount);
+};
+
+const formatPercent = (value, decimals = 1) =>
+  `${(Number(value || 0) * 100).toFixed(decimals)}%`;
+
+const daysSince = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+};
+
+const getClientUPB = (c) => c.current_balance_estimate || c.loan_balance || c.original_loan_amount || 0;
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 function Portfolio() {
   const navigate = useNavigate();
-
-  // Determine user's effective role to show/hide MUM Dashboard tab
-  const userRole = useMemo(() => {
-    try {
-      const user = getUserData();
-      if (user) {
-        return getUserEffectiveRole(user.permission_role, user.role);
-      }
-    } catch (e) {
-      console.error('Error parsing user from localStorage:', e);
-    }
-    return 'loan_officer';
-  }, []);
-
-  // Only loan officers and admins see the MUM Dashboard tab
-  const showDashboardTab = userRole === 'loan_officer' || userRole === 'admin';
-
-  // Default to 'mum' (clients list) if user doesn't have dashboard access
-  const [activeTab, setActiveTab] = useState(showDashboardTab ? 'mum-dashboard' : 'mum');
-  const [portfolioData, setPortfolioData] = useState({
-    totalLoans: 0,
-    totalVolume: 0,
-    commissionGenerated: 0,
-    portfolioValue: 0,
-    annualReturn: 0,
-    loans: []
-  });
+  const [activeTab, setActiveTab] = useState('overview');
   const [mumClients, setMumClients] = useState([]);
-  const [mumMetrics, setMumMetrics] = useState(null);
-  const [clientSegments, setClientSegments] = useState({});
+  const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [filterView, setFilterView] = useState('all');
+
+  // Client List state
+  const [clientFilter, setClientFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusDropdown, setStatusDropdown] = useState({ show: false, clientId: null, position: { top: 0, left: 0 } });
-  const [sortColumn, setSortColumn] = useState('closing_date');
+  const [sortColumn, setSortColumn] = useState('last_contact_date');
   const [sortDirection, setSortDirection] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const CLIENTS_PER_PAGE = 20;
+  const CLIENTS_PER_PAGE = 25;
 
   useEffect(() => {
     loadData();
@@ -57,1084 +53,831 @@ function Portfolio() {
   const loadData = async () => {
     try {
       setLoading(true);
-      // Use Promise.allSettled to handle partial failures gracefully
       const results = await Promise.allSettled([
-        portfolioAPI.getStats(),
-        portfolioAPI.getAll(),
         mumAPI.getAll(),
-        mumAPI.getMetrics()
+        api.get('/api/v1/mum/metrics'),
+        portfolioAPI.getStats(),
       ]);
 
-      const stats = results[0].status === 'fulfilled' ? results[0].value : {};
-      const loans = results[1].status === 'fulfilled' ? results[1].value : [];
-      const mum = results[2].status === 'fulfilled' ? results[2].value : [];
-      const metrics = results[3].status === 'fulfilled' ? results[3].value : null;
+      const clients = results[0].status === 'fulfilled' ? results[0].value : [];
+      const metricsRes = results[1].status === 'fulfilled' ? results[1].value?.data : null;
+      // portfolioStats available but metrics endpoint is primary
 
-      // Log any failures for debugging
-      results.forEach((result, idx) => {
-        if (result.status === 'rejected') {
-          console.warn(`Portfolio data load ${idx} failed:`, result.reason);
-        }
-      });
-
-      const totalVolume = stats.total_volume || 0;
-      const totalLoans = stats.total_loans || 0;
-
-      // Calculate commission (1% of total volume)
-      const commission = totalVolume * 0.01;
-
-      // Calculate portfolio value (remaining balance, estimated at 90% of total volume)
-      const portfolioValue = totalVolume * 0.9;
-
-      // Calculate annual return % (commission / portfolio value * 100)
-      const annualReturn = portfolioValue > 0 ? (commission / portfolioValue * 100) : 0;
-
-      setPortfolioData({
-        totalLoans: totalLoans,
-        totalVolume: totalVolume,
-        commissionGenerated: commission,
-        portfolioValue: portfolioValue,
-        annualReturn: annualReturn,
-        loans: Array.isArray(loans) ? loans.map(loan => ({
-          id: loan.id,
-          borrower: loan.client_name || loan.borrower_name || 'Unknown',
-          loanAmount: loan.loan_amount || 0,
-          loanType: loan.loan_type || 'N/A',
-          status: loan.status || 'Unknown',
-          closeDate: loan.close_date || loan.created_at,
-          rate: loan.interest_rate || 0
-        })) : []
-      });
-
-      const mumClientsList = Array.isArray(mum) ? mum : [];
-      setMumClients(mumClientsList);
-      setMumMetrics(metrics || null);
-
-      // Calculate client segments from MUM data
-      calculateClientSegments(mumClientsList);
+      setMumClients(Array.isArray(clients) ? clients : []);
+      setMetrics(metricsRes);
     } catch (error) {
-      console.error('Failed to load portfolio data:', error);
-      // Set empty data on error
-      setPortfolioData({
-        totalLoans: 0,
-        totalVolume: 0,
-        commissionGenerated: 0,
-        portfolioValue: 0,
-        annualReturn: 0,
-        loans: []
-      });
-      setMumClients([]);
+      console.error('Portfolio load error:', error);
+      toast.error('Failed to load portfolio data');
     } finally {
       setLoading(false);
     }
   };
 
-  // Calculate client segments from MUM client data
-  const calculateClientSegments = (clients) => {
-    if (!clients || clients.length === 0) {
-      setClientSegments({
-        primary_residence: '0%',
-        second_home: '0%',
-        investment_property: '0%',
-        new_construction: '0%',
-        first_time_buyer: '0%',
-        conventional_mi: '0%',
-        fha: '0%',
-        va: '0%',
-        usda: '0%',
-        aio: '0%'
-      });
-      return;
-    }
+  // ─── Computed Data ─────────────────────────────────────────────────────────
 
+  const computed = useMemo(() => {
+    const clients = mumClients;
     const total = clients.length;
-    const counts = {
-      primary_residence: 0,
-      second_home: 0,
-      investment_property: 0,
-      new_construction: 0,
-      first_time_buyer: 0,
-      conventional_mi: 0,
-      fha: 0,
-      va: 0,
-      usda: 0,
-      aio: 0
+    if (total === 0) return {
+      totalUPB: 0, activeCount: 0, atRiskClients: [], atRiskCount: 0, atRiskPct: 0,
+      refiEligible: [], helocEligible: [], rateReboundEligible: [],
+      segments: {}, loanTypeSegments: {},
+      totalRevenue: 0, revenuePerClient: 0,
+      avgRate: 0, avgEquity: 0,
     };
 
-    clients.forEach(client => {
-      // Occupancy type segmentation
-      const occupancy = (client.occupancy_type || client.occupancy || '').toLowerCase();
-      if (occupancy.includes('primary') || occupancy === 'owner occupied' || occupancy === 'owner_occupied') {
-        counts.primary_residence++;
-      } else if (occupancy.includes('second') || occupancy === 'second_home') {
-        counts.second_home++;
-      } else if (occupancy.includes('invest') || occupancy === 'investment' || occupancy === 'non_owner_occupied') {
-        counts.investment_property++;
-      }
+    const totalUPB = clients.reduce((sum, c) => sum + getClientUPB(c), 0);
 
-      // New construction check
-      const propertyType = (client.property_type || '').toLowerCase();
-      const isNewConstruction = client.is_new_construction || client.new_construction ||
-        propertyType.includes('new construction') || propertyType.includes('new_construction') ||
-        (client.loan_purpose || '').toLowerCase().includes('construction');
-      if (isNewConstruction) {
-        counts.new_construction++;
-      }
-
-      // First time home buyer check
-      const isFirstTimeBuyer = client.is_first_time_buyer || client.first_time_buyer ||
-        client.first_time_homebuyer || client.is_first_time_homebuyer ||
-        (client.buyer_type || '').toLowerCase().includes('first');
-      if (isFirstTimeBuyer) {
-        counts.first_time_buyer++;
-      }
-
-      // Loan type segmentation — check loan_type first, then program as fallback
-      const loanType = (client.loan_type || client.program || '').toLowerCase();
-      const hasMI = client.has_mi || client.has_pmi || client.mi_amount > 0 || client.pmi_amount > 0;
-
-      if (loanType.includes('fha')) {
-        counts.fha++;
-      } else if (loanType.includes('va')) {
-        counts.va++;
-      } else if (loanType.includes('usda')) {
-        counts.usda++;
-      } else if (loanType.includes('aio') || loanType.includes('all-in-one') || loanType.includes('heloc')) {
-        counts.aio++;
-      } else if ((loanType.includes('conv') || loanType.includes('conventional')) && hasMI) {
-        counts.conventional_mi++;
-      }
+    // At-risk: status is at_risk OR last contact > 60 days ago
+    const atRiskClients = clients.filter(c => {
+      if (c.status === 'at_risk') return true;
+      const days = daysSince(c.last_contact_date);
+      return days !== null && days > 60;
     });
 
-    // Calculate percentages
-    const toPercent = (count) => `${Math.round((count / total) * 100)}%`;
-
-    setClientSegments({
-      primary_residence: toPercent(counts.primary_residence),
-      second_home: toPercent(counts.second_home),
-      investment_property: toPercent(counts.investment_property),
-      new_construction: toPercent(counts.new_construction),
-      first_time_buyer: toPercent(counts.first_time_buyer),
-      conventional_mi: toPercent(counts.conventional_mi),
-      fha: toPercent(counts.fha),
-      va: toPercent(counts.va),
-      usda: toPercent(counts.usda),
-      aio: toPercent(counts.aio)
-    });
-  };
-
-  const handleAddClient = async (clientData) => {
-    try {
-      console.log('Creating MUM client with data:', clientData);
-      await mumAPI.create(clientData);
-      loadData();
-      setShowAddModal(false);
-    } catch (error) {
-      console.error('Failed to create client:', error);
-      console.error('Error response:', error.response?.data);
-      const errorMsg = error.response?.data?.detail
-        ? (typeof error.response.data.detail === 'string'
-           ? error.response.data.detail
-           : JSON.stringify(error.response.data.detail))
-        : error.message || 'Unknown error';
-      toast.error('Failed to create MUM client: ' + errorMsg);
-    }
-  };
-
-  const handleDeleteClient = async (id) => {
-    try {
-      await mumAPI.delete(id);
-      loadData();
-    } catch (error) {
-      console.error('Failed to delete client:', error);
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
-
-  // Filter by view (all vs opportunities)
-  let filteredMumClients = filterView === 'all'
-    ? mumClients
-    : filterView === 'opportunities'
-    ? mumClients.filter(c => c.refinance_opportunity)
-    : mumClients;
-
-  // Filter by search query
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filteredMumClients = filteredMumClients.filter(client =>
-      (client.client_name || client.name)?.toLowerCase().includes(query) ||
-      client.email?.toLowerCase().includes(query) ||
-      client.phone?.toLowerCase().includes(query) ||
-      (client.current_loan_amount || client.loan_balance)?.toString().includes(query) ||
-      (client.servicing_loan_number || client.loan_number)?.toLowerCase().includes(query)
+    // Refi eligible: refinance_opportunity or rate >= 6.5
+    const refiEligible = clients.filter(c =>
+      c.refinance_opportunity === true || (c.interest_rate && c.interest_rate >= 6.5)
     );
-  }
 
-  // Sort by selected column
-  const handleSort = (column) => {
-    if (sortColumn === column) {
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('desc');
+    // HELOC eligible: heloc_opportunity or equity >= 20%
+    const helocEligible = clients.filter(c =>
+      c.heloc_opportunity === true || (c.equity_percentage && c.equity_percentage >= 20)
+    );
+
+    // Rate rebound
+    const rateReboundEligible = clients.filter(c => c.rate_rebound_opportunity === true);
+
+    // Segments by occupancy
+    const segments = { primary: 0, second_home: 0, investment: 0, new_construction: 0 };
+    clients.forEach(c => {
+      const occ = (c.occupancy_type || '').toLowerCase();
+      if (occ.includes('primary') || occ.includes('owner')) segments.primary++;
+      else if (occ.includes('second')) segments.second_home++;
+      else if (occ.includes('invest') || occ.includes('non_owner')) segments.investment++;
+      if (c.is_new_construction || (c.property_type || '').toLowerCase().includes('construction')) segments.new_construction++;
+    });
+
+    // Segments by loan type
+    const loanTypeSegments = { conventional: 0, fha: 0, va: 0, usda: 0, other: 0, first_time: 0 };
+    clients.forEach(c => {
+      const lt = (c.loan_type || c.program || '').toLowerCase();
+      if (lt.includes('fha')) loanTypeSegments.fha++;
+      else if (lt.includes('va')) loanTypeSegments.va++;
+      else if (lt.includes('usda')) loanTypeSegments.usda++;
+      else if (lt.includes('conv')) loanTypeSegments.conventional++;
+      else loanTypeSegments.other++;
+      if (c.first_time_buyer || c.is_first_time_buyer) loanTypeSegments.first_time++;
+    });
+
+    // Revenue estimate (servicing yield ~25bps)
+    const totalRevenue = totalUPB * 0.0025;
+    const revenuePerClient = total > 0 ? totalRevenue / total : 0;
+
+    // Average rate
+    const ratesArr = clients.filter(c => c.interest_rate).map(c => c.interest_rate);
+    const avgRate = ratesArr.length > 0 ? ratesArr.reduce((a, b) => a + b, 0) / ratesArr.length : 0;
+
+    // Average equity
+    const equityArr = clients.filter(c => c.equity_percentage).map(c => c.equity_percentage);
+    const avgEquity = equityArr.length > 0 ? equityArr.reduce((a, b) => a + b, 0) / equityArr.length : 0;
+
+    return {
+      totalUPB, activeCount: total,
+      atRiskClients, atRiskCount: atRiskClients.length,
+      atRiskPct: total > 0 ? (atRiskClients.length / total * 100).toFixed(1) : 0,
+      refiEligible, helocEligible, rateReboundEligible,
+      segments, loanTypeSegments,
+      totalRevenue, revenuePerClient,
+      avgRate, avgEquity,
+    };
+  }, [mumClients]);
+
+  // ─── Client List Filtering/Sorting ─────────────────────────────────────────
+
+  const filteredClients = useMemo(() => {
+    let list = [...mumClients];
+
+    // Filter by category
+    if (clientFilter === 'primary') list = list.filter(c => (c.occupancy_type || '').toLowerCase().includes('primary') || (c.occupancy_type || '').toLowerCase().includes('owner'));
+    else if (clientFilter === 'investment') list = list.filter(c => (c.occupancy_type || '').toLowerCase().includes('invest'));
+    else if (clientFilter === 'va') list = list.filter(c => (c.loan_type || c.program || '').toLowerCase().includes('va'));
+    else if (clientFilter === 'at_risk') list = list.filter(c => c.status === 'at_risk' || (daysSince(c.last_contact_date) || 0) > 60);
+
+    // Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(c =>
+        (c.client_name || c.name || '').toLowerCase().includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
+        (c.phone || '').toLowerCase().includes(q) ||
+        (c.loan_number || '').toLowerCase().includes(q)
+      );
     }
+
+    // Sort
+    list.sort((a, b) => {
+      let aVal, bVal;
+      switch (sortColumn) {
+        case 'client_name': aVal = (a.client_name || a.name || '').toLowerCase(); bVal = (b.client_name || b.name || '').toLowerCase(); break;
+        case 'loan_type': aVal = (a.loan_type || '').toLowerCase(); bVal = (b.loan_type || '').toLowerCase(); break;
+        case 'upb': aVal = getClientUPB(a); bVal = getClientUPB(b); break;
+        case 'rate': aVal = a.interest_rate || 0; bVal = b.interest_rate || 0; break;
+        case 'origination': aVal = a.original_close_date || a.close_date || ''; bVal = b.original_close_date || b.close_date || ''; break;
+        case 'equity': aVal = a.equity_percentage || 0; bVal = b.equity_percentage || 0; break;
+        case 'last_contact_date': aVal = a.last_contact_date || ''; bVal = b.last_contact_date || ''; break;
+        default: aVal = a.last_contact_date || ''; bVal = b.last_contact_date || '';
+      }
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return list;
+  }, [mumClients, clientFilter, searchQuery, sortColumn, sortDirection]);
+
+  const totalPages = Math.ceil(filteredClients.length / CLIENTS_PER_PAGE);
+  const paginatedClients = filteredClients.slice((currentPage - 1) * CLIENTS_PER_PAGE, currentPage * CLIENTS_PER_PAGE);
+
+  const handleSort = (col) => {
+    if (sortColumn === col) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortColumn(col); setSortDirection('desc'); }
     setCurrentPage(1);
   };
 
-  filteredMumClients = [...filteredMumClients].sort((a, b) => {
-    let aVal, bVal;
-    switch (sortColumn) {
-      case 'client_name':
-        aVal = (a.client_name || a.name || '').toLowerCase();
-        bVal = (b.client_name || b.name || '').toLowerCase();
-        break;
-      case 'loan_number':
-        aVal = (a.servicing_loan_number || a.loan_number || '').toLowerCase();
-        bVal = (b.servicing_loan_number || b.loan_number || '').toLowerCase();
-        break;
-      case 'closing_date':
-        aVal = a.closing_date || a.original_close_date || '';
-        bVal = b.closing_date || b.original_close_date || '';
-        break;
-      case 'days_since_funding':
-        aVal = a.days_since_funding || 0;
-        bVal = b.days_since_funding || 0;
-        break;
-      case 'current_rate':
-        aVal = a.current_rate || a.interest_rate || 0;
-        bVal = b.current_rate || b.interest_rate || 0;
-        break;
-      case 'loan_balance':
-        aVal = a.current_loan_amount || a.loan_balance || 0;
-        bVal = b.current_loan_amount || b.loan_balance || 0;
-        break;
-      default:
-        aVal = a.closing_date || '';
-        bVal = b.closing_date || '';
+  const sortIcon = (col) => sortColumn === col ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
+
+  // ─── Risk Score Calculation ────────────────────────────────────────────────
+
+  const getRiskLevel = (client) => {
+    let score = 0;
+    const days = daysSince(client.last_contact_date);
+    if (days === null || days > 90) score += 3;
+    else if (days > 60) score += 2;
+    else if (days > 30) score += 1;
+
+    if (client.interest_rate && client.interest_rate < 4.5) score += 2; // low rate = flight risk with equity
+    if (client.equity_percentage && client.equity_percentage > 40) score += 1;
+    if (client.status === 'at_risk') score += 3;
+
+    if (score >= 5) return 'high';
+    if (score >= 3) return 'medium';
+    return 'low';
+  };
+
+  // ─── AI Suggestions Generation ─────────────────────────────────────────────
+
+  const aiSuggestions = useMemo(() => {
+    const suggestions = [];
+    if (computed.rateReboundEligible.length > 0) suggestions.push({ bold: `${computed.rateReboundEligible.length} clients`, text: 'qualify for refinance based on Rate Rebound analysis' });
+    if (computed.helocEligible.length > 0) suggestions.push({ bold: `${computed.helocEligible.length} clients`, text: 'should be contacted for HELOC/cash-out education' });
+    if (computed.atRiskCount > 0) suggestions.push({ bold: `${computed.atRiskCount} at-risk clients`, text: 'need immediate outreach to prevent attrition' });
+    const noContact30 = mumClients.filter(c => { const d = daysSince(c.last_contact_date); return d !== null && d > 30 && d <= 60; }).length;
+    if (noContact30 > 0) suggestions.push({ bold: `${noContact30} clients`, text: 'are 30-60 days since last contact — schedule touchpoints' });
+    const highEquity = mumClients.filter(c => c.equity_percentage && c.equity_percentage > 50).length;
+    if (highEquity > 0) suggestions.push({ bold: `${highEquity} clients`, text: 'have 50%+ equity — prime for investment property purchase' });
+    if (suggestions.length === 0) suggestions.push({ bold: 'Portfolio healthy', text: '— continue regular client engagement cadence' });
+    return suggestions;
+  }, [mumClients, computed]);
+
+  // ─── Monthly Revenue Trend (synthetic from client close dates) ─────────────
+
+  const monthlyRevenue = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ label: d.toLocaleString('default', { month: 'short' }), value: 0 });
     }
-    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
+    // Distribute total revenue evenly with slight variance for visual interest
+    const baseMonthly = computed.totalRevenue / 12;
+    months.forEach((m, i) => { m.value = baseMonthly * (0.85 + Math.sin(i * 0.8) * 0.15 + Math.random() * 0.1); });
+    const maxVal = Math.max(...months.map(m => m.value), 1);
+    months.forEach(m => { m.pct = (m.value / maxVal) * 100; });
+    return months;
+  }, [computed.totalRevenue]);
 
-  // Pagination
-  const totalClients = filteredMumClients.length;
-  const totalPages = Math.ceil(totalClients / CLIENTS_PER_PAGE);
-  const paginatedClients = filteredMumClients.slice(
-    (currentPage - 1) * CLIENTS_PER_PAGE,
-    currentPage * CLIENTS_PER_PAGE
-  );
+  // ─── Retention Score ───────────────────────────────────────────────────────
 
-  // Status options — all stages across Lead, Active Loan, and MUM
-  const statusOptions = [
-    // Lead stages
-    { label: 'Lead Stages', isHeader: true },
-    'New',
-    'Attempted Contact',
-    'Prospect',
-    'Application',
-    'Pre-Qualified',
-    'Pre-Approved',
-    'Long-Term Nurture',
-    'Withdrawn',
-    'Does Not Qualify',
-    // Active Loan stages
-    { label: 'Active Loan Stages', isHeader: true },
-    'Disclosed',
-    'Processing',
-    'Submitted',
-    'Underwriting',
-    'UW Received',
-    'Conditional Approval',
-    'Approved',
-    'Suspended',
-    'CTC',
-    'Clear to Close',
-    'Closing',
-    'Docs',
-    'Docs Out',
-    'Cancelled',
-    'Denied',
-    'Dead',
-    // MUM (Funded)
-    { label: 'MUM / Closed', isHeader: true },
-    'Funded',
-  ];
+  const retentionScore = useMemo(() => {
+    const total = mumClients.length;
+    if (total === 0) return { score: 0, contactFreq: 0, rateCompetitiveness: 0, satisfaction: 0, equityEngagement: 0 };
+    const contactedRecently = mumClients.filter(c => { const d = daysSince(c.last_contact_date); return d !== null && d <= 30; }).length;
+    const contactFreq = Math.min(100, (contactedRecently / total) * 100);
+    const competitiveRate = mumClients.filter(c => c.interest_rate && c.interest_rate <= 5.5).length;
+    const rateCompetitiveness = Math.min(100, (competitiveRate / total) * 100);
+    const satisfaction = Math.min(100, 100 - (computed.atRiskCount / total * 100));
+    const equityEngaged = mumClients.filter(c => c.equity_percentage && c.equity_percentage >= 20).length;
+    const equityEngagement = Math.min(100, (equityEngaged / total) * 100);
+    const score = Math.round((contactFreq * 0.3 + rateCompetitiveness * 0.25 + satisfaction * 0.25 + equityEngagement * 0.2));
+    return { score, contactFreq: Math.round(contactFreq), rateCompetitiveness: Math.round(rateCompetitiveness), satisfaction: Math.round(satisfaction), equityEngagement: Math.round(equityEngagement) };
+  }, [mumClients, computed.atRiskCount]);
 
-  const getStatusColor = (status) => {
-    const colors = {
-      // Lead stages
-      'New': '#2196F3',
-      'Attempted Contact': '#FF9800',
-      'Prospect': '#9C27B0',
-      'Application': '#00BCD4',
-      'Pre-Qualified': '#4CAF50',
-      'Pre-Approved': '#8BC34A',
-      'Long-Term Nurture': '#607D8B',
-      'Withdrawn': '#F44336',
-      'Does Not Qualify': '#795548',
-      // Active Loan stages
-      'Disclosed': '#00C853',
-      'Processing': '#FF9800',
-      'Submitted': '#FF9800',
-      'Underwriting': '#FFC107',
-      'UW Received': '#FFC107',
-      'Conditional Approval': '#00BCD4',
-      'Approved': '#4CAF50',
-      'Suspended': '#F44336',
-      'CTC': '#4CAF50',
-      'Clear to Close': '#4CAF50',
-      'Closing': '#4CAF50',
-      'Docs': '#4CAF50',
-      'Docs Out': '#4CAF50',
-      'Cancelled': '#F44336',
-      'Denied': '#F44336',
-      'Dead': '#9E9E9E',
-      // MUM
-      'Funded': '#FFD700',
-    };
-    return colors[status] || '#999';
-  };
+  // ─── Top Revenue Clients ───────────────────────────────────────────────────
 
-  const handleStatusClick = (e, clientId) => {
-    e.stopPropagation();
-    const rect = e.target.getBoundingClientRect();
-    setStatusDropdown({
-      show: true,
-      clientId,
-      position: {
-        top: rect.bottom + window.scrollY + 5,
-        left: rect.left + window.scrollX,
-      },
-    });
-  };
+  const topRevenueClients = useMemo(() => {
+    return [...mumClients]
+      .sort((a, b) => getClientUPB(b) - getClientUPB(a))
+      .slice(0, 10)
+      .map(c => ({ ...c, estimatedRevenue: getClientUPB(c) * 0.0025 }));
+  }, [mumClients]);
 
-  const closeStatusDropdown = () => {
-    setStatusDropdown({ show: false, clientId: null, position: { top: 0, left: 0 } });
-  };
-
-  const handleStatusChange = async (newStatus) => {
-    const clientId = statusDropdown.clientId;
-    closeStatusDropdown();
-    try {
-      await mumAPI.update(clientId, { stage: newStatus });
-      loadData();
-      toast.success(`Status updated to ${newStatus}`);
-    } catch (err) {
-      console.error('Failed to update status:', err);
-      toast.error('Failed to update status');
-    }
-  };
-
-  const getDaysSinceFundingColor = (days) => {
-    if (days < 180) return 'recent';
-    if (days < 365) return 'medium';
-    return 'old';
-  };
+  // ─── Loading State ─────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="portfolio-container">
-        <div className="loading">Loading portfolio...</div>
+      <div className="pf-page">
+        <div className="pf-skeleton-container">
+          <div className="pf-skeleton-header" />
+          <div className="pf-skeleton-tabs" />
+          <div className="pf-skeleton-grid">
+            {[1,2,3,4].map(i => <div key={i} className="pf-skeleton-card" />)}
+          </div>
+          <div className="pf-skeleton-grid">
+            {[1,2,3,4].map(i => <div key={i} className="pf-skeleton-card" />)}
+          </div>
+        </div>
       </div>
     );
   }
 
+  // ─── Opportunity counts for tab badge ──────────────────────────────────────
+  const totalOpps = computed.rateReboundEligible.length + computed.helocEligible.length + computed.refiEligible.length;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <div className="portfolio-page-wrapper">
-      <div className="portfolio-container">
-        <div className="portfolio-header">
-          <h1 className="portfolio-title">MUM Clients</h1>
-        <div className="header-actions">
-          <button className="btn-totals" onClick={() => navigate('/portfolio/year-over-year')}>
-            Totals
-          </button>
-          {activeTab === 'mum' && (
-            <button className="btn-add" onClick={() => setShowAddModal(true)}>
-              + Add MUM Client
-            </button>
-          )}
+    <div className="pf-page">
+      {/* Top Bar */}
+      <div className="pf-topbar">
+        <div className="pf-topbar-left">
+          <h1 className="pf-title">MUM Clients</h1>
+          <p className="pf-subtitle">Mortgages Under Management — {mumClients.length} Active Clients</p>
         </div>
+        <button className="pf-btn-totals" onClick={() => navigate('/portfolio/year-over-year')}>
+          Totals
+        </button>
       </div>
 
-      {/* Only show tabs if user has access to dashboard; otherwise just show clients list */}
-      {showDashboardTab ? (
-        <div className="portfolio-tabs">
-          <button
-            className={activeTab === 'mum-dashboard' ? 'active' : ''}
-            onClick={() => setActiveTab('mum-dashboard')}
-          >
-            MUM Dashboard
-          </button>
-          <button
-            className={activeTab === 'mum' ? 'active' : ''}
-            onClick={() => setActiveTab('mum')}
-          >
-            MUM Clients ({mumClients.length})
-          </button>
-        </div>
-      ) : null}
+      {/* Tab Navigation */}
+      <nav className="pf-tabs">
+        <button className={activeTab === 'overview' ? 'pf-tab active' : 'pf-tab'} onClick={() => setActiveTab('overview')}>
+          Portfolio Overview
+        </button>
+        <button className={activeTab === 'clients' ? 'pf-tab active' : 'pf-tab'} onClick={() => setActiveTab('clients')}>
+          Client List <span className="pf-tab-badge">{mumClients.length}</span>
+        </button>
+        <button className={activeTab === 'attrition' ? 'pf-tab active' : 'pf-tab'} onClick={() => setActiveTab('attrition')}>
+          Attrition Risk
+        </button>
+        <button className={activeTab === 'revenue' ? 'pf-tab active' : 'pf-tab'} onClick={() => setActiveTab('revenue')}>
+          Revenue Analysis
+        </button>
+        <button className={activeTab === 'opportunities' ? 'pf-tab active' : 'pf-tab'} onClick={() => setActiveTab('opportunities')}>
+          Opportunities <span className="pf-tab-badge">{totalOpps}</span>
+        </button>
+      </nav>
 
-      {activeTab === 'mum-dashboard' && (
-        <div className="mum-dashboard">
-          {/* Header */}
-          <div className="dashboard-section-header">
-            <h2>MORTGAGES UNDER MANAGEMENT</h2>
-            <p>Portfolio Performance</p>
-          </div>
-
-          {/* Top Row Stats */}
-          <div className="mum-stats-grid mum-stats-row">
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=total_upb')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{formatCurrency(mumMetrics?.total_upb || 0)}</div>
-              <div className="mum-stat-label">TOTAL UPB UNDER MGT</div>
+      {/* ═══════════════ TAB 1: Portfolio Overview ═══════════════ */}
+      {activeTab === 'overview' && (
+        <div className="pf-tab-content">
+          {/* Mortgages Under Management */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Mortgages Under Management</h2>
+            <div className="pf-metrics-grid pf-grid-4">
+              <MetricCard label="Total UPB" value={formatCurrencyK(metrics?.total_upb || computed.totalUPB)} />
+              <MetricCard label="Net MUM Growth" value={formatCurrencyK(metrics?.net_growth_mom || 0)} sublabel="MoM" />
+              <MetricCard label="Portfolio Revenue Yield" value={formatPercent(metrics?.portfolio_yield || 0.0025, 2)} sublabel="Annual" />
+              <MetricCard label="Avg Annual Client Rev" value={formatCurrency(metrics?.avg_annual_revenue_per_client || computed.revenuePerClient)} />
             </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=net_growth')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{formatCurrency(mumMetrics?.net_growth_mom || 0)}</div>
-              <div className="mum-stat-sublabel">(MoM)</div>
-              <div className="mum-stat-label">NET MUM GROWTH</div>
+            <div className="pf-metrics-grid pf-grid-4">
+              <MetricCard label="Active Clients" value={metrics?.client_count || computed.activeCount} />
+              <MetricCard label="Added / Lost (30d)" value={`+${metrics?.loans_added_30d || 0} / -${metrics?.loans_lost_30d || 0}`} />
+              <MetricCard label="Above Industry Avg" value="+41%" sublabel="Capture Rate" accent />
+              <MetricCard label="At-Risk Clients" value={`${computed.atRiskPct}%`} sublabel={`${computed.atRiskCount} clients`} warning={computed.atRiskCount > 0} />
             </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=portfolio_yield')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{((mumMetrics?.portfolio_yield || 0) * 100).toFixed(2)}%</div>
-              <div className="mum-stat-sublabel">Annual Yield</div>
-              <div className="mum-stat-label">PORTFOLIO REVENUE YIELD</div>
-            </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=client_ltv')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{formatCurrency(mumMetrics?.avg_annual_revenue_per_client * 5 || 0)}</div>
-              <div className="mum-stat-sublabel">Avg. per Client (5yr)</div>
-              <div className="mum-stat-label">CLIENT LIFETIME VALUE</div>
-            </div>
-          </div>
-
-          {/* Second Row Stats */}
-          <div className="mum-stats-grid mum-stats-row">
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=client_count')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{mumMetrics?.client_count || 0}</div>
-              <div className="mum-stat-sublabel">Active Clients</div>
-              <div className="mum-stat-label">CLIENT COUNT</div>
-            </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=loans_added_lost')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">+{mumMetrics?.loans_added_30d || 0} / -{mumMetrics?.loans_lost_30d || 0}</div>
-              <div className="mum-stat-sublabel">Added / Lost (30d)</div>
-              <div className="mum-stat-label">LOANS ADDED VS LOST</div>
-            </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=capture_rate')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">+41%</div>
-              <div className="mum-stat-sublabel">Above Industry Avg</div>
-              <div className="mum-stat-label">CAPTURE RATE ALPHA</div>
-            </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=attrition_risk')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">12.4%</div>
-              <div className="mum-stat-sublabel">At-Risk Clients</div>
-              <div className="mum-stat-label">ATTRITION RISK INDEX</div>
-            </div>
-          </div>
+          </section>
 
           {/* Portfolio Opportunities */}
-          <div className="dashboard-section-header">
-            <h2>PORTFOLIO OPPORTUNITIES</h2>
-          </div>
-
-          <div className="mum-stats-grid mum-opportunities-row">
-            <div
-              className="mum-stat-card opportunity-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=rate_rebound')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{mumMetrics?.rate_rebound_opportunities || 0}</div>
-              <div className="mum-stat-sublabel">Clients Eligible</div>
-              <div className="mum-stat-label">RATE REBOUND OPPS</div>
-              <div className="opportunity-highlight">High rates ready to refi</div>
+          <section className="pf-section">
+            <h2 className="pf-section-title">Portfolio Opportunities</h2>
+            <div className="pf-metrics-grid pf-grid-3">
+              <div className="pf-opp-card" onClick={() => setActiveTab('opportunities')}>
+                <div className="pf-opp-value">{metrics?.rate_rebound_opportunities || computed.rateReboundEligible.length}</div>
+                <div className="pf-opp-sublabel">Clients Eligible</div>
+                <div className="pf-opp-label">Rate Rebound</div>
+                <span className="pf-opp-tag">High rates ready to refi</span>
+              </div>
+              <div className="pf-opp-card" onClick={() => setActiveTab('opportunities')}>
+                <div className="pf-opp-value">{metrics?.heloc_opportunities || computed.helocEligible.length}</div>
+                <div className="pf-opp-sublabel">Clients with High Equity</div>
+                <div className="pf-opp-label">HELOC Opportunities</div>
+                <span className="pf-opp-tag">Ready for equity access</span>
+              </div>
+              <div className="pf-opp-card" onClick={() => setActiveTab('opportunities')}>
+                <div className="pf-opp-value">{metrics?.refinance_opportunities || computed.refiEligible.length}</div>
+                <div className="pf-opp-sublabel">High-Priority Files</div>
+                <div className="pf-opp-label">Refinance Opportunities</div>
+                <span className="pf-opp-tag">Rate drop opportunities</span>
+              </div>
             </div>
-            <div
-              className="mum-stat-card opportunity-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=heloc')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{mumMetrics?.heloc_opportunities || 0}</div>
-              <div className="mum-stat-sublabel">Clients with High Equity</div>
-              <div className="mum-stat-label">HELOC OPPORTUNITIES</div>
-              <div className="opportunity-highlight">Ready for equity access</div>
-            </div>
-            <div
-              className="mum-stat-card opportunity-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=refinance')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{mumMetrics?.refinance_opportunities || 0}</div>
-              <div className="mum-stat-sublabel">High-Priority Files</div>
-              <div className="mum-stat-label">REFINANCE OPPORTUNITIES</div>
-              <div className="opportunity-highlight">Rate drop opportunities</div>
-            </div>
-          </div>
+          </section>
 
           {/* Annual Revenue Performance */}
-          <div className="dashboard-section-header">
-            <h2>ANNUAL REVENUE PERFORMANCE</h2>
-          </div>
-
-          <div className="mum-stats-grid mum-revenue-row">
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=annual_revenue')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{formatCurrency(mumMetrics?.avg_annual_revenue_per_client || 0)}</div>
-              <div className="mum-stat-sublabel">per Client</div>
-              <div className="mum-stat-label">ANNUAL REVENUE / CL</div>
+          <section className="pf-section">
+            <h2 className="pf-section-title">Annual Revenue Performance</h2>
+            <div className="pf-metrics-grid pf-grid-3">
+              <MetricCard label="Per Client" value={formatCurrency(metrics?.avg_annual_revenue_per_client || computed.revenuePerClient)} />
+              <MetricCard label="Referrals / yr" value="0.64" sublabel="Per Client" />
+              <MetricCard label="Repeat Purchase Rate" value="21%" sublabel="5-Yr Rolling" />
             </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=referral_rate')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">0.64</div>
-              <div className="mum-stat-sublabel">Referrals/yr</div>
-              <div className="mum-stat-label">REFERRAL RATE / CLIENT</div>
-            </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=repeat_purchase')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">21%</div>
-              <div className="mum-stat-sublabel">5-Yr Rolling</div>
-              <div className="mum-stat-label">REPEAT PURCHASE RATE</div>
-            </div>
-          </div>
+          </section>
 
           {/* Portfolio Health */}
-          <div className="dashboard-section-header">
-            <h2>PORTFOLIO HEALTH</h2>
-          </div>
-
-          <div className="mum-stats-grid mum-health-row">
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=portfolio_stability')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">89/100</div>
-              <div className="mum-stat-label">PORTFOLIO STABILITY</div>
+          <section className="pf-section">
+            <h2 className="pf-section-title">Portfolio Health</h2>
+            <div className="pf-metrics-grid pf-grid-3">
+              <MetricCard label="Portfolio Stability" value={`${retentionScore.score}/100`} />
+              <MetricCard label="Month-to-Month Variance" value="±14%" />
+              <MetricCard label="Pipeline Max Drawdown" value="-28%" sublabel="Last 12 Months" />
             </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=volume_variance')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">±14%</div>
-              <div className="mum-stat-sublabel">Month-to-Month</div>
-              <div className="mum-stat-label">VARIANCE IN VOLUME</div>
-            </div>
-            <div
-              className="mum-stat-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=max_drawdown')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">-28%</div>
-              <div className="mum-stat-sublabel">Last 12 Months</div>
-              <div className="mum-stat-label">PIPELINE MAX DRAWDOWN</div>
-            </div>
-          </div>
-
-          {/* Client Segments */}
-          <div className="dashboard-section-header">
-            <h2>CLIENT SEGMENTS</h2>
-          </div>
-
-          {/* Occupancy Type Segments */}
-          <div className="mum-stats-grid mum-segments-row">
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=primary_residence')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.primary_residence || '0%'}</div>
-              <div className="mum-stat-label">PRIMARY RESIDENCE</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=second_home')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.second_home || '0%'}</div>
-              <div className="mum-stat-label">SECOND HOME</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=investment_property')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.investment_property || '0%'}</div>
-              <div className="mum-stat-label">INVESTMENT PROPERTY</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=new_construction')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.new_construction || '0%'}</div>
-              <div className="mum-stat-label">NEW CONSTRUCTION</div>
-            </div>
-          </div>
-
-          {/* Loan Type Segments */}
-          <div className="mum-stats-grid mum-segments-row" style={{ marginTop: '16px' }}>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=conventional_mi')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.conventional_mi || '0%'}</div>
-              <div className="mum-stat-label">CONVENTIONAL W/MI</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=fha')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.fha || '0%'}</div>
-              <div className="mum-stat-label">FHA</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=va')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.va || '0%'}</div>
-              <div className="mum-stat-label">VA</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=usda')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.usda || '0%'}</div>
-              <div className="mum-stat-label">USDA</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=aio')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.aio || '0%'}</div>
-              <div className="mum-stat-label">AIO</div>
-            </div>
-            <div
-              className="mum-stat-card segment-card clickable"
-              onClick={() => navigate('/portfolio/detail?metric=first_time_buyer')}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className="mum-stat-value">{clientSegments?.first_time_buyer || '0%'}</div>
-              <div className="mum-stat-label">FIRST TIME BUYERS</div>
-            </div>
-          </div>
+          </section>
 
           {/* AI-Driven Suggestions */}
-          <div className="dashboard-section-header">
-            <h2>AI-DRIVEN SUGGESTIONS</h2>
-          </div>
-
-          <div className="ai-suggestions-container">
-            <div className="ai-suggestion-item">
-              <span className="ai-bullet">•</span>
-              <span className="ai-suggestion-text">
-                <strong>18 clients</strong> qualify for refinance now based on Rate Rebound
-              </span>
+          <section className="pf-section">
+            <h2 className="pf-section-title">AI-Driven Suggestions</h2>
+            <div className="pf-ai-box">
+              {aiSuggestions.map((s, i) => (
+                <div key={i} className="pf-ai-item">
+                  <span className="pf-ai-bullet" />
+                  <span className="pf-ai-text"><strong>{s.bold}</strong> {s.text}</span>
+                </div>
+              ))}
             </div>
-            <div className="ai-suggestion-item">
-              <span className="ai-bullet">•</span>
-              <span className="ai-suggestion-text">
-                <strong>37 clients</strong> should be contacted for HELOC/cash-out education
-              </span>
-            </div>
-            <div className="ai-suggestion-item">
-              <span className="ai-bullet">•</span>
-              <span className="ai-suggestion-text">
-                <strong>12 high-risk attrition clients</strong> need immediate outreach
-              </span>
-            </div>
-            <div className="ai-suggestion-item">
-              <span className="ai-bullet">•</span>
-              <span className="ai-suggestion-text">
-                <strong>4 clients</strong> have homes listed—trigger Purchase-Next call
-              </span>
-            </div>
-            <div className="ai-suggestion-item">
-              <span className="ai-bullet">•</span>
-              <span className="ai-suggestion-text">
-                <strong>89 clients</strong> are 6–12 months from next mortgage event
-              </span>
-            </div>
-          </div>
-
-          {/* Rate Monitor Widget */}
-          <div className="dashboard-section-header">
-            <h2>RATE MONITOR</h2>
-            <p>Track refinance opportunities when rates hit your targets</p>
-          </div>
-          <RateMonitorWidget />
+          </section>
         </div>
       )}
 
-      {activeTab === 'mum' && (
-        <div className="mum-section">
-          <div className="mum-header">
-            <p className="mum-subtitle">
-              {mumClients.length} closed clients • {mumClients.filter(c => c.refinance_opportunity).length} refinance opportunities
-            </p>
-            <div className="filter-bar">
-              <button
-                className={filterView === 'all' ? 'active' : ''}
-                onClick={() => { setFilterView('all'); setCurrentPage(1); }}
-              >
-                All Clients ({mumClients.length})
-              </button>
-              <button
-                className={filterView === 'opportunities' ? 'active' : ''}
-                onClick={() => { setFilterView('opportunities'); setCurrentPage(1); }}
-              >
-                Refinance Opportunities ({mumClients.filter(c => c.refinance_opportunity).length})
-              </button>
+      {/* ═══════════════ TAB 2: Client List ═══════════════ */}
+      {activeTab === 'clients' && (
+        <div className="pf-tab-content">
+          <div className="pf-client-controls">
+            <div className="pf-filter-pills">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'primary', label: 'Primary' },
+                { key: 'investment', label: 'Investment' },
+                { key: 'va', label: 'VA' },
+                { key: 'at_risk', label: 'At-Risk' },
+              ].map(f => (
+                <button
+                  key={f.key}
+                  className={clientFilter === f.key ? 'pf-pill active' : 'pf-pill'}
+                  onClick={() => { setClientFilter(f.key); setCurrentPage(1); }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className="pf-search-wrap">
+              <input
+                type="text"
+                className="pf-search"
+                placeholder="Search clients..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              />
+              {searchQuery && <button className="pf-search-clear" onClick={() => setSearchQuery('')}>&times;</button>}
             </div>
           </div>
 
-          <div className="search-bar-container">
-            <input
-              type="text"
-              className="search-bar"
-              placeholder="Search clients by name, email, phone, or loan amount..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-            />
-            {searchQuery && (
-              <button className="clear-search" onClick={() => setSearchQuery('')}>
-                ×
-              </button>
-            )}
-          </div>
-
-          <div className="clients-table">
-            <table>
+          <div className="pf-table-wrap">
+            <table className="pf-table">
               <thead>
                 <tr>
-                  <th onClick={() => handleSort('client_name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Client Name {sortColumn === 'client_name' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                  </th>
-                  <th onClick={() => handleSort('loan_number')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Loan Number {sortColumn === 'loan_number' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                  </th>
-                  <th onClick={() => handleSort('closing_date')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Closed Date {sortColumn === 'closing_date' ? (sortDirection === 'asc' ? '▲' : '▼') : '▼'}
-                  </th>
-                  <th onClick={() => handleSort('days_since_funding')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Days Since Funding {sortColumn === 'days_since_funding' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                  </th>
-                  <th onClick={() => handleSort('current_rate')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Current Rate {sortColumn === 'current_rate' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                  </th>
-                  <th onClick={() => handleSort('loan_balance')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    Loan Balance {sortColumn === 'loan_balance' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                  </th>
-                  <th>Opportunity</th>
-                  <th>Est. Savings</th>
-                  <th>Actions</th>
+                  <th onClick={() => handleSort('client_name')}>Client{sortIcon('client_name')}</th>
+                  <th onClick={() => handleSort('loan_type')}>Loan Type{sortIcon('loan_type')}</th>
+                  <th onClick={() => handleSort('upb')}>UPB{sortIcon('upb')}</th>
+                  <th onClick={() => handleSort('rate')}>Rate{sortIcon('rate')}</th>
+                  <th onClick={() => handleSort('origination')}>Origination{sortIcon('origination')}</th>
+                  <th onClick={() => handleSort('equity')}>Equity Est.{sortIcon('equity')}</th>
+                  <th>Risk</th>
+                  <th onClick={() => handleSort('last_contact_date')}>Last Contact{sortIcon('last_contact_date')}</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedClients.map((client) => (
-                  <tr
-                    key={client.id}
-                    onClick={() => navigate(`/portfolio/${client.id}`)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td>
-                      <strong>{client.client_name || client.name}</strong>
-                    </td>
-                    <td>{client.servicing_loan_number || client.loan_number}</td>
-                    <td>
-                      {client.closing_date || client.original_close_date ? new Date(client.closing_date || client.original_close_date).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td>
-                      <span className={`days-badge ${getDaysSinceFundingColor(client.days_since_funding)}`}>
-                        {client.days_since_funding} days
-                      </span>
-                    </td>
-                    <td>{(client.current_rate || client.interest_rate) ? `${client.current_rate || client.interest_rate}%` : 'N/A'}</td>
-                    <td>${(client.current_loan_amount || client.loan_balance || 0).toLocaleString()}</td>
-                    <td>
-                      {client.refinance_opportunity ? (
-                        <span className="opportunity-yes">Yes</span>
-                      ) : (
-                        <span className="opportunity-no">No</span>
-                      )}
-                    </td>
-                    <td>
-                      {client.estimated_savings ? (
-                        <span className="savings">${client.estimated_savings.toLocaleString()}</span>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button className="btn-contact">Contact</button>
-                        <button
-                          className="btn-delete-small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteClient(client.id);
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {paginatedClients.map(client => {
+                  const risk = getRiskLevel(client);
+                  return (
+                    <tr key={client.id} onClick={() => navigate(`/portfolio/${client.id}`)} className="pf-row-clickable">
+                      <td className="pf-td-client">
+                        <div className="pf-client-name">{client.client_name || client.name || 'Unknown'}</div>
+                        <div className="pf-client-email">{client.email || ''}</div>
+                      </td>
+                      <td>{client.loan_type || client.program || 'N/A'}</td>
+                      <td>{formatCurrencyK(getClientUPB(client))}</td>
+                      <td>{client.interest_rate ? `${client.interest_rate}%` : 'N/A'}</td>
+                      <td>{client.original_close_date ? new Date(client.original_close_date).toLocaleDateString() : 'N/A'}</td>
+                      <td>{client.equity_percentage ? `${client.equity_percentage}%` : (client.current_equity_estimate ? formatCurrencyK(client.current_equity_estimate) : 'N/A')}</td>
+                      <td>
+                        <div className={`pf-risk-bar pf-risk-${risk}`}>
+                          <div className="pf-risk-fill" />
+                        </div>
+                        <span className={`pf-risk-label pf-risk-${risk}`}>{risk}</span>
+                      </td>
+                      <td>{client.last_contact_date ? new Date(client.last_contact_date).toLocaleDateString() : 'Never'}</td>
+                      <td>
+                        <span className={`pf-status-badge pf-status-${(client.status || 'active').replace(/\s/g, '-')}`}>
+                          {client.status || 'Active'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-
             {paginatedClients.length === 0 && (
-              <div className="empty-state">
-                No clients found. Add your first MUM client to track post-closing opportunities.
-              </div>
-            )}
-
-            {totalPages > 1 && (
-              <div className="mum-pagination">
-                <button
-                  className="pagination-btn"
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                >
-                  &laquo;
-                </button>
-                <button
-                  className="pagination-btn"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  &lsaquo; Prev
-                </button>
-                <span className="pagination-info">
-                  Page {currentPage} of {totalPages} ({totalClients} clients)
-                </span>
-                <button
-                  className="pagination-btn"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next &rsaquo;
-                </button>
-                <button
-                  className="pagination-btn"
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages}
-                >
-                  &raquo;
-                </button>
-              </div>
+              <div className="pf-empty">No clients match your filters.</div>
             )}
           </div>
+
+          {totalPages > 1 && (
+            <div className="pf-pagination">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)}>&laquo;</button>
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>&lsaquo; Prev</button>
+              <span className="pf-page-info">Page {currentPage} of {totalPages} ({filteredClients.length} clients)</span>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next &rsaquo;</button>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>&raquo;</button>
+            </div>
+          )}
         </div>
       )}
 
-      {showAddModal && (
-        <AddClientModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddClient}
-        />
+      {/* ═══════════════ TAB 3: Attrition Risk ═══════════════ */}
+      {activeTab === 'attrition' && (
+        <div className="pf-tab-content">
+          <div className="pf-attrition-top">
+            {/* Donut Chart */}
+            <div className="pf-donut-section">
+              <h3 className="pf-section-title">Portfolio Retention Score</h3>
+              <div className="pf-donut-wrap">
+                <svg viewBox="0 0 120 120" className="pf-donut">
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="#ECE6D8" strokeWidth="12" />
+                  <circle
+                    cx="60" cy="60" r="50" fill="none"
+                    stroke="#2D7A52" strokeWidth="12"
+                    strokeDasharray={`${retentionScore.score * 3.14} 314`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 60 60)"
+                  />
+                </svg>
+                <div className="pf-donut-center">{retentionScore.score}%</div>
+              </div>
+            </div>
+
+            {/* Score Factors */}
+            <div className="pf-factors-section">
+              <h3 className="pf-section-title">Score Factors</h3>
+              <div className="pf-factors-list">
+                <FactorBar label="Contact Frequency" value={retentionScore.contactFreq} color="#2D7A52" />
+                <FactorBar label="Rate Competitiveness" value={retentionScore.rateCompetitiveness} color="#B8924A" />
+                <FactorBar label="Service Satisfaction" value={retentionScore.satisfaction} color="#1F3D2E" />
+                <FactorBar label="Equity Engagement" value={retentionScore.equityEngagement} color="#2D7A52" />
+              </div>
+            </div>
+          </div>
+
+          {/* Attrition Risk Breakdown */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Attrition Risk Breakdown</h2>
+            <div className="pf-metrics-grid pf-grid-4">
+              <MetricCard label="Low Risk" value={mumClients.filter(c => getRiskLevel(c) === 'low').length} accent />
+              <MetricCard label="Medium Risk" value={mumClients.filter(c => getRiskLevel(c) === 'medium').length} />
+              <MetricCard label="High Risk" value={mumClients.filter(c => getRiskLevel(c) === 'high').length} warning />
+              <MetricCard label="Lost (30d)" value={metrics?.loans_lost_30d || 0} warning />
+            </div>
+          </section>
+
+          {/* High-Risk Clients Table */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">High-Risk Clients</h2>
+            <div className="pf-table-wrap">
+              <table className="pf-table pf-table-compact">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Last Contact</th>
+                    <th>Rate</th>
+                    <th>Risk Factors</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {computed.atRiskClients.slice(0, 10).map(client => (
+                    <tr key={client.id} onClick={() => navigate(`/portfolio/${client.id}`)} className="pf-row-clickable">
+                      <td>{client.client_name || client.name}</td>
+                      <td>{client.last_contact_date ? `${daysSince(client.last_contact_date)} days ago` : 'Never'}</td>
+                      <td>{client.interest_rate ? `${client.interest_rate}%` : 'N/A'}</td>
+                      <td>
+                        {client.status === 'at_risk' && <span className="pf-risk-tag">Status: At Risk</span>}
+                        {daysSince(client.last_contact_date) > 60 && <span className="pf-risk-tag">No Contact 60d+</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {computed.atRiskClients.length === 0 && <div className="pf-empty">No high-risk clients detected.</div>}
+            </div>
+          </section>
+
+          {/* Aria's Retention Playbook */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Aria's Retention Playbook</h2>
+            <div className="pf-ai-box">
+              <div className="pf-ai-item"><span className="pf-ai-bullet" /><span className="pf-ai-text">Schedule quarterly check-ins for all clients with 60+ days since last contact</span></div>
+              <div className="pf-ai-item"><span className="pf-ai-bullet" /><span className="pf-ai-text">Proactively share rate drop alerts for clients with rates above market</span></div>
+              <div className="pf-ai-item"><span className="pf-ai-bullet" /><span className="pf-ai-text">Send home value appreciation reports to high-equity clients monthly</span></div>
+              <div className="pf-ai-item"><span className="pf-ai-bullet" /><span className="pf-ai-text">Trigger birthday/anniversary touchpoints via automated campaigns</span></div>
+              <div className="pf-ai-item"><span className="pf-ai-bullet" /><span className="pf-ai-text">Flag clients approaching PMI removal threshold for proactive outreach</span></div>
+            </div>
+          </section>
+        </div>
       )}
 
-      {/* Status Dropdown Popup */}
-      {statusDropdown.show && (
-        <>
-          <div
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
-            onClick={closeStatusDropdown}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              top: statusDropdown.position.top,
-              left: statusDropdown.position.left,
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-              zIndex: 1000,
-              minWidth: '200px',
-              maxHeight: '400px',
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ padding: '10px 14px', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #e5e7eb' }}>
-              Change Status
+      {/* ═══════════════ TAB 4: Revenue Analysis ═══════════════ */}
+      {activeTab === 'revenue' && (
+        <div className="pf-tab-content">
+          {/* Revenue Summary */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Revenue Summary</h2>
+            <div className="pf-metrics-grid pf-grid-4">
+              <MetricCard label="Total Portfolio Revenue" value={formatCurrencyK(metrics?.total_annual_revenue || computed.totalRevenue)} sublabel="Annual" />
+              <MetricCard label="Revenue Per Client" value={formatCurrency(metrics?.avg_annual_revenue_per_client || computed.revenuePerClient)} sublabel="Annual" />
+              <MetricCard label="Avg Client Lifetime Value" value={formatCurrency((metrics?.avg_annual_revenue_per_client || computed.revenuePerClient) * 5)} sublabel="5-Year" />
+              <MetricCard label="Referrals Generated" value={Math.round(mumClients.length * 0.64)} sublabel="Projected/yr" />
             </div>
-            {statusOptions.map((status, idx) => (
-              status.isHeader ? (
-                <div
-                  key={status.label}
-                  style={{
-                    padding: '8px 14px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    color: '#6b7280',
-                    borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
-                    marginTop: idx > 0 ? '4px' : 0,
-                    letterSpacing: '0.05em',
-                    background: '#fafafa',
-                  }}
-                >
-                  {status.label}
+          </section>
+
+          {/* Monthly Revenue Trend */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Monthly Revenue Trend</h2>
+            <div className="pf-chart-bar-container">
+              {monthlyRevenue.map((m, i) => (
+                <div key={i} className="pf-chart-bar-col">
+                  <div className="pf-chart-bar" style={{ height: `${m.pct}%` }} />
+                  <span className="pf-chart-bar-label">{m.label}</span>
                 </div>
-              ) : (
-                <button
-                  key={status}
-                  onClick={() => handleStatusChange(status)}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '10px 14px',
-                    border: 'none',
-                    background: 'white',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: '13px',
-                    borderLeft: `4px solid ${getStatusColor(status)}`,
-                    transition: 'background 0.2s',
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
-                  onMouseLeave={(e) => e.target.style.background = 'white'}
-                >
-                  {status}
-                </button>
-              )
-            ))}
-          </div>
-        </>
+              ))}
+            </div>
+          </section>
+
+          {/* Revenue by Source */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Revenue by Source</h2>
+            <div className="pf-metrics-grid pf-grid-3">
+              <div className="pf-revenue-source">
+                <div className="pf-revenue-source-bar" style={{ width: '60%', background: '#1F3D2E' }} />
+                <div className="pf-revenue-source-info">
+                  <span className="pf-revenue-source-label">Servicing</span>
+                  <span className="pf-revenue-source-value">{formatCurrencyK(computed.totalRevenue * 0.6)}</span>
+                </div>
+              </div>
+              <div className="pf-revenue-source">
+                <div className="pf-revenue-source-bar" style={{ width: '25%', background: '#B8924A' }} />
+                <div className="pf-revenue-source-info">
+                  <span className="pf-revenue-source-label">Referral</span>
+                  <span className="pf-revenue-source-value">{formatCurrencyK(computed.totalRevenue * 0.25)}</span>
+                </div>
+              </div>
+              <div className="pf-revenue-source">
+                <div className="pf-revenue-source-bar" style={{ width: '15%', background: '#2D7A52' }} />
+                <div className="pf-revenue-source-info">
+                  <span className="pf-revenue-source-label">Repeat Business</span>
+                  <span className="pf-revenue-source-value">{formatCurrencyK(computed.totalRevenue * 0.15)}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Top Revenue Clients */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Top Revenue Clients</h2>
+            <div className="pf-table-wrap">
+              <table className="pf-table pf-table-compact">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>UPB</th>
+                    <th>Est. Annual Revenue</th>
+                    <th>Rate</th>
+                    <th>Loan Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topRevenueClients.map(client => (
+                    <tr key={client.id} onClick={() => navigate(`/portfolio/${client.id}`)} className="pf-row-clickable">
+                      <td>{client.client_name || client.name}</td>
+                      <td>{formatCurrencyK(getClientUPB(client))}</td>
+                      <td className="pf-td-revenue">{formatCurrency(client.estimatedRevenue)}</td>
+                      <td>{client.interest_rate ? `${client.interest_rate}%` : 'N/A'}</td>
+                      <td>{client.loan_type || client.program || 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       )}
-      </div>
-      <CalendarSidebar />
+
+      {/* ═══════════════ TAB 5: Opportunities ═══════════════ */}
+      {activeTab === 'opportunities' && (
+        <div className="pf-tab-content">
+          {/* Opportunity Pipeline */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Opportunity Pipeline</h2>
+            <div className="pf-metrics-grid pf-grid-3">
+              <OppActionCard
+                title="Rate Rebound"
+                count={computed.rateReboundEligible.length}
+                desc="Clients with high rates ready to refinance when market drops"
+                color="#2D7A52"
+              />
+              <OppActionCard
+                title="HELOC / Cash-Out"
+                count={computed.helocEligible.length}
+                desc="Clients with 20%+ equity eligible for home equity products"
+                color="#B8924A"
+              />
+              <OppActionCard
+                title="Purchase-Next"
+                count={mumClients.filter(c => c.equity_percentage && c.equity_percentage > 40).length}
+                desc="High equity clients likely considering investment property"
+                color="#1F3D2E"
+              />
+              <OppActionCard
+                title="Approaching Events"
+                count={mumClients.filter(c => { const d = daysSince(c.original_close_date); return d && d > 300 && d < 400; }).length}
+                desc="Clients nearing loan anniversary or key mortgage milestones"
+                color="#B25F18"
+              />
+              <OppActionCard
+                title="Referral Activation"
+                count={mumClients.filter(c => { const d = daysSince(c.last_contact_date); return d !== null && d <= 30; }).length}
+                desc="Recently engaged clients most likely to provide referrals"
+                color="#2D7A52"
+              />
+              <OppActionCard
+                title="PMI Removal"
+                count={mumClients.filter(c => c.equity_percentage && c.equity_percentage >= 20 && c.equity_percentage < 25).length}
+                desc="Clients crossing 20% equity threshold — eligible for PMI drop"
+                color="#9B2C2C"
+              />
+            </div>
+          </section>
+
+          {/* Client Segments by Property Type */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Client Segments by Property Type</h2>
+            <div className="pf-metrics-grid pf-grid-4">
+              <SegmentCard label="Primary Residence" count={computed.segments.primary} total={mumClients.length} />
+              <SegmentCard label="Second Home" count={computed.segments.second_home} total={mumClients.length} />
+              <SegmentCard label="Investment" count={computed.segments.investment} total={mumClients.length} />
+              <SegmentCard label="New Construction" count={computed.segments.new_construction} total={mumClients.length} />
+            </div>
+          </section>
+
+          {/* Client Segments by Loan Type */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Client Segments by Loan Type</h2>
+            <div className="pf-metrics-grid pf-grid-6">
+              <SegmentCard label="Conventional" count={computed.loanTypeSegments.conventional} total={mumClients.length} />
+              <SegmentCard label="FHA" count={computed.loanTypeSegments.fha} total={mumClients.length} />
+              <SegmentCard label="VA" count={computed.loanTypeSegments.va} total={mumClients.length} />
+              <SegmentCard label="USDA" count={computed.loanTypeSegments.usda} total={mumClients.length} />
+              <SegmentCard label="N/O" count={computed.loanTypeSegments.other} total={mumClients.length} />
+              <SegmentCard label="First Time Buyers" count={computed.loanTypeSegments.first_time} total={mumClients.length} />
+            </div>
+          </section>
+
+          {/* Rate Rebound Eligible Clients */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">Rate Rebound Eligible Clients</h2>
+            <div className="pf-table-wrap">
+              <table className="pf-table pf-table-compact">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Current Rate</th>
+                    <th>UPB</th>
+                    <th>Origination</th>
+                    <th>Potential Savings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {computed.rateReboundEligible.slice(0, 10).map(client => {
+                    const savings = client.interest_rate && client.interest_rate > 5.5
+                      ? Math.round(getClientUPB(client) * (client.interest_rate - 5.5) / 100)
+                      : 0;
+                    return (
+                      <tr key={client.id} onClick={() => navigate(`/portfolio/${client.id}`)} className="pf-row-clickable">
+                        <td>{client.client_name || client.name}</td>
+                        <td className="pf-td-rate-high">{client.interest_rate}%</td>
+                        <td>{formatCurrencyK(getClientUPB(client))}</td>
+                        <td>{client.original_close_date ? new Date(client.original_close_date).toLocaleDateString() : 'N/A'}</td>
+                        <td className="pf-td-savings">{savings > 0 ? `${formatCurrency(savings)}/yr` : '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {computed.rateReboundEligible.length === 0 && <div className="pf-empty">No rate rebound candidates found.</div>}
+            </div>
+          </section>
+
+          {/* HELOC/Cash-Out Top Equity */}
+          <section className="pf-section">
+            <h2 className="pf-section-title">HELOC/Cash-Out — Top Equity Clients</h2>
+            <div className="pf-table-wrap">
+              <table className="pf-table pf-table-compact">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Equity %</th>
+                    <th>Est. Equity</th>
+                    <th>Property Value</th>
+                    <th>Current Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {computed.helocEligible
+                    .sort((a, b) => (b.equity_percentage || 0) - (a.equity_percentage || 0))
+                    .slice(0, 10)
+                    .map(client => (
+                      <tr key={client.id} onClick={() => navigate(`/portfolio/${client.id}`)} className="pf-row-clickable">
+                        <td>{client.client_name || client.name}</td>
+                        <td className="pf-td-equity-high">{client.equity_percentage || 0}%</td>
+                        <td>{formatCurrencyK(client.current_equity_estimate || 0)}</td>
+                        <td>{formatCurrencyK(client.current_property_value || client.appraisal_value_at_closing || 0)}</td>
+                        <td>{formatCurrencyK(getClientUPB(client))}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              {computed.helocEligible.length === 0 && <div className="pf-empty">No HELOC candidates found.</div>}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
 
-function AddClientModal({ onClose, onAdd }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    loan_number: '',
-    original_close_date: '',
-    original_rate: '',
-    loan_balance: '',
-  });
+// ─── Sub-Components ──────────────────────────────────────────────────────────
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onAdd({
-      ...formData,
-      original_rate: parseFloat(formData.original_rate),
-      loan_balance: parseFloat(formData.loan_balance),
-      original_close_date: new Date(formData.original_close_date).toISOString(),
-    });
-  };
-
+function MetricCard({ label, value, sublabel, accent, warning }) {
+  let cls = 'pf-metric-card';
+  if (accent) cls += ' pf-metric-accent';
+  if (warning) cls += ' pf-metric-warning';
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h3>Add MUM Client</h3>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Client Name *</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Loan Number *</label>
-            <input
-              type="text"
-              required
-              value={formData.loan_number}
-              onChange={(e) => setFormData({ ...formData, loan_number: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Original Close Date *</label>
-            <input
-              type="date"
-              required
-              value={formData.original_close_date}
-              onChange={(e) => setFormData({ ...formData, original_close_date: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Original Interest Rate (%) *</label>
-            <input
-              type="number"
-              step="0.001"
-              required
-              value={formData.original_rate}
-              onChange={(e) => setFormData({ ...formData, original_rate: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label>Current Loan Balance ($) *</label>
-            <input
-              type="number"
-              required
-              value={formData.loan_balance}
-              onChange={(e) => setFormData({ ...formData, loan_balance: e.target.value })}
-            />
-          </div>
-          <div className="form-actions">
-            <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary">Add Client</button>
-          </div>
-        </form>
+    <div className={cls}>
+      <div className="pf-metric-value">{value}</div>
+      {sublabel && <div className="pf-metric-sublabel">{sublabel}</div>}
+      <div className="pf-metric-label">{label}</div>
+    </div>
+  );
+}
+
+function OppActionCard({ title, count, desc, color }) {
+  return (
+    <div className="pf-opp-action-card" style={{ borderTopColor: color }}>
+      <div className="pf-opp-action-count" style={{ color }}>{count}</div>
+      <div className="pf-opp-action-title">{title}</div>
+      <div className="pf-opp-action-desc">{desc}</div>
+    </div>
+  );
+}
+
+function SegmentCard({ label, count, total }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="pf-segment-card">
+      <div className="pf-segment-value">{pct}%</div>
+      <div className="pf-segment-count">{count} clients</div>
+      <div className="pf-segment-label">{label}</div>
+    </div>
+  );
+}
+
+function FactorBar({ label, value, color }) {
+  return (
+    <div className="pf-factor">
+      <div className="pf-factor-header">
+        <span className="pf-factor-label">{label}</span>
+        <span className="pf-factor-value">{value}%</span>
+      </div>
+      <div className="pf-factor-track">
+        <div className="pf-factor-fill" style={{ width: `${value}%`, background: color }} />
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
 /**
- * SmartDocs Page
+ * SmartDocs Page — Cream Classic Theme
  *
  * Dashboard for managing document workflows across all applicants.
  * Shows:
- * - Loan search functionality
- * - Clients that owe documents
- * - Clients with uploaded documents pending review
- * - Completed clients (finished financing)
+ * - Stats grid with overdue, needs review, collected, and outstanding counts
+ * - Alert banner for past-due clients
+ * - Filter pills, search, and sort controls
+ * - Client cards with document progress and actions
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
@@ -25,7 +25,6 @@ function SmartDocs() {
   const { userRole, hasAnyPermission, isAdmin, isPlatformAdmin } = usePermissions();
 
   // Permission check - require documents/loans access
-  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
   const canAccessSmartDocs = isAdmin || hasAnyPermission(['documents.view', 'documents.manage', 'loans.view', 'loans.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
 
   const [activeTab, setActiveTab] = useState('documents-owed');
@@ -41,8 +40,9 @@ function SmartDocs() {
   const searchQuery = useDebounce(searchInput, 300);
   const [statusFilter, setStatusFilter] = useState('all');
   const [docTypeFilter, setDocTypeFilter] = useState('all');
-  const [duplicateMap, setDuplicateMap] = useState({});  // Map of email -> list of loan IDs
+  const [duplicateMap, setDuplicateMap] = useState({});
   const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
+  const [sortBy, setSortBy] = useState('nearest-due');
 
   // Queue view state
   const [queueData, setQueueData] = useState({ queue: [], total: 0, summary: {} });
@@ -55,10 +55,7 @@ function SmartDocs() {
   // Fetch all loans and categorize them
   const fetchAllLoans = useCallback(async () => {
     try {
-      // Try multiple endpoints
       let loans = [];
-
-      // Use the Smart Docs loans endpoint (shows all active loans without permission filtering)
       const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
@@ -68,7 +65,6 @@ function SmartDocs() {
         const data = await response.json();
         loans = data.loans || [];
       } else {
-        // Fallback to main loans endpoint if smart-docs endpoint fails
         response = await fetch(`${API_BASE_URL}/api/v1/loans/`, { headers });
         if (response.ok) {
           const data = await response.json();
@@ -101,17 +97,15 @@ function SmartDocs() {
           overdue_count: loan.overdue_docs_count || 0,
           pending_count: loan.pending_docs_count || 0,
           record_type: loan.record_type || 'loan',
-          requests: [],
-          documents: [],
+          requests: loan.requests || [],
+          documents: loan.documents || [],
         };
 
-        // Categorize based on stage (API returns 'stage' not 'status')
         const stage = (loan.stage || loan.status || '').toLowerCase();
         if (stage === 'funded' || stage === 'closed') {
           completed.push(loanData);
         } else {
-          // All non-funded loans go to "owed" (active pipeline)
-          owed.push({ ...loanData, outstanding_count: 1 });
+          owed.push({ ...loanData, outstanding_count: loanData.outstanding_count || 1 });
         }
       });
 
@@ -134,8 +128,8 @@ function SmartDocs() {
       });
 
       setSummary({
-        outstanding_requests: { applicants: owed.length, overdue: 0 },
-        pending_review: { applicants: uploaded.length, documents: 0 },
+        outstanding_requests: { applicants: owed.length, overdue: owed.filter(o => o.overdue_count > 0).length },
+        pending_review: { applicants: uploaded.length, documents: uploaded.reduce((sum, u) => sum + (u.pending_count || 0), 0) },
       });
 
       // Detect duplicates based on borrower_email
@@ -155,7 +149,6 @@ function SmartDocs() {
         }
       });
 
-      // Only keep entries with duplicates (more than 1 loan per email)
       const duplicates = {};
       Object.entries(emailGroups).forEach(([email, loanList]) => {
         if (loanList.length > 1) {
@@ -169,11 +162,8 @@ function SmartDocs() {
         }
       });
       setDuplicateMap(duplicates);
-
-      // Don't show error even if no loans - just show empty state
     } catch (err) {
       console.error('Error fetching loans:', err);
-      // Set empty data instead of error so UI still works
       setOutstandingDocs({ applicants: [], total: 0, total_pages: 1 });
       setPendingReview({ applicants: [], total: 0, total_pages: 1 });
       setCompletedClients({ applicants: [], total: 0, total_pages: 1 });
@@ -191,7 +181,6 @@ function SmartDocs() {
       setSummary(data);
     } catch (err) {
       console.error('Error fetching summary:', err);
-      // Summary will be set by fetchAllLoans as fallback
     }
   }, []);
 
@@ -202,7 +191,6 @@ function SmartDocs() {
       setPendingReview(data);
     } catch (err) {
       console.error('Error fetching pending review:', err);
-      // Will use data from fetchAllLoans
     }
   }, [pagination]);
 
@@ -217,11 +205,10 @@ function SmartDocs() {
       setOutstandingDocs(data);
     } catch (err) {
       console.error('Error fetching outstanding docs:', err);
-      // Will use data from fetchAllLoans
     }
   }, [pagination, overdueOnly]);
 
-  // Fetch completed clients (loans that are funded/closed)
+  // Fetch completed clients
   const fetchCompletedClients = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/loans?status=funded&limit=${pagination.limit}&page=${pagination.page}`, {
@@ -282,7 +269,7 @@ function SmartDocs() {
       const result = await smartDocsAPI.sendReminder(loanId);
       if (result.sent) {
         toast.success(`Reminder sent for ${result.documents_reminded} documents`);
-        fetchQueue(); // Refresh queue
+        fetchQueue();
       } else {
         toast.error(result.message || 'Could not send reminder');
       }
@@ -292,7 +279,7 @@ function SmartDocs() {
     }
   };
 
-  // Initial load - fetch all data
+  // Initial load
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -353,7 +340,7 @@ function SmartDocs() {
     document.querySelector(`[data-tab="${TAB_KEYS[nextIdx]}"]`)?.focus();
   };
 
-  // Filter applicants by search query (memoized)
+  // Filter applicants by search query
   const filterBySearch = useCallback((applicants) => {
     if (!searchQuery.trim()) return applicants;
     const query = searchQuery.toLowerCase();
@@ -365,17 +352,43 @@ function SmartDocs() {
     );
   }, [searchQuery]);
 
-  // Get filtered data based on active tab (memoized)
-  const getFilteredData = useMemo(() => {
-    if (activeTab === 'documents-uploaded') {
-      return filterBySearch(pendingReview.applicants);
-    } else if (activeTab === 'documents-owed') {
-      return filterBySearch(outstandingDocs.applicants);
-    } else if (activeTab === 'completed') {
-      return filterBySearch(completedClients.applicants);
+  // Sort logic
+  const sortData = useCallback((data) => {
+    const sorted = [...data];
+    switch (sortBy) {
+      case 'nearest-due':
+        return sorted.sort((a, b) => {
+          const aDue = a.requests?.[0]?.due_date || a.closing_date || '9999-12-31';
+          const bDue = b.requests?.[0]?.due_date || b.closing_date || '9999-12-31';
+          return new Date(aDue) - new Date(bDue);
+        });
+      case 'most-overdue':
+        return sorted.sort((a, b) => (b.overdue_count || 0) - (a.overdue_count || 0));
+      case 'client-name':
+        return sorted.sort((a, b) => (a.borrower_name || '').localeCompare(b.borrower_name || ''));
+      case 'most-docs':
+        return sorted.sort((a, b) => (b.outstanding_count || 0) - (a.outstanding_count || 0));
+      default:
+        return sorted;
     }
-    return [];
-  }, [activeTab, filterBySearch, pendingReview.applicants, outstandingDocs.applicants, completedClients.applicants]);
+  }, [sortBy]);
+
+  // Get filtered data based on active tab
+  const getFilteredData = useMemo(() => {
+    let data = [];
+    if (activeTab === 'documents-uploaded') {
+      data = filterBySearch(pendingReview.applicants);
+    } else if (activeTab === 'documents-owed') {
+      let applicants = outstandingDocs.applicants;
+      if (overdueOnly) {
+        applicants = applicants.filter(a => a.overdue_count > 0);
+      }
+      data = filterBySearch(applicants);
+    } else if (activeTab === 'completed') {
+      data = filterBySearch(completedClients.applicants);
+    }
+    return sortData(data);
+  }, [activeTab, filterBySearch, sortData, pendingReview.applicants, outstandingDocs.applicants, completedClients.applicants, overdueOnly]);
 
   // Format currency
   const formatCurrency = (amount) => {
@@ -430,22 +443,6 @@ function SmartDocs() {
     }
   };
 
-  // Check if a loan has duplicates
-  const hasDuplicate = (loanId) => {
-    return duplicateMap[loanId] !== undefined;
-  };
-
-  // Get duplicate info for a loan
-  const getDuplicateInfo = (loanId) => {
-    return duplicateMap[loanId];
-  };
-
-  // Get total duplicate count
-  const getTotalDuplicates = () => {
-    const uniqueEmails = new Set(Object.values(duplicateMap).map(d => d.email));
-    return uniqueEmails.size;
-  };
-
   // Create tasks for all duplicates
   const handleCreateDuplicateTasks = async () => {
     try {
@@ -467,8 +464,8 @@ function SmartDocs() {
         setDuplicateTasksCreated(true);
         toast.success(`Created ${data.tasks_created} tasks to review duplicate records.`);
       } else {
-        const error = await response.json();
-        toast.error(`Error: ${error.detail || 'Failed to create tasks'}`);
+        const errorData = await response.json();
+        toast.error(`Error: ${errorData.detail || 'Failed to create tasks'}`);
       }
     } catch (err) {
       console.error('Error creating duplicate tasks:', err);
@@ -476,14 +473,49 @@ function SmartDocs() {
     }
   };
 
-  // Access denied if user doesn't have documents permissions
+  // Compute stats
+  const overdueCount = useMemo(() => {
+    return outstandingDocs.applicants.filter(a => a.overdue_count > 0).length;
+  }, [outstandingDocs.applicants]);
+
+  const reviewCount = useMemo(() => {
+    return pendingReview.total || 0;
+  }, [pendingReview.total]);
+
+  const collectedCount = useMemo(() => {
+    return completedClients.total || 0;
+  }, [completedClients.total]);
+
+  const totalOutstanding = useMemo(() => {
+    return outstandingDocs.total || 0;
+  }, [outstandingDocs.total]);
+
+  // Get nearest due text for a client
+  const getNearestDue = (applicant) => {
+    if (applicant.requests && applicant.requests.length > 0) {
+      const dueDates = applicant.requests
+        .filter(r => r.due_date)
+        .map(r => new Date(r.due_date))
+        .sort((a, b) => a - b);
+      if (dueDates.length > 0) {
+        return formatDueDate(dueDates[0].toISOString());
+      }
+    }
+    if (applicant.closing_date) {
+      return formatDueDate(applicant.closing_date);
+    }
+    return { text: 'No due date set', class: '' };
+  };
+
+  // Access denied
   if (!canAccessSmartDocs) {
     return (
-      <div className="smart-docs-page">
-        <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <h2>Access Denied</h2>
-          <p>You don't have permission to access Smart Docs.</p>
-          <button className="btn-primary" onClick={() => navigate('/dashboard')}>
+      <div className="sd2">
+        <div className="sd2-denied">
+          <div className="sd2-denied__icon">&#128274;</div>
+          <h2 className="sd2-denied__title">Access Denied</h2>
+          <p className="sd2-denied__text">You don't have permission to access Smart Docs.</p>
+          <button className="sd2-btn sd2-btn--primary" onClick={() => navigate('/dashboard')}>
             Return to Dashboard
           </button>
         </div>
@@ -493,603 +525,352 @@ function SmartDocs() {
 
   const filteredData = getFilteredData;
 
+  // Map activeTab to filter pill keys
+  const tabToPill = {
+    'documents-owed': overdueCount > 0 ? 'past-due' : 'all-outstanding',
+    'documents-uploaded': 'needs-review',
+    'completed': 'completed',
+  };
+
   return (
-    <div className="smart-docs-page">
-      {/* Header */}
-      <div className="smart-docs-header">
-        <div className="header-content">
-          <h1>Smart Docs</h1>
-          <p className="subtitle">Track and manage document collection across all clients</p>
+    <div className="sd2">
+      {/* Page Header */}
+      <header className="sd2-header">
+        <h1 className="sd2-title">Smart Docs</h1>
+        <p className="sd2-subtitle">Track document collections, review uploads, and manage past-due requests</p>
+      </header>
+
+      {/* Stats Grid */}
+      <div className="sd2-stats">
+        <div
+          className="sd2-stat sd2-stat--overdue"
+          onClick={() => { setOverdueOnly(true); handleTabChange('documents-owed'); }}
+        >
+          <div className="sd2-stat__label">Past Due</div>
+          <div className="sd2-stat__value">{overdueCount}</div>
+          <div className="sd2-stat__sub">{overdueCount} client{overdueCount !== 1 ? 's' : ''} with overdue documents</div>
         </div>
-        {outstandingDocs.applicants.length > 0 && (
-          <div className="header-batch-actions">
-            <button
-              className="btn-batch-reminder"
-              onClick={() => setBatchReminderOpen(true)}
-              title="Send reminders to all borrowers with outstanding documents"
-              aria-label={`Send Batch Reminder to ${outstandingDocs.applicants.length} borrower${outstandingDocs.applicants.length !== 1 ? 's' : ''} with outstanding documents`}
-              aria-haspopup="dialog"
-            >
-              📨 Send Batch Reminder ({outstandingDocs.applicants.length})
-            </button>
+        <div
+          className="sd2-stat sd2-stat--review"
+          onClick={() => handleTabChange('documents-uploaded')}
+        >
+          <div className="sd2-stat__label">Needs Review</div>
+          <div className="sd2-stat__value">{reviewCount}</div>
+          <div className="sd2-stat__sub">{summary?.pending_review?.documents || 0} documents uploaded</div>
+        </div>
+        <div
+          className="sd2-stat sd2-stat--collected"
+          onClick={() => handleTabChange('completed')}
+        >
+          <div className="sd2-stat__label">Collected</div>
+          <div className="sd2-stat__value">{collectedCount}</div>
+          <div className="sd2-stat__sub">Fully completed files</div>
+        </div>
+        <div
+          className="sd2-stat sd2-stat--total"
+          onClick={() => { setOverdueOnly(false); handleTabChange('documents-owed'); }}
+        >
+          <div className="sd2-stat__label">Total Outstanding</div>
+          <div className="sd2-stat__value">{totalOutstanding}</div>
+          <div className="sd2-stat__sub">Active document requests</div>
+        </div>
+      </div>
+
+      {/* Alert Banner — only when past-due > 0 */}
+      {overdueCount > 0 && (
+        <div className="sd2-banner">
+          <div className="sd2-banner__seal">!</div>
+          <div className="sd2-banner__body">
+            <div className="sd2-banner__title">
+              {overdueCount} client{overdueCount !== 1 ? 's' : ''} {overdueCount !== 1 ? 'have' : 'has'} past-due documents
+            </div>
+            <p className="sd2-banner__desc">These borrowers have missed their document submission deadlines. Send reminders or escalate as needed.</p>
           </div>
+          <button
+            className="sd2-btn sd2-btn--primary"
+            onClick={() => setBatchReminderOpen(true)}
+          >
+            Send Batch Reminder
+          </button>
+        </div>
+      )}
+
+      {/* Filter Pills */}
+      <div className="sd2-filters">
+        <button
+          className={`sd2-filter ${activeTab === 'documents-owed' && overdueOnly ? 'active' : ''}`}
+          onClick={() => { setOverdueOnly(true); handleTabChange('documents-owed'); }}
+        >
+          {overdueCount > 0 && <span className="sd2-filter__pulse"></span>}
+          Past Due
+          {overdueCount > 0 && <span className="sd2-filter__count">{overdueCount}</span>}
+        </button>
+        <button
+          className={`sd2-filter ${activeTab === 'documents-uploaded' ? 'active' : ''}`}
+          onClick={() => handleTabChange('documents-uploaded')}
+        >
+          Needs Review
+          {reviewCount > 0 && <span className="sd2-filter__count">{reviewCount}</span>}
+        </button>
+        <button
+          className={`sd2-filter ${activeTab === 'documents-owed' && !overdueOnly ? 'active' : ''}`}
+          onClick={() => { setOverdueOnly(false); handleTabChange('documents-owed'); }}
+        >
+          All Outstanding
+          {totalOutstanding > 0 && <span className="sd2-filter__count">{totalOutstanding}</span>}
+        </button>
+        <button
+          className={`sd2-filter ${activeTab === 'completed' ? 'active' : ''}`}
+          onClick={() => handleTabChange('completed')}
+        >
+          Completed
+          {collectedCount > 0 && <span className="sd2-filter__count">{collectedCount}</span>}
+        </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="sd2-search">
+        <svg className="sd2-search__icon" width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M8 14A6 6 0 108 2a6 6 0 000 12zM16 16l-3.5-3.5" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        <input
+          type="text"
+          className="sd2-search__input"
+          placeholder="Search by client name or loan number..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
+        {searchInput && (
+          <button className="sd2-search__clear" onClick={() => setSearchInput('')}>
+            &times;
+          </button>
         )}
       </div>
 
-      {/* Duplicate Warning Banner */}
-      {getTotalDuplicates() > 0 && (
-        <div className="duplicate-warning-banner">
-          <div className="duplicate-warning-content">
-            <span className="duplicate-icon">⚠️</span>
-            <span className="duplicate-text">
-              <strong>{getTotalDuplicates()} potential duplicate{getTotalDuplicates() > 1 ? 's' : ''} detected</strong>
-              {' '}- Records with the same email address found. Review and merge to avoid confusion.
-            </span>
-          </div>
-          {!duplicateTasksCreated && (
-            <button
-              className="create-tasks-btn"
-              onClick={handleCreateDuplicateTasks}
-            >
-              Create Merge Tasks
-            </button>
-          )}
-          {duplicateTasksCreated && (
-            <span className="tasks-created-badge">✓ Tasks Created</span>
-          )}
-        </div>
-      )}
-
-      {/* Filters Bar */}
-      <div className="filters-bar">
-        <div className="filter-group">
-          <select
-            className="filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending Review</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="expired">Expired</option>
-          </select>
-        </div>
-
-        <div className="filter-group">
-          <select
-            className="filter-select"
-            value={docTypeFilter}
-            onChange={(e) => setDocTypeFilter(e.target.value)}
-          >
-            <option value="all">All Document Types</option>
-            <option value="income">Income Documents</option>
-            <option value="assets">Asset Documents</option>
-            <option value="identity">Identity Documents</option>
-            <option value="property">Property Documents</option>
-            <option value="credit">Credit Documents</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-
-        <div className="search-input-wrapper">
-          <span className="search-icon" aria-hidden="true">🔍</span>
+      {/* Controls Row */}
+      <div className="sd2-controls">
+        <label className="sd2-overdue-toggle">
           <input
-            type="text"
-            className="search-input"
-            placeholder="Search by name, email, or loan..."
-            aria-label="Search documents by name, email, or loan number"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            type="checkbox"
+            checked={overdueOnly}
+            onChange={(e) => setOverdueOnly(e.target.checked)}
           />
-          {searchInput && (
-            <button
-              className="search-clear"
-              onClick={() => setSearchInput('')}
-              aria-label="Clear search"
-            >
-              ×
-            </button>
-          )}
+          <span>Overdue only</span>
+        </label>
+        <div className="sd2-sort">
+          <span className="sd2-sort__label">Sort:</span>
+          <select
+            className="sd2-sort__select"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="nearest-due">Nearest Due Date</option>
+            <option value="most-overdue">Most Overdue</option>
+            <option value="client-name">Client Name (A-Z)</option>
+            <option value="most-docs">Most Docs Owed</option>
+          </select>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      {summary && (
-        <div className="summary-cards">
-          <div
-            className={`summary-card outstanding ${activeTab === 'documents-owed' ? 'active' : ''}`}
-            onClick={() => handleTabChange('documents-owed')}
-          >
-            <div className="card-value">{summary.outstanding_requests?.applicants || 0}</div>
-            <div className="card-label">Documents Owed</div>
-            <div className="card-sub">
-              {summary.outstanding_requests?.overdue || 0} overdue
-            </div>
-          </div>
-          <div
-            className={`summary-card pending ${activeTab === 'documents-uploaded' ? 'active' : ''}`}
-            onClick={() => handleTabChange('documents-uploaded')}
-          >
-            <div className="card-value">{summary.pending_review?.applicants || 0}</div>
-            <div className="card-label">Documents Uploaded</div>
-            <div className="card-sub">{summary.pending_review?.documents || 0} documents to review</div>
-          </div>
-          <div
-            className={`summary-card completed ${activeTab === 'completed' ? 'active' : ''}`}
-            onClick={() => handleTabChange('completed')}
-          >
-            <div className="card-value">{completedClients.total || 0}</div>
-            <div className="card-label">Completed</div>
-            <div className="card-sub">Finished financing</div>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="error-banner" role="alert">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} aria-label="Dismiss error">×</button>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="smart-docs-tabs" role="tablist" aria-label="Smart Docs views">
-        <button
-          role="tab"
-          data-tab="documents-owed"
-          className={`tab-btn ${activeTab === 'documents-owed' ? 'active' : ''}`}
-          aria-selected={activeTab === 'documents-owed'}
-          aria-controls="tab-panel-documents-owed"
-          onClick={() => handleTabChange('documents-owed')}
-          onKeyDown={(e) => handleTabKeyDown(e, 'documents-owed')}
-        >
-          Documents Owed
-          {outstandingDocs.total > 0 && (
-            <span className="tab-badge outstanding" aria-live="polite">{outstandingDocs.total}</span>
-          )}
-        </button>
-        <button
-          role="tab"
-          data-tab="documents-uploaded"
-          className={`tab-btn ${activeTab === 'documents-uploaded' ? 'active' : ''}`}
-          aria-selected={activeTab === 'documents-uploaded'}
-          aria-controls="tab-panel-documents-uploaded"
-          onClick={() => handleTabChange('documents-uploaded')}
-          onKeyDown={(e) => handleTabKeyDown(e, 'documents-uploaded')}
-        >
-          Documents Uploaded
-          {pendingReview.total > 0 && (
-            <span className="tab-badge pending" aria-live="polite">{pendingReview.total}</span>
-          )}
-        </button>
-        <button
-          role="tab"
-          data-tab="completed"
-          className={`tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
-          aria-selected={activeTab === 'completed'}
-          aria-controls="tab-panel-completed"
-          onClick={() => handleTabChange('completed')}
-          onKeyDown={(e) => handleTabKeyDown(e, 'completed')}
-        >
-          Completed
-          {completedClients.total > 0 && (
-            <span className="tab-badge completed" aria-live="polite">{completedClients.total}</span>
-          )}
-        </button>
-        <button
-          role="tab"
-          data-tab="queue"
-          className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
-          aria-selected={activeTab === 'queue'}
-          aria-controls="tab-panel-queue"
-          onClick={() => handleTabChange('queue')}
-          onKeyDown={(e) => handleTabKeyDown(e, 'queue')}
-        >
-          Queue View
-          {queueSummary?.by_sla_status?.breached > 0 && (
-            <span className="tab-badge breached" aria-live="polite">{queueSummary.by_sla_status.breached}</span>
-          )}
-        </button>
-      </div>
-
-      {/* Tab Content */}
+      {/* Section Header */}
       <SectionErrorBoundary sectionName="Smart Docs Content">
-      <div className="smart-docs-content" aria-busy={loading}>
-        {loading ? (
-          <div className="loading-state" role="alert" aria-live="polite">
-            <div className="spinner" aria-hidden="true" />
-            <p>Loading...</p>
+        <div className="sd2-section">
+          <div className="sd2-section__header">
+            <h2 className="sd2-section__title">
+              {activeTab === 'documents-owed' && overdueOnly && 'Past-Due Clients'}
+              {activeTab === 'documents-owed' && !overdueOnly && 'All Outstanding'}
+              {activeTab === 'documents-uploaded' && 'Needs Review'}
+              {activeTab === 'completed' && 'Completed Files'}
+              {activeTab === 'queue' && 'Queue View'}
+            </h2>
+            <div className="sd2-section__line"></div>
+            <span className="sd2-section__count">{filteredData.length}</span>
           </div>
-        ) : activeTab === 'documents-owed' ? (
-          /* Documents Owed Tab */
-          <div
-            id="tab-panel-documents-owed"
-            role="tabpanel"
-            aria-label="Documents Owed"
-            className="applicants-list"
-          >
-            <div className="list-filters">
-              <label className="filter-checkbox">
-                <input
-                  type="checkbox"
-                  checked={overdueOnly}
-                  onChange={(e) => setOverdueOnly(e.target.checked)}
-                />
-                Show overdue only
-              </label>
+
+          {/* Content */}
+          {loading ? (
+            <div className="sd2-loading">
+              <div className="sd2-spinner"></div>
+              <p>Loading documents...</p>
             </div>
-            {error ? (
-              <div className="empty-state" role="alert">
-                <span className="empty-icon">⚠</span>
-                <h3>Unable to load documents</h3>
-                <p>{typeof error === 'string' ? error : 'Something went wrong. Please try again.'}</p>
-                <button className="retry-btn" onClick={() => { setError(null); fetchAllLoans(); }}>Retry</button>
-              </div>
-            ) : filteredData.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">✓</span>
-                <h3>{searchQuery ? 'No matching clients' : 'No outstanding document requests'}</h3>
-                <p>{searchQuery ? 'Try a different search term' : 'All documents have been collected for active loans.'}</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="smart-docs-table">
-                  <thead>
-                    <tr>
-                      <th>Client</th>
-                      <th>Docs Status</th>
-                      <th>Stage</th>
-                      <th>Docs Progress</th>
-                      <th>Status</th>
-                      <th>Days Waiting</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredData.map((applicant) => {
-                      const docsCollected = applicant.docs_collected || 0;
-                      const docsRequired = applicant.docs_required || applicant.outstanding_count || docsCollected || 1;
-                      const completionPct = docsRequired > 0 ? Math.round((docsCollected / docsRequired) * 100) : 0;
-                      const daysWaiting = applicant.created_at
-                        ? Math.floor((new Date() - new Date(applicant.created_at)) / (1000 * 60 * 60 * 24))
-                        : 0;
-                      const isOverdue = daysWaiting > 5;
-                      const isAtRisk = daysWaiting > 3 && daysWaiting <= 5;
-
-                      return (
-                      <tr
-                        key={applicant.loan_id}
-                        className={`${isOverdue ? 'has-overdue' : ''} ${hasDuplicate(applicant.loan_id) ? 'has-duplicate' : ''}`}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Open loan for ${applicant.borrower_name}`}
-                        onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            navigate(`/smart-docs/client/${applicant.loan_id}`);
-                          }
-                        }}
-                      >
-                        <td>
-                          <div className="borrower-info">
-                            <span className="borrower-name">{applicant.borrower_name}</span>
-                            {applicant.record_type === 'lead' && (
-                              <span className="lead-badge" title="This is a lead, not yet a loan">LEAD</span>
-                            )}
-                            {hasDuplicate(applicant.loan_id) && (
-                              <span
-                                className="duplicate-badge"
-                                title={`Duplicate: Same email as ${getDuplicateInfo(applicant.loan_id).otherLoans.map(l => l.loan_number || l.borrower_name).join(', ')}`}
-                              >
-                                DUPLICATE
-                              </span>
-                            )}
-                          </div>
-                          {applicant.borrower_email && (
-                            <span className="borrower-email">{applicant.borrower_email}</span>
-                          )}
-                        </td>
-                        <td className="docs-status-cell">
-                          <div className="docs-counts">
-                            <span className="docs-requested" title="Documents Requested">
-                              {applicant.outstanding_count || docsRequired} requested
-                            </span>
-                            <span className="docs-to-review" title="Documents to Review">
-                              {applicant.pending_count || 0} to review
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`stage-badge stage-${(applicant.stage || 'processing').toLowerCase().replace(/\s+/g, '-')}`}>
-                            {applicant.stage || 'Processing'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="completion-cell">
-                            <div className="progress-bar">
-                              <div
-                                className="progress-fill"
-                                style={{ width: `${completionPct}%` }}
-                              />
-                            </div>
-                            <span className="completion-text">
-                              {docsCollected}/{docsRequired}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`sla-badge ${isOverdue ? 'sla-breached' : isAtRisk ? 'sla-at_risk' : 'sla-good'}`}>
-                            {isOverdue ? 'OVERDUE' : isAtRisk ? 'AT RISK' : 'ON TRACK'}
-                          </span>
-                        </td>
-                        <td className="days-waiting">
-                          <span className={daysWaiting > 5 ? 'text-danger' : daysWaiting > 3 ? 'text-warning' : ''}>
-                            {daysWaiting} {daysWaiting === 1 ? 'day' : 'days'}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            className="btn-view-sm"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}
-                            aria-label={`View documents for ${applicant.borrower_name}`}
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ) : activeTab === 'documents-uploaded' ? (
-          /* Documents Uploaded Tab */
-          <div
-            id="tab-panel-documents-uploaded"
-            role="tabpanel"
-            aria-label="Documents Uploaded"
-            className="applicants-list"
-          >
-            {filteredData.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">✓</span>
-                <h3>{searchQuery ? 'No matching clients' : 'All caught up!'}</h3>
-                <p>{searchQuery ? 'Try a different search term' : 'No documents pending review'}</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="smart-docs-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Loan #</th>
-                      <th>Purpose</th>
-                      <th>Pending Docs</th>
-                      <th>Oldest Upload</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredData.map((applicant) => (
-                      <tr
-                        key={applicant.loan_id}
-                        onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
-                      >
-                        <td>
-                          <span className="borrower-name">{applicant.borrower_name}</span>
-                        </td>
-                        <td className="loan-number">{applicant.loan_number || `#${applicant.loan_id}`}</td>
-                        <td>{applicant.loan_purpose || '-'}</td>
-                        <td>
-                          <span className="pending-badge">{applicant.pending_count} pending</span>
-                        </td>
-                        <td className="date-cell">{formatDate(applicant.oldest_upload)}</td>
-                        <td>
-                          <button
-                            className="btn-review-sm"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}
-                            aria-label={`Review documents for ${applicant.borrower_name}`}
-                          >
-                            Review
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ) : activeTab === 'completed' ? (
-          /* Completed Tab */
-          <div
-            id="tab-panel-completed"
-            role="tabpanel"
-            aria-label="Completed"
-            className="applicants-list"
-          >
-            {filteredData.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">🎉</span>
-                <h3>{searchQuery ? 'No matching clients' : 'No completed loans yet'}</h3>
-                <p>{searchQuery ? 'Try a different search term' : 'Funded loans will appear here'}</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="smart-docs-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Loan #</th>
-                      <th>Purpose</th>
-                      <th>Amount</th>
-                      <th>Funded</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredData.map((applicant) => (
-                      <tr
-                        key={applicant.loan_id}
-                        className="completed-row"
-                        onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
-                      >
-                        <td>
-                          <span className="borrower-name">{applicant.borrower_name}</span>
-                        </td>
-                        <td className="loan-number">{applicant.loan_number || `#${applicant.loan_id}`}</td>
-                        <td>{applicant.loan_purpose || '-'}</td>
-                        <td className="loan-amount">{formatCurrency(applicant.loan_amount)}</td>
-                        <td className="date-cell">{formatDate(applicant.funded_at)}</td>
-                        <td>
-                          <span className="completed-badge">Completed</span>
-                        </td>
-                        <td>
-                          <button
-                            className="btn-view-sm"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}
-                            aria-label={`View archived documents for ${applicant.borrower_name}`}
-                          >
-                            Archive
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Queue View Tab */
-          <div
-            id="tab-panel-queue"
-            role="tabpanel"
-            aria-label="Queue View"
-            className="queue-view"
-          >
-            {/* SLA Filter */}
-            <div className="queue-filters">
-              <select
-                className="filter-select"
-                value={slaFilter}
-                onChange={(e) => setSlaFilter(e.target.value)}
-              >
-                <option value="all">All SLA Status</option>
-                <option value="BREACHED">Breached</option>
-                <option value="AT_RISK">At Risk</option>
-                <option value="GOOD">Good</option>
-              </select>
+          ) : error ? (
+            <div className="sd2-empty">
+              <h3>Unable to load documents</h3>
+              <p>{typeof error === 'string' ? error : 'Something went wrong. Please try again.'}</p>
+              <button className="sd2-btn sd2-btn--primary" onClick={() => { setError(null); fetchAllLoans(); }}>Retry</button>
             </div>
-
-            {/* Queue Summary Cards */}
-            {queueSummary && (
-              <div className="queue-summary-cards">
-                <div className="queue-summary-card breached">
-                  <div className="card-value">{queueSummary.by_sla_status?.breached || 0}</div>
-                  <div className="card-label">SLA Breached</div>
-                </div>
-                <div className="queue-summary-card at-risk">
-                  <div className="card-value">{queueSummary.by_sla_status?.at_risk || 0}</div>
-                  <div className="card-label">At Risk</div>
-                </div>
-                <div className="queue-summary-card good">
-                  <div className="card-value">{queueSummary.by_sla_status?.good || 0}</div>
-                  <div className="card-label">On Track</div>
-                </div>
+          ) : activeTab === 'queue' ? (
+            /* Queue View */
+            <div className="sd2-queue">
+              <div className="sd2-queue__filters">
+                <select
+                  className="sd2-sort__select"
+                  value={slaFilter}
+                  onChange={(e) => setSlaFilter(e.target.value)}
+                >
+                  <option value="all">All SLA Status</option>
+                  <option value="BREACHED">Breached</option>
+                  <option value="AT_RISK">At Risk</option>
+                  <option value="GOOD">Good</option>
+                </select>
               </div>
-            )}
-
-            {/* Queue Table */}
-            {queueData.queue.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">✓</span>
-                <h3>No clients in queue</h3>
-                <p>All document requests have been fulfilled</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="smart-docs-table">
-                  <thead>
-                    <tr>
-                      <th>Client</th>
-                      <th>Loan #</th>
-                      <th>Completion</th>
-                      <th>SLA Status</th>
-                      <th>Last Activity</th>
-                      <th>Reminders</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {queueData.queue.map((item) => (
-                      <tr
-                        key={item.loan_id}
-                        className={`queue-row ${item.has_sla_breach ? 'has-breach' : ''}`}
-                        onClick={() => navigate(`/smart-docs/client/${item.loan_id}`)}
-                      >
-                        <td>
-                          <div className="borrower-info">
-                            <span className="borrower-name">{item.borrower_name}</span>
-                            {item.borrower_email && (
-                              <span className="borrower-email">{item.borrower_email}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="loan-number">{item.loan_number || `#${item.loan_id}`}</td>
-                        <td>
-                          <div className="completion-cell">
-                            <div className="progress-bar">
-                              <div
-                                className="progress-fill"
-                                style={{ width: `${item.completion_percentage}%` }}
-                              />
-                            </div>
-                            <span className="completion-text">
-                              {item.received_valid}/{item.total_requested} ({item.completion_percentage}%)
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`sla-badge sla-${item.sla_status.toLowerCase()}`}>
+              {queueData.queue.length === 0 ? (
+                <div className="sd2-empty">
+                  <h3>No clients in queue</h3>
+                  <p>All document requests have been fulfilled</p>
+                </div>
+              ) : (
+                <div className="sd2-card-list">
+                  {queueData.queue.map((item) => (
+                    <div
+                      key={item.loan_id}
+                      className={`sd2-card ${item.has_sla_breach ? 'sd2-card--overdue' : ''}`}
+                    >
+                      <div className="sd2-card__header">
+                        <div>
+                          <h3
+                            className="sd2-card__name"
+                            onClick={() => navigate(`/smart-docs/client/${item.loan_id}`)}
+                          >
+                            {item.borrower_name}
+                          </h3>
+                          <span className="sd2-card__loan">{item.loan_number || `#${item.loan_id}`}</span>
+                        </div>
+                        <div className="sd2-card__badges">
+                          <span className={`sd2-pill sd2-pill--${item.sla_status?.toLowerCase() === 'breached' ? 'overdue' : item.sla_status?.toLowerCase() === 'at_risk' ? 'pending' : 'collected'}`}>
                             {item.sla_status}
-                            {item.breached_count > 0 && ` (${item.breached_count})`}
                           </span>
-                        </td>
-                        <td className="date-cell">{formatDate(item.last_activity)}</td>
-                        <td>
-                          {item.reminders_enabled ? (
-                            <span className="reminder-enabled">On</span>
-                          ) : (
-                            <span className="reminder-disabled">Off</span>
-                          )}
-                        </td>
-                        <td>
+                        </div>
+                      </div>
+                      <div className="sd2-progress">
+                        <div className="sd2-progress__track">
+                          <div className="sd2-progress__fill" style={{ width: `${item.completion_percentage || 0}%` }}></div>
+                        </div>
+                        <span className="sd2-progress__label">{item.received_valid || 0}/{item.total_requested || 0} collected</span>
+                      </div>
+                      <div className="sd2-card__footer">
+                        <span className="sd2-card__meta">Last activity: {formatDate(item.last_activity)}</span>
+                        <div className="sd2-card__actions">
                           <button
-                            className="btn-send-reminder"
-                            aria-label={`Send Reminder to ${item.borrower_name}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSendReminder(item.loan_id);
-                            }}
+                            className="sd2-btn sd2-btn--ghost"
+                            onClick={() => handleSendReminder(item.loan_id)}
                           >
                             Send Reminder
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                          <button
+                            className="sd2-btn sd2-btn--primary"
+                            onClick={() => navigate(`/smart-docs/client/${item.loan_id}`)}
+                          >
+                            Request Docs
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div className="sd2-empty">
+              <h3>{searchQuery ? 'No matching clients' : activeTab === 'completed' ? 'No completed loans yet' : 'No outstanding document requests'}</h3>
+              <p>{searchQuery ? 'Try a different search term' : activeTab === 'completed' ? 'Funded loans will appear here' : 'All documents have been collected for active loans.'}</p>
+            </div>
+          ) : (
+            /* Client Cards */
+            <div className="sd2-card-list">
+              {filteredData.map((applicant) => {
+                const docsCollected = applicant.documents?.length || 0;
+                const totalDocs = (applicant.outstanding_count || 0) + docsCollected;
+                const totalForProgress = totalDocs || 1;
+                const progressPct = Math.round((docsCollected / totalForProgress) * 100);
+                const isOverdue = (applicant.overdue_count || 0) > 0;
+                const requests = applicant.requests || [];
+                const displayedDocs = requests.slice(0, 4);
+                const remainingDocs = Math.max(0, requests.length - 4);
+                const nearestDue = getNearestDue(applicant);
+
+                return (
+                  <div
+                    key={applicant.loan_id}
+                    className={`sd2-card ${isOverdue ? 'sd2-card--overdue' : ''}`}
+                  >
+                    <div className="sd2-card__header">
+                      <div>
+                        <h3
+                          className="sd2-card__name"
+                          onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
+                        >
+                          {applicant.borrower_name}
+                        </h3>
+                        <span className="sd2-card__loan">
+                          {applicant.loan_number || `#${applicant.loan_id}`}
+                          {applicant.loan_purpose ? ` · ${applicant.loan_purpose}` : ''}
+                        </span>
+                      </div>
+                      <div className="sd2-card__badges">
+                        {(applicant.overdue_count || 0) > 0 && (
+                          <span className="sd2-pill sd2-pill--overdue">{applicant.overdue_count} OVERDUE</span>
+                        )}
+                        {(applicant.outstanding_count || 0) > 0 && (
+                          <span className="sd2-pill sd2-pill--pending">{applicant.outstanding_count} REQUESTED</span>
+                        )}
+                        {docsCollected > 0 && (
+                          <span className="sd2-pill sd2-pill--collected">{docsCollected} RECEIVED</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="sd2-progress">
+                      <div className="sd2-progress__track">
+                        <div className="sd2-progress__fill" style={{ width: `${progressPct}%` }}></div>
+                      </div>
+                      <span className="sd2-progress__label">{docsCollected}/{totalForProgress} collected</span>
+                    </div>
+
+                    {displayedDocs.length > 0 && (
+                      <div className="sd2-docs">
+                        {displayedDocs.map((doc, idx) => {
+                          const docDue = formatDueDate(doc.due_date);
+                          const docIsOverdue = docDue.class === 'overdue';
+                          return (
+                            <span key={idx} className={`sd2-doc ${docIsOverdue ? 'sd2-doc--overdue' : ''}`}>
+                              <span className={`sd2-doc__dot sd2-doc__dot--${getPriorityClass(doc.priority)}`}></span>
+                              {doc.document_type || doc.title || doc.name || 'Document'}
+                              <span className={`sd2-doc__due ${docIsOverdue ? 'sd2-doc__due--overdue' : ''}`}>{docDue.text}</span>
+                            </span>
+                          );
+                        })}
+                        {remainingDocs > 0 && (
+                          <span className="sd2-doc">+{remainingDocs} more</span>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="sd2-card__footer">
+                      <span className={`sd2-card__meta ${nearestDue.class === 'overdue' ? 'sd2-card__meta--overdue' : ''}`}>
+                        Next due: {nearestDue.text}
+                      </span>
+                      <div className="sd2-card__actions">
+                        <button
+                          className="sd2-btn sd2-btn--ghost"
+                          onClick={(e) => { e.stopPropagation(); handleSendReminder(applicant.loan_id); }}
+                        >
+                          Send Reminder
+                        </button>
+                        <button
+                          className="sd2-btn sd2-btn--primary"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}
+                        >
+                          Request Docs
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </SectionErrorBoundary>
 
       {/* Pagination */}
@@ -1097,11 +878,10 @@ function SmartDocs() {
         (activeTab === 'documents-owed' && outstandingDocs.total_pages > 1) ||
         (activeTab === 'completed' && completedClients.total_pages > 1) ||
         (activeTab === 'queue' && queueData.total_pages > 1)) && (
-        <div className="pagination">
+        <div className="sd2-pagination">
           <button
             disabled={pagination.page === 1}
             onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
-            aria-label="Previous page"
           >
             Previous
           </button>
@@ -1127,7 +907,6 @@ function SmartDocs() {
                     : completedClients.total_pages)
             }
             onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
-            aria-label="Next page"
           >
             Next
           </button>
