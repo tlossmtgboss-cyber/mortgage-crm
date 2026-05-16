@@ -135,6 +135,64 @@ export const useTask = (taskId, options = {}) => {
 };
 
 // ============================================================================
+// SMS TASKS QUERIES
+// ============================================================================
+
+export const useSMSTasks = (status = '', category = '', options = {}) => {
+  return useQuery({
+    queryKey: ['smsTasks', status, category],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: '50' });
+      if (status && status !== 'all') params.set('status', status);
+      if (category) params.set('category', category);
+      const data = await fetchWithAuth(`/api/v1/sms-tasks?${params}`);
+      return Array.isArray(data) ? data : (data?.tasks || data?.items || []);
+    },
+    staleTime: 1000 * 60 * 2,
+    refetchOnMount: 'always',
+    retry: 2,
+    ...options,
+  });
+};
+
+export const useSMSTaskDetail = (taskId, options = {}) => {
+  return useQuery({
+    queryKey: ['smsTask', taskId],
+    queryFn: () => fetchWithAuth(`/api/v1/sms-tasks/${taskId}`),
+    enabled: !!taskId,
+    staleTime: 1000 * 60 * 2,
+    ...options,
+  });
+};
+
+export const useSMSTaskStats = (options = {}) => {
+  return useQuery({
+    queryKey: ['smsTaskStats'],
+    queryFn: () => fetchWithAuth('/api/v1/sms-tasks/stats'),
+    staleTime: 1000 * 60 * 2,
+    ...options,
+  });
+};
+
+// ============================================================================
+// RECONCILIATION QUERIES
+// ============================================================================
+
+export const useReconciliationItems = (options = {}) => {
+  return useQuery({
+    queryKey: ['reconciliation'],
+    queryFn: async () => {
+      const data = await fetchWithAuth('/api/v1/reconciliation/pending');
+      return Array.isArray(data) ? data : (data?.items || []);
+    },
+    staleTime: 1000 * 60 * 2,
+    refetchOnMount: 'always',
+    retry: 2,
+    ...options,
+  });
+};
+
+// ============================================================================
 // PORTFOLIO / CLIENTS QUERIES
 // ============================================================================
 

@@ -409,7 +409,7 @@ function ReferralPartnerDetail() {
         >
           Overview
         </button>
-        {partner && partner.category === 'builder' && (
+        {partner && (partner.type === 'Builder' || partner.category === 'builder') && (
           <button
             className={`partner-tab ${activeTab === 'builderapp' ? 'active' : ''}`}
             onClick={() => {

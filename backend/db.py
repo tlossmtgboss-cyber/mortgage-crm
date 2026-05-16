@@ -99,18 +99,18 @@ elif USE_PGBOUNCER:
     )
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has ~25 max connections. With numReplicas=1 in railway.toml,
-    # pool_size=5 + max_overflow=1 = 6 connections per process.
-    # During rolling deploys (2 containers briefly): 2 × 6 = 12 + advisory = 13 total.
-    # pool_size=5 is the minimum that handles SPA burst loads (~20 concurrent API calls).
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=5, max_overflow=1, max=6)")
+    # Railway has ~20 max connections. With numReplicas=1 in railway.toml,
+    # pool_size=3 + max_overflow=2 = 5 connections per process.
+    # During rolling deploys (2 containers briefly): 2 × 5 = 10 + advisory = 11 total.
+    # pool_recycle=120 aggressively reclaims idle connections.
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=2, max=5)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=1,
-        pool_recycle=300,             # Recycle connections every 5min (prevents stale connections without excessive churn)
-        pool_timeout=20,              # Wait max 20s for a connection (handles SPA burst loads)
+        pool_size=3,
+        max_overflow=2,
+        pool_recycle=120,             # Recycle connections every 2min to prevent buildup
+        pool_timeout=10,              # Wait max 10s for a connection
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         pool_reset_on_return='rollback',  # Clean connections before reuse
         echo=False,                   # Set True for SQL debugging

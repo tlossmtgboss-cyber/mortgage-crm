@@ -234,10 +234,11 @@ function App() {
     tasks: 0,
     urgentTasks: 0,
     partners: 0,
-    unifiedTasks: 0,  // New unified task count
-    reconciliation: 0,  // Pending reconciliation items
-    smartDocs: 0,  // Documents pending review
-    smsUnread: 0  // Inbound SMS awaiting response
+    unifiedTasks: 0,
+    reconciliation: 0,
+    smartDocs: 0,
+    smsUnread: 0,
+    totalTasks: 0  // Combined count for sidebar badge
   });
 
   const toggleAssistant = () => {
@@ -276,7 +277,8 @@ function App() {
           unifiedTasks: 0,
           reconciliation: 0,
           smartDocs: 0,
-          smsUnread: 0
+          smsUnread: 0,
+          totalTasks: 0
         });
         // Clean up push notification registration on logout
         teardownPushNotifications();
@@ -351,6 +353,10 @@ function App() {
           const smsData = await smsUnreadResponse.json();
           updates.smsUnread = smsData.unread_count || 0;
         }
+
+        // Compute combined total for sidebar badge
+        const prevMerged = { ...taskCounts, ...updates };
+        updates.totalTasks = (prevMerged.urgentTasks || 0) + (prevMerged.reconciliation || 0) + (prevMerged.smsUnread || 0);
 
         setTaskCounts(prev => ({ ...prev, ...updates }));
       } catch (error) {

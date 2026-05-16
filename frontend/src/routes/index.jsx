@@ -105,7 +105,7 @@ const MumClientDetail = lazyRetry(() => import('../pages/MumClientDetail'));
 const YearOverYear = lazyRetry(() => import('../pages/YearOverYear'));
 const RateMonitor = lazyRetry(() => import('../pages/RateMonitor'));
 const Tasks = lazyRetry(() => import('../pages/Tasks'));
-const SMSTasks = lazyRetry(() => import('../pages/SMSTasks'));
+// SMSTasks removed — merged into unified Tasks page
 const Calendar = lazyRetry(() => import('../pages/Calendar'));
 const CalendarSettings = lazyRetry(() => import('../pages/CalendarSettings'));
 const CalendarSetupWizard = lazyRetry(() => import('../components/calendar/setup/CalendarSetupWizard'));
@@ -125,7 +125,7 @@ const PartnerClientDetail = lazyRetry(() => import('../pages/PartnerClientDetail
 const AIUnderwriter = lazyRetry(() => import('../pages/AIUnderwriter'));
 const GoalTracker = lazyRetry(() => import('../pages/GoalTracker'));
 const Coach = lazyRetry(() => import('../pages/Coach'));
-const ReconciliationCenter = lazyRetry(() => import('../pages/ReconciliationCenter'));
+// ReconciliationCenter removed — merged into unified Tasks page
 const MergeCenter = lazyRetry(() => import('../pages/MergeCenter'));
 const Settings = lazyRetry(() => import('../pages/Settings'));
 const TeamMembers = lazyRetry(() => import('../pages/TeamMembers'));
@@ -638,7 +638,7 @@ export function getRoutes(layoutProps, options = {}) {
 
     // Tasks & Calendar
     <Route key="/tasks" path="/tasks" element={withMainLayout(Tasks)} />,
-    <Route key="/sms-tasks" path="/sms-tasks" element={withMainLayout(SMSTasks)} />,
+    <Route key="/sms-tasks" path="/sms-tasks" element={<Navigate to="/tasks" replace />} />,
     <Route key="/calendar" path="/calendar" element={withMainLayout(Calendar)} />,
     <Route key="/calendar-settings" path="/calendar-settings" element={withMainLayout(CalendarSettings)} />,
     <Route key="/calendar/setup" path="/calendar/setup" element={withMainLayout(CalendarSetupWizard)} />,
@@ -735,7 +735,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/ai-underwriter" path="/ai-underwriter" element={withMainLayout(AIUnderwriter)} />,
     <Route key="/goal-tracker" path="/goal-tracker" element={withMainLayout(GoalTracker)} />,
     <Route key="/coach" path="/coach" element={withMainLayout(Coach)} />,
-    <Route key="/reconciliation" path="/reconciliation" element={withMainLayout(ReconciliationCenter)} />,
+    <Route key="/reconciliation" path="/reconciliation" element={<Navigate to="/tasks" replace />} />,
     <Route key="/merge" path="/merge" element={withMainLayout(MergeCenter)} />,
 
     // Communication Intelligence

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { teamAPI, tasksAPI, reconciliationAPI, leadsAPI, loansAPI, API_BASE_URL } from '../services/api';
@@ -15,7 +15,6 @@ import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
-// Lead status options — values match backend LeadStage enum (Title Case)
 const LEAD_STAGES = [
   { value: 'New', label: 'New', color: '#B8924A' },
   { value: 'Attempted Contact', label: 'Attempted Contact', color: '#B8924A' },
@@ -31,31 +30,43 @@ const LEAD_STAGES = [
   { value: 'Long-Term Nurture', label: 'Long-Term Nurture', color: '#6b7280' }
 ];
 
-// Mock data functions - returning empty arrays (sample data removed)
-const mockPrioritizedTasks = () => [];
+const PRIORITY_COLORS = {
+  urgent: '#ef4444',
+  critical: '#dc2626',
+  high: '#f59e0b',
+  medium: '#3b82f6',
+  normal: '#22c55e',
+  low: '#9ca3af',
+};
+
+const CATEGORY_COLORS = {
+  scheduling: { bg: '#e0f2fe', text: '#0369a1' },
+  question: { bg: '#fef3c7', text: '#92400e' },
+  document_request: { bg: '#FAF3E5', text: '#8A6D30' },
+  status_update: { bg: '#d1fae5', text: '#065f46' },
+  rate_inquiry: { bg: '#fce7f3', text: '#9d174d' },
+  general: { bg: '#f3f4f6', text: '#374151' },
+};
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 const mockLoanIssues = () => [];
-
-const mockAiTasks = () => ({ pending: [], waiting: [] }); // eslint-disable-line no-unused-vars
-
 const mockMumAlerts = () => [];
+const mockLeadMetrics = () => ({ new_today: 0, avg_contact_time: 0, conversion_rate: 0, hot_leads: 0, alerts: [] });
 
-const mockLeadMetrics = () => ({
-  new_today: 0,
-  avg_contact_time: 0,
-  conversion_rate: 0,
-  hot_leads: 0,
-  alerts: [
-  ]
-});
-
-const mockMessages = () => []; // eslint-disable-line no-unused-vars
-
-// Fetch function for React Query - fetches and transforms all task data
+// Fetch workflow + manual tasks
 const fetchTasksData = async () => {
   const token = getToken();
-
-  // Fetch workflow tasks from all leads/loans
   const workflowResponse = await fetch(`${API_BASE_URL}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
@@ -78,6 +89,7 @@ const fetchTasksData = async () => {
       ai_message: `${task.description}\n\nWorkflow: ${task.workflow_name}\nDays until due: ${task.days_until_due}`,
       description: task.description,
       source: 'Workflow',
+      taskType: 'workflow',
       entity_type: task.client_type,
       entity_id: task.client_id,
       lead_id: task.client_type === 'lead' ? task.client_id : null,
@@ -90,11 +102,8 @@ const fetchTasksData = async () => {
     }));
   }
 
-  // Also fetch any manual tasks from unified-tasks endpoint
   const response = await tasksAPI.getUnified();
   const unifiedTasks = response?.tasks || [];
-
-  // Transform unified tasks to match frontend format
   const transformedTasks = unifiedTasks.map(task => ({
     id: `${task.source}-${task.id}`,
     title: task.title,
@@ -113,34 +122,32 @@ const fetchTasksData = async () => {
           : task.source === 'workflow' ? 'Workflow'
           : task.source === 'task' ? 'Manual'
           : task.source,
+    taskType: 'workflow',
     entity_type: task.entity_type,
     entity_id: task.entity_id,
     email_from: task.email_from,
     email_subject: task.email_subject,
     communication_history: [],
-    // SLA task fields
     sla_milestone_id: task.sla_milestone_id,
     sla_milestone_type: task.sla_milestone_type,
     sla_date_field: task.sla_date_field,
     related_type: task.related_type
   }));
 
-  // Filter manual tasks AND workflow tasks from unified-tasks
   const manualAndUnifiedWorkflowTasks = transformedTasks.filter(t =>
     (t.source === 'Manual' || t.source === 'Workflow') &&
     !t.email_from &&
     !t.email_subject
   );
 
-  // Filter out phone-only workflow tasks - those go to Power Dialer
   const nonPhoneWorkflowTasks = workflowTasks.filter(task =>
     task.preferred_contact_method !== 'Phone'
   );
+  const phoneWorkflowTasks = workflowTasks.filter(task =>
+    task.preferred_contact_method === 'Phone'
+  );
 
-  // Combine old-style workflow tasks with manual + new linked workflow tasks
   const allTasks = [...nonPhoneWorkflowTasks, ...manualAndUnifiedWorkflowTasks];
-
-  // Deduplicate tasks by id
   const seen = new Set();
   const deduplicatedTasks = allTasks.filter(task => {
     if (seen.has(task.id)) return false;
@@ -150,40 +157,86 @@ const fetchTasksData = async () => {
 
   return {
     prioritizedTasks: deduplicatedTasks,
+    phoneTasks: phoneWorkflowTasks,
     loanIssues: mockLoanIssues(),
-    aiTasks: { pending: [], waiting: [] },
     mumAlerts: mockMumAlerts(),
     leadMetrics: mockLeadMetrics(),
-    messages: []
   };
+};
+
+// Fetch SMS tasks
+const fetchSMSTasks = async () => {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks?limit=50&status=pending`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const tasks = Array.isArray(data) ? data : (data.tasks || data.items || []);
+  return tasks.map(t => ({
+    ...t,
+    taskType: 'sms',
+    title: `SMS: ${(t.category || 'general').replace(/_/g, ' ')}`,
+    borrower: t.contact_name || 'Unknown',
+  }));
+};
+
+// Fetch reconciliation items
+const fetchReconciliationItems = async () => {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}/api/v1/reconciliation/pending`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const items = Array.isArray(data) ? data : (data.items || []);
+  return items.map(item => ({
+    ...item,
+    taskType: 'reconciliation',
+    title: item.subject || item.email_subject || '(No Subject)',
+    borrower: item.from_name || item.from_email || item.sender_name || 'Unknown',
+  }));
 };
 
 function Tasks() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Use React Query for cached task fetching - instant on revisit!
-  const { data: tasksData, isLoading: loading, refetch: refetchTasks } = useQuery({
+  // Unified data fetching
+  const { data: tasksData, isLoading: tasksLoading, refetch: refetchTasks } = useQuery({
     queryKey: ['tasks'],
     queryFn: fetchTasksData,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 2,
   });
 
-  // Derive task state from React Query cache
+  const { data: smsTasks = [], isLoading: smsLoading, refetch: refetchSMS } = useQuery({
+    queryKey: ['smsTasks', 'pending'],
+    queryFn: fetchSMSTasks,
+    staleTime: 1000 * 60 * 2,
+    refetchOnMount: 'always',
+  });
+
+  const { data: reconItems = [], isLoading: reconLoading, refetch: refetchRecon } = useQuery({
+    queryKey: ['reconciliation'],
+    queryFn: fetchReconciliationItems,
+    staleTime: 1000 * 60 * 2,
+    refetchOnMount: 'always',
+  });
+
+  const loading = tasksLoading || smsLoading || reconLoading;
+
   const prioritizedTasks = tasksData?.prioritizedTasks || [];
+  const phoneTasks_raw = tasksData?.phoneTasks || [];
   const loanIssues = tasksData?.loanIssues || [];
-  const aiTasks = tasksData?.aiTasks || { pending: [], waiting: [] };
   const mumAlerts = tasksData?.mumAlerts || [];
   const leadMetrics = tasksData?.leadMetrics || {};
-  const messages = tasksData?.messages || [];
 
-  // Load completed tasks from localStorage on initial render
   const [completedTasks, setCompletedTasks] = useState(() => {
     const saved = localStorage.getItem('completedTasks');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
-  const [activeTab, setActiveTab] = useState('outstanding');
-  const [selectedTask, setSelectedTask] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [selectedItem, setSelectedItem] = useState(null);
   const [commModal, setCommModal] = useState(null);
   const [snoozedTasks, setSnoozedTasks] = useState(new Set());
   const [teamMembers, setTeamMembers] = useState([]);
@@ -191,19 +244,16 @@ function Tasks() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [completingTask, setCompletingTask] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Layout fix hook
-  const { containerRef } = useLayoutFix([loading]);
+  // SMS detail state
+  const [smsTaskDetail, setSmsTaskDetail] = useState(null);
+  const [smsDetailLoading, setSmsDetailLoading] = useState(false);
+  const [smsResponseMode, setSmsResponseMode] = useState(null);
+  const [smsEditText, setSmsEditText] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
 
-  // Save completed tasks to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('completedTasks', JSON.stringify([...completedTasks]));
-  }, [completedTasks]);
-
-  // Reconciliation tab state
-  const [emailQueue, setEmailQueue] = useState([]);
-  const [, setEmailQueueTotal] = useState(0);
-  const [reconciliationStats, setReconciliationStats] = useState({});
+  // Reconciliation detail state
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [showDispositionDialog, setShowDispositionDialog] = useState(false);
   const [dispositionEmail, setDispositionEmail] = useState(null);
@@ -211,23 +261,23 @@ function Tasks() {
   const [createTask, setCreateTask] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [processingEmailId, setProcessingEmailId] = useState(null);
-  const [queueFilters, setQueueFilters] = useState({
-    status: 'pending',
-    disposition: '',
-    hasMatch: ''
-  });
 
-  // Phone tab state (Power Dialer)
-  const [phoneTasks, setPhoneTasks] = useState([]);
-  const [, setPhoneContacts] = useState([]);
+  // Phone tab state
+  const [phoneTasksList, setPhoneTasksList] = useState([]);
   const [selectedPhoneTask, setSelectedPhoneTask] = useState(null);
-  const [dialerSession, setDialerSession] = useState(null); // eslint-disable-line no-unused-vars
   const [callStatus, setCallStatus] = useState('idle');
   const [selectedPhoneTaskIds, setSelectedPhoneTaskIds] = useState([]);
-  const [, setCallLogs] = useState([]);
-  const [, setDialerSettings] = useState(null);
+  const [powerDialActive, setPowerDialActive] = useState(false);
+  const [powerDialIndex, setPowerDialIndex] = useState(0);
+  const [powerDialQueue, setPowerDialQueue] = useState([]);
 
-  // Disposition options for reconciliation
+  const { containerRef } = useLayoutFix([loading]);
+
+  useEffect(() => {
+    localStorage.setItem('completedTasks', JSON.stringify([...completedTasks]));
+  }, [completedTasks]);
+
+  // Disposition options
   const dispositionOptions = [
     { value: 'document_received', label: 'Document Received', icon: '📄' },
     { value: 'document_request', label: 'Document Request', icon: '📋' },
@@ -239,154 +289,523 @@ function Tasks() {
     { value: 'skip', label: 'Skip/Archive', icon: '⏭️' }
   ];
 
+  // Load team members and subscribe to events
   useEffect(() => {
     loadTeamMembers();
-
-    // Subscribe to task events from other components (e.g., ActionSidebar)
     const unsubscribeCompleted = subscribeToTaskEvent(TASK_EVENTS.TASK_COMPLETED, (detail) => {
-      // If task was completed elsewhere, add to local completedTasks set
       if (detail.source !== 'tasks-page') {
-        console.log('[Tasks] Task completed elsewhere, updating...', detail.taskId);
-        setCompletedTasks(prev => {
-          const newCompleted = new Set(prev);
-          newCompleted.add(detail.taskId);
-          return newCompleted;
-        });
-        // Also reload to get fresh data
+        setCompletedTasks(prev => new Set([...prev, detail.taskId]));
         refetchTasks();
       }
     });
-
     const unsubscribeRefresh = subscribeToTaskEvent(TASK_EVENTS.TASKS_REFRESH, (detail) => {
       if (detail.source !== 'tasks-page') {
-        console.log('[Tasks] Refresh requested, reloading...');
         refetchTasks();
+        refetchSMS();
+        refetchRecon();
+      }
+    });
+    return () => { unsubscribeCompleted(); unsubscribeRefresh(); };
+  }, []);
+
+  // Load phone data
+  useEffect(() => {
+    if (activeFilter === 'phone') {
+      loadPhoneData();
+    }
+  }, [activeFilter]);
+
+  // Sync phone tasks from workflow data
+  useEffect(() => {
+    if (phoneTasks_raw.length > 0) {
+      setPhoneTasksList(phoneTasks_raw);
+    }
+  }, [phoneTasks_raw]);
+
+  // Auto-select first item when filter changes
+  useEffect(() => {
+    if (!loading && activeFilter !== 'phone') {
+      const items = getFilteredItems();
+      if (items.length > 0 && (!selectedItem || !items.find(i => i.id === selectedItem.id))) {
+        setSelectedItem(items[0]);
+      } else if (items.length === 0) {
+        setSelectedItem(null);
+      }
+    }
+  }, [loading, activeFilter, prioritizedTasks, smsTasks, reconItems]);
+
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => window.dispatchEvent(new Event('resize')), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, activeFilter, selectedItem]);
+
+  // Fetch SMS task detail when an SMS item is selected
+  useEffect(() => {
+    if (selectedItem?.taskType === 'sms' && selectedItem.id) {
+      fetchSmsDetail(selectedItem.id);
+    } else {
+      setSmsTaskDetail(null);
+      setSmsResponseMode(null);
+      setSmsEditText('');
+    }
+  }, [selectedItem?.id, selectedItem?.taskType]);
+
+  const fetchSmsDetail = async (taskId) => {
+    setSmsDetailLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks/${taskId}`, {
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSmsTaskDetail(data);
+      }
+    } catch (err) {
+      console.error('Error fetching SMS task detail:', err);
+    } finally {
+      setSmsDetailLoading(false);
+    }
+  };
+
+  // =============================================
+  // Build unified item list
+  // =============================================
+  const getAllItems = useCallback(() => {
+    const items = [];
+    const addedIds = new Set();
+
+    // Workflow tasks
+    prioritizedTasks.forEach((task, idx) => {
+      const taskId = task.id || `priority-${idx}`;
+      if (task.source === 'AI Engine' || task.email_from || task.email_subject) return;
+      if (!completedTasks.has(taskId) && !addedIds.has(taskId) && !snoozedTasks.has(taskId)) {
+        addedIds.add(taskId);
+        let sourceIcon = '⚡';
+        if (task.source === 'Manual') sourceIcon = '🎯';
+        items.push({ ...task, id: taskId, taskType: 'workflow', source: task.source || 'Workflow', sourceIcon });
       }
     });
 
-    return () => {
-      unsubscribeCompleted();
-      unsubscribeRefresh();
-    };
-  }, []);
+    // Loan issues
+    loanIssues.forEach((issue, idx) => {
+      const taskId = `issue-${idx}`;
+      if (!completedTasks.has(taskId) && !addedIds.has(taskId)) {
+        addedIds.add(taskId);
+        items.push({ id: taskId, ...issue, title: issue.issue, stage: 'Milestone Alert', urgency: 'critical', source: 'Milestone Risk', taskType: 'workflow', sourceIcon: '🔥' });
+      }
+    });
 
-  // Auto-select first task when tasks load or tab changes
-  useEffect(() => {
-    if (!loading) {
-      const tasksForTab = getTasksForTab();
-      if (tasksForTab.length > 0) {
-        // Only auto-select if no task is currently selected or if switching tabs
-        if (!selectedTask || !tasksForTab.find(t => t.id === selectedTask.id)) {
-          setSelectedTask(tasksForTab[0]);
+    // MUM alerts
+    mumAlerts.forEach((alert, idx) => {
+      const taskId = `mum-${idx}`;
+      if (!completedTasks.has(taskId) && !addedIds.has(taskId)) {
+        addedIds.add(taskId);
+        items.push({ id: taskId, ...alert, borrower: alert.client, stage: 'Client Retention', urgency: alert.urgency || 'medium', source: 'Client for Life', taskType: 'workflow', sourceIcon: '💎' });
+      }
+    });
+
+    // Lead alerts
+    if (leadMetrics.alerts) {
+      leadMetrics.alerts.forEach((alert, idx) => {
+        const taskId = `lead-${idx}`;
+        if (alert && !completedTasks.has(taskId) && !addedIds.has(taskId)) {
+          addedIds.add(taskId);
+          items.push({ id: taskId, title: alert, borrower: '', stage: 'Leads', urgency: 'high', source: 'Leads Engine', taskType: 'workflow', sourceIcon: '🚀' });
         }
-      } else {
-        setSelectedTask(null);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, activeTab, prioritizedTasks, aiTasks, loanIssues]);
-
-  // Note: Task state (draft message, communication method, etc.) is now managed
-  // inside the shared TaskDetailPanel component
-
-  // Force layout recalculation when content loads to fix scroll issues
-  useEffect(() => {
-    if (!loading) {
-      // Small delay to ensure DOM has updated
-      const timer = setTimeout(() => {
-        window.dispatchEvent(new Event('resize'));
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [loading, activeTab, selectedTask]);
-
-  // Load reconciliation data when tab is active
-  const loadReconciliationData = useCallback(async () => {
-    try {
-      // Load stats
-      const statsResponse = await fetch(`${API_BASE_URL}/api/v1/email-intelligence/stats`, {
-        headers: getAuthHeaders()
       });
-      if (statsResponse.ok) {
-        const data = await statsResponse.json();
-        setReconciliationStats(data);
-      }
-
-      // Load email queue
-      let url = `${API_BASE_URL}/api/v1/email-intelligence/queue?limit=50`;
-      if (queueFilters.status) url += `&status=${queueFilters.status}`;
-      if (queueFilters.disposition) url += `&disposition=${queueFilters.disposition}`;
-      if (queueFilters.hasMatch === 'yes') url += `&has_match=true`;
-      if (queueFilters.hasMatch === 'no') url += `&has_match=false`;
-
-      const queueResponse = await fetch(url, { headers: getAuthHeaders() });
-      if (queueResponse.ok) {
-        const data = await queueResponse.json();
-        setEmailQueue(data.emails || []);
-        setEmailQueueTotal(data.total || 0);
-      }
-    } catch (error) {
-      console.error('Error loading reconciliation data:', error);
     }
-  }, [getAuthHeaders, queueFilters]);
 
-  // Load phone dialer data when tab is active
+    // SMS tasks
+    smsTasks.forEach(task => {
+      if (!completedTasks.has(task.id) && !addedIds.has(task.id)) {
+        addedIds.add(task.id);
+        items.push(task);
+      }
+    });
+
+    // Reconciliation items
+    reconItems.forEach(item => {
+      if (!completedTasks.has(item.id) && !addedIds.has(item.id)) {
+        addedIds.add(item.id);
+        items.push(item);
+      }
+    });
+
+    return items;
+  }, [prioritizedTasks, loanIssues, mumAlerts, leadMetrics, smsTasks, reconItems, completedTasks, snoozedTasks]);
+
+  const getFilteredItems = useCallback(() => {
+    if (activeFilter === 'completed') return getCompletedTasks();
+    if (activeFilter === 'phone') return [];
+
+    let items = getAllItems();
+
+    if (activeFilter === 'workflow') {
+      items = items.filter(i => i.taskType === 'workflow');
+    } else if (activeFilter === 'sms') {
+      items = items.filter(i => i.taskType === 'sms');
+    } else if (activeFilter === 'reconciliation') {
+      items = items.filter(i => i.taskType === 'reconciliation');
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(i =>
+        (i.title || '').toLowerCase().includes(q) ||
+        (i.borrower || '').toLowerCase().includes(q) ||
+        (i.inbound_message || '').toLowerCase().includes(q) ||
+        (i.from_email || '').toLowerCase().includes(q)
+      );
+    }
+
+    return items;
+  }, [activeFilter, getAllItems, searchQuery]);
+
+  const getCompletedTasks = () => {
+    const tasks = [];
+    prioritizedTasks.forEach((task, idx) => {
+      const taskId = task.id || `priority-${idx}`;
+      if (completedTasks.has(taskId)) {
+        tasks.push({ ...task, id: taskId, taskType: 'workflow', source: task.source || 'Workflow', sourceIcon: '⚡' });
+      }
+    });
+    return tasks;
+  };
+
+  // =============================================
+  // Counts for filter tabs
+  // =============================================
+  const allItems = getAllItems();
+  const workflowCount = allItems.filter(i => i.taskType === 'workflow').length;
+  const smsCount = allItems.filter(i => i.taskType === 'sms').length;
+  const reconCount = allItems.filter(i => i.taskType === 'reconciliation').length;
+  const completedCount = getCompletedTasks().length;
+
+  // =============================================
+  // Phone dialer
+  // =============================================
   const loadPhoneData = useCallback(async () => {
     try {
-      // Fetch call tasks
-      const tasksResponse = await fetch(`${API_BASE}/api/v1/dialer/call-tasks`, {
-        headers: getAuthHeaders()
-      });
+      const tasksResponse = await fetch(`${API_BASE}/api/v1/dialer/call-tasks`, { headers: getAuthHeaders() });
       if (tasksResponse.ok) {
         const data = await tasksResponse.json();
-        setPhoneTasks(data.tasks || []);
-      }
-
-      // Fetch callable contacts
-      const contactsResponse = await fetch(`${API_BASE}/api/v1/dialer/callable-contacts`, {
-        headers: getAuthHeaders()
-      });
-      if (contactsResponse.ok) {
-        const data = await contactsResponse.json();
-        setPhoneContacts(data.contacts || []);
-      }
-
-      // Fetch call logs
-      const logsResponse = await fetch(`${API_BASE}/api/v1/dialer/call-logs?limit=20`, {
-        headers: getAuthHeaders()
-      });
-      if (logsResponse.ok) {
-        const data = await logsResponse.json();
-        setCallLogs(data.call_logs || []);
-      }
-
-      // Fetch dialer settings
-      const settingsResponse = await fetch(`${API_BASE}/api/v1/dialer/settings`, {
-        headers: getAuthHeaders()
-      });
-      if (settingsResponse.ok) {
-        const data = await settingsResponse.json();
-        setDialerSettings(data);
+        setPhoneTasksList(prev => {
+          const apiTasks = data.tasks || [];
+          const merged = [...prev];
+          apiTasks.forEach(t => { if (!merged.find(m => m.id === t.id)) merged.push(t); });
+          return merged;
+        });
       }
     } catch (error) {
       console.error('Error loading phone data:', error);
     }
-  }, [getAuthHeaders]);
+  }, []);
 
-  // Load tab-specific data when tab changes
-  useEffect(() => {
-    if (activeTab === 'reconciliation') {
-      loadReconciliationData();
-    } else if (activeTab === 'phone') {
-      loadPhoneData();
-    }
-  }, [activeTab, loadReconciliationData, loadPhoneData]);
-
-  // Reconciliation handlers
-  const handleViewEmail = (email) => { // eslint-disable-line no-unused-vars
-    setSelectedEmail(email);
+  const handleClickToDial = (task) => {
+    if (!task?.contact_phone) return;
+    const cleanPhone = task.contact_phone.replace(/[^\d+]/g, '');
+    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
+    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
   };
 
+  const handleEndCall = async () => {
+    setCallStatus('idle');
+    loadPhoneData();
+  };
+
+  const togglePhoneTaskSelection = (taskId) => {
+    setSelectedPhoneTaskIds(prev => prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]);
+  };
+
+  const selectAllPhoneTasks = () => {
+    setSelectedPhoneTaskIds(prev => prev.length === phoneTasksList.length ? [] : phoneTasksList.map(t => t.id));
+  };
+
+  const startPowerDial = () => {
+    const ids = selectedPhoneTaskIds.length > 0 ? selectedPhoneTaskIds : phoneTasksList.map(t => t.id);
+    const queue = phoneTasksList.filter(t => ids.includes(t.id));
+    if (queue.length === 0) { toast.error('No tasks to dial'); return; }
+    setPowerDialQueue(queue);
+    setPowerDialIndex(0);
+    setPowerDialActive(true);
+    setSelectedPhoneTask(queue[0]);
+    handleClickToDial(queue[0]);
+  };
+
+  const nextPowerDialContact = () => {
+    const next = powerDialIndex + 1;
+    if (next < powerDialQueue.length) {
+      setPowerDialIndex(next);
+      setSelectedPhoneTask(powerDialQueue[next]);
+      handleClickToDial(powerDialQueue[next]);
+    } else {
+      stopPowerDial();
+    }
+  };
+
+  const skipPowerDialContact = () => nextPowerDialContact();
+
+  const stopPowerDial = () => {
+    setPowerDialActive(false);
+    setPowerDialQueue([]);
+    setPowerDialIndex(0);
+    setCallStatus('idle');
+  };
+
+  // =============================================
+  // Task handlers
+  // =============================================
+  const loadTeamMembers = async () => {
+    try {
+      const data = await teamAPI.getMembers();
+      setTeamMembers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setTeamMembers([]);
+    }
+  };
+
+  const handleSend = (taskId, method, _message) => {
+    toast.success(`Task sent via ${method || 'Email'}!`);
+    handleComplete(taskId);
+  };
+
+  const handleDelete = async (taskId) => {
+    try {
+      const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
+      const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
+
+      if (!isMockTask && typeof taskId === 'string') {
+        if (taskId.startsWith('reconciliation-')) {
+          await reconciliationAPI.delete(taskId.replace('reconciliation-', ''));
+        } else if (taskId.startsWith('task-')) {
+          await tasksAPI.delete(taskId.replace('task-', ''));
+        } else if (!taskId.startsWith('workflow-')) {
+          await tasksAPI.delete(taskId);
+        }
+      } else if (!isMockTask && typeof taskId === 'number') {
+        await tasksAPI.delete(taskId);
+      }
+
+      setCompletedTasks(prev => new Set([...prev, taskId]));
+      if (selectedItem && selectedItem.id === taskId) {
+        const items = getFilteredItems();
+        const idx = items.findIndex(t => t.id === taskId);
+        setSelectedItem(items[idx + 1] || items[idx - 1] || null);
+      }
+      emitTaskCompleted(taskId, 'tasks-page');
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast.error('Failed to delete task. Please try again.');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTaskIds.size === 0) return;
+    setBulkDeleting(true);
+    let successCount = 0;
+    for (const taskId of selectedTaskIds) {
+      try {
+        const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
+        const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(p => taskId.startsWith(p));
+        if (!isMockTask && typeof taskId === 'string') {
+          if (taskId.startsWith('reconciliation-')) await reconciliationAPI.delete(taskId.replace('reconciliation-', ''));
+          else if (taskId.startsWith('task-')) await tasksAPI.delete(taskId.replace('task-', ''));
+          else if (!taskId.startsWith('workflow-')) await tasksAPI.delete(taskId);
+        } else if (!isMockTask && typeof taskId === 'number') {
+          await tasksAPI.delete(taskId);
+        }
+        setCompletedTasks(prev => new Set([...prev, taskId]));
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to delete task ${taskId}:`, error);
+      }
+    }
+    setSelectedTaskIds(new Set());
+    setSelectedItem(null);
+    setBulkDeleting(false);
+    if (successCount > 0) toast.success(`Deleted ${successCount} task${successCount > 1 ? 's' : ''}`);
+  };
+
+  const toggleTaskSelection = (taskId, e) => {
+    e.stopPropagation();
+    setSelectedTaskIds(prev => {
+      const s = new Set(prev);
+      s.has(taskId) ? s.delete(taskId) : s.add(taskId);
+      return s;
+    });
+  };
+
+  const handleSelectAll = (tasks) => {
+    const allSelected = tasks.every(t => selectedTaskIds.has(t.id));
+    setSelectedTaskIds(prev => {
+      const s = new Set(prev);
+      tasks.forEach(t => allSelected ? s.delete(t.id) : s.add(t.id));
+      return s;
+    });
+  };
+
+  const handleSnooze = (taskId) => {
+    setSnoozedTasks(prev => new Set([...prev, taskId]));
+    setTimeout(() => setSnoozedTasks(prev => { const s = new Set(prev); s.delete(taskId); return s; }), 24 * 60 * 60 * 1000);
+    if (selectedItem && selectedItem.id === taskId) {
+      const items = getFilteredItems();
+      const idx = items.findIndex(t => t.id === taskId);
+      setSelectedItem(items[idx + 1] || items[idx - 1] || null);
+    }
+  };
+
+  const handleDelegate = async (member) => {
+    if (!selectedItem) return;
+    const taskId = selectedItem.id;
+    queryClient.setQueryData(['tasks'], (prev) => {
+      if (!prev) return prev;
+      return { ...prev, prioritizedTasks: prev.prioritizedTasks.filter(t => t.id !== taskId) };
+    });
+    const items = getFilteredItems();
+    const idx = items.findIndex(t => t.id === taskId);
+    setSelectedItem(items[idx + 1] || items[idx - 1] || null);
+    try { await tasksAPI.delegate(taskId, member.id); } catch (error) { console.error('Failed to delegate:', error); }
+  };
+
+  const handleComplete = async (taskId) => {
+    setCompletingTask(true);
+    try {
+      const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
+      const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(p => taskId.startsWith(p));
+      if (!isMockTask) {
+        if (typeof taskId === 'string' && taskId.startsWith('task-')) {
+          await tasksAPI.update(taskId.replace('task-', ''), { status: 'completed' });
+        } else if (typeof taskId === 'string' && taskId.startsWith('workflow-')) {
+          try { await tasksAPI.update(taskId.replace('workflow-', ''), { status: 'completed' }); } catch (e) { /* ok */ }
+        } else if (typeof taskId === 'number') {
+          await tasksAPI.update(taskId, { status: 'completed' });
+        }
+      }
+      setCompletedTasks(prev => new Set([...prev, taskId]));
+      if (selectedItem && selectedItem.id === taskId) {
+        const items = getFilteredItems();
+        const idx = items.findIndex(t => t.id === taskId);
+        setSelectedItem(items[idx + 1] || items[idx - 1] || null);
+      }
+      emitTaskCompleted(taskId, 'tasks-page');
+    } catch (error) {
+      console.error('Error completing task:', error);
+      setCompletedTasks(prev => new Set([...prev, taskId]));
+      emitTaskCompleted(taskId, 'tasks-page');
+    } finally {
+      setCompletingTask(false);
+    }
+  };
+
+  const handleChangeStatus = async (newStatus) => {
+    if (!selectedItem) return;
+    setUpdatingStatus(true);
+    try {
+      const leadId = selectedItem.lead_id || selectedItem.leadId;
+      const loanId = selectedItem.loan_id || selectedItem.loanId;
+      if (leadId) {
+        await leadsAPI.update(leadId, { stage: newStatus });
+        setSelectedItem(prev => ({ ...prev, stage: newStatus }));
+        toast.success(`Lead status updated to "${LEAD_STAGES.find(s => s.value === newStatus)?.label || newStatus}"`);
+      } else if (loanId) {
+        await loansAPI.update(loanId, { stage: newStatus });
+        setSelectedItem(prev => ({ ...prev, stage: newStatus }));
+        toast.success(`Loan status updated to "${newStatus}"`);
+      } else {
+        toast.error('No lead or loan associated with this task');
+      }
+    } catch (error) {
+      toast.error('Failed to update status. Please try again.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleApproveAiTask = async (taskId, method = 'email') => {
+    try {
+      const task = selectedItem;
+      if (task && task.ai_message) {
+        const sentEmails = JSON.parse(localStorage.getItem('sentEmails') || '[]');
+        sentEmails.push({
+          id: `email-${Date.now()}`, taskId, to: task.borrower, subject: task.title,
+          body: task.ai_message, sentAt: new Date().toISOString(), sentVia: method, status: 'sent',
+          loanId: task.loan_id || task.loanId || null
+        });
+        localStorage.setItem('sentEmails', JSON.stringify(sentEmails));
+      }
+      handleComplete(taskId);
+      toast.success('AI action approved and sent!');
+    } catch (error) {
+      toast.error('Failed to approve task');
+    }
+  };
+
+  // =============================================
+  // SMS handlers
+  // =============================================
+  const handleSmsSendResponse = async (text, source) => {
+    if (!text.trim() || !selectedItem?.id) return;
+    setSmsSending(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks/${selectedItem.id}/respond`, {
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ response_text: text, response_source: source }),
+      });
+      if (!res.ok) throw new Error('Failed to send response');
+      toast.success('Response sent successfully');
+      setSmsResponseMode(null);
+      setSmsEditText('');
+      refetchSMS();
+      // Move to next SMS item
+      const items = getFilteredItems();
+      const idx = items.findIndex(i => i.id === selectedItem.id);
+      const next = items.find((i, j) => j > idx && i.taskType === 'sms');
+      if (next) setSelectedItem(next);
+    } catch (err) {
+      toast.error('Failed to send response');
+    } finally {
+      setSmsSending(false);
+    }
+  };
+
+  const handleSmsDismiss = async () => {
+    if (!selectedItem?.id) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks/${selectedItem.id}/dismiss`, {
+        method: 'POST', headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to dismiss task');
+      toast.success('Task dismissed');
+      refetchSMS();
+      const items = getFilteredItems();
+      const idx = items.findIndex(i => i.id === selectedItem.id);
+      const next = items[idx + 1] || items[idx - 1] || null;
+      setSelectedItem(next);
+    } catch (err) {
+      toast.error('Failed to dismiss task');
+    }
+  };
+
+  const handleSmsRegenerate = async () => {
+    if (!selectedItem?.id) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks/${selectedItem.id}/regenerate`, {
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ feedback: 'Please suggest a different response' }),
+      });
+      if (!res.ok) throw new Error('Failed to regenerate');
+      toast.success('Regenerating AI response...');
+      fetchSmsDetail(selectedItem.id);
+    } catch (err) {
+      toast.error('Failed to regenerate response');
+    }
+  };
+
+  // =============================================
+  // Reconciliation handlers
+  // =============================================
   const handleOpenDisposition = (email) => {
     setDispositionEmail(email);
     setSelectedDisposition(email.ai_analysis?.disposition || '');
@@ -397,23 +816,16 @@ function Tasks() {
 
   const handleProcessDisposition = async () => {
     if (!dispositionEmail || !selectedDisposition) return;
-
     setProcessingEmailId(dispositionEmail.id);
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/email-intelligence/queue/${dispositionEmail.id}/process`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          disposition: selectedDisposition,
-          create_task: createTask,
-          task_title: createTask ? taskTitle : undefined
-        })
+        method: 'POST', headers: getAuthHeaders(),
+        body: JSON.stringify({ disposition: selectedDisposition, create_task: createTask, task_title: createTask ? taskTitle : undefined }),
       });
-
       if (response.ok) {
         setShowDispositionDialog(false);
         setDispositionEmail(null);
-        loadReconciliationData();
+        refetchRecon();
       }
     } catch (error) {
       console.error('Error processing disposition:', error);
@@ -421,6 +833,8 @@ function Tasks() {
       setProcessingEmailId(null);
     }
   };
+
+  const getUrgencyColor = (urgency) => PRIORITY_COLORS[urgency] || '#6b7280';
 
   const formatEmailDate = (dateStr) => {
     if (!dateStr) return '';
@@ -433,1057 +847,252 @@ function Tasks() {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  const getEmailUrgencyLabel = (level) => {
-    if (level >= 5) return { label: 'Critical', color: '#dc2626' };
-    if (level >= 4) return { label: 'Urgent', color: '#f59e0b' };
-    if (level >= 3) return { label: 'Normal', color: '#3b82f6' };
-    return { label: 'Low', color: '#6b7280' };
-  };
-
-  // Phone dialer handlers
-  const handleClickToDial = (task) => {
-    if (!task?.contact_phone) return;
-
-    const cleanPhone = task.contact_phone.replace(/[^\d+]/g, '');
-    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
-  };
-
-  const handleEndCall = async () => {
-    setCallStatus('idle');
-    // Refresh data after call
-    loadPhoneData();
-  };
-
-  const togglePhoneTaskSelection = (taskId) => {
-    setSelectedPhoneTaskIds(prev => {
-      if (prev.includes(taskId)) {
-        return prev.filter(id => id !== taskId);
-      }
-      return [...prev, taskId];
-    });
-  };
-
-  // Select all phone tasks for power dialing
-  const selectAllPhoneTasks = () => {
-    if (selectedPhoneTaskIds.length === phoneTasks.length) {
-      // If all selected, deselect all
-      setSelectedPhoneTaskIds([]);
-    } else {
-      // Select all
-      setSelectedPhoneTaskIds(phoneTasks.map(task => task.id));
-    }
-  };
-
-  // Power dial state
-  const [powerDialActive, setPowerDialActive] = useState(false);
-  const [powerDialIndex, setPowerDialIndex] = useState(0);
-  const [powerDialQueue, setPowerDialQueue] = useState([]);
-
-  // Start power dial session with selected tasks (or all if none selected)
-  const startPowerDial = () => {
-    const tasksToDialIds = selectedPhoneTaskIds.length > 0
-      ? selectedPhoneTaskIds
-      : phoneTasks.map(t => t.id);
-
-    const tasksToDial = phoneTasks.filter(t => tasksToDialIds.includes(t.id));
-
-    if (tasksToDial.length === 0) {
-      toast.error('No tasks to dial');
-      return;
-    }
-
-    setPowerDialQueue(tasksToDial);
-    setPowerDialIndex(0);
-    setPowerDialActive(true);
-    setSelectedPhoneTask(tasksToDial[0]);
-
-    // Auto-dial the first contact
-    handleClickToDial(tasksToDial[0]);
-  };
-
-  // Move to next contact in power dial queue
-  const nextPowerDialContact = () => {
-    const nextIndex = powerDialIndex + 1;
-    if (nextIndex < powerDialQueue.length) {
-      setPowerDialIndex(nextIndex);
-      setSelectedPhoneTask(powerDialQueue[nextIndex]);
-      handleClickToDial(powerDialQueue[nextIndex]);
-    } else {
-      // End of queue
-      stopPowerDial();
-    }
-  };
-
-  // Skip current contact and move to next
-  const skipPowerDialContact = () => {
-    nextPowerDialContact();
-  };
-
-  // Stop power dial session
-  const stopPowerDial = () => {
-    setPowerDialActive(false);
-    setPowerDialQueue([]);
-    setPowerDialIndex(0);
-    setCallStatus('idle');
-  };
-
-  // loadTasks replaced by React Query - refetchTasks() used directly for refreshes
-
-  const loadTeamMembers = async () => {
-    try {
-      const data = await teamAPI.getMembers();
-      setTeamMembers(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load team members:', error);
-      setTeamMembers([]);
-    }
-  };
-
-  // Handler functions
-  const handleSend = (taskId, method, _message) => { // eslint-disable-line no-unused-vars
-    // method and message are passed from the shared TaskDetailPanel component
-    toast.success(`Task sent via ${method || 'Email'}!`);
-    handleComplete(taskId);
-  };
-
-  const handleDelete = async (taskId) => {
-
-    try {
-      // Check if this is a mock/demo task
-      // Mock tasks have IDs like 'priority-0', 'message-1', 'ai-pending-0', etc.
-      const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
-      const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
-
-      if (!isMockTask && typeof taskId === 'string') {
-        // Check if it's a reconciliation task (AI Engine)
-        if (taskId.startsWith('reconciliation-')) {
-          const numericId = taskId.replace('reconciliation-', '');
-          await reconciliationAPI.delete(numericId);
-        } else if (taskId.startsWith('task-')) {
-          // Regular task from unified-tasks
-          const numericId = taskId.replace('task-', '');
-          await tasksAPI.delete(numericId);
-        } else if (taskId.startsWith('workflow-')) {
-          // Workflow task - these may not be deletable, just remove from UI
-          console.log('Workflow task dismissed from UI:', taskId);
-        } else {
-          // Try as-is for numeric IDs
-          await tasksAPI.delete(taskId);
-        }
-      } else if (!isMockTask && typeof taskId === 'number') {
-        await tasksAPI.delete(taskId);
-      }
-
-      // Remove from local state
-      setCompletedTasks(prev => {
-        const newCompleted = new Set(prev);
-        newCompleted.add(taskId);
-        return newCompleted;
-      });
-
-      // Select next task from current tab only
-      if (selectedTask && selectedTask.id === taskId) {
-        const tabTasks = getTasksForTab();
-        const currentIndex = tabTasks.findIndex(t => t.id === taskId);
-        const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
-        setSelectedTask(nextTask);
-      }
-
-      // Emit event so other components (like ActionSidebar) can update
-      emitTaskCompleted(taskId, 'tasks-page');
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      toast.error('Failed to delete task. Please try again.');
-    }
-  };
-
-  // Bulk delete selected tasks
-  const handleBulkDelete = async () => {
-    if (selectedTaskIds.size === 0) return;
-
-    setBulkDeleting(true);
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const taskId of selectedTaskIds) {
-      try {
-        const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
-        const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
-
-        if (!isMockTask && typeof taskId === 'string') {
-          if (taskId.startsWith('reconciliation-')) {
-            const numericId = taskId.replace('reconciliation-', '');
-            await reconciliationAPI.delete(numericId);
-          } else if (taskId.startsWith('task-')) {
-            const numericId = taskId.replace('task-', '');
-            await tasksAPI.delete(numericId);
-          } else if (taskId.startsWith('workflow-')) {
-            // Workflow tasks - just mark as completed in UI
-            console.log('Workflow task dismissed:', taskId);
-          } else {
-            await tasksAPI.delete(taskId);
-          }
-        } else if (!isMockTask && typeof taskId === 'number') {
-          await tasksAPI.delete(taskId);
-        }
-
-        // Mark as completed locally
-        setCompletedTasks(prev => new Set([...prev, taskId]));
-        successCount++;
-      } catch (error) {
-        console.error(`Failed to delete task ${taskId}:`, error);
-        failCount++;
-      }
-    }
-
-    // Clear selection
-    setSelectedTaskIds(new Set());
-    setSelectedTask(null);
-    setBulkDeleting(false);
-
-    if (failCount > 0) {
-      toast.success(`Deleted ${successCount} tasks. ${failCount} failed.`);
-    }
-  };
-
-  // Toggle task selection
-  const toggleTaskSelection = (taskId, e) => {
-    e.stopPropagation();
-    setSelectedTaskIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(taskId)) {
-        newSet.delete(taskId);
-      } else {
-        newSet.add(taskId);
-      }
-      return newSet;
-    });
-  };
-
-  // Select all visible tasks
-  const handleSelectAll = (tasks) => {
-    const allSelected = tasks.every(t => selectedTaskIds.has(t.id));
-    if (allSelected) {
-      // Deselect all
-      setSelectedTaskIds(prev => {
-        const newSet = new Set(prev);
-        tasks.forEach(t => newSet.delete(t.id));
-        return newSet;
-      });
-    } else {
-      // Select all
-      setSelectedTaskIds(prev => {
-        const newSet = new Set(prev);
-        tasks.forEach(t => newSet.add(t.id));
-        return newSet;
-      });
-    }
-  };
-
-  const handleSnooze = (taskId) => {
-    setSnoozedTasks(prev => {
-      const newSnoozed = new Set(prev);
-      newSnoozed.add(taskId);
-      return newSnoozed;
-    });
-
-    // Remove from snoozed after 24 hours
-    setTimeout(() => {
-      setSnoozedTasks(prev => {
-        const newSnoozed = new Set(prev);
-        newSnoozed.delete(taskId);
-        return newSnoozed;
-      });
-    }, 24 * 60 * 60 * 1000); // 24 hours
-
-    // Select next task from current tab only
-    if (selectedTask && selectedTask.id === taskId) {
-      const tabTasks = getTasksForTab();
-      const currentIndex = tabTasks.findIndex(t => t.id === taskId);
-      const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
-      setSelectedTask(nextTask);
-    }
-  };
-
-  const handleDelegate = async (member) => {
-    if (!selectedTask) return;
-
-    const memberName = `${member.first_name} ${member.last_name}`;
-    const taskId = selectedTask.id;
-    const taskSource = selectedTask.source;
-
-    // Optimistic UI: remove task from cache immediately
-    queryClient.setQueryData(['tasks'], (prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        prioritizedTasks: prev.prioritizedTasks.filter(t => t.id !== taskId),
-        loanIssues: prev.loanIssues.filter(t => t.id !== taskId),
-        aiTasks: {
-          pending: prev.aiTasks.pending.filter(t => t.id !== taskId),
-          waiting: prev.aiTasks.waiting.filter(t => t.id !== taskId)
-        },
-        mumAlerts: prev.mumAlerts.filter(t => t.id !== taskId),
-        messages: prev.messages.filter(t => t.id !== taskId),
-      };
-    });
-
-    // Move to next task
-    const tabTasks = getTasksForTab();
-    const currentIndex = tabTasks.findIndex(t => t.id === taskId);
-    const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
-    setSelectedTask(nextTask);
-
-    // Call API in background
-    try {
-      await tasksAPI.delegate(taskId, member.id);
-      console.log(`Task ${taskId} delegated to ${memberName}`);
-    } catch (error) {
-      console.error('Failed to delegate task:', error);
-    }
-  };
-
-  // Get tasks filtered by active tab
-  const getTasksForTab = () => {
-    if (activeTab === 'completed') {
-      return getCompletedTasks();
-    }
-
-    const allTasks = getAggregatedTasks();
-
-    switch (activeTab) {
-      case 'outstanding':
-        return allTasks.filter(task => !snoozedTasks.has(task.id));
-      case 'mum':
-        return allTasks.filter(task => task.source === 'Client for Life' && !snoozedTasks.has(task.id));
-      default:
-        return allTasks.filter(task => !snoozedTasks.has(task.id));
-    }
-  };
-
-  // Get all completed tasks for the completed tab
-  const getCompletedTasks = () => {
-    const tasks = [];
-
-    // Add completed manual prioritized tasks
-    prioritizedTasks.forEach((task, idx) => {
-      if (completedTasks.has(`priority-${idx}`)) {
-        tasks.push({
-          id: `priority-${idx}`,
-          ...task,
-          source: 'Manual Priority',
-          sourceIcon: '🎯'
-        });
-      }
-    });
-
-    // Add completed loan issues
-    loanIssues.forEach((issue, idx) => {
-      if (completedTasks.has(`issue-${idx}`)) {
-        tasks.push({
-          id: `issue-${idx}`,
-          ...issue,
-          title: issue.issue,
-          stage: 'Milestone Alert',
-          urgency: 'critical',
-          source: 'Milestone Risk',
-          sourceIcon: '🔥'
-        });
-      }
-    });
-
-    // Add completed AI pending tasks
-    aiTasks.pending.forEach((task, idx) => {
-      const taskId = `ai-pending-${idx}`;
-      if (completedTasks.has(taskId)) {
-        const { id: _originalId, ...taskWithoutId } = task; // eslint-disable-line no-unused-vars
-        tasks.push({
-          ...taskWithoutId,
-          id: taskId,
-          title: task.task,
-          stage: 'AI Suggested',
-          urgency: task.urgency || 'medium',
-          ai_action: `AI confidence: ${task.confidence}%`,
-          source: 'AI Engine',
-          sourceIcon: '🤖'
-        });
-      }
-    });
-
-    // Add completed AI waiting tasks
-    aiTasks.waiting.forEach((task, idx) => {
-      const taskId = `ai-waiting-${idx}`;
-      if (completedTasks.has(taskId)) {
-        const { id: _originalId, ...taskWithoutId } = task; // eslint-disable-line no-unused-vars
-        tasks.push({
-          ...taskWithoutId,
-          id: taskId,
-          title: task.task,
-          stage: 'Needs Approval',
-          urgency: task.urgency || 'low',
-          source: 'AI Engine',
-          sourceIcon: '🤖'
-        });
-      }
-    });
-
-    // Add completed MUM alerts
-    mumAlerts.forEach((alert, idx) => {
-      if (completedTasks.has(`mum-${idx}`)) {
-        tasks.push({
-          id: `mum-${idx}`,
-          ...alert,
-          borrower: alert.client,
-          stage: 'Client Retention',
-          urgency: alert.urgency || 'medium',
-          source: 'Client for Life',
-          sourceIcon: '💎'
-        });
-      }
-    });
-
-    // Add completed lead alerts
-    if (leadMetrics.alerts) {
-      leadMetrics.alerts.forEach((alert, idx) => {
-        if (alert && completedTasks.has(`lead-${idx}`)) {
-          tasks.push({
-            id: `lead-${idx}`,
-            title: alert,
-            borrower: '',
-            stage: 'Leads',
-            urgency: 'high',
-            ai_action: null,
-            source: 'Leads Engine',
-            sourceIcon: '🚀'
-          });
-        }
-      });
-    }
-
-    // Add completed messages
-    messages.filter(m => !m.read).forEach((msg, idx) => {
-      const msgId = `message-${idx}`;
-      if (completedTasks.has(msgId)) {
-        const { id: _originalId, ...msgWithoutId } = msg; // eslint-disable-line no-unused-vars
-        tasks.push({
-          ...msgWithoutId,
-          id: msgId,
-          title: `Message from ${msg.from}`,
-          borrower: msg.from,
-          stage: 'Communication',
-          urgency: msg.urgency || 'medium',
-          ai_action: msg.ai_summary ? `AI Summary: ${msg.ai_summary}` : null,
-          source: 'Messages',
-          sourceIcon: '💬'
-        });
-      }
-    });
-
-    return tasks;
-  };
-
-  // Aggregate all tasks from different containers
-  // IMPORTANT: NO emails or AI Engine/reconciliation tasks - those go to Reconciliation page ONLY
-  const getAggregatedTasks = () => {
-    const tasks = [];
-    const addedTaskIds = new Set();
-
-    // Add prioritized tasks - EXCLUDE any AI Engine or email-related tasks
-    prioritizedTasks.forEach((task, idx) => {
-      const taskId = task.id || `priority-${idx}`;
-      // Skip AI Engine tasks and any tasks with email data
-      if (task.source === 'AI Engine' || task.email_from || task.email_subject) {
-        return;
-      }
-      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
-        addedTaskIds.add(taskId);
-        // Set sourceIcon based on source
-        let sourceIcon = '🎯';
-        if (task.source === 'Workflow') sourceIcon = '⚡';
-        else if (task.source === 'Manual') sourceIcon = '🎯';
-
-        tasks.push({
-          ...task,
-          id: taskId,
-          source: task.source || 'Manual Priority',
-          sourceIcon
-        });
-      }
-    });
-
-    // Add loan issues as critical tasks
-    loanIssues.forEach((issue, idx) => {
-      const taskId = `issue-${idx}`;
-      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
-        addedTaskIds.add(taskId);
-        tasks.push({
-          id: taskId,
-          ...issue,
-          title: issue.issue,
-          stage: 'Milestone Alert',
-          urgency: 'critical',
-          source: 'Milestone Risk',
-          sourceIcon: '🔥'
-        });
-      }
-    });
-
-    // AI Engine tasks (emails/reconciliation) are NOT added here
-    // They belong ONLY on the Reconciliation page
-
-    // Add MUM alerts
-    mumAlerts.forEach((alert, idx) => {
-      const taskId = `mum-${idx}`;
-      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
-        addedTaskIds.add(taskId);
-        tasks.push({
-          id: taskId,
-          ...alert,
-          borrower: alert.client,
-          stage: 'Client Retention',
-          urgency: alert.urgency || 'medium',
-          source: 'Client for Life',
-          sourceIcon: '💎'
-        });
-      }
-    });
-
-    // Add lead alerts as tasks
-    if (leadMetrics.alerts) {
-      leadMetrics.alerts.forEach((alert, idx) => {
-        const taskId = `lead-${idx}`;
-        if (alert && !completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
-          addedTaskIds.add(taskId);
-          tasks.push({
-            id: taskId,
-            title: alert,
-            borrower: '',
-            stage: 'Leads',
-            urgency: 'high',
-            ai_action: null,
-            source: 'Leads Engine',
-            sourceIcon: '🚀'
-          });
-        }
-      });
-    }
-
-    // Add unread messages as tasks
-    messages.filter(m => !m.read).forEach((msg, idx) => {
-      const taskId = `message-${idx}`;
-      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
-        addedTaskIds.add(taskId);
-        const { id: _originalId, ...msgWithoutId } = msg; // eslint-disable-line no-unused-vars
-        tasks.push({
-          ...msgWithoutId,
-          id: taskId,
-          title: `Message from ${msg.from}`,
-          borrower: msg.from,
-          stage: 'Communication',
-          urgency: msg.urgency || 'medium',
-          ai_action: msg.ai_summary ? `AI Summary: ${msg.ai_summary}` : null,
-          source: 'Messages',
-          sourceIcon: '💬'
-        });
-      }
-    });
-
-    return tasks;
-  };
-
-  const handleComplete = async (taskId) => {
-    setCompletingTask(true);
-    try {
-      // Check task type and call appropriate API
-      const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
-      const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
-
-      if (!isMockTask) {
-        if (typeof taskId === 'string' && taskId.startsWith('task-')) {
-          const numericId = taskId.replace('task-', '');
-          await tasksAPI.update(numericId, { status: 'completed' });
-        } else if (typeof taskId === 'string' && taskId.startsWith('workflow-')) {
-          // Workflow tasks - mark completed in backend if possible
-          const numericId = taskId.replace('workflow-', '');
-          try {
-            await tasksAPI.update(numericId, { status: 'completed' });
-          } catch (e) {
-            console.log('Workflow task completed locally:', taskId);
-          }
-        } else if (typeof taskId === 'number') {
-          await tasksAPI.update(taskId, { status: 'completed' });
-        }
-      }
-
-      // Update local state
-      setCompletedTasks(prev => {
-        const newCompleted = new Set(prev);
-        newCompleted.add(taskId);
-        return newCompleted;
-      });
-
-      // If the completed task is the selected one, select the next task from current tab only
-      if (selectedTask && selectedTask.id === taskId) {
-        const tabTasks = getTasksForTab();
-        const currentIndex = tabTasks.findIndex(t => t.id === taskId);
-        const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
-        setSelectedTask(nextTask);
-      }
-
-      // Emit event so other components (like ActionSidebar) can update
-      emitTaskCompleted(taskId, 'tasks-page');
-    } catch (error) {
-      console.error('Error completing task:', error);
-      // Still mark as completed locally even if API fails
-      setCompletedTasks(prev => {
-        const newCompleted = new Set(prev);
-        newCompleted.add(taskId);
-        return newCompleted;
-      });
-      // Still emit event for local completion
-      emitTaskCompleted(taskId, 'tasks-page');
-    } finally {
-      setCompletingTask(false);
-    }
-  };
-
-  // Handle changing lead/loan status
-  const handleChangeStatus = async (newStatus) => {
-    if (!selectedTask) return;
-
-    setUpdatingStatus(true);
-    try {
-      // Check if this task is associated with a lead or loan
-      const leadId = selectedTask.lead_id || selectedTask.leadId;
-      const loanId = selectedTask.loan_id || selectedTask.loanId;
-
-      if (leadId) {
-        await leadsAPI.update(leadId, { stage: newStatus });
-        // Update the selected task's stage locally
-        setSelectedTask(prev => ({ ...prev, stage: newStatus }));
-        toast.success(`Lead status updated to "${LEAD_STAGES.find(s => s.value === newStatus)?.label || newStatus}"`);
-      } else if (loanId) {
-        await loansAPI.update(loanId, { stage: newStatus });
-        setSelectedTask(prev => ({ ...prev, stage: newStatus }));
-        toast.success(`Loan status updated to "${newStatus}"`);
-      } else {
-        toast.error('No lead or loan associated with this task');
-      }
-    } catch (error) {
-      console.error('Error updating status:', error);
-      toast.error('Failed to update status. Please try again.');
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
-
-  const handleApproveAiTask = async (taskId, method = 'email') => {
-    try {
-      // Get the task details before completing
-      const task = selectedTask;
-
-      // If there's an AI message, log it as a sent email
-      if (task && task.ai_message) {
-        // Store the sent email in localStorage for now (will be API later)
-        const sentEmails = JSON.parse(localStorage.getItem('sentEmails') || '[]');
-        sentEmails.push({
-          id: `email-${Date.now()}`,
-          taskId: taskId,
-          to: task.borrower,
-          subject: task.title,
-          body: task.ai_message,
-          sentAt: new Date().toISOString(),
-          sentVia: method,
-          status: 'sent',
-          loanId: task.loan_id || task.loanId || null
-        });
-        localStorage.setItem('sentEmails', JSON.stringify(sentEmails));
-      }
-
-      // Mark task as complete
-      handleComplete(taskId);
-
-      // Show success message
-      toast.success('AI action approved and sent!');
-    } catch (error) {
-      console.error('Error approving AI task:', error);
-      toast.error('Failed to approve task');
-    }
-  };
-
-  const getUrgencyColor = (urgency) => {
-    const colors = {
-      critical: '#dc2626',
-      high: '#f59e0b',
-      medium: '#3b82f6',
-      low: '#6b7280'
-    };
-    return colors[urgency] || '#6b7280';
-  };
-
-  const handleCommClick = (comm) => { // eslint-disable-line no-unused-vars
-    // Generate detailed content based on type
-    let detailedContent = null;
-
-    if (comm.type === 'Email') {
-      detailedContent = {
-        type: 'Email',
-        subject: comm.subject,
-        thread: [
-          {
-            from: 'You',
-            to: selectedTask?.borrower || 'Client',
-            date: comm.date,
-            body: comm.message
-          },
-          {
-            from: selectedTask?.borrower || 'Client',
-            to: 'You',
-            date: comm.date,
-            body: 'Thank you for reaching out! I appreciate the information. I have a few questions about the next steps...'
-          }
-        ]
-      };
-    } else if (comm.type === 'Phone') {
-      detailedContent = {
-        type: 'Phone',
-        subject: comm.subject,
-        duration: '30 minutes',
-        date: comm.date,
-        summary: comm.message,
-        details: `Call started at 2:30 PM and lasted 30 minutes.
-
-Key Discussion Points:
-• Reviewed loan options and interest rates
-• Discussed pre-qualification requirements
-• Explained the application process timeline
-• Answered questions about documentation needed
-• Scheduled follow-up for next week
-
-Next Steps:
-• Client will gather employment verification documents
-• Send detailed loan comparison email
-• Schedule property search consultation
-
-Client seemed very engaged and interested in moving forward with the pre-qualification process.`
-      };
-    } else if (comm.type === 'Text') {
-      detailedContent = {
-        type: 'Text',
-        subject: comm.subject,
-        messages: [
-          { from: 'You', text: comm.message, time: '10:30 AM' },
-          { from: selectedTask?.borrower || 'Client', text: 'Thanks for the reminder! I\'ll upload them today.', time: '10:45 AM' },
-          { from: 'You', text: 'Perfect! Let me know if you need any help.', time: '10:46 AM' },
-          { from: selectedTask?.borrower || 'Client', text: 'Will do 👍', time: '10:47 AM' }
-        ]
-      };
-    }
-
-    setCommModal(detailedContent);
-  };
-
-  // Use skeleton loader that matches the exact layout structure
+  // =============================================
+  // Render
+  // =============================================
   if (loading) return <TasksSkeleton />;
 
-  const allTasks = getAggregatedTasks();
-  const tabTasks = getTasksForTab();
+  const filteredItems = getFilteredItems();
 
-  // Reusable Email Layout Component
-  const TaskEmailLayout = ({ tasks, emptyMessage = "No tasks" }) => { // eslint-disable-line no-unused-vars
-    const allSelected = tasks.length > 0 && tasks.every(t => selectedTaskIds.has(t.id));
-    const someSelected = tasks.some(t => selectedTaskIds.has(t.id));
+  const renderInboxItem = (item) => {
+    const isSelected = selectedItem && selectedItem.id === item.id;
+    const isChecked = selectedTaskIds.has(item.id);
 
-    return (
-    <div className="email-layout">
-      {/* Task List (Left Side) */}
-      <div className="task-inbox">
-        <div className="inbox-header">
-          <div className="inbox-header-left">
-            <input
-              type="checkbox"
-              className="task-checkbox select-all-checkbox"
-              checked={allSelected}
-              ref={(el) => {
-                if (el) el.indeterminate = someSelected && !allSelected;
-              }}
-              onChange={() => handleSelectAll(tasks)}
-              title="Select all"
-            />
-            <h3>Tasks</h3>
-            <span className="task-count">{tasks.length}</span>
-          </div>
-          {selectedTaskIds.size > 0 && (
-            <button
-              className="btn-bulk-delete"
-              onClick={handleBulkDelete}
-              disabled={bulkDeleting}
-            >
-              {bulkDeleting ? 'Deleting...' : `🗑️ Delete (${selectedTaskIds.size})`}
-            </button>
-          )}
-        </div>
-        <div className="inbox-list">
-          {tasks.map((task) => (
-            <div
-              key={task.id}
-              className={`inbox-item ${selectedTask && selectedTask.id === task.id ? 'selected' : ''} ${selectedTaskIds.has(task.id) ? 'checked' : ''}`}
-              onClick={() => setSelectedTask(task)}
-            >
-              <div className="inbox-item-header">
-                <input
-                  type="checkbox"
-                  className="task-checkbox"
-                  checked={selectedTaskIds.has(task.id)}
-                  onChange={(e) => toggleTaskSelection(task.id, e)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <span className="source-icon">{task.sourceIcon}</span>
-                <span className="task-title-compact">{task.title}</span>
-                {task.ai_confidence && (
-                  <span
-                    className={`ai-confidence-meter ${task.ai_confidence >= 90 ? 'high' : task.ai_confidence >= 70 ? 'medium' : 'low'}`}
-                    title={`AI Confidence: ${task.ai_confidence}%`}
-                  >
-                    🤖 {task.ai_confidence}%
-                  </span>
-                )}
-              </div>
-              <div className="inbox-item-meta">
-                <span className="task-client-compact">{task.borrower || task.source}</span>
-                <span
-                  className="urgency-dot"
-                  style={{ backgroundColor: getUrgencyColor(task.urgency) }}
-                  title={task.urgency}
-                ></span>
-              </div>
-              <div className="task-preview">{task.stage}</div>
+    if (item.taskType === 'sms') {
+      return (
+        <div key={item.id} className={`inbox-item ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
+          <div className="type-dot sms" />
+          <div className="inbox-item-content">
+            <div className="inbox-item-top">
+              <span className="inbox-item-title">{item.title}</span>
+              <span className="inbox-item-time">{timeAgo(item.inbound_received_at || item.created_at)}</span>
             </div>
-          ))}
-          {tasks.length === 0 && (
-            <div className="empty-inbox">
-              <p>{emptyMessage}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Task Detail (Right Side) - Using Shared Component */}
-      <TaskDetailPanel
-        task={selectedTask}
-        onComplete={handleComplete}
-        onDelete={handleDelete}
-        onSnooze={handleSnooze}
-        onDelegate={handleDelegate}
-        onSend={handleSend}
-        onApproveAi={handleApproveAiTask}
-        onChangeStatus={handleChangeStatus}
-        completing={completingTask}
-        updatingStatus={updatingStatus}
-        teamMembers={teamMembers}
-        statusOptions={LEAD_STAGES}
-      />
-    </div>
-    );
-  };
-
-  // Reusable Email Layout for Reconciliation
-  const ReconciliationEmailLayout = () => { // eslint-disable-line no-unused-vars
-    return (
-      <div className="email-layout">
-        {/* Email List (Left Side) */}
-        <div className="task-inbox">
-          <div className="inbox-header">
-            <div className="inbox-header-left">
-              <h3>📧 Email Queue</h3>
-              <span className="task-count">{emailQueue.length}</span>
-            </div>
-            <div className="inbox-filters">
-              <select
-                value={queueFilters.status}
-                onChange={(e) => setQueueFilters({ ...queueFilters, status: e.target.value })}
-                className="filter-select"
-              >
-                <option value="">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="processed">Processed</option>
-              </select>
-            </div>
-          </div>
-          <div className="inbox-list">
-            {emailQueue.map((email) => (
-              <div
-                key={email.id}
-                className={`inbox-item ${selectedEmail && selectedEmail.id === email.id ? 'selected' : ''}`}
-                onClick={() => setSelectedEmail(email)}
-              >
-                <div className="inbox-item-header">
-                  <span className="source-icon">📧</span>
-                  <span className="task-title-compact">{email.subject || '(No Subject)'}</span>
-                </div>
-                <div className="inbox-item-meta">
-                  <span className="task-client-compact">{email.from_name || email.from_email}</span>
-                  {email.ai_analysis?.urgency_level && (
-                    <span
-                      className="urgency-dot"
-                      style={{ backgroundColor: getEmailUrgencyLabel(email.ai_analysis.urgency_level).color }}
-                      title={getEmailUrgencyLabel(email.ai_analysis.urgency_level).label}
-                    ></span>
-                  )}
-                </div>
-                <div className="task-preview">
-                  {email.matched_loan_id && <span className="match-tag">Loan #{email.matched_loan_id}</span>}
-                  {email.matched_lead_id && <span className="match-tag lead">Lead #{email.matched_lead_id}</span>}
-                  <span className="date-tag">{formatEmailDate(email.sent_date)}</span>
-                </div>
-              </div>
-            ))}
-            {emailQueue.length === 0 && (
-              <div className="empty-inbox">
-                <p>📭 No emails in queue</p>
-              </div>
+            <div className="inbox-item-sub">{item.borrower}{item.phone_number ? ` · ${item.phone_number}` : ''}</div>
+            {item.inbound_message && (
+              <div className="inbox-item-preview">"{item.inbound_message.length > 80 ? item.inbound_message.slice(0, 80) + '...' : item.inbound_message}"</div>
             )}
-          </div>
-        </div>
-
-        {/* Email Detail (Right Side) - Using shared component */}
-        <ReconciliationDetailPanel
-          email={selectedEmail}
-          onProcess={(email) => handleOpenDisposition(email)}
-          onViewLoan={(loanId) => navigate(`/loans/${loanId}`)}
-          onViewLead={(leadId) => navigate(`/leads/${leadId}`)}
-          onClose={() => setSelectedEmail(null)}
-        />
-      </div>
-    );
-  };
-
-  // Reusable Email Layout for Phone Dialer
-  const PhoneEmailLayout = () => { // eslint-disable-line no-unused-vars
-    return (
-      <div className="email-layout">
-        {/* Phone Task List (Left Side) */}
-        <div className="task-inbox">
-          <div className="inbox-header">
-            <div className="inbox-header-left">
-              <h3>📞 Call Tasks</h3>
-              <span className="task-count">{phoneTasks.length}</span>
-            </div>
-            <div className="inbox-header-right">
-              <button
-                className="select-all-btn"
-                onClick={selectAllPhoneTasks}
-                title={selectedPhoneTaskIds.length === phoneTasks.length ? "Deselect All" : "Select All"}
-              >
-                {selectedPhoneTaskIds.length === phoneTasks.length ? '☑️ Deselect All' : '☐ Select All'}
-              </button>
-              {!powerDialActive ? (
-                <button
-                  className="power-dial-btn"
-                  onClick={startPowerDial}
-                  disabled={phoneTasks.length === 0}
-                  title={selectedPhoneTaskIds.length > 0 ? `Power Dial ${selectedPhoneTaskIds.length} selected` : 'Power Dial All'}
-                >
-                  🚀 Power Dial {selectedPhoneTaskIds.length > 0 ? `(${selectedPhoneTaskIds.length})` : 'All'}
-                </button>
-              ) : (
-                <button
-                  className="power-dial-btn stop"
-                  onClick={stopPowerDial}
-                >
-                  ⏹️ Stop Dialing
-                </button>
+            <div className="inbox-item-tags">
+              <span className="type-chip sms">SMS</span>
+              {item.category && (
+                <span className="category-badge" style={{
+                  backgroundColor: (CATEGORY_COLORS[item.category] || CATEGORY_COLORS.general).bg,
+                  color: (CATEGORY_COLORS[item.category] || CATEGORY_COLORS.general).text,
+                }}>{(item.category || '').replace(/_/g, ' ')}</span>
+              )}
+              {item.ai_confidence > 0 && (
+                <>
+                  <div className="conf-bar"><div className={`conf-bar-fill ${item.ai_confidence >= 85 ? 'high' : item.ai_confidence >= 65 ? 'med' : 'low'}`} style={{ width: `${item.ai_confidence}%` }} /></div>
+                  <span className="conf-pct">{item.ai_confidence}%</span>
+                </>
               )}
             </div>
           </div>
-          {/* Power Dial Progress Bar */}
-          {powerDialActive && (
-            <div className="power-dial-progress">
-              <div className="progress-info">
-                <span>📞 Power Dialing: {powerDialIndex + 1} of {powerDialQueue.length}</span>
-                <span className="progress-contact">{powerDialQueue[powerDialIndex]?.contact_name}</span>
-              </div>
-              <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${((powerDialIndex + 1) / powerDialQueue.length) * 100}%` }}
-                />
-              </div>
+        </div>
+      );
+    }
+
+    if (item.taskType === 'reconciliation') {
+      return (
+        <div key={item.id} className={`inbox-item ${isSelected ? 'selected' : ''}`} onClick={() => { setSelectedItem(item); setSelectedEmail(item); }}>
+          <div className="type-dot recon" />
+          <div className="inbox-item-content">
+            <div className="inbox-item-top">
+              <span className="inbox-item-title">{item.title}</span>
+              <span className="inbox-item-time">{formatEmailDate(item.sent_date || item.received_at)}</span>
             </div>
-          )}
-          <div className="inbox-list">
-            {phoneTasks.map((task) => (
-              <div
-                key={task.id}
-                className={`inbox-item ${selectedPhoneTask && selectedPhoneTask.id === task.id ? 'selected' : ''}`}
-                onClick={() => setSelectedPhoneTask(task)}
-              >
-                <div className="inbox-item-header">
-                  <input
-                    type="checkbox"
-                    className="task-checkbox"
-                    checked={selectedPhoneTaskIds.includes(task.id)}
-                    onChange={() => togglePhoneTaskSelection(task.id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <span className="source-icon">{task.task_type === 'workflow' ? '⚡' : '📞'}</span>
-                  <span className="task-title-compact">{task.title}</span>
-                </div>
-                <div className="inbox-item-meta">
-                  <span className="task-client-compact">{task.contact_name}</span>
-                  <span
-                    className="urgency-dot"
-                    style={{ backgroundColor: task.priority === 'high' ? '#f59e0b' : '#6b7280' }}
-                  ></span>
-                </div>
-                <div className="task-preview">
-                  <span className="phone-tag">📱 {task.contact_phone}</span>
-                  {task.entity_type && (
-                    <span className={`match-tag ${task.entity_type}`}>
-                      {task.entity_type === 'lead' ? 'Lead' : 'Loan'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {phoneTasks.length === 0 && (
-              <div className="empty-inbox">
-                <p>📞 No call tasks available</p>
-                <p style={{ fontSize: '12px', color: '#888' }}>Phone tasks from workflows will appear here</p>
-              </div>
+            <div className="inbox-item-sub">From: {item.borrower}</div>
+            <div className="inbox-item-tags">
+              <span className="type-chip recon">Reconciliation</span>
+              {item.matched_loan_id && <span className="match-tag">Loan #{item.matched_loan_id}</span>}
+              {item.matched_lead_id && <span className="match-tag lead">Lead #{item.matched_lead_id}</span>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Workflow / manual task
+    return (
+      <div key={item.id} className={`inbox-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''}`} onClick={() => setSelectedItem(item)}>
+        <div className="type-dot task" />
+        <div className="inbox-item-content">
+          <div className="inbox-item-top">
+            <input type="checkbox" className="task-checkbox" checked={isChecked} onChange={(e) => toggleTaskSelection(item.id, e)} onClick={(e) => e.stopPropagation()} />
+            <span className="source-icon">{item.sourceIcon}</span>
+            <span className="inbox-item-title">{item.title}</span>
+            <span className="inbox-item-time">{timeAgo(item.date_created || item.due_date)}</span>
+          </div>
+          <div className="inbox-item-sub">{item.borrower || item.source}</div>
+          <div className="inbox-item-tags">
+            <span className="type-chip task">{item.source || 'Workflow'}</span>
+            {item.urgency && (
+              <span className="urgency-dot" style={{ backgroundColor: getUrgencyColor(item.urgency) }} title={item.urgency} />
+            )}
+            {item.ai_confidence && (
+              <span className={`ai-confidence-meter ${item.ai_confidence >= 90 ? 'high' : item.ai_confidence >= 70 ? 'medium' : 'low'}`}>
+                🤖 {item.ai_confidence}%
+              </span>
             )}
           </div>
         </div>
-
-        {/* Phone Task Detail (Right Side) - Using shared component */}
-        <CallDetailPanel
-          task={selectedPhoneTask}
-          callStatus={callStatus}
-          powerDialActive={powerDialActive}
-          powerDialIndex={powerDialIndex}
-          powerDialTotal={powerDialQueue.length}
-          onClickToDial={handleClickToDial}
-          onEndCall={handleEndCall}
-          onNextContact={nextPowerDialContact}
-          onSkipContact={skipPowerDialContact}
-          onStopPowerDial={stopPowerDial}
-          onViewEntity={(task) => {
-            if (task.lead_id) {
-              navigate(`/leads/${task.lead_id}`);
-            } else if (task.loan_id) {
-              navigate(`/loans/${task.loan_id}`);
-            }
-          }}
-          onComplete={(taskId) => {
-            setPhoneTasks(prev => prev.filter(t => t.id !== taskId));
-            setSelectedPhoneTask(null);
-          }}
-          onClose={() => setSelectedPhoneTask(null)}
-        />
       </div>
     );
   };
+
+  // Detail panel for SMS tasks
+  const renderSmsDetail = () => {
+    if (smsDetailLoading) return <div className="detail-loading"><div className="spinner" /><p>Loading...</p></div>;
+    if (!smsTaskDetail) return <div className="empty-detail"><p>Select a task to view details</p></div>;
+
+    return (
+      <div className="sms-detail-panel">
+        <div className="detail-header">
+          <div>
+            <h2>{smsTaskDetail.contact_name || 'Unknown Contact'}</h2>
+            <span className="detail-phone">{smsTaskDetail.phone_number || ''}</span>
+          </div>
+          <button className="close-detail" onClick={() => setSelectedItem(null)}>×</button>
+        </div>
+        <div className="detail-section">
+          <h4>Inbound Message</h4>
+          <div className="inbound-message-box">
+            <p>{smsTaskDetail.inbound_message}</p>
+            <span className="message-time">{timeAgo(smsTaskDetail.inbound_received_at || smsTaskDetail.created_at)}</span>
+          </div>
+        </div>
+        <div className="detail-meta">
+          {smsTaskDetail.category && (
+            <span className="category-badge" style={{
+              backgroundColor: (CATEGORY_COLORS[smsTaskDetail.category] || CATEGORY_COLORS.general).bg,
+              color: (CATEGORY_COLORS[smsTaskDetail.category] || CATEGORY_COLORS.general).text,
+            }}>{(smsTaskDetail.category || 'general').replace(/_/g, ' ')}</span>
+          )}
+          <span className="priority-badge" style={{ color: PRIORITY_COLORS[smsTaskDetail.priority] || PRIORITY_COLORS.normal }}>
+            {smsTaskDetail.priority || 'normal'} priority
+          </span>
+        </div>
+        {smsTaskDetail.ai_recommendation && (
+          <div className="detail-section">
+            <h4>AI Recommended Response</h4>
+            <div className="ai-response-box">
+              <p>{smsTaskDetail.ai_recommendation}</p>
+              <div className="ai-confidence-row">
+                <span>Confidence: {smsTaskDetail.ai_confidence || 0}%</span>
+                <div className="confidence-bar-bg large">
+                  <div className="confidence-bar-fill" style={{ width: `${smsTaskDetail.ai_confidence || 0}%` }} />
+                </div>
+                <button className="regen-btn" onClick={handleSmsRegenerate} title="Regenerate">↻</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {smsTaskDetail.status === 'pending' && !smsResponseMode && (
+          <div className="action-buttons">
+            <button className="action-btn send-ai" onClick={() => handleSmsSendResponse(smsTaskDetail.ai_recommendation, 'ai')} disabled={!smsTaskDetail.ai_recommendation || smsSending}>
+              {smsSending ? 'Sending...' : 'Send AI Response'}
+            </button>
+            <button className="action-btn edit-send" onClick={() => { setSmsResponseMode('edit'); setSmsEditText(smsTaskDetail.ai_recommendation || ''); }}>Edit & Send</button>
+            <button className="action-btn write-own" onClick={() => { setSmsResponseMode('write'); setSmsEditText(''); }}>Write Own</button>
+            <button className="action-btn dismiss" onClick={handleSmsDismiss}>Dismiss</button>
+          </div>
+        )}
+        {smsResponseMode && (
+          <div className="compose-area">
+            <textarea value={smsEditText} onChange={(e) => setSmsEditText(e.target.value)} placeholder={smsResponseMode === 'edit' ? 'Edit the AI response...' : 'Write your response...'} rows={4} autoFocus />
+            <div className="compose-actions">
+              <button className="action-btn send-ai" onClick={() => handleSmsSendResponse(smsEditText, smsResponseMode === 'edit' ? 'ai_edited' : 'manual')} disabled={!smsEditText.trim() || smsSending}>
+                {smsSending ? 'Sending...' : 'Send'}
+              </button>
+              <button className="action-btn dismiss" onClick={() => { setSmsResponseMode(null); setSmsEditText(''); }}>Cancel</button>
+            </div>
+          </div>
+        )}
+        {smsTaskDetail.status !== 'pending' && (
+          <div className="detail-section">
+            <h4>Response Sent</h4>
+            <div className="sent-response-box">
+              <p>{smsTaskDetail.response_text || 'No response recorded'}</p>
+              <span className="response-source">via {(smsTaskDetail.response_source || 'unknown').replace(/_/g, ' ')}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Phone tab layout
+  const renderPhoneLayout = () => (
+    <div className="email-layout">
+      <div className="task-inbox">
+        <div className="inbox-header">
+          <div className="inbox-header-left">
+            <h3>Call Tasks</h3>
+            <span className="task-count">{phoneTasksList.length}</span>
+          </div>
+          <div className="inbox-header-right">
+            <button className="select-all-btn" onClick={selectAllPhoneTasks}>
+              {selectedPhoneTaskIds.length === phoneTasksList.length ? '☑ Deselect All' : '☐ Select All'}
+            </button>
+            {!powerDialActive ? (
+              <button className="power-dial-btn" onClick={startPowerDial} disabled={phoneTasksList.length === 0}>
+                Power Dial {selectedPhoneTaskIds.length > 0 ? `(${selectedPhoneTaskIds.length})` : 'All'}
+              </button>
+            ) : (
+              <button className="power-dial-btn stop" onClick={stopPowerDial}>Stop Dialing</button>
+            )}
+          </div>
+        </div>
+        {powerDialActive && (
+          <div className="power-dial-progress">
+            <div className="progress-info">
+              <span>Power Dialing: {powerDialIndex + 1} of {powerDialQueue.length}</span>
+              <span className="progress-contact">{powerDialQueue[powerDialIndex]?.contact_name}</span>
+            </div>
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${((powerDialIndex + 1) / powerDialQueue.length) * 100}%` }} />
+            </div>
+          </div>
+        )}
+        <div className="inbox-list">
+          {phoneTasksList.map((task) => (
+            <div key={task.id} className={`inbox-item ${selectedPhoneTask?.id === task.id ? 'selected' : ''}`} onClick={() => setSelectedPhoneTask(task)}>
+              <div className="inbox-item-header">
+                <input type="checkbox" className="task-checkbox" checked={selectedPhoneTaskIds.includes(task.id)} onChange={() => togglePhoneTaskSelection(task.id)} onClick={(e) => e.stopPropagation()} />
+                <span className="source-icon">{task.task_type === 'workflow' ? '⚡' : '📞'}</span>
+                <span className="task-title-compact">{task.title}</span>
+              </div>
+              <div className="inbox-item-meta">
+                <span className="task-client-compact">{task.contact_name}</span>
+                <span className="urgency-dot" style={{ backgroundColor: task.priority === 'high' ? '#f59e0b' : '#6b7280' }} />
+              </div>
+              <div className="task-preview">
+                <span className="phone-tag">{task.contact_phone}</span>
+                {task.entity_type && <span className={`match-tag ${task.entity_type}`}>{task.entity_type === 'lead' ? 'Lead' : 'Loan'}</span>}
+              </div>
+            </div>
+          ))}
+          {phoneTasksList.length === 0 && (
+            <div className="empty-inbox"><p>No call tasks available</p><p style={{ fontSize: '12px', color: '#888' }}>Phone tasks from workflows will appear here</p></div>
+          )}
+        </div>
+      </div>
+      <CallDetailPanel
+        task={selectedPhoneTask}
+        callStatus={callStatus}
+        powerDialActive={powerDialActive}
+        powerDialIndex={powerDialIndex}
+        powerDialTotal={powerDialQueue.length}
+        onClickToDial={handleClickToDial}
+        onEndCall={handleEndCall}
+        onNextContact={nextPowerDialContact}
+        onSkipContact={skipPowerDialContact}
+        onStopPowerDial={stopPowerDial}
+        onViewEntity={(task) => { if (task.lead_id) navigate(`/leads/${task.lead_id}`); else if (task.loan_id) navigate(`/loans/${task.loan_id}`); }}
+        onComplete={(taskId) => { setPhoneTasksList(prev => prev.filter(t => t.id !== taskId)); setSelectedPhoneTask(null); }}
+        onClose={() => setSelectedPhoneTask(null)}
+      />
+    </div>
+  );
 
   return (
     <div className="tasks-page" ref={containerRef}>
@@ -1491,78 +1100,118 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         <div className="tasks-header">
           <div className="header-content">
             <h1>Tasks</h1>
-            <p>Manage and complete your outstanding tasks</p>
+            <p>All workflow tasks, SMS responses, and reconciliation in one place</p>
 
-            {/* Tab Navigation */}
-            <div className="tab-navigation">
-              <button
-                className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
-                onClick={() => setActiveTab('outstanding')}
-              >
-                Outstanding ({allTasks.filter(t => !snoozedTasks.has(t.id)).length})
+            <div className="unified-filter-tabs">
+              <button className={`filter-tab ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => setActiveFilter('all')}>
+                All <span className="filter-count">{allItems.length}</span>
               </button>
-              <button
-                className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
-                onClick={() => setActiveTab('reconciliation')}
-              >
-                Reconciliation ({reconciliationStats.pending_count || 0})
+              <button className={`filter-tab ${activeFilter === 'workflow' ? 'active' : ''}`} onClick={() => setActiveFilter('workflow')}>
+                Workflow <span className="filter-count">{workflowCount}</span>
               </button>
-              <button
-                className={`tab-button ${activeTab === 'phone' ? 'active' : ''}`}
-                onClick={() => setActiveTab('phone')}
-              >
-                Phone ({phoneTasks.length})
+              <button className={`filter-tab ${activeFilter === 'sms' ? 'active' : ''}`} onClick={() => setActiveFilter('sms')}>
+                SMS <span className="filter-count">{smsCount}</span>
               </button>
-              <button
-                className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
-                onClick={() => setActiveTab('completed')}
-              >
-                Completed ({getCompletedTasks().length})
+              <button className={`filter-tab ${activeFilter === 'reconciliation' ? 'active' : ''}`} onClick={() => setActiveFilter('reconciliation')}>
+                Reconciliation <span className="filter-count">{reconCount}</span>
+              </button>
+              <button className={`filter-tab ${activeFilter === 'phone' ? 'active' : ''}`} onClick={() => setActiveFilter('phone')}>
+                Phone <span className="filter-count">{phoneTasksList.length}</span>
+              </button>
+              <button className={`filter-tab ${activeFilter === 'completed' ? 'active' : ''}`} onClick={() => setActiveFilter('completed')}>
+                Completed <span className="filter-count">{completedCount}</span>
               </button>
             </div>
           </div>
-          <div className="header-actions">
-            {/* Action button placeholder - can be customized per tab */}
-          </div>
         </div>
 
-        {/* Outstanding Tasks Tab */}
-        {activeTab === 'outstanding' && (
-          <div className="tasks-content">
-            <TaskEmailLayout tasks={tabTasks} emptyMessage="No outstanding tasks" />
-          </div>
-        )}
-
-        {/* Reconciliation Tab */}
-        {activeTab === 'reconciliation' && (
-          <div className="tasks-content">
-            <ReconciliationEmailLayout />
-          </div>
-        )}
-
         {/* Phone Tab */}
-        {activeTab === 'phone' && (
-          <div className="tasks-content">
-            <PhoneEmailLayout />
-          </div>
+        {activeFilter === 'phone' && (
+          <div className="tasks-content">{renderPhoneLayout()}</div>
         )}
 
-        {/* Completed Tasks Tab */}
-        {activeTab === 'completed' && (
+        {/* All other tabs — Unified Inbox */}
+        {activeFilter !== 'phone' && (
           <div className="tasks-content">
-            <TaskEmailLayout tasks={tabTasks} emptyMessage="No completed tasks yet" />
+            <div className="email-layout">
+              {/* Left: Item List */}
+              <div className="task-inbox">
+                <div className="inbox-header">
+                  <div className="inbox-header-left">
+                    {activeFilter !== 'completed' && filteredItems.length > 0 && (
+                      <input
+                        type="checkbox"
+                        className="task-checkbox select-all-checkbox"
+                        checked={filteredItems.length > 0 && filteredItems.every(t => selectedTaskIds.has(t.id))}
+                        onChange={() => handleSelectAll(filteredItems)}
+                        title="Select all"
+                      />
+                    )}
+                    <h3>Tasks</h3>
+                    <span className="task-count">{filteredItems.length}</span>
+                  </div>
+                  {selectedTaskIds.size > 0 && (
+                    <button className="btn-bulk-delete" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                      {bulkDeleting ? 'Deleting...' : `Delete (${selectedTaskIds.size})`}
+                    </button>
+                  )}
+                </div>
+                <div className="inbox-search">
+                  <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+                <div className="inbox-list">
+                  {filteredItems.map(renderInboxItem)}
+                  {filteredItems.length === 0 && (
+                    <div className="empty-inbox">
+                      <p>{activeFilter === 'completed' ? 'No completed tasks yet' : 'All caught up!'}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: Detail Panel */}
+              {selectedItem?.taskType === 'sms' ? (
+                <div className="task-detail-wrapper">{renderSmsDetail()}</div>
+              ) : selectedItem?.taskType === 'reconciliation' ? (
+                <ReconciliationDetailPanel
+                  email={selectedEmail || selectedItem}
+                  onProcess={(email) => handleOpenDisposition(email)}
+                  onViewLoan={(loanId) => navigate(`/loans/${loanId}`)}
+                  onViewLead={(leadId) => navigate(`/leads/${leadId}`)}
+                  onClose={() => { setSelectedItem(null); setSelectedEmail(null); }}
+                />
+              ) : (
+                <TaskDetailPanel
+                  task={selectedItem}
+                  onComplete={handleComplete}
+                  onDelete={handleDelete}
+                  onSnooze={handleSnooze}
+                  onDelegate={handleDelegate}
+                  onSend={handleSend}
+                  onApproveAi={handleApproveAiTask}
+                  onChangeStatus={handleChangeStatus}
+                  completing={completingTask}
+                  updatingStatus={updatingStatus}
+                  teamMembers={teamMembers}
+                  statusOptions={LEAD_STAGES}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Delete and Delegate modals are now handled inside TaskDetailPanel */}
 
       {/* Communication Detail Modal */}
       {commModal && (
         <div className="comm-modal-overlay" onClick={() => setCommModal(null)}>
           <div className="comm-modal" onClick={(e) => e.stopPropagation()}>
             <button className="btn-close-comm-modal" onClick={() => setCommModal(null)}>×</button>
-
             <div className="comm-modal-header">
               <span className="comm-modal-icon">
                 {commModal.type === 'Email' && '📧'}
@@ -1571,85 +1220,21 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
               </span>
               <h2>{commModal.subject}</h2>
             </div>
-
-            <div className="comm-modal-body">
-              {commModal.type === 'Email' && (
-                <div className="email-thread">
-                  {commModal.thread.map((email, idx) => (
-                    <div key={idx} className="email-message">
-                      <div className="email-message-header">
-                        <div className="email-from-to">
-                          <strong>From:</strong> {email.from}<br />
-                          <strong>To:</strong> {email.to}
-                        </div>
-                        <div className="email-date">{new Date(email.date).toLocaleString()}</div>
-                      </div>
-                      <div className="email-message-body">{email.body}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {commModal.type === 'Phone' && (
-                <div className="phone-summary">
-                  <div className="call-meta">
-                    <div className="call-info-item">
-                      <strong>Duration:</strong> {commModal.duration}
-                    </div>
-                    <div className="call-info-item">
-                      <strong>Date:</strong> {new Date(commModal.date).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="call-summary-section">
-                    <h3>Summary</h3>
-                    <p>{commModal.summary}</p>
-                  </div>
-                  <div className="call-details-section">
-                    <h3>Call Notes</h3>
-                    <pre className="call-notes">{commModal.details}</pre>
-                  </div>
-                </div>
-              )}
-
-              {commModal.type === 'Text' && (
-                <div className="text-thread">
-                  {commModal.messages.map((msg, idx) => (
-                    <div key={idx} className={`text-message ${msg.from === 'You' ? 'sent' : 'received'}`}>
-                      <div className="text-message-bubble">
-                        <div className="text-message-sender">{msg.from}</div>
-                        <div className="text-message-text">{msg.text}</div>
-                        <div className="text-message-time">{msg.time}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}
-
-      {/* AI Acknowledgment is now shown inline inside TaskDetailPanel */}
 
       {/* Disposition Dialog Modal */}
       {showDispositionDialog && dispositionEmail && (
         <div className="modal-overlay" onClick={() => setShowDispositionDialog(false)}>
           <div className="modal-content disposition-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Process Email</h2>
-            <p className="disposition-email-subject">
-              <strong>Subject:</strong> {dispositionEmail.subject || '(No Subject)'}
-            </p>
-            <p className="disposition-email-from">
-              <strong>From:</strong> {dispositionEmail.from_name || dispositionEmail.from_email}
-            </p>
+            <p className="disposition-email-subject"><strong>Subject:</strong> {dispositionEmail.subject || dispositionEmail.title || '(No Subject)'}</p>
+            <p className="disposition-email-from"><strong>From:</strong> {dispositionEmail.from_name || dispositionEmail.from_email || dispositionEmail.borrower}</p>
 
             <div className="disposition-options-grid">
               {dispositionOptions.map((option) => (
-                <button
-                  key={option.value}
-                  className={`disposition-option ${selectedDisposition === option.value ? 'selected' : ''}`}
-                  onClick={() => setSelectedDisposition(option.value)}
-                >
+                <button key={option.value} className={`disposition-option ${selectedDisposition === option.value ? 'selected' : ''}`} onClick={() => setSelectedDisposition(option.value)}>
                   <span className="disposition-icon">{option.icon}</span>
                   <span className="disposition-label">{option.label}</span>
                 </button>
@@ -1657,38 +1242,19 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
             </div>
 
             <label className="create-task-checkbox">
-              <input
-                type="checkbox"
-                checked={createTask}
-                onChange={(e) => setCreateTask(e.target.checked)}
-              />
+              <input type="checkbox" checked={createTask} onChange={(e) => setCreateTask(e.target.checked)} />
               <span>Create a follow-up task</span>
             </label>
 
             {createTask && (
-              <input
-                type="text"
-                className="task-title-input"
-                placeholder="Task title..."
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-              />
+              <input type="text" className="task-title-input" placeholder="Task title..." value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
             )}
 
             <div className="modal-buttons">
-              <button
-                className="btn-modal-primary"
-                onClick={handleProcessDisposition}
-                disabled={!selectedDisposition || processingEmailId === dispositionEmail.id}
-              >
+              <button className="btn-modal-primary" onClick={handleProcessDisposition} disabled={!selectedDisposition || processingEmailId === dispositionEmail.id}>
                 {processingEmailId === dispositionEmail.id ? 'Processing...' : 'Process Email'}
               </button>
-              <button
-                className="btn-modal-cancel"
-                onClick={() => setShowDispositionDialog(false)}
-              >
-                Cancel
-              </button>
+              <button className="btn-modal-cancel" onClick={() => setShowDispositionDialog(false)}>Cancel</button>
             </div>
           </div>
         </div>
