@@ -177,7 +177,7 @@ const fetchSMSTasks = async () => {
     ...t,
     taskType: 'sms',
     title: `SMS: ${(t.category || 'general').replace(/_/g, ' ')}`,
-    borrower: t.contact_name || 'Unknown',
+    borrower: t.resolved_contact_name || t.contact_name || [t.lead_first_name, t.lead_last_name].filter(Boolean).join(' ') || 'Unknown',
   }));
 };
 
@@ -948,7 +948,7 @@ function Tasks() {
       <div className="sms-detail-panel">
         <div className="detail-header">
           <div>
-            <h2>{smsTaskDetail.contact_name || 'Unknown Contact'}</h2>
+            <h2>{smsTaskDetail.contact_name || [smsTaskDetail.lead_first_name, smsTaskDetail.lead_last_name].filter(Boolean).join(' ') || 'Unknown Contact'}</h2>
             <span className="detail-phone">{smsTaskDetail.phone_number || ''}</span>
           </div>
           <button className="close-detail" onClick={() => setSelectedItem(null)}>×</button>

@@ -39,11 +39,16 @@ def handle_inbound_sms(
 
         try:
             lead_row = db.execute(
-                text("SELECT id FROM leads WHERE phone = :phone AND organization_id = :org_id ORDER BY updated_at DESC LIMIT 1"),
+                text("SELECT id, first_name, last_name FROM leads WHERE phone = :phone AND organization_id = :org_id ORDER BY updated_at DESC LIMIT 1"),
                 {"phone": phone_number, "org_id": organization_id},
             ).fetchone()
             if lead_row:
                 lead_id = lead_row.id
+                if not contact_name:
+                    parts = [lead_row.first_name, lead_row.last_name]
+                    resolved = " ".join(p for p in parts if p)
+                    if resolved:
+                        contact_name = resolved
         except Exception as e:
             logger.exception("Lead lookup failed for phone=%s org=%s: %s", phone_number, organization_id, e)
 

@@ -143,8 +143,21 @@ def get_sms_tasks(
 
         rows = db.execute(
             text(f"""
-                SELECT t.*
+                SELECT t.*,
+                       COALESCE(l.first_name, lp.first_name) AS lead_first_name,
+                       COALESCE(l.last_name, lp.last_name) AS lead_last_name,
+                       COALESCE(
+                           t.contact_name,
+                           NULLIF(CONCAT(COALESCE(l.first_name, lp.first_name, ''), ' ', COALESCE(l.last_name, lp.last_name, '')), ' ')
+                       ) AS resolved_contact_name
                 FROM sms_tasks t
+                LEFT JOIN leads l ON l.id = t.lead_id
+                LEFT JOIN LATERAL (
+                    SELECT first_name, last_name FROM leads
+                    WHERE phone = t.phone_number
+                      AND organization_id = t.organization_id
+                    ORDER BY updated_at DESC LIMIT 1
+                ) lp ON t.lead_id IS NULL
                 WHERE {where_sql}
                 ORDER BY
                     CASE t.priority
