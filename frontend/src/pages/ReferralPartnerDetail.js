@@ -416,9 +416,8 @@ function ReferralPartnerDetail() {
               setActiveTab('builderapp');
               if (builderApps.length === 0 && !loadingApp) {
                 setLoadingApp(true);
-                builderApplicationsAPI.list().then(apps => {
-                  const filtered = apps.filter(a => a.contact_email === partner.email);
-                  setBuilderApps(filtered);
+                builderApplicationsAPI.list({ partner_id: partner.id }).then(apps => {
+                  setBuilderApps(apps || []);
                 }).catch(() => {}).finally(() => setLoadingApp(false));
               }
             }}

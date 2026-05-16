@@ -60,6 +60,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/vapi",  # Vapi AI receptionist webhooks — verified by require_vapi_webhook
         "/api/v1/zapier",
         "/api/v1/borrower",  # Borrower portal uses JWT auth
+        "/api/v1/builder-portal",  # Builder portal — uses submission token auth (stateless, inherently CSRF-safe)
         "/api/v1/csrf-token",  # Token endpoint itself
         "/api/v1/public",  # Public endpoints (migrations, etc.)
         "/api/v1/scheduler/public",  # Public booking endpoints (unauthenticated POST)

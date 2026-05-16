@@ -192,7 +192,7 @@ class BuilderApplicationSummary(BaseModel):
 # ===========================================================================
 
 @router.post("/api/v1/builder-portal/register", response_model=RegisterResponse)
-async def register_builder(body: RegisterRequest, request: Request, db: Session = Depends()):
+async def register_builder(body: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     """
     Register a builder and create a draft application.
     Returns a submission token for subsequent API calls.
@@ -216,7 +216,7 @@ async def register_builder(body: RegisterRequest, request: Request, db: Session 
     partner = db.query(ReferralPartner).filter(
         ReferralPartner.organization_id == lo.organization_id,
         ReferralPartner.email == body.email,
-        ReferralPartner.category == "builder",
+        ReferralPartner.category == "Builder",
     ).first()
 
     if not partner:
@@ -403,6 +403,7 @@ async def list_builder_applications(
     user=Depends(_get_current_user),
     db: Session = Depends(get_db),
     status: Optional[str] = None,
+    partner_id: Optional[int] = None,
 ):
     """List builder applications for the current LO's organization."""
 
@@ -427,6 +428,9 @@ async def list_builder_applications(
 
     if status:
         query = query.filter(BuilderApplication.status == status.upper())
+
+    if partner_id:
+        query = query.filter(BuilderApplication.partner_id == partner_id)
 
     rows = query.order_by(BuilderApplication.created_at.desc()).all()
 

@@ -90,6 +90,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         "https://www.perenniaai.com",
         "https://app.perenniaai.com",
         "https://api.perenniaai.com",
+        # Builder portal (GitHub Pages static site)
+        "https://tlossmtgboss-cyber.github.io",
         # Capacitor iOS/Android app origins (used in production builds)
         "capacitor://localhost",
         "ionic://localhost",
