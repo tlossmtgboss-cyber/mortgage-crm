@@ -70,11 +70,26 @@
   padding: 12px 14px;
   text-align: center;
   min-width: 0;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  font-family: inherit;
+}
+.rp-stat:hover {
+  border-color: #218D8D;
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.12);
+  transform: translateY(-1px);
+}
+.rp-stat:active {
+  transform: translateY(0);
 }
 
 .rp-stat--highlight {
   background: linear-gradient(135deg, #218D8D, #1a7070);
   border-color: transparent;
+}
+.rp-stat--highlight:hover {
+  border-color: transparent;
+  box-shadow: 0 2px 12px rgba(33, 141, 141, 0.3);
 }
 
 .rp-stat--highlight .rp-stat__value { color: #fff; }
@@ -581,4 +596,79 @@
   .rp-stat { min-width: calc(50% - 4px); }
   .rp-stat__value { font-size: 16px; }
   .rp-type-tab { padding: 5px 8px; font-size: 11px; }
+}
+
+/* ---- Outreach Modal ---- */
+.rp-outreach-modal {
+  max-width: 520px;
+}
+
+.rp-outreach__partner-info {
+  padding: 12px 16px;
+  background: #FAF7F1;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #ECE6D8;
+}
+
+.rp-outreach__channel {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rp-outreach__textarea {
+  width: 100%;
+  border: 1px solid #ECE6D8;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 100px;
+  background: #fff;
+  color: #1A1F1B;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.rp-outreach__textarea:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.1);
+}
+.rp-outreach__textarea::placeholder {
+  color: #B5B0A1;
+}
+
+.rp-outreach__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  gap: 12px;
+}
+
+.rp-outreach__send-group {
+  display: flex;
+  gap: 8px;
+}
+
+.rp-btn--ai {
+  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  color: #fff;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rp-btn--ai:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  transform: translateY(-1px);
+}
+.rp-btn--ai:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }

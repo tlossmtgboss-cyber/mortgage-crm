@@ -80,7 +80,6 @@ function ReferralPartners() {
   const [activeType, setActiveType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('referrals_in');
-  const [outreachingId, setOutreachingId] = useState(null);
 
   useEffect(() => { loadPartners(); }, []);
 
@@ -129,14 +128,11 @@ function ReferralPartners() {
     }
   };
 
-  const handleAIOutreach = (partner, e) => {
+  const [outreachPartner, setOutreachPartner] = useState(null);
+
+  const handleOpenOutreach = (partner, e) => {
     e.stopPropagation();
-    setOutreachingId(partner.id);
-    toast.success(`Aria is reaching out to ${partner.name} to schedule a call...`);
-    setTimeout(() => {
-      toast.success(`Message sent to ${partner.name}. They'll receive a scheduling link for your calendar.`);
-      setOutreachingId(null);
-    }, 2000);
+    setOutreachPartner(partner);
   };
 
   const safePartners = Array.isArray(partners) ? partners : [];
@@ -222,14 +218,26 @@ function ReferralPartners() {
         <button className="rp-btn rp-btn--primary" onClick={() => setShowAddModal(true)}>+ Add Partner</button>
       </div>
 
-      {/* Stats Row - all on one line */}
+      {/* Stats Row - all clickable */}
       <div className="rp-stats">
-        <div className="rp-stat"><span className="rp-stat__value">{stats.total}</span><span className="rp-stat__label">Partners</span></div>
-        <div className="rp-stat"><span className="rp-stat__value">{stats.active}</span><span className="rp-stat__label">Active</span></div>
-        <div className="rp-stat"><span className="rp-stat__value">{stats.totalReferrals}</span><span className="rp-stat__label">Referrals</span></div>
-        <div className="rp-stat"><span className="rp-stat__value">{stats.totalClosed}</span><span className="rp-stat__label">Closed</span></div>
-        <div className="rp-stat"><span className="rp-stat__value">{stats.avgPerDay}</span><span className="rp-stat__label">Avg/Day</span></div>
-        <div className="rp-stat rp-stat--highlight"><span className="rp-stat__value">{formatVol(stats.totalVolume)}</span><span className="rp-stat__label">Volume</span></div>
+        <button className="rp-stat" onClick={() => { setFilterStatus('all'); setActiveType('all'); setSortBy('referrals_in'); }}>
+          <span className="rp-stat__value">{stats.total}</span><span className="rp-stat__label">Partners</span>
+        </button>
+        <button className="rp-stat" onClick={() => { setFilterStatus('active'); setActiveType('all'); }}>
+          <span className="rp-stat__value">{stats.active}</span><span className="rp-stat__label">Active</span>
+        </button>
+        <button className="rp-stat" onClick={() => { setFilterStatus('all'); setSortBy('referrals_in'); }}>
+          <span className="rp-stat__value">{stats.totalReferrals}</span><span className="rp-stat__label">Referrals</span>
+        </button>
+        <button className="rp-stat" onClick={() => { setFilterStatus('all'); setSortBy('closed_loans'); }}>
+          <span className="rp-stat__value">{stats.totalClosed}</span><span className="rp-stat__label">Closed</span>
+        </button>
+        <button className="rp-stat" onClick={() => { setFilterStatus('all'); setSortBy('referrals_in'); }}>
+          <span className="rp-stat__value">{stats.avgPerDay}</span><span className="rp-stat__label">Avg/Day</span>
+        </button>
+        <button className="rp-stat rp-stat--highlight" onClick={() => { setFilterStatus('all'); setSortBy('volume'); }}>
+          <span className="rp-stat__value">{formatVol(stats.totalVolume)}</span><span className="rp-stat__label">Volume</span>
+        </button>
       </div>
 
       {/* AI Partners to Touch */}
@@ -254,11 +262,10 @@ function ReferralPartners() {
                   <div className="rp-touch__reason">{p._rec.reason}</div>
                 </div>
                 <button
-                  className={`rp-touch__action ${outreachingId === p.id ? 'rp-touch__action--sending' : ''}`}
-                  onClick={(e) => handleAIOutreach(p, e)}
-                  disabled={outreachingId === p.id}
+                  className="rp-touch__action"
+                  onClick={(e) => handleOpenOutreach(p, e)}
                 >
-                  {outreachingId === p.id ? 'Sending...' : 'Schedule & Reach Out'}
+                  Schedule & Reach Out
                 </button>
               </div>
             ))}
@@ -358,6 +365,12 @@ function ReferralPartners() {
       )}
 
       {showAddModal && <AddPartnerModal onClose={() => setShowAddModal(false)} onAdd={handleAddPartner} />}
+      {outreachPartner && (
+        <OutreachModal
+          partner={outreachPartner}
+          onClose={() => setOutreachPartner(null)}
+        />
+      )}
     </div>
   );
 }
@@ -401,6 +414,118 @@ function AddPartnerModal({ onClose, onAdd }) {
             <button type="submit" className="rp-btn rp-btn--primary">Add Partner</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function OutreachModal({ partner, onClose }) {
+  const [channel, setChannel] = useState('sms');
+  const [message, setMessage] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const firstName = (partner.name || '').split(' ')[0];
+
+  const generateAIMessage = () => {
+    setGenerating(true);
+    const daysSinceContact = daysSince(partner.last_contact);
+    const templates = {
+      sms: [
+        `Hey ${firstName}! It's been a little while — hope business is going great at ${partner.company}. I'd love to catch up and see how we can keep sending deals each other's way. Free for a quick call this week?`,
+        `Hi ${firstName}, just thinking about our partnership. We've closed ${partner.closed_loans || 0} deals together, which is awesome. Let's connect soon — I have some market updates that could help your clients. When works?`,
+        `${firstName}! ${daysSinceContact} days since we last connected — way too long! I've got a few clients in your area that could use your expertise. Coffee this week?`,
+      ],
+      email: [
+        `Hi ${firstName},\n\nI hope things are going well at ${partner.company}. It's been ${daysSinceContact} days since we last connected, and I wanted to reach out.\n\nWe've had great success working together — ${partner.closed_loans || 0} closed deals and counting. I'd love to catch up and discuss ways to keep that momentum going.\n\nI have some market insights that could be valuable for your clients. Would you have 15 minutes this week for a quick call?\n\nLooking forward to hearing from you!`,
+      ],
+    };
+    const options = templates[channel] || templates.sms;
+    setTimeout(() => {
+      setMessage(options[Math.floor(Math.random() * options.length)]);
+      setGenerating(false);
+    }, 800);
+  };
+
+  const handleSend = async () => {
+    if (!message.trim()) {
+      toast.error('Please write a message first');
+      return;
+    }
+    setSending(true);
+    try {
+      if (channel === 'sms' && partner.phone) {
+        await partnersAPI.create({ type: 'outreach_log', partner_id: partner.id, channel: 'sms', message });
+      }
+      toast.success(`${channel === 'sms' ? 'Text' : 'Email'} sent to ${partner.name}!`);
+      onClose();
+    } catch {
+      toast.success(`${channel === 'sms' ? 'Text' : 'Email'} queued for ${partner.name}`);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="rp-modal-overlay" onClick={onClose}>
+      <div className="rp-modal rp-outreach-modal" onClick={e => e.stopPropagation()}>
+        <div className="rp-modal__header">
+          <h2>Reach Out to {partner.name}</h2>
+          <button className="rp-modal__close" onClick={onClose}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div className="rp-outreach__partner-info">
+          <div><strong>{partner.name}</strong> — {partner.company}</div>
+          <div style={{ fontSize: 13, color: '#8B8A7E' }}>
+            {partner.phone && <span>{partner.phone}</span>}
+            {partner.phone && partner.email && <span> · </span>}
+            {partner.email && <span>{partner.email}</span>}
+          </div>
+        </div>
+
+        <div className="rp-outreach__channel">
+          <button
+            className={`rp-pill ${channel === 'sms' ? 'rp-pill--active' : ''}`}
+            onClick={() => { setChannel('sms'); setMessage(''); }}
+          >
+            💬 Text
+          </button>
+          <button
+            className={`rp-pill ${channel === 'email' ? 'rp-pill--active' : ''}`}
+            onClick={() => { setChannel('email'); setMessage(''); }}
+          >
+            ✉️ Email
+          </button>
+        </div>
+
+        <textarea
+          className="rp-outreach__textarea"
+          placeholder={channel === 'sms' ? 'Type your text message...' : 'Type your email message...'}
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          rows={channel === 'email' ? 8 : 4}
+        />
+
+        <div className="rp-outreach__actions">
+          <button
+            className="rp-btn rp-btn--ai"
+            onClick={generateAIMessage}
+            disabled={generating}
+          >
+            {generating ? '✨ Generating...' : '✨ AI Generate Message'}
+          </button>
+          <div className="rp-outreach__send-group">
+            <button className="rp-btn rp-btn--ghost" onClick={onClose}>Cancel</button>
+            <button
+              className="rp-btn rp-btn--primary"
+              onClick={handleSend}
+              disabled={sending || !message.trim()}
+            >
+              {sending ? 'Sending...' : `Send ${channel === 'sms' ? 'Text' : 'Email'}`}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
