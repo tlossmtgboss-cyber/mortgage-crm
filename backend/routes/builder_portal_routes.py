@@ -108,10 +108,10 @@ def _require_builder_token(request: Request, db: Session) -> "BuilderApplication
 
 async def _get_current_user(request: Request, db: Session = Depends(get_db)):
     """Delegate to canonical auth (lazy import avoids circular deps)."""
-    from auth.dependencies import get_current_user as _auth
+    from main import get_current_user as _gcu
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _auth(token=token, request=request, db=db)
+    return await _gcu(token, request, db)
 
 
 # ---------------------------------------------------------------------------
