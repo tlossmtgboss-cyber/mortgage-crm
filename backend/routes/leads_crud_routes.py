@@ -258,20 +258,21 @@ async def get_leads(
 
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 
-        # Resolve org-wide Production Assistant 1 name (single query for all leads)
+        # Resolve org-wide Production Assistant 1 via ORM (EncryptedString needs ORM decryption)
         pa_name = None
         try:
             org_id = current_user.organization_id or 1
             pa_row = db.execute(text("""
-                SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
+                SELECT dra.user_id
                 FROM default_role_assignments dra
                 JOIN roles r ON r.id = dra.role_id
-                JOIN users u ON u.id = dra.user_id
                 WHERE dra.organization_id = :org_id AND r.name = 'Production Assistant 1'
                 LIMIT 1
             """), {"org_id": org_id}).fetchone()
             if pa_row:
-                pa_name = pa_row[0] if pa_row[0] and pa_row[0].strip() else None
+                pa_user = db.query(User).filter(User.id == pa_row[0]).first()
+                if pa_user:
+                    pa_name = pa_user.full_name or None
         except Exception as e:
             logger.debug(f"Production assistant lookup: {e}")
 

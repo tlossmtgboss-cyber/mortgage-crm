@@ -755,29 +755,59 @@ async def get_loans(
         total = query.count()
         loans = query.order_by(Loan.created_at.desc()).offset(skip).limit(limit).all()
 
-        # Resolve org-wide Production Assistant 1 name (single query for all loans)
+        # Resolve org-wide role assignments via ORM (EncryptedString needs ORM decryption)
         pa_name = None
+        lo_fallback_name = None
         try:
             _org_id = current_user.organization_id
-            if not _org_id:
-                raise HTTPException(status_code=403, detail="Organization context required")
-            pa_row = db.execute(text("""
-                SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
-                FROM default_role_assignments dra
-                JOIN roles r ON r.id = dra.role_id
-                JOIN users u ON u.id = dra.user_id
-                WHERE dra.organization_id = :org_id AND r.name = 'Production Assistant 1'
-                LIMIT 1
-            """), {"org_id": _org_id}).fetchone()
-            if pa_row:
-                pa_name = pa_row[0] if pa_row[0] and pa_row[0].strip() else None
+            if _org_id:
+                role_rows = db.execute(text("""
+                    SELECT r.name as role_name, dra.user_id
+                    FROM default_role_assignments dra
+                    JOIN roles r ON r.id = dra.role_id
+                    WHERE dra.organization_id = :org_id
+                      AND r.name IN ('Production Assistant 1', 'Loan Officer')
+                """), {"org_id": _org_id}).fetchall()
+                user_ids = {row[1] for row in role_rows}
+                if user_ids:
+                    role_users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+                    for role_name, uid in role_rows:
+                        u = role_users.get(uid)
+                        if u and u.full_name:
+                            if role_name == 'Production Assistant 1' and not pa_name:
+                                pa_name = u.full_name
+                            elif role_name == 'Loan Officer' and not lo_fallback_name:
+                                lo_fallback_name = u.full_name
         except Exception as e:
-            logger.debug(f"Production assistant lookup: {e}")
+            logger.debug(f"Role assignment lookup: {e}")
+
+        # Also resolve current user's name as LO fallback
+        if not lo_fallback_name:
+            lo_fallback_name = getattr(current_user, 'full_name', None) or None
+            if not lo_fallback_name:
+                first = getattr(current_user, 'first_name', '') or ''
+                last = getattr(current_user, 'last_name', '') or ''
+                lo_fallback_name = f"{first} {last}".strip() or None
+
+        # Build a map of loan_officer_id -> name for loans with ID but no name
+        lo_ids_needed = {loan.loan_officer_id for loan in loans if loan.loan_officer_id and not loan.loan_officer_name}
+        lo_name_map = {}
+        if lo_ids_needed:
+            try:
+                lo_users = db.query(User).filter(User.id.in_(lo_ids_needed)).all()
+                lo_name_map = {u.id: u.full_name for u in lo_users if u.full_name}
+            except Exception as e:
+                logger.debug(f"Loan officer name lookup: {e}")
 
         result = []
         for loan in loans:
             d = _loan_to_dict(loan)
             d["production_assistant"] = pa_name
+            if not d.get("loan_officer_name"):
+                if loan.loan_officer_id:
+                    d["loan_officer_name"] = lo_name_map.get(loan.loan_officer_id, lo_fallback_name)
+                else:
+                    d["loan_officer_name"] = lo_fallback_name
             result.append(d)
 
         response_data = {"items": result, "total": total}
