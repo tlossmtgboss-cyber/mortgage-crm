@@ -103,7 +103,7 @@ function AppSidebar({ taskCounts = {} }) {
 
   return (
     <aside className="app-sidebar">
-      <Link to="/" className="s-head" style={{ textDecoration: 'none', color: 'inherit' }}>
+      <Link to="/aria-mobile" className="s-head" style={{ textDecoration: 'none', color: 'inherit' }}>
         <span className="s-logo">Aria</span>
         <span className="s-version">{roleBadge}</span>
       </Link>
