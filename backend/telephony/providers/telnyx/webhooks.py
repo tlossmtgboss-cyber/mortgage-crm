@@ -259,36 +259,39 @@ def validate_telnyx_webhook(
         return False
 
     try:
-        # Telnyx uses Ed25519 for signature verification
-        # The signed payload is: timestamp + "|" + payload
-        import nacl.signing
-        import nacl.encoding
+        import base64
+        from nacl.signing import VerifyKey
+        from nacl.exceptions import BadSignatureError
 
-        public_key_bytes = nacl.encoding.Base64Encoder.decode(public_key)
-        verify_key = nacl.signing.VerifyKey(public_key_bytes)
-        signature_bytes = nacl.encoding.Base64Encoder.decode(signature)
+        public_key_bytes = base64.b64decode(public_key)
+        if len(public_key_bytes) != 32:
+            logger.error("Telnyx public key wrong length: %d (expected 32)", len(public_key_bytes))
+            return False
 
-        # Try pipe separator first (current Telnyx format), fall back to dot
-        for sep in ("|", "."):
-            try:
-                signed_payload = f"{timestamp}{sep}".encode() + payload
-                verify_key.verify(signed_payload, signature_bytes)
-                return True
-            except nacl.exceptions.BadSignatureError:
-                continue
+        verify_key = VerifyKey(public_key_bytes)
+        signature_bytes = base64.b64decode(signature)
+        if len(signature_bytes) != 64:
+            logger.error("Telnyx signature wrong length: %d (expected 64)", len(signature_bytes))
+            return False
 
-        logger.error(
-            "Telnyx webhook signature invalid with both separators. "
-            "ts=%s, sig_len=%d, body_len=%d, pk=%s...",
-            timestamp, len(signature_bytes), len(payload), public_key[:12],
+        # Telnyx signs: "{timestamp}|{payload_as_string}"
+        # Match the official SDK: decode body to string, format, re-encode
+        payload_str = payload.decode("utf-8") if isinstance(payload, bytes) else payload
+        signed_payload = f"{timestamp}|{payload_str}".encode("utf-8")
+        try:
+            verify_key.verify(signed_payload, signature_bytes)
+            return True
+        except BadSignatureError:
+            pass
+
+        logger.debug(
+            "Telnyx Ed25519 verification failed: ts=%s, sig_len=%d, body_len=%d",
+            timestamp, len(signature_bytes), len(payload),
         )
         return False
 
     except ImportError:
         logger.error("PyNaCl not installed - webhook validation REJECTED. Install with: pip install pynacl")
-        return False
-    except nacl.exceptions.CryptoError as e:
-        logger.error("Telnyx webhook crypto error: %s", e)
         return False
     except Exception as e:
         logger.error("Telnyx webhook validation failed: %s (type=%s)", e, type(e).__name__)

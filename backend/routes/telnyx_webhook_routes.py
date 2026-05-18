@@ -27,28 +27,48 @@ from sqlalchemy import text as sa_text
 from database import get_db, SessionLocal
 from middleware.webhook_verification import require_telnyx_webhook as _require_telnyx_webhook_strict
 
-_TELNYX_IP_PREFIX = "192.76.120."
+_TELNYX_IP_PREFIXES = ("192.76.120.", "185.246.41.", "103.115.244.")
+
+
+def _extract_origin_ip(request: Request) -> str:
+    """Get real client IP, preferring Cloudflare header since API is behind CF."""
+    for header in ("cf-connecting-ip", "x-real-ip"):
+        val = request.headers.get(header, "").strip()
+        if val:
+            return val
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else ""
 
 
 async def require_telnyx_webhook(request: Request) -> bytes:
     """Telnyx webhook verification with IP-based fallback.
 
-    Ed25519 verification fails in production due to CDN body modification.
-    Falls back to IP verification for known Telnyx egress range.
+    Ed25519 verification fails in production because Cloudflare (in front of
+    api.perenniaai.com) can modify request body bytes. Falls back to IP
+    verification using cf-connecting-ip header for the real origin IP.
     """
     try:
         return await _require_telnyx_webhook_strict(request)
     except HTTPException as exc:
         if exc.status_code in (401, 503):
-            forwarded = request.headers.get("x-forwarded-for", "")
-            origin_ip = forwarded.split(",")[0].strip() if forwarded else ""
-            if origin_ip.startswith(_TELNYX_IP_PREFIX):
+            origin_ip = _extract_origin_ip(request)
+            if any(origin_ip.startswith(p) for p in _TELNYX_IP_PREFIXES):
                 body = await request.body()
                 logger.warning(
                     "Telnyx Ed25519 failed — allowing via IP fallback. "
                     "ip=%s, body_len=%d", origin_ip, len(body),
                 )
                 return body
+            logger.warning(
+                "Telnyx webhook IP fallback failed: origin_ip=%s not in Telnyx range. "
+                "cf_ip=%s, xff=%s, client=%s",
+                origin_ip,
+                request.headers.get("cf-connecting-ip", ""),
+                request.headers.get("x-forwarded-for", ""),
+                request.client.host if request.client else "",
+            )
         raise
 
 # Call Intelligence Integration (optional — degrades gracefully if unavailable)
@@ -1216,7 +1236,7 @@ async def _aria_sms_ai_background_task(
                     to=normalized_from,
                     text=_reply_text,
                     user_id=context_data.get("user_id") or context_data.get("lo_id"),
-                    lead_id=lead_id,
+                    lead_id=context_data.get("lead_id"),
                     organization_id=org_id,
                     db=db,
                     bypass_compliance=True,

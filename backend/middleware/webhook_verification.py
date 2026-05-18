@@ -69,20 +69,36 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 WEBHOOK_TIMESTAMP_TOLERANCE = int(os.getenv("WEBHOOK_TIMESTAMP_TOLERANCE", "300"))  # 5 minutes
 
-# Telnyx webhook egress IP range — used as fallback when Ed25519 fails
-# (e.g., CDN proxy modifies body bytes). Primary verification is still Ed25519.
-TELNYX_IP_PREFIXES = ("192.76.120.",)
+# Telnyx webhook egress IP ranges (all regions) — used as fallback when
+# Ed25519 fails (e.g., Cloudflare proxy modifies body bytes).
+# US: CH1 192.76.120.128/29, DC2 192.76.120.136/29, SV1 192.76.120.144/29
+# EU: LD6 185.246.41.0/29, FR5 185.246.41.8/29, AM6 185.246.41.16/29
+# APAC: SY1 103.115.244.0/29, SG1 103.115.244.8/29
+TELNYX_IP_PREFIXES = ("192.76.120.", "185.246.41.", "103.115.244.")
+
+
+def _get_origin_ip(request: Request) -> str:
+    """Extract the true origin IP, checking Cloudflare and proxy headers."""
+    # cf-connecting-ip is set by Cloudflare to the real client IP — most reliable
+    # when the API is behind Cloudflare (api.perenniaai.com uses Cloudflare).
+    cf_ip = request.headers.get("cf-connecting-ip", "").strip()
+    if cf_ip:
+        return cf_ip
+    # x-real-ip is set by some reverse proxies
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+    # x-forwarded-for: first entry is the original client
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else ""
 
 
 def _is_telnyx_ip(request: Request) -> bool:
     """Check if the request originates from a known Telnyx IP range."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        origin_ip = forwarded.split(",")[0].strip()
-        if any(origin_ip.startswith(p) for p in TELNYX_IP_PREFIXES):
-            return True
-    client_ip = request.client.host if request.client else ""
-    return any(client_ip.startswith(p) for p in TELNYX_IP_PREFIXES)
+    origin_ip = _get_origin_ip(request)
+    return any(origin_ip.startswith(p) for p in TELNYX_IP_PREFIXES)
 
 
 class WebhookVerifier:
@@ -384,39 +400,52 @@ class WebhookVerifier:
             raise HTTPException(status_code=401, detail="Invalid Telnyx timestamp")
 
         # -- Ed25519 signature verification -----------------------------------
-        # Primary: Ed25519 signature check.
+        # Primary: Telnyx SDK (if available), then custom PyNaCl.
         # Fallback: IP-based verification from known Telnyx egress range.
-        # CDN proxies (Cloudflare/Railway) can modify body bytes in transit,
+        # Cloudflare (in front of api.perenniaai.com) can modify body bytes,
         # breaking Ed25519 verification while the webhook is still legitimate.
+        origin_ip = _get_origin_ip(request)
         ed25519_ok = False
+
+        # Try 1: Telnyx SDK's official verify_webhook_signature
         try:
-            from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
-            ed25519_ok = validate_telnyx_webhook(body, signature, timestamp, public_key)
+            from telnyx.lib.webhook_verification import verify_webhook_signature
+            verify_webhook_signature(body, dict(request.headers), public_key)
+            ed25519_ok = True
         except ImportError:
-            logger.error(
-                "Telnyx webhook validation module not available — "
-                "install PyNaCl"
-            )
+            pass
         except Exception as e:
-            logger.error("Telnyx webhook signature validation error: %s", e)
+            logger.debug("Telnyx SDK Ed25519 failed: %s", e)
+
+        # Try 2: Custom PyNaCl verification
+        if not ed25519_ok:
+            try:
+                from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
+                ed25519_ok = validate_telnyx_webhook(body, signature, timestamp, public_key)
+            except ImportError:
+                logger.error("Neither telnyx SDK nor PyNaCl available for webhook verification")
+            except Exception as e:
+                logger.debug("Custom Ed25519 failed: %s", e)
 
         if ed25519_ok:
             return body
 
-        # Ed25519 failed — fall back to IP verification
+        # Ed25519 failed — fall back to IP verification (checks cf-connecting-ip
+        # first since we're behind Cloudflare)
         if _is_telnyx_ip(request):
-            logger.warning(
-                "Telnyx Ed25519 failed but request is from Telnyx IP — "
-                "allowing via IP fallback. source=%s, body_len=%d, "
-                "sig_len=%d, ts=%s",
-                source_ip, len(body), len(signature), timestamp,
+            logger.info(
+                "Telnyx Ed25519 failed but request is from Telnyx IP %s — "
+                "allowing via IP fallback. body_len=%d, ts=%s",
+                origin_ip, len(body), timestamp,
             )
             return body
 
         logger.warning(
-            "Telnyx webhook rejected: Ed25519 failed and IP %s is not "
-            "in Telnyx range. body_len=%d, sig_len=%d",
-            source_ip, len(body), len(signature),
+            "Telnyx webhook rejected: Ed25519 failed and origin IP %s is not "
+            "in Telnyx range. body_len=%d, sig_len=%d, cf_ip=%s, xff=%s",
+            origin_ip, len(body), len(signature),
+            request.headers.get("cf-connecting-ip", ""),
+            request.headers.get("x-forwarded-for", ""),
         )
         raise HTTPException(status_code=401, detail="Invalid Telnyx webhook signature")
 
