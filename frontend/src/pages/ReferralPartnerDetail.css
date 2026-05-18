@@ -90,6 +90,47 @@
   transform: translateY(0);
 }
 
+.btn-builder-docs-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #1F3D2E, #2A5A3E);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(31, 61, 46, 0.3);
+}
+
+.btn-builder-docs-portal:hover {
+  background: linear-gradient(135deg, #2A5A3E, #1F3D2E);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31, 61, 46, 0.4);
+}
+
+.btn-builder-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #B8924A;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-builder-portal:hover {
+  background: #9A7A3D;
+}
+
 /* Partner Info Card */
 .partner-info-card {
   background: white;

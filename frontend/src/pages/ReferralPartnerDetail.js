@@ -324,6 +324,7 @@ function ReferralPartnerDetail() {
   }
 
   const categories = categorizeReferrals();
+  const isBuilder = partner?.type === 'Builder' || partner?.category === 'builder';
 
   return (
     <div className="partner-detail-container">
@@ -337,8 +338,17 @@ function ReferralPartnerDetail() {
             onClick={() => navigate(`/partner-portal/${id}`)}
             title="View as partner"
           >
-            👁️ View Portal
+            👁 View Portal
           </button>
+          {isBuilder && (
+            <button
+              className="btn-builder-docs-portal"
+              onClick={() => navigate(`/partner-portal/${id}?tab=clients`)}
+              title="Open builder docs portal"
+            >
+              📄 Builder Docs Portal
+            </button>
+          )}
           <h1>{partner.name}</h1>
           <span className={`tier-badge ${getTierBadgeClass(partner.loyalty_tier)}`}>
             {partner.loyalty_tier || 'Bronze'}
@@ -350,14 +360,28 @@ function ReferralPartnerDetail() {
       <div className="partner-info-card">
         <div className="info-card-header">
           <h3>Partner Information</h3>
-          <button className="btn-edit-partner" onClick={handleOpenEdit}>
-            Edit Profile
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {isBuilder && (
+              <button
+                className="btn-builder-portal"
+                onClick={() => {
+                  const portalUrl = `${window.location.origin}/builder-portal?partner_id=${id}`;
+                  navigator.clipboard.writeText(portalUrl).then(() => toast.success('Builder docs portal link copied to clipboard'));
+                }}
+                title="Copy builder docs portal link"
+              >
+                📋 Copy Docs Portal Link
+              </button>
+            )}
+            <button className="btn-edit-partner" onClick={handleOpenEdit}>
+              Edit Profile
+            </button>
+          </div>
         </div>
         <div className="info-grid">
           <div className="info-item">
             <span className="label">Company</span>
-            <span className="value">{partner.company || 'N/A'}</span>
+            <span className="value">{partner.company || partner.business_name || 'N/A'}</span>
           </div>
           <div className="info-item">
             <span className="label">Type</span>
@@ -371,6 +395,26 @@ function ReferralPartnerDetail() {
             <span className="label">Phone</span>
             <span className="value"><ClickablePhone phone={partner.phone} /></span>
           </div>
+          {partner.title && (
+            <div className="info-item">
+              <span className="label">Title</span>
+              <span className="value">{partner.title}</span>
+            </div>
+          )}
+          {partner.contact_name && partner.contact_name !== partner.name && (
+            <div className="info-item">
+              <span className="label">Contact</span>
+              <span className="value">{partner.contact_name}</span>
+            </div>
+          )}
+          {(partner.street_address || partner.city) && (
+            <div className="info-item" style={{ gridColumn: 'span 2' }}>
+              <span className="label">Address</span>
+              <span className="value">
+                {[partner.street_address, partner.city, partner.state, partner.zip_code].filter(Boolean).join(', ')}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="stats-row">
@@ -411,7 +455,7 @@ function ReferralPartnerDetail() {
         >
           Overview
         </button>
-        {partner && (partner.type === 'Builder' || partner.category === 'builder') && (
+        {isBuilder && (
           <button
             className={`partner-tab ${activeTab === 'builderapp' ? 'active' : ''}`}
             onClick={() => {
