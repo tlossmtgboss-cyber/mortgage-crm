@@ -346,7 +346,7 @@ class WebhookVerifier:
         Returns the raw request body bytes so the caller can parse JSON
         without reading the body a second time.
         """
-        public_key = os.getenv("TELNYX_PUBLIC_KEY")
+        public_key = (os.getenv("TELNYX_PUBLIC_KEY") or "").strip()
         body = await request.body()
 
         if not public_key:
@@ -413,7 +413,7 @@ class WebhookVerifier:
             verify_webhook_signature(body, dict(request.headers), public_key)
             ed25519_ok = True
         except ImportError:
-            pass
+            logger.debug("Telnyx SDK webhook_verification not available, falling back to custom")
         except Exception as e:
             logger.debug("Telnyx SDK Ed25519 failed: %s", e)
 

@@ -1024,6 +1024,17 @@ async def _handle_sms_opt_keyword(
     except Exception as e:
         logger.warning("sms_opt_keyword: sms_messages insert failed: %s", e)
 
+    # --- Close active Aria conversations so AI doesn't reply to opted-out numbers ---
+    if is_opt_out:
+        try:
+            db.execute(sa_text("""
+                UPDATE sms_ai_conversations
+                SET status = 'closed', updated_at = NOW()
+                WHERE phone_number = :phone AND status = 'active'
+            """), {"phone": from_phone})
+        except Exception as e:
+            logger.warning("sms_opt_keyword: close Aria conversations failed: %s", e)
+
     # Commit all DB changes in one transaction
     try:
         db.commit()
@@ -1087,6 +1098,10 @@ async def _aria_sms_ai_background_task(
     db: Optional[Session] = None
     try:
         db = SessionLocal()
+
+        if not message_body or not message_body.strip():
+            logger.info("aria_sms_bg: empty message body, skipping AI reply for conv_id=%s", conv_id)
+            return
 
         # Fetch conversation history for context
         _history_rows = db.execute(sa_text("""
@@ -1306,7 +1321,7 @@ async def _aria_sms_ai_background_task(
                 _extract_text = _extract_resp.content[0].text.strip() if _extract_resp.content else ""
                 logger.info("aria_sms_bg: appointment extraction: %s", _extract_text[:200])
 
-                if "CONFIRMED: yes" in _extract_text.lower() or "CONFIRMED:yes" in _extract_text.lower():
+                if "confirmed: yes" in _extract_text.lower() or "confirmed:yes" in _extract_text.lower():
                     # Parse extracted fields
                     _appt_date = None
                     _appt_time = None
