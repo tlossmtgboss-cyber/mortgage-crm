@@ -254,10 +254,19 @@ async def websocket_endpoint(websocket: WebSocket, call_id: str):
                 await websocket.send_json({"type": "pong"})
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, call_id)
+        pass
     except Exception as e:
         logger.error(f"WebSocket error for call {call_id}: {e}")
-        manager.disconnect(websocket, call_id)
+    finally:
+        # CQ-006 fix: guarantee cleanup even if an unexpected exception escapes.
+        try:
+            manager.disconnect(websocket, call_id)
+        except Exception as cleanup_exc:  # pragma: no cover - defensive
+            logger.debug(f"ConnectionManager cleanup failed: {cleanup_exc}")
+        try:
+            await ws_session_manager.unregister(ws_session_id)
+        except Exception as cleanup_exc:  # pragma: no cover - defensive
+            logger.debug(f"ws_session_manager.unregister failed: {cleanup_exc}")
 
 
 # =============================================================================

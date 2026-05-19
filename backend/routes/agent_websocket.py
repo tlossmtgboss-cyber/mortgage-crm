@@ -13,6 +13,7 @@ from database import get_db
 from models.agent_governance import AgentProfile, AgentMetricsTimeseries, AgentAlert
 from sqlalchemy.exc import SQLAlchemyError
 from utils.websocket_auth import authenticate_websocket
+from services.websocket_session_manager import ws_session_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -227,6 +228,13 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
         return
 
     await manager.connect_agent(websocket, agent_id, org_id)
+    ws_session_id = f"agent_metrics:{org_id}:{agent_id}:{id(websocket)}"
+    try:
+        await ws_session_manager.register(
+            ws_session_id, websocket, {"agent_id": agent_id, "org_id": org_id}
+        )
+    except Exception as reg_exc:  # pragma: no cover - defensive
+        logger.debug(f"ws_session_manager.register failed: {reg_exc}")
 
     try:
         while True:
@@ -248,10 +256,21 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
             await asyncio.sleep(5)
 
     except WebSocketDisconnect:
-        manager.disconnect_agent(websocket, agent_id, org_id)
+        pass
     except SQLAlchemyError as e:
         logger.error(f"Agent WebSocket error: {e}")
-        manager.disconnect_agent(websocket, agent_id, org_id)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"Agent WebSocket unexpected error: {e}")
+    finally:
+        # CQ-006 fix: guarantee disconnect cleanup runs even on unexpected exceptions.
+        try:
+            manager.disconnect_agent(websocket, agent_id, org_id)
+        except Exception as cleanup_exc:  # pragma: no cover - defensive
+            logger.debug(f"disconnect_agent cleanup failed: {cleanup_exc}")
+        try:
+            await ws_session_manager.unregister(ws_session_id)
+        except Exception as cleanup_exc:  # pragma: no cover - defensive
+            logger.debug(f"ws_session_manager.unregister failed: {cleanup_exc}")
 
 
 @router.websocket("/ws/system/health")

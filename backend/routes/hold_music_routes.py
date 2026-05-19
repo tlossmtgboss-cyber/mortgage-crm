@@ -497,17 +497,17 @@ async def set_default_hold_music(
 # ============================================================================
 
 @router.get("/stream/default")
-async def stream_default_hold_music(db: Session = Depends(get_db)):
+async def stream_default_hold_music(db: AsyncSession = Depends(get_async_db)):
     """
     Redirect to the default hold music URL.
     Used in TwiML: <Play>/api/v1/hold-music/stream/default</Play>
     """
     try:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT audio_url FROM hold_music
             WHERE is_default = TRUE AND is_active = TRUE
             LIMIT 1
-        """)).fetchone()
+        """))).fetchone()
 
         if result and result.audio_url and _validate_audio_url(result.audio_url):
             return RedirectResponse(url=result.audio_url)
@@ -523,17 +523,17 @@ async def stream_default_hold_music(db: Session = Depends(get_db)):
 @router.get("/stream/{music_id}")
 async def stream_hold_music(
     music_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Redirect to a specific hold music URL.
     Used in TwiML: <Play>/api/v1/hold-music/stream/{music_id}</Play>
     """
     try:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT audio_url FROM hold_music
             WHERE id = :music_id AND is_active = TRUE
-        """), {"music_id": music_id}).fetchone()
+        """), {"music_id": music_id})).fetchone()
 
         if result and result.audio_url and _validate_audio_url(result.audio_url):
             return RedirectResponse(url=result.audio_url)
@@ -554,7 +554,7 @@ async def stream_hold_music(
 async def get_hold_twiml(
     music_id: Optional[int] = None,
     message: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Generate TwiML for hold music with optional comfort message.
@@ -570,18 +570,18 @@ async def get_hold_twiml(
 
     # Get music URL
     if music_id:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT audio_url, comfort_messages, comfort_message_interval
             FROM hold_music
             WHERE id = :music_id AND is_active = TRUE
-        """), {"music_id": music_id}).fetchone()
+        """), {"music_id": music_id})).fetchone()
     else:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT audio_url, comfort_messages, comfort_message_interval
             FROM hold_music
             WHERE is_default = TRUE AND is_active = TRUE
             LIMIT 1
-        """)).fetchone()
+        """))).fetchone()
 
     music_url = DEFAULT_HOLD_MUSIC["classical"]["url"]
     if result and result.audio_url:

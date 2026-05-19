@@ -190,14 +190,17 @@ def test_metrics_recorded_on_low_confidence_fallback(metric_spy):
 # 5. Empty / null input is handled gracefully
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize(
-    "bad_input",
-    [None, {}, {"intent": None, "confidence": None}, "not-a-dict"],
-)
-def test_empty_or_null_input_falls_back(bad_input, metric_spy):
-    out = apply_confidence_gate(bad_input, query="")
-
-    assert out["intent"] == FALLBACK_INTENT
-    assert out["agents"] == FALLBACK_AGENTS
-    assert out["fallback_applied"] is True
-    # The gate must never raise on malformed input.
+def test_empty_or_null_input_falls_back(metric_spy):
+    # All of these malformed inputs must produce the safe fallback result,
+    # and the gate must never raise.
+    bad_inputs = [
+        None,
+        {},
+        {"intent": None, "confidence": None},
+        "not-a-dict",
+    ]
+    for bad_input in bad_inputs:
+        out = apply_confidence_gate(bad_input, query="")
+        assert out["intent"] == FALLBACK_INTENT
+        assert out["agents"] == FALLBACK_AGENTS
+        assert out["fallback_applied"] is True
