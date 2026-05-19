@@ -19,10 +19,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import httpx
 
-from db import get_db
+from db import get_async_db
 from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
@@ -98,11 +99,11 @@ async def _send_sms(to: str, from_: str, body: str, messaging_profile_id: str = 
 # Opt-out / opt-in persistence
 # ---------------------------------------------------------------------------
 
-def _opt_out(db: Session, phone: str, org_id: Optional[int], keyword: str):
+async def _opt_out(db: AsyncSession, phone: str, org_id: Optional[int], keyword: str):
     """Record an SMS opt-out (STOP). Upserts into sms_opt_outs table."""
     try:
         now = datetime.now(timezone.utc)
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO sms_opt_outs (phone_number, opt_out_keyword, organization_id,
                 active, opted_out_at)
             VALUES (:phone, :kw, :org_id, TRUE, :now)
@@ -111,52 +112,52 @@ def _opt_out(db: Session, phone: str, org_id: Optional[int], keyword: str):
                 opt_out_keyword = EXCLUDED.opt_out_keyword,
                 organization_id = COALESCE(EXCLUDED.organization_id, sms_opt_outs.organization_id)
         """), {"phone": phone, "kw": keyword, "org_id": org_id, "now": now})
-        db.commit()
+        await db.commit()
         logger.info("SMS opt-out recorded: ***%s keyword=%s org=%s", phone[-4:], keyword, org_id)
     except Exception as e:
         logger.exception("Failed to record opt-out for ***%s: %s", phone[-4:], e)
-        db.rollback()
+        await db.rollback()
         raise  # Opt-out MUST succeed or visibly fail — TCPA violation if silently ignored
 
 
-def _opt_in(db: Session, phone: str, org_id: Optional[int], keyword: str):
+async def _opt_in(db: AsyncSession, phone: str, org_id: Optional[int], keyword: str):
     """Record an SMS opt-in (START). Deactivate opt-out flag."""
     try:
         now = datetime.now(timezone.utc)
         if org_id:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE sms_opt_outs SET active = FALSE, opted_in_at = :now
                 WHERE phone_number = :phone
                   AND (organization_id = :org_id OR organization_id IS NULL)
             """), {"now": now, "phone": phone, "org_id": org_id})
         else:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE sms_opt_outs SET active = FALSE, opted_in_at = :now
                 WHERE phone_number = :phone
             """), {"now": now, "phone": phone})
-        db.commit()
+        await db.commit()
         logger.info("SMS opt-in recorded: ***%s keyword=%s org=%s", phone[-4:], keyword, org_id)
     except Exception as e:
         logger.exception("Failed to record opt-in for ***%s: %s", phone[-4:], e)
-        db.rollback()
+        await db.rollback()
         raise  # Opt-in must succeed or visibly fail — caller needs to know
 
 
-def is_opted_out(db: Session, phone: str, org_id: Optional[int]) -> bool:
+async def is_opted_out(db: AsyncSession, phone: str, org_id: Optional[int]) -> bool:
     """Check if a phone number has opted out of SMS for this org."""
     if org_id:
-        row = db.execute(text("""
+        row = (await db.execute(text("""
             SELECT id FROM sms_opt_outs
             WHERE phone_number = :phone AND active = TRUE
               AND (organization_id = :org_id OR organization_id IS NULL)
             LIMIT 1
-        """), {"phone": phone, "org_id": org_id}).fetchone()
+        """), {"phone": phone, "org_id": org_id})).fetchone()
     else:
-        row = db.execute(text("""
+        row = (await db.execute(text("""
             SELECT id FROM sms_opt_outs
             WHERE phone_number = :phone AND active = TRUE
             LIMIT 1
-        """), {"phone": phone}).fetchone()
+        """), {"phone": phone})).fetchone()
     return row is not None
 
 
@@ -164,21 +165,21 @@ def is_opted_out(db: Session, phone: str, org_id: Optional[int]) -> bool:
 # Resolve org from Telnyx "to" number
 # ---------------------------------------------------------------------------
 
-def _resolve_org(db: Session, to_number: str) -> Optional[int]:
+async def _resolve_org(db: AsyncSession, to_number: str) -> Optional[int]:
     """Try to find the organization that owns the receiving phone number."""
     # Check agent_telephony_settings or verified_caller_ids
-    row = db.execute(text("""
+    row = (await db.execute(text("""
         SELECT organization_id FROM verified_caller_ids
         WHERE phone_number = :phone LIMIT 1
-    """), {"phone": to_number}).fetchone()
+    """), {"phone": to_number})).fetchone()
     if row:
         return row.organization_id
 
     # Fallback: check the Telnyx from number in org settings
-    row = db.execute(text("""
+    row = (await db.execute(text("""
         SELECT organization_id FROM agent_telephony_settings
         WHERE business_caller_id = :phone LIMIT 1
-    """), {"phone": to_number}).fetchone()
+    """), {"phone": to_number})).fetchone()
     if row:
         return row.organization_id
 
@@ -193,7 +194,7 @@ def _resolve_org(db: Session, to_number: str) -> Optional[int]:
 async def sms_inbound_webhook(
     request: Request,
     raw_body: bytes = Depends(require_telnyx_webhook),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Telnyx inbound SMS webhook handler.
@@ -218,7 +219,7 @@ async def sms_inbound_webhook(
         return JSONResponse({"status": "ignored"})
 
     keyword = message_text.lower().strip()
-    org_id = _resolve_org(db, to_number)
+    org_id = await _resolve_org(db, to_number)
 
     logger.info(
         "Inbound SMS: from=***%s to=%s text=%r org=%s",
@@ -227,7 +228,7 @@ async def sms_inbound_webhook(
 
     # Log all inbound SMS for audit
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO sms_inbound_log (from_phone, to_phone, message_text, keyword_detected,
                 organization_id, created_at)
             VALUES (:from_ph, :to_ph, :msg, :kw, :org_id, :now)
@@ -236,15 +237,15 @@ async def sms_inbound_webhook(
             "msg": message_text[:500], "kw": keyword if keyword in STOP_KEYWORDS | HELP_KEYWORDS | START_KEYWORDS else None,
             "org_id": org_id, "now": datetime.now(timezone.utc),
         })
-        db.commit()
+        await db.commit()
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
-        db.rollback()
+        await db.rollback()
 
     # ── STOP keywords ──
     if keyword in STOP_KEYWORDS:
         try:
-            _opt_out(db, from_number, org_id, keyword)
+            await _opt_out(db, from_number, org_id, keyword)
         except Exception as _exc:  # noqa: BLE001
             # Still send the legally-required STOP confirmation
             logger.exception("unhandled exception")
@@ -265,7 +266,7 @@ async def sms_inbound_webhook(
     # ── START keywords ──
     if keyword in START_KEYWORDS:
         try:
-            _opt_in(db, from_number, org_id, keyword)
+            await _opt_in(db, from_number, org_id, keyword)
         except Exception as _exc:  # noqa: BLE001
             logger.exception("unhandled exception")
             await _send_sms(to=from_number, from_=to_number, body=START_REPLY)
@@ -292,7 +293,7 @@ class OptOutCheckRequest(BaseModel):
 @router.post("/check-opt-out")
 async def check_opt_out_status(
     body: OptOutCheckRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Check if a phone number has opted out of SMS."""
@@ -301,7 +302,7 @@ async def check_opt_out_status(
         raise HTTPException(status_code=401, detail="Authentication required")
     if body.organization_id != user_org:
         raise HTTPException(status_code=403, detail="Cannot check opt-out for another organization")
-    opted = is_opted_out(db, body.phone, body.organization_id)
+    opted = await is_opted_out(db, body.phone, body.organization_id)
     return {"phone": body.phone, "opted_out": opted}
 
 
@@ -312,7 +313,7 @@ async def check_opt_out_status(
 @router.get("/opt-outs")
 async def list_opt_outs(
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """List opted-out phone numbers for the current org."""
@@ -320,13 +321,13 @@ async def list_opt_outs(
     if not org_id:
         raise HTTPException(status_code=401, detail="Auth required")
 
-    rows = db.execute(text("""
+    rows = (await db.execute(text("""
         SELECT phone_number, opted_out_at, opt_out_keyword
         FROM sms_opt_outs
         WHERE organization_id = :org_id AND active = TRUE
         ORDER BY opted_out_at DESC
         LIMIT :lim
-    """), {"org_id": org_id, "lim": limit}).fetchall()
+    """), {"org_id": org_id, "lim": limit})).fetchall()
 
     return {
         "opt_outs": [

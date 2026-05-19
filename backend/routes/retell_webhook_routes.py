@@ -19,8 +19,9 @@ from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_async_db
 from utils.background_tasks import tenant_task
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def verify_retell_signature(payload: bytes, signature: str) -> bool:
 async def retell_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Receive Retell AI webhook events.
 
@@ -84,7 +85,7 @@ async def retell_webhook(
     call_id = payload.get("data", {}).get("call_id")
     org_id = None
     if call_id:
-        row = db.execute(
+        row = (await db.execute(
             text("""
                 SELECT u.organization_id
                 FROM retell_calls rc
@@ -92,7 +93,7 @@ async def retell_webhook(
                 WHERE rc.retell_call_id = :call_id
             """),
             {"call_id": call_id},
-        ).fetchone()
+        )).fetchone()
         if row:
             org_id = row.organization_id
 
@@ -113,7 +114,7 @@ async def retell_webhook(
     return JSONResponse(status_code=200, content={"status": "received"})
 
 
-def _process_call_ended(payload: dict, *, db: Session = None, organization_id: int = None):
+async def _process_call_ended(payload: dict, *, db: AsyncSession = None, organization_id: int = None):
     """Process call_ended event -- update local call record with duration and status.
 
     When invoked via tenant_task, receives a tenant-scoped db session.
@@ -143,7 +144,7 @@ def _process_call_ended(payload: dict, *, db: Session = None, organization_id: i
         )
 
         # Update local call record
-        db.execute(
+        await db.execute(
             text("""
                 UPDATE retell_calls
                 SET status = 'completed',
@@ -161,13 +162,13 @@ def _process_call_ended(payload: dict, *, db: Session = None, organization_id: i
         )
 
         # Update lead last_contact_at if call is linked to a lead
-        call_record = db.execute(
+        call_record = (await db.execute(
             text("SELECT lead_id FROM retell_calls WHERE retell_call_id = :call_id"),
             {"call_id": call_id},
-        ).fetchone()
+        )).fetchone()
 
         if call_record and call_record.lead_id:
-            db.execute(
+            await db.execute(
                 text("""
                     UPDATE leads
                     SET last_contact_at = :now, last_contact_method = 'phone'
@@ -176,16 +177,16 @@ def _process_call_ended(payload: dict, *, db: Session = None, organization_id: i
                 {"lead_id": call_record.lead_id, "now": datetime.now(timezone.utc)},
             )
 
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.error(f"Retell call_ended processing failed: {e}", exc_info=True)
-        db.rollback()
+        await db.rollback()
     finally:
         if _owns_session:
             db.close()
 
 
-def _process_call_analyzed(payload: dict, *, db: Session = None, organization_id: int = None):
+async def _process_call_analyzed(payload: dict, *, db: AsyncSession = None, organization_id: int = None):
     """Process call_analyzed event -- store transcript, summary, and sentiment.
 
     When invoked via tenant_task, receives a tenant-scoped db session.
@@ -211,7 +212,7 @@ def _process_call_analyzed(payload: dict, *, db: Session = None, organization_id
 
         logger.info(f"Retell call analyzed: call_id={call_id}")
 
-        db.execute(
+        await db.execute(
             text("""
                 UPDATE retell_calls
                 SET transcript = :transcript,
@@ -230,7 +231,7 @@ def _process_call_analyzed(payload: dict, *, db: Session = None, organization_id
                 "custom": str(analysis.get("custom_analysis_data", {})),
             },
         )
-        db.commit()
+        await db.commit()
 
         # Trigger Call Intelligence processing if transcript is available
         if transcript:
@@ -264,7 +265,7 @@ def _process_call_analyzed(payload: dict, *, db: Session = None, organization_id
 
     except Exception as e:
         logger.error(f"Retell call_analyzed processing failed: {e}", exc_info=True)
-        db.rollback()
+        await db.rollback()
     finally:
         if _owns_session:
             db.close()

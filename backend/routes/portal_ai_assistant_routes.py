@@ -13,6 +13,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/api/v1/portal-assistant", tags=["Portal AI Assistant
 # DEPENDENCY INJECTION
 # =============================================================================
 
-from db import get_db
+from db import get_async_db
 
 _get_current_user = None
 
@@ -77,15 +78,15 @@ class QuickAction(BaseModel):
 # PORTAL CONTEXT HELPERS
 # =============================================================================
 
-async def get_workspace_context(db: Session, workspace_id: int) -> Dict[str, Any]:
+async def get_workspace_context(db: AsyncSession, workspace_id: int) -> Dict[str, Any]:
     """Get context about the workspace for the AI assistant."""
     # Get workspace info
-    workspace = db.execute(text("""
+    workspace = (await db.execute(text("""
         SELECT w.id, w.slug, w.display_name, w.status, w.settings,
                w.created_at, w.updated_at
         FROM purl_workspaces w
         WHERE w.id = :workspace_id
-    """), {"workspace_id": workspace_id}).fetchone()
+    """), {"workspace_id": workspace_id})).fetchone()
 
     if not workspace:
         return {}
@@ -100,13 +101,13 @@ async def get_workspace_context(db: Session, workspace_id: int) -> Dict[str, Any
     }
 
     # Get application status
-    application = db.execute(text("""
+    application = (await db.execute(text("""
         SELECT id, status, completeness_pct, validation_errors, started_at, submitted_at
         FROM purl_applications
         WHERE workspace_id = :workspace_id
         ORDER BY created_at DESC
         LIMIT 1
-    """), {"workspace_id": workspace_id}).fetchone()
+    """), {"workspace_id": workspace_id})).fetchone()
 
     if application:
         context["application"] = {
@@ -119,7 +120,7 @@ async def get_workspace_context(db: Session, workspace_id: int) -> Dict[str, Any
         }
 
     # Get document summary
-    docs = db.execute(text("""
+    docs = (await db.execute(text("""
         SELECT
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE status = 'approved') as approved,
@@ -127,7 +128,7 @@ async def get_workspace_context(db: Session, workspace_id: int) -> Dict[str, Any
             COUNT(*) FILTER (WHERE status = 'rejected') as rejected
         FROM purl_documents
         WHERE workspace_id = :workspace_id
-    """), {"workspace_id": workspace_id}).fetchone()
+    """), {"workspace_id": workspace_id})).fetchone()
 
     if docs:
         context["documents"] = {
@@ -138,24 +139,24 @@ async def get_workspace_context(db: Session, workspace_id: int) -> Dict[str, Any
         }
 
     # Get pending tasks
-    tasks = db.execute(text("""
+    tasks = (await db.execute(text("""
         SELECT COUNT(*) as pending_count
         FROM purl_tasks
         WHERE workspace_id = :workspace_id AND status = 'pending'
-    """), {"workspace_id": workspace_id}).fetchone()
+    """), {"workspace_id": workspace_id})).fetchone()
 
     if tasks:
         context["pending_tasks"] = tasks[0]
 
     # Get loan milestones
-    milestones = db.execute(text("""
+    milestones = (await db.execute(text("""
         SELECT m.name, lm.status, lm.completed_at
         FROM purl_loan_milestones lm
         JOIN purl_milestone_definitions m ON m.id = lm.milestone_id
         JOIN purl_loans l ON l.id = lm.loan_id
         WHERE l.workspace_id = :workspace_id
         ORDER BY m.order_index
-    """), {"workspace_id": workspace_id}).fetchall()
+    """), {"workspace_id": workspace_id})).fetchall()
 
     if milestones:
         context["milestones"] = [
@@ -220,7 +221,7 @@ async def generate_ai_response(
     message: str,
     context: Dict[str, Any],
     conversation_history: List[ChatMessage],
-    db: Session
+    db: AsyncSession
 ) -> Dict[str, Any]:
     """Generate AI response using Claude or fallback to rule-based responses."""
 
@@ -425,7 +426,7 @@ What would you like to know?"""
 async def chat_with_assistant(
     request: ChatRequest,
     http_request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Chat with the AI assistant.
@@ -462,7 +463,7 @@ async def chat_with_assistant(
 
     # Log the interaction
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, actor_type,
                 metadata, created_at
@@ -479,7 +480,7 @@ async def chat_with_assistant(
                 "suggestions_count": len(response.get("suggestions", [])),
             }
         })
-        db.commit()
+        await db.commit()
     except SQLAlchemyError as e:
         logger.warning(f"Failed to log AI chat interaction: {e}")
 
@@ -490,7 +491,7 @@ async def chat_with_assistant(
 async def get_quick_actions(
     workspace_id: int = Path(..., description="Workspace ID"),
     http_request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> List[QuickAction]:
     """
     Get contextual quick actions for the workspace.
@@ -612,7 +613,7 @@ async def get_faq() -> List[Dict[str, str]]:
 @router.get("/tips/{workspace_id}")
 async def get_contextual_tips(
     workspace_id: int = Path(..., description="Workspace ID"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> List[Dict[str, str]]:
     """
     Get contextual tips based on current workspace state.
@@ -675,7 +676,7 @@ async def submit_assistant_feedback(
     message_id: Optional[str] = None,
     rating: int = Query(..., ge=1, le=5),
     feedback: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Submit feedback about the AI assistant.
@@ -683,7 +684,7 @@ async def submit_assistant_feedback(
     Helps improve the assistant's responses over time.
     """
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, actor_type,
                 metadata, created_at
@@ -700,7 +701,7 @@ async def submit_assistant_feedback(
                 "feedback": feedback
             }
         })
-        db.commit()
+        await db.commit()
 
         return {"success": True, "message": "Thank you for your feedback!"}
 

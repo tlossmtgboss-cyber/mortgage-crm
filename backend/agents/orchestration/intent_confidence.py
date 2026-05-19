@@ -117,10 +117,10 @@ def _record_governance_event(
     # 2. Fall back to a real import if no preloaded module is present.
     if governance_metrics is None:
         try:
-            from agents.orchestration import governance_metrics
+            from agents.orchestration import governance_metrics  # type: ignore[no-redef]
         except ImportError:
             try:
-                from services import governance_metrics  # type: ignore
+                from services import governance_metrics  # type: ignore[no-redef]
             except ImportError:
                 logger.debug(
                     "governance_metrics module not available; skipping metric record"

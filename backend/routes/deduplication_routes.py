@@ -14,8 +14,9 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_async_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ class MergeResult(BaseModel):
 @router.get("/duplicates/contacts", response_model=List[DuplicateGroup])
 async def get_contact_duplicates(
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Find contacts (leads) with duplicate email or phone within the user's org."""
     from services.deduplication_service import find_duplicate_contacts
@@ -101,7 +102,7 @@ async def get_contact_duplicates(
 @router.get("/duplicates/leads", response_model=List[DuplicateGroup])
 async def get_lead_duplicates(
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Find leads with duplicate email or phone within the user's org."""
     from services.deduplication_service import find_duplicate_leads
@@ -122,7 +123,7 @@ async def get_lead_duplicates(
 async def merge_duplicates(
     body: MergeRequest,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Merge selected duplicate leads into a primary record.
 
@@ -142,7 +143,7 @@ async def merge_duplicates(
             primary_id=body.primary_id,
             duplicate_ids=body.duplicate_ids,
         )
-        db.commit()
+        await db.commit()
         logger.info(
             "Merge completed: primary=%d, merged=%s, org=%d, by user=%d",
             body.primary_id, body.duplicate_ids, org_id, current_user.id,
@@ -151,7 +152,7 @@ async def merge_duplicates(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Merge failed for org %s", org_id)
         raise HTTPException(status_code=500, detail="Merge operation failed")
 
@@ -159,7 +160,7 @@ async def merge_duplicates(
 @router.get("/report", response_model=DedupReport)
 async def get_dedup_summary(
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Data quality summary: total contacts, duplicate groups, duplicate rate."""
     from services.deduplication_service import get_dedup_report

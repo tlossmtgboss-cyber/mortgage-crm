@@ -15,8 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 from auth.dependencies import get_current_user
 from database.models import User
 
@@ -53,12 +54,12 @@ VALID_VETERAN_STATUSES = {"veteran", "not_veteran", "prefer_not_to_say"}
 VALID_DISABILITY_STATUSES = {"yes", "no", "prefer_not_to_say"}
 
 
-def _validate_candidate_portal_token(db: Session, candidate_id: int, token: str):
+async def _validate_candidate_portal_token(db: AsyncSession, candidate_id: int, token: str):
     """Validate that the portal token matches the candidate."""
-    row = db.execute(text("""
+    row = (await db.execute(text("""
         SELECT id FROM mm_candidates
         WHERE id = :id AND portal_token = :token AND is_active = true
-    """), {"id": candidate_id, "token": token}).fetchone()
+    """), {"id": candidate_id, "token": token})).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Invalid candidate or token")
 
@@ -72,7 +73,7 @@ async def submit_eeoc_self_identification(
     candidate_id: int,
     data: EEOCSelfIdentification,
     token: str = Query(..., description="Portal access token for candidate verification"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Submit voluntary EEOC self-identification for a candidate.
@@ -80,7 +81,7 @@ async def submit_eeoc_self_identification(
     This is accessed from the candidate portal during the application process.
     Requires a valid portal token. All fields are optional and consent must be given.
     """
-    _validate_candidate_portal_token(db, candidate_id, token)
+    await _validate_candidate_portal_token(db, candidate_id, token)
 
     if not data.consent_given:
         return {"message": "Self-identification declined", "saved": False}
@@ -96,7 +97,7 @@ async def submit_eeoc_self_identification(
         raise HTTPException(status_code=400, detail="Invalid disability status value")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE mm_candidates
             SET eeoc_consent_given = true,
                 eeoc_consent_date = :consent_date,
@@ -114,7 +115,7 @@ async def submit_eeoc_self_identification(
             "veteran_status": data.veteran_status,
             "disability_status": data.disability_status,
         })
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Candidate not found")
@@ -134,7 +135,7 @@ async def submit_eeoc_self_identification(
 @router.get("/report")
 async def get_eeoc_aggregate_report(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get aggregate EEOC demographic report for the organization.
@@ -146,45 +147,45 @@ async def get_eeoc_aggregate_report(
 
     try:
         # Participation rate
-        totals = db.execute(text("""
+        totals = (await db.execute(text("""
             SELECT
                 COUNT(*) as total_candidates,
                 COUNT(CASE WHEN eeoc_consent_given = true THEN 1 END) as consented
             FROM mm_candidates
             WHERE organization_id = :org_id AND is_active = true
-        """), {"org_id": org_id}).fetchone()
+        """), {"org_id": org_id})).fetchone()
 
         # Gender breakdown
-        gender_data = db.execute(text("""
+        gender_data = (await db.execute(text("""
             SELECT eeoc_gender as value, COUNT(*) as count
             FROM mm_candidates
             WHERE organization_id = :org_id AND eeoc_consent_given = true AND is_active = true
             GROUP BY eeoc_gender
-        """), {"org_id": org_id}).fetchall()
+        """), {"org_id": org_id})).fetchall()
 
         # Race/ethnicity breakdown
-        race_data = db.execute(text("""
+        race_data = (await db.execute(text("""
             SELECT eeoc_race_ethnicity as value, COUNT(*) as count
             FROM mm_candidates
             WHERE organization_id = :org_id AND eeoc_consent_given = true AND is_active = true
             GROUP BY eeoc_race_ethnicity
-        """), {"org_id": org_id}).fetchall()
+        """), {"org_id": org_id})).fetchall()
 
         # Veteran status breakdown
-        veteran_data = db.execute(text("""
+        veteran_data = (await db.execute(text("""
             SELECT eeoc_veteran_status as value, COUNT(*) as count
             FROM mm_candidates
             WHERE organization_id = :org_id AND eeoc_consent_given = true AND is_active = true
             GROUP BY eeoc_veteran_status
-        """), {"org_id": org_id}).fetchall()
+        """), {"org_id": org_id})).fetchall()
 
         # Disability status breakdown
-        disability_data = db.execute(text("""
+        disability_data = (await db.execute(text("""
             SELECT eeoc_disability_status as value, COUNT(*) as count
             FROM mm_candidates
             WHERE organization_id = :org_id AND eeoc_consent_given = true AND is_active = true
             GROUP BY eeoc_disability_status
-        """), {"org_id": org_id}).fetchall()
+        """), {"org_id": org_id})).fetchall()
 
         return {
             "participation": {

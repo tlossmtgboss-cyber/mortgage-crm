@@ -5,9 +5,10 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel, validator
-from database import get_db
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ async def list_sms_tasks(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     mine: bool = Query(False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -117,7 +118,7 @@ async def list_sms_tasks(
 
 @router.get("/stats")
 async def get_task_statistics(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -135,7 +136,7 @@ async def get_task_statistics(
 
 @router.get("/settings")
 async def get_auto_respond_settings(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -152,7 +153,7 @@ async def get_auto_respond_settings(
 @router.put("/settings")
 async def update_auto_respond_settings(
     body: SettingsUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -167,13 +168,13 @@ async def update_auto_respond_settings(
             auto_respond_enabled=body.auto_respond_enabled,
             auto_respond_threshold=threshold,
         )
-        db.commit()
+        await db.commit()
         return {"settings": updated}
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.exception("Failed to update SMS settings org=%s: %s", org_id, e)
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -181,7 +182,7 @@ async def update_auto_respond_settings(
 async def get_confidence_trend(
     category: Optional[str] = Query(None),
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -198,7 +199,7 @@ async def get_confidence_trend(
 @router.get("/{task_id}")
 async def get_sms_task(
     task_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -220,7 +221,7 @@ async def get_sms_task(
 async def respond_to_task(
     task_id: int,
     body: RespondRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -235,20 +236,20 @@ async def respond_to_task(
             response_text=body.response_text,
             response_source=body.response_source,
         )
-        db.commit()
+        await db.commit()
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.exception("Failed to respond to SMS task %s org=%s: %s", task_id, org_id, e)
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{task_id}/dismiss")
 async def dismiss_task(
     task_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -261,13 +262,13 @@ async def dismiss_task(
             organization_id=org_id,
             user_id=current_user.id,
         )
-        db.commit()
+        await db.commit()
         return {"status": "dismissed"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.exception("Failed to dismiss SMS task %s org=%s: %s", task_id, org_id, e)
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -275,7 +276,7 @@ async def dismiss_task(
 async def regenerate_recommendation(
     task_id: int,
     body: RegenerateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -302,7 +303,7 @@ async def regenerate_recommendation(
 async def post_feedback(
     task_id: int,
     body: FeedbackRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     org_id = _require_org(current_user)
@@ -315,7 +316,7 @@ async def post_feedback(
             raise HTTPException(status_code=404, detail="SMS task not found")
 
         now = datetime.now(timezone.utc)
-        db.execute(
+        await db.execute(
             text("""
                 UPDATE sms_tasks
                 SET user_feedback = :feedback,
@@ -331,7 +332,7 @@ async def post_feedback(
             },
         )
 
-        db.execute(
+        await db.execute(
             text("""
                 INSERT INTO sms_ai_audit_log
                     (organization_id, task_id, action, details, user_id, created_at)
@@ -346,11 +347,11 @@ async def post_feedback(
                 "now": now,
             },
         )
-        db.commit()
+        await db.commit()
         return {"status": "recorded", "task_id": task_id, "rating": body.rating}
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("Failed to record feedback for task %s org=%s: %s", task_id, org_id, e)
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

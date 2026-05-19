@@ -13,6 +13,7 @@ Endpoints:
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
@@ -57,7 +58,7 @@ def get_db():
     yield from _get_db()
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     if _get_current_user_func is None:
         raise RuntimeError("Slot hold dependencies not set")
     auth_header = request.headers.get("Authorization", "")
@@ -120,7 +121,7 @@ class ConvertHoldRequest(BaseModel):
 async def create_slot_hold(
     hold_request: CreateHoldRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Create a soft hold on a time slot.
@@ -146,10 +147,10 @@ async def create_slot_hold(
             held_for_email=hold_request.held_for_email,
             conversation_id=hold_request.conversation_id,
         )
-        db.commit()
+        await db.commit()
         return {"hold": result, "message": "Slot hold created"}
     except SlotHoldError as e:
-        db.rollback()
+        await db.rollback()
         status_map = {
             "APPOINTMENT_CONFLICT": 409,
             "HOLD_CONFLICT": 409,
@@ -170,7 +171,7 @@ async def extend_slot_hold(
     hold_id: int,
     extend_request: ExtendHoldRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Extend the TTL of an active hold.
@@ -188,10 +189,10 @@ async def extend_slot_hold(
             db=db,
             models=_models,
         )
-        db.commit()
+        await db.commit()
         return {"hold": result, "message": "Hold extended"}
     except SlotHoldError as e:
-        db.rollback()
+        await db.rollback()
         status_map = {
             "NOT_FOUND": 404,
             "EXPIRED": 410,
@@ -207,7 +208,7 @@ async def convert_hold(
     hold_id: int,
     convert_request: ConvertHoldRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Convert a hold into a real appointment.
@@ -227,10 +228,10 @@ async def convert_hold(
             db=db,
             models=_models,
         )
-        db.commit()
+        await db.commit()
         return {"appointment": result, "message": "Hold converted to appointment"}
     except SlotHoldError as e:
-        db.rollback()
+        await db.rollback()
         status_map = {
             "NOT_FOUND": 404,
             "EXPIRED": 410,
@@ -244,7 +245,7 @@ async def convert_hold(
 async def release_slot_hold(
     hold_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Release a hold before it expires. Idempotent: if already released/expired,
@@ -260,10 +261,10 @@ async def release_slot_hold(
             db=db,
             models=_models,
         )
-        db.commit()
+        await db.commit()
         return result
     except SlotHoldError as e:
-        db.rollback()
+        await db.rollback()
         if e.code == "NOT_FOUND":
             raise HTTPException(status_code=404, detail=e.message)
         raise HTTPException(status_code=400, detail=e.message)
@@ -273,7 +274,7 @@ async def release_slot_hold(
 async def list_active_holds(
     request: Request,
     lo_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List active holds for a loan officer. If lo_id not specified,
@@ -301,7 +302,7 @@ async def list_active_holds(
 async def get_hold_statistics(
     request: Request,
     days: int = 30,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get hold analytics: conversion rate, average hold duration, expiry rate.
@@ -322,7 +323,7 @@ async def get_hold_statistics(
 @router.post("/holds/cleanup")
 async def trigger_cleanup(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Manually trigger cleanup of expired holds. Normally runs automatically
@@ -333,6 +334,6 @@ async def trigger_cleanup(
     _get_org_id(user)
 
     result = await cleanup_expired_holds(db=db, models=_models)
-    db.commit()
+    await db.commit()
 
     return {"message": "Cleanup complete", **result}

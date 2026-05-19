@@ -75,6 +75,7 @@ def set_dependencies(user_model, current_user_func, db_func):
 
 from fastapi import Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 
@@ -188,7 +189,7 @@ def get_user_id(current_user) -> int:
 @router.get("/status")
 async def get_status(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get ElevenLabs connection status for current user."""
     user_id = get_user_id(current_user)
@@ -197,12 +198,12 @@ async def get_status(
 
     try:
         # Check for existing config
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT api_key, voice_id, settings, subscription_tier,
                    character_limit, character_count, created_at, updated_at
             FROM user_elevenlabs_config
             WHERE user_id = :user_id
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": user_id})).fetchone()
 
         if result and result[0]:  # Has API key
             return {
@@ -229,7 +230,7 @@ async def get_status(
 async def connect(
     request: ConnectRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Connect ElevenLabs account with API key."""
     user_id = get_user_id(current_user)
@@ -241,7 +242,7 @@ async def connect(
         subscription = await verify_api_key(request.api_key)
 
         # Ensure table exists
-        db.execute(text("""
+        await db.execute(text("""
             CREATE TABLE IF NOT EXISTS user_elevenlabs_config (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -260,7 +261,7 @@ async def connect(
         encrypted_key = _encrypt_api_key(request.api_key)
 
         # Upsert config
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_elevenlabs_config
                 (user_id, api_key, subscription_tier, character_limit, character_count, created_at, updated_at)
             VALUES
@@ -278,7 +279,7 @@ async def connect(
             "char_limit": subscription.get("character_limit"),
             "char_count": subscription.get("character_count")
         })
-        db.commit()
+        await db.commit()
 
         logger.info(f"User {user_id} connected ElevenLabs account")
 
@@ -294,7 +295,7 @@ async def connect(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to connect ElevenLabs: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -302,7 +303,7 @@ async def connect(
 @router.post("/disconnect")
 async def disconnect(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Disconnect ElevenLabs account."""
     user_id = get_user_id(current_user)
@@ -310,16 +311,16 @@ async def disconnect(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM user_elevenlabs_config WHERE user_id = :user_id
         """), {"user_id": user_id})
-        db.commit()
+        await db.commit()
 
         logger.info(f"User {user_id} disconnected ElevenLabs account")
         return {"data": {"disconnected": True}}
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to disconnect ElevenLabs: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -327,7 +328,7 @@ async def disconnect(
 @router.get("/voices")
 async def list_voices(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get available voices from ElevenLabs."""
     user_id = get_user_id(current_user)
@@ -336,9 +337,9 @@ async def list_voices(
 
     try:
         # Get API key
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT api_key FROM user_elevenlabs_config WHERE user_id = :user_id
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": user_id})).fetchone()
 
         if not result or not result[0]:
             raise HTTPException(status_code=400, detail="ElevenLabs not connected")
@@ -371,7 +372,7 @@ async def list_voices(
 async def update_settings(
     request: VoiceSettings,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update voice selection and settings."""
     user_id = get_user_id(current_user)
@@ -380,7 +381,7 @@ async def update_settings(
 
     try:
         import json
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE user_elevenlabs_config
             SET voice_id = :voice_id,
                 settings = :settings::jsonb,
@@ -391,13 +392,13 @@ async def update_settings(
             "voice_id": request.voice_id,
             "settings": json.dumps(request.settings or {})
         })
-        db.commit()
+        await db.commit()
 
         logger.info(f"User {user_id} updated ElevenLabs settings")
         return {"data": {"updated": True}}
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to update settings: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -406,7 +407,7 @@ async def update_settings(
 async def test_voice(
     request: TestRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Test voice synthesis and return audio."""
     user_id = get_user_id(current_user)
@@ -415,9 +416,9 @@ async def test_voice(
 
     try:
         # Get API key
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT api_key FROM user_elevenlabs_config WHERE user_id = :user_id
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": user_id})).fetchone()
 
         if not result or not result[0]:
             raise HTTPException(status_code=400, detail="ElevenLabs not connected")
@@ -452,7 +453,7 @@ async def test_voice(
 @router.get("/config")
 async def get_config(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get ElevenLabs configuration for AI Receptionist use."""
     user_id = get_user_id(current_user)
@@ -460,11 +461,11 @@ async def get_config(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT api_key, voice_id, settings
             FROM user_elevenlabs_config
             WHERE user_id = :user_id
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": user_id})).fetchone()
 
         if not result or not result[0]:
             return {"data": {"configured": False}}
@@ -513,7 +514,7 @@ async def list_agents(
     admin_key: str = None,
     user_email: str = None,
     current_user=None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List ElevenLabs Conversational AI agents."""
     # Get API key
@@ -542,7 +543,7 @@ async def create_agent(
     admin_key: str = None,
     user_email: str = None,
     current_user=None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create an ElevenLabs Conversational AI agent."""
     api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
@@ -589,7 +590,7 @@ async def list_phone_numbers(
     admin_key: str = None,
     user_email: str = None,
     current_user=None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List phone numbers registered with ElevenLabs."""
     api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
@@ -630,7 +631,7 @@ async def import_telephony_number(
     admin_key: str = None,
     user_email: str = None,
     current_user=None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Import a phone number into ElevenLabs for Conversational AI."""
     api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
@@ -675,7 +676,7 @@ async def make_outbound_call(
     admin_key: str = None,
     user_email: str = None,
     current_user=None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Make an outbound AI call using ElevenLabs Conversational AI.
@@ -770,14 +771,14 @@ async def make_outbound_call(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user, db: Session) -> str:
+async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user, db: AsyncSession) -> str:
     """Get ElevenLabs API key for the specified user."""
     user_id = None
 
     expected_admin_key = os.getenv("ADMIN_API_KEY")
     if expected_admin_key and admin_key and secrets.compare_digest(admin_key, expected_admin_key) and user_email:
         # Admin mode - look up user by email
-        user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
+        user_result = (await db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email})).fetchone()
         if not user_result:
             raise HTTPException(status_code=404, detail=f"User {user_email} not found")
         user_id = user_result[0]
@@ -791,9 +792,9 @@ async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user,
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get user's ElevenLabs API key
-    result = db.execute(text("""
+    result = (await db.execute(text("""
         SELECT api_key FROM user_elevenlabs_config WHERE user_id = :user_id
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     if not result or not result[0]:
         # Fall back to system key

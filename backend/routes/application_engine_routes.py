@@ -11,8 +11,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 from services.application_engine import (
     ApplicationEngineOrchestrator,
     ApplicationAuditRequest,
@@ -117,7 +118,7 @@ class AuditResponse(BaseModel):
 @router.post("/audit", response_model=Dict[str, Any])
 async def audit_application(
     request: AuditRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Run application audit on loan data.
@@ -185,7 +186,7 @@ async def audit_application(
 @router.post("/process-transcript", response_model=Dict[str, Any])
 async def process_transcript(
     request: ProcessTranscriptRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Process a call transcript through Call Intelligence.
@@ -228,7 +229,7 @@ async def process_and_audit(
     transcript: str = Body(...),
     call_type: str = Body("initial_intake"),
     loan_type: Optional[str] = Body(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Process call transcript and run application audit in one step.
@@ -306,13 +307,13 @@ async def get_modules():
 @router.get("/loan/{loan_id}/status")
 async def get_loan_audit_status(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get the latest audit status for a loan."""
     try:
         from sqlalchemy import text
 
-        result = db.execute(
+        result = (await db.execute(
             text("""
                 SELECT overall_status, overall_completion, total_fields,
                        complete_fields, missing_fields, tasks_generated, created_at
@@ -322,7 +323,7 @@ async def get_loan_audit_status(
                 LIMIT 1
             """),
             {"loan_id": loan_id}
-        ).fetchone()
+        )).fetchone()
 
         if not result:
             return {
@@ -354,7 +355,7 @@ async def audit_single_module(
     loan_id: int = Body(...),
     call_extractions: Dict[str, Any] = Body(default_factory=dict),
     existing_data: Dict[str, Any] = Body(default_factory=dict),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Run audit on a single module.
@@ -404,7 +405,7 @@ async def get_call_intelligence_agents():
 async def extract_from_transcript(
     request: ProcessTranscriptRequest,
     agents: Optional[List[str]] = Query(None, description="Specific agents to run"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Extract data from transcript using Call Intelligence.

@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .salesforce_models import FieldMappingRequest
 from .salesforce_helpers import (
@@ -27,7 +28,7 @@ router = APIRouter()
 @router.get("/mappings")
 async def get_field_mappings(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get current field mappings for Salesforce sync."""
     user_id = get_current_user_id(request, db)
@@ -35,19 +36,19 @@ async def get_field_mappings(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get organization_id from user
-    user = db.execute(text("""
+    user = (await db.execute(text("""
         SELECT organization_id FROM users WHERE id = :user_id
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     org_id = user[0] if user and user[0] else None
 
-    mappings = db.execute(text("""
+    mappings = (await db.execute(text("""
         SELECT id, salesforce_field, crm_field, transform_type, is_active
         FROM salesforce_field_mappings
         WHERE organization_id = :org_id
           AND salesforce_object = 'MtgPlanner_CRM__Transaction_Property__c'
         ORDER BY salesforce_field
-    """), {"org_id": org_id}).fetchall()
+    """), {"org_id": org_id})).fetchall()
 
     # If no custom mappings, return defaults
     if not mappings:
@@ -85,7 +86,7 @@ async def get_field_mappings(
 async def create_field_mapping(
     request: Request,
     mapping: FieldMappingRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create or update a field mapping."""
     from sqlalchemy.exc import SQLAlchemyError
@@ -95,14 +96,14 @@ async def create_field_mapping(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get organization_id from user
-    user = db.execute(text("""
+    user = (await db.execute(text("""
         SELECT organization_id FROM users WHERE id = :user_id
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     org_id = user[0] if user and user[0] else None
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO salesforce_field_mappings
             (organization_id, salesforce_object, salesforce_field, crm_entity, crm_field, transform_type)
             VALUES (:org_id, 'MtgPlanner_CRM__Transaction_Property__c', :sf_field, 'loan', :crm_field, :transform)
@@ -114,12 +115,12 @@ async def create_field_mapping(
             "crm_field": mapping.crm_field,
             "transform": mapping.transform_type,
         })
-        db.commit()
+        await db.commit()
 
         return {"status": "success", "message": "Field mapping saved"}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to save field mapping: {e}")
         raise HTTPException(status_code=500, detail="Failed to save mapping")
 
@@ -129,17 +130,17 @@ async def create_field_mapping(
 @router.get("/test-connection")
 async def test_salesforce_connection(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Test Salesforce connection by querying a simple object."""
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    integration = db.execute(text("""
+    integration = (await db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     if not integration or not integration[0]:
         return {"connected": False, "error": "Not connected to Salesforce"}
@@ -180,7 +181,7 @@ async def test_salesforce_connection(
 @router.get("/explore/objects")
 async def explore_salesforce_objects(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all available Salesforce objects. Admin access required."""
     import requests
@@ -192,10 +193,10 @@ async def explore_salesforce_objects(
     # Require admin access for schema exploration
     require_admin_role(user_id, db)
 
-    integration = db.execute(text("""
+    integration = (await db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     if not integration or not integration[0]:
         raise HTTPException(status_code=400, detail="Not connected to Salesforce")
@@ -260,7 +261,7 @@ async def explore_salesforce_objects(
 async def explore_salesforce_object_fields(
     object_name: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get fields for a specific Salesforce object. Admin access required."""
     import requests
@@ -272,10 +273,10 @@ async def explore_salesforce_object_fields(
     # Require admin access for schema exploration
     require_admin_role(user_id, db)
 
-    integration = db.execute(text("""
+    integration = (await db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     if not integration or not integration[0]:
         raise HTTPException(status_code=400, detail="Not connected to Salesforce")
@@ -336,7 +337,7 @@ async def explore_salesforce_query(
     request: Request,
     object_name: str = Query(..., description="Salesforce object name"),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Query sample records from a Salesforce object. Admin access required."""
     import requests
@@ -348,10 +349,10 @@ async def explore_salesforce_query(
     # Require admin access for schema exploration
     require_admin_role(user_id, db)
 
-    integration = db.execute(text("""
+    integration = (await db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     if not integration or not integration[0]:
         raise HTTPException(status_code=400, detail="Not connected to Salesforce")

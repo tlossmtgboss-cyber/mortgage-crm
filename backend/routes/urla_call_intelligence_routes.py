@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("urla.routes.intelligence")
 
@@ -28,9 +29,9 @@ logger = logging.getLogger("urla.routes.intelligence")
 from auth.dependencies import get_current_user
 
 try:
-    from db import get_db
+    from db import get_async_db
 except ImportError:
-    from database import get_db
+    from db import get_async_db
 
 # ---------------------------------------------------------------------------
 # URLA module imports — graceful fallback when modules are not yet available
@@ -557,7 +558,7 @@ async def get_call_tasks(
 async def push_tasks_to_crm(
     loan_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Push the auto-generated URLA tasks to the CRM task system.
 
@@ -607,10 +608,10 @@ async def push_tasks_to_crm(
                 related_contact_name=_get_borrower_name(app),
             )
             db.add(crm_task)
-            db.flush()
+            await db.flush()
             created_ids.append(crm_task.id)
 
-        db.commit()
+        await db.commit()
 
         logger.info(
             "Pushed %d URLA tasks to CRM",
@@ -626,7 +627,7 @@ async def push_tasks_to_crm(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.exception(
             "Failed to push URLA tasks to CRM",
             extra={"loan_id": loan_id},

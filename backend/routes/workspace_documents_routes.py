@@ -14,9 +14,10 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from database import get_db
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -28,7 +29,7 @@ _security = HTTPBearer(auto_error=False)
 
 async def _require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Require valid authentication for workspace document endpoints."""
     if not credentials:
@@ -81,14 +82,14 @@ class DocumentsResponse(BaseModel):
 # HELPER FUNCTIONS
 # =============================================================================
 
-def get_workspace_by_slug(db: Session, slug: str) -> Optional[Dict[str, Any]]:
+async def get_workspace_by_slug(db: AsyncSession, slug: str) -> Optional[Dict[str, Any]]:
     """
     Get workspace info by slug.
     Returns workspace_id and lead_id if available.
     """
     try:
         # Try PURL workspace first
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT pw.id as workspace_id, pw.slug, pw.organization_id,
                    pl.main_loan_id
             FROM purl_workspaces pw
@@ -102,7 +103,7 @@ def get_workspace_by_slug(db: Session, slug: str) -> Optional[Dict[str, Any]]:
             # Try to get lead_id from main loan if linked
             lead_id = None
             if row.main_loan_id:
-                lead_result = db.execute(text("""
+                lead_result = await db.execute(text("""
                     SELECT lead_id FROM loans WHERE id = :loan_id
                 """), {"loan_id": row.main_loan_id})
                 lead_row = lead_result.fetchone()
@@ -121,8 +122,8 @@ def get_workspace_by_slug(db: Session, slug: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def sync_documents_to_workspace(
-    db: Session,
+async def sync_documents_to_workspace(
+    db: AsyncSession,
     workspace_id: int,
     organization_id: int,
     documents: List[DocumentRequirement]
@@ -136,7 +137,7 @@ def sync_documents_to_workspace(
     for doc in documents:
         try:
             # Check if document request already exists
-            existing = db.execute(text("""
+            existing = (await db.execute(text("""
                 SELECT id FROM purl_document_requests
                 WHERE workspace_id = :workspace_id
                   AND document_type = :doc_type
@@ -145,11 +146,11 @@ def sync_documents_to_workspace(
                 "workspace_id": workspace_id,
                 "doc_type": doc.name,
                 "category": doc.category
-            }).fetchone()
+            })).fetchone()
 
             if existing:
                 # Update existing record
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE purl_document_requests
                     SET description = :description,
                         is_required = :is_required,
@@ -168,7 +169,7 @@ def sync_documents_to_workspace(
                 })
             else:
                 # Create new record
-                result = db.execute(text("""
+                result = await db.execute(text("""
                     INSERT INTO purl_document_requests
                     (organization_id, workspace_id, document_type, document_category,
                      description, is_required, status, created_at, updated_at)
@@ -198,8 +199,8 @@ def sync_documents_to_workspace(
     return synced
 
 
-def sync_documents_to_lead(
-    db: Session,
+async def sync_documents_to_lead(
+    db: AsyncSession,
     lead_id: int,
     documents: List[DocumentRequirement]
 ) -> List[Dict[str, Any]]:
@@ -212,7 +213,7 @@ def sync_documents_to_lead(
     for doc in documents:
         try:
             # Check if condition already exists
-            existing = db.execute(text("""
+            existing = (await db.execute(text("""
                 SELECT id FROM lead_conditions
                 WHERE lead_id = :lead_id
                   AND name = :name
@@ -221,11 +222,11 @@ def sync_documents_to_lead(
                 "lead_id": lead_id,
                 "name": doc.name,
                 "category": doc.category
-            }).fetchone()
+            })).fetchone()
 
             if existing:
                 # Update existing record
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE lead_conditions
                     SET description = :description,
                         priority = :priority,
@@ -244,7 +245,7 @@ def sync_documents_to_lead(
                 })
             else:
                 # Create new record
-                result = db.execute(text("""
+                result = await db.execute(text("""
                     INSERT INTO lead_conditions
                     (lead_id, name, description, category, priority, status, is_new, created_at, updated_at)
                     VALUES
@@ -284,7 +285,7 @@ def sync_documents_to_lead(
 async def sync_workspace_documents(
     workspace_id: str = Path(..., description="Workspace ID or slug"),
     request: DocumentsRequest = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Sync document requirements for a workspace.
@@ -306,13 +307,13 @@ async def sync_workspace_documents(
             )
 
         # Try to find workspace by slug or ID
-        workspace = get_workspace_by_slug(db, workspace_id)
+        workspace = await get_workspace_by_slug(db, workspace_id)
 
         if not workspace:
             # Try as numeric ID
             try:
                 ws_id = int(workspace_id)
-                result = db.execute(text("""
+                result = await db.execute(text("""
                     SELECT id as workspace_id, slug, organization_id
                     FROM purl_workspaces
                     WHERE id = :id
@@ -332,7 +333,7 @@ async def sync_workspace_documents(
 
         if workspace:
             # Sync to purl_document_requests
-            synced_docs = sync_documents_to_workspace(
+            synced_docs = await sync_documents_to_workspace(
                 db,
                 workspace["workspace_id"],
                 workspace["organization_id"],
@@ -341,7 +342,7 @@ async def sync_workspace_documents(
 
             # Also sync to lead_conditions if lead is linked
             if workspace.get("lead_id"):
-                lead_synced = sync_documents_to_lead(
+                lead_synced = await sync_documents_to_lead(
                     db,
                     workspace["lead_id"],
                     request.documents
@@ -357,7 +358,7 @@ async def sync_workspace_documents(
                 for doc in request.documents
             ]
 
-        db.commit()
+        await db.commit()
 
         return DocumentsResponse(
             success=True,
@@ -368,7 +369,7 @@ async def sync_workspace_documents(
 
     except SQLAlchemyError as e:
         logger.exception(f"Error syncing workspace documents: {e}")
-        db.rollback()
+        await db.rollback()
         # Return success=True to prevent frontend errors, but log the issue
         return DocumentsResponse(
             success=True,
@@ -385,7 +386,7 @@ async def sync_workspace_documents(
 )
 async def get_workspace_documents(
     workspace_id: str = Path(..., description="Workspace ID or slug"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get document requirements for a workspace.
@@ -394,12 +395,12 @@ async def get_workspace_documents(
     """
     try:
         # Try to find workspace
-        workspace = get_workspace_by_slug(db, workspace_id)
+        workspace = await get_workspace_by_slug(db, workspace_id)
 
         if not workspace:
             try:
                 ws_id = int(workspace_id)
-                result = db.execute(text("""
+                result = await db.execute(text("""
                     SELECT id as workspace_id FROM purl_workspaces WHERE id = :id
                 """), {"id": ws_id})
                 row = result.fetchone()
@@ -412,7 +413,7 @@ async def get_workspace_documents(
             return {"documents": [], "message": "Workspace not found"}
 
         # Get document requests
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, document_type as name, document_category as category,
                    description, status, is_required,
                    created_at, updated_at

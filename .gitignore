@@ -91,3 +91,4 @@ id_rsa*
 frontend/playwright-report/
 frontend/test-results/
 .claude/worktrees/
+.coverage

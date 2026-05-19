@@ -5,6 +5,7 @@ Manage intelligent call routing based on CRM stages
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, text
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
@@ -14,7 +15,7 @@ import logging
 import os
 import httpx
 
-from database import get_db
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 from middleware.webhook_verification import require_vapi_webhook
 
@@ -95,12 +96,12 @@ class CallerLookupResult(BaseModel):
 _routing_table_ensured = False
 
 
-def _ensure_routing_table(db: Session):
+async def _ensure_routing_table(db: AsyncSession):
     global _routing_table_ensured
     if _routing_table_ensured:
         return
     try:
-        db.execute(text("""
+        await db.execute(text("""
             CREATE TABLE IF NOT EXISTS call_routing_logs (
                 id SERIAL PRIMARY KEY,
                 phone_number VARCHAR(20),
@@ -113,12 +114,12 @@ def _ensure_routing_table(db: Session):
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """))
-        db.commit()
+        await db.commit()
         _routing_table_ensured = True
     except Exception as e:
         logger.debug("Routing table ensure failed (non-fatal): %s", e)
         try:
-            db.rollback()
+            await db.rollback()
         except Exception as _exc:  # noqa: BLE001
             pass
 
@@ -134,7 +135,7 @@ def normalize_phone(phone: str) -> str:
     return ''.join(filter(str.isdigit, phone))[-10:]  # Get last 10 digits
 
 
-def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) -> Dict[str, Any]:
+async def lookup_caller_in_crm(db: AsyncSession, phone: str, org_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Look up caller in CRM database across leads, loans, and MUM clients.
     Returns caller type and appropriate assistant.
@@ -168,7 +169,7 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
             """ + org_filter + """
             LIMIT 1
         """
-        mum_result = db.execute(text(mum_query), params).fetchone()
+        mum_result = (await db.execute(text(mum_query), params)).fetchone()
 
         if mum_result:
             return {
@@ -199,7 +200,7 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
             ORDER BY l.created_at DESC
             LIMIT 1
         """
-        loan_result = db.execute(text(loan_query), params).fetchone()
+        loan_result = (await db.execute(text(loan_query), params)).fetchone()
 
         if loan_result:
             return {
@@ -230,7 +231,7 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
             ORDER BY created_at DESC
             LIMIT 1
         """
-        lead_result = db.execute(text(lead_query), params).fetchone()
+        lead_result = (await db.execute(text(lead_query), params)).fetchone()
 
         if lead_result:
             caller_name = lead_result.name or f"{lead_result.first_name or ''} {lead_result.last_name or ''}".strip()
@@ -267,7 +268,7 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
 async def route_inbound_call(
     request: Request,
     raw_body: bytes = Depends(require_vapi_webhook),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Vapi webhook endpoint for intelligent call routing.
@@ -294,14 +295,14 @@ async def route_inbound_call(
             logger.info(f"Routing call from: {phone_number}")
 
             # Look up caller in CRM
-            result = lookup_caller_in_crm(db, phone_number)
+            result = await lookup_caller_in_crm(db, phone_number)
 
             logger.info(f"Routing decision: {result['caller_type']} -> {result['assistant_name']}")
 
             # Log the routing decision (ensure table exists on first call)
-            _ensure_routing_table(db)
+            await _ensure_routing_table(db)
             try:
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO call_routing_logs
                     (phone_number, caller_type, caller_name, stage, assistant_id, assistant_name, organization_id, created_at)
                     VALUES (:phone, :caller_type, :caller_name, :stage, :assistant_id, :assistant_name, :organization_id, :created_at)
@@ -315,11 +316,11 @@ async def route_inbound_call(
                     "organization_id": result.get("context", {}).get("organization_id"),
                     "created_at": datetime.now(timezone.utc)
                 })
-                db.commit()
+                await db.commit()
             except Exception as log_err:
                 logger.warning(f"Failed to log routing: {log_err}")
                 try:
-                    db.rollback()
+                    await db.rollback()
                 except Exception as _exc:  # noqa: BLE001
                     pass
 
@@ -422,7 +423,7 @@ async def route_inbound_call(
 
 @router.get("/config")
 async def get_routing_config(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Get current call routing configuration"""
@@ -437,12 +438,12 @@ async def get_routing_config(
 @router.get("/test-lookup")
 async def test_caller_lookup(
     phone: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Test the caller lookup for a given phone number"""
     org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
-    result = lookup_caller_in_crm(db, phone, org_id=org_id)
+    result = await lookup_caller_in_crm(db, phone, org_id=org_id)
     return {
         "phone_searched": phone,
         "phone_normalized": normalize_phone(phone),
@@ -472,20 +473,20 @@ async def list_assistants(
 @router.get("/logs")
 async def get_routing_logs(
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Get recent call routing logs"""
     try:
         org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
-        logs = db.execute(text("""
+        logs = (await db.execute(text("""
             SELECT id, phone_number, caller_type, caller_name, stage,
                    assistant_id, assistant_name, created_at
             FROM call_routing_logs
             WHERE organization_id = :org_id
             ORDER BY created_at DESC
             LIMIT :limit
-        """), {"limit": limit, "org_id": org_id}).fetchall()
+        """), {"limit": limit, "org_id": org_id})).fetchall()
 
         return {
             "logs": [
@@ -508,7 +509,7 @@ async def get_routing_logs(
 
 @router.post("/configure-phone")
 async def configure_phone_routing(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """
@@ -563,12 +564,12 @@ async def configure_phone_routing(
 
 @router.post("/migrate")
 async def run_routing_migration(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Create call routing logs table"""
     try:
-        db.execute(text("""
+        await db.execute(text("""
             CREATE TABLE IF NOT EXISTS call_routing_logs (
                 id SERIAL PRIMARY KEY,
                 phone_number VARCHAR(20),
@@ -583,27 +584,27 @@ async def run_routing_migration(
         """))
 
         # Add organization_id column if table already exists without it
-        db.execute(text("""
+        await db.execute(text("""
             ALTER TABLE call_routing_logs
             ADD COLUMN IF NOT EXISTS organization_id INTEGER
         """))
 
-        db.execute(text("""
+        await db.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_call_routing_logs_created
             ON call_routing_logs(created_at DESC)
         """))
 
-        db.execute(text("""
+        await db.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_call_routing_logs_phone
             ON call_routing_logs(phone_number)
         """))
 
-        db.execute(text("""
+        await db.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_call_routing_logs_org
             ON call_routing_logs(organization_id)
         """))
 
-        db.commit()
+        await db.commit()
 
         return {"success": True, "message": "Migration completed"}
 
@@ -614,14 +615,14 @@ async def run_routing_migration(
 
 @router.get("/status")
 async def get_routing_status(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Get routing system status and stats"""
     try:
         org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
         # Get today's stats
-        stats = db.execute(text("""
+        stats = (await db.execute(text("""
             SELECT
                 caller_type,
                 COUNT(*) as count
@@ -629,7 +630,7 @@ async def get_routing_status(
             WHERE created_at >= CURRENT_DATE
             AND organization_id = :org_id
             GROUP BY caller_type
-        """), {"org_id": org_id}).fetchall()
+        """), {"org_id": org_id})).fetchall()
 
         stats_dict = {row.caller_type: row.count for row in stats}
 

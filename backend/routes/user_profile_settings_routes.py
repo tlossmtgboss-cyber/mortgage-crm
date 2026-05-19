@@ -5,6 +5,7 @@ Comprehensive error handling pattern for user profile management
 
 from fastapi import APIRouter, Depends, UploadFile, File, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field, EmailStr, validator, root_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ import re
 import os
 import uuid
 
-from database import get_db
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException
 from utils.error_handling import (
@@ -386,7 +387,7 @@ def validate_profile_completeness(user) -> Dict[str, Any]:
 @router.get("")
 async def get_profile_settings(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get current user's profile settings"""
     try:
@@ -412,7 +413,7 @@ async def get_profile_settings(
 async def update_profile_settings(
     updates: FullProfileUpdate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update current user's profile settings"""
     try:
@@ -468,8 +469,8 @@ async def update_profile_settings(
             user_meta['notification_preferences'] = notifications
             current_user.user_metadata = user_meta
 
-        db.commit()
-        db.refresh(current_user)
+        await db.commit()
+        await db.refresh(current_user)
 
         profile_data = get_user_profile_data(current_user)
         completeness = validate_profile_completeness(current_user)
@@ -488,7 +489,7 @@ async def update_profile_settings(
         raise
     except Exception as e:
         logger.error(f"Error updating profile: {e}")
-        db.rollback()
+        await db.rollback()
         raise DatabaseException("Failed to update profile", original_error=str(e))
 
 
@@ -496,7 +497,7 @@ async def update_profile_settings(
 async def change_password(
     password_data: PasswordChange,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Change current user's password"""
     try:
@@ -511,7 +512,7 @@ async def change_password(
 
         # Hash and save new password
         current_user.hashed_password = pwd_context.hash(password_data.new_password)
-        db.commit()
+        await db.commit()
 
         logger.info(f"Password changed for user {current_user.email}")
 
@@ -523,7 +524,7 @@ async def change_password(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error changing password: {e}")
-        db.rollback()
+        await db.rollback()
         raise DatabaseException("Failed to change password", original_error=str(e))
 
 
@@ -531,7 +532,7 @@ async def change_password(
 async def upload_profile_photo(
     photo: UploadFile = File(...),
     request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Upload profile photo for current user"""
     try:
@@ -575,7 +576,7 @@ async def upload_profile_photo(
         photo_url = f"/uploads/profiles/{filename}"
         current_user.headshot_url = photo_url
 
-        db.commit()
+        await db.commit()
 
         logger.info(f"Photo uploaded for user {current_user.id}: {filename}")
 
@@ -597,7 +598,7 @@ async def upload_profile_photo(
 @router.delete("/photo")
 async def delete_profile_photo(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete current user's profile photo"""
     try:
@@ -606,7 +607,7 @@ async def delete_profile_photo(
         # Clear photo URL
         current_user.headshot_url = None
 
-        db.commit()
+        await db.commit()
 
         logger.info(f"Photo deleted for user {current_user.id}")
 
@@ -616,7 +617,7 @@ async def delete_profile_photo(
         )
     except SQLAlchemyError as e:
         logger.error(f"Error deleting photo: {e}")
-        db.rollback()
+        await db.rollback()
         raise DatabaseException("Failed to delete photo", original_error=str(e))
 
 
@@ -706,7 +707,7 @@ class UserMeUpdate(BaseModel):
 @users_router.get("/me")
 async def get_current_user_profile(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get current user's profile — flat JSON for frontend Settings.js"""
     try:
@@ -743,7 +744,7 @@ async def get_current_user_profile(
 async def update_current_user_profile(
     updates: UserMeUpdate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update current user's profile — accepts flat JSON from frontend Settings.js"""
     try:
@@ -780,8 +781,8 @@ async def update_current_user_profile(
                 business_hours['blocked_times'] = update_data['blocked_times']
             current_user.business_hours = business_hours
 
-        db.commit()
-        db.refresh(current_user)
+        await db.commit()
+        await db.refresh(current_user)
 
         logger.info(f"Profile updated for user {current_user.email}: {list(update_data.keys())}")
 
@@ -804,7 +805,7 @@ async def update_current_user_profile(
         raise
     except Exception as e:
         logger.error(f"Error updating user profile: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -812,7 +813,7 @@ async def update_current_user_profile(
 async def change_user_password(
     password_data: PasswordChange,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Change password — frontend-compatible path at /api/v1/users/me/password"""
     try:
@@ -823,7 +824,7 @@ async def change_user_password(
             raise HTTPException(status_code=400, detail="Current password is incorrect")
 
         current_user.hashed_password = pwd_context.hash(password_data.new_password)
-        db.commit()
+        await db.commit()
 
         logger.info(f"Password changed for user {current_user.email}")
         return {"message": "Password changed successfully"}
@@ -831,5 +832,5 @@ async def change_user_password(
         raise
     except Exception as e:
         logger.error(f"Error changing password: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

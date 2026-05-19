@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -52,7 +53,7 @@ def get_db():
     yield from _get_db()
 
 
-def get_automation_service(db: Session):
+def get_automation_service(db: AsyncSession):
     """Get configured automation service."""
     from services.contract_portal_automation_service import ContractPortalAutomationService
     return ContractPortalAutomationService(db, _notification_service)
@@ -123,7 +124,7 @@ class PendingPortalTask(BaseModel):
 async def trigger_contract_automation(
     request: TriggerAutomationRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Manually trigger contract portal automation for a loan.
@@ -159,7 +160,7 @@ async def trigger_contract_automation(
 @router.post("/add-realtor", response_model=AddRealtorResponse)
 async def add_realtor_to_loan(
     request: AddRealtorRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Add a realtor to a loan and automatically create their portal.
@@ -213,7 +214,7 @@ async def add_realtor_to_loan(
 async def get_pending_realtor_tasks(
     owner_id: Optional[int] = Query(None, description="Filter by task owner"),
     limit: int = Query(50, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get pending tasks to enter realtor information.
@@ -249,7 +250,7 @@ async def get_pending_realtor_tasks(
             ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
             LIMIT :limit
         """
-        tasks = db.execute(text(query), params).fetchall()
+        tasks = (await db.execute(text(query), params)).fetchall()
 
         return {
             "tasks": [
@@ -277,7 +278,7 @@ async def get_pending_realtor_tasks(
 @router.get("/loan/{loan_id}/portal-status")
 async def get_loan_portal_status(
     loan_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get the status of all portals for a loan.
@@ -289,7 +290,7 @@ async def get_loan_portal_status(
     """
     try:
         # Get loan info
-        loan = db.execute(text("""
+        loan = (await db.execute(text("""
             SELECT
                 l.id,
                 l.loan_number,
@@ -297,32 +298,32 @@ async def get_loan_portal_status(
                 l.realtor_agent
             FROM loans l
             WHERE l.id = :loan_id
-        """), {"loan_id": loan_id}).fetchone()
+        """), {"loan_id": loan_id})).fetchone()
 
         if not loan:
             raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
 
         # Check client portal
-        client_portal = db.execute(text("""
+        client_portal = (await db.execute(text("""
             SELECT id, slug, status FROM purl_workspaces
             WHERE loan_id = :loan_id
             LIMIT 1
-        """), {"loan_id": loan_id}).fetchone()
+        """), {"loan_id": loan_id})).fetchone()
 
         # Check buyer's agent portal - look for realtor in loan_team_members
         buyers_agent = None
-        team_realtor = db.execute(text("""
+        team_realtor = (await db.execute(text("""
             SELECT ltm.id, ltm.name, ltm.email, ltm.referral_partner_id
             FROM loan_team_members ltm
             WHERE ltm.loan_id = :loan_id
             AND (ltm.role ILIKE '%buyer%' OR ltm.role ILIKE '%realtor%')
             LIMIT 1
-        """), {"loan_id": loan_id}).fetchone()
+        """), {"loan_id": loan_id})).fetchone()
 
         if team_realtor and team_realtor[3]:  # Has referral_partner_id
-            partner = db.execute(text("""
+            partner = (await db.execute(text("""
                 SELECT id, name, email FROM referral_partners WHERE id = :partner_id
-            """), {"partner_id": team_realtor[3]}).fetchone()
+            """), {"partner_id": team_realtor[3]})).fetchone()
             if partner:
                 buyers_agent = {
                     "exists": True,
@@ -343,11 +344,11 @@ async def get_loan_portal_status(
 
         if not buyers_agent:
             # Check for pending task
-            task = db.execute(text("""
+            task = (await db.execute(text("""
                 SELECT id, status FROM tasks
                 WHERE loan_id = :loan_id AND title ILIKE '%buyer%agent%'
                 ORDER BY id DESC LIMIT 1
-            """), {"loan_id": loan_id}).fetchone()
+            """), {"loan_id": loan_id})).fetchone()
             buyers_agent = {
                 "exists": False,
                 "pending_task_id": task[0] if task else None,
@@ -355,16 +356,16 @@ async def get_loan_portal_status(
             }
 
         # Check listing agent portal
-        listing_tx = db.execute(text("""
+        listing_tx = (await db.execute(text("""
             SELECT id, status FROM listing_transactions WHERE loan_id = :loan_id LIMIT 1
-        """), {"loan_id": loan_id}).fetchone()
+        """), {"loan_id": loan_id})).fetchone()
 
         listing_agent = None
         if listing_tx:
-            parties = db.execute(text("""
+            parties = (await db.execute(text("""
                 SELECT name, email FROM listing_transaction_parties
                 WHERE transaction_id = :tx_id AND role = 'listing_agent'
-            """), {"tx_id": listing_tx[0]}).fetchall()
+            """), {"tx_id": listing_tx[0]})).fetchall()
             listing_agent = {
                 "exists": True,
                 "transaction_id": listing_tx[0],
@@ -373,11 +374,11 @@ async def get_loan_portal_status(
                 "agents": [{"name": p[0], "email": p[1]} for p in parties]
             }
         else:
-            task = db.execute(text("""
+            task = (await db.execute(text("""
                 SELECT id, status FROM tasks
                 WHERE loan_id = :loan_id AND title ILIKE '%listing%agent%'
                 ORDER BY id DESC LIMIT 1
-            """), {"loan_id": loan_id}).fetchone()
+            """), {"loan_id": loan_id})).fetchone()
             listing_agent = {
                 "exists": False,
                 "pending_task_id": task[0] if task else None,
@@ -413,7 +414,7 @@ async def get_loan_portal_status(
 async def resend_portal_invitation(
     loan_id: int = Query(...),
     portal_type: str = Query(..., description="'buyers_agent' or 'listing_agent'"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Resend a portal invitation email.
@@ -432,9 +433,9 @@ async def resend_portal_invitation(
             if not partner_id:
                 raise HTTPException(status_code=400, detail="No buyer's agent assigned to this loan")
 
-            partner = db.execute(text("""
+            partner = (await db.execute(text("""
                 SELECT id, name, email FROM referral_partners WHERE id = :partner_id
-            """), {"partner_id": partner_id}).fetchone()
+            """), {"partner_id": partner_id})).fetchone()
 
             if not partner or not partner[2]:
                 raise HTTPException(status_code=400, detail="Partner has no email address")
@@ -448,18 +449,18 @@ async def resend_portal_invitation(
             )
 
         elif portal_type == "listing_agent":
-            tx = db.execute(text("""
+            tx = (await db.execute(text("""
                 SELECT id FROM listing_transactions WHERE loan_id = :loan_id LIMIT 1
-            """), {"loan_id": loan_id}).fetchone()
+            """), {"loan_id": loan_id})).fetchone()
 
             if not tx:
                 raise HTTPException(status_code=400, detail="No listing transaction exists for this loan")
 
-            party = db.execute(text("""
+            party = (await db.execute(text("""
                 SELECT name, email FROM listing_transaction_parties
                 WHERE transaction_id = :tx_id AND role = 'listing_agent'
                 LIMIT 1
-            """), {"tx_id": tx[0]}).fetchone()
+            """), {"tx_id": tx[0]})).fetchone()
 
             if not party or not party[1]:
                 raise HTTPException(status_code=400, detail="Listing agent has no email address")

@@ -17,6 +17,7 @@ Use this as a template for refactoring other routes.
 from fastapi import APIRouter, Depends, BackgroundTasks, Request
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 from typing import Optional, List, Dict, Any
@@ -25,7 +26,7 @@ from decimal import Decimal
 from enum import Enum
 import logging
 
-from database import get_db
+from db import get_async_db
 from utils.error_handling import (
     ValidationException,
     PermissionException,
@@ -314,7 +315,7 @@ async def list_agent_settings(
     status: Optional[AgentStatus] = None,
     category: Optional[str] = None,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List all agents with their current configuration.
@@ -355,7 +356,7 @@ async def list_agent_settings(
 
         query += " ORDER BY display_name ASC"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         agents = []
 
         for row in result:
@@ -394,7 +395,7 @@ async def list_agent_settings(
 async def get_agent_settings(
     agent_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get detailed configuration for a specific agent.
@@ -408,7 +409,7 @@ async def get_agent_settings(
         raise PermissionException()
 
     try:
-        result = db.execute(
+        result = await db.execute(
             text("""
                 SELECT * FROM agent_profiles WHERE id = :agent_id
             """),
@@ -493,7 +494,7 @@ async def update_agent_settings(
     settings: AgentSettingsUpdate,
     background_tasks: BackgroundTasks,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Update agent configuration with comprehensive validation.
@@ -519,7 +520,7 @@ async def update_agent_settings(
 
     try:
         # 2. Verify agent exists
-        result = db.execute(
+        result = await db.execute(
             text("SELECT id, agent_name FROM agent_profiles WHERE id = :agent_id"),
             {"agent_id": agent_id}
         )
@@ -564,7 +565,7 @@ async def update_agent_settings(
             }
 
             # Update agent
-            db.execute(
+            await db.execute(
                 text("""
                     UPDATE agent_profiles SET
                         display_name = :display_name,
@@ -590,7 +591,7 @@ async def update_agent_settings(
                 }
             )
 
-            db.commit()
+            await db.commit()
 
             # 7. Log success
             logger.info(
@@ -625,7 +626,7 @@ async def update_agent_settings(
             )
 
         except SQLAlchemyError as e:
-            db.rollback()
+            await db.rollback()
             logger.error(
                 f"Database error updating agent {agent_id}: {str(e)}",
                 extra={"agent_id": agent_id, "user_id": current_user.id},
@@ -654,7 +655,7 @@ async def test_agent_configuration(
     agent_id: int,
     test_request: AgentTestRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Test agent configuration with sample input.
@@ -668,7 +669,7 @@ async def test_agent_configuration(
         )
 
     # Verify agent exists
-    result = db.execute(
+    result = await db.execute(
         text("SELECT id, agent_name, config FROM agent_profiles WHERE id = :agent_id"),
         {"agent_id": agent_id}
     )
@@ -709,7 +710,7 @@ async def test_agent_configuration(
 async def bulk_update_status(
     bulk_request: BulkStatusUpdate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Update status for multiple agents at once.
@@ -724,7 +725,7 @@ async def bulk_update_status(
 
     for agent_id in bulk_request.agent_ids:
         try:
-            result = db.execute(
+            result = await db.execute(
                 text("""
                     UPDATE agent_profiles
                     SET status = :status, updated_at = :updated_at
@@ -745,7 +746,7 @@ async def bulk_update_status(
         except Exception as e:
             failed.append({"id": agent_id, "error": "Internal server error"})
 
-    db.commit()
+    await db.commit()
 
     logger.info(
         f"Bulk status update: {len(updated)} updated, {len(failed)} failed",

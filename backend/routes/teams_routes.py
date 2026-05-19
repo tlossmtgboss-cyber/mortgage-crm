@@ -12,8 +12,9 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 from services.microsoft_graph import (
     MicrosoftGraphUserService,
     CalendarEventParams,
@@ -29,7 +30,7 @@ _security = HTTPBearer(auto_error=False)
 
 async def _get_authenticated_user(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get current authenticated user for Teams endpoints."""
     if not credentials:
@@ -92,7 +93,7 @@ class AvailabilityResponse(BaseModel):
 async def create_teams_meeting(
     request: CreateMeetingRequest,
     current_user=Depends(_get_authenticated_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create a Microsoft Teams meeting.
@@ -134,14 +135,14 @@ async def create_teams_meeting(
             if request.lead_id:
                 try:
                     from sqlalchemy import text
-                    db.execute(text("""
+                    await db.execute(text("""
                         INSERT INTO lead_activities (lead_id, activity_type, description, created_at)
                         VALUES (:lead_id, 'meeting_scheduled', :description, NOW())
                     """), {
                         "lead_id": request.lead_id,
                         "description": f"Teams meeting scheduled: {request.subject}"
                     })
-                    db.commit()
+                    await db.commit()
                 except SQLAlchemyError as e:
                     logger.warning(f"Failed to log meeting activity: {e}")
 
@@ -173,7 +174,7 @@ async def get_user_availability(
     end_date: datetime = Query(..., description="End of date range"),
     slot_duration_minutes: int = Query(default=30, ge=15, le=120),
     current_user=Depends(_get_authenticated_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get a user's availability for scheduling meetings.
@@ -242,7 +243,7 @@ async def get_user_availability(
 @router.get("/status")
 async def get_teams_integration_status(
     current_user=Depends(_get_authenticated_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Check if a user has Microsoft/Teams integration configured.
@@ -251,12 +252,12 @@ async def get_teams_integration_status(
         from sqlalchemy import text
         user_id = current_user.id
 
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT id, expires_at, connected_email
             FROM user_integrations
             WHERE user_id = :user_id AND provider = 'microsoft'
             LIMIT 1
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": user_id})).fetchone()
 
         if not result:
             return {
@@ -289,7 +290,7 @@ async def cancel_teams_meeting(
     event_id: str,
     send_cancellation: bool = Query(default=True, description="Send cancellation to attendees"),
     current_user=Depends(_get_authenticated_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Cancel a Teams meeting.

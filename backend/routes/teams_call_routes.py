@@ -29,9 +29,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.responses import JSONResponse
 from starlette.responses import Response
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from database import get_db
+from db import get_async_db
 from routes.auth_deps import current_user_flexible_dep
 from utils.websocket_auth import authenticate_websocket_post_connect
 
@@ -48,7 +49,7 @@ def _normalize_phone(phone: str) -> str:
     return "".join(filter(str.isdigit, phone))[-10:]
 
 
-def _lookup_contact_by_phone(db: Session, phone: str, organization_id: int) -> Optional[Dict[str, Any]]:
+async def _lookup_contact_by_phone(db: AsyncSession, phone: str, organization_id: int) -> Optional[Dict[str, Any]]:
     """Search leads and client_files for a matching phone number."""
     phone_clean = _normalize_phone(phone)
     if not phone_clean:
@@ -56,7 +57,7 @@ def _lookup_contact_by_phone(db: Session, phone: str, organization_id: int) -> O
 
     suffixes = [phone_clean, f"+1{phone_clean}", f"1{phone_clean}"]
 
-    result = db.execute(
+    result = await db.execute(
         text("""
             SELECT id, name, first_name, last_name, email, phone, stage,
                    owner_id, organization_id
@@ -89,7 +90,7 @@ def _lookup_contact_by_phone(db: Session, phone: str, organization_id: int) -> O
             "profile_url": f"/leads/{row[0]}",
         }
 
-    cf_result = db.execute(
+    cf_result = await db.execute(
         text("""
             SELECT cf.id, cf.first_name, cf.last_name, cf.primary_email,
                    cf.primary_phone, cf.lifecycle_stage, cf.assigned_loan_officer_id
@@ -222,7 +223,7 @@ def _verify_webhook_secret(request: Request, body: dict) -> bool:
 @router.post("/api/v1/teams/calls/inbound")
 async def handle_inbound_call(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Webhook endpoint for Teams/Graph inbound call notifications.
@@ -257,20 +258,20 @@ async def handle_inbound_call(
             target_email = resource_data.get("targets", [{}])[0].get("identity", {}).get("user", {}).get("id", "")
 
         if not target_user_id and target_email:
-            user_row = db.execute(
+            user_row = (await db.execute(
                 text("SELECT id, organization_id FROM users WHERE email = :email LIMIT 1"),
                 {"email": target_email},
-            ).fetchone()
+            )).fetchone()
             if user_row:
                 target_user_id = user_row[0]
                 org_id = user_row[1]
             else:
                 continue
         elif target_user_id:
-            user_row = db.execute(
+            user_row = (await db.execute(
                 text("SELECT organization_id FROM users WHERE id = :uid LIMIT 1"),
                 {"uid": target_user_id},
-            ).fetchone()
+            )).fetchone()
             org_id = user_row[0] if user_row else None
         else:
             continue
@@ -278,7 +279,7 @@ async def handle_inbound_call(
         if not org_id:
             continue
 
-        contact = _lookup_contact_by_phone(db, caller_phone, org_id)
+        contact = await _lookup_contact_by_phone(db, caller_phone, org_id)
 
         payload = {
             "type": "inbound_call",
@@ -301,7 +302,7 @@ async def handle_inbound_call(
 async def lookup_caller(
     request: Request,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Manual phone lookup — requires authentication."""
     body = await request.json()
@@ -316,7 +317,7 @@ async def lookup_caller(
     if not phone or not org_id:
         return {"contact": None}
 
-    contact = _lookup_contact_by_phone(db, phone, org_id)
+    contact = await _lookup_contact_by_phone(db, phone, org_id)
     return {"contact": contact}
 
 
@@ -324,7 +325,7 @@ async def lookup_caller(
 async def simulate_inbound_call(
     request: Request,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Simulate an inbound call to test the lightbox. Authenticated — pushes
     a notification to the current user's WebSocket connection."""
@@ -344,7 +345,7 @@ async def simulate_inbound_call(
     if not user_id:
         return JSONResponse({"error": "no user"}, status_code=401)
 
-    contact = _lookup_contact_by_phone(db, caller_phone, org_id) if org_id else None
+    contact = await _lookup_contact_by_phone(db, caller_phone, org_id) if org_id else None
 
     payload = {
         "type": "inbound_call",

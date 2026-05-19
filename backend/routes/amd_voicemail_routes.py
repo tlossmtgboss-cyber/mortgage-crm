@@ -18,10 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import httpx
 
-from db import get_db
+from db import get_async_db
 from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
@@ -96,14 +97,14 @@ class AMDConfig(BaseModel):
     caller_id: str = ""
 
 
-def _get_org_amd_config(db: Session, organization_id: int) -> AMDConfig:
+async def _get_org_amd_config(db: AsyncSession, organization_id: int) -> AMDConfig:
     """Load AMD config for org, or return defaults."""
-    row = db.execute(text("""
+    row = (await db.execute(text("""
         SELECT amd_enabled, amd_action, default_vm_audio_url,
                ring_timeout_seconds, caller_id
         FROM org_amd_configs
         WHERE organization_id = :org_id
-    """), {"org_id": organization_id}).fetchone()
+    """), {"org_id": organization_id})).fetchone()
 
     if not row:
         return AMDConfig()
@@ -242,8 +243,8 @@ async def trigger_slybroadcast_drop(
 # Log AMD events
 # ---------------------------------------------------------------------------
 
-def _log_amd_event(
-    db: Session,
+async def _log_amd_event(
+    db: AsyncSession,
     phone: str,
     event_type: str,
     result: str,
@@ -261,7 +262,7 @@ def _log_amd_event(
         event_type, result, phone[-4:] if phone else "?", org_id, lead_id,
     )
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO amd_events (phone, event_type, result, organization_id, meta, created_at)
             VALUES (:phone, :event_type, :result, :org_id, :meta, :now)
         """), {
@@ -272,14 +273,14 @@ def _log_amd_event(
             "meta": str(meta)[:2000],
             "now": datetime.now(timezone.utc),
         })
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.warning(
             "Could not log AMD event (table may not exist yet): %s "
             "event_type=%s org_id=%s lead_id=%s",
             e, event_type, org_id, lead_id,
         )
-        db.rollback()
+        await db.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +288,7 @@ def _log_amd_event(
 # ---------------------------------------------------------------------------
 
 @router.post("/amd-callback")
-async def amd_callback(request: Request, db: Session = Depends(get_db)):
+async def amd_callback(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Telnyx AMD (Answering Machine Detection) webhook.
 
@@ -308,10 +309,10 @@ async def amd_callback(request: Request, db: Session = Depends(get_db)):
     # ── OBS-011: Resolve correlation IDs (org_id, lead_id) early ──
     org_id = None
     lead_id = None
-    call_row = db.execute(text("""
+    call_row = (await db.execute(text("""
         SELECT organization_id, lead_id FROM call_logs
         WHERE call_sid = :sid ORDER BY created_at DESC LIMIT 1
-    """), {"sid": call_control_id}).fetchone()
+    """), {"sid": call_control_id})).fetchone()
     if call_row:
         org_id = call_row.organization_id
         lead_id = getattr(call_row, "lead_id", None)
@@ -322,14 +323,14 @@ async def amd_callback(request: Request, db: Session = Depends(get_db)):
         call_control_id[:12], org_id, lead_id,
     )
 
-    _log_amd_event(db, to_number, "amd_detection", amd_result, org_id, {
+    await _log_amd_event(db, to_number, "amd_detection", amd_result, org_id, {
         "call_control_id": call_control_id,
         "from": from_number,
     }, lead_id=lead_id)
 
     if amd_result == "machine":
         # Load org config
-        config = _get_org_amd_config(db, org_id) if org_id else AMDConfig()
+        config = await _get_org_amd_config(db, org_id) if org_id else AMDConfig()
 
         if not config.amd_enabled or config.amd_action != "drop_voicemail":
             logger.info(
@@ -364,7 +365,7 @@ async def amd_callback(request: Request, db: Session = Depends(get_db)):
             from routes.voicemail_drop_routes import check_calling_hours
             tcpa_ok = check_calling_hours(to_number)
             if not tcpa_ok:
-                _log_amd_event(db, to_number, "tcpa_blocked", "quiet_hours", org_id, {}, lead_id=lead_id)
+                await _log_amd_event(db, to_number, "tcpa_blocked", "quiet_hours", org_id, {}, lead_id=lead_id)
                 logger.info(
                     "amd_callback action=tcpa_blocked reason=quiet_hours "
                     "phone=***%s org_id=%s lead_id=%s",
@@ -378,7 +379,7 @@ async def amd_callback(request: Request, db: Session = Depends(get_db)):
                 "phone=***%s org_id=%s lead_id=%s",
                 to_number[-4:] if to_number else "?", org_id, lead_id,
             )
-            _log_amd_event(db, to_number, "tcpa_blocked", "check_unavailable", org_id, {}, lead_id=lead_id)
+            await _log_amd_event(db, to_number, "tcpa_blocked", "check_unavailable", org_id, {}, lead_id=lead_id)
             return JSONResponse({"status": "tcpa_blocked", "reason": "tcpa_check_unavailable"})
         except Exception as e:
             # COMP-006: Fail-closed — check errored, BLOCK the drop
@@ -388,7 +389,7 @@ async def amd_callback(request: Request, db: Session = Depends(get_db)):
                 to_number[-4:] if to_number else "?", org_id, lead_id, e,
                 exc_info=True,
             )
-            _log_amd_event(db, to_number, "tcpa_blocked", "check_error", org_id, {"error": str(e)}, lead_id=lead_id)
+            await _log_amd_event(db, to_number, "tcpa_blocked", "check_error", org_id, {"error": str(e)}, lead_id=lead_id)
             return JSONResponse({"status": "tcpa_blocked", "reason": "tcpa_check_error"})
 
         # Trigger Slybroadcast drop
@@ -400,7 +401,7 @@ async def amd_callback(request: Request, db: Session = Depends(get_db)):
             lead_id=lead_id,
         )
 
-        _log_amd_event(
+        await _log_amd_event(
             db, to_number, "slybroadcast_triggered",
             "success" if result.get("success") else "failed",
             org_id, result, lead_id=lead_id,
@@ -439,7 +440,7 @@ async def amd_callback(request: Request, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/call-noanswer-callback")
-async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)):
+async def call_noanswer_callback(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Telnyx call status webhook for no-answer / busy scenarios.
 
@@ -474,10 +475,10 @@ async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)
     # ── OBS-011: Resolve correlation IDs (org_id, lead_id) ──
     org_id = None
     lead_id = None
-    call_row = db.execute(text("""
+    call_row = (await db.execute(text("""
         SELECT organization_id, lead_id FROM call_logs
         WHERE call_sid = :sid ORDER BY created_at DESC LIMIT 1
-    """), {"sid": call_control_id}).fetchone()
+    """), {"sid": call_control_id})).fetchone()
     if call_row:
         org_id = call_row.organization_id
         lead_id = getattr(call_row, "lead_id", None)
@@ -488,12 +489,12 @@ async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)
         call_control_id[:12], org_id, lead_id,
     )
 
-    _log_amd_event(db, to_number, "no_answer", hangup_cause, org_id, {
+    await _log_amd_event(db, to_number, "no_answer", hangup_cause, org_id, {
         "sip_cause": sip_cause,
         "call_control_id": call_control_id,
     }, lead_id=lead_id)
 
-    config = _get_org_amd_config(db, org_id) if org_id else AMDConfig()
+    config = await _get_org_amd_config(db, org_id) if org_id else AMDConfig()
 
     if not config.amd_enabled or config.amd_action != "drop_voicemail":
         return JSONResponse({"status": "skipped"})
@@ -512,7 +513,7 @@ async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)
     try:
         from routes.voicemail_drop_routes import check_calling_hours
         if not check_calling_hours(to_number):
-            _log_amd_event(db, to_number, "tcpa_blocked", "quiet_hours", org_id, {}, lead_id=lead_id)
+            await _log_amd_event(db, to_number, "tcpa_blocked", "quiet_hours", org_id, {}, lead_id=lead_id)
             logger.info(
                 "noanswer_callback action=tcpa_blocked reason=quiet_hours "
                 "phone=***%s org_id=%s lead_id=%s",
@@ -526,7 +527,7 @@ async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)
             "phone=***%s org_id=%s lead_id=%s",
             to_number[-4:] if to_number else "?", org_id, lead_id,
         )
-        _log_amd_event(db, to_number, "tcpa_blocked", "check_unavailable", org_id, {}, lead_id=lead_id)
+        await _log_amd_event(db, to_number, "tcpa_blocked", "check_unavailable", org_id, {}, lead_id=lead_id)
         return JSONResponse({"status": "tcpa_blocked", "reason": "tcpa_check_unavailable"})
     except Exception as e:
         # COMP-006: Fail-closed — check errored, BLOCK the drop
@@ -536,7 +537,7 @@ async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)
             to_number[-4:] if to_number else "?", org_id, lead_id, e,
             exc_info=True,
         )
-        _log_amd_event(db, to_number, "tcpa_blocked", "check_error", org_id, {"error": str(e)}, lead_id=lead_id)
+        await _log_amd_event(db, to_number, "tcpa_blocked", "check_error", org_id, {"error": str(e)}, lead_id=lead_id)
         return JSONResponse({"status": "tcpa_blocked", "reason": "tcpa_check_error"})
 
     result = await trigger_slybroadcast_drop(
@@ -547,7 +548,7 @@ async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)
         lead_id=lead_id,
     )
 
-    _log_amd_event(
+    await _log_amd_event(
         db, to_number, "noanswer_slybroadcast",
         "success" if result.get("success") else "failed",
         org_id, result, lead_id=lead_id,
@@ -562,7 +563,7 @@ async def call_noanswer_callback(request: Request, db: Session = Depends(get_db)
 
 @router.get("/amd-config")
 async def get_amd_config(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Get AMD configuration for the current org."""
@@ -570,14 +571,14 @@ async def get_amd_config(
     if not org_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    config = _get_org_amd_config(db, org_id)
+    config = await _get_org_amd_config(db, org_id)
     return config.dict()
 
 
 @router.put("/amd-config")
 async def update_amd_config(
     body: AMDConfig,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Update AMD configuration for the current org."""
@@ -586,12 +587,12 @@ async def update_amd_config(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Upsert
-    existing = db.execute(text(
+    existing = (await db.execute(text(
         "SELECT id FROM org_amd_configs WHERE organization_id = :org_id"
-    ), {"org_id": org_id}).fetchone()
+    ), {"org_id": org_id})).fetchone()
 
     if existing:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE org_amd_configs SET
                 amd_enabled = :enabled, amd_action = :action,
                 default_vm_audio_url = :audio, ring_timeout_seconds = :timeout,
@@ -603,7 +604,7 @@ async def update_amd_config(
             "cid": body.caller_id, "now": datetime.now(timezone.utc), "org_id": org_id,
         })
     else:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO org_amd_configs (organization_id, amd_enabled, amd_action,
                 default_vm_audio_url, ring_timeout_seconds, caller_id, created_at, updated_at)
             VALUES (:org_id, :enabled, :action, :audio, :timeout, :cid, :now, :now)
@@ -613,5 +614,5 @@ async def update_amd_config(
             "cid": body.caller_id, "now": datetime.now(timezone.utc),
         })
 
-    db.commit()
+    await db.commit()
     return {"status": "updated"}

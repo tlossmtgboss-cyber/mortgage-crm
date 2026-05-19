@@ -10,13 +10,14 @@ Provides endpoints for:
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
 
-from database import get_db
+from db import get_async_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def get_current_user_dep():
     return main.get_current_user
 
 
-def get_date_reconciliation_service(db: Session, user_id: int):
+def get_date_reconciliation_service(db: AsyncSession, user_id: int):
     """Get the date reconciliation service."""
     from services.date_reconciliation_service import DateReconciliationService
     return DateReconciliationService(db, user_id)
@@ -76,7 +77,7 @@ def get_date_reconciliation_service(db: Session, user_id: int):
 @router.get("/pending")
 async def get_pending_date_reconciliation_tasks(
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get all pending date reconciliation tasks.
@@ -104,7 +105,7 @@ async def get_all_date_reconciliation_tasks(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get all date reconciliation tasks with optional filtering.
@@ -126,7 +127,7 @@ async def get_all_date_reconciliation_tasks(
             " ORDER BY created_at DESC"
             " LIMIT :limit OFFSET :offset"
         )
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         tasks = [
             {
@@ -148,7 +149,7 @@ async def get_all_date_reconciliation_tasks(
             " AND owner_id = :owner_id"
             " " + status_filter
         )
-        count_result = db.execute(text(count_query), params)
+        count_result = await db.execute(text(count_query), params)
         total = count_result.scalar()
 
         return {
@@ -166,7 +167,7 @@ async def get_all_date_reconciliation_tasks(
 async def resolve_reconciliation_task(
     request: ResolveReconciliationRequest,
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Resolve a date reconciliation task by linking a loan to the Salesforce record.
@@ -180,12 +181,12 @@ async def resolve_reconciliation_task(
         service = get_date_reconciliation_service(db, current_user.id)
 
         # Verify the task exists and belongs to user
-        task = db.execute(text("""
+        task = (await db.execute(text("""
             SELECT id, status FROM tasks
             WHERE id = :task_id
               AND owner_id = :owner_id
               AND source = 'Salesforce Date Sync'
-        """), {"task_id": request.task_id, "owner_id": current_user.id}).fetchone()
+        """), {"task_id": request.task_id, "owner_id": current_user.id})).fetchone()
 
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -194,9 +195,9 @@ async def resolve_reconciliation_task(
             raise HTTPException(status_code=400, detail="Task is already completed")
 
         # Verify the loan exists
-        loan = db.execute(text("""
+        loan = (await db.execute(text("""
             SELECT id, loan_number, borrower_name FROM loans WHERE id = :loan_id
-        """), {"loan_id": request.loan_id}).fetchone()
+        """), {"loan_id": request.loan_id})).fetchone()
 
         if not loan:
             raise HTTPException(status_code=404, detail="Loan not found")
@@ -223,7 +224,7 @@ async def resolve_reconciliation_task(
         raise
     except Exception as e:
         logger.error(f"Error resolving reconciliation task: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -231,7 +232,7 @@ async def resolve_reconciliation_task(
 async def create_loan_from_reconciliation(
     request: CreateLoanFromReconciliationRequest,
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create a new loan from a date reconciliation task.
@@ -243,13 +244,13 @@ async def create_loan_from_reconciliation(
     """
     try:
         # Verify the task exists
-        task = db.execute(text("""
+        task = (await db.execute(text("""
             SELECT id, description FROM tasks
             WHERE id = :task_id
               AND owner_id = :owner_id
               AND source = 'Salesforce Date Sync'
               AND status = 'pending'
-        """), {"task_id": request.task_id, "owner_id": current_user.id}).fetchone()
+        """), {"task_id": request.task_id, "owner_id": current_user.id})).fetchone()
 
         if not task:
             raise HTTPException(status_code=404, detail="Task not found or already completed")
@@ -261,7 +262,7 @@ async def create_loan_from_reconciliation(
             loan_number = f"SF-{request.salesforce_id[-8:]}"
 
         # Create the loan
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO loans (
                 loan_number, borrower_name, borrower_email, borrower_phone,
                 salesforce_id, salesforce_sync_status, loan_officer_id,
@@ -283,7 +284,7 @@ async def create_loan_from_reconciliation(
         new_loan_id = result.scalar()
 
         # Mark task as completed
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tasks
             SET status = 'completed',
                 completed_at = NOW(),
@@ -291,7 +292,7 @@ async def create_loan_from_reconciliation(
             WHERE id = :task_id
         """), {"task_id": request.task_id})
 
-        db.commit()
+        await db.commit()
 
         logger.info(f"Created loan {new_loan_id} from reconciliation task {request.task_id}")
 
@@ -306,7 +307,7 @@ async def create_loan_from_reconciliation(
         raise
     except Exception as e:
         logger.error(f"Error creating loan from reconciliation: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -315,7 +316,7 @@ async def get_loan_date_update_history(
     loan_id: int,
     limit: int = Query(50, ge=1, le=200),
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get date update history for a specific loan.
@@ -324,15 +325,15 @@ async def get_loan_date_update_history(
     """
     try:
         # Verify loan access
-        loan = db.execute(text("""
+        loan = (await db.execute(text("""
             SELECT id, loan_number, borrower_name FROM loans WHERE id = :loan_id
-        """), {"loan_id": loan_id}).fetchone()
+        """), {"loan_id": loan_id})).fetchone()
 
         if not loan:
             raise HTTPException(status_code=404, detail="Loan not found")
 
         # Get field update history
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, field_name, old_value, new_value, update_source, updated_at
             FROM field_update_history
             WHERE entity_type = 'loan'
@@ -373,7 +374,7 @@ async def get_loan_date_update_history(
 @router.get("/date-mappings")
 async def get_date_field_mappings(
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get the list of date fields that are tracked during Salesforce sync.
@@ -444,7 +445,7 @@ async def get_date_field_mappings(
 @router.get("/summary")
 async def get_date_reconciliation_summary(
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get a summary of date reconciliation activity.
@@ -453,36 +454,36 @@ async def get_date_reconciliation_summary(
     """
     try:
         # Get pending task count
-        pending_count = db.execute(text("""
+        pending_count = (await db.execute(text("""
             SELECT COUNT(*) FROM tasks
             WHERE source = 'Salesforce Date Sync'
               AND status = 'pending'
               AND owner_id = :owner_id
-        """), {"owner_id": current_user.id}).scalar()
+        """), {"owner_id": current_user.id})).scalar()
 
         # Get completed task count (last 30 days)
-        completed_count = db.execute(text("""
+        completed_count = (await db.execute(text("""
             SELECT COUNT(*) FROM tasks
             WHERE source = 'Salesforce Date Sync'
               AND status = 'completed'
               AND owner_id = :owner_id
               AND completed_at >= NOW() - INTERVAL '30 days'
-        """), {"owner_id": current_user.id}).scalar()
+        """), {"owner_id": current_user.id})).scalar()
 
         # Get recent date updates count
-        recent_updates = db.execute(text("""
+        recent_updates = (await db.execute(text("""
             SELECT COUNT(*) FROM field_update_history
             WHERE entity_type = 'loan'
               AND field_name LIKE '%date%'
               AND update_source = 'salesforce_sync'
               AND updated_at >= NOW() - INTERVAL '7 days'
-        """)).scalar() or 0
+        """))).scalar() or 0
 
         # Get last sync time
-        last_sync = db.execute(text("""
+        last_sync = (await db.execute(text("""
             SELECT MAX(salesforce_last_synced_at) FROM loans
             WHERE salesforce_id IS NOT NULL
-        """)).scalar()
+        """))).scalar()
 
         return {
             "status": "success",

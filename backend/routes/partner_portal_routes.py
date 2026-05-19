@@ -25,8 +25,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_async_db
 from schemas.partner_schemas import (
     PartnerLoginRequest,
     PartnerLoginResponse,
@@ -53,7 +54,7 @@ router = APIRouter(prefix="/api/v1/partner", tags=["Partner Portal"])
 
 def get_current_partner(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Extract and validate the partner session from the Authorization header.
@@ -81,7 +82,7 @@ def get_current_partner(
 async def partner_login(
     body: PartnerLoginRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Partner login flow:
@@ -115,7 +116,7 @@ async def partner_login(
 @router.post("/auth/logout", status_code=204)
 async def partner_logout(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Revoke the current partner session."""
     from services.partner_portal_service import revoke_partner_session
@@ -134,7 +135,7 @@ async def partner_logout(
 @router.get("/loans")
 async def list_partner_loans(
     partner=Depends(get_current_partner),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List all loans tied to borrowers referred by this partner.
@@ -150,7 +151,7 @@ async def list_partner_loans(
 async def get_loan_status(
     loan_id: int,
     partner=Depends(get_current_partner),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get the milestone timeline for a specific loan.
@@ -172,7 +173,7 @@ async def get_loan_status(
 async def refer_lead(
     body: ReferLeadRequest,
     partner=Depends(get_current_partner),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Refer a new buyer/lead to the partner's associated loan officer.
@@ -206,7 +207,7 @@ async def refer_lead(
 async def request_prequal_letter(
     body: PreApprovalLetterRequestCreate,
     partner=Depends(get_current_partner),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Request a pre-approval letter for a buyer."""
     from services.partner_portal_service import create_prequal_letter_request
@@ -231,7 +232,7 @@ async def request_prequal_letter(
 @router.get("/prequal-letters")
 async def list_prequal_letters(
     partner=Depends(get_current_partner),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all pre-approval letter requests submitted by this partner."""
     from services.partner_portal_service import get_prequal_letter_requests
@@ -247,7 +248,7 @@ async def list_prequal_letters(
 @router.get("/marketing/templates")
 async def list_marketing_templates(
     partner=Depends(get_current_partner),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get co-marketing templates available to this partner."""
     from services.partner_portal_service import get_marketing_templates
@@ -272,7 +273,7 @@ async def get_partner_profile(
 async def update_partner_profile(
     body: PartnerProfileUpdate,
     partner=Depends(get_current_partner),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update the current partner's profile fields."""
     update_data = body.model_dump(exclude_unset=True)
@@ -283,6 +284,6 @@ async def update_partner_profile(
         if hasattr(partner, field):
             setattr(partner, field, value)
 
-    db.commit()
-    db.refresh(partner)
+    await db.commit()
+    await db.refresh(partner)
     return PartnerProfileResponse.model_validate(partner)

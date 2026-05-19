@@ -15,9 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from db import get_db
+from db import get_async_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ class RecordingResponse(BaseModel):
 async def get_call_recording(
     call_id: str,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Retrieve recording metadata and URL for a specific call.
@@ -63,7 +64,7 @@ async def get_call_recording(
     org_id = getattr(current_user, "organization_id", None)
 
     # Try vapi_calls first (by vapi_call_id)
-    row = db.execute(text("""
+    row = (await db.execute(text("""
         SELECT vapi_call_id, phone_number, direction,
                recording_url, stereo_recording_url, recording_status,
                transcript, transcript_status, summary,
@@ -72,7 +73,7 @@ async def get_call_recording(
         WHERE (vapi_call_id = :cid OR CAST(id AS TEXT) = :cid)
           AND organization_id = :org_id
         LIMIT 1
-    """), {"cid": call_id, "org_id": org_id}).fetchone()
+    """), {"cid": call_id, "org_id": org_id})).fetchone()
 
     if row:
         return RecordingResponse(
@@ -92,7 +93,7 @@ async def get_call_recording(
         )
 
     # Fallback: try call_logs (by id or call_sid)
-    row = db.execute(text("""
+    row = (await db.execute(text("""
         SELECT COALESCE(call_sid, CAST(id AS TEXT)), contact_phone,
                recording_url, stereo_recording_url, recording_status,
                transcript_text, transcript_status,
@@ -101,7 +102,7 @@ async def get_call_recording(
         WHERE (call_sid = :cid OR CAST(id AS TEXT) = :cid)
           AND organization_id = :org_id
         LIMIT 1
-    """), {"cid": call_id, "org_id": org_id}).fetchone()
+    """), {"cid": call_id, "org_id": org_id})).fetchone()
 
     if row:
         return RecordingResponse(
@@ -136,7 +137,7 @@ async def list_lead_recordings(
     lead_id: int,
     limit: int = Query(50, ge=1, le=200),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List all call recordings associated with a lead, newest first.
@@ -146,7 +147,7 @@ async def list_lead_recordings(
     results: list[RecordingResponse] = []
 
     # Vapi calls with a recording
-    vapi_rows = db.execute(text("""
+    vapi_rows = (await db.execute(text("""
         SELECT vapi_call_id, phone_number, direction,
                recording_url, stereo_recording_url, recording_status,
                transcript, transcript_status, summary,
@@ -157,7 +158,7 @@ async def list_lead_recordings(
           AND recording_url IS NOT NULL AND recording_url != ''
         ORDER BY created_at DESC
         LIMIT :lim
-    """), {"lead_id": lead_id, "org_id": org_id, "lim": limit}).fetchall()
+    """), {"lead_id": lead_id, "org_id": org_id, "lim": limit})).fetchall()
 
     for row in vapi_rows:
         results.append(RecordingResponse(
@@ -177,7 +178,7 @@ async def list_lead_recordings(
         ))
 
     # Dialer call_logs with a recording
-    dialer_rows = db.execute(text("""
+    dialer_rows = (await db.execute(text("""
         SELECT COALESCE(call_sid, CAST(id AS TEXT)), contact_phone,
                recording_url, stereo_recording_url, recording_status,
                transcript_text, transcript_status,
@@ -188,7 +189,7 @@ async def list_lead_recordings(
           AND recording_url IS NOT NULL AND recording_url != ''
         ORDER BY created_at DESC
         LIMIT :lim
-    """), {"lead_id": lead_id, "org_id": org_id, "lim": limit}).fetchall()
+    """), {"lead_id": lead_id, "org_id": org_id, "lim": limit})).fetchall()
 
     for row in dialer_rows:
         results.append(RecordingResponse(
@@ -250,7 +251,7 @@ async def stream_call_recording(
     call_id: str,
     channel: str = Query("mono", regex="^(mono|stereo)$"),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Stream a call recording through the API after verifying tenant access.
@@ -262,26 +263,26 @@ async def stream_call_recording(
     recording_url = None
 
     # 1. Try vapi_calls
-    row = db.execute(text("""
+    row = (await db.execute(text("""
         SELECT recording_url, stereo_recording_url
         FROM vapi_calls
         WHERE (vapi_call_id = :cid OR CAST(id AS TEXT) = :cid)
           AND organization_id = :org_id
         LIMIT 1
-    """), {"cid": call_id, "org_id": org_id}).fetchone()
+    """), {"cid": call_id, "org_id": org_id})).fetchone()
 
     if row:
         recording_url = row[1] if channel == "stereo" and row[1] else row[0]
 
     # 2. Fallback: call_logs
     if not recording_url:
-        row = db.execute(text("""
+        row = (await db.execute(text("""
             SELECT recording_url, stereo_recording_url
             FROM call_logs
             WHERE (call_sid = :cid OR CAST(id AS TEXT) = :cid)
               AND organization_id = :org_id
             LIMIT 1
-        """), {"cid": call_id, "org_id": org_id}).fetchone()
+        """), {"cid": call_id, "org_id": org_id})).fetchone()
 
         if row:
             recording_url = row[1] if channel == "stereo" and row[1] else row[0]

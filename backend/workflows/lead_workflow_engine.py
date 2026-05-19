@@ -233,7 +233,7 @@ class LeadWorkflowEngine:
 
     async def _handle_new_lead(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle brand new lead entering the system"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Send welcome SMS to lead
@@ -311,7 +311,7 @@ class LeadWorkflowEngine:
 
     async def _handle_new_to_attempted(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition from New to Attempted Contact"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Log contact attempt
@@ -358,7 +358,7 @@ class LeadWorkflowEngine:
 
     async def _handle_attempted_to_prospect(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition from Attempted Contact to Prospect"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Celebration notification
@@ -437,7 +437,7 @@ class LeadWorkflowEngine:
 
     async def _handle_prospect_to_application(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition from Prospect to Application Started"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Send application started confirmation
@@ -499,7 +499,7 @@ class LeadWorkflowEngine:
 
     async def _handle_application_complete(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Application Complete"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Congratulations email
@@ -563,7 +563,7 @@ class LeadWorkflowEngine:
 
     async def _handle_pre_approved(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Pre-Approved"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Celebration email
@@ -640,7 +640,7 @@ class LeadWorkflowEngine:
 
     async def _handle_to_under_contract(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Under Contract"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # Defer to SLA workflow if active
@@ -692,7 +692,7 @@ class LeadWorkflowEngine:
 
     async def _handle_to_long_term_nurture(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Long-Term Nurture"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
 
         # Defer to SLA workflow if active
         if self._check_active_sla_workflow(sc.lead_id, sc.organization_id):
@@ -728,7 +728,7 @@ class LeadWorkflowEngine:
 
     async def _handle_to_does_not_qualify(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Does Not Qualify"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # Defer to SLA workflow if active
@@ -783,7 +783,7 @@ class LeadWorkflowEngine:
 
     async def _handle_to_withdrawn(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Withdrawn"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
 
         # 1. Cancel all active workflows and drip campaigns
         actions.append({
@@ -813,7 +813,7 @@ class LeadWorkflowEngine:
 
     async def _handle_to_disclosed(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Disclosed (lead-to-loan handoff)"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # Defer to SLA workflow if active
@@ -900,7 +900,7 @@ class LeadWorkflowEngine:
 
     async def _handle_to_amr(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Annual Mortgage Review"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Schedule annual review task
@@ -938,7 +938,7 @@ class LeadWorkflowEngine:
 
     async def _handle_to_referral_source(self, sc: LeadStatusChange) -> List[Dict]:
         """Handle transition to Referral Source (Circle of Cash Flow)"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         first_name = sc.lead_name.split()[0] if sc.lead_name else "there"
 
         # 1. Create referral outreach task
@@ -1007,7 +1007,7 @@ class TimeBasedWorkflowEngine:
                              grouped by organization_id (backward-compatible but
                              each sub-query still filters per-org).
         """
-        actions = []
+        actions: List[Dict[str, Any]] = []
         now = datetime.now(timezone.utc)
 
         # Check for New leads not contacted within 1 hour
@@ -1026,7 +1026,7 @@ class TimeBasedWorkflowEngine:
 
     async def _check_new_no_contact(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find New leads without contact attempt after threshold"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         threshold = now - timedelta(hours=TIME_RULES["new_no_contact"])
         escalate_threshold = now - timedelta(hours=TIME_RULES["new_escalate"])
 
@@ -1040,7 +1040,7 @@ class TimeBasedWorkflowEngine:
                 AND l.created_at < :threshold
                 AND l.created_at > :max_age
             """
-            params = {
+            params: Dict[str, Any] = {
                 "threshold": threshold,
                 "max_age": now - timedelta(hours=24),  # Don't process very old leads
             }
@@ -1087,7 +1087,7 @@ class TimeBasedWorkflowEngine:
 
     async def _check_attempted_reengagement(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find Attempted Contact leads needing re-engagement"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         threshold = now - timedelta(hours=TIME_RULES["attempted_reengagement"])
 
         try:
@@ -1098,7 +1098,7 @@ class TimeBasedWorkflowEngine:
                 WHERE l.stage = 'Attempted Contact'
                 AND l.updated_at < :threshold
             """
-            params = {"threshold": threshold}
+            params: Dict[str, Any] = {"threshold": threshold}
             if organization_id:
                 query += " AND l.organization_id = :org_id"
                 params["org_id"] = organization_id
@@ -1129,7 +1129,7 @@ class TimeBasedWorkflowEngine:
 
     async def _check_stalled_prospects(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find Prospects stalled without progression"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         threshold = now - timedelta(hours=TIME_RULES["prospect_stalled"])
 
         try:
@@ -1140,7 +1140,7 @@ class TimeBasedWorkflowEngine:
                 WHERE l.stage = 'Prospect'
                 AND l.updated_at < :threshold
             """
-            params = {"threshold": threshold}
+            params: Dict[str, Any] = {"threshold": threshold}
             if organization_id:
                 query += " AND l.organization_id = :org_id"
                 params["org_id"] = organization_id
@@ -1171,7 +1171,7 @@ class TimeBasedWorkflowEngine:
 
     async def _check_incomplete_applications(self, now: datetime, organization_id: int = None) -> List[Dict]:
         """Find incomplete applications needing follow-up"""
-        actions = []
+        actions: List[Dict[str, Any]] = []
         threshold = now - timedelta(hours=TIME_RULES["application_incomplete"])
 
         try:
@@ -1182,7 +1182,7 @@ class TimeBasedWorkflowEngine:
                 WHERE l.stage = 'Application Started'
                 AND l.updated_at < :threshold
             """
-            params = {"threshold": threshold}
+            params: Dict[str, Any] = {"threshold": threshold}
             if organization_id:
                 query += " AND l.organization_id = :org_id"
                 params["org_id"] = organization_id

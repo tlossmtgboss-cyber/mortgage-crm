@@ -15,10 +15,11 @@ from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel, Field
 
-from database import get_db
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ class NaturalLanguageQueryRequest(BaseModel):
 @router.post("/search/by-client")
 async def search_emails_by_client(
     request: SearchEmailsByClientRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -127,7 +128,7 @@ async def search_emails_by_client(
 @router.post("/search/by-content")
 async def search_emails_by_content(
     request: SearchEmailsByContentRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -159,7 +160,7 @@ async def search_emails_by_content(
 @router.post("/identify")
 async def identify_email_sender(
     request: IdentifyEmailSenderRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -187,7 +188,7 @@ async def identify_email_sender(
 @router.post("/thread")
 async def get_email_thread(
     request: EmailThreadRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -216,7 +217,7 @@ async def get_email_thread(
 @router.post("/priority")
 async def get_priority_emails(
     request: PriorityEmailsRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -246,7 +247,7 @@ async def get_priority_emails(
 @router.post("/context")
 async def get_email_context(
     request: EmailContextRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -276,7 +277,7 @@ async def get_email_context(
 @router.post("/query")
 async def natural_language_query(
     request: NaturalLanguageQueryRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -359,7 +360,7 @@ async def natural_language_query(
 
 @router.get("/morning-briefing")
 async def get_morning_briefing(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -385,7 +386,7 @@ async def get_morning_briefing(
 @router.get("/stats")
 async def get_email_stats(
     days: int = Query(7, description="Days to look back", ge=1, le=30),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: UserProxy = Depends(get_current_user)
 ):
     """
@@ -400,7 +401,7 @@ async def get_email_stats(
     try:
         start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-        stats = db.execute(text("""
+        stats = (await db.execute(text("""
             SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE is_priority = TRUE) as priority,
@@ -414,7 +415,7 @@ async def get_email_stats(
         """), {
             "user_id": current_user.id,
             "start_date": start_date
-        }).fetchone()
+        })).fetchone()
 
         return {
             "period_days": days,

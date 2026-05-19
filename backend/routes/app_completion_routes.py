@@ -23,9 +23,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text as sa_text
 
-from database import get_db
+from db import get_async_db
 from auth.dependencies import get_current_user
 from middleware.webhook_verification import require_telnyx_webhook
 
@@ -112,22 +113,22 @@ class AskBorrowerBody(BaseModel):
 # Helpers
 # =============================================================================
 
-def _verify_loan_tenant(db: Session, loan_id: int, current_user: Any) -> None:
+async def _verify_loan_tenant(db: AsyncSession, loan_id: int, current_user: Any) -> None:
     """Verify the requesting user's org owns the loan. Raises 404 if not."""
     org_id = getattr(current_user, "organization_id", None)
     is_platform_admin = getattr(current_user, "permission_role", "") == "admin"
     if org_id and not is_platform_admin:
-        row = db.execute(
+        row = (await db.execute(
             sa_text("SELECT organization_id FROM loans WHERE id = :id"),
             {"id": loan_id},
-        ).first()
+        )).first()
         if row is None:
             raise HTTPException(status_code=404, detail="Loan not found")
         if row[0] is not None and row[0] != org_id:
             raise HTTPException(status_code=404, detail="Not found")
 
 
-def _get_orchestrator(db: Session):
+def _get_orchestrator(db: AsyncSession):
     """Get orchestrator service, raising 501 if unavailable."""
     try:
         from services.smart_docs.app_completion_orchestrator import (
@@ -161,7 +162,7 @@ def _get_org_id(current_user: Any) -> Optional[str]:
 @router.post("/review/{loan_id}")
 async def trigger_application_review(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -171,7 +172,7 @@ async def trigger_application_review(
     identifies gaps, stages missing documents, and builds an action plan.
     Returns the review summary with score, complexity, and next steps.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         from services.smart_docs.app_completion_orchestrator import (
@@ -194,7 +195,7 @@ async def trigger_application_review(
 @router.get("/review/{loan_id}")
 async def get_latest_review(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -203,7 +204,7 @@ async def get_latest_review(
     Returns full review details including score, missing items,
     staged documents, communication log, and appointment info.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -223,7 +224,7 @@ async def get_review_history(
     loan_id: int,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -231,7 +232,7 @@ async def get_review_history(
 
     Useful for tracking score improvement over time.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -255,7 +256,7 @@ async def get_review_history(
 @router.get("/scoring/{loan_id}")
 async def get_scoring_page(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -265,7 +266,7 @@ async def get_scoring_page(
     staged, exceptions, score history, recent communications, appointment
     coordination, and summary statistics.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -287,7 +288,7 @@ async def get_scoring_page(
 async def get_score_trend(
     loan_id: int,
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -296,7 +297,7 @@ async def get_score_trend(
     Returns timestamped score values over the requested period,
     suitable for rendering a line chart of completion progress.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -319,7 +320,7 @@ async def get_missing_items(
     item_type: Optional[str] = Query(None, description="Filter by type: field, document, clarification"),
     severity: Optional[str] = Query(None, description="Filter by severity: CRITICAL, HIGH, MEDIUM, LOW"),
     status: Optional[str] = Query(None, description="Filter by status: open, resolved, deferred, escalated"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -328,7 +329,7 @@ async def get_missing_items(
     Returns categorized list of missing fields, documents, and
     clarifications needed, each with resolution method and priority.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -350,7 +351,7 @@ async def get_missing_items(
 async def resolve_item(
     item_id: int,
     body: ResolveItemBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -367,7 +368,7 @@ async def resolve_item(
         item_info = orchestrator.get_item_loan_id(item_id)
         if not item_info:
             raise HTTPException(status_code=404, detail="Item not found")
-        _verify_loan_tenant(db, item_info["loan_id"], current_user)
+        await _verify_loan_tenant(db, item_info["loan_id"], current_user)
 
         result = orchestrator.resolve_item(
             item_id=item_id,
@@ -386,7 +387,7 @@ async def resolve_item(
 @router.post("/items/{item_id}/escalate")
 async def escalate_item(
     item_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -402,7 +403,7 @@ async def escalate_item(
         item_info = orchestrator.get_item_loan_id(item_id)
         if not item_info:
             raise HTTPException(status_code=404, detail="Item not found")
-        _verify_loan_tenant(db, item_info["loan_id"], current_user)
+        await _verify_loan_tenant(db, item_info["loan_id"], current_user)
 
         result = orchestrator.escalate_item(
             item_id=item_id,
@@ -419,7 +420,7 @@ async def escalate_item(
 @router.post("/items/{item_id}/defer")
 async def defer_item(
     item_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -435,7 +436,7 @@ async def defer_item(
         item_info = orchestrator.get_item_loan_id(item_id)
         if not item_info:
             raise HTTPException(status_code=404, detail="Item not found")
-        _verify_loan_tenant(db, item_info["loan_id"], current_user)
+        await _verify_loan_tenant(db, item_info["loan_id"], current_user)
 
         result = orchestrator.defer_item(
             item_id=item_id,
@@ -453,7 +454,7 @@ async def defer_item(
 async def ask_borrower(
     item_id: int,
     body: Optional[AskBorrowerBody] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -469,7 +470,7 @@ async def ask_borrower(
         item_info = orchestrator.get_item_loan_id(item_id)
         if not item_info:
             raise HTTPException(status_code=404, detail="Item not found")
-        _verify_loan_tenant(db, item_info["loan_id"], current_user)
+        await _verify_loan_tenant(db, item_info["loan_id"], current_user)
 
         custom_message = body.custom_message if body else None
         result = orchestrator.ask_borrower(
@@ -492,7 +493,7 @@ async def ask_borrower(
 @router.get("/documents/{loan_id}")
 async def get_staged_documents(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -502,7 +503,7 @@ async def get_staged_documents(
     received, waived. Each entry includes type, label, priority,
     reason, and current status.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -519,7 +520,7 @@ async def get_staged_documents(
 async def stage_document(
     loan_id: int,
     body: StageDocumentBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -529,7 +530,7 @@ async def stage_document(
     the AI review identified. The document is staged for review
     before being sent to the borrower.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -552,7 +553,7 @@ async def stage_document(
 @router.post("/documents/select")
 async def select_documents(
     body: SelectDocumentsBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -575,7 +576,7 @@ async def select_documents(
                     status_code=404,
                     detail=f"Staging entry {staging_id} not found",
                 )
-            _verify_loan_tenant(db, staging_info["loan_id"], current_user)
+            await _verify_loan_tenant(db, staging_info["loan_id"], current_user)
 
         result = orchestrator.select_documents(
             staging_ids=body.staging_ids,
@@ -592,7 +593,7 @@ async def select_documents(
 @router.post("/documents/select-all/{loan_id}")
 async def select_all_documents(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -601,7 +602,7 @@ async def select_all_documents(
     Convenience endpoint that marks every staged (unselected)
     document for the given loan as selected.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -621,7 +622,7 @@ async def select_all_documents(
 async def send_documents(
     loan_id: int,
     body: SendDocumentsBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -631,7 +632,7 @@ async def send_documents(
     SMS and/or email notifications to the borrower based on the
     request body flags.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -654,7 +655,7 @@ async def send_documents(
 async def waive_document(
     staging_id: int,
     body: WaiveDocumentBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -670,7 +671,7 @@ async def waive_document(
         staging_info = orchestrator.get_staging_loan_id(staging_id)
         if not staging_info:
             raise HTTPException(status_code=404, detail="Staging entry not found")
-        _verify_loan_tenant(db, staging_info["loan_id"], current_user)
+        await _verify_loan_tenant(db, staging_info["loan_id"], current_user)
 
         result = orchestrator.waive_document(
             staging_id=staging_id,
@@ -688,7 +689,7 @@ async def waive_document(
 @router.get("/documents/{loan_id}/portal-tasks")
 async def get_portal_tasks(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -698,7 +699,7 @@ async def get_portal_tasks(
     formatted for the borrower portal UI. Each task includes
     a label, instructions, priority, and upload target.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -720,7 +721,7 @@ async def get_communication_log(
     loan_id: int,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -729,7 +730,7 @@ async def get_communication_log(
     Returns all SMS, email, and system messages related to the
     application completion process, ordered most recent first.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -749,7 +750,7 @@ async def get_communication_log(
 @router.post("/comms/{loan_id}/send-intro")
 async def send_intro_sequence(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -759,7 +760,7 @@ async def send_intro_sequence(
     the document collection process. Normally triggered automatically
     by the review, but can be re-sent manually.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -778,7 +779,7 @@ async def send_intro_sequence(
 @router.post("/comms/webhook/inbound-sms")
 async def inbound_sms_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
@@ -836,7 +837,7 @@ async def inbound_sms_webhook(
 @router.get("/appointment/{loan_id}")
 async def get_appointment(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -845,7 +846,7 @@ async def get_appointment(
     Returns the scheduled or pending PA review call details,
     including assigned PA, time, duration, and items to discuss.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -862,7 +863,7 @@ async def get_appointment(
 async def schedule_appointment(
     loan_id: int,
     body: ScheduleAppointmentBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -871,7 +872,7 @@ async def schedule_appointment(
     Creates an appointment record linking the loan to a PA user
     at the specified time. Sends calendar invite and notification.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    await _verify_loan_tenant(db, loan_id, current_user)
 
     try:
         orchestrator = _get_orchestrator(db)
@@ -896,7 +897,7 @@ async def schedule_appointment(
 async def complete_appointment(
     appointment_id: int,
     body: CompleteCallBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -911,7 +912,7 @@ async def complete_appointment(
         appt_info = orchestrator.get_appointment_loan_id(appointment_id)
         if not appt_info:
             raise HTTPException(status_code=404, detail="Appointment not found")
-        _verify_loan_tenant(db, appt_info["loan_id"], current_user)
+        await _verify_loan_tenant(db, appt_info["loan_id"], current_user)
 
         result = orchestrator.complete_appointment(
             appointment_id=appointment_id,
@@ -931,7 +932,7 @@ async def complete_appointment(
 async def cancel_appointment(
     appointment_id: int,
     body: CancelAppointmentBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -946,7 +947,7 @@ async def cancel_appointment(
         appt_info = orchestrator.get_appointment_loan_id(appointment_id)
         if not appt_info:
             raise HTTPException(status_code=404, detail="Appointment not found")
-        _verify_loan_tenant(db, appt_info["loan_id"], current_user)
+        await _verify_loan_tenant(db, appt_info["loan_id"], current_user)
 
         result = orchestrator.cancel_appointment(
             appointment_id=appointment_id,
@@ -968,7 +969,7 @@ async def cancel_appointment(
 @router.get("/dashboard")
 async def get_dashboard(
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1003,7 +1004,7 @@ async def get_review_queue(
     sort_by: str = Query("score_asc", description="Sort: score_asc, score_desc, created_desc, updated_desc"),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """

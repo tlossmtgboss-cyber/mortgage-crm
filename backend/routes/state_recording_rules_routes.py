@@ -17,10 +17,11 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel
 
-from database import get_db
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class UpdateRuleRequest(BaseModel):
 @router.get("/by-state/{state_code}")
 async def get_state_disclosure(
     state_code: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> StateDisclosure:
     """
     Get recording disclosure requirements for a state.
@@ -87,7 +88,7 @@ async def get_state_disclosure(
     try:
         state_upper = state_code.upper()
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 state, recording_required, requires_verbal_ack,
                 disclosure_script, consent_type
@@ -122,7 +123,7 @@ async def get_state_disclosure(
 
 @router.get("/all-party-states")
 async def get_all_party_consent_states(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> dict:
     """
     Get list of states requiring all-party consent.
@@ -130,7 +131,7 @@ async def get_all_party_consent_states(
     Useful for quickly checking if verbal acknowledgment is needed.
     """
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT state, disclosure_script
             FROM state_recording_rules
             WHERE consent_type = 'all-party' OR requires_verbal_ack = true
@@ -156,7 +157,7 @@ async def get_all_party_consent_states(
 
 @router.get("/")
 async def list_all_rules(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     consent_type: Optional[str] = None,
     limit: int = Query(default=100, le=100),
     offset: int = 0
@@ -181,7 +182,7 @@ async def list_all_rules(
             ORDER BY state
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         rules = []
         for row in result.fetchall():
@@ -197,7 +198,7 @@ async def list_all_rules(
 
         # Get total count
         count_query = "SELECT COUNT(*) FROM state_recording_rules WHERE " + where_clause
-        count_result = db.execute(text(count_query), params)
+        count_result = await db.execute(text(count_query), params)
         total = count_result.scalar()
 
         return {
@@ -219,7 +220,7 @@ async def list_all_rules(
 @router.post("/")
 async def create_or_update_rule(
     rule: StateRecordingRule,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create or update a state recording rule.
@@ -235,7 +236,7 @@ async def create_or_update_rule(
                 detail="State code must be exactly 2 characters"
             )
 
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO state_recording_rules
             (state, recording_required, requires_verbal_ack, disclosure_script, consent_type, notes, updated_at)
             VALUES (:state, :recording_required, :requires_verbal_ack, :disclosure_script, :consent_type, :notes, NOW())
@@ -254,7 +255,7 @@ async def create_or_update_rule(
             "consent_type": rule.consent_type,
             "notes": rule.notes
         })
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -266,7 +267,7 @@ async def create_or_update_rule(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error saving state rule: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -274,7 +275,7 @@ async def create_or_update_rule(
 async def update_rule(
     state_code: str,
     updates: UpdateRuleRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update specific fields of an existing state recording rule."""
     try:
@@ -309,10 +310,10 @@ async def update_rule(
             + ", ".join(update_fields)
             + " WHERE state = :state RETURNING state"
         )
-        result = db.execute(text(update_query), params)
+        result = await db.execute(text(update_query), params)
 
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if not row:
             raise HTTPException(
@@ -330,27 +331,27 @@ async def update_rule(
         raise
     except Exception as e:
         logger.error(f"Error updating state rule: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{state_code}")
 async def delete_rule(
     state_code: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a state recording rule."""
     try:
         state_upper = state_code.upper()
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM state_recording_rules
             WHERE state = :state
             RETURNING state
         """), {"state": state_upper})
 
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if not row:
             raise HTTPException(
@@ -368,7 +369,7 @@ async def delete_rule(
         raise
     except Exception as e:
         logger.error(f"Error deleting state rule: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -378,7 +379,7 @@ async def delete_rule(
 
 async def get_state_disclosure_for_rate_quote(
     state: str,
-    db: Session
+    db: AsyncSession
 ) -> Optional[dict]:
     """
     Helper function for Rate Engine integration.
@@ -390,7 +391,7 @@ async def get_state_disclosure_for_rate_quote(
         # Returns: {"recording_required": True, "script": "...", "requires_ack": True}
     """
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT recording_required, requires_verbal_ack, disclosure_script
             FROM state_recording_rules
             WHERE state = :state

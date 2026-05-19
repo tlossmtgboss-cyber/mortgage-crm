@@ -11,8 +11,9 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_async_db
 
 
 def get_current_user_dep():
@@ -71,7 +72,7 @@ class MarkReadBody(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────
 
 
-def _svc(db: Session, redis: Any) -> Any:
+def _svc(db: AsyncSession, redis: Any) -> Any:
     TeamChatService = _get_service()
     return TeamChatService(db, redis=redis)
 
@@ -96,7 +97,7 @@ def list_messages(
     before: Optional[datetime] = Query(None),
     limit: int = Query(80, ge=1, le=200),
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> list[dict]:
     svc = _svc(db, redis)
@@ -120,11 +121,11 @@ def list_messages(
     "/clients/{client_file_id}/team-chat/messages",
     status_code=status.HTTP_201_CREATED,
 )
-def send_message(
+async def send_message(
     client_file_id: uuid.UUID,
     body: SendMessageBody,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
@@ -141,19 +142,19 @@ def send_message(
         raise HTTPException(403, str(e))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    db.commit()
+    await db.commit()
     return svc._serialize_message(
         msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
     )
 
 
 @router.patch("/clients/{client_file_id}/team-chat/messages/{message_id}")
-def edit_message(
+async def edit_message(
     client_file_id: uuid.UUID,
     message_id: uuid.UUID,
     payload: EditMessageBody,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
@@ -167,7 +168,7 @@ def edit_message(
         raise HTTPException(403, str(e))
     except ValueError as e:
         raise HTTPException(404, str(e))
-    db.commit()
+    await db.commit()
     return svc._serialize_message(
         msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
     )
@@ -177,11 +178,11 @@ def edit_message(
     "/clients/{client_file_id}/team-chat/messages/{message_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_message(
+async def delete_message(
     client_file_id: uuid.UUID,
     message_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> None:
     svc = _svc(db, redis)
@@ -189,36 +190,36 @@ def delete_message(
         svc.delete_message(message_id=message_id, actor_user_id=user.id)
     except PermissionError as e:
         raise HTTPException(403, str(e))
-    db.commit()
+    await db.commit()
 
 
 @router.post("/clients/{client_file_id}/team-chat/messages/{message_id}/pin")
-def pin_message(
+async def pin_message(
     client_file_id: uuid.UUID,
     message_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
     msg = svc.pin(message_id=message_id)
-    db.commit()
+    await db.commit()
     return svc._serialize_message(
         msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
     )
 
 
 @router.post("/clients/{client_file_id}/team-chat/messages/{message_id}/unpin")
-def unpin_message(
+async def unpin_message(
     client_file_id: uuid.UUID,
     message_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
     msg = svc.unpin(message_id=message_id)
-    db.commit()
+    await db.commit()
     return svc._serialize_message(
         msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
     )
@@ -228,7 +229,7 @@ def unpin_message(
 def get_pinned(
     client_file_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> Optional[dict]:
     svc = _svc(db, redis)
@@ -248,12 +249,12 @@ def get_pinned(
     "/clients/{client_file_id}/team-chat/messages/{message_id}/reactions",
     status_code=status.HTTP_201_CREATED,
 )
-def react(
+async def react(
     client_file_id: uuid.UUID,
     message_id: uuid.UUID,
     payload: ReactBody,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
@@ -263,7 +264,7 @@ def react(
         emoji=payload.emoji,
         organization_id=user.organization_id,
     )
-    db.commit()
+    await db.commit()
     return {
         "id": str(r.id),
         "message_id": str(r.message_id),
@@ -276,25 +277,25 @@ def react(
     "/clients/{client_file_id}/team-chat/messages/{message_id}/reactions/{emoji}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def unreact(
+async def unreact(
     client_file_id: uuid.UUID,
     message_id: uuid.UUID,
     emoji: str,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> None:
     TeamChatReactionEmoji = _get_models()
     svc = _svc(db, redis)
     svc.unreact(message_id=message_id, user_id=user.id, emoji=TeamChatReactionEmoji(emoji))
-    db.commit()
+    await db.commit()
 
 
 @router.get("/clients/{client_file_id}/team-chat/members")
 def list_members(
     client_file_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> list[dict]:
     svc = _svc(db, redis)
@@ -307,11 +308,11 @@ def list_members(
 
 
 @router.post("/clients/{client_file_id}/team-chat/read")
-def mark_read(
+async def mark_read(
     client_file_id: uuid.UUID,
     payload: MarkReadBody,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
@@ -322,12 +323,12 @@ def mark_read(
             user_id=user.id,
             last_read_message_id=payload.last_read_message_id,
         )
-        db.commit()
+        await db.commit()
         return result
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("team_chat.mark_read failed: %s", e)
-        db.rollback()
+        await db.rollback()
         return {"channel_id": "", "user_id": str(user.id), "last_read_message_id": str(payload.last_read_message_id)}
 
 
@@ -335,7 +336,7 @@ def mark_read(
 def unread_count(
     client_file_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)
@@ -358,7 +359,7 @@ def unread_count(
 def set_typing(
     client_file_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> None:
     svc = _svc(db, redis)
@@ -375,7 +376,7 @@ def set_typing(
 def get_typing(
     client_file_id: uuid.UUID,
     user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
     svc = _svc(db, redis)

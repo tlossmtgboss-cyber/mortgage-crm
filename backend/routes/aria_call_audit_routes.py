@@ -14,9 +14,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from db import get_db
+from db import get_async_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ async def list_aria_calls(
     date_from: Optional[str] = Query(None, description="Filter from date (ISO format)"),
     date_to: Optional[str] = Query(None, description="Filter to date (ISO format)"),
     search: Optional[str] = Query(None, description="Search transcript/summary text"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -177,7 +178,7 @@ async def list_aria_calls(
     # Count total
     count_sql = f"SELECT COUNT(*) FROM vapi_calls vc WHERE {where_sql}"
     try:
-        total = db.execute(text(count_sql), params).scalar() or 0
+        total = (await db.execute(text(count_sql), params)).scalar() or 0
     except Exception as e:
         logger.error("Call audit count query failed: %s", e)
         total = 0
@@ -213,7 +214,7 @@ async def list_aria_calls(
     """
 
     try:
-        rows = db.execute(text(data_sql), params).fetchall()
+        rows = (await db.execute(text(data_sql), params)).fetchall()
     except Exception as e:
         logger.error("Call audit list query failed: %s", e)
         return CallHistoryResponse(
@@ -257,7 +258,7 @@ async def list_aria_calls(
 @router.get("/stats")
 async def get_aria_call_stats(
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Get aggregate call statistics for the Aria call audit dashboard."""
@@ -268,7 +269,7 @@ async def get_aria_call_stats(
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     try:
-        row = db.execute(text("""
+        row = (await db.execute(text("""
             SELECT
                 COUNT(*) AS total_calls,
                 COUNT(*) FILTER (WHERE direction = 'inbound') AS inbound_calls,
@@ -284,7 +285,7 @@ async def get_aria_call_stats(
             WHERE organization_id = :org_id
               AND status IN ('completed', 'ended')
               AND (started_at >= :cutoff OR (started_at IS NULL AND created_at >= :cutoff))
-        """), {"org_id": org_id, "cutoff": cutoff}).fetchone()
+        """), {"org_id": org_id, "cutoff": cutoff})).fetchone()
     except Exception as e:
         logger.error("Call audit stats query failed: %s", e)
         return {
@@ -317,7 +318,7 @@ async def get_aria_call_stats(
 @router.get("/{call_id}")
 async def get_aria_call_detail(
     call_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -331,7 +332,7 @@ async def get_aria_call_detail(
         raise HTTPException(status_code=400, detail="Organization context required")
 
     try:
-        row = db.execute(text("""
+        row = (await db.execute(text("""
             SELECT
                 vc.id,
                 vc.vapi_call_id,
@@ -354,7 +355,7 @@ async def get_aria_call_detail(
             FROM vapi_calls vc
             LEFT JOIN leads l ON l.id = vc.lead_id
             WHERE vc.id = :call_id AND vc.organization_id = :org_id
-        """), {"call_id": call_id, "org_id": org_id}).fetchone()
+        """), {"call_id": call_id, "org_id": org_id})).fetchone()
     except Exception as e:
         logger.error("Call audit detail query failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to load call detail")
@@ -365,12 +366,12 @@ async def get_aria_call_detail(
     # Fetch notes/action items
     notes = []
     try:
-        note_rows = db.execute(text("""
+        note_rows = (await db.execute(text("""
             SELECT id, note_type, content, priority, completed, created_at
             FROM vapi_call_notes
             WHERE call_id = :call_id
             ORDER BY created_at ASC
-        """), {"call_id": call_id}).fetchall()
+        """), {"call_id": call_id})).fetchall()
         notes = [
             {
                 "id": n.id,

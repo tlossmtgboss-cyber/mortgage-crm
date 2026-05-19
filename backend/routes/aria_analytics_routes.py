@@ -15,9 +15,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from db import get_db
+from db import get_async_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ class ConversationLogEntry(BaseModel):
 async def get_aria_stats(
     period_days: int = Query(30, ge=1, le=365, description="Period in days"),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get Aria voice usage statistics for the current user's organization.
 
@@ -93,7 +94,7 @@ async def get_aria_stats(
 
     try:
         # Query vapi_calls for voice conversation stats
-        summary_row = db.execute(text("""
+        summary_row = (await db.execute(text("""
             SELECT
                 COUNT(*) as total,
                 COALESCE(SUM(
@@ -105,20 +106,20 @@ async def get_aria_stats(
             FROM vapi_calls
             WHERE organization_id = :org_id
             AND created_at >= :cutoff
-        """), {"org_id": org_id, "cutoff": cutoff}).fetchone()
+        """), {"org_id": org_id, "cutoff": cutoff})).fetchone()
 
         total = summary_row[0] if summary_row else 0
         total_duration_secs = float(summary_row[1]) if summary_row else 0
         avg_duration = float(summary_row[2]) if summary_row else 0
 
         # Count outcomes
-        outcome_rows = db.execute(text("""
+        outcome_rows = (await db.execute(text("""
             SELECT status, COUNT(*) as cnt
             FROM vapi_calls
             WHERE organization_id = :org_id
             AND created_at >= :cutoff
             GROUP BY status
-        """), {"org_id": org_id, "cutoff": cutoff}).fetchall()
+        """), {"org_id": org_id, "cutoff": cutoff})).fetchall()
 
         completed = 0
         abandoned = 0
@@ -137,7 +138,7 @@ async def get_aria_stats(
         tools_used_count = 0
         top_intents: List[Dict[str, Any]] = []
         try:
-            tool_rows = db.execute(text("""
+            tool_rows = (await db.execute(text("""
                 SELECT
                     jsonb_array_elements_text(tools_used::jsonb) as tool_name,
                     COUNT(*) as cnt
@@ -149,7 +150,7 @@ async def get_aria_stats(
                 GROUP BY tool_name
                 ORDER BY cnt DESC
                 LIMIT 15
-            """), {"org_id": org_id, "cutoff": cutoff}).fetchall()
+            """), {"org_id": org_id, "cutoff": cutoff})).fetchall()
             for row in tool_rows:
                 top_intents.append({"intent": row[0], "count": row[1]})
                 tools_used_count += row[1]
@@ -180,7 +181,7 @@ async def get_common_queries(
     period_days: int = Query(30, ge=1, le=365),
     limit: int = Query(20, ge=1, le=100),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get most common voice queries/intents across the organization.
 
@@ -193,7 +194,7 @@ async def get_common_queries(
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
     try:
-        rows = db.execute(text("""
+        rows = (await db.execute(text("""
             SELECT
                 jsonb_array_elements_text(tools_used::jsonb) as tool_name,
                 COUNT(*) as cnt,
@@ -208,7 +209,7 @@ async def get_common_queries(
             GROUP BY tool_name
             ORDER BY cnt DESC
             LIMIT :lim
-        """), {"org_id": org_id, "cutoff": cutoff, "lim": limit}).fetchall()
+        """), {"org_id": org_id, "cutoff": cutoff, "lim": limit})).fetchall()
 
         return [
             CommonQuery(
@@ -227,7 +228,7 @@ async def get_common_queries(
 async def get_time_saved(
     period_days: int = Query(30, ge=1, le=365),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Estimate time saved by using Aria vs manual CRM interaction.
 
@@ -269,18 +270,18 @@ async def get_time_saved(
 
     try:
         # Count conversations
-        conv_row = db.execute(text("""
+        conv_row = (await db.execute(text("""
             SELECT COUNT(*) FROM vapi_calls
             WHERE organization_id = :org_id
             AND created_at >= :cutoff
-        """), {"org_id": org_id, "cutoff": cutoff}).scalar() or 0
+        """), {"org_id": org_id, "cutoff": cutoff})).scalar() or 0
 
         # Count tools used
         tool_breakdown: Dict[str, Any] = {}
         total_minutes_saved = 0.0
 
         try:
-            tool_rows = db.execute(text("""
+            tool_rows = (await db.execute(text("""
                 SELECT
                     jsonb_array_elements_text(tools_used::jsonb) as tool_name,
                     COUNT(*) as cnt
@@ -290,7 +291,7 @@ async def get_time_saved(
                 AND tools_used IS NOT NULL
                 AND tools_used != '[]'
                 GROUP BY tool_name
-            """), {"org_id": org_id, "cutoff": cutoff}).fetchall()
+            """), {"org_id": org_id, "cutoff": cutoff})).fetchall()
 
             for row in tool_rows:
                 tool_name = row[0]
@@ -327,7 +328,7 @@ async def get_conversations(
     limit: int = Query(25, ge=1, le=100),
     mode: Optional[str] = Query(None, description="Filter by mode: lo_assistant, inbound_receptionist, outbound_followup"),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get recent Aria conversation logs.
 
@@ -349,7 +350,7 @@ async def get_conversations(
     where = " AND ".join(conditions)
 
     try:
-        rows = db.execute(text(f"""
+        rows = (await db.execute(text(f"""
             SELECT
                 vapi_call_id,
                 COALESCE(call_type, 'lo_assistant') as mode,
@@ -365,7 +366,7 @@ async def get_conversations(
             WHERE {where}
             ORDER BY created_at DESC
             LIMIT :lim
-        """), params).fetchall()
+        """), params)).fetchall()
 
         results = []
         for row in rows:

@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel
 
@@ -27,7 +28,7 @@ _get_db: Optional[Callable] = None
 _get_current_user: Optional[Callable] = None
 
 
-from db import get_db
+from db import get_async_db
 
 
 def set_dependencies(get_db_func: Callable, get_current_user_func: Callable):
@@ -86,7 +87,7 @@ async def slack_callback(
     state: Optional[str] = Query(None, description="State parameter with user_id"),
     error: Optional[str] = Query(None, description="Error from Slack"),
     error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle OAuth callback from Slack.
@@ -132,7 +133,7 @@ async def slack_callback(
     # Store tokens in user_integrations table
     try:
         # Check if user_integrations table exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
                 WHERE table_name = 'user_integrations'
@@ -141,7 +142,7 @@ async def slack_callback(
         table_exists = result.scalar()
 
         if not table_exists:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE user_integrations (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -159,10 +160,10 @@ async def slack_callback(
                     UNIQUE(user_id, provider)
                 )
             """))
-            db.commit()
+            await db.commit()
 
         # Upsert the integration record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_integrations
                 (user_id, provider, access_token, refresh_token, expires_at, provider_user_id, scopes, extra_data, updated_at)
             VALUES
@@ -194,13 +195,13 @@ async def slack_callback(
             "bot_user_id": token_data.get("bot_user_id"),
             "user_access_token": token_data.get("user_access_token"),
         })
-        db.commit()
+        await db.commit()
 
         logger.info(f"Successfully stored Slack tokens for user {user_id}")
 
     except SQLAlchemyError as e:
         logger.error(f"Error storing Slack tokens: {e}")
-        db.rollback()
+        await db.rollback()
         return RedirectResponse(
             url=f"{frontend_url}/settings/integrations?error=slack_storage_failed"
         )
@@ -226,7 +227,7 @@ async def slack_callback(
 @router.get("/status")
 async def slack_status(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Check Slack connection status"""
     from integrations.slack_service import slack_client
@@ -237,7 +238,7 @@ async def slack_status(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT access_token, refresh_token, expires_at, provider_user_id, scopes, extra_data
             FROM user_integrations
             WHERE user_id = :user_id AND provider = 'slack'
@@ -273,7 +274,7 @@ async def slack_status(
 @router.post("/disconnect")
 async def disconnect_slack(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Disconnect Slack integration"""
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
@@ -282,11 +283,11 @@ async def disconnect_slack(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM user_integrations
             WHERE user_id = :user_id AND provider = 'slack'
         """), {"user_id": user_id})
-        db.commit()
+        await db.commit()
 
         return success_response({
             "disconnected": True
@@ -294,7 +295,7 @@ async def disconnect_slack(
 
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Slack: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -303,14 +304,14 @@ async def disconnect_slack(
 @router.get("/team")
 async def get_team_info(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get Slack team/workspace info"""
     from integrations.slack_service import slack_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'slack'
     """), {"user_id": user_id})
@@ -331,14 +332,14 @@ async def get_team_info(
 async def list_channels(
     limit: int = Query(100, le=1000),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List Slack channels"""
     from integrations.slack_service import slack_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'slack'
     """), {"user_id": user_id})
@@ -359,14 +360,14 @@ async def list_channels(
 async def list_users(
     limit: int = Query(100, le=1000),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List Slack workspace users"""
     from integrations.slack_service import slack_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'slack'
     """), {"user_id": user_id})
@@ -387,14 +388,14 @@ async def list_users(
 async def send_message(
     message: SendMessageRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a message to a Slack channel"""
     from integrations.slack_service import slack_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'slack'
     """), {"user_id": user_id})
@@ -420,14 +421,14 @@ async def send_message(
 async def send_direct_message(
     message: SendDirectMessageRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a direct message to a Slack user"""
     from integrations.slack_service import slack_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'slack'
     """), {"user_id": user_id})
@@ -452,14 +453,14 @@ async def send_direct_message(
 async def send_notification(
     notification: SendNotificationRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a rich notification to a Slack channel"""
     from integrations.slack_service import slack_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'slack'
     """), {"user_id": user_id})

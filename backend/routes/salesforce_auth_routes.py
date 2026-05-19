@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 
 from .salesforce_models import SalesforceConnectionStatus
@@ -31,7 +32,7 @@ router = APIRouter()
 async def salesforce_connect(
     request: Request,
     redirect_url: Optional[str] = Query(None, description="URL to redirect after auth"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Initiate Salesforce OAuth flow.
@@ -71,7 +72,7 @@ async def salesforce_callback(
     state: Optional[str] = Query(None, description="State parameter with user_id"),
     error: Optional[str] = Query(None, description="Error from Salesforce"),
     error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle OAuth callback from Salesforce.
@@ -95,7 +96,7 @@ async def salesforce_callback(
 
             # Ensure oauth_states table exists with correct schema
             try:
-                db.execute(text("""
+                await db.execute(text("""
                     CREATE TABLE IF NOT EXISTS oauth_states (
                         id SERIAL PRIMARY KEY,
                         state_token VARCHAR(255) UNIQUE NOT NULL,
@@ -108,21 +109,21 @@ async def salesforce_callback(
                         state_metadata JSONB
                     )
                 """))
-                db.commit()
+                await db.commit()
             except Exception as table_err:
                 logger.debug(f"oauth_states table check: {table_err}")
                 try:
-                    db.rollback()
+                    await db.rollback()
                 except Exception as e2:
                     logger.error(f"Error in salesforce_callback (rollback): {e2}")
 
             # Check if this state exists in oauth_states table
             logger.info(f"Looking up OAuth state in database: {state[:20]}...")
-            oauth_state = db.execute(text("""
+            oauth_state = (await db.execute(text("""
                 SELECT id, user_id, return_url, state_metadata, expires_at, used
                 FROM oauth_states
                 WHERE state_token = :state AND provider = 'salesforce'
-            """), {"state": state}).fetchone()
+            """), {"state": state})).fetchone()
 
             if oauth_state:
                 logger.info(f"Found OAuth state in database for state token")
@@ -178,7 +179,7 @@ async def salesforce_callback(
 
                     # Try to get more info about what's in the database
                     try:
-                        count_result = db.execute(text("SELECT COUNT(*) FROM oauth_states WHERE provider = 'salesforce'")).fetchone()
+                        count_result = (await db.execute(text("SELECT COUNT(*) FROM oauth_states WHERE provider = 'salesforce'"))).fetchone()
                         logger.info(f"oauth_states table has {count_result[0]} salesforce entries")
                     except Exception as count_err:
                         logger.error(f"Could not query oauth_states table: {count_err}")
@@ -245,7 +246,7 @@ async def salesforce_callback(
     # Store tokens in user_integrations table
     try:
         # Ensure table exists (create if not exists - safe operation)
-        db.execute(text("""
+        await db.execute(text("""
             CREATE TABLE IF NOT EXISTS user_integrations (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
@@ -262,7 +263,7 @@ async def salesforce_callback(
                 UNIQUE(user_id, provider)
             )
         """))
-        db.commit()
+        await db.commit()
 
         # Encrypt tokens before storage
         encrypted_access = encrypt_token(token_data.get("access_token", ""))
@@ -270,7 +271,7 @@ async def salesforce_callback(
 
         # Use atomic UPSERT to avoid race conditions
         # PostgreSQL: INSERT ... ON CONFLICT DO UPDATE
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_integrations
             (user_id, provider, access_token, refresh_token, scopes, instance_url, email, provider_user_id, created_at, updated_at)
             VALUES (:user_id, 'salesforce', :access_token, :refresh_token, :scopes, :instance_url, :email, :provider_user_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -293,12 +294,12 @@ async def salesforce_callback(
             "provider_user_id": user_info.get("user_id") if user_info else None,
         })
 
-        db.commit()
+        await db.commit()
         logger.info(f"Stored Salesforce tokens for user {user_id}")
 
     except SQLAlchemyError as e:
         logger.error(f"Failed to store Salesforce tokens: {e}")
-        db.rollback()
+        await db.rollback()
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         return RedirectResponse(
             url=f"{frontend_url}/settings/integrations?error=salesforce_storage_failed"
@@ -314,18 +315,18 @@ async def salesforce_callback(
 @router.get("/status", response_model=SalesforceConnectionStatus)
 async def salesforce_status(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Check Salesforce connection status for current user."""
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    integration = db.execute(text("""
+    integration = (await db.execute(text("""
         SELECT access_token, scopes, email, created_at, updated_at, instance_url
         FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     if not integration or not integration[0]:
         return SalesforceConnectionStatus(connected=False)
@@ -338,10 +339,10 @@ async def salesforce_status(
     # Get last sync time (table may not exist yet)
     last_sync_time = None
     try:
-        last_sync = db.execute(text("""
+        last_sync = (await db.execute(text("""
             SELECT MAX(completed_at) FROM salesforce_sync_logs
             WHERE user_id = :user_id AND status = 'success'
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": user_id})).fetchone()
         if last_sync and last_sync[0]:
             last_sync_time = last_sync[0].isoformat()
     except Exception as e:
@@ -360,7 +361,7 @@ async def salesforce_status(
 @router.delete("/disconnect")
 async def salesforce_disconnect(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Disconnect Salesforce integration."""
     user_id = get_current_user_id(request, db)
@@ -368,10 +369,10 @@ async def salesforce_disconnect(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get current token to revoke
-    integration = db.execute(text("""
+    integration = (await db.execute(text("""
         SELECT access_token, refresh_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
-    """), {"user_id": user_id}).fetchone()
+    """), {"user_id": user_id})).fetchone()
 
     if integration:
         from integrations.salesforce_service import salesforce_client
@@ -381,10 +382,10 @@ async def salesforce_disconnect(
             salesforce_client.revoke_token(decrypt_token(integration[0]))
 
         # Delete from database
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM user_integrations
             WHERE user_id = :user_id AND provider = 'salesforce'
         """), {"user_id": user_id})
-        db.commit()
+        await db.commit()
 
     return {"status": "disconnected", "message": "Salesforce integration disconnected"}

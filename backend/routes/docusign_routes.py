@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel
 
@@ -89,7 +90,7 @@ async def docusign_callback(
     state: Optional[str] = Query(None, description="State parameter with user_id"),
     error: Optional[str] = Query(None, description="Error from DocuSign"),
     error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle OAuth callback from DocuSign.
@@ -147,7 +148,7 @@ async def docusign_callback(
     # Store tokens in user_integrations table
     try:
         # Check if user_integrations table exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
                 WHERE table_name = 'user_integrations'
@@ -156,7 +157,7 @@ async def docusign_callback(
         table_exists = result.scalar()
 
         if not table_exists:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE user_integrations (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -174,10 +175,10 @@ async def docusign_callback(
                     UNIQUE(user_id, provider)
                 )
             """))
-            db.commit()
+            await db.commit()
 
         # Upsert the integration record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_integrations
                 (user_id, provider, access_token, refresh_token, expires_at, email, provider_user_id, instance_url, scopes, extra_data, updated_at)
             VALUES
@@ -211,13 +212,13 @@ async def docusign_callback(
             "account_name": account_name,
             "environment": docusign_client.environment,
         })
-        db.commit()
+        await db.commit()
 
         logger.info(f"Successfully stored DocuSign tokens for user {user_id}")
 
     except SQLAlchemyError as e:
         logger.error(f"Error storing DocuSign tokens: {e}")
-        db.rollback()
+        await db.rollback()
         return RedirectResponse(
             url=f"{frontend_url}/settings/integrations?error=docusign_storage_failed"
         )
@@ -231,7 +232,7 @@ async def docusign_callback(
 @router.get("/status")
 async def docusign_status(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Check DocuSign connection status"""
     from integrations.docusign_service import docusign_client
@@ -242,7 +243,7 @@ async def docusign_status(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT access_token, refresh_token, expires_at, email, provider_user_id, instance_url, scopes, extra_data
             FROM user_integrations
             WHERE user_id = :user_id AND provider = 'docusign'
@@ -287,7 +288,7 @@ async def docusign_status(
 @router.post("/refresh")
 async def refresh_docusign_token(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Refresh DocuSign access token"""
     from integrations.docusign_service import docusign_client
@@ -299,7 +300,7 @@ async def refresh_docusign_token(
 
     try:
         # Get current refresh token
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT refresh_token FROM user_integrations
             WHERE user_id = :user_id AND provider = 'docusign'
         """), {"user_id": user_id})
@@ -315,7 +316,7 @@ async def refresh_docusign_token(
             raise HTTPException(status_code=500, detail="Failed to refresh token")
 
         # Update stored tokens
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE user_integrations
             SET access_token = :access_token,
                 refresh_token = :refresh_token,
@@ -328,7 +329,7 @@ async def refresh_docusign_token(
             "refresh_token": token_data.get("refresh_token"),
             "expires_at": token_data.get("expires_at")
         })
-        db.commit()
+        await db.commit()
 
         return success_response({
             "refreshed": True,
@@ -345,7 +346,7 @@ async def refresh_docusign_token(
 @router.post("/disconnect")
 async def disconnect_docusign(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Disconnect DocuSign integration"""
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
@@ -354,11 +355,11 @@ async def disconnect_docusign(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM user_integrations
             WHERE user_id = :user_id AND provider = 'docusign'
         """), {"user_id": user_id})
-        db.commit()
+        await db.commit()
 
         return success_response({
             "disconnected": True
@@ -366,15 +367,15 @@ async def disconnect_docusign(
 
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting DocuSign: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # DocuSign API Endpoints
 
-def get_docusign_credentials(user_id: int, db: Session):
+async def get_docusign_credentials(user_id: int, db: AsyncSession):
     """Helper to get DocuSign credentials for a user"""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token, refresh_token, expires_at, extra_data
         FROM user_integrations
         WHERE user_id = :user_id AND provider = 'docusign'
@@ -393,13 +394,13 @@ async def list_envelopes(
     days: int = Query(30, description="Number of days to fetch envelopes for"),
     envelope_status: Optional[str] = Query(None, description="Filter by status: sent, delivered, completed, voided"),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List envelopes (documents)"""
     from integrations.docusign_service import docusign_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    access_token, account_id = get_docusign_credentials(user_id, db)
+    access_token, account_id = await get_docusign_credentials(user_id, db)
 
     if not account_id:
         raise HTTPException(status_code=400, detail="DocuSign account not configured")
@@ -423,13 +424,13 @@ async def list_envelopes(
 async def get_envelope(
     envelope_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get envelope details"""
     from integrations.docusign_service import docusign_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    access_token, account_id = get_docusign_credentials(user_id, db)
+    access_token, account_id = await get_docusign_credentials(user_id, db)
 
     envelope = docusign_client.get_envelope(access_token, account_id, envelope_id)
 
@@ -443,13 +444,13 @@ async def get_envelope(
 async def send_for_signature(
     request: SendForSignatureRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a document for signature"""
     from integrations.docusign_service import docusign_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    access_token, account_id = get_docusign_credentials(user_id, db)
+    access_token, account_id = await get_docusign_credentials(user_id, db)
 
     envelope = docusign_client.send_envelope_for_signature(
         access_token,
@@ -473,13 +474,13 @@ async def void_envelope(
     envelope_id: str,
     request: VoidEnvelopeRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Void an envelope"""
     from integrations.docusign_service import docusign_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    access_token, account_id = get_docusign_credentials(user_id, db)
+    access_token, account_id = await get_docusign_credentials(user_id, db)
 
     result = docusign_client.void_envelope(
         access_token,
@@ -498,13 +499,13 @@ async def void_envelope(
 async def get_envelope_documents(
     envelope_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get list of documents in an envelope"""
     from integrations.docusign_service import docusign_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    access_token, account_id = get_docusign_credentials(user_id, db)
+    access_token, account_id = await get_docusign_credentials(user_id, db)
 
     documents = docusign_client.get_envelope_documents(access_token, account_id, envelope_id)
 
@@ -518,13 +519,13 @@ async def get_envelope_documents(
 async def list_templates(
     count: int = Query(100, le=1000),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List available templates"""
     from integrations.docusign_service import docusign_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    access_token, account_id = get_docusign_credentials(user_id, db)
+    access_token, account_id = await get_docusign_credentials(user_id, db)
 
     templates = docusign_client.list_templates(access_token, account_id, count=count)
 
@@ -539,13 +540,13 @@ async def send_from_template(
     template_id: str,
     request: CreateEnvelopeFromTemplateRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create and send an envelope from a template"""
     from integrations.docusign_service import docusign_client
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    access_token, account_id = get_docusign_credentials(user_id, db)
+    access_token, account_id = await get_docusign_credentials(user_id, db)
 
     envelope = docusign_client.create_envelope_from_template(
         access_token,

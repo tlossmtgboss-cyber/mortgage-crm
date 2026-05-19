@@ -36,9 +36,10 @@ from fastapi import (
 )
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 
-from database import get_db
+from db import get_async_db
 from services.smart_docs.borrower_portal_v2_service import (
     BorrowerPortalV2Service,
     PortalV2TokenService,
@@ -144,7 +145,7 @@ def _require_write_scope(portal_user: Dict) -> None:
 @router.post("/portal/v2/auth/magic-link")
 async def send_magic_link(
     body: MagicLinkRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Send a magic link email to the borrower for portal access.
@@ -191,7 +192,7 @@ async def send_magic_link(
 @router.post("/portal/v2/auth/verify")
 async def verify_auth(
     body: VerifyAuthRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Verify portal authentication via magic link token or 6-digit access code.
@@ -263,7 +264,7 @@ async def verify_auth(
 async def get_document_checklist(
     lang: str = Query(default="en", description="Language code (en, es)"),
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get the document checklist for the borrower's loan.
@@ -311,7 +312,7 @@ async def upload_document(
     camera_capture: bool = Form(default=False, description="Whether captured via mobile camera"),
     lang: str = Form(default="en", description="Language code"),
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Upload a document to the borrower portal.
@@ -367,7 +368,7 @@ async def upload_document(
 async def get_loan_progress(
     lang: str = Query(default="en", description="Language code (en, es)"),
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get loan progress for the borrower portal.
@@ -410,7 +411,7 @@ async def get_messages(
     limit: int = Query(default=50, ge=1, le=100, description="Max messages to return"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get messages between the borrower and their loan officer.
@@ -446,7 +447,7 @@ async def get_messages(
 async def send_message(
     body: SendMessageRequest,
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Send a message from the borrower to the loan officer.
@@ -461,10 +462,10 @@ async def send_message(
     try:
         # Get borrower name from loan
         from sqlalchemy import text as sa_text
-        loan_row = db.execute(
+        loan_row = (await db.execute(
             sa_text("SELECT borrower_name FROM loans WHERE id = :id"),
             {"id": int(portal_user["loan_id"])},
-        ).fetchone()
+        )).fetchone()
         borrower_name = loan_row[0] if loan_row else portal_user["borrower_email"]
 
         svc = get_borrower_portal_v2_service(db)
@@ -492,7 +493,7 @@ async def send_message(
 async def get_pending_signatures(
     lang: str = Query(default="en", description="Language code (en, es)"),
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get pending e-signature documents for the borrower.
@@ -525,7 +526,7 @@ async def get_pending_signatures(
 @router.get("/portal/v2/branding")
 async def get_portal_branding(
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get white-label branding for the portal (org logo, colors, tagline).
@@ -551,7 +552,7 @@ async def get_portal_branding(
 @router.get("/portal/v2/analytics")
 async def get_portal_analytics(
     portal_user: Dict = Depends(_get_portal_v2_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get portal analytics for the loan (login frequency, upload patterns,

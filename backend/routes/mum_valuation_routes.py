@@ -11,8 +11,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_async_db
 from agents.utils.financial_calcs import (
     calculate_remaining_balance,
     estimate_current_property_value,
@@ -48,9 +49,9 @@ DEFAULT_MARKET_RATE = 6.5
 DEFAULT_CLOSING_COST_PCT = 0.02
 
 
-def _get_market_rate(db: Session) -> float:
+async def _get_market_rate(db: AsyncSession) -> float:
     try:
-        row = db.execute(text("SELECT value FROM settings WHERE key = 'current_market_rate' LIMIT 1")).fetchone()
+        row = (await db.execute(text("SELECT value FROM settings WHERE key = 'current_market_rate' LIMIT 1"))).fetchone()
         if row and row[0]:
             return float(row[0])
     except Exception as e:
@@ -63,7 +64,7 @@ async def batch_recalculate(
     request: Request,
     dry_run: bool = False,
     limit: int = 1000,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(lambda: None),  # Will be replaced by actual auth
 ):
     """
@@ -85,9 +86,9 @@ async def batch_recalculate(
     except ImportError:
         pass  # Allow in dev without auth
 
-    market_rate = _get_market_rate(db)
+    market_rate = await _get_market_rate(db)
 
-    rows = db.execute(text("""
+    rows = (await db.execute(text("""
         SELECT id, appraisal_value_at_closing, original_loan_amount,
                interest_rate, original_rate, term, first_payment_date,
                original_close_date, property_state
@@ -95,7 +96,7 @@ async def batch_recalculate(
         WHERE status = 'Active'
         ORDER BY id
         LIMIT :lim
-    """), {"lim": limit}).fetchall()
+    """), {"lim": limit})).fetchall()
 
     if not rows:
         return {"message": "No active MUM clients found", "updated": 0}
@@ -191,7 +192,7 @@ async def batch_recalculate(
             estimated_savings = round(savings["annual_savings"], 2) if refi_opportunity else 0
 
             if not dry_run:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE mum_clients SET
                         current_property_value = :val,
                         estimated_equity = :equity,
@@ -218,7 +219,7 @@ async def batch_recalculate(
             errors += 1
 
     if not dry_run:
-        db.commit()
+        await db.commit()
 
     return {
         "message": f"{'DRY RUN: ' if dry_run else ''}Recalculated {updated}/{len(rows)} MUM clients",

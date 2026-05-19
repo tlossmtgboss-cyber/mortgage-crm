@@ -23,10 +23,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import httpx
 
-from db import get_db
+from db import get_async_db
 from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
@@ -173,11 +174,11 @@ async def _execute_speed_to_lead(
 
     try:
         # Fetch lead
-        lead = db.execute(text("""
+        lead = (await db.execute(text("""
             SELECT id, first_name, last_name, phone, email, organization_id,
                    loan_type, state, source, owner_id
             FROM leads WHERE id = :lid
-        """), {"lid": lead_id}).fetchone()
+        """), {"lid": lead_id})).fetchone()
 
         if not lead:
             logger.warning("Speed-to-lead: lead %s not found", lead_id)
@@ -187,7 +188,7 @@ async def _execute_speed_to_lead(
         now = datetime.now(timezone.utc)
 
         # Log event start
-        _log_stl_event(db, lead_id, org_id, "started", None)
+        await _log_stl_event(db, lead_id, org_id, "started", None)
 
         # Step 1: Route lead if not already assigned
         assigned_lo_id = lead.owner_id
@@ -202,20 +203,20 @@ async def _execute_speed_to_lead(
                 )
                 if result:
                     assigned_lo_id = result["lo_id"]
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE leads SET owner_id = :lo_id, updated_at = :now
                         WHERE id = :lid
                     """), {"lo_id": assigned_lo_id, "now": now, "lid": lead_id})
-                    db.commit()
-                    _log_stl_event(db, lead_id, org_id, "routed", {"lo_id": assigned_lo_id, "reason": result["reason"]})
+                    await db.commit()
+                    await _log_stl_event(db, lead_id, org_id, "routed", {"lo_id": assigned_lo_id, "reason": result["reason"]})
             except Exception as e:
                 logger.exception("Lead routing failed for lead %s: %s", lead_id, e)
-                db.rollback()
+                await db.rollback()
 
         # TCPA quiet hours check — block calls/SMS outside 8am-9pm borrower local time
         borrower_state = getattr(lead, "state", None)
         if _is_tcpa_quiet_hours(borrower_state):
-            _log_stl_event(db, lead_id, org_id, "tcpa_blocked", {"state": borrower_state})
+            await _log_stl_event(db, lead_id, org_id, "tcpa_blocked", {"state": borrower_state})
             logger.info("Speed-to-lead blocked by TCPA quiet hours for lead %s (state=%s)", lead_id, borrower_state)
             return
 
@@ -237,7 +238,7 @@ async def _execute_speed_to_lead(
                     f"Reply STOP to opt out."
                 )
                 await _send_sms(to=lead.phone, from_=from_number, body=sms_body)
-                _log_stl_event(db, lead_id, org_id, "sms_sent", {"phone": lead.phone[-4:]})
+                await _log_stl_event(db, lead_id, org_id, "sms_sent", {"phone": lead.phone[-4:]})
 
         # Step 3: Initiate outbound call
         if not skip_call and lead.phone:
@@ -256,10 +257,10 @@ async def _execute_speed_to_lead(
             )
 
             if call_id:
-                _log_stl_event(db, lead_id, org_id, "call_initiated", {"call_control_id": call_id})
+                await _log_stl_event(db, lead_id, org_id, "call_initiated", {"call_control_id": call_id})
                 # Log call in call_logs
                 try:
-                    db.execute(text("""
+                    await db.execute(text("""
                         INSERT INTO call_logs (call_sid, phone_number, direction, status,
                             organization_id, agent_id, created_at)
                         VALUES (:sid, :phone, 'outbound', 'initiated', :org_id, :lo_id, :now)
@@ -267,14 +268,14 @@ async def _execute_speed_to_lead(
                         "sid": call_id, "phone": lead.phone,
                         "org_id": org_id, "lo_id": assigned_lo_id, "now": now,
                     })
-                    db.commit()
+                    await db.commit()
                 except Exception as _exc:  # noqa: BLE001
                     logger.exception("unhandled exception")
-                    db.rollback()
+                    await db.rollback()
             else:
-                _log_stl_event(db, lead_id, org_id, "call_failed", {})
+                await _log_stl_event(db, lead_id, org_id, "call_failed", {})
 
-        _log_stl_event(db, lead_id, org_id, "completed", {
+        await _log_stl_event(db, lead_id, org_id, "completed", {
             "elapsed_ms": int((datetime.now(timezone.utc) - now).total_seconds() * 1000)
         })
 
@@ -285,10 +286,10 @@ async def _execute_speed_to_lead(
         engine.dispose()
 
 
-def _log_stl_event(db: Session, lead_id: int, org_id: Optional[int], event: str, meta: Optional[dict]):
+async def _log_stl_event(db: AsyncSession, lead_id: int, org_id: Optional[int], event: str, meta: Optional[dict]):
     """Log a speed-to-lead event (best-effort)."""
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO speed_to_lead_events (lead_id, organization_id, event, meta, created_at)
             VALUES (:lid, :org_id, :event, :meta, :now)
         """), {
@@ -296,10 +297,10 @@ def _log_stl_event(db: Session, lead_id: int, org_id: Optional[int], event: str,
             "meta": str(meta)[:2000] if meta else None,
             "now": datetime.now(timezone.utc),
         })
-        db.commit()
+        await db.commit()
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
-        db.rollback()
+        await db.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +311,7 @@ def _log_stl_event(db: Session, lead_id: int, org_id: Optional[int], event: str,
 async def trigger_speed_to_lead(
     body: TriggerRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """
@@ -320,9 +321,9 @@ async def trigger_speed_to_lead(
     org_id = getattr(current_user, "organization_id", None)
 
     # Verify lead exists and belongs to org
-    lead = db.execute(text("""
+    lead = (await db.execute(text("""
         SELECT id, phone FROM leads WHERE id = :lid AND organization_id = :org_id
-    """), {"lid": body.lead_id, "org_id": org_id}).fetchone()
+    """), {"lid": body.lead_id, "org_id": org_id})).fetchone()
 
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -348,7 +349,7 @@ async def trigger_speed_to_lead(
 async def speed_to_lead_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     External webhook for new leads from third-party sources.
@@ -374,18 +375,18 @@ async def speed_to_lead_webhook(
 
     # Check for duplicate (same phone + org in last 24 hours)
     if body.phone:
-        dup = db.execute(text("""
+        dup = (await db.execute(text("""
             SELECT id FROM leads
             WHERE phone = :phone AND organization_id = :org_id
                 AND created_at >= :cutoff
             LIMIT 1
-        """), {"phone": body.phone, "org_id": org_id, "cutoff": now}).fetchone()
+        """), {"phone": body.phone, "org_id": org_id, "cutoff": now})).fetchone()
 
         if dup:
             return {"status": "duplicate", "lead_id": dup.id}
 
     # Create lead
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO leads (first_name, last_name, email, phone, source,
             loan_type, loan_amount, state, organization_id, stage, created_at, updated_at)
         VALUES (:fn, :ln, :email, :phone, :source, :lt, :la, :state, :org_id, 'New', :now, :now)
@@ -397,7 +398,7 @@ async def speed_to_lead_webhook(
         "org_id": org_id, "now": now,
     })
     lead_id = result.fetchone().id
-    db.commit()
+    await db.commit()
 
     # Trigger speed-to-lead flow
     db_url = os.getenv("DATABASE_URL", "postgresql://localhost:5432/perennia")
@@ -417,7 +418,7 @@ async def speed_to_lead_webhook(
 @router.get("/metrics")
 async def speed_to_lead_metrics(
     days: int = 30,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Get speed-to-lead performance metrics."""
@@ -426,7 +427,7 @@ async def speed_to_lead_metrics(
         raise HTTPException(status_code=400, detail="Organization required")
 
     try:
-        stats = db.execute(text("""
+        stats = (await db.execute(text("""
             SELECT
                 COUNT(DISTINCT lead_id) as total_leads,
                 COUNT(CASE WHEN event = 'sms_sent' THEN 1 END) as sms_sent,
@@ -436,7 +437,7 @@ async def speed_to_lead_metrics(
             FROM speed_to_lead_events
             WHERE organization_id = :org_id
                 AND created_at >= CURRENT_DATE - :days
-        """), {"org_id": org_id, "days": days}).fetchone()
+        """), {"org_id": org_id, "days": days})).fetchone()
 
         return {
             "period_days": days,

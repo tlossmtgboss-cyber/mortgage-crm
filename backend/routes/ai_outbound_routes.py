@@ -14,8 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 
 import logging
 
@@ -108,7 +109,7 @@ class QueueCallResponse(BaseModel):
 _tables_initialized = False
 
 
-def _ensure_tables(db: Session):
+def _ensure_tables(db: AsyncSession):
     """Ensure outbound tables exist (idempotent)."""
     global _tables_initialized
     if _tables_initialized:
@@ -129,7 +130,7 @@ def _ensure_tables(db: Session):
 async def queue_call(
     data: QueueCallRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Queue a single outbound AI call to a lead, loan borrower, or MUM client.
@@ -190,7 +191,7 @@ async def get_call_queue(
     status: Optional[str] = Query(None, description="Filter by status: pending, in_progress, completed, retry_scheduled"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     View the pending outbound call queue.
@@ -229,13 +230,13 @@ async def get_call_queue(
                 scheduled_for ASC NULLS FIRST
             LIMIT :limit OFFSET :offset
         """
-        rows = db.execute(text(query_sql), params).fetchall()
+        rows = (await db.execute(text(query_sql), params)).fetchall()
 
         count_sql = """
             SELECT COUNT(*) FROM ai_outbound_calls
             WHERE lo_id = :lo_id """ + status_filter + """
         """
-        total_result = db.execute(text(count_sql), params).fetchone()
+        total_result = (await db.execute(text(count_sql), params)).fetchone()
 
         calls = []
         for row in rows:
@@ -276,7 +277,7 @@ async def get_call_queue(
 async def get_conversion_stats(
     request: Request,
     days: int = Query(30, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get outbound call conversion statistics.
@@ -322,7 +323,7 @@ async def get_conversion_stats(
 async def bulk_queue_calls(
     data: BulkQueueRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Queue outbound calls for an entire segment.
@@ -365,7 +366,7 @@ async def bulk_queue_calls(
 async def record_call_outcome(
     data: CallOutcomeRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Record the outcome of a completed outbound call.
@@ -407,7 +408,7 @@ async def record_call_outcome(
 async def update_settings(
     data: UpdateSettingsRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Configure outbound call scheduler settings for your organization.
@@ -461,7 +462,7 @@ async def update_settings(
 @router.get("/settings")
 async def get_settings(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get current outbound scheduler settings."""
     import main
@@ -511,7 +512,7 @@ async def get_script_variants(
 async def process_queue(
     request: Request,
     max_calls: int = Query(10, ge=1, le=50, description="Max calls to process"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Process pending calls in the queue.
@@ -543,7 +544,7 @@ async def process_queue(
 async def cancel_queued_call(
     call_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Cancel a pending call in the queue."""
     import main
@@ -552,7 +553,7 @@ async def cancel_queued_call(
     _ensure_tables(db)
 
     try:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             UPDATE ai_outbound_calls
             SET status = 'cancelled', updated_at = :now
             WHERE call_id = :call_id AND lo_id = :lo_id AND status IN ('pending', 'retry_scheduled')
@@ -561,9 +562,9 @@ async def cancel_queued_call(
             "call_id": call_id,
             "lo_id": current_user.id,
             "now": datetime.now(timezone.utc),
-        }).fetchone()
+        })).fetchone()
 
-        db.commit()
+        await db.commit()
 
         if result:
             return {"success": True, "message": f"Call {call_id} cancelled"}
@@ -577,5 +578,5 @@ async def cancel_queued_call(
         raise
     except Exception as e:
         logger.error(f"Error cancelling call: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

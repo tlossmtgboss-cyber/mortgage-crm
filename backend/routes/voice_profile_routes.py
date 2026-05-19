@@ -32,9 +32,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from db import get_db
+from db import get_async_db
 from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -146,11 +147,11 @@ class VerifyResponse(BaseModel):
 # ─── Routes ──────────────────────────────────────────────────────────────────
 
 @router.post("/samples", response_model=SampleUploadResponse, status_code=status.HTTP_201_CREATED)
-def upload_voice_sample(
+async def upload_voice_sample(
     audio: UploadFile = File(...),
     prompt_id: str = Form(...),
     category: str = Form(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -186,7 +187,7 @@ def upload_voice_sample(
         pass
 
     # Insert sample record
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO voice_samples (user_id, prompt_id, category, s3_key, duration_s)
         VALUES (:user_id, :prompt_id, :category, :s3_key, :duration_s)
         RETURNING id
@@ -198,10 +199,10 @@ def upload_voice_sample(
         "duration_s": duration_s,
     })
     sample_id = str(result.scalar())
-    db.commit()
+    await db.commit()
 
     # Count total samples
-    row = db.execute(text(
+    row = await db.execute(text(
         "SELECT COUNT(*) FROM voice_samples WHERE user_id = :uid"
     ), {"uid": user_id})
     total = row.scalar()
@@ -216,8 +217,8 @@ def upload_voice_sample(
 
 
 @router.post("/enroll", response_model=EnrollmentStatusResponse)
-def finalize_enrollment(
-    db: Session = Depends(get_db),
+async def finalize_enrollment(
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -228,7 +229,7 @@ def finalize_enrollment(
 
     user_id = str(current_user.id)
 
-    rows = db.execute(text("""
+    rows = await db.execute(text("""
         SELECT id, s3_key, duration_s FROM voice_samples
         WHERE user_id = :uid AND processed = FALSE
         ORDER BY created_at ASC
@@ -250,7 +251,7 @@ def finalize_enrollment(
             embedding = _compute_embedding(obj)
             embeddings.append(embedding)
 
-            db.execute(text(
+            await db.execute(text(
                 "UPDATE voice_samples SET processed = TRUE WHERE id = :id"
             ), {"id": sample_id})
         except Exception as e:
@@ -268,7 +269,7 @@ def finalize_enrollment(
     embedding_literal = "[" + ",".join(f"{x:.6f}" for x in profile_embedding.tolist()) + "]"
     enrolled_at = datetime.now(timezone.utc)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO voice_profiles (user_id, embedding, samples_count, enrolled_at)
         VALUES (:uid, :emb::vector, :cnt, :enrolled_at)
         ON CONFLICT (user_id) DO UPDATE SET
@@ -282,7 +283,7 @@ def finalize_enrollment(
         "cnt": len(embeddings),
         "enrolled_at": enrolled_at,
     })
-    db.commit()
+    await db.commit()
 
     logger.info(f"Voice enrollment complete: user={user_id} samples={len(embeddings)}")
 
@@ -296,18 +297,18 @@ def finalize_enrollment(
 
 
 @router.get("/status", response_model=EnrollmentStatusResponse)
-def get_enrollment_status(
-    db: Session = Depends(get_db),
+async def get_enrollment_status(
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     user_id = str(current_user.id)
 
-    profile_row = db.execute(text("""
+    profile_row = await db.execute(text("""
         SELECT samples_count, enrolled_at FROM voice_profiles WHERE user_id = :uid
     """), {"uid": user_id})
     profile = profile_row.fetchone()
 
-    sample_count_row = db.execute(text(
+    sample_count_row = await db.execute(text(
         "SELECT COUNT(*) FROM voice_samples WHERE user_id = :uid"
     ), {"uid": user_id})
     sample_count = sample_count_row.scalar()
@@ -331,9 +332,9 @@ def get_enrollment_status(
 
 
 @router.post("/verify", response_model=VerifyResponse)
-def verify_voice(
+async def verify_voice(
     audio: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -344,7 +345,7 @@ def verify_voice(
 
     user_id = str(current_user.id)
 
-    row = db.execute(text("""
+    row = await db.execute(text("""
         SELECT embedding::text FROM voice_profiles WHERE user_id = :uid
     """), {"uid": user_id})
     result = row.fetchone()
@@ -376,8 +377,8 @@ def verify_voice(
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-def delete_voice_profile(
-    db: Session = Depends(get_db),
+async def delete_voice_profile(
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -385,7 +386,7 @@ def delete_voice_profile(
     """
     user_id = str(current_user.id)
 
-    rows = db.execute(text(
+    rows = await db.execute(text(
         "SELECT s3_key FROM voice_samples WHERE user_id = :uid"
     ), {"uid": user_id})
     keys = [r[0] for r in rows.fetchall()]
@@ -400,8 +401,8 @@ def delete_voice_profile(
         except Exception as e:
             logger.warning(f"Failed to delete S3 objects for user {user_id}: {e}")
 
-    db.execute(text("DELETE FROM voice_samples WHERE user_id = :uid"), {"uid": user_id})
-    db.execute(text("DELETE FROM voice_profiles WHERE user_id = :uid"), {"uid": user_id})
-    db.commit()
+    await db.execute(text("DELETE FROM voice_samples WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM voice_profiles WHERE user_id = :uid"), {"uid": user_id})
+    await db.commit()
 
     logger.info(f"Voice profile deleted: user={user_id} samples_removed={len(keys)}")
