@@ -29,7 +29,7 @@ import uuid
 import zlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
 
 from sqlalchemy.orm import Session
@@ -589,7 +589,7 @@ def process_saml_response(
         raise ValueError("No NameID found in SAML Assertion")
 
     # Extract raw attributes from AttributeStatement
-    raw_attributes: Dict[str, str] = {}
+    raw_attributes: Dict[str, Any] = {}
     attr_statement = assertion.find("saml:AttributeStatement", ns)
     if attr_statement is not None:
         for attr_elem in attr_statement.findall("saml:Attribute", ns):

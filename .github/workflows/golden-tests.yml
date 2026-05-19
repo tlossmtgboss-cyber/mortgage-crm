@@ -72,9 +72,9 @@ jobs:
       - name: Discover golden tests
         working-directory: ./backend
         run: |
-          python -m pytest tests/test_golden_*.py --collect-only -q
+          python -m pytest tests/test_golden_*.py tests/integration/ --collect-only -q
 
-      - name: Run golden tests
+      - name: Run golden + integration tests
         working-directory: ./backend
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test_perennia
@@ -83,4 +83,4 @@ jobs:
           SECRET_KEY: ci-test-secret-key
           DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-bytes-min
         run: |
-          python -m pytest tests/test_golden_*.py -v --maxfail=3
+          python -m pytest tests/test_golden_*.py tests/integration/ -v --maxfail=5

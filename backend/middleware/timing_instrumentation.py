@@ -300,7 +300,7 @@ def wrap_middleware_for_timing(
     # overrides dispatch to time and delegate.  This avoids double
     # wrapping and keeps the ASGI call chain intact.
 
-    class _TimedVariant(middleware_class):  # type: ignore[misc]
+    class _TimedVariant(middleware_class):
         """Auto-generated timed variant of the middleware."""
 
         async def dispatch(self, request: Request, call_next) -> Response:

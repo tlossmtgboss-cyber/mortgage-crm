@@ -20,7 +20,7 @@ import time
 from typing import Dict, Optional, Tuple
 from urllib.parse import urlencode
 
-import requests as http_requests
+import requests as http_requests  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 

@@ -561,7 +561,7 @@ def get_user_cost_summary(db: Session, user_id: int, days: int = 30) -> Dict[str
         ORDER BY usage_date DESC
     """), {"user_id": user_id, "days": days}).fetchall()
 
-    daily_costs = [
+    daily_costs: List[Dict[str, Any]] = [
         {
             "date": str(row[0]),
             "input_tokens": int(row[1]),
@@ -572,8 +572,8 @@ def get_user_cost_summary(db: Session, user_id: int, days: int = 30) -> Dict[str
         for row in result
     ]
 
-    total_cost = sum(d["total_cost"] for d in daily_costs)
-    total_tokens = sum(d["input_tokens"] + d["output_tokens"] for d in daily_costs)
+    total_cost = sum(float(d["total_cost"]) for d in daily_costs)
+    total_tokens = sum(int(d["input_tokens"]) + int(d["output_tokens"]) for d in daily_costs)
 
     return {
         "user_id": user_id,

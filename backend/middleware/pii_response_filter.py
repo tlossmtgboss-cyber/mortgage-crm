@@ -372,7 +372,7 @@ class PIIResponseFilterMiddleware(BaseHTTPMiddleware):
         # Read body -- requires consuming the response stream
         body_bytes = b""
         try:
-            async for chunk in response.body_iterator:  # type: ignore[union-attr]
+            async for chunk in response.body_iterator:
                 if isinstance(chunk, str):
                     body_bytes += chunk.encode("utf-8")
                 else:

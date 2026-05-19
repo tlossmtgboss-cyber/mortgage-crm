@@ -33,7 +33,7 @@ class QualityAnalyzer:
     Total: 100 points
     """
 
-    QUALITY_CHECKLIST = {
+    QUALITY_CHECKLIST: Dict[str, Dict[str, Any]] = {
         "Identity & Role": {
             "weight": 15,
             "checks": [

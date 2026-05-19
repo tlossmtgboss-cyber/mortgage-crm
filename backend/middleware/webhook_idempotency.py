@@ -70,7 +70,7 @@ import json
 import logging
 import threading
 import time
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -656,7 +656,7 @@ async def check_webhook_idempotency(request: Request, db: Session) -> dict:
     body_bytes = await request.body()
 
     # Parse JSON body for event fields
-    body = {}
+    body: Dict[str, Any] = {}
     try:
         body = json.loads(body_bytes) if body_bytes else {}
     except (json.JSONDecodeError, UnicodeDecodeError):

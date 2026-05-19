@@ -35,7 +35,7 @@ Tenant Middleware Architecture (consolidated 2026-05-14):
 import logging
 import os
 import warnings
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from fastapi import Request, HTTPException, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -192,7 +192,7 @@ async def get_current_tenant(request: Request) -> Tenant:
     return tenant
 
 
-async def get_tenant_db(request: Request) -> Session:
+async def get_tenant_db(request: Request) -> AsyncGenerator[Session, None]:
     """
     Dependency to get a database session for the current tenant.
     
@@ -218,7 +218,7 @@ async def get_tenant_db(request: Request) -> Session:
         db_session.close()
 
 
-async def get_tenant_context(request: Request) -> TenantContext:
+async def get_tenant_context(request: Request) -> AsyncGenerator[TenantContext, None]:
     """
     Dependency to get both tenant info and database session.
     

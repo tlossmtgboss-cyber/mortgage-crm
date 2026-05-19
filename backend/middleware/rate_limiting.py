@@ -385,7 +385,7 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             reset (int): Unix timestamp when the current window expires.
         """
         window = 60  # 1 minute sliding window
-        limit = 0
+        limit: float = 0
         key = ""
         try:
             tier = await self._get_tenant_tier(org_id)
@@ -441,7 +441,7 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             # Fall back to in-memory limiter instead of failing open
             self._memory_limiter.log_fallback()
             allowed, remaining = self._memory_limiter.check(
-                key, limit, window
+                key, int(limit), window
             )
             reset_at = int(time.time()) + window
             return {
