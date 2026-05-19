@@ -44,41 +44,66 @@ RATE_COLUMNS = [
 ]
 
 
-def upgrade() -> None:
-    for table, column in DOLLAR_COLUMNS:
+def _alter(table: str, column: str, new_type, old_type, pg_using: str) -> None:
+    """Dialect-aware alter_column.
+
+    PostgreSQL supports ALTER COLUMN TYPE ... USING expression; SQLite does
+    not support ALTER COLUMN at all and must use batch_alter_table to copy
+    into a new table. Both paths produce the same logical end state.
+    """
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
         op.alter_column(
             table,
             column,
-            type_=sa.Numeric(14, 2),
-            existing_type=sa.Float(),
-            postgresql_using=f"{column}::numeric(14,2)",
+            type_=new_type,
+            existing_type=old_type,
+            postgresql_using=pg_using,
+        )
+    else:
+        with op.batch_alter_table(table) as batch_op:
+            batch_op.alter_column(
+                column,
+                type_=new_type,
+                existing_type=old_type,
+            )
+
+
+def upgrade() -> None:
+    for table, column in DOLLAR_COLUMNS:
+        _alter(
+            table,
+            column,
+            sa.Numeric(14, 2),
+            sa.Float(),
+            f"{column}::numeric(14,2)",
         )
 
     for table, column in RATE_COLUMNS:
-        op.alter_column(
+        _alter(
             table,
             column,
-            type_=sa.Numeric(8, 5),
-            existing_type=sa.Float(),
-            postgresql_using=f"{column}::numeric(8,5)",
+            sa.Numeric(8, 5),
+            sa.Float(),
+            f"{column}::numeric(8,5)",
         )
 
 
 def downgrade() -> None:
     for table, column in DOLLAR_COLUMNS:
-        op.alter_column(
+        _alter(
             table,
             column,
-            type_=sa.Float(),
-            existing_type=sa.Numeric(14, 2),
-            postgresql_using=f"{column}::double precision",
+            sa.Float(),
+            sa.Numeric(14, 2),
+            f"{column}::double precision",
         )
 
     for table, column in RATE_COLUMNS:
-        op.alter_column(
+        _alter(
             table,
             column,
-            type_=sa.Float(),
-            existing_type=sa.Numeric(8, 5),
-            postgresql_using=f"{column}::double precision",
+            sa.Float(),
+            sa.Numeric(8, 5),
+            f"{column}::double precision",
         )

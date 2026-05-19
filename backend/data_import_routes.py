@@ -227,22 +227,10 @@ _IMPORT_PROTECTED_COLUMNS = frozenset({
 router = APIRouter(prefix="/api/v1/data-import", tags=["Data Import"])
 
 # Import dependencies with lazy loading to avoid circular imports
-_get_current_user = None
 _get_db_connection = None
 
-async def get_current_user(*args, **kwargs):
-    global _get_current_user
-    if _get_current_user is None:
-        try:
-            from auth.dependencies import get_current_user as _gcu
-            _get_current_user = _gcu
-        except Exception as e:
-            logger.exception(f"Failed to import get_current_user from main: {e}")
-            from fastapi import HTTPException as _HTTPException
-            async def fallback(*a, **kw):
-                raise _HTTPException(status_code=503, detail="Authentication service not initialized")
-            _get_current_user = fallback
-    return await _get_current_user(*args, **kwargs)
+# Canonical auth dependency — replaces local lazy wrapper (auth-dedup-W3).
+from auth.dependencies import get_current_user  # noqa: E402
 
 def get_db_connection():
     global _get_db_connection

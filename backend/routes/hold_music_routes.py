@@ -5,7 +5,8 @@ Manage hold music library for call queues, transfers, and conferences
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ import os
 import json
 
 from database import get_db
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -54,14 +56,24 @@ def safe_isoformat(dt_value) -> Optional[str]:
     return str(dt_value)
 
 
-async def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+async def get_current_user_optional(request: Request):
     """
     Optional authentication - returns user if authenticated, None otherwise.
     Lazy imports from main to avoid circular imports.
+
+    Uses its own short-lived sync session so this dependency does not pin a
+    shared `db` parameter; route handlers are free to use `get_async_db()`.
     """
     try:
         from auth.dependencies import get_current_user_flexible as auth_func
-        return await auth_func(request, db)
+        from database import SessionLocal
+        # Use a dedicated sync session for the auth check only — released before
+        # the handler runs. The route's own (async) db session is independent.
+        local_db = SessionLocal()
+        try:
+            return await auth_func(request, local_db)
+        finally:
+            local_db.close()
     except Exception as e:
         logger.debug(f"Auth failed (optional): {e}")
         return None
