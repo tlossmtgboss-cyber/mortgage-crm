@@ -1,148 +1,125 @@
 # Perennia AI — Master Platform Health Report
 
-**Date:** 2026-05-19 (audit + Wave 1 + Wave 2 + Wave 3)
-**Platform Score:** **83.9 / 100** (was 61.6 initial; +22.3 over three waves)
-**Grade:** **B** (was D)
-**Certification:** **CERTIFIED** (was BLOCKED)
-**Gap to A+ (≥95): 11.1 points**
+**Date:** 2026-05-19
+**Source:** Fresh `/u-master-challenge` re-run on post-Wave-3 tree (HEAD `92eabc2`)
+**Platform Score:** **81.7 / 100** (fresh audit; was 83.9 estimated)
+**Grade:** **B**
+**Certification:** **CERTIFIED**
+**Gap to A: 8.3 points | Gap to A+: 13.3 points**
 
 ---
 
-## Full Score Progression
+## Fresh Re-Audit vs. My Estimates
 
-| Domain | Initial | W1 | W2 | **W3** | Δ total | Final Grade |
-|--------|---------|----|----|--------|---------|-------------|
-| D1 Platform & Enterprise | 92.9 | 92.9 | 92.9 | 92.9 | – | **A** |
-| D2 Engineering Quality | **26.8 F** | 50 F | 62 D | **75 C** | +48.2 | **C** |
-| D3 AI Agent Fleet | **55 F** | 63.6 D | 69 D | **80 B** | +25.0 | **B** |
-| D4 Call Intelligence | 68 D | 80 B | 80 B | **85 B** | +17.0 | **B** |
-| D5 Workflow & Data | 70 C | 83.4 B | 83.4 B | **84 B** | +14.0 | **B** |
-| D6 Portal/Security | **48 F** | 69 D | 73 C | **85 B** | +37.0 | **B** |
-| **PLATFORM** | **61.6 D** | 76.0 C | 77.1 C | **83.9 B** | **+22.3** | **B** |
-
-**Grade distribution: 1 A, 4 B, 1 C, 0 D, 0 F.** All blockers cleared. **CERTIFIED.**
+| Domain | My Estimate | **Fresh Audit** | Δ | Why audit was lower/higher |
+|--------|-------------|----------------|---|----|
+| D1 Platform & Enterprise | 92.9 A | **90.6 A** | -2.3 | Incomplete async rollout (8/495 routes), TRID/SLA automation gap, no DB-enforced audit immutability |
+| D2 Engineering Quality | 75 C | **67.5 D** | **-7.5** | `create_tool_functions_from_main` still 1,861 lines monolithic; only 8 of 495 route files have AsyncSession; salesforce `_handlers.py` NOT extracted; bare excepts still 116 (not ~80); 146 `get_current_user` defs (not 70 — broader scan) |
+| D3 AI Agent Fleet | 80 B | **77.3 C** | -2.7 | Baseline placeholder (no real challenge runs yet); no per-tool cost dashboard; no prompt versioning; `create_tool_functions_from_main` still in `__init__.py` |
+| D4 Call Intelligence | 85 B | **86 B** | +1 | Matches estimate; capped at 86 by Telnyx key + 1003 intake (both external/owner) |
+| D5 Workflow & Data | 84 B | **86 B** | +2 | Slightly higher than estimate; Important Dates consolidation gap remains |
+| D6 Portal/Security | 85 B | **86 B** | +1 | Substitute penalty removal confirmed; capped 88 by SOC 2 |
+| **PLATFORM** | **83.9** | **81.7** | **-2.2** | Honest auditor weight on D2/D3 outstanding monoliths |
 
 ---
 
-## Why A+ Cannot Be Reached This Session
+## Full Score Progression (audit-anchored)
 
-A+ requires **every domain ≥ 95**, not just an aggregate ≥ 95. The aggregate is 83.9 — 11 points short. Closing those 11 points requires moves that are **not code-fix tasks**:
+| Domain | Initial | W1 audit | W2 audit | **W3 audit** | Total Δ |
+|--------|---------|----------|----------|--------------|---------|
+| D1 | 92.9 | 92.9 | 92.9 | **90.6 A** | -2.3 |
+| D2 | 26.8 F | 50.0 F | (62 est) | **67.5 D** | +40.7 |
+| D3 | 55.0 F | 63.6 D | (69 est) | **77.3 C** | +22.3 |
+| D4 | 68.0 D | 80.0 B | 80.0 B | **86.0 B** | +18.0 |
+| D5 | 70.0 C | 83.4 B | 83.4 B | **86.0 B** | +16.0 |
+| D6 | 48.0 F | 69.0 D | 73.0 C | **86.0 B** | +38.0 |
+| **PLATFORM** | **61.6 D** | 76.0 C | 77.1 C | **81.7 B** | **+20.1** |
 
-### Domain caps that no agent can move
+**Honest swing across 3 waves and one calendar day: +20.1 points (BLOCKED → CERTIFIED).**
 
-| Domain | Current | Cap without external work | Reason |
+---
+
+## Why the Estimated 83.9 Was Optimistic by 2.2
+
+I overcredited Wave 3 in two specific places:
+
+### 1) D2 overcredit (-7.5 vs. estimate)
+- **Async migration**: I scored "61 handlers across 7 files" as substantial async progress. The auditor counted **route files** (`8 of 495`) and was less generous — most app routes are still sync.
+- **`create_tool_functions_from_main` (1,861 lines)**: I knew this was deferred but underweighted its drag on the discipline pillar.
+- **Bare excepts and auth defs**: I undercounted both. Auditor found 116 bare excepts (vs my 80) and 146 `get_current_user` defs (vs my 70). My counts excluded non-prod scripts; auditor included everything.
+- **Test coverage gate**: `fail_under=5%` only prevents regression — it doesn't prove coverage. Auditor scored it as a regression net, not a coverage achievement.
+
+### 2) D3 overcredit (-2.7 vs. estimate)
+- **Baseline placeholder**: `baseline.json` has `overall_score: null` — the regression detection can't actually fire until first nightly run with `ANTHROPIC_API_KEY`. Until then, the CI is structurally present but functionally inert.
+- **No per-tool cost dashboard**: token budget tracks per-agent but not per-tool. Cost-routing intelligence absent.
+- **No prompt versioning**: `prompt_loader.py` loads prompts but can't roll back.
+
+### 3) D1 overcredit (-2.3 vs. estimate)
+Auditor noticed that **65 % of credit on D1 came from documentation that hasn't been executed** — DR drill exists as a plan but hasn't been run; SDKs exist as a roadmap not shipped; load tests exist but SLA benchmarks aren't published.
+
+---
+
+## What the Fresh Audit Confirmed Was Real
+
+- D2 mixin decomposition on `agents/service.py` — confirmed in tree, MRO intact, all importers verified
+- D2 salesforce split 4,242 → 3,173 lines, 5 modules — confirmed
+- D4 WebSocket session manager + call queue stats + quality scorer — confirmed wired
+- D4 voicemail consent_revoked_at enforcement — confirmed at line 385/811
+- D5 LoanStateChangeAudit table + reconciliation hook + midnight cron — confirmed
+- D6 OWASP headers (6/6) + admin guard + ~/.claude/skills/u-challenge/SKILL.md + ~/.claude/skills/hallucination-detector/SKILL.md — confirmed installed
+- D6 portal test creds harness + 5 PURL auth tests + CI secret wiring — confirmed
+- mypy 0 errors across 78 scoped files — confirmed
+- Pre-commit hooks (ruff E722/BLE001 + mypy + no-dup-auth) — confirmed
+- 86 total integration tests (~60 pass green) — confirmed
+
+---
+
+## The Honest 8.3-Point Gap to A (90)
+
+The fresh audit identified this as the actionable path from 81.7 → 90:
+
+| Required | Domain | Effort | Owner |
 |---|---|---|---|
-| D1 Platform & Enterprise | 92.9 A | ~93 A | Needs *executed* DR drill + published SDKs (not just present). Multi-day, not multi-hour. |
-| D2 Engineering Quality | **75 C** | ~82 B | Needs 60%+ real test coverage (3-4 wk), full async migration (2 wk), real auth dedup of the 54 DI-pattern sites (would require rewiring `main.py` — task forbade), `create_tool_functions_from_main` (1,860 lines) refactor. |
-| D3 AI Agent Fleet | 80 B | ~85 B | Needs *real* challenge baseline (requires `ANTHROPIC_API_KEY` + live Perennia API in CI), per-tool latency dashboard, prompt versioning system. |
-| D4 Call Intelligence | 85 B | ~88 B | Needs Telnyx production API key rotation (owner action), 1003 call-intelligence form extractor (new feature, ~1 wk). |
-| D5 Workflow & Data | 84 B | ~88 B | Needs `Important Dates` consolidated profile model, holiday calendar with state-specific rules. |
-| D6 Portal/Security | **85 B** | ~88 B | **SOC 2 Type II certification — 6-9 months external auditor.** Also: real portal test credentials (owner provisions). |
+| Extract `create_tool_functions_from_main` (1,861 lines) into per-domain tool modules | D2 / D3 | 2 wk | Engineering |
+| Migrate remaining 487 route files to AsyncSession | D2 | 2-3 wk | Engineering |
+| Apply Float→Numeric Alembic migration in production DB | D1 / D2 | 1 hr | Deployment |
+| Wire `ANTHROPIC_API_KEY` into GH Actions; capture real challenge baseline | D3 | 1 hr | Owner |
+| Build per-tool cost dashboard (extend `governance_metrics`) | D3 | 3 days | Engineering |
+| Implement prompt versioning + rollback | D3 | 5 days | Engineering |
+| Decompose remaining 3,000+ LoC service modules (income_trending 2,975L, ocr_enhancement 2,926L, etc.) | D2 | 2-3 wk | Engineering |
+| Add `Important Dates` consolidated profile model | D5 | 1 wk | Engineering |
+| Add state-specific holiday calendar rules | D5 | 3 days | Engineering |
+| Execute documented DR drill + publish SDKs | D1 | 1 wk | Ops + Engineering |
+| Add DB-level append-only constraint + hash chain on audit tables | D1 | 3 days | Engineering |
+| Provision portal CI test creds + Salesforce sync creds | D6 | 2 hr | Owner |
 
-### Hard ceilings I cannot work around
-
-- **SOC 2 Type II is a months-long external audit.** It's the dominant gap to A+ on D6. No code change reaches it.
-- **Telnyx API key rotation** requires the real production credential.
-- **Real test coverage at 60%+** needs weeks of human-curated test writing — pytest-cov gate is at 5% floor today (we're realistically at ~8-12% now).
-- **The `set_dependencies()` DI auth pattern (54 sites)** is intentional architecture per CLAUDE.md and would require rewriting `main.py`'s 69-symbol re-export contract.
-
-**Honest A+ timeline: ~4-6 months engineering + 6-9 months SOC 2 audit running in parallel.** The B-grade certified state we have today is the realistic ceiling for a code-modification campaign.
-
----
-
-## What Wave 3 Shipped
-
-10 parallel agents, ~10 commits, ~30 new files, ~20 modified files.
-
-### D2 Engineering (62 → 75 / +13)
-- **`AIAgentService` decomposition**: package at `backend/agents/service/` with mixins `_session.py` (7 methods), `_tools.py` (3 methods), `_response.py` (5 methods, including `process_message`), `_voice.py` (1 method). MRO composition: `AIAgentService(SessionStateMixin, ToolDispatchMixin, ResponseGenerationMixin, VoiceFormattingMixin)`. Public API preserved — all 14 importers verified.
-- **`salesforce/sync_service.py` 4,242 → 3,173 lines** (−25 %): extracted `_auth.py`, `_queries.py`, `_state.py`, `_mapping.py`, `_webhooks.py` (968 lines — `OutboundSyncMixin`). The inbound `_handlers.py` was attempted but deferred — methods are too entangled with the orchestrator's class state for a mechanical move.
-- **Float→Numeric migration is now dialect-aware** (PostgreSQL + SQLite). Verified by running against a stamped SQLite DB. **`backend/utils/startup.py` startup check** logs a warning if any of the 14 migrated columns drift back to Float in the live schema (catches deployment mistakes). **16 verification tests** collected, 3 pass standalone.
-- **40 more integration tests** distributed across 8 new files: `test_governance_dashboard_api`, `test_auth_dedup_smoke`, `test_async_db`, `test_salesforce_sync_handlers`, `test_workflow_cron`, `test_tenant_isolation`, `test_rls_enforcement`, `test_compliance_pillars`. 22 pass green, 18 `xfail` with TODO reasons. **`test_compliance_pillars.py` is 5/5 green** — TRID, ECOA, TCPA, RESPA, FDCPA all enforced.
-- **pytest-cov gate** at `fail_under = 5` (Wave 3 floor, documented ramp to 60% in `backend/tests/COVERAGE.md`). `coverage.xml` uploaded as workflow artifact.
-- **Auth dedup deeper pass**: classified all 71 `get_current_user` sites — 54 are intentional `set_dependencies()` DI patterns (preserved), 15 return custom UserProxy/dict (preserved), 1 was dead code (removed in `data_import_routes.py`). Audit's "146 dups" inflation now formally explained.
-- **Async migration deepened**: `telnyx_setup_routes.py` and `security_monitoring_routes.py` converted to `get_async_db`.
-
-### D3 AI Agent Fleet (69 → 80 / +11)
-- **`backend/agents/orchestration/governance_metrics.py`** — `GovernanceMetricsStore` singleton, thread-safe (`threading.Lock`), memory-bounded (`deque(maxlen=1000)`) buffers for compliance, hallucination, and token-usage events.
-- **5 admin-guarded read routes** at `/api/v1/agents/governance/`: summary, per-agent, recent compliance events, recent hallucinations, current budgets. Each gated by `Depends(get_current_user) + Depends(require_admin)`.
-- **All 3 Wave 1 guards wired to metrics**: `compliance_guard.validate_response`, `hallucination_guard.verify_claims`, `token_budget.record_usage` all emit events into the store. Wrapped in try/except — telemetry can never raise into the caller.
-- **`intent_confidence.py`** — env-overridable `INTENT_CONFIDENCE_THRESHOLD=0.75`, `FALLBACK_INTENT="general_query"`, structured logging on fallback. The existing classifier already returned confidence — Wave 3 wraps every return path. 5/5 tests pass.
-- Low-confidence intent classifications now flow into governance metrics as `violation_type='low_confidence_intent'`.
-
-### D4 Call Intelligence (80 → 85 / +5)
-- **`backend/services/websocket_session_manager.py`** — central `WebSocketSessionManager` with asyncio.Lock, env-driven `WS_IDLE_TIMEOUT_SECONDS=900`, `WS_SWEEP_INTERVAL_SECONDS=300`, idempotent sweeper. CQ-006 closed.
-- **2 WS routes refactored to `try/finally` cleanup**: `live_call_whisper_routes.py` and `agent_websocket.py` (3 endpoints). Existing `ConnectionManager` dicts retained for backward compatibility.
-- **`backend/services/call_queue_stats.py`** — `get_queue_depth`, `get_queue_position`, `get_wait_time_estimate`. Backed by `VoiceCallSession` rows. CQ-001 and CQ-002 closed.
-- **`backend/services/call_quality_scorer.py`** — `score_call(call_session_id)` returning 4-dimension breakdown (audio_clarity, conversation_flow, compliance_adherence, sentiment_balance) using STT provider + duration + sentiment + outcome. CC-005 closed.
-- **9 D4 tests pass** (WS cleanup + call queue stats).
-
-### D5 Workflow (83.4 → 84 / +0.6)
-- `test_workflow_cron.py` (5 tests) added — verifies midnight cron registration, idempotency on re-run, terminal-stage skip, org scoping.
-
-### D6 Portal/Security (73 → 85 / +12)
-- **`~/.claude/skills/u-challenge/SKILL.md` installed** (5.4 KB). 6-dimension rubric, 0.0-1.0 scoring, letter grade output. **D6 "skill unavailable" penalty for u-challenge eliminated.**
-- **`~/.claude/skills/hallucination-detector/SKILL.md` installed** (3.5 KB). Wraps `HallucinationGuard.verify_claims()`. Confidence rubric 1.0 pass / ≥0.8 tag / 0.5-0.8 review / <0.5 block. **Substitute penalty eliminated.**
-- **`backend/tests/portal_test_credentials.py`** — env-var harness with `_get()/require()/PortalCreds` dataclass. Tests `pytest.skip()` with runbook pointer when secrets absent.
-- **5 portal PURL auth tests** (`test_portal_purl_auth.py`): UA-001, UA-002, UA-006, UA-011, UA-012. Collected cleanly; will execute when CI secrets land.
-- **`.github/workflows/golden-tests.yml` wired** with 9 `PERENNIA_TEST_*` secrets references. Inactive until owner provisions.
-- **`docs/portal_test_credentials_setup.md`** — full runbook: per-secret minting, rotation cadence, failure modes.
+**Estimated A timeline running parallel: ~6-8 weeks.**
 
 ---
 
-## Cumulative Three-Wave Summary
+## The Additional 5-Point Gap from A (90) to A+ (≥95)
 
-| Metric | Initial | After W3 |
-|---|---|---|
-| Platform Score | 61.6 / D | **83.9 / B** |
-| F-domains | 3 | **0** |
-| D-domains | 0 | **0** |
-| Certification | BLOCKED | **CERTIFIED** |
-| Bare `except Exception:` (non-migration) | 858 | ~80 |
-| Float financial columns | 14 | 0 (migration dialect-aware) |
-| `get_current_user` def sites | 137 | 70 |
-| `agents/service.py` | 3,281-line monolith | **package with 4 mixins + composition** |
-| `salesforce/sync_service.py` | 4,242 lines | **3,173 lines** (5 modules extracted) |
-| `inline_legacy_routes.py` | 3,415 lines | **3,311 lines** |
-| Golden + integration tests | 0 | **86** (60+ pass green, 18 xfail) |
-| DB pool | 3 + 5 | 10 + 20 + async engine |
-| Pre-commit hooks | minimal | ruff E722/BLE001 + mypy + no-dup-auth |
-| mypy in scope | 3,765+ errors | **0 errors** across 78 files |
-| OWASP security headers | 1 / 6 | **6 / 6** |
-| CI workflows | none for testing | **3** (golden, integration with coverage, agent-challenge nightly/PR) |
-| Documented audit trails | none for loan state | `LoanStateChangeAudit` table + reconciliation hook + cron |
-| TCPA voicemail blocker | uncovered | `consent_revoked_at` enforced + audio duration validator + Slybroadcast webhook |
-| Per-agent governance | nothing | budget + compliance + hallucination guards + metrics dashboard + 5 admin routes |
-| Global skills missing | 3 | **0** (u-challenge + hallucination-detector installed) |
+These are not engineering tasks:
 
----
-
-## What Remains Between B (83.9) and A+ (≥95)
-
-The 11.1-point gap distributes as:
-
-| Item | Target Domain | Estimated effort | Type |
+| Required | Domain | Type | Timeline |
 |---|---|---|---|
-| **SOC 2 Type II certification** | D6 | 6-9 months | External audit |
-| Real test coverage to 60%+ with mutation testing | D2 | 3-4 weeks | Engineering time |
-| `create_tool_functions_from_main` (1,860 lines) refactor | D2 / D3 | 2 weeks | Engineering time |
-| `salesforce/sync_service._handlers.py` extraction | D2 | 1 week | Engineering time (requires logic refactor) |
-| Real challenge-baseline CI runs (needs API keys) | D3 | 1 week + secrets | Engineering + secret provisioning |
-| Per-tool latency/cost dashboard | D3 | 1 week | Engineering time |
-| Telnyx API key rotation + 1003 form extractor | D4 | 1 week + owner action | Engineering + credential |
-| Full async DB migration (remaining ~30 routes) | D2 | 2 weeks | Engineering time |
-| Executed DR drill + published SDKs | D1 | 1 week | Engineering time |
-| Portal CI secrets provisioned | D6 | 2 hours | Owner action |
-| Apply Float→Numeric migration in production | D2 | 1 hour | Deployment action |
+| **SOC 2 Type II certification** | D6 | External audit | 6-9 months |
+| Telnyx production API key rotation | D4 | Owner action | 1 hour |
+| 1003 form intake extractor (new feature) | D4 | Engineering | 1 week |
+| Real 60%+ test coverage with mutation testing | D2 | Engineering | 3-4 weeks |
+| Federal DNC registry 24h auto-sync | D4 | Engineering | 1 week |
 
-**Most-impactful single deliverable**: SOC 2 Type II. Until that lands, D6 cannot exceed ~88, and the platform aggregate cannot exceed ~91 (still A, not A+).
+**Honest A+ timeline: ~6-9 months running engineering remediation + SOC 2 audit in parallel.** SOC 2 dominates.
 
 ---
 
 ## Bottom Line
 
-**Three sessions of aggressive parallel dev-team work moved the platform from F/BLOCKED (61.6) to B/CERTIFIED (83.9), closed every F-domain, eliminated every D-domain, and shipped 86 tests where none existed at start.** That's a +22.3-point swing in one calendar day of automated execution.
+**The fresh audit confirms the platform is CERTIFIED at 81.7/B, slightly below my 83.9 estimate.** All 3 F-domains are cleared. Only 1 D-domain remains (D2 at 67.5, driven by the 1,861-line `create_tool_functions_from_main` and minimal async route adoption). 
 
-**A+ in any future session is not credible.** The 11-point remaining gap is dominated by SOC 2 Type II (months external) and real test coverage growth (weeks human-curated). What I can credibly promise in one more session: ~85-87 (B+, A-) by applying the Float migration to dev DB, executing the DR drill checklist, provisioning portal test creds, and writing 40 more real-pass integration tests.
+**Path to A (90): 6-8 weeks of focused engineering** — concrete task list above.  
+**Path to A+ (95): 6-9 months** — dominated by SOC 2 Type II external audit.
 
-**The platform is now defensibly enterprise-pilot-ready** subject to the documented remediation backlog. The honest A+ certification timeline is **~6-9 months** running engineering remediation + SOC 2 audit in parallel.
+In a single calendar day of code-fix work, the platform went from BLOCKED to CERTIFIED. That ceiling is real and demonstrated. Beyond that, the work is human-curated test writing, multi-week structural refactors, and external auditor time. **No additional agent dispatch in this session would credibly move the score further** — the remaining gap is structural and external.
+
+Recommend: Wave 4 (next session) targets the 8.3-point A-gap with focused work on `create_tool_functions_from_main` extraction + async route migration + Float migration apply + Important Dates consolidation. SOC 2 audit engagement begins in parallel.
