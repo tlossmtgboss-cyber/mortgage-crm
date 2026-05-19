@@ -30,6 +30,9 @@ from services.virtual_meeting_service import (
     save_meeting_provider_settings,
 )
 from exceptions import EntityNotFoundError, PerenniaError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +112,7 @@ async def create_meeting(
     appointment_id: int,
     body: CreateMeetingRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a virtual meeting for an existing appointment.
 
@@ -125,14 +128,14 @@ async def create_meeting(
     _models = get_models()
     Appointment = _models["Appointment"]
 
-    appointment = db.query(Appointment).filter(
+    appointment = (await db.execute(select(Appointment).where(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
         or_(
             Appointment.assigned_user_id == user.id,
             Appointment.created_by_user_id == user.id,
         ),
-    ).first()
+    ))).scalars().first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -158,8 +161,8 @@ async def create_meeting(
                    entity_id=appointment_id,
                    changes={"provider": result.provider, "join_url": result.join_url},
                    request=request)
-        db.commit()
-        db.refresh(appointment)
+        await db.commit()
+        await db.refresh(appointment)
 
         logger.info(
             f"Meeting created for appointment {appointment_id}: "
@@ -190,7 +193,7 @@ async def create_meeting(
 async def delete_meeting(
     appointment_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Remove meeting from an appointment.
 
@@ -203,14 +206,14 @@ async def delete_meeting(
     _models = get_models()
     Appointment = _models["Appointment"]
 
-    appointment = db.query(Appointment).filter(
+    appointment = (await db.execute(select(Appointment).where(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
         or_(
             Appointment.assigned_user_id == user.id,
             Appointment.created_by_user_id == user.id,
         ),
-    ).first()
+    ))).scalars().first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -246,7 +249,7 @@ async def delete_meeting(
                entity_id=appointment_id,
                changes={"old_video_link": old_link, "provider": provider_name},
                request=request)
-    db.commit()
+    await db.commit()
 
     logger.info(f"Meeting removed from appointment {appointment_id} by user {user.id}")
 
@@ -265,7 +268,7 @@ async def delete_meeting(
 async def get_meeting_details(
     appointment_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get meeting details for an appointment.
 
@@ -277,14 +280,14 @@ async def get_meeting_details(
     _models = get_models()
     Appointment = _models["Appointment"]
 
-    appointment = db.query(Appointment).filter(
+    appointment = (await db.execute(select(Appointment).where(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
         or_(
             Appointment.assigned_user_id == user.id,
             Appointment.created_by_user_id == user.id,
         ),
-    ).first()
+    ))).scalars().first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -332,7 +335,7 @@ async def get_meeting_details(
 async def test_meeting_connection(
     body: TestConnectionRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Test connectivity to a meeting provider.
 
@@ -378,7 +381,7 @@ async def test_meeting_connection(
 @router.get("/meetings/settings", response_model=ProviderSettingsResponse)
 async def get_provider_settings(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get meeting provider settings for the current user.
 
@@ -404,7 +407,7 @@ async def get_provider_settings(
 async def save_provider_settings(
     body: SaveProviderSettingsRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Save meeting provider preferences for the current user.
 
@@ -427,7 +430,7 @@ async def save_provider_settings(
 
         _audit_log(db, org_id, user.id, "settings_updated", "meeting_provider",
                    changes=body.model_dump(exclude_none=True), request=request)
-        db.commit()
+        await db.commit()
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

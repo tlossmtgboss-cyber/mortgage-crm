@@ -18,6 +18,9 @@ import logging
 
 from db import get_db
 from utils.pagination import clamp_pagination
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +83,7 @@ def get_business_metrics():
 @router.post("/", status_code=201)
 async def create_lead(
     lead: dict,  # Use dict to avoid schema import at module level
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Create a new lead with AI scoring and SLA tracking."""
@@ -124,13 +127,13 @@ async def create_lead(
         db_lead.next_action = "Initial contact and needs assessment"
 
         db.add(db_lead)
-        db.flush()
+        await db.flush()
 
         from services.client_file_service import ensure_client_file
         ensure_client_file(db, db_lead)
 
-        db.commit()
-        db.refresh(db_lead)
+        await db.commit()
+        await db.refresh(db_lead)
 
         # Capture lead info for logging and response
         lead_id = db_lead.id
@@ -196,7 +199,7 @@ async def create_lead(
 
     except Exception as e:
         logger.error(f"Error creating lead: {e}", exc_info=True)
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create lead")
 
 
@@ -226,7 +229,7 @@ async def get_leads(
     limit: int = 100,
     stage: Optional[str] = None,
     pipeline: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Get all leads with optional stage filtering and permission-based access.
@@ -262,7 +265,7 @@ async def get_leads(
         pa_name = None
         try:
             org_id = current_user.organization_id or 1
-            pa_row = db.execute(text("""
+            pa_row = await db.execute(text("""
                 SELECT dra.user_id
                 FROM default_role_assignments dra
                 JOIN roles r ON r.id = dra.role_id
@@ -270,7 +273,7 @@ async def get_leads(
                 LIMIT 1
             """), {"org_id": org_id}).fetchone()
             if pa_row:
-                pa_user = db.query(User).filter(User.id == pa_row[0]).first()
+                pa_user = (await db.execute(select(User).where(User.id == pa_row[0]))).scalars().first()
                 if pa_user:
                     pa_name = pa_user.full_name or None
         except Exception as e:
@@ -346,7 +349,7 @@ async def get_leads(
 async def search_leads(
     q: str,
     limit: int = 10,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Search leads by name (first name, last name, or full name)"""
@@ -380,7 +383,7 @@ async def search_leads(
 @router.get("/{lead_id}/client-file-id")
 def get_client_file_id_for_lead(
     lead_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """Return the client_file ID associated with a lead."""

@@ -21,6 +21,9 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Query, Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +136,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     # ====================================================================
     @app.post("/api/v1/ops-manager/sweep", tags=["Operations Manager"])
     async def trigger_pipeline_sweep(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
         organization_id: int = None,
         dry_run: bool = False,
@@ -177,7 +180,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     # ====================================================================
     @app.post("/api/v1/ops-manager/sweep/all", tags=["Operations Manager"])
     async def trigger_sweep_all_orgs(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
         dry_run: bool = False,
     ):
@@ -191,7 +194,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
         try:
             from agents.specialized.ops_manager_agent import OpsManagerAgent
 
-            orgs = db.execute(text(
+            orgs = await db.execute(text(
                 "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
             )).fetchall()
 
@@ -243,7 +246,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     # ====================================================================
     @app.get("/api/v1/ops-manager/summary", tags=["Operations Manager"])
     async def get_impediment_summary(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
         organization_id: int = None,
         category: str = None,
@@ -278,7 +281,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     # ====================================================================
     @app.get("/api/v1/ops-manager/history", tags=["Operations Manager"])
     async def get_sweep_history(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
         organization_id: int = None,
         limit: int = Query(default=20, le=100),
@@ -313,7 +316,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     # ====================================================================
     @app.get("/api/v1/ops-manager/priority-queue", tags=["Operations Manager"])
     async def get_priority_queue(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
         organization_id: int = None,
         assigned_to_id: int = None,
@@ -349,7 +352,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/ops-manager/loan/{loan_id}/health", tags=["Operations Manager"])
     async def get_loan_health(
         loan_id: int = Path(..., description="Loan ID to check"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get comprehensive health check for a single loan."""
@@ -382,7 +385,7 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
     async def evaluate_stage_transition(
         loan_id: int = Query(..., description="Loan ID"),
         target_stage: str = Query(..., description="Target stage to evaluate"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Evaluate whether a loan can transition to a target stage."""

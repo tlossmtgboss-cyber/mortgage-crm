@@ -26,6 +26,9 @@ from database.models.income_calculation import (
     IncomeSource,
     CalculationStatus,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +351,7 @@ def _render_html_preview(
 async def preview_form_1084(
     loan_id: int,
     calculation_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
@@ -393,7 +396,7 @@ async def preview_form_1084(
 async def generate_form_1084_pdf(
     loan_id: int,
     body: Optional[Form1084GenerateRequest] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
@@ -469,7 +472,7 @@ async def generate_form_1084_pdf(
 async def get_form_1084_data(
     loan_id: int,
     calculation_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):

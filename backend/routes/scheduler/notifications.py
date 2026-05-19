@@ -27,6 +27,9 @@ from routes.scheduler.constants import (
 )
 from smart_scheduler_models import AppointmentStatus
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -286,7 +289,7 @@ async def get_notifications(
     request: Request,
     limit: int = Query(NOTIFICATION_FETCH_LIMIT, ge=1, le=100, description="Max notifications to return"),
     since_hours: int = Query(NOTIFICATION_LOOKBACK_HOURS, ge=1, le=720, description="Look back window in hours"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get notifications for the authenticated user.
 
@@ -315,7 +318,7 @@ async def get_notifications(
 async def mark_notification_read(
     notification_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Mark a single notification as read.
 
@@ -336,7 +339,7 @@ async def mark_notification_read(
 @router.put("/notifications/read-all")
 async def mark_all_notifications_read(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Mark all notifications as read.
 

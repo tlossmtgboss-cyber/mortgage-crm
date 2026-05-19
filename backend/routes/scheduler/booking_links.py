@@ -24,6 +24,9 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _audit_log,
 )
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,7 @@ router = APIRouter()
 @router.get("/booking-links/all")
 async def list_all_booking_links(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all active booking links for admin use (calendar assignment)"""
     user = await get_current_user(request, db)
@@ -52,16 +55,16 @@ async def list_all_booking_links(
     BookingLink = _models['BookingLink']
     User = _models.get('User')
 
-    links = db.query(BookingLink).filter(
+    links = (await db.execute(select(BookingLink).where(
         BookingLink.is_active == True,
         BookingLink.organization_id == org_id
-    ).all()
+    ))).scalars().all()
 
     # Batch-load owners to avoid N+1 queries
     owner_ids = [link.user_id for link in links if link.user_id]
     owners_map = {}
     if owner_ids and User:
-        owners = db.query(User).filter(User.id.in_(owner_ids)).all()
+        owners = (await db.execute(select(User).where(User.id.in_(owner_ids)))).scalars().all()
         owners_map = {o.id: getattr(o, 'full_name', f"{o.first_name} {o.last_name}") for o in owners}
 
     result = []
@@ -87,7 +90,7 @@ async def list_booking_links(
     request: Request,
     limit: int = Query(50, ge=1, le=200, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List user's booking links"""
     user = await get_current_user(request, db)
@@ -131,7 +134,7 @@ async def list_booking_links(
 async def create_booking_link(
     link_data: BookingLinkCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a booking link"""
     user = await get_current_user(request, db)
@@ -145,10 +148,10 @@ async def create_booking_link(
     slug_with_suffix = f"{link_data.slug}-{random_suffix}"
 
     # Check for duplicate slug globally -- public lookup is cross-org so slugs must be unique
-    existing = db.query(BookingLink).filter(
+    existing = (await db.execute(select(BookingLink).where(
         BookingLink.slug == slug_with_suffix,
         BookingLink.is_active == True
-    ).first()
+    ))).scalars().first()
     if existing:
         # Extremely unlikely collision with random suffix, but handle it
         slug_with_suffix = f"{link_data.slug}-{secrets.token_hex(3)}"
@@ -186,8 +189,8 @@ async def create_booking_link(
     db.add(link)
     _audit_log(db, org_id, user.id, 'created', 'booking_link',
                changes={'slug': slug_with_suffix, 'link_name': link_data.link_name}, request=request)
-    db.commit()
-    db.refresh(link)
+    await db.commit()
+    await db.refresh(link)
 
     return {
         "message": "Booking link created",
@@ -201,7 +204,7 @@ async def create_booking_link(
 async def delete_booking_link(
     link_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a booking link"""
     user = await get_current_user(request, db)
@@ -210,11 +213,11 @@ async def delete_booking_link(
     _models = get_models()
     BookingLink = _models['BookingLink']
 
-    link = db.query(BookingLink).filter(
+    link = (await db.execute(select(BookingLink).where(
         BookingLink.id == link_id,
         BookingLink.organization_id == org_id,
         BookingLink.user_id == user.id
-    ).first()
+    ))).scalars().first()
 
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
@@ -222,7 +225,7 @@ async def delete_booking_link(
     link.is_active = False
     _audit_log(db, org_id, user.id, 'deleted', 'booking_link',
                entity_id=link_id, changes={'slug': link.slug}, request=request)
-    db.commit()
+    await db.commit()
 
     return {"message": "Booking link deactivated"}
 
@@ -236,7 +239,7 @@ async def get_booking_link_analytics(
     link_id: int,
     request: Request,
     days: int = Query(30, ge=1, le=365, description="Analytics window in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get performance analytics for a booking link.
 
@@ -249,10 +252,10 @@ async def get_booking_link_analytics(
     _models = get_models()
     BookingLink = _models['BookingLink']
 
-    link = db.query(BookingLink).filter(
+    link = (await db.execute(select(BookingLink).where(
         BookingLink.id == link_id,
         BookingLink.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
@@ -368,7 +371,7 @@ async def get_booking_link_analytics(
 @router.get("/booking-links/analytics/summary")
 async def get_booking_links_summary_analytics(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get aggregate analytics across all booking links for the organization.
 
@@ -385,10 +388,10 @@ async def get_booking_links_summary_analytics(
     _models = get_models()
     BookingLink = _models['BookingLink']
 
-    links = db.query(BookingLink).filter(
+    links = (await db.execute(select(BookingLink).where(
         BookingLink.organization_id == org_id,
         BookingLink.is_active == True,
-    ).all()
+    ))).scalars().all()
 
     total_views = sum(link.view_count or 0 for link in links)
     total_bookings = sum(link.booking_count or 0 for link in links)

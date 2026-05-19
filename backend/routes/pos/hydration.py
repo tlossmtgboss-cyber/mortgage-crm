@@ -21,6 +21,9 @@ from database import get_db
 from database.models import Organization
 from database.models.pos import POSApplication
 from services.pos.urla_hydration_service import URLAHydrationService
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 
 logger = logging.getLogger("pos.hydration.routes")
@@ -119,7 +122,7 @@ class HydrateFromVoiceResponse(BaseModel):
 def hydrate_from_voice(
     body: HydrateFromVoiceRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     _auth: None = Depends(_verify_crm_api_key),
 ) -> HydrateFromVoiceResponse:
     # ------------------------------------------------------------------

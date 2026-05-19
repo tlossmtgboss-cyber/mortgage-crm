@@ -30,6 +30,9 @@ from routes.scheduler.error_responses import (
 from services.scheduler_audit_logger import scheduler_audit
 from db import get_db
 from middleware.feature_gate import require_feature_tier
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +79,7 @@ async def initiate_reschedule(
     request: Request,
     appointment_id: int,
     body: RescheduleInitiateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Start a reschedule flow for an appointment (LO / admin).
@@ -108,17 +111,17 @@ async def initiate_reschedule(
         request=request,
     )
 
-    db.commit()
+    await db.commit()
 
     # Enterprise audit: structured log for compliance
     # Fetch the appointment to include full details in the audit entry
     try:
         models = get_models()
         Appointment = models["Appointment"]
-        appt = db.query(Appointment).filter(
+        appt = (await db.execute(select(Appointment).where(
             Appointment.id == appointment_id,
             Appointment.organization_id == org_id,
-        ).first()
+        ))).scalars().first()
         if appt:
             scheduler_audit.log_reschedule_initiated(
                 appt, user,
@@ -139,7 +142,7 @@ async def initiate_reschedule(
 async def get_reschedule_history(
     request: Request,
     appointment_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get full reschedule history for an appointment (LO / admin)."""
     user = await get_current_user(request, db)
@@ -163,7 +166,7 @@ async def get_reschedule_history(
 async def generate_reschedule_link(
     request: Request,
     appointment_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Generate a borrower-facing reschedule link (JWT token, 72-hour expiry).
@@ -189,16 +192,16 @@ async def generate_reschedule_link(
         request=request,
     )
 
-    db.commit()
+    await db.commit()
 
     # Enterprise audit: structured log for compliance
     try:
         models = get_models()
         Appointment = models["Appointment"]
-        appt = db.query(Appointment).filter(
+        appt = (await db.execute(select(Appointment).where(
             Appointment.id == appointment_id,
             Appointment.organization_id == org_id,
-        ).first()
+        ))).scalars().first()
         if appt:
             scheduler_audit.log_reschedule_link_generated(
                 appt, user, request=request,
@@ -221,7 +224,7 @@ async def public_reschedule_slots(
     request: Request,
     token: str,
     target_date: Optional[str] = Query(None, description="YYYY-MM-DD start date"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get available time slots for rescheduling (public, borrower self-service).
@@ -279,7 +282,7 @@ async def public_reschedule_confirm(
     request: Request,
     token: str,
     body: RescheduleConfirmRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Confirm a reschedule from the borrower self-service link.
@@ -363,15 +366,15 @@ async def public_reschedule_confirm(
             conflict_error(str(e.detail) if isinstance(e.detail, str) else "This time slot has already been booked. Please select another time.")
         raise
 
-    db.commit()
+    await db.commit()
 
     # Enterprise audit: structured log for borrower self-service reschedule
     try:
         models = get_models()
         Appointment = models["Appointment"]
-        appt = db.query(Appointment).filter(
+        appt = (await db.execute(select(Appointment).where(
             Appointment.id == appointment_id,
-        ).first()
+        ))).scalars().first()
         if appt:
             scheduler_audit.log_borrower_reschedule_confirmed(
                 appt,
@@ -390,9 +393,9 @@ async def public_reschedule_confirm(
         models = get_models()
         Appointment = models["Appointment"]
         User = models.get("User")
-        appt_for_sync = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+        appt_for_sync = (await db.execute(select(Appointment).where(Appointment.id == appointment_id))).scalars().first()
         if appt_for_sync and appt_for_sync.assigned_user_id and User:
-            sync_user = db.query(User).filter(User.id == appt_for_sync.assigned_user_id).first()
+            sync_user = (await db.execute(select(User).where(User.id == appt_for_sync.assigned_user_id))).scalars().first()
             if sync_user:
                 await push_appointment_updated(db, appt_for_sync, sync_user)
     except Exception as cal_err:

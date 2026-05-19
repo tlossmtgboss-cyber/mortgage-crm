@@ -27,6 +27,9 @@ from ._helpers import (
     resolve_application_for_borrower,
     resolve_application_for_borrower_write,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger("pos.messages.routes")
 
@@ -101,7 +104,7 @@ def _msg_to_response(msg: POSBorrowerMessage) -> BorrowerMessageResponse:
 )
 def list_messages(
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> BorrowerMessageListResponse:
     app_id = str(application.id)
 
@@ -130,7 +133,7 @@ def list_messages(
 def mark_message_read(
     message_id: int,
     application: POSApplication = Depends(resolve_application_for_borrower_write),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> BorrowerMessageResponse:
     msg = (
         db.query(POSBorrowerMessage)
@@ -162,7 +165,7 @@ def mark_message_read(
 )
 def mark_all_read(
     application: POSApplication = Depends(resolve_application_for_borrower_write),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> BorrowerMessageListResponse:
     app_id = str(application.id)
     now = datetime.now(timezone.utc)
@@ -197,7 +200,7 @@ def send_message(
     body: SendMessageRequest,
     application: POSApplication = Depends(resolve_application_for_borrower_write),
     purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> BorrowerMessageResponse:
     borrower_name = "Borrower"
     if purl_ctx.contact_id:

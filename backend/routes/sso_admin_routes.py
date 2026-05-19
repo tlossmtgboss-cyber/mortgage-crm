@@ -29,6 +29,9 @@ from schemas.sso_schemas import (
     SSOTestResponse,
     IdPMetadataUpload,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +110,7 @@ def _config_to_response(config) -> SSOConfigResponse:
     response_model=SSOConfigResponse,
 )
 async def get_sso_config(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user_dep()),
 ):
     """Get SSO configuration for the current user's organization.
@@ -120,9 +123,9 @@ async def get_sso_config(
 
     from database.models.sso_config import SSOConfiguration
 
-    config = db.query(SSOConfiguration).filter(
+    config = (await db.execute(select(SSOConfiguration).where(
         SSOConfiguration.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not config:
         raise HTTPException(
@@ -143,7 +146,7 @@ async def get_sso_config(
 )
 async def update_sso_config(
     request: SSOConfigCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user_dep()),
 ):
     """Create or update SSO configuration for the current user's organization.
@@ -169,9 +172,9 @@ async def update_sso_config(
         )
 
     # Find or create
-    config = db.query(SSOConfiguration).filter(
+    config = (await db.execute(select(SSOConfiguration).where(
         SSOConfiguration.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not config:
         config = SSOConfiguration(organization_id=org_id)
@@ -208,8 +211,8 @@ async def update_sso_config(
     config.is_active = True
     config.updated_at = datetime.now(timezone.utc)
 
-    db.commit()
-    db.refresh(config)
+    await db.commit()
+    await db.refresh(config)
 
     logger.info(
         f"SSO configuration updated: org_id={org_id}, provider={config.provider}, "
@@ -229,7 +232,7 @@ async def update_sso_config(
 )
 async def test_sso_config(
     request: SSOTestRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user_dep()),
 ):
     """Test SSO configuration for the current user's organization.
@@ -246,9 +249,9 @@ async def test_sso_config(
 
     from database.models.sso_config import SSOConfiguration
 
-    config = db.query(SSOConfiguration).filter(
+    config = (await db.execute(select(SSOConfiguration).where(
         SSOConfiguration.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not config:
         return SSOTestResponse(
@@ -283,7 +286,7 @@ async def test_sso_config(
                 from auth.sso import generate_sp_metadata_xml
                 from database.models.core import Organization
 
-                org = db.query(Organization).filter(Organization.id == org_id).first()
+                org = (await db.execute(select(Organization).where(Organization.id == org_id))).scalars().first()
                 org_slug = org.slug if org else None
                 metadata = generate_sp_metadata_xml(org_slug=org_slug)
                 if metadata and "EntityDescriptor" in metadata:
@@ -372,7 +375,7 @@ async def test_sso_config(
 
 @router.delete("/api/v1/admin/sso/configuration")
 async def disable_sso_config(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user_dep()),
 ):
     """Disable SSO for the current user's organization.
@@ -387,9 +390,9 @@ async def disable_sso_config(
 
     from database.models.sso_config import SSOConfiguration
 
-    config = db.query(SSOConfiguration).filter(
+    config = (await db.execute(select(SSOConfiguration).where(
         SSOConfiguration.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not config:
         raise HTTPException(
@@ -403,11 +406,11 @@ async def disable_sso_config(
 
     # Also disable enforcement on the Organization model if it was set
     from database.models.core import Organization
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    org = (await db.execute(select(Organization).where(Organization.id == org_id))).scalars().first()
     if org and org.sso_enforced:
         org.sso_enforced = False
 
-    db.commit()
+    await db.commit()
 
     logger.info(f"SSO disabled for org_id={org_id} by user_id={current_user.id}")
 
@@ -428,7 +431,7 @@ async def disable_sso_config(
 )
 async def upload_idp_metadata(
     request: IdPMetadataUpload,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user_dep()),
 ):
     """Upload IdP metadata XML to auto-configure SSO.
@@ -470,9 +473,9 @@ async def upload_idp_metadata(
         )
 
     # Find or create config
-    config = db.query(SSOConfiguration).filter(
+    config = (await db.execute(select(SSOConfiguration).where(
         SSOConfiguration.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not config:
         config = SSOConfiguration(organization_id=org_id)
@@ -488,8 +491,8 @@ async def upload_idp_metadata(
     config.is_active = True
     config.updated_at = datetime.now(timezone.utc)
 
-    db.commit()
-    db.refresh(config)
+    await db.commit()
+    await db.refresh(config)
 
     logger.info(
         f"IdP metadata uploaded for org_id={org_id}: "

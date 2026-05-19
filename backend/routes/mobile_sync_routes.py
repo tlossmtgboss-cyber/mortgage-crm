@@ -28,6 +28,9 @@ from middleware.mobile_error_handler import (
     mobile_error,
     mobile_error_response,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +353,7 @@ async def sync_batch(
     body: SyncBatchRequest,
     request: Request,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Process a batch of queued mutations from an offline mobile client.
 
@@ -397,7 +400,7 @@ async def sync_batch(
                 failed += 1
         except Exception as e:
             logger.exception(f"Sync operation {op.type} failed for client_id={op.client_id}: {e}")
-            db.rollback()
+            await db.rollback()
             results.append(OperationResult(
                 client_id=op.client_id,
                 success=False,
@@ -408,10 +411,10 @@ async def sync_batch(
 
     # Commit all successful operations in one transaction
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.exception(f"Sync batch commit failed: {e}")
-        db.rollback()
+        await db.rollback()
         # Mark all previously-succeeded operations as failed
         for r in results:
             if r.success:

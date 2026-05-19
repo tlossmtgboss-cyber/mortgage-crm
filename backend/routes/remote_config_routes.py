@@ -19,6 +19,9 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 import logging
 import json
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +319,7 @@ def register_remote_config_routes(app, get_db, get_current_user, **kwargs):
         request: Request,
         body: MobileConfigUpdateRequest,
         scope: str = "organization",
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Update mobile configuration.

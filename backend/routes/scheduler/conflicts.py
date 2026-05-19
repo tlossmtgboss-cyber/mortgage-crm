@@ -31,6 +31,9 @@ from services.conflict_resolution_service import (
     list_user_conflicts,
     auto_resolve_soft_conflicts,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +136,7 @@ async def check_conflicts(
     end: str = Query(..., description="ISO 8601 end datetime"),
     exclude_appointment_id: Optional[int] = Query(None, description="Appointment ID to exclude (for edits)"),
     duration_minutes: Optional[int] = Query(DEFAULT_APPOINTMENT_DURATION_MINUTES, description="Duration in minutes for alternative suggestions"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Check for conflicts before booking or editing an appointment.
@@ -206,7 +209,7 @@ async def list_conflicts(
     user_id: Optional[int] = Query(None, description="User ID (defaults to current user)"),
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List all current scheduling conflicts for a user.
@@ -257,7 +260,7 @@ async def resolve_conflict(
     appointment_id: int,
     body: ResolveConflictRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Resolve a conflict by moving an appointment to a new time slot.
@@ -275,14 +278,14 @@ async def resolve_conflict(
     from sqlalchemy import or_
 
     # Fetch the appointment (must belong to this org and be accessible by user)
-    appointment = db.query(Appointment).filter(
+    appointment = (await db.execute(select(Appointment).where(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
         or_(
             Appointment.assigned_user_id == current_user.id,
             Appointment.created_by_user_id == current_user.id,
         ),
-    ).first()
+    ))).scalars().first()
 
     if not appointment:
         not_found_error("Appointment not found")
@@ -340,7 +343,7 @@ async def resolve_conflict(
         request=request,
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         'status': 'resolved',

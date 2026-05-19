@@ -23,6 +23,9 @@ from services.production_predictor_service import (
     TrendDirection,
     RiskLevel,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +120,7 @@ class ConversionAnalysisResponse(BaseModel):
 async def get_production_summary(
     entity_id: str,
     entity_type: str = Query(default="lo", description="lo, team, or branch"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get comprehensive production summary with forecasts.
@@ -134,7 +137,7 @@ async def get_production_summary(
 
 
 @router.post("/forecast", response_model=ForecastResponse)
-async def get_forecast(request: ForecastRequest, db: Session = Depends(get_db)):
+async def get_forecast(request: ForecastRequest, db: AsyncSession = Depends(get_async_db)):
     """
     Get production forecast for a specific period.
 
@@ -191,7 +194,7 @@ async def get_trend_analysis(
     entity_id: str,
     entity_type: str = Query(default="lo"),
     months: int = Query(default=12, ge=3, le=24),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get trend analysis for an entity.
@@ -219,7 +222,7 @@ async def get_trend_analysis(
 
 
 @router.post("/goal-attainment", response_model=GoalAttainmentResponse)
-async def predict_goal_attainment(request: GoalAttainmentRequest, db: Session = Depends(get_db)):
+async def predict_goal_attainment(request: GoalAttainmentRequest, db: AsyncSession = Depends(get_async_db)):
     """
     Predict likelihood of achieving production goals.
 
@@ -283,7 +286,7 @@ async def predict_goal_attainment(request: GoalAttainmentRequest, db: Session = 
 
 
 @router.post("/team-forecast")
-async def get_team_forecast(request: TeamForecastRequest, db: Session = Depends(get_db)):
+async def get_team_forecast(request: TeamForecastRequest, db: AsyncSession = Depends(get_async_db)):
     """
     Get aggregated forecast for a team.
 
@@ -305,7 +308,7 @@ async def get_team_forecast(request: TeamForecastRequest, db: Session = Depends(
 async def get_conversion_analysis(
     entity_id: str,
     days: int = Query(default=90, ge=30, le=365),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Analyze conversion rates at each pipeline stage.
@@ -334,7 +337,7 @@ async def get_production_history(
     entity_id: str,
     entity_type: str = Query(default="lo"),
     months: int = Query(default=12, ge=1, le=24),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get historical production data.
@@ -371,7 +374,7 @@ async def get_production_leaderboard(
     entity_type: str = Query(default="lo", description="lo, team, or branch"),
     period: str = Query(default="mtd", description="mtd, qtd, ytd, or 30d"),
     limit: int = Query(default=10, ge=1, le=50),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get production leaderboard with rankings.

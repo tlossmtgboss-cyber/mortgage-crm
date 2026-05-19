@@ -21,6 +21,9 @@ from routes.scheduler._helpers import (
     _generate_available_slots,
 )
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +141,7 @@ def _calculate_no_show_risk(appointment, db, Appointment, AppointmentStatusEnum,
 async def ai_recommend_slots(
     slot_request: AvailableSlotsRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get AI-recommended time slots based on:
@@ -239,7 +242,7 @@ async def ai_recommend_slots(
 async def get_appointment_no_show_risk(
     appointment_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get predictive no-show risk score for a single appointment.
@@ -255,10 +258,10 @@ async def get_appointment_no_show_risk(
     Appointment = _models['Appointment']
     from database.enums import AppointmentStatus as _AppointmentStatus
 
-    appointment = db.query(Appointment).filter(
+    appointment = (await db.execute(select(Appointment).where(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id
-    ).first()
+    ))).scalars().first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -279,7 +282,7 @@ async def get_appointment_no_show_risk(
 async def get_batch_no_show_risks(
     request: Request,
     target_date: date = Query(..., alias="date", description="Date to score (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get no-show risk scores for all appointments on a given date.

@@ -18,6 +18,9 @@ import logging
 
 from auth.dependencies import get_current_user
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +263,7 @@ async def get_rate_monitor_alerts(
     offset: int = Query(0, ge=0),
     status: Optional[str] = None,
     priority: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Return rate alerts in the unified format expected by the SPA and iOS.

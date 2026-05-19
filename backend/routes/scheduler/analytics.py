@@ -31,6 +31,9 @@ from services.calendar_analytics_service import (
     get_by_type_breakdown,
     get_by_lo_breakdown,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +206,7 @@ async def analytics_overview(
     start_date: Optional[date_type] = Query(None, description="Explicit start date (YYYY-MM-DD) — reserved for future use"),
     end_date: Optional[date_type] = Query(None, description="Explicit end date (YYYY-MM-DD) — reserved for future use"),
     user_id: Optional[int] = Query(None, description="Filter by specific user (admin only)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Key metrics for the analytics dashboard.
@@ -253,7 +256,7 @@ async def analytics_trends(
     start_date: Optional[date_type] = Query(None, description="Explicit start date (YYYY-MM-DD) — reserved for future use"),
     end_date: Optional[date_type] = Query(None, description="Explicit end date (YYYY-MM-DD) — reserved for future use"),
     user_id: Optional[int] = Query(None, description="Filter by specific user (admin only)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Time-series data for trend charts.
@@ -310,7 +313,7 @@ async def analytics_by_type(
     user_id: Optional[int] = Query(None, description="Filter by specific user (admin only)"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Appointment breakdown by appointment type (paginated).
@@ -365,7 +368,7 @@ async def analytics_by_lo(
     period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Appointment breakdown by loan officer (manager view, paginated).

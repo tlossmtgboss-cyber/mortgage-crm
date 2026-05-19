@@ -33,6 +33,9 @@ from services.scheduler_webhook_service import (
     register_webhook,
     dispatch_webhook,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +165,7 @@ def _require_admin(user):
 async def create_webhook(
     body: WebhookRegisterRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Register a new webhook endpoint for appointment lifecycle events.
 
@@ -228,7 +231,7 @@ async def create_webhook(
         request=request,
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "status": "ok",
@@ -245,7 +248,7 @@ async def create_webhook(
 async def list_webhooks(
     request: Request,
     include_inactive: bool = Query(False, description="Include deactivated webhooks"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all webhook subscriptions for the authenticated user's organization."""
     user = await get_current_user(request, db)
@@ -277,7 +280,7 @@ async def list_webhooks(
 async def delete_webhook(
     webhook_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Deactivate a webhook subscription.
 
@@ -301,7 +304,7 @@ async def delete_webhook(
 
     subscription.is_active = False
     subscription.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.commit()
 
     _audit_log(
         db, org_id, user.id, "webhook_deleted", "webhook_subscription",
@@ -324,7 +327,7 @@ async def delete_webhook(
 async def test_webhook(
     webhook_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Send a test event to verify the webhook endpoint is reachable.
 
@@ -384,7 +387,7 @@ async def test_webhook(
         db=db,
     )
 
-    db.commit()
+    await db.commit()
 
     # Find the delivery for this specific subscription
     delivery = next((d for d in deliveries if d.subscription_id == subscription.id), None)
@@ -415,7 +418,7 @@ async def list_deliveries(
     offset: int = Query(0, ge=0, description="Pagination offset"),
     status_filter: Optional[str] = Query(None, description="Filter by status: success, failed, pending"),
     event_filter: Optional[str] = Query(None, description="Filter by event type"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get recent delivery log entries for a webhook subscription.
 

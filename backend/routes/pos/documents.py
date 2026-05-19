@@ -27,6 +27,9 @@ from models.smart_docs_models import (
     RequestStatus,
     SmartDocument,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +128,7 @@ def _due_severity(
 def get_pos_documents(
     loan_id: int = Query(..., description="Loan ID to fetch documents for"),
     purl_ctx: PURLAuthContext = Depends(require_purl_token),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return the borrower's document requests and reference docs, shaped
     for the POS DocumentsPage component.

@@ -35,6 +35,9 @@ from ._helpers import (
     resolve_application_for_borrower,
     resolve_application_for_borrower_write,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 
 router = APIRouter(
@@ -67,7 +70,7 @@ def get_ai_qa_service() -> AIQAService:
 async def ask_aria(
     body: AskRequest,
     purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     ctx: AuditContext = Depends(build_audit_context),
     service: AIQAService = Depends(get_ai_qa_service),
 ) -> AskResponse:
@@ -98,9 +101,9 @@ async def ask_aria(
             current_step=body.current_step,
             ctx=ctx,
         )
-        db.commit()
+        await db.commit()
     except Exception as exc:
-        db.rollback()
+        await db.rollback()
         _logger.exception("Aria ask failed: %s", exc)
         from datetime import datetime as _dt, timezone as _tz
         return AskResponse(
@@ -149,7 +152,7 @@ async def ask_aria(
 def get_aria_context(
     application: POSApplication = Depends(resolve_application_for_borrower),
     purl_ctx: PURLAuthContext = Depends(require_purl_token),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     from models.purl import PURLContact
     from database.models.core import User
@@ -207,7 +210,7 @@ def get_aria_context(
 def get_history(
     limit: int = Query(50, ge=1, le=200),
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: AIQAService = Depends(get_ai_qa_service),
 ) -> QAHistoryResponse:
     messages = service.get_history(

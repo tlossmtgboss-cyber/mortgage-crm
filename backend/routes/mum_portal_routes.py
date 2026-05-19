@@ -22,6 +22,9 @@ from models.purl import (
     TokenStatus,
     WorkspaceStatus,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,7 @@ router = APIRouter(prefix="/api/v1/mum-portal", tags=["MUM Portal (Public)"])
 async def get_mum_portal(
     slug: str,
     token: Optional[str] = Query(None, description="Access token for authenticated access"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get MUM portal data for client view.
@@ -70,16 +73,16 @@ async def get_mum_portal(
 async def get_mum_portal_videos(
     slug: str,
     token: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get video messages for a MUM portal.
     """
     # Get workspace
-    workspace = db.query(PURLWorkspace).filter(
+    workspace = (await db.execute(select(PURLWorkspace).where(
         PURLWorkspace.slug == slug,
         PURLWorkspace.status == WorkspaceStatus.POST_CLOSE.value
-    ).first()
+    ))).scalars().first()
 
     if not workspace:
         raise HTTPException(status_code=404, detail="Portal not found")
@@ -87,7 +90,7 @@ async def get_mum_portal_videos(
     # Get video messages from portal_video_messages table
     try:
         from sqlalchemy import text
-        videos = db.execute(text("""
+        videos = await db.execute(text("""
             SELECT
                 id, video_url, thumbnail_url, title, description,
                 duration_seconds, sender_name, sender_avatar_url,
@@ -126,7 +129,7 @@ async def get_mum_portal_videos(
 async def get_mum_portal_documents(
     slug: str,
     token: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get documents for a MUM portal.
@@ -134,10 +137,10 @@ async def get_mum_portal_documents(
     from models.purl import PURLDocument
 
     # Get workspace
-    workspace = db.query(PURLWorkspace).filter(
+    workspace = (await db.execute(select(PURLWorkspace).where(
         PURLWorkspace.slug == slug,
         PURLWorkspace.status == WorkspaceStatus.POST_CLOSE.value
-    ).first()
+    ))).scalars().first()
 
     if not workspace:
         raise HTTPException(status_code=404, detail="Portal not found")
@@ -169,7 +172,7 @@ async def get_mum_portal_messages(
     slug: str,
     token: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get text messages for a MUM portal.
@@ -177,10 +180,10 @@ async def get_mum_portal_messages(
     from models.purl import PURLMessage
 
     # Get workspace
-    workspace = db.query(PURLWorkspace).filter(
+    workspace = (await db.execute(select(PURLWorkspace).where(
         PURLWorkspace.slug == slug,
         PURLWorkspace.status == WorkspaceStatus.POST_CLOSE.value
-    ).first()
+    ))).scalars().first()
 
     if not workspace:
         raise HTTPException(status_code=404, detail="Portal not found")
@@ -211,17 +214,17 @@ async def mum_portal_heartbeat(
     slug: str,
     token: Optional[str] = Body(None, embed=True),
     page: Optional[str] = Body(None, embed=True),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Record client activity/heartbeat on the portal.
     Used for engagement tracking.
     """
     # Get workspace
-    workspace = db.query(PURLWorkspace).filter(
+    workspace = (await db.execute(select(PURLWorkspace).where(
         PURLWorkspace.slug == slug,
         PURLWorkspace.status == WorkspaceStatus.POST_CLOSE.value
-    ).first()
+    ))).scalars().first()
 
     if not workspace:
         raise HTTPException(status_code=404, detail="Portal not found")
@@ -229,7 +232,7 @@ async def mum_portal_heartbeat(
     # Record the heartbeat
     try:
         from sqlalchemy import text
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, resource_type, actor_type, meta_data, created_at
             ) VALUES (
@@ -241,7 +244,7 @@ async def mum_portal_heartbeat(
             "workspace_id": workspace.id,
             "metadata": {"page": page or "home"}
         })
-        db.commit()
+        await db.commit()
     except SQLAlchemyError as e:
         logger.warning(f"Failed to record heartbeat: {e}")
 
@@ -253,7 +256,7 @@ async def mark_message_read(
     slug: str,
     message_id: int,
     token: Optional[str] = Body(None, embed=True),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Mark a message as read by the client.
@@ -261,26 +264,26 @@ async def mark_message_read(
     from models.purl import PURLMessage
 
     # Get workspace
-    workspace = db.query(PURLWorkspace).filter(
+    workspace = (await db.execute(select(PURLWorkspace).where(
         PURLWorkspace.slug == slug,
         PURLWorkspace.status == WorkspaceStatus.POST_CLOSE.value
-    ).first()
+    ))).scalars().first()
 
     if not workspace:
         raise HTTPException(status_code=404, detail="Portal not found")
 
     # Get and update message
-    message = db.query(PURLMessage).filter(
+    message = (await db.execute(select(PURLMessage).where(
         PURLMessage.id == message_id,
         PURLMessage.workspace_id == workspace.id
-    ).first()
+    ))).scalars().first()
 
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
     message.is_read_by_borrower = True
     message.read_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.commit()
 
     return {"success": True}
 
@@ -290,16 +293,16 @@ async def mark_video_viewed(
     slug: str,
     video_id: int,
     token: Optional[str] = Body(None, embed=True),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Mark a video as viewed by the client.
     """
     # Get workspace
-    workspace = db.query(PURLWorkspace).filter(
+    workspace = (await db.execute(select(PURLWorkspace).where(
         PURLWorkspace.slug == slug,
         PURLWorkspace.status == WorkspaceStatus.POST_CLOSE.value
-    ).first()
+    ))).scalars().first()
 
     if not workspace:
         raise HTTPException(status_code=404, detail="Portal not found")
@@ -307,12 +310,12 @@ async def mark_video_viewed(
     # Update video viewed status
     try:
         from sqlalchemy import text
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE portal_video_messages
             SET is_viewed = true, viewed_at = NOW()
             WHERE id = :video_id AND workspace_id = :workspace_id
         """), {"video_id": video_id, "workspace_id": workspace.id})
-        db.commit()
+        await db.commit()
     except SQLAlchemyError as e:
         logger.warning(f"Failed to mark video viewed: {e}")
 

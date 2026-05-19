@@ -28,6 +28,8 @@ from models.billing import (
     OrgSubscription, Invoice, PaymentMethod, StripeEvent,
     SubscriptionStatus, InvoiceStatus,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks/stripe", tags=["stripe", "billing"])
@@ -90,7 +92,7 @@ def mark_event_processed(
 @router.post("")
 async def handle_stripe_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     stripe_signature: Optional[str] = Header(None, alias="Stripe-Signature"),
 ):
     """
@@ -131,19 +133,19 @@ async def handle_stripe_webhook(
         if handler:
             result = await handler(event_data, db)
             mark_event_processed(db, stripe_event)
-            db.commit()
+            await db.commit()
             return {"status": "processed", "result": result}
         else:
             # Unhandled event type - acknowledge but don't process
             mark_event_processed(db, stripe_event)
-            db.commit()
+            await db.commit()
             logger.debug(f"Unhandled event type: {event_type}")
             return {"status": "ignored", "reason": f"Unhandled event type: {event_type}"}
 
     except Exception as e:
         logger.exception(f"Error processing Stripe event {event_id}: {e}")
         mark_event_processed(db, stripe_event, error=str(e))
-        db.commit()
+        await db.commit()
         # Return 200 to prevent Stripe retries for processing errors
         return {"status": "error", "error": "Internal server error"}
 
@@ -158,7 +160,7 @@ async def handle_invoice_paid(data: Dict[str, Any], db: Session) -> Dict[str, An
     stripe_subscription_id = data.get("subscription")
 
     # Find or create invoice
-    invoice = db.execute(
+    invoice = await db.execute(
         select(Invoice).where(Invoice.stripe_invoice_id == stripe_invoice_id)
     ).scalar_one_or_none()
 
@@ -178,7 +180,7 @@ async def handle_invoice_paid(data: Dict[str, Any], db: Session) -> Dict[str, An
 
     # Update subscription period if applicable
     if stripe_subscription_id:
-        subscription = db.execute(
+        subscription = await db.execute(
             select(OrgSubscription).where(
                 OrgSubscription.stripe_subscription_id == stripe_subscription_id
             )
@@ -211,7 +213,7 @@ async def handle_invoice_payment_failed(data: Dict[str, Any], db: Session) -> Di
     attempt_count = data.get("attempt_count", 1)
 
     # Update invoice status
-    invoice = db.execute(
+    invoice = await db.execute(
         select(Invoice).where(Invoice.stripe_invoice_id == stripe_invoice_id)
     ).scalar_one_or_none()
 
@@ -223,7 +225,7 @@ async def handle_invoice_payment_failed(data: Dict[str, Any], db: Session) -> Di
 
     # Update subscription status if past_due
     if stripe_subscription_id:
-        subscription = db.execute(
+        subscription = await db.execute(
             select(OrgSubscription).where(
                 OrgSubscription.stripe_subscription_id == stripe_subscription_id
             )
@@ -256,7 +258,7 @@ async def handle_subscription_created(data: Dict[str, Any], db: Session) -> Dict
     stripe_customer_id = data.get("customer")
 
     # Check if subscription already exists
-    existing = db.execute(
+    existing = await db.execute(
         select(OrgSubscription).where(
             OrgSubscription.stripe_subscription_id == stripe_subscription_id
         )
@@ -267,7 +269,7 @@ async def handle_subscription_created(data: Dict[str, Any], db: Session) -> Dict
         return {"subscription_id": stripe_subscription_id, "status": "exists"}
 
     # Find organization by Stripe customer ID
-    org_sub = db.execute(
+    org_sub = await db.execute(
         select(OrgSubscription).where(
             OrgSubscription.stripe_customer_id == stripe_customer_id
         )
@@ -303,7 +305,7 @@ async def handle_subscription_updated(data: Dict[str, Any], db: Session) -> Dict
     """Handle customer.subscription.updated event."""
     stripe_subscription_id = data.get("id")
 
-    subscription = db.execute(
+    subscription = await db.execute(
         select(OrgSubscription).where(
             OrgSubscription.stripe_subscription_id == stripe_subscription_id
         )
@@ -349,7 +351,7 @@ async def handle_subscription_deleted(data: Dict[str, Any], db: Session) -> Dict
     """Handle customer.subscription.deleted event."""
     stripe_subscription_id = data.get("id")
 
-    subscription = db.execute(
+    subscription = await db.execute(
         select(OrgSubscription).where(
             OrgSubscription.stripe_subscription_id == stripe_subscription_id
         )
@@ -373,7 +375,7 @@ async def handle_payment_method_attached(data: Dict[str, Any], db: Session) -> D
     pm_type = data.get("type", "card")
 
     # Find organization
-    subscription = db.execute(
+    subscription = await db.execute(
         select(OrgSubscription).where(
             OrgSubscription.stripe_customer_id == stripe_customer_id
         )
@@ -407,7 +409,7 @@ async def handle_payment_method_detached(data: Dict[str, Any], db: Session) -> D
     """Handle payment_method.detached event."""
     stripe_pm_id = data.get("id")
 
-    payment_method = db.execute(
+    payment_method = await db.execute(
         select(PaymentMethod).where(
             PaymentMethod.stripe_payment_method_id == stripe_pm_id
         )

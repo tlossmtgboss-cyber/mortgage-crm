@@ -1,3 +1,6 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 # backend/api/routes/call_recording.py
 """
 Call Recording Processing API
@@ -79,7 +82,7 @@ class CallProcessResponse(BaseModel):
 async def process_call_recording(
     request: CallProcessRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Process a call recording:
@@ -118,7 +121,7 @@ async def process_call_recording(
             # Step 2: Get contact info if available
             contact_info = None
             if request.contactId:
-                lead = db.query(Lead).filter(Lead.id == int(request.contactId)).first()
+                lead = (await db.execute(select(Lead).where(Lead.id == int(request.contactId)))).scalars().first()
                 if lead:
                     contact_info = {
                         "name": f"{lead.first_name} {lead.last_name}",
@@ -131,7 +134,7 @@ async def process_call_recording(
             # Get loan info if available
             loan_info = None
             if request.loanId:
-                loan = db.query(Loan).filter(Loan.id == int(request.loanId)).first()
+                loan = (await db.execute(select(Loan).where(Loan.id == int(request.loanId)))).scalars().first()
                 if loan:
                     loan_info = {
                         "loan_number": loan.loan_number,
@@ -452,7 +455,7 @@ async def create_playback_url(
 async def get_call_history(
     limit: int = 20,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get user's call recording history (via tasks)."""
     try:

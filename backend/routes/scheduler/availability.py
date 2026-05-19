@@ -54,6 +54,9 @@ from routes.scheduler._helpers import (
     _generate_available_slots,
 )
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +76,7 @@ async def get_availability(
     start_date: date = Query(...),
     end_date: date = Query(...),
     user_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get availability slots for a date range"""
     user = await get_current_user(request, db)
@@ -104,18 +107,18 @@ async def get_availability(
     if is_viewing_other_user:
         User = _models.get('User')
         if User:
-            target_user = db.query(User).filter(
+            target_user = (await db.execute(select(User).where(
                 User.id == user_id,
                 User.organization_id == org_id
-            ).first()
+            ))).scalars().first()
             if not target_user:
                 raise HTTPException(status_code=403, detail="User not found in your organization")
 
     # Get config
-    config = db.query(SchedulerConfig).filter(
+    config = (await db.execute(select(SchedulerConfig).where(
         SchedulerConfig.user_id == target_user_id,
         SchedulerConfig.organization_id == org_id
-    ).first()
+    ))).scalars().first()
 
     if not config:
         # Return default working hours
@@ -155,13 +158,13 @@ async def get_availability(
     ).all()
 
     # Get existing appointments
-    appointments = db.query(Appointment).filter(
+    appointments = (await db.execute(select(Appointment).where(
         Appointment.organization_id == org_id,
         Appointment.assigned_user_id == target_user_id,
         Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
         Appointment.scheduled_start >= start_dt,
         Appointment.scheduled_start <= end_dt
-    ).all()
+    ))).scalars().all()
 
     # Non-admins viewing another user's availability get redacted personal details:
     # blocked time titles/descriptions and appointment titles are stripped to prevent
@@ -210,7 +213,7 @@ async def get_availability(
 async def create_availability_slot(
     slot_data: AvailabilitySlotCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a custom availability slot"""
     user = await get_current_user(request, db)
@@ -220,10 +223,10 @@ async def create_availability_slot(
     SchedulerConfig = _models['SchedulerConfig']
     AvailabilitySlot = _models['AvailabilitySlot']
 
-    config = db.query(SchedulerConfig).filter(
+    config = (await db.execute(select(SchedulerConfig).where(
         SchedulerConfig.user_id == user.id,
         SchedulerConfig.organization_id == org_id
-    ).first()
+    ))).scalars().first()
 
     if not config:
         raise HTTPException(status_code=400, detail="Please create scheduler config first")
@@ -270,7 +273,7 @@ async def create_availability_slot(
     )
 
     db.add(slot)
-    db.flush()
+    await db.flush()
 
     _audit_log(
         db, org_id, user.id, "created",
@@ -283,7 +286,7 @@ async def create_availability_slot(
         },
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return {"message": "Availability slot created", "slot_id": slot.id}
 
@@ -292,7 +295,7 @@ async def create_availability_slot(
 async def delete_availability_slot(
     slot_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete an availability slot"""
     user = await get_current_user(request, db)
@@ -301,11 +304,11 @@ async def delete_availability_slot(
     _models = get_models()
     AvailabilitySlot = _models['AvailabilitySlot']
 
-    slot = db.query(AvailabilitySlot).filter(
+    slot = (await db.execute(select(AvailabilitySlot).where(
         AvailabilitySlot.id == slot_id,
         AvailabilitySlot.user_id == user.id,
         AvailabilitySlot.organization_id == org_id
-    ).first()
+    ))).scalars().first()
 
     if not slot:
         raise HTTPException(status_code=404, detail="Slot not found")
@@ -322,7 +325,7 @@ async def delete_availability_slot(
         },
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return {"message": "Slot deleted"}
 
@@ -335,7 +338,7 @@ async def delete_availability_slot(
 async def get_available_slots(
     slot_request: AvailableSlotsRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get available time slots for booking.
@@ -373,11 +376,11 @@ async def get_available_slots(
             _models = get_models()
             AppointmentType = _models.get('AppointmentType') if _models else None
             if AppointmentType:
-                appt_type = db.query(AppointmentType).filter(
+                appt_type = (await db.execute(select(AppointmentType).where(
                     AppointmentType.id == slot_request.appointment_type_id,
                     AppointmentType.is_active == True,
                     AppointmentType.organization_id == org_id,
-                ).first()
+                ))).scalars().first()
                 if appt_type and getattr(appt_type, 'default_duration_minutes', None):
                     effective_duration = appt_type.default_duration_minutes
 

@@ -23,6 +23,9 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from middleware.webhook_verification import require_telnyx_webhook
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +64,7 @@ from db import get_db
 async def handle_sms_reply(
     request: Request,
     raw_body: bytes = Depends(require_telnyx_webhook),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Handle inbound SMS replies for appointment management.
 
@@ -209,10 +212,10 @@ async def _handle_confirm(db: Session, phone: str, org_id: Optional[int] = None)
     _acknowledge_reminders(db, appointment.id)
 
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.error(f"Failed to commit SMS confirmation: {e}")
-        db.rollback()
+        await db.rollback()
         return JSONResponse(content={"status": "error", "detail": "Database error"})
 
     await _send_reply(
@@ -264,10 +267,10 @@ async def _handle_cancel(db: Session, phone: str, org_id: Optional[int] = None) 
             logger.warning(f"Failed to record status history: {e}")
 
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.error(f"Failed to commit SMS cancellation: {e}")
-        db.rollback()
+        await db.rollback()
         return JSONResponse(content={"status": "error", "detail": "Database error"})
 
     await _send_reply(

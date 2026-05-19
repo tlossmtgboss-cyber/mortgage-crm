@@ -26,6 +26,9 @@ from sqlalchemy import text
 
 from db import get_db
 from routes.auth_deps import current_user_flexible_dep
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +294,7 @@ def _fallback_route(db: Session, org_id: int) -> Optional[dict]:
 @router.post("/route", response_model=RouteLeadResponse)
 async def route_a_lead(
     body: RouteLeadRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Route a lead to the best LO based on configured rules."""
@@ -307,7 +310,7 @@ async def route_a_lead(
     source = body.source
 
     if body.lead_id:
-        lead = db.execute(text("""
+        lead = await db.execute(text("""
             SELECT loan_type, state, zip_code, preferred_language, source
             FROM leads WHERE id = :lid AND organization_id = :org_id
         """), {"lid": body.lead_id, "org_id": org_id}).fetchone()
@@ -326,7 +329,7 @@ async def route_a_lead(
     # Optionally assign the lead
     if body.lead_id:
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE leads SET owner_id = :lo_id, updated_at = :now
                 WHERE id = :lid AND organization_id = :org_id
             """), {
@@ -335,11 +338,11 @@ async def route_a_lead(
                 "lid": body.lead_id,
                 "org_id": org_id,
             })
-            db.commit()
+            await db.commit()
             logger.info("Lead %s routed to LO %s: %s", body.lead_id, result["lo_id"], result["reason"])
         except Exception as e:
             logger.exception("Failed to assign lead %s: %s", body.lead_id, e)
-            db.rollback()
+            await db.rollback()
 
     return RouteLeadResponse(
         assigned_lo_id=result["lo_id"],
@@ -355,7 +358,7 @@ async def route_a_lead(
 
 @router.get("/rules")
 async def list_routing_rules(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """List all routing rules for the current org."""
@@ -363,7 +366,7 @@ async def list_routing_rules(
     if not org_id:
         raise HTTPException(status_code=400, detail="Organization required")
 
-    rows = db.execute(text("""
+    rows = await db.execute(text("""
         SELECT id, rule_name, rule_type, match_value, assigned_lo_ids,
                priority, weight, is_active
         FROM lead_routing_rules
@@ -391,7 +394,7 @@ async def list_routing_rules(
 @router.post("/rules")
 async def create_routing_rule(
     body: RoutingRuleCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Create a new routing rule."""
@@ -402,7 +405,7 @@ async def create_routing_rule(
     now = datetime.now(timezone.utc)
     ids_str = ",".join(str(x) for x in body.assigned_lo_ids)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO lead_routing_rules
             (organization_id, rule_name, rule_type, match_value, assigned_lo_ids,
              priority, weight, is_active, created_at, updated_at)
@@ -412,7 +415,7 @@ async def create_routing_rule(
         "val": body.match_value, "ids": ids_str, "pri": body.priority,
         "wt": body.weight, "active": body.is_active, "now": now,
     })
-    db.commit()
+    await db.commit()
 
     return {"status": "created", "rule_name": body.rule_name}
 
@@ -421,7 +424,7 @@ async def create_routing_rule(
 async def update_routing_rule(
     rule_id: int,
     body: RoutingRuleCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Update a routing rule."""
@@ -431,7 +434,7 @@ async def update_routing_rule(
 
     ids_str = ",".join(str(x) for x in body.assigned_lo_ids)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE lead_routing_rules SET
             rule_name = :name, rule_type = :type, match_value = :val,
             assigned_lo_ids = :ids, priority = :pri, weight = :wt,
@@ -443,7 +446,7 @@ async def update_routing_rule(
         "pri": body.priority, "wt": body.weight, "active": body.is_active,
         "now": datetime.now(timezone.utc),
     })
-    db.commit()
+    await db.commit()
 
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -454,7 +457,7 @@ async def update_routing_rule(
 @router.delete("/rules/{rule_id}")
 async def delete_routing_rule(
     rule_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Delete a routing rule."""
@@ -462,11 +465,11 @@ async def delete_routing_rule(
     if not org_id:
         raise HTTPException(status_code=400, detail="Organization required")
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         DELETE FROM lead_routing_rules
         WHERE id = :rid AND organization_id = :org_id
     """), {"rid": rule_id, "org_id": org_id})
-    db.commit()
+    await db.commit()
 
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -481,7 +484,7 @@ async def delete_routing_rule(
 @router.get("/stats")
 async def routing_stats(
     days: int = 30,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Get routing assignment stats for the org."""
@@ -490,7 +493,7 @@ async def routing_stats(
         raise HTTPException(status_code=400, detail="Organization required")
 
     # Lead assignments by LO in the last N days
-    rows = db.execute(text("""
+    rows = await db.execute(text("""
         SELECT u.id as lo_id, CONCAT(u.first_name, ' ', u.last_name) as lo_name,
                COUNT(l.id) as assigned_count
         FROM users u

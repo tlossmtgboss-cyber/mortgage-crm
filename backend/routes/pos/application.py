@@ -40,6 +40,9 @@ from ._helpers import (
     resolve_application_for_borrower,
     resolve_application_for_borrower_write,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 
 router = APIRouter(
@@ -63,7 +66,7 @@ def get_or_start_my_application(
     loan_id: int | None = Query(None),
     source_channel: str | None = Query(None),
     purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: ApplicationService = Depends(get_application_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> ApplicationResponse:
@@ -152,7 +155,7 @@ def update_section(
     section_key: str,
     body: SectionUpdateRequest,
     application: POSApplication = Depends(resolve_application_for_borrower_write),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: ApplicationService = Depends(get_application_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> SectionResponse:
@@ -218,7 +221,7 @@ def update_section(
 async def submit_application(
     body: ApplicationSubmitRequest,
     application: POSApplication = Depends(resolve_application_for_borrower_write),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: ApplicationService = Depends(get_application_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> ApplicationSubmitResponse:
@@ -233,8 +236,8 @@ async def submit_application(
     except ApplicationStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    db.commit()
-    db.refresh(submitted)
+    await db.commit()
+    await db.refresh(submitted)
 
     confirmation = _build_confirmation_number(submitted)
     next_steps = _next_steps_for_borrower(submitted)

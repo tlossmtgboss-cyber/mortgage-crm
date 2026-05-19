@@ -28,6 +28,9 @@ from services.appointment_sla_service import (
     get_sla_targets,
     DEFAULT_SLA_TARGETS,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +168,7 @@ class SLATargetsResponse(BaseModel):
 async def sla_dashboard(
     request: Request,
     period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     SLA compliance dashboard showing all tracked metrics.
@@ -202,7 +205,7 @@ async def sla_breaches(
     days: int = Query(7, ge=1, le=90, description="Lookback period in days"),
     severity: Optional[str] = Query(None, pattern="^(critical|warning)$", description="Filter by severity"),
     breach_type: Optional[str] = Query(None, description="Filter by breach type"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List recent SLA breaches with details.
@@ -250,7 +253,7 @@ async def sla_lo_metrics(
     request: Request,
     lo_id: int,
     period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get SLA metrics for a specific loan officer.
@@ -301,7 +304,7 @@ async def sla_lo_metrics(
 async def update_sla_targets(
     request: Request,
     body: SLATargetsUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Update SLA targets for the organization.
@@ -328,10 +331,10 @@ async def update_sla_targets(
 
     try:
         # Get or create org-level config
-        config = db.query(SchedulerConfig).filter(
+        config = (await db.execute(select(SchedulerConfig).where(
             SchedulerConfig.organization_id == org_id,
             SchedulerConfig.user_id.is_(None),
-        ).first()
+        ))).scalars().first()
 
         if not config:
             # Create org-level config if it doesn't exist
@@ -341,7 +344,7 @@ async def update_sla_targets(
                 is_active=True,
             )
             db.add(config)
-            db.flush()
+            await db.flush()
 
         # Merge updates into existing sla_targets
         existing_targets = {}
@@ -364,7 +367,7 @@ async def update_sla_targets(
                 else:
                     logger.warning("SchedulerConfig has no sla_targets or settings column")
 
-        db.commit()
+        await db.commit()
 
         # Return merged targets
         final_targets = get_sla_targets(db, models, org_id)
@@ -377,6 +380,6 @@ async def update_sla_targets(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.exception(f"Failed to update SLA targets: {e}")
         raise HTTPException(status_code=500, detail="Failed to update SLA targets")

@@ -41,14 +41,19 @@ repos:
         args: [--fix, --select, "E,F,E722,B"]
       - id: ruff-format
 
-  # Mypy type-checking for backend (Slice F scope — must mirror mypy.ini `files = ...`)
+  # Mypy type-checking for backend.
+  # Wave 5: scope broadened to ~974 files (~32 % of backend) via a coarse
+  # directory-based regex. Whatever ends up in `mypy.ini` `files = ...` should
+  # be reachable via this regex. Excludes: tests, migrations, alembic, scripts,
+  # examples, docs, and `remediation/` (numeric folder names collide).
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
       - id: mypy
         name: mypy (backend)
         args: [--config-file=mypy.ini]
-        files: '^backend/(auth/.*\.py|middleware/.*\.py|agents/orchestration/.*\.py|agents/nodes/.*\.py|agents/service/_(response|session|tools|voice)\.py|services/loan_state_audit_service\.py|services/loan_reconciliation_service\.py|services/salesforce/_(auth|mapping|queries|state|webhooks)\.py|services/websocket_session_manager\.py|services/call_queue_stats\.py|services/call_quality_scorer\.py|services/los_integration/.*\.py|services/compliance/.*\.py|services/calculator_scenarios/.*\.py|services/aria_memory/.*\.py|services/calendar_providers/.*\.py|services/media/.*\.py|services/service_cost_integrations/.*\.py|services/content_marketing/.*\.py|services/pos/.*\.py|services/learning/.*\.py|services/appointment/.*\.py|services/application_engine/.*\.py|db\.py|database/models/.*\.py|schemas/.*\.py|routes/(security_monitoring|agent_governance_metrics|slybroadcast_webhook)_routes\.py|workflows/.*\.py)$'
+        exclude: '^backend/(tests|migrations|alembic|scripts|examples|docs|remediation|seeds/__pycache__)/'
+        files: '^backend/(auth|middleware|db\.py|schemas|database/models|workflows|jobs|tasks|utils|integrations|api|telephony|monitoring|ai_receptionist|ai_providers|scrapers|soc2|soc2_compliance|validators|validation|intake_engine|seeds|aria|crud|tools|ab_testing|income_engine|workers|smart_docs_remediation|core|constants|uvip|config|agents/(orchestration|nodes|service|tools|autonomous|memory|metrics|challenge|orchestrator\.py|state\.py|service_governance\.py)|services/(salesforce|los_integration|compliance|calculator_scenarios|aria_memory|calendar_providers|media|service_cost_integrations|content_marketing|pos|learning|appointment|application_engine|call_monitoring|autonomous|underwriting_engine|disc|acquisition_engine|dre|call_intelligence|marketing|income|smart_docs/(income|ocr_enhancement_service|integrations|enterprise)|loan_state_audit_service\.py|loan_reconciliation_service\.py|websocket_session_manager\.py|call_queue_stats\.py|call_quality_scorer\.py|voice_sentiment_service\.py)|routes/(security_monitoring|agent_governance_metrics|slybroadcast_webhook)_routes\.py)(/.*\.py|$)'
         additional_dependencies:
           - types-redis
           - types-requests
