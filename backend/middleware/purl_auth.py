@@ -97,6 +97,19 @@ async def get_purl_token(
             if token.startswith("purl_live_"):
                 return token
 
+    # Diagnostic: distinguish "header missing" from "header present but wrong scheme".
+    # Without this it's nearly impossible to tell a stripped-by-proxy header apart
+    # from a borrower who hit a PURL endpoint with a non-PURL JWT.
+    if not credentials and not authorization:
+        logger.debug("PURL token extraction: no Authorization header on request")
+    else:
+        cred_prefix = credentials.credentials[:10] if credentials and credentials.credentials else None
+        hdr_prefix = authorization[:20] if authorization else None
+        logger.warning(
+            "PURL token extraction failed: scheme/prefix mismatch (credentials_prefix=%r, header_prefix=%r)",
+            cred_prefix,
+            hdr_prefix,
+        )
     return None
 
 

@@ -90,8 +90,26 @@ export function usePOSApplication(loanId?: number) {
         setSections(prev => ({ ...prev, [sectionKey]: section }));
         return section;
       } catch (e) {
+        // Don't promote a per-section 401/403 to the global error state once
+        // the application has loaded. /applications/me already proved the
+        // token works; a section-scoped auth failure is either transient or
+        // a backend issue specific to that endpoint, and bouncing the user
+        // back to the signup screen would just wipe their session for no
+        // reason. Retry once after a short delay before giving up silently.
+        if (e instanceof APIError && [401, 403].includes(e.status)) {
+          console.warn('Section auth failed, retrying once', sectionKey, e.status);
+          try {
+            await new Promise(r => setTimeout(r, 400));
+            const section = await posApi.getSection(application.id, sectionKey);
+            setSections(prev => ({ ...prev, [sectionKey]: section }));
+            return section;
+          } catch (retryErr) {
+            console.error('Section auth failed after retry', sectionKey, retryErr);
+            return;
+          }
+        }
         console.error('Failed to load section', sectionKey, e);
-        if (e instanceof APIError && [400, 401, 403].includes(e.status)) {
+        if (e instanceof APIError && e.status === 400) {
           setError(e.message);
         }
       }
