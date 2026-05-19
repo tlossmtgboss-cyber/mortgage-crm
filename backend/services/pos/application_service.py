@@ -185,6 +185,19 @@ class ApplicationService:
                 f"Cannot modify sections of a {application.status} application"
             )
 
+        _PII_KEYS = {"ssn", "co_ssn", "dob", "co_dob",
+                      "social_security_number", "date_of_birth"}
+        pii_extracted = {k: data.pop(k) for k in list(data.keys()) if k in _PII_KEYS}
+        if pii_extracted:
+            self.upsert_pii(
+                session,
+                application=application,
+                ssn=pii_extracted.get("ssn") or pii_extracted.get("social_security_number"),
+                co_ssn=pii_extracted.get("co_ssn"),
+                dob=pii_extracted.get("dob") or pii_extracted.get("date_of_birth"),
+                co_dob=pii_extracted.get("co_dob"),
+            )
+
         # Find existing or create.
         section = next(
             (s for s in application.sections if s.section_key == section_key),
@@ -270,8 +283,11 @@ class ApplicationService:
             pii.co_ssn_encrypted = co_ssn or None
         if dob is not None:
             pii.dob = dob or None
+            # Dual-write: populate encrypted column alongside plain column
+            pii.dob_encrypted = dob.isoformat() if dob else None
         if co_dob is not None:
             pii.co_dob = co_dob or None
+            pii.co_dob_encrypted = co_dob.isoformat() if co_dob else None
 
         session.flush()
         return pii
@@ -442,8 +458,8 @@ def _serialize_for_promotion(application: POSApplication) -> dict[str, Any]:
         pii_payload = {
             "ssn": application.pii.ssn_encrypted,  # decrypted by EncryptedString on read
             "co_ssn": application.pii.co_ssn_encrypted,
-            "dob": application.pii.dob.isoformat() if application.pii.dob else None,
-            "co_dob": application.pii.co_dob.isoformat() if application.pii.co_dob else None,
+            "dob": application.pii.dob_date.isoformat() if application.pii.dob_date else None,
+            "co_dob": application.pii.co_dob_date.isoformat() if application.pii.co_dob_date else None,
         }
 
     return {

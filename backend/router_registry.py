@@ -386,14 +386,9 @@ def _register_voice_ai_routes(app):
 def _register_borrower_routes(app, get_db, get_current_user):
     """Borrower application, POS consent, prospect re-engagement."""
 
-    try:
-        from routes.borrower_application_routes import router as borrower_application_router
-        app.include_router(borrower_application_router, tags=["Borrower Applications"])
-        logger.info("Borrower Application routes loaded")
-    except Exception as e:
-        logger.error(f"Borrower Application routes failed to load: {e}")
-        import traceback
-        traceback.print_exc()
+    # Legacy borrower_application_routes deregistered — 20+ endpoints with no
+    # frontend consumers, replaced by routes/pos/ (new Digital 1003 flow).
+    # File retained for reference but no longer mounted.
 
     try:
         from routes.pos_consent_routes import router as pos_consent_router
@@ -1495,6 +1490,14 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
         logger.info("Rate alerts routes loaded")
     except Exception as e:
         logger.warning(f"Rate alerts routes skipped: {e}")
+
+    # Rate Watch (market rate polling + refi opportunity detection)
+    try:
+        from routes.rate_watch_routes import router as rate_watch_router
+        app.include_router(rate_watch_router, tags=["Rate Watch"])
+        logger.info("Rate watch routes loaded")
+    except Exception as e:
+        logger.warning(f"Rate watch routes skipped: {e}")
 
     # Data Quality / Deduplication
     try:

@@ -122,22 +122,28 @@ export function usePOSApplication(loanId?: number) {
   const saveSection = useCallback(
     async (sectionKey: SectionKey, body: SectionUpdateRequest) => {
       if (!application) return;
+      // Back up to localStorage before network save so data survives failures.
+      try {
+        localStorage.setItem(
+          `pos_draft_${application.id}_${sectionKey}`,
+          JSON.stringify(body.data),
+        );
+      } catch (_) { /* quota exceeded — best effort */ }
       setSaveState('saving');
       try {
         const section = await posApi.updateSection(application.id, sectionKey, body);
         setSections(prev => ({ ...prev, [sectionKey]: section }));
-        // The PATCH response includes application metadata — use it directly
-        // instead of making a second GET round-trip (~200-300ms saved).
         if (section.application) {
           setApplication(section.application);
         }
         dirtyRef.current = false;
         setSaveState('saved');
-        // Auto-clear the "saved" status after a few seconds.
+        // Clear draft backup on successful save.
+        try { localStorage.removeItem(`pos_draft_${application.id}_${sectionKey}`); } catch {}
         setTimeout(() => setSaveState(prev => (prev === 'saved' ? 'idle' : prev)), 2000);
         return section;
       } catch (e) {
-        dirtyRef.current = false;
+        // Keep dirtyRef true — data is still unsaved.
         setSaveState('error');
         setError(e instanceof Error ? e.message : 'Save failed');
       }

@@ -11,16 +11,20 @@ export const CreditAuthPanel: React.FC<PanelProps> = ({
   application,
 }) => {
   const { data, updateField } = usePanelData(section, onChange);
-  const [agreed, setAgreed] = useState((data.credit_auth_agreed as boolean) || false);
+  const [agreed, setAgreed] = useState((data.authorization_granted as boolean) || false);
   const [errors, setErrors] = useState<{ path: string; message: string }[]>([]);
 
   useEffect(() => {
-    if (data.credit_auth_agreed != null) setAgreed(Boolean(data.credit_auth_agreed));
-  }, [data.credit_auth_agreed]);
+    if (data.authorization_granted != null) setAgreed(Boolean(data.authorization_granted));
+  }, [data.authorization_granted]);
 
   const handleContinue = async () => {
     if (!application || !agreed) return;
-    const submitData = { ...data, credit_auth_agreed: true, agreed_at: new Date().toISOString() };
+    const submitData = {
+      ...data,
+      authorization_granted: true,
+      borrower_name: data.borrower_name || '',
+    };
     const result = validateSection('credit_auth', submitData);
     if (!result.ok) {
       setErrors(result.issues);
@@ -109,7 +113,7 @@ export const CreditAuthPanel: React.FC<PanelProps> = ({
               checked={agreed}
               onChange={e => {
                 setAgreed(e.target.checked);
-                updateField('credit_auth_agreed', e.target.checked);
+                updateField('authorization_granted', e.target.checked);
               }}
               style={{
                 width: 20, height: 20, marginTop: 2,
