@@ -92,3 +92,5 @@ frontend/playwright-report/
 frontend/test-results/
 .claude/worktrees/
 .coverage
+.mypy_cache/
+coverage.xml

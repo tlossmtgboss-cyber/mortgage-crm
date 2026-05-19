@@ -366,7 +366,7 @@ class LOSSyncService:
             )
 
         # Build data dict from CRM loan using field mappings
-        push_data = {"loan_id": loan_id}
+        push_data: Dict[str, Any] = {"loan_id": loan_id}
 
         # Include LOS loan ID if we have it (for updates)
         los_loan_id = _get_los_loan_id(loan)

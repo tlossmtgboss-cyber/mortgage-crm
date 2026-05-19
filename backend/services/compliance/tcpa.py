@@ -17,21 +17,21 @@ Usage:
 
 import logging
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+_ZoneInfo: Any = None
 try:
     import zoneinfo
     _ZoneInfo = zoneinfo.ZoneInfo
 except ImportError:
     # Python < 3.9 fallback
     try:
-        from backports.zoneinfo import ZoneInfo as _ZoneInfo
+        from backports.zoneinfo import ZoneInfo as _ZoneInfo  # type: ignore[no-redef]
     except ImportError:
-        _ZoneInfo = None
         logger.warning(
             "zoneinfo not available — TCPA timezone checks will "
             "fall back to UTC offset estimation"

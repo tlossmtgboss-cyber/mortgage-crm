@@ -554,7 +554,7 @@ class AlexScenarioAnalysis:
         print("-"*70)
 
         for s in scenarios:
-            down_pmt = home_price * s["down_pct"]
+            down_pmt = home_price * s["down_pct"]  # type: ignore[operator]
             loan_amt = home_price - down_pmt
 
             closing = calculator_service.estimate_closing_costs(

@@ -119,8 +119,8 @@ class ECOAValidator:
         deadline = denial_dt + timedelta(days=30)
         today = date.today()
 
-        missing_requirements = []
-        warnings = []
+        missing_requirements: list = []
+        warnings: list = []
 
         # Look for existing adverse action notice(s) for this loan
         notice_query = db.query(AdverseActionNotice).filter(
