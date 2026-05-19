@@ -175,11 +175,16 @@ export function usePOSApplication(loanId?: number) {
       const existing = timersRef.current[sectionKey];
       if (existing) clearTimeout(existing);
       dirtyRef.current = true;
+      const lastUpdated = sections[sectionKey]?.updated_at;
       timersRef.current[sectionKey] = setTimeout(() => {
-        saveSection(sectionKey, { data, mark_complete: false });
+        saveSection(sectionKey, {
+          data,
+          mark_complete: false,
+          expected_updated_at: lastUpdated,
+        });
       }, AUTOSAVE_DELAY_MS);
     },
-    [saveSection],
+    [saveSection, sections],
   );
 
   const markComplete = useCallback(

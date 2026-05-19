@@ -170,6 +170,7 @@ class ApplicationService:
         section_key: str,
         data: dict[str, Any],
         mark_complete: bool = False,
+        expected_updated_at: Any = None,
         ctx: AuditContext,
     ) -> POSApplicationSection:
         """Insert or update a section's JSON data.
@@ -203,6 +204,14 @@ class ApplicationService:
             (s for s in application.sections if s.section_key == section_key),
             None,
         )
+
+        if section is not None and expected_updated_at is not None:
+            if section.updated_at != expected_updated_at:
+                raise ApplicationStateError(
+                    "Section was modified by another session. "
+                    "Refresh and retry."
+                )
+
         previously_complete = section.is_complete if section else False
 
         if section is None:

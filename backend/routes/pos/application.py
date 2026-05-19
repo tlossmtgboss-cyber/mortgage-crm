@@ -173,6 +173,7 @@ def update_section(
             section_key=section_key,
             data=body.data,
             mark_complete=body.mark_complete,
+            expected_updated_at=body.expected_updated_at,
             ctx=ctx,
         )
         if pii_kwargs:

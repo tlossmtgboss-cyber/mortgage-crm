@@ -140,9 +140,13 @@ class SectionUpdateRequest(SectionData):
 
     Setting `mark_complete=true` flips the section's is_complete flag and
     advances current_step if appropriate.
+
+    `expected_updated_at` enables optimistic locking — if supplied and the
+    section's current updated_at differs, the save is rejected with 409.
     """
 
     mark_complete: bool = False
+    expected_updated_at: datetime | None = None
 
 
 class SectionResponse(BaseModel):

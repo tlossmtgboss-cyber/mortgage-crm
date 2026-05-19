@@ -101,6 +101,7 @@ export interface SectionUpdateRequest {
   dob?: string; // ISO date YYYY-MM-DD
   co_dob?: string;
   mark_complete?: boolean;
+  expected_updated_at?: string; // ISO datetime for optimistic locking
 }
 
 export interface ApplicationSubmitRequest {
