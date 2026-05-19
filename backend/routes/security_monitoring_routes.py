@@ -11,12 +11,14 @@ Provides real-time security monitoring data for the admin dashboard including:
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 import logging
 import os
 
 from database import get_db
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -45,9 +47,18 @@ async def get_user_from_request(request: Request, db: Session):
     return await get_current_user(token, request, db)
 
 
-async def require_admin_dep(request: Request, db: Session = Depends(get_db)):
-    """Require admin role for security endpoints."""
-    current_user = await get_user_from_request(request, db)
+async def require_admin_dep(request: Request):
+    """Require admin role for security endpoints.
+
+    Uses a dedicated short-lived sync session for auth, leaving route
+    handlers free to use `get_async_db()` independently.
+    """
+    from database import SessionLocal
+    local_db = SessionLocal()
+    try:
+        current_user = await get_user_from_request(request, local_db)
+    finally:
+        local_db.close()
     if not current_user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -380,8 +391,8 @@ def _get_security_config() -> Dict[str, Any]:
     }
 
 
-def _get_recent_security_events(
-    db: Session,
+async def _get_recent_security_events(
+    db: AsyncSession,
     limit: int = 50,
     event_type: Optional[str] = None,
     org_id: Optional[int] = None,
@@ -424,7 +435,7 @@ def _get_recent_security_events(
 
         query += " ORDER BY created_at DESC LIMIT :limit"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         for row in result:
             events.append({
@@ -442,7 +453,7 @@ def _get_recent_security_events(
     return events
 
 
-def _get_failed_login_stats(app, db: Session) -> Dict[str, Any]:
+def _get_failed_login_stats(app, db) -> Dict[str, Any]:
     """Get failed login attempt statistics."""
     stats = {
         "recent_failed_attempts": 0,
