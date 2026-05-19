@@ -793,84 +793,130 @@ class DemoStartResponse(BaseModel):
     summary="Demo start — creates application immediately without email verification",
 )
 def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(get_db)):
-    _ensure_table(db)
+    """Create-or-resume a borrower workspace and issue a PURL token.
 
+    Each phase is tagged so a 500 in production logs the exact failure
+    point (e.g. `POS demo start[create_workspace]: ...`). Without this it's
+    indistinguishable which DB step blew up.
+    """
+    phase = "ensure_table"
     try:
-        org_id = _resolve_organization_id(db, body.lo_slug)
+        _ensure_table(db)
+
+        phase = "resolve_org"
+        try:
+            org_id = _resolve_organization_id(db, body.lo_slug)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception("POS demo start[resolve_org]: failed for lo_slug=%r: %s", body.lo_slug, e)
+            raise HTTPException(status_code=500, detail=f"Organization lookup failed: {type(e).__name__}")
+
+        email_lower = body.email.strip().lower()
+
+        phase = "find_existing_contact"
+        existing_contact = (
+            db.query(PURLContact)
+            .filter(PURLContact.email == email_lower)
+            .order_by(PURLContact.id.desc())
+            .first()
+        )
+
+        if existing_contact:
+            phase = "load_existing_workspace"
+            workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == existing_contact.workspace_id).first()
+            if workspace:
+                phase = "issue_token_existing"
+                token_service = PURLTokenService(db)
+                _token_id, full_token = token_service.create_token(
+                    organization_id=existing_contact.organization_id,
+                    workspace_id=workspace.id,
+                    scope=TokenScope.WRITE,
+                    contact_id=existing_contact.id,
+                    expires_in_days=90,
+                )
+                phase = "commit_existing"
+                db.commit()
+                logger.info(
+                    "POS demo start: returning existing workspace=%d contact=%d for email=%s",
+                    workspace.id, existing_contact.id, email_lower,
+                )
+                return DemoStartResponse(
+                    token=full_token,
+                    workspace_slug=workspace.slug,
+                    borrower_name=existing_contact.first_name or body.first_name,
+                )
+
+        slug = f"{body.first_name.strip().lower()}-{body.last_name.strip().lower()}-{uuid.uuid4().hex[:8]}"
+        display_name = f"{body.first_name.strip()} {body.last_name.strip()}"
+        phone_raw = body.phone.strip() if body.phone else ""
+
+        phase = "create_workspace"
+        workspace = PURLWorkspace(
+            organization_id=org_id,
+            slug=slug,
+            status=WorkspaceStatus.APPLICATION.value,
+            display_name=display_name,
+            source="pos_demo",
+            application_at=datetime.now(timezone.utc),
+        )
+        db.add(workspace)
+        db.flush()
+
+        phase = "create_contact"
+        contact = PURLContact(
+            organization_id=org_id,
+            workspace_id=workspace.id,
+            contact_type=ContactType.BORROWER.value,
+            first_name=body.first_name.strip(),
+            last_name=body.last_name.strip(),
+            email=email_lower,
+            phone=phone_raw,
+        )
+        db.add(contact)
+        db.flush()
+
+        phase = "issue_token_new"
+        token_service = PURLTokenService(db)
+        _token_id, full_token = token_service.create_token(
+            organization_id=org_id,
+            workspace_id=workspace.id,
+            scope=TokenScope.WRITE,
+            contact_id=contact.id,
+            expires_in_days=90,
+        )
+
+        phase = "commit_new"
+        db.commit()
+        logger.info(
+            "POS demo start: created workspace=%d contact=%d slug=%s for email=%s",
+            workspace.id, contact.id, slug, email_lower,
+        )
+        return DemoStartResponse(
+            token=full_token,
+            workspace_slug=slug,
+            borrower_name=body.first_name.strip(),
+        )
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("POS demo start: failed to resolve organization: %s", e)
-        raise HTTPException(status_code=500, detail=f"Organization lookup failed: {type(e).__name__}")
-
-    email_lower = body.email.strip().lower()
-
-    existing_contact = (
-        db.query(PURLContact)
-        .filter(PURLContact.email == email_lower)
-        .order_by(PURLContact.id.desc())
-        .first()
-    )
-    if existing_contact:
-        workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == existing_contact.workspace_id).first()
-        if workspace:
-            token_service = PURLTokenService(db)
-            _token_id, full_token = token_service.create_token(
-                organization_id=existing_contact.organization_id,
-                workspace_id=workspace.id,
-                scope=TokenScope.WRITE,
-                contact_id=existing_contact.id,
-                expires_in_days=90,
-            )
-            db.commit()
-            return DemoStartResponse(
-                token=full_token,
-                workspace_slug=workspace.slug,
-                borrower_name=existing_contact.first_name or body.first_name,
-            )
-
-    slug = f"{body.first_name.strip().lower()}-{body.last_name.strip().lower()}-{uuid.uuid4().hex[:8]}"
-    display_name = f"{body.first_name.strip()} {body.last_name.strip()}"
-    phone_raw = body.phone.strip() if body.phone else ""
-
-    workspace = PURLWorkspace(
-        organization_id=org_id,
-        slug=slug,
-        status=WorkspaceStatus.APPLICATION.value,
-        display_name=display_name,
-        source="pos_demo",
-        application_at=datetime.now(timezone.utc),
-    )
-    db.add(workspace)
-    db.flush()
-
-    contact = PURLContact(
-        organization_id=org_id,
-        workspace_id=workspace.id,
-        contact_type=ContactType.BORROWER.value,
-        first_name=body.first_name.strip(),
-        last_name=body.last_name.strip(),
-        email=email_lower,
-        phone=phone_raw,
-    )
-    db.add(contact)
-    db.flush()
-
-    token_service = PURLTokenService(db)
-    _token_id, full_token = token_service.create_token(
-        organization_id=org_id,
-        workspace_id=workspace.id,
-        scope=TokenScope.WRITE,
-        contact_id=contact.id,
-        expires_in_days=90,
-    )
-    db.commit()
-
-    return DemoStartResponse(
-        token=full_token,
-        workspace_slug=slug,
-        borrower_name=body.first_name.strip(),
-    )
+        # Roll back so the next request on this connection isn't in a poisoned
+        # transaction. Log the phase tag + exception type so production logs
+        # tell us exactly which step blew up — the user-facing response is
+        # sanitized to "Internal server error" by the global handler.
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.exception(
+            "POS demo start[%s] failed for email=%s lo_slug=%r: %s: %s",
+            phase, body.email, body.lo_slug, type(e).__name__, e,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"start-demo failed at phase={phase} error={type(e).__name__}",
+        )
 
 
 @router.post(
