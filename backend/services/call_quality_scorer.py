@@ -158,7 +158,7 @@ def score_call(call_session_id: Any) -> Dict[str, Any]:
     finally:
         try:
             Session.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     if session_row is None:

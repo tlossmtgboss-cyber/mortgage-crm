@@ -34,7 +34,8 @@ from ..state import create_initial_state, QueryIntent
 try:
     from ..orchestration.governance_hooks import run_post_response_governance  # noqa: F401
     _GOVERNANCE_HOOKS_AVAILABLE = True
-except Exception:  # pragma: no cover - never break agent path
+except Exception as _exc:  # pragma: no cover - never break agent path  # noqa: BLE001
+    logger.exception("unhandled exception")
     _GOVERNANCE_HOOKS_AVAILABLE = False
 from ..service_governance import apply_post_response_governance
 

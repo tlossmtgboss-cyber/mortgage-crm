@@ -75,7 +75,7 @@ def _collect_context_values(node: Any, sink: Set[str], depth: int = 0) -> None:
     # fallback: stringify
     try:
         sink.add(_normalize(repr(node)))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
 

@@ -81,17 +81,20 @@ async def slybroadcast_callback(request: Request):
         if "application/json" in ctype:
             try:
                 payload = await request.json()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 payload = {}
         else:
             try:
                 form = await request.form()
                 payload = {k: v for k, v in form.items()}
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 # Last-ditch: try JSON anyway
+                logger.exception("unhandled exception")
                 try:
                     payload = await request.json()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     payload = {}
     except Exception as parse_err:
         logger.warning("slybroadcast webhook: failed to parse payload: %s", parse_err)
@@ -209,7 +212,7 @@ async def slybroadcast_callback(request: Request):
             logger.error("slybroadcast webhook: commit failed: %s", commit_err)
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return JSONResponse(status_code=200, content={"ok": True})
@@ -222,5 +225,5 @@ async def slybroadcast_callback(request: Request):
         if db is not None:
             try:
                 db.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass

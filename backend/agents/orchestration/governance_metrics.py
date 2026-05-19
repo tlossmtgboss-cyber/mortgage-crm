@@ -361,7 +361,7 @@ class GovernanceMetricsStore:
             limit = max(1, min(int(limit), _BUFFER_MAXLEN))
             with self._lock:
                 return list(self._compliance_events)[-limit:][::-1]
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return []
 
     def recent_hallucinations(self, limit: int = 50) -> List[Dict[str, Any]]:
@@ -369,7 +369,7 @@ class GovernanceMetricsStore:
             limit = max(1, min(int(limit), _BUFFER_MAXLEN))
             with self._lock:
                 return list(self._hallucination_events)[-limit:][::-1]
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return []
 
     def recent_tokens(self, limit: int = 50) -> List[Dict[str, Any]]:
@@ -377,7 +377,7 @@ class GovernanceMetricsStore:
             limit = max(1, min(int(limit), _BUFFER_MAXLEN))
             with self._lock:
                 return list(self._token_events)[-limit:][::-1]
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return []
 
     def reset(self) -> None:

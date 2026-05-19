@@ -45,7 +45,8 @@ try:
         AsyncSession,
     )
     _ASYNC_SQLALCHEMY_AVAILABLE = True
-except Exception:  # pragma: no cover - older SQLAlchemy
+except Exception as _exc:  # pragma: no cover - older SQLAlchemy  # noqa: BLE001
+    logger.exception("unhandled exception")
     _ASYNC_SQLALCHEMY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)

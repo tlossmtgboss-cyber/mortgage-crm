@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 try:
     from .orchestration.governance_hooks import run_post_response_governance
     _GOVERNANCE_HOOKS_AVAILABLE = True
-except Exception:  # pragma: no cover - never break agent path
+except Exception as _exc:  # pragma: no cover - never break agent path  # noqa: BLE001
+    logger.exception("unhandled exception")
     _GOVERNANCE_HOOKS_AVAILABLE = False
 
 

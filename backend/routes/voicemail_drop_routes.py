@@ -837,7 +837,8 @@ async def create_voicemail_drop(
                     revoked_ts = borrower_for_consent.consent_revoked_at
                     try:
                         revoked_iso = revoked_ts.isoformat()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         revoked_iso = str(revoked_ts)
                     logger.warning(
                         "TCPA-D4: voicemail blocked — consent revoked for %s at %s",
@@ -897,7 +898,8 @@ async def create_voicemail_drop(
                     _template_audio_url_for_check = _row[1]
             if not delivery_method_for_check:
                 delivery_method_for_check = os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             delivery_method_for_check = os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
 
         _needs_sb_check = delivery_method_for_check in ("slybroadcast", "ringless")

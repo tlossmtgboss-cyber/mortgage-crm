@@ -148,7 +148,7 @@ class SMSOptOutManager:
                 # Non-fatal — sms_opt_outs is the authoritative store; DNC mirror is best-effort.
                 try:
                     self.db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
                 logger.warning(
                     "SMS-003: failed to mirror opt-out into contact_dnc_status: %s",

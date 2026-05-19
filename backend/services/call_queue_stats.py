@@ -72,7 +72,7 @@ def get_queue_depth(organization_id: Optional[int] = None) -> int:
     finally:
         try:
             Session.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -115,7 +115,7 @@ def get_queue_position(
     finally:
         try:
             Session.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

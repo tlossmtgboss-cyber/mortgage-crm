@@ -56,7 +56,7 @@ def _coerce_uuid(value: Any, *, kind: str = "id") -> Optional[uuid.UUID]:
     try:
         if s.lstrip("-").isdigit():
             return uuid.uuid5(_LEGACY_INT_ID_NS, f"{kind}:{s}")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
     return None
 
@@ -120,13 +120,14 @@ def record_state_change(
                 try:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(own_db, int(tenant))
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     # tenant_mixin shape may differ; fall back to raw SET
+                    logger.exception("unhandled exception")
                     own_db.execute(
                         _sa_text("SET LOCAL app.current_tenant = :t"),
                         {"t": str(tenant)},
                     )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # No RLS context configured — fine for system-wide writes.
             pass
 
@@ -168,5 +169,5 @@ def record_state_change(
         if own_db is not None:
             try:
                 own_db.close()
-            except Exception:  # pragma: no cover
+            except Exception as _exc:  # pragma: no cover  # noqa: BLE001
                 pass
