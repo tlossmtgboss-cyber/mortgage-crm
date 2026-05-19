@@ -147,7 +147,11 @@ class PURLTokenService:
         """
         # Validate format
         if not PURLTokenGenerator.is_valid_format(token):
-            logger.warning(f"Invalid token format: {token[:20]}...")
+            logger.warning(
+                "PURL verify rejected: bad format (prefix=%r, len=%d)",
+                token[:10] if token else "",
+                len(token) if token else 0,
+            )
             return None
 
         # Hash the token for lookup
@@ -159,12 +163,16 @@ class PURLTokenService:
         ).first()
 
         if not token_record:
-            logger.warning(f"Token not found: {token[:20]}...")
+            logger.warning("PURL verify rejected: hash not found in purl_access_tokens (prefix=%s)", token[:16])
             return None
 
         # Check status
         if token_record.status != TokenStatus.ACTIVE.value:
-            logger.warning(f"Token {token_record.id} status is {token_record.status}")
+            logger.warning(
+                "PURL verify rejected: token %d status=%s (expected active)",
+                token_record.id,
+                token_record.status,
+            )
             return None
 
         # Check expiration
@@ -172,7 +180,11 @@ class PURLTokenService:
             # Auto-expire the token
             token_record.status = TokenStatus.EXPIRED.value
             self.db.commit()
-            logger.info(f"Token {token_record.id} auto-expired")
+            logger.info(
+                "PURL verify rejected: token %d auto-expired (expires_at=%s)",
+                token_record.id,
+                token_record.expires_at.isoformat(),
+            )
             return None
 
         # Get workspace
@@ -181,7 +193,11 @@ class PURLTokenService:
         ).first()
 
         if not workspace:
-            logger.error(f"Workspace {token_record.workspace_id} not found for token")
+            logger.error(
+                "PURL verify rejected: token %d references missing workspace %d",
+                token_record.id,
+                token_record.workspace_id,
+            )
             return None
 
         # Update last_used_at using raw SQL to avoid foreign key resolution issues

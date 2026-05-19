@@ -34,6 +34,7 @@ interface VerifySession {
 }
 
 const SESSION_KEY = 'perennia_pos_verify';
+const SIGNUP_DRAFT_KEY = 'perennia_pos_signup_draft';
 
 const POSEntryPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -120,10 +121,15 @@ const POSEntryPage: React.FC = () => {
     }
   }, [tokenParam]);
 
+  const [authBounceError, setAuthBounceError] = useState<string | null>(null);
+
   const handleAuthError = () => {
     localStorage.removeItem('perennia_purl_token');
     setApiPurlToken(null);
     setPurlToken(null);
+    setAuthBounceError(
+      "We couldn't open your application. Your details below are saved — please try again, or contact your loan officer if this keeps happening.",
+    );
     setFlowStep('auth');
   };
 
@@ -138,8 +144,10 @@ const POSEntryPage: React.FC = () => {
     setApiPurlToken(token);
     setPurlToken(token);
     if (name) setBorrowerName(name);
+    setAuthBounceError(null);
     setFlowStep('app');
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SIGNUP_DRAFT_KEY);
   };
 
   const handleBack = () => {
@@ -198,7 +206,16 @@ const POSEntryPage: React.FC = () => {
     );
   }
 
-  return <AuthGate onStarted={handleStarted} onVerified={handleVerified} loSlug={loSlug} loProfile={loProfile} />;
+  return (
+    <AuthGate
+      onStarted={handleStarted}
+      onVerified={handleVerified}
+      loSlug={loSlug}
+      loProfile={loProfile}
+      bounceError={authBounceError}
+      onClearBounceError={() => setAuthBounceError(null)}
+    />
+  );
 };
 
 
@@ -211,11 +228,15 @@ function AuthGate({
   onVerified,
   loSlug,
   loProfile,
+  bounceError,
+  onClearBounceError,
 }: {
   onStarted: (session: VerifySession) => void;
   onVerified: (token: string, name?: string) => void;
   loSlug?: string | null;
   loProfile?: LOProfile | null;
+  bounceError?: string | null;
+  onClearBounceError?: () => void;
 }) {
   const [tab, setTab] = useState<AuthTab>('signup');
   const [variant, setVariant] = useState<DesignVariant>('conversational');
@@ -244,7 +265,14 @@ function AuthGate({
   );
 
   const formContent = tab === 'signup' ? (
-    <SignupForm onStarted={onStarted} onVerified={onVerified} onSwitchToLogin={() => setTab('login')} loSlug={loSlug} />
+    <SignupForm
+      onStarted={onStarted}
+      onVerified={onVerified}
+      onSwitchToLogin={() => setTab('login')}
+      loSlug={loSlug}
+      bounceError={bounceError ?? null}
+      onClearBounceError={onClearBounceError}
+    />
   ) : (
     <LoginForm onStarted={onStarted} onVerified={onVerified} onSwitchToSignup={() => setTab('signup')} />
   );
@@ -734,18 +762,41 @@ function SignupForm({
   onVerified,
   onSwitchToLogin,
   loSlug,
+  bounceError,
+  onClearBounceError,
 }: {
   onStarted: (session: VerifySession) => void;
   onVerified: (token: string, name?: string) => void;
   onSwitchToLogin: () => void;
   loSlug?: string | null;
+  bounceError?: string | null;
+  onClearBounceError?: () => void;
 }) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  // Hydrate from sessionStorage so values survive a bounce back from a failed
+  // post-signup auth (POSContainer can unmount this form via onAuthError).
+  const draft = (() => {
+    try {
+      const raw = sessionStorage.getItem(SIGNUP_DRAFT_KEY);
+      if (raw) return JSON.parse(raw) as { firstName?: string; lastName?: string; email?: string; phone?: string };
+    } catch { /* ignore parse error */ }
+    return {} as { firstName?: string; lastName?: string; email?: string; phone?: string };
+  })();
+
+  const [firstName, setFirstName] = useState(draft.firstName || '');
+  const [lastName, setLastName] = useState(draft.lastName || '');
+  const [email, setEmail] = useState(draft.email || '');
+  const [phone, setPhone] = useState(draft.phone || '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        SIGNUP_DRAFT_KEY,
+        JSON.stringify({ firstName, lastName, email, phone }),
+      );
+    } catch { /* storage full or disabled — fine */ }
+  }, [firstName, lastName, email, phone]);
 
   const isValid = firstName.trim() && lastName.trim() && email.trim();
 
@@ -753,6 +804,7 @@ function SignupForm({
     e.preventDefault();
     if (!isValid) return;
     setError('');
+    onClearBounceError?.();
     setSubmitting(true);
 
     try {
@@ -790,6 +842,9 @@ function SignupForm({
         Your progress saves automatically.
       </p>
 
+      {bounceError && !error && (
+        <div className="pos-start__error" role="alert">{bounceError}</div>
+      )}
       {error && <div className="pos-start__error">{error}</div>}
 
       <form onSubmit={handleSubmit}>
