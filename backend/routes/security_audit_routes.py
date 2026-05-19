@@ -46,6 +46,9 @@ from sqlalchemy.orm import Session
 from auth.dependencies import get_current_user_flexible
 from db import get_db
 from services.audit_events import audit_event
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +200,7 @@ async def receive_audit_log(
     body: AuditLogRequest,
     request: Request,
     user=Depends(get_current_user_flexible),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Receive batched security audit events from the iOS AuditLogger.
 
@@ -305,11 +308,11 @@ async def receive_audit_log(
 
     # Commit the batch
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.exception("[SecurityAudit] Failed to commit audit batch: %s", e)
         try:
-            db.rollback()
+            await db.rollback()
         except Exception as _exc:  # noqa: BLE001
             pass
         return AuditLogResponse(

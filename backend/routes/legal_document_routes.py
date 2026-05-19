@@ -17,6 +17,9 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import json
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +62,7 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/admin/legal-documents", tags=["Legal Documents"])
     async def list_legal_documents(
         document_type: Optional[str] = Query(None),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List all legal documents for the organization (WL-007)."""
@@ -81,7 +84,7 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
 
         query += " ORDER BY document_type, version DESC"
 
-        rows = db.execute(text(query), params).fetchall()
+        rows = await db.execute(text(query), params).fetchall()
         docs = []
         for r in rows:
             docs.append({
@@ -102,14 +105,14 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/admin/legal-documents/{doc_id}", tags=["Legal Documents"])
     async def get_legal_document(
         doc_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get a legal document with full content (WL-007)."""
         _require_admin(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT id, organization_id, document_type, title, content_html, content_text,
                    version, is_published, effective_date, requires_acceptance,
                    created_by_id, created_at, updated_at, published_at
@@ -137,7 +140,7 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/legal-documents", tags=["Legal Documents"], status_code=201)
     async def create_legal_document(
         body: LegalDocumentCreate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Create a new legal document for the organization (WL-007)."""
@@ -149,7 +152,7 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
         if body.document_type not in VALID_DOC_TYPES:
             raise HTTPException(status_code=400, detail=f"Invalid type. Must be one of: {VALID_DOC_TYPES}")
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO tenant_legal_documents
                 (organization_id, document_type, title, content_html, content_text,
                  version, effective_date, requires_acceptance, is_published,
@@ -171,7 +174,7 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
             "user_id": current_user.id,
         })
         doc_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {"id": doc_id, "message": f"Legal document '{body.title}' created (draft)"}
 
@@ -182,14 +185,14 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
     async def update_legal_document(
         doc_id: int,
         body: LegalDocumentUpdate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Update a legal document (WL-007)."""
         _require_admin(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        existing = db.execute(text(
+        existing = await db.execute(text(
             "SELECT id, is_published FROM tenant_legal_documents WHERE id = :id AND organization_id = :org_id"
         ), {"id": doc_id, "org_id": org_id}).fetchone()
         if not existing:
@@ -215,8 +218,8 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
             "UPDATE tenant_legal_documents SET " + ", ".join(updates)
             + " WHERE id = :id AND organization_id = :org_id"
         )
-        db.execute(text(sql), params)
-        db.commit()
+        await db.execute(text(sql), params)
+        await db.commit()
 
         return {"id": doc_id, "message": "Legal document updated"}
 
@@ -226,32 +229,32 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/legal-documents/{doc_id}/publish", tags=["Legal Documents"])
     async def publish_legal_document(
         doc_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Publish a legal document, making it the active version for borrowers (WL-007)."""
         _require_admin(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        row = db.execute(text(
+        row = await db.execute(text(
             "SELECT id, document_type FROM tenant_legal_documents WHERE id = :id AND organization_id = :org_id"
         ), {"id": doc_id, "org_id": org_id}).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Legal document not found")
 
         # Unpublish previous version of same type
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tenant_legal_documents SET is_published = false
             WHERE organization_id = :org_id AND document_type = :dt AND id != :id
         """), {"org_id": org_id, "dt": row[1], "id": doc_id})
 
         # Publish this version
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tenant_legal_documents
             SET is_published = true, published_at = NOW(), updated_at = NOW()
             WHERE id = :id
         """), {"id": doc_id})
-        db.commit()
+        await db.commit()
 
         return {"id": doc_id, "message": f"Published as active {row[1]}"}
 
@@ -262,13 +265,13 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
     async def get_public_legal_document(
         org_slug: str,
         doc_type: str,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """Get the published legal document for a given org (public, no auth). WL-007."""
         if doc_type not in VALID_DOC_TYPES:
             raise HTTPException(status_code=404, detail="Document type not found")
 
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT d.title, d.content_html, d.content_text, d.version,
                    d.effective_date, o.name as org_name
             FROM tenant_legal_documents d

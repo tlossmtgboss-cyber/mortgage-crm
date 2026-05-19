@@ -22,6 +22,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +52,14 @@ def get_health_router(
     router = APIRouter(prefix="/health", tags=["Health"])
 
     @router.get("")
-    async def health_check(db: Session = Depends(get_db)):
+    async def health_check(db: AsyncSession = Depends(get_async_db)):
         """
         Basic health check endpoint.
 
         Returns database connectivity status and basic metadata.
         """
         try:
-            db.execute(text("SELECT 1"))
+            await db.execute(text("SELECT 1"))
             return {
                 "status": "healthy",
                 "database": "connected",
@@ -89,7 +92,7 @@ def get_health_router(
         # Check database
         try:
             db = SessionLocal()
-            db.execute(text("SELECT 1"))
+            await db.execute(text("SELECT 1"))
             db.close()
             checks["database"] = True
         except Exception as e:

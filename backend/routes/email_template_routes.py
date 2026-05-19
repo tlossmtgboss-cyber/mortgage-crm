@@ -18,6 +18,9 @@ from typing import Optional, List, Dict
 from datetime import datetime, timezone
 import json
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +207,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
         category: Optional[str] = Query(None),
         template_type: Optional[str] = Query(None),
         is_active: Optional[bool] = Query(None),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List all email templates for the current organization (WL-003)."""
@@ -233,7 +236,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
 
         query += " ORDER BY template_type, name"
 
-        rows = db.execute(text(query), params).fetchall()
+        rows = await db.execute(text(query), params).fetchall()
         templates = []
         for r in rows:
             templates.append({
@@ -251,14 +254,14 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/admin/email-templates/{template_id}", tags=["Email Templates"])
     async def get_email_template(
         template_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get a single email template with full body content (WL-003)."""
         _require_admin(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT id, organization_id, template_type, name, subject,
                    body_html, body_text, cta_text, cta_url,
                    merge_fields, category, is_active, created_at, updated_at
@@ -284,7 +287,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/email-templates", tags=["Email Templates"], status_code=201)
     async def create_email_template(
         body: EmailTemplateCreate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Create a new email template for the organization (WL-003)."""
@@ -293,7 +296,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
         if not org_id:
             raise HTTPException(status_code=403, detail="Organization context required")
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO tenant_email_templates
                 (organization_id, template_type, name, subject, body_html, body_text,
                  cta_text, cta_url, merge_fields, category, is_active,
@@ -318,7 +321,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
             "user_id": current_user.id,
         })
         template_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {"id": template_id, "message": f"Template '{body.name}' created"}
 
@@ -329,7 +332,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
     async def update_email_template(
         template_id: int,
         body: EmailTemplateUpdate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Update an email template (WL-003)."""
@@ -337,7 +340,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, 'organization_id', None)
 
         # Verify ownership
-        existing = db.execute(text(
+        existing = await db.execute(text(
             "SELECT id FROM tenant_email_templates WHERE id = :id AND organization_id = :org_id"
         ), {"id": template_id, "org_id": org_id}).fetchone()
         if not existing:
@@ -362,8 +365,8 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
             "UPDATE tenant_email_templates SET " + ", ".join(updates)
             + " WHERE id = :id AND organization_id = :org_id"
         )
-        db.execute(text(update_sql), params)
-        db.commit()
+        await db.execute(text(update_sql), params)
+        await db.commit()
 
         return {"id": template_id, "message": "Template updated"}
 
@@ -373,17 +376,17 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
     @app.delete("/api/v1/admin/email-templates/{template_id}", tags=["Email Templates"])
     async def delete_email_template(
         template_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Delete an email template (WL-003)."""
         _require_admin(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        result = db.execute(text(
+        result = await db.execute(text(
             "DELETE FROM tenant_email_templates WHERE id = :id AND organization_id = :org_id"
         ), {"id": template_id, "org_id": org_id})
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Template not found")
@@ -397,14 +400,14 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
     async def preview_email_template(
         template_id: int,
         body: TemplatePreviewRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Preview a template with merge field substitution (WL-003)."""
         _require_admin(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT subject, body_html, body_text, cta_text, cta_url
             FROM tenant_email_templates
             WHERE id = :id AND organization_id = :org_id
@@ -439,7 +442,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
     # ==================================================================
     @app.post("/api/v1/admin/email-templates/reset-defaults", tags=["Email Templates"])
     async def reset_default_templates(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Reset organization templates to system defaults (WL-003)."""
@@ -451,13 +454,13 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
         created = 0
         for tmpl in SYSTEM_DEFAULT_TEMPLATES:
             # Only insert if template_type doesn't exist for this org
-            existing = db.execute(text("""
+            existing = await db.execute(text("""
                 SELECT id FROM tenant_email_templates
                 WHERE organization_id = :org_id AND template_type = :tt
             """), {"org_id": org_id, "tt": tmpl["template_type"]}).fetchone()
 
             if not existing:
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO tenant_email_templates
                         (organization_id, template_type, name, subject, body_html, body_text,
                          cta_text, cta_url, merge_fields, category, is_active,
@@ -481,7 +484,7 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
                 })
                 created += 1
 
-        db.commit()
+        await db.commit()
         return {"message": f"Reset complete: {created} default templates created", "created": created}
 
     logger.info("  Email template routes registered (WL-003)")

@@ -470,6 +470,86 @@ class GovernanceMetricsStore:
             logger.debug("governance_metrics.get_fleet_summary swallowed: %s", exc)
             return {"generated_at": _utc_now_iso(), "error": "summary_unavailable"}
 
+    def get_tool_summary(self, tool_name: str, last_n: int = 20) -> Dict[str, Any]:
+        """
+        Aggregated stats for a single tool: call count, success rate, latency
+        percentiles, token totals, and estimated cost.
+        """
+        try:
+            tool_name = str(tool_name)
+            last_n = max(0, int(last_n))
+            with self._lock:
+                calls = int(self._tool_call_count.get(tool_name, 0))
+                successes = int(self._tool_success_count.get(tool_name, 0))
+                in_tok = int(self._tool_input_tokens.get(tool_name, 0))
+                out_tok = int(self._tool_output_tokens.get(tool_name, 0))
+                cost = float(self._tool_cost_usd.get(tool_name, 0.0))
+                latencies = list(self._tool_latencies.get(tool_name, deque()))
+                recent = list(self._tool_per_name.get(tool_name, deque()))[-last_n:] if last_n else []
+
+            success_rate = round((successes / calls), 4) if calls > 0 else 1.0
+            return {
+                "tool_name": tool_name,
+                "total_calls": calls,
+                "success_count": successes,
+                "failure_count": calls - successes,
+                "success_rate": success_rate,
+                "p50_latency_ms": round(_percentile(latencies, 50), 3),
+                "p95_latency_ms": round(_percentile(latencies, 95), 3),
+                "p99_latency_ms": round(_percentile(latencies, 99), 3),
+                "total_input_tokens": in_tok,
+                "total_output_tokens": out_tok,
+                "total_tokens": in_tok + out_tok,
+                "estimated_cost_usd": round(cost, 6),
+                "recent": recent,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("governance_metrics.get_tool_summary swallowed: %s", exc)
+            return {"tool_name": str(tool_name), "error": "summary_unavailable"}
+
+    def get_top_tools_by_cost(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Rank known tools by total estimated cost (USD) descending. Each row
+        carries calls, success_rate, p95 latency, tokens, and cost so a
+        dashboard can render the full picture in one shot.
+        """
+        try:
+            limit = max(1, int(limit))
+            with self._lock:
+                tool_names = list(self._tool_call_count.keys())
+                rows: List[Dict[str, Any]] = []
+                for name in tool_names:
+                    calls = int(self._tool_call_count.get(name, 0))
+                    successes = int(self._tool_success_count.get(name, 0))
+                    in_tok = int(self._tool_input_tokens.get(name, 0))
+                    out_tok = int(self._tool_output_tokens.get(name, 0))
+                    cost = float(self._tool_cost_usd.get(name, 0.0))
+                    latencies = list(self._tool_latencies.get(name, deque()))
+                    rows.append({
+                        "tool_name": name,
+                        "total_calls": calls,
+                        "success_rate": round((successes / calls), 4) if calls > 0 else 1.0,
+                        "p50_latency_ms": round(_percentile(latencies, 50), 3),
+                        "p95_latency_ms": round(_percentile(latencies, 95), 3),
+                        "total_input_tokens": in_tok,
+                        "total_output_tokens": out_tok,
+                        "total_tokens": in_tok + out_tok,
+                        "estimated_cost_usd": round(cost, 6),
+                    })
+            rows.sort(key=lambda r: r["estimated_cost_usd"], reverse=True)
+            return rows[:limit]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("governance_metrics.get_top_tools_by_cost swallowed: %s", exc)
+            return []
+
+    def recent_tool_calls(self, limit: int = 50) -> List[Dict[str, Any]]:
+        try:
+            limit = max(1, min(int(limit), _BUFFER_MAXLEN))
+            with self._lock:
+                return list(self._tool_events)[-limit:][::-1]
+        except Exception as _exc:  # noqa: BLE001
+            return []
+
     def recent_compliance(self, limit: int = 50) -> List[Dict[str, Any]]:
         try:
             limit = max(1, min(int(limit), _BUFFER_MAXLEN))
@@ -513,10 +593,22 @@ class GovernanceMetricsStore:
             self._token_input_total.clear()
             self._token_output_total.clear()
             self._token_call_count.clear()
+            self._tool_events.clear()
+            self._tool_per_name.clear()
+            self._tool_call_count.clear()
+            self._tool_success_count.clear()
+            self._tool_input_tokens.clear()
+            self._tool_output_tokens.clear()
+            self._tool_cost_usd.clear()
+            self._tool_latencies.clear()
 
 
 # Module-level singleton.
 governance_metrics = GovernanceMetricsStore()
 
 
-__all__ = ["GovernanceMetricsStore", "governance_metrics"]
+__all__ = [
+    "GovernanceMetricsStore",
+    "governance_metrics",
+    "_PRICING_PER_1K_TOKENS",
+]

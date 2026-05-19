@@ -20,6 +20,9 @@ import re
 
 from routes.scheduler._helpers import get_current_user, get_models, _get_org_id, _audit_log
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,7 @@ router = APIRouter()
 async def list_reminder_templates(
     request: Request,
     include_inactive: bool = Query(False, description="Include deactivated templates"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all reminder templates for the authenticated user's organization."""
     from database.models.reminder_config import ReminderTemplate
@@ -82,7 +85,7 @@ async def list_reminder_templates(
 @router.post("/reminders/templates", status_code=201)
 async def create_reminder_template(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new reminder template for the organization."""
     from database.models.reminder_config import ReminderTemplate
@@ -128,7 +131,7 @@ async def create_reminder_template(
         appointment_type_id=body.get("appointment_type_id"),
     )
     db.add(template)
-    db.flush()
+    await db.flush()
 
     _audit_log(
         db, org_id, getattr(user, "id", None), "created",
@@ -136,7 +139,7 @@ async def create_reminder_template(
         changes={"name": template.name, "channel": template.channel},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return {
         "id": template.id,
@@ -160,7 +163,7 @@ async def create_reminder_template(
 async def update_reminder_template(
     template_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update an existing reminder template."""
     from database.models.reminder_config import ReminderTemplate
@@ -225,7 +228,7 @@ async def update_reminder_template(
             request=request,
         )
 
-    db.commit()
+    await db.commit()
 
     return {
         "id": template.id,
@@ -249,7 +252,7 @@ async def update_reminder_template(
 async def delete_reminder_template(
     template_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete a reminder template. Associated logs are preserved (SET NULL)."""
     from database.models.reminder_config import ReminderTemplate
@@ -277,7 +280,7 @@ async def delete_reminder_template(
         changes={"name": template_name},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return {"success": True, "deleted_id": template_id}
 
@@ -293,7 +296,7 @@ async def list_reminder_logs(
     status: Optional[str] = Query(None, description="Filter by status (sent/failed/skipped)"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """View reminder send history with optional filters."""
     from database.models.reminder_config import ReminderLog, ReminderTemplate
@@ -351,7 +354,7 @@ async def list_reminder_logs(
 @router.post("/reminders/test")
 async def send_test_reminder(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Send a test reminder using a template with sample data.

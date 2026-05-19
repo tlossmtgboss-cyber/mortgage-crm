@@ -21,6 +21,9 @@ import logging
 
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +68,7 @@ async def list_appointment_templates(
     include_inactive: bool = Query(False, description="Include deactivated templates"),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all appointment templates for the authenticated user's organization."""
     from database.models.appointment_template import AppointmentTemplate
@@ -106,7 +109,7 @@ MAX_TEMPLATES_PER_ORG = 50
 @router.post("/templates", status_code=201)
 async def create_appointment_template(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new appointment template for the organization."""
     from database.models.appointment_template import AppointmentTemplate
@@ -178,7 +181,7 @@ async def create_appointment_template(
         sort_order=body.get("sort_order", existing_count),
     )
     db.add(template)
-    db.flush()
+    await db.flush()
 
     _audit_log(
         db, org_id, getattr(user, "id", None), "created",
@@ -186,7 +189,7 @@ async def create_appointment_template(
         changes={"name": template.name, "location_type": template.location_type},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return _serialize_template(template)
 
@@ -199,7 +202,7 @@ async def create_appointment_template(
 async def update_appointment_template(
     template_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update an existing appointment template."""
     from database.models.appointment_template import AppointmentTemplate
@@ -297,7 +300,7 @@ async def update_appointment_template(
             request=request,
         )
 
-    db.commit()
+    await db.commit()
 
     return _serialize_template(template)
 
@@ -310,7 +313,7 @@ async def update_appointment_template(
 async def delete_appointment_template(
     template_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Soft-delete an appointment template."""
     from database.models.appointment_template import AppointmentTemplate
@@ -339,7 +342,7 @@ async def delete_appointment_template(
         changes={"name": template.name},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return {"success": True, "deleted_id": template_id}
 
@@ -352,7 +355,7 @@ async def delete_appointment_template(
 async def duplicate_appointment_template(
     template_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Clone an existing appointment template."""
     from database.models.appointment_template import AppointmentTemplate
@@ -415,7 +418,7 @@ async def duplicate_appointment_template(
         sort_order=existing_count,
     )
     db.add(clone)
-    db.flush()
+    await db.flush()
 
     _audit_log(
         db, org_id, getattr(user, "id", None), "duplicated",
@@ -423,7 +426,7 @@ async def duplicate_appointment_template(
         changes={"source_id": source.id, "source_name": source.name, "new_name": clone.name},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return _serialize_template(clone)
 

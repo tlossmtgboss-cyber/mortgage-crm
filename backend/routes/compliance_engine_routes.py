@@ -24,6 +24,9 @@ from typing import List, Optional
 from fastapi import Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +108,7 @@ def register_compliance_engine_routes(app, get_db, get_current_user, **kwargs):
     )
     async def get_loan_deadlines(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get upcoming compliance deadlines for a loan.
@@ -139,7 +142,7 @@ def register_compliance_engine_routes(app, get_db, get_current_user, **kwargs):
     )
     async def get_loan_compliance_status(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get current compliance status for a loan.
@@ -169,7 +172,7 @@ def register_compliance_engine_routes(app, get_db, get_current_user, **kwargs):
     )
     async def get_loan_sla_status(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get SLA status for a loan.

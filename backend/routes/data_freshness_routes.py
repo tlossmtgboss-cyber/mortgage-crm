@@ -13,6 +13,9 @@ Endpoints:
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +43,7 @@ def register_data_freshness_routes(app, get_db, get_current_user, **kwargs):
     async def data_freshness_report(
         stale_lead_days: int = Query(30, ge=1, le=365, description="Days threshold for stale leads"),
         stale_loan_days: int = Query(60, ge=1, le=365, description="Days threshold for stale pipeline loans"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -69,7 +72,7 @@ def register_data_freshness_routes(app, get_db, get_current_user, **kwargs):
     # ========================================================================
     @app.get("/api/v1/data-quality/completeness", tags=["Data Quality"])
     async def data_completeness_report(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -89,7 +92,7 @@ def register_data_freshness_routes(app, get_db, get_current_user, **kwargs):
     # ========================================================================
     @app.get("/api/v1/data-quality/score", tags=["Data Quality"])
     async def data_quality_score(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -111,7 +114,7 @@ def register_data_freshness_routes(app, get_db, get_current_user, **kwargs):
     async def data_quality_dashboard(
         stale_lead_days: int = Query(30, ge=1, le=365, description="Days threshold for stale leads"),
         stale_loan_days: int = Query(60, ge=1, le=365, description="Days threshold for stale pipeline loans"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -309,7 +312,7 @@ def register_data_freshness_routes(app, get_db, get_current_user, **kwargs):
     async def data_quality_auto_merge(
         threshold: float = Query(0.95, ge=0.8, le=1.0, description="Minimum confidence to auto-merge"),
         dry_run: bool = Query(True, description="Preview merges without executing (default: true)"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -333,7 +336,7 @@ def register_data_freshness_routes(app, get_db, get_current_user, **kwargs):
         )
 
         if not dry_run:
-            db.commit()
+            await db.commit()
 
         return result
 

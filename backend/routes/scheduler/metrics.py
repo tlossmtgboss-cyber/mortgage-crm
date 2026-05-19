@@ -16,6 +16,9 @@ import logging
 
 from db import get_db
 from routes.scheduler._helpers import get_current_user, _is_scheduler_admin
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +32,7 @@ router = APIRouter()
 @router.get("/metrics")
 async def get_scheduler_metrics(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return current scheduler metrics as JSON.
 
@@ -52,7 +55,7 @@ async def get_scheduler_metrics(
 @router.get("/metrics/prometheus")
 async def get_scheduler_metrics_prometheus(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return scheduler metrics in Prometheus text exposition format.
 
@@ -78,7 +81,7 @@ async def get_scheduler_metrics_prometheus(
 @router.post("/metrics/reset")
 async def reset_scheduler_metrics(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Reset all scheduler metrics counters and timings.
 

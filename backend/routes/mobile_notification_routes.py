@@ -18,6 +18,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.auth_deps import require_auth, current_user_dep
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,7 @@ async def get_mobile_notifications(
     offset: int = Query(default=0, ge=0),
     unread_only: bool = Query(default=False),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return notifications for the authenticated user.
 
@@ -108,7 +111,7 @@ async def get_mobile_notifications(
 async def mark_notification_read(
     notification_id: int,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Mark a single notification as read."""
     from database.models.security import Notification
@@ -131,9 +134,9 @@ async def mark_notification_read(
     notif.read_at = datetime.now(timezone.utc)
 
     try:
-        db.commit()
+        await db.commit()
     except Exception as exc:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to mark notification %s as read: %s", notification_id, exc)
         raise HTTPException(status_code=500, detail="Failed to update notification")
 
@@ -147,7 +150,7 @@ async def mark_notification_read(
 @router.post("/notifications/read-all")
 async def mark_all_notifications_read(
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Mark all unread notifications as read for the current user."""
     from database.models.security import Notification
@@ -171,9 +174,9 @@ async def mark_all_notifications_read(
                 synchronize_session="fetch",
             )
         )
-        db.commit()
+        await db.commit()
     except Exception as exc:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to mark all notifications as read: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to update notifications")
 

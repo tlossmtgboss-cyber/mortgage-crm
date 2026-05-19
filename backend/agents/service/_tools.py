@@ -12,6 +12,7 @@ Shared state expected on self:
 """
 
 import logging
+import time
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -361,6 +362,8 @@ class ToolDispatchMixin:
         if tool_name not in self._tool_functions:
             return {"error": f"Unknown tool: {tool_name}"}
 
+        started_ms = time.perf_counter()
+        success = False
         try:
             func = self._tool_functions[tool_name]
             result = await func(args)
@@ -368,10 +371,33 @@ class ToolDispatchMixin:
             # Post-execution tenant validation (defense-in-depth)
             result = self._validate_tool_result_tenant(tool_name, result)
 
+            success = not (isinstance(result, dict) and "error" in result)
             return result
         except Exception as e:
             logger.error(f"Tool execution error ({tool_name}): {e}")
             return {"error": "Internal server error"}
+        finally:
+            # Per-tool cost telemetry (Wave 5, D3 audit remediation).
+            # Best-effort: never let governance bookkeeping fault the caller.
+            try:
+                from agents.orchestration.governance_metrics import governance_metrics
+
+                duration_ms = (time.perf_counter() - started_ms) * 1000.0
+                agent_id = getattr(self, "agent_id", None) or getattr(self, "_agent_id", "unknown")
+                agent_role = getattr(self, "agent_role", None) or getattr(self, "_agent_role", "unknown")
+                model = getattr(self, "model", None) or getattr(self, "_model", None)
+                governance_metrics.record_tool_call(
+                    agent_id=agent_id,
+                    agent_role=agent_role,
+                    tool_name=tool_name,
+                    input_tokens=0,
+                    output_tokens=0,
+                    model=model,
+                    duration_ms=duration_ms,
+                    success=success,
+                )
+            except Exception as _telemetry_exc:  # noqa: BLE001
+                logger.debug("tool telemetry swallowed: %s", _telemetry_exc)
 
     def _validate_tool_result_tenant(self, tool_name: str, result: Any) -> Any:
         """Validate that tool results belong to the current user's organization.

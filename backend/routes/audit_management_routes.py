@@ -16,6 +16,9 @@ from sqlalchemy.orm import Session
 
 from auth.dependencies import get_current_user_flexible
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +51,7 @@ def _require_platform_admin(user) -> None:
 async def audit_cleanup(
     request: Request,
     body: AuditCleanupRequest = AuditCleanupRequest(),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_flexible),
 ):
     """Delete audit log entries older than the retention period.

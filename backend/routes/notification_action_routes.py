@@ -22,6 +22,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.auth_deps import current_user_dep, require_auth
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +86,7 @@ class TaskCompleteResponse(BaseModel):
 )
 async def complete_task(
     task_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -124,10 +127,10 @@ async def complete_task(
     task.updated_at = now
 
     try:
-        db.commit()
-        db.refresh(task)
+        await db.commit()
+        await db.refresh(task)
     except Exception as exc:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to complete task %s: %s", task_id, exc)
         raise HTTPException(status_code=500, detail="Failed to complete task")
 
@@ -155,7 +158,7 @@ async def complete_task(
 )
 async def extend_rate_lock(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -176,10 +179,10 @@ async def extend_rate_lock(
 
     # Query loan scoped to user's organisation
     org_id = getattr(current_user, "organization_id", None)
-    loan = db.query(Loan).filter(
+    loan = (await db.execute(select(Loan).where(
         Loan.id == loan_id,
         Loan.organization_id == org_id
-    ).first()
+    ))).scalars().first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -229,10 +232,10 @@ async def extend_rate_lock(
     loan.rate_lock_history = history
 
     try:
-        db.commit()
-        db.refresh(loan)
+        await db.commit()
+        await db.refresh(loan)
     except Exception as exc:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to extend rate lock for loan %s: %s", loan_id, exc)
         raise HTTPException(status_code=500, detail="Failed to extend rate lock")
 
@@ -260,7 +263,7 @@ async def extend_rate_lock(
 async def send_doc_reminder(
     body: DocReminderRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """

@@ -14,6 +14,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +52,7 @@ def get_user_model():
 @router.post("/{client_id}/portal")
 async def create_mum_client_portal(
     client_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """
@@ -61,7 +64,7 @@ async def create_mum_client_portal(
     MUMClient = get_mum_client_model()
 
     # Get the MUM client
-    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+    client = (await db.execute(select(MUMClient).where(MUMClient.id == client_id))).scalars().first()
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
 
@@ -85,7 +88,7 @@ async def create_mum_client_portal(
 @router.get("/{client_id}/portal")
 async def get_mum_client_portal(
     client_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """
@@ -97,7 +100,7 @@ async def get_mum_client_portal(
     MUMClient = get_mum_client_model()
 
     # Get the MUM client
-    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+    client = (await db.execute(select(MUMClient).where(MUMClient.id == client_id))).scalars().first()
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
 
@@ -125,7 +128,7 @@ async def post_mum_portal_message(
     content: str = Body(..., embed=True),
     message_type: str = Body("text", embed=True),
     metadata: Optional[Dict] = Body(None, embed=True),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """
@@ -137,7 +140,7 @@ async def post_mum_portal_message(
     MUMClient = get_mum_client_model()
 
     # Get the MUM client
-    client = db.query(MUMClient).filter(MUMClient.id == client_id).first()
+    client = (await db.execute(select(MUMClient).where(MUMClient.id == client_id))).scalars().first()
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
 

@@ -19,6 +19,9 @@ from sqlalchemy.orm import Session
 from database import get_db, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
 from routes.auth_deps import require_auth
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics Tracking"], dependencies=[Depends(require_auth)])
@@ -160,7 +163,7 @@ class BetaMetricsResponse(BaseModel):
 @router.post("/track")
 async def track_event(
     event_data: EventTrackRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Track a user event.
@@ -197,7 +200,7 @@ async def track_event(
         )
 
         db.add(db_event)
-        db.commit()
+        await db.commit()
 
         return {"success": True}
 
@@ -210,7 +213,7 @@ async def track_event(
 @router.get("/events/summary", response_model=EventsSummaryResponse)
 async def get_events_summary(
     days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get summary of events for the last N days.
@@ -275,7 +278,7 @@ async def get_events_summary(
 async def get_feature_stats(
     feature_name: str,
     days: int = Query(30, ge=1, le=90, description="Number of days to analyze"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get detailed stats for a specific feature.
@@ -324,7 +327,7 @@ async def get_feature_stats(
 
 
 @router.get("/beta/metrics", response_model=BetaMetricsResponse)
-async def get_beta_metrics(db: Session = Depends(get_db)):
+async def get_beta_metrics(db: AsyncSession = Depends(get_async_db)):
     """
     Get key metrics for beta program monitoring.
 

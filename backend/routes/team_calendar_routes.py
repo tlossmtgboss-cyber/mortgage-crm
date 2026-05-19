@@ -16,6 +16,9 @@ from pydantic import BaseModel
 import logging
 
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ def set_dependencies(get_current_user_func, models_dict):
     _models = models_dict
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     if _get_current_user_func is None:
         raise RuntimeError("Dependencies not set for team_calendar_routes")
     auth_header = request.headers.get("Authorization", "")
@@ -118,7 +121,7 @@ async def get_team_calendar(
     start_date: date = Query(..., description="Start of date range (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End of date range (YYYY-MM-DD)"),
     lo_ids: Optional[str] = Query(None, description="Comma-separated LO user IDs to filter"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get all LOs' appointments for a date range, grouped by LO.
@@ -214,7 +217,7 @@ async def get_team_capacity(
     start_date: date = Query(...),
     end_date: date = Query(...),
     lo_ids: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Capacity summary: booked slots vs available capacity per LO per day.
@@ -301,7 +304,7 @@ async def get_team_capacity(
 async def reassign_appointment(
     request: Request,
     body: ReassignRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Move an appointment to a different LO.
@@ -375,8 +378,8 @@ async def reassign_appointment(
         + "]"
     )
 
-    db.commit()
-    db.refresh(appointment)
+    await db.commit()
+    await db.refresh(appointment)
 
     # Send notification emails (best-effort, non-blocking)
     try:
@@ -416,7 +419,7 @@ async def get_availability_matrix(
     target_date: date = Query(..., description="Date to check availability (YYYY-MM-DD)"),
     duration_minutes: int = Query(30, description="Desired appointment duration"),
     lo_ids: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Shows available time slots across all LOs for a given date.

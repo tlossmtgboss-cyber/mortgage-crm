@@ -6,10 +6,13 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from db import get_db
+from db import get_async_db
 from routes.scheduler._core import get_current_user_func
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Authenticate the current user from the Authorization header."""
     func = get_current_user_func()
     if func is None:

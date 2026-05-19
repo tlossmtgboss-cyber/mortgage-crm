@@ -27,6 +27,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +187,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
     )
     async def get_ai_cost_summary(
         period_days: int = Query(30, ge=1, le=365),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return platform-wide AI cost summary (admin only).
@@ -208,7 +211,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
         org_id: int,
         start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
         end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return cost breakdown for a specific organization.
@@ -254,7 +257,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
     async def get_ai_cost_daily_trend(
         period_days: int = Query(30, ge=1, le=365),
         org_id: Optional[int] = Query(None, description="Filter by org (admin only for cross-org)"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return daily cost trend for the last N days.
@@ -289,7 +292,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
     async def get_ai_cost_by_agent(
         org_id: Optional[int] = Query(None, description="Organization ID"),
         period_days: int = Query(30, ge=1, le=365),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return cost breakdown by agent type for an organization.
@@ -336,7 +339,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
         summary="Budget status for all orgs",
     )
     async def get_ai_budget_status(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return current spend vs budget for all organizations (admin only).
@@ -368,7 +371,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
     async def set_ai_org_budget(
         org_id: int,
         body: SetBudgetRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Set or remove the daily AI budget for an organization (admin only).
@@ -381,7 +384,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
         from sqlalchemy import text as sql_text
 
         # Verify org exists
-        org_row = db.execute(sql_text(
+        org_row = await db.execute(sql_text(
             "SELECT id, name FROM organizations WHERE id = :org_id"
         ), {"org_id": org_id}).fetchone()
 
@@ -389,10 +392,10 @@ def register_ai_cost_routes(app, get_db, get_current_user):
             raise HTTPException(status_code=404, detail=f"Organization {org_id} not found")
 
         budget_value = body.daily_budget_usd
-        db.execute(sql_text(
+        await db.execute(sql_text(
             "UPDATE organizations SET ai_daily_budget_usd = :budget WHERE id = :org_id"
         ), {"budget": budget_value, "org_id": org_id})
-        db.commit()
+        await db.commit()
 
         # Also update the in-memory budget tracker
         try:
@@ -427,7 +430,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
     )
     async def get_ai_budget_alerts(
         limit: int = Query(50, ge=1, le=200),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return recent budget alerts/warnings across all orgs (admin only).
@@ -457,7 +460,7 @@ def register_ai_cost_routes(app, get_db, get_current_user):
     )
     async def reset_ai_circuit_breaker(
         org_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Manually reset the circuit breaker for an organization (admin only).

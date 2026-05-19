@@ -13,6 +13,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +26,7 @@ def register_sse_notification_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/notifications/stream", tags=["Notifications"])
     async def sse_notification_stream(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -49,7 +52,7 @@ def register_sse_notification_routes(app, get_db, get_current_user, **kwargs):
 
                 try:
                     # Query notifications scoped to org_id + user_id
-                    rows = db.execute(text("""
+                    rows = await db.execute(text("""
                         SELECT id, title, message, notification_type, priority,
                                entity_type, entity_id, created_at
                         FROM notifications
@@ -97,7 +100,7 @@ def register_sse_notification_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/notifications/broadcast", tags=["Notifications"])
     async def broadcast_tenant_notification(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -111,7 +114,7 @@ def register_sse_notification_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, 'organization_id', None)
 
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO notifications
                     (title, message, notification_type, priority, organization_id, created_at)
                 VALUES
@@ -123,10 +126,10 @@ def register_sse_notification_routes(app, get_db, get_current_user, **kwargs):
                 "priority": body.get("priority", "normal"),
                 "org_id": org_id,
             })
-            db.commit()
+            await db.commit()
             return {"status": "broadcast_sent", "organization_id": org_id}
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Broadcast failed: {e}")
             raise HTTPException(status_code=500, detail="Broadcast failed")
 

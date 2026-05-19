@@ -19,6 +19,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db, Base, engine
 from routes.auth_deps import current_user_dep
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +171,7 @@ async def list_ai_activity(
     offset: int = Query(default=0, ge=0),
     agent_type: Optional[str] = Query(default=None, description="Filter by agent type"),
     outcome: Optional[str] = Query(default=None, description="Filter by outcome"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -225,7 +228,7 @@ async def list_ai_activity(
 async def create_ai_activity(
     loan_id: int,
     body: AIActivityCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -253,10 +256,10 @@ async def create_ai_activity(
 
     # Verify loan belongs to the user's organization
     from database.models.lead_loan import Loan
-    loan = db.query(Loan).filter(
+    loan = (await db.execute(select(Loan).where(
         Loan.id == loan_id,
         Loan.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
@@ -288,8 +291,8 @@ async def create_ai_activity(
     )
 
     db.add(record)
-    db.commit()
-    db.refresh(record)
+    await db.commit()
+    await db.refresh(record)
 
     logger.info(
         "AI activity logged: loan_id=%s agent=%s outcome=%s",

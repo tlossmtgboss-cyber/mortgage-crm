@@ -15,6 +15,9 @@ from datetime import datetime
 from db import get_db
 from auth.auth import get_current_user
 from models.auth import User
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +51,7 @@ class DocumentationContentUpdate(BaseModel):
 @router.post("/content")
 async def create_documentation_content(
     content_data: DocumentationContent,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Create new documentation content. Admin only."""
@@ -83,7 +86,7 @@ async def list_documentation_content(
     published: Optional[bool] = Query(None, description="Filter by published status"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """List all documentation content for admin management."""
@@ -150,7 +153,7 @@ async def list_documentation_content(
 @router.get("/content/{content_id}")
 async def get_documentation_content(
     content_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get specific documentation content for editing."""
@@ -191,7 +194,7 @@ async def get_documentation_content(
 async def update_documentation_content(
     content_id: str,
     content_update: DocumentationContentUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Update existing documentation content."""
@@ -220,7 +223,7 @@ async def update_documentation_content(
 @router.delete("/content/{content_id}")
 async def delete_documentation_content(
     content_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Delete documentation content."""
@@ -248,7 +251,7 @@ async def delete_documentation_content(
 @router.post("/content/{content_id}/publish")
 async def publish_documentation_content(
     content_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Publish documentation content to make it visible to users."""
@@ -273,7 +276,7 @@ async def publish_documentation_content(
 @router.post("/content/{content_id}/unpublish")
 async def unpublish_documentation_content(
     content_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Unpublish documentation content to hide it from users."""
@@ -297,7 +300,7 @@ async def unpublish_documentation_content(
 
 @router.get("/stats")
 async def get_documentation_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get documentation management statistics."""

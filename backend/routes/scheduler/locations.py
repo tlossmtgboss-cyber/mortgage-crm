@@ -21,6 +21,9 @@ import logging
 
 from routes.scheduler._helpers import get_current_user, _get_org_id, _is_scheduler_admin, _audit_log
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +123,7 @@ def _clear_default(db: Session, org_id: int, exclude_id: int = None):
 async def list_locations(
     request: Request,
     include_inactive: bool = Query(False, description="Include deactivated locations"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List all appointment locations for the authenticated user's organization.
@@ -159,7 +162,7 @@ async def list_locations(
 async def create_location(
     body: LocationCreate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Create a new appointment location for the organization (admin only).
@@ -198,7 +201,7 @@ async def create_location(
         is_active=True,
     )
     db.add(location)
-    db.flush()
+    await db.flush()
 
     _audit_log(
         db, org_id, getattr(user, "id", None), "created",
@@ -206,7 +209,7 @@ async def create_location(
         changes={"name": location.name, "location_type": location.location_type},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     logger.info(f"Location created: {location.id} ({location.name}) for org {org_id}")
 
@@ -225,7 +228,7 @@ async def update_location(
     location_id: int,
     body: LocationUpdate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update an existing appointment location (admin only)."""
     from database.models.appointment_location import AppointmentLocation
@@ -236,10 +239,10 @@ async def update_location(
     if not _is_scheduler_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required to manage locations")
 
-    location = db.query(AppointmentLocation).filter(
+    location = (await db.execute(select(AppointmentLocation).where(
         AppointmentLocation.id == location_id,
         AppointmentLocation.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
@@ -267,8 +270,8 @@ async def update_location(
         changes={k: str(v) for k, v in update_data.items()},
         request=request,
     )
-    db.commit()
-    db.refresh(location)
+    await db.commit()
+    await db.refresh(location)
 
     logger.info(f"Location updated: {location.id} ({location.name}) for org {org_id}")
 
@@ -286,7 +289,7 @@ async def update_location(
 async def delete_location(
     location_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Soft-delete a location by setting is_active=False.
@@ -303,10 +306,10 @@ async def delete_location(
     if not _is_scheduler_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required to manage locations")
 
-    location = db.query(AppointmentLocation).filter(
+    location = (await db.execute(select(AppointmentLocation).where(
         AppointmentLocation.id == location_id,
         AppointmentLocation.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
@@ -322,7 +325,7 @@ async def delete_location(
         changes={"name": location_name},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     logger.info(f"Location deactivated: {location.id} ({location_name}) for org {org_id}")
 
@@ -340,7 +343,7 @@ async def delete_location(
 async def set_default_location(
     location_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Set a location as the organization's default (admin only).
@@ -355,11 +358,11 @@ async def set_default_location(
     if not _is_scheduler_admin(user):
         raise HTTPException(status_code=403, detail="Admin access required to manage locations")
 
-    location = db.query(AppointmentLocation).filter(
+    location = (await db.execute(select(AppointmentLocation).where(
         AppointmentLocation.id == location_id,
         AppointmentLocation.organization_id == org_id,
         AppointmentLocation.is_active == True,
-    ).first()
+    ))).scalars().first()
 
     if not location:
         raise HTTPException(status_code=404, detail="Location not found or inactive")
@@ -368,8 +371,8 @@ async def set_default_location(
     _clear_default(db, org_id, exclude_id=location_id)
     location.is_default = True
     location.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(location)
+    await db.commit()
+    await db.refresh(location)
 
     logger.info(f"Location set as default: {location.id} ({location.name}) for org {org_id}")
 

@@ -18,6 +18,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger("aria.memory.routes")
 
@@ -65,7 +68,7 @@ class ConsolidateRequest(BaseModel):
 async def load_context(
     req: ContextRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Tier 1 context load at call start."""
     _verify_internal_key(request)
@@ -85,7 +88,7 @@ async def load_context(
 async def retrieve(
     req: RetrieveRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Shared retrieval — memory or guideline scope."""
     _verify_internal_key(request)
@@ -115,7 +118,7 @@ async def consolidate(
     req: ConsolidateRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Trigger async consolidation after call end. Returns 202 immediately."""
     _verify_internal_key(request)

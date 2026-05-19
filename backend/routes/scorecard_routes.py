@@ -20,6 +20,9 @@ from typing import Optional
 import csv
 import io
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +63,7 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
     async def get_scorecard(
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user)
     ):
         """
@@ -318,7 +321,7 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         format: str = Query("csv", description="Export format (csv)"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """

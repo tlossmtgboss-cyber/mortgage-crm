@@ -12,8 +12,11 @@ from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
 
 from db import get_db
+from db import get_async_db
 from routes.auth_deps import require_auth, current_user_dep
 from routes.mobile_tasks_routes import SnoozeRequest, _snooze_task
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(
     prefix="/api/v1/tasks",
@@ -27,7 +30,7 @@ async def snooze_task(
     task_id: int,
     body: SnoozeRequest = Body(default=SnoozeRequest()),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Snooze a task — PATCH /api/v1/tasks/{task_id}/snooze
 

@@ -15,6 +15,9 @@ from pydantic import BaseModel
 
 from utils.responses import success_response, error_response
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +76,7 @@ async def zoom_callback(
     state: Optional[str] = Query(None, description="State parameter with user_id"),
     error: Optional[str] = Query(None, description="Error from Zoom"),
     error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle OAuth callback from Zoom.
@@ -124,7 +127,7 @@ async def zoom_callback(
     # Store tokens in user_integrations table
     try:
         # Check if user_integrations table exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
                 WHERE table_name = 'user_integrations'
@@ -134,7 +137,7 @@ async def zoom_callback(
 
         if not table_exists:
             # Create table if it doesn't exist
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE user_integrations (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -152,10 +155,10 @@ async def zoom_callback(
                     UNIQUE(user_id, provider)
                 )
             """))
-            db.commit()
+            await db.commit()
 
         # Upsert the integration record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_integrations
                 (user_id, provider, access_token, refresh_token, expires_at, email, provider_user_id, scopes, extra_data, updated_at)
             VALUES
@@ -181,13 +184,13 @@ async def zoom_callback(
             "scopes": token_data.get("scope"),
             "token_type": token_data.get("token_type", "bearer")
         })
-        db.commit()
+        await db.commit()
 
         logger.info(f"Successfully stored Zoom tokens for user {user_id}")
 
     except SQLAlchemyError as e:
         logger.error(f"Error storing Zoom tokens: {e}")
-        db.rollback()
+        await db.rollback()
         return RedirectResponse(
             url=f"{frontend_url}/settings/integrations?error=zoom_storage_failed"
         )
@@ -201,7 +204,7 @@ async def zoom_callback(
 @router.get("/status")
 async def zoom_status(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Check Zoom connection status"""
     from integrations.zoom_service import zoom_client
@@ -212,7 +215,7 @@ async def zoom_status(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT access_token, refresh_token, expires_at, email, provider_user_id, scopes
             FROM user_integrations
             WHERE user_id = :user_id AND provider = 'zoom'
@@ -252,7 +255,7 @@ async def zoom_status(
 @router.post("/refresh")
 async def refresh_zoom_token(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Refresh Zoom access token"""
     from integrations.zoom_service import zoom_client
@@ -264,7 +267,7 @@ async def refresh_zoom_token(
 
     try:
         # Get current refresh token
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT refresh_token FROM user_integrations
             WHERE user_id = :user_id AND provider = 'zoom'
         """), {"user_id": user_id})
@@ -280,7 +283,7 @@ async def refresh_zoom_token(
             raise HTTPException(status_code=500, detail="Failed to refresh token")
 
         # Update stored tokens
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE user_integrations
             SET access_token = :access_token,
                 refresh_token = :refresh_token,
@@ -293,7 +296,7 @@ async def refresh_zoom_token(
             "refresh_token": token_data.get("refresh_token"),
             "expires_at": token_data.get("expires_at")
         })
-        db.commit()
+        await db.commit()
 
         return success_response({
             "refreshed": True,
@@ -310,7 +313,7 @@ async def refresh_zoom_token(
 @router.post("/disconnect")
 async def disconnect_zoom(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Disconnect Zoom integration"""
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
@@ -319,11 +322,11 @@ async def disconnect_zoom(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM user_integrations
             WHERE user_id = :user_id AND provider = 'zoom'
         """), {"user_id": user_id})
-        db.commit()
+        await db.commit()
 
         return success_response({
             "disconnected": True
@@ -331,7 +334,7 @@ async def disconnect_zoom(
 
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Zoom: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -341,7 +344,7 @@ async def disconnect_zoom(
 async def list_meetings(
     meeting_type: str = Query("scheduled", description="Meeting type: scheduled, live, upcoming"),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List meetings for the connected user"""
     from integrations.zoom_service import zoom_client
@@ -349,7 +352,7 @@ async def list_meetings(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token, refresh_token, expires_at
         FROM user_integrations
         WHERE user_id = :user_id AND provider = 'zoom'
@@ -366,7 +369,7 @@ async def list_meetings(
         token_data = await zoom_client.async_refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_integrations
                 SET access_token = :access_token,
                     refresh_token = :refresh_token,
@@ -379,7 +382,7 @@ async def list_meetings(
                 "refresh_token": token_data.get("refresh_token"),
                 "expires_at": token_data.get("expires_at")
             })
-            db.commit()
+            await db.commit()
         else:
             raise HTTPException(status_code=401, detail="Token expired and refresh failed")
 
@@ -395,7 +398,7 @@ async def list_meetings(
 async def create_meeting(
     meeting: CreateMeetingRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new Zoom meeting"""
     from integrations.zoom_service import zoom_client
@@ -403,7 +406,7 @@ async def create_meeting(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'zoom'
     """), {"user_id": user_id})
@@ -431,7 +434,7 @@ async def create_meeting(
 async def get_meeting(
     meeting_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific meeting"""
     from integrations.zoom_service import zoom_client
@@ -439,7 +442,7 @@ async def get_meeting(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'zoom'
     """), {"user_id": user_id})
@@ -460,7 +463,7 @@ async def get_meeting(
 async def delete_meeting(
     meeting_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a meeting"""
     from integrations.zoom_service import zoom_client
@@ -468,7 +471,7 @@ async def delete_meeting(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'zoom'
     """), {"user_id": user_id})
@@ -489,7 +492,7 @@ async def delete_meeting(
 async def list_recordings(
     days: int = Query(30, description="Number of days to fetch recordings for"),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List cloud recordings"""
     from integrations.zoom_service import zoom_client
@@ -497,7 +500,7 @@ async def list_recordings(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'zoom'
     """), {"user_id": user_id})

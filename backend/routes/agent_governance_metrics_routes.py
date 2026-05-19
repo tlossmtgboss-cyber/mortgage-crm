@@ -176,4 +176,38 @@ async def get_budget_utilization(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+# ---------------------------------------------------------------------------
+# Per-tool cost dashboard (Wave 5 — D3 audit remediation)
+# ---------------------------------------------------------------------------
+
+@router.get("/tools/summary")
+async def get_top_tools_by_cost(
+    limit: int = Query(20, ge=1, le=200),
+    _user: Any = Depends(get_current_user),
+    _admin: Any = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Top-N tools ranked by total estimated cost (USD)."""
+    try:
+        rows = _store().get_top_tools_by_cost(limit=limit)
+        return {"count": len(rows), "tools": rows}
+    except Exception as exc:  # noqa: BLE001
+        logger.error("governance tools summary failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/tools/{tool_name}")
+async def get_tool_detail(
+    tool_name: str,
+    last_n: int = Query(20, ge=0, le=200),
+    _user: Any = Depends(get_current_user),
+    _admin: Any = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Aggregated stats + last-N events for a single tool."""
+    try:
+        return _store().get_tool_summary(tool_name, last_n=last_n)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("governance tool detail failed (%s): %s", tool_name, exc)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 __all__ = ["router"]

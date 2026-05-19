@@ -18,6 +18,9 @@ from pydantic import BaseModel
 from openai import OpenAI
 
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 router = APIRouter(prefix="/api/v1/ai/knowledge-base", tags=["AI Knowledge Base"])
 logger = logging.getLogger(__name__)
@@ -98,7 +101,7 @@ async def list_knowledge_base(
     category: Optional[str] = None,
     search: Optional[str] = None,
     is_active: bool = True,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """List all knowledge base entries with optional filtering"""
@@ -146,7 +149,7 @@ async def list_knowledge_base(
 
 @router.get("/categories")
 async def get_knowledge_categories(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Get all available knowledge base categories with counts"""
@@ -184,7 +187,7 @@ async def get_knowledge_categories(
 @router.get("/{entry_id}")
 async def get_knowledge_entry(
     entry_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Get a single knowledge base entry with full content"""
@@ -225,7 +228,7 @@ async def get_knowledge_entry(
 @router.post("")
 async def create_knowledge_entry(
     entry: KnowledgeBaseCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Create a new knowledge base entry"""
@@ -270,8 +273,8 @@ async def create_knowledge_entry(
     )
 
     db.add(new_entry)
-    db.commit()
-    db.refresh(new_entry)
+    await db.commit()
+    await db.refresh(new_entry)
 
     return {"id": new_entry.id, "message": "Knowledge entry created successfully"}
 
@@ -280,7 +283,7 @@ async def create_knowledge_entry(
 async def update_knowledge_entry(
     entry_id: int,
     update: KnowledgeBaseUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Update an existing knowledge base entry"""
@@ -305,8 +308,8 @@ async def update_knowledge_entry(
         if key not in _protected:
             setattr(entry, key, value)
 
-    db.commit()
-    db.refresh(entry)
+    await db.commit()
+    await db.refresh(entry)
 
     return {"id": entry.id, "message": "Knowledge entry updated successfully"}
 
@@ -314,7 +317,7 @@ async def update_knowledge_entry(
 @router.delete("/{entry_id}")
 async def delete_knowledge_entry(
     entry_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Soft delete a knowledge base entry"""
@@ -334,7 +337,7 @@ async def delete_knowledge_entry(
         raise HTTPException(status_code=404, detail="Knowledge entry not found")
 
     entry.is_active = False
-    db.commit()
+    await db.commit()
 
     return {"message": "Knowledge entry deleted successfully"}
 
@@ -346,7 +349,7 @@ async def upload_knowledge_document(
     category: str = Form(...),
     priority: int = Form(5),
     tags: str = Form(""),  # Comma-separated tags
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Upload a document to the knowledge base (PDF, DOCX, TXT)"""
@@ -425,8 +428,8 @@ async def upload_knowledge_document(
     )
 
     db.add(new_entry)
-    db.commit()
-    db.refresh(new_entry)
+    await db.commit()
+    await db.refresh(new_entry)
 
     return {
         "id": new_entry.id,

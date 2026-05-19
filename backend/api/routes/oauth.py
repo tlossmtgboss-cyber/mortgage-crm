@@ -15,6 +15,9 @@ import os
 
 # Use relative imports for backend modules
 import sys
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from database import get_db
@@ -49,7 +52,7 @@ def get_current_user_from_token(db: Session, token: str):
 @router.get("/microsoft/connect")
 async def microsoft_connect(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     redirect_uri: str = Query(None, description="Where to redirect after auth (for mobile)")
 ):
     """
@@ -101,7 +104,7 @@ async def microsoft_callback(
     state: str = Query(...),
     error: str = Query(None),
     error_description: str = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Handle Microsoft OAuth callback.
@@ -170,14 +173,14 @@ async def microsoft_callback(
         integration_id = str(uuid.uuid4())
 
         # Check if integration exists
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT id FROM user_integrations
             WHERE user_id = :user_id AND provider = 'microsoft'
         """), {"user_id": user_id}).fetchone()
 
         if existing:
             # Update existing
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_integrations
                 SET access_token = :access_token,
                     refresh_token = :refresh_token,
@@ -196,7 +199,7 @@ async def microsoft_callback(
             logger.info(f"Updated Microsoft integration for user {user_id}")
         else:
             # Create new
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO user_integrations (id, user_id, provider, access_token, refresh_token, expires_at, scopes, created_at, updated_at)
                 VALUES (:id, :user_id, 'microsoft', :access_token, :refresh_token, :expires_at, :scopes, :created_at, :updated_at)
             """), {
@@ -211,7 +214,7 @@ async def microsoft_callback(
             })
             logger.info(f"Created new Microsoft integration for user {user_id}")
 
-        db.commit()
+        await db.commit()
 
         # Handle redirect based on client type
         if redirect_type == "mobile":
@@ -227,7 +230,7 @@ async def microsoft_callback(
         raise
     except Exception as e:
         logger.error(f"Microsoft OAuth callback error: {e}")
-        db.rollback()
+        await db.rollback()
         return RedirectResponse(
             url=f"{FRONTEND_URL}/settings?integration=microsoft&status=error&message=Connection failed"
         )
@@ -236,7 +239,7 @@ async def microsoft_callback(
 @router.delete("/microsoft/disconnect")
 async def microsoft_disconnect(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Disconnect Microsoft account."""
     from sqlalchemy import text
@@ -249,12 +252,12 @@ async def microsoft_disconnect(
     # In production, decode JWT to get user_id
     user_id = "current_user"  # Replace with actual user ID extraction
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         DELETE FROM user_integrations
         WHERE user_id = :user_id AND provider = 'microsoft'
     """), {"user_id": user_id})
 
-    db.commit()
+    await db.commit()
 
     if result.rowcount > 0:
         return {"status": "disconnected", "provider": "microsoft"}
@@ -265,7 +268,7 @@ async def microsoft_disconnect(
 @router.get("/microsoft/status")
 async def microsoft_status(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Check if Microsoft account is connected."""
     from sqlalchemy import text
@@ -278,7 +281,7 @@ async def microsoft_status(
     # In production, decode JWT to get user_id
     user_id = "current_user"  # Replace with actual user ID extraction
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT expires_at, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'microsoft'
     """), {"user_id": user_id}).fetchone()
@@ -301,7 +304,7 @@ async def microsoft_status(
 @router.get("/status")
 async def all_integrations_status(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get status of all connected integrations."""
     from sqlalchemy import text
@@ -314,7 +317,7 @@ async def all_integrations_status(
     # In production, decode JWT to get user_id
     user_id = "current_user"  # Replace with actual user ID extraction
 
-    integrations = db.execute(text("""
+    integrations = await db.execute(text("""
         SELECT provider, expires_at, scopes FROM user_integrations
         WHERE user_id = :user_id
     """), {"user_id": user_id}).fetchall()

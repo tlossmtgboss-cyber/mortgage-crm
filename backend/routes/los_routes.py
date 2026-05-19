@@ -28,6 +28,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +157,7 @@ def register_los_routes(app, get_db, get_current_user, **kwargs):
     async def push_loan_to_los(
         loan_id: int,
         body: LOSPushRequest = LOSPushRequest(),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Push loan data from CRM to LOS.
@@ -193,7 +196,7 @@ def register_los_routes(app, get_db, get_current_user, **kwargs):
     async def pull_loan_from_los(
         loan_id: int,
         body: LOSPullRequest = LOSPullRequest(),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Pull loan data from LOS to CRM.
@@ -232,7 +235,7 @@ def register_los_routes(app, get_db, get_current_user, **kwargs):
     )
     async def get_los_sync_status(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get LOS sync status for a loan.

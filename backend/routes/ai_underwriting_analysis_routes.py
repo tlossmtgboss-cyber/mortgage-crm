@@ -14,6 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 router = APIRouter(prefix="/api/v1/ai/underwriting", tags=["AI Underwriting Analysis"])
 logger = logging.getLogger(__name__)
@@ -51,7 +54,7 @@ async def log_ai_action_to_mission_control(**kwargs):
 @router.post("/analyze")
 async def ai_underwriting_analyze(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -185,7 +188,7 @@ Provide your analysis in JSON format:
 @router.get("/guidelines")
 async def get_underwriting_guidelines(
     loan_type: str = "Conventional",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -266,7 +269,7 @@ async def get_underwriting_guidelines(
 @router.post("/risk-score")
 async def calculate_risk_score(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -384,7 +387,7 @@ async def calculate_risk_score(
 @router.get("/checklist/{loan_type}")
 async def get_underwriting_checklist(
     loan_type: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """

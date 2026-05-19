@@ -15,6 +15,9 @@ from typing import List, Optional
 import logging
 
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +38,7 @@ def set_dependencies(get_current_user_func, models_dict):
     _models = models_dict
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     if _get_current_user_func is None:
         raise RuntimeError("Dependencies not set for capacity_dashboard_routes")
     auth_header = request.headers.get("Authorization", "")
@@ -115,7 +118,7 @@ async def get_capacity_overview(
     start_date: date = Query(..., description="Start of date range (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End of date range (YYYY-MM-DD)"),
     lo_ids: Optional[str] = Query(None, description="Comma-separated LO user IDs"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Team capacity overview: per-LO booked vs available minutes,
@@ -304,7 +307,7 @@ async def get_capacity_heatmap(
     start_date: date = Query(..., description="Start of date range (YYYY-MM-DD)"),
     end_date: date = Query(..., description="End of date range (YYYY-MM-DD)"),
     lo_ids: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Booking density heatmap: number of appointments per hour per day-of-week.
@@ -395,7 +398,7 @@ async def get_capacity_trends(
     request: Request,
     weeks: int = Query(4, ge=1, le=12, description="Number of weeks to look back"),
     lo_ids: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Weekly booking trends: appointments per week, show rate, no-show rate,

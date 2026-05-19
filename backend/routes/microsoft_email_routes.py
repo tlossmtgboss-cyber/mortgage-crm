@@ -30,6 +30,9 @@ from auth.dependencies import get_current_user
 from db import get_db
 from database.models.microsoft_email import MicrosoftEmailToken
 from services.microsoft_graph_email import MicrosoftGraphEmailService
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +130,7 @@ def _get_org_id(user) -> int:
 @router.get("/connect", response_model=ConnectResponse)
 async def microsoft_email_connect(
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Start the Microsoft OAuth2 flow.
 
@@ -144,7 +147,7 @@ async def microsoft_email_connect(
 @router.get("/connect-redirect")
 async def microsoft_email_connect_redirect(
     token: str = Query(..., description="JWT access token"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Browser-friendly: redirects directly to Microsoft OAuth login.
 
@@ -163,7 +166,7 @@ async def microsoft_email_connect_redirect(
         from database.models.core import User
         _db = SessionLocal()
         try:
-            user = _db.query(User).filter(User.id == int(user_id)).first()
+            user = _(await db.execute(select(User).where(User.id == int(user_id)))).scalars().first()
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
             org_id = getattr(user, "organization_id", None)
@@ -188,7 +191,7 @@ async def microsoft_email_callback(
     state: str = Query(..., description="State parameter for CSRF validation"),
     error: str | None = Query(None),
     error_description: str | None = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Handle the OAuth2 callback from Microsoft.
 
@@ -274,9 +277,9 @@ async def microsoft_email_callback(
         db.add(new_token)
 
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error("Failed to persist Microsoft email token for user %d: %s", user_id, str(e))
         return RedirectResponse(
             url=f"{_FRONTEND_URL}/settings/email?error=db_error",
@@ -298,7 +301,7 @@ async def microsoft_email_callback(
 @router.get("/status", response_model=StatusResponse)
 async def microsoft_email_status(
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Check whether the organization has an active Microsoft email connection."""
     org_id = _get_org_id(user)
@@ -325,7 +328,7 @@ async def microsoft_email_status(
 @router.post("/disconnect", response_model=DisconnectResponse)
 async def microsoft_email_disconnect(
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Deactivate the Microsoft email connection for this organization."""
     org_id = _get_org_id(user)
@@ -346,7 +349,7 @@ async def microsoft_email_disconnect(
         record.is_active = False
         record.updated_at = datetime.now(timezone.utc)
 
-    db.commit()
+    await db.commit()
     logger.info("Microsoft email disconnected for org %d by user %d", org_id, user.id)
     return DisconnectResponse(success=True, message="Microsoft email disconnected successfully")
 
@@ -354,7 +357,7 @@ async def microsoft_email_disconnect(
 @router.post("/test", response_model=TestEmailResponse)
 async def microsoft_email_test(
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Send a test email to the current user via Microsoft Graph.
 

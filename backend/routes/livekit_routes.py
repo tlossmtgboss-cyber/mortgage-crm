@@ -20,6 +20,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from livekit.api import AccessToken, VideoGrants, RoomAgentDispatch, RoomConfiguration
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +67,7 @@ def _get_auth():
 async def create_voice_token(
     body: TokenRequest = TokenRequest(),
     current_user=Depends(_get_auth()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Generate a LiveKit access token for Aria voice session.

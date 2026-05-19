@@ -28,6 +28,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from auth.dependencies import get_current_user
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +128,7 @@ def _get_plaid_service(db: Session):
 async def create_link_token(
     request: LinkTokenRequest,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a Plaid Link token for a borrower to connect their bank.
 
@@ -156,7 +159,7 @@ async def create_link_token(
 async def exchange_public_token(
     request: ExchangeTokenRequest,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Exchange a public token from Plaid Link for an access token.
 
@@ -191,7 +194,7 @@ async def exchange_public_token(
 async def get_connections(
     loan_id: int,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all Plaid connections for a loan.
 
@@ -222,7 +225,7 @@ async def create_asset_report(
     loan_id: int,
     request: AssetReportRequest,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Request a GSE-certified Plaid Asset Report.
 
@@ -254,7 +257,7 @@ async def create_asset_report(
 async def get_asset_report(
     report_id: str,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Retrieve a completed Plaid Asset Report.
 
@@ -287,7 +290,7 @@ async def get_asset_report(
 async def analyze_bank_data(
     loan_id: int,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Run full bank analysis on Plaid data for a loan.
 
@@ -324,7 +327,7 @@ async def analyze_bank_data(
 async def disconnect_account(
     connection_id: int,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Disconnect a Plaid account and revoke the access token.
 
@@ -357,7 +360,7 @@ async def disconnect_account(
 @router.post("/plaid/webhooks")
 async def handle_plaid_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Handle Plaid webhook notifications (no auth required).
 

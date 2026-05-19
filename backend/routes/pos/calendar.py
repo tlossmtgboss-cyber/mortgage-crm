@@ -13,6 +13,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,7 @@ def get_calendar_service() -> CalendarService:
 )
 def get_assigned_lo(
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: CalendarService = Depends(get_calendar_service),
 ) -> AssignedLOResponse:
     try:
@@ -112,7 +115,7 @@ async def get_available_slots(
     duration_minutes: int = Query(30, ge=15, le=240),
     timezone_str: str = Query("America/New_York", alias="timezone"),
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: CalendarService = Depends(get_calendar_service),
 ) -> AvailableSlotsResponse:
     if (end_date - start_date) > timedelta(days=60):
@@ -187,7 +190,7 @@ async def get_available_slots(
 async def create_hold(
     body: SlotHoldRequest,
     purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: CalendarService = Depends(get_calendar_service),
 ) -> SlotHoldResponse:
     """Hold a slot via the existing scheduler's BatchHoldSlotsRequest endpoint.
@@ -262,7 +265,7 @@ async def create_hold(
 async def create_booking(
     body: BookingRequest,
     purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: CalendarService = Depends(get_calendar_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> BookingResponse:
@@ -315,7 +318,7 @@ async def create_booking(
 
     # Link the appointment to the application for duplicate prevention.
     application.submitted_appointment_id = booking.appointment_id
-    db.commit()
+    await db.commit()
 
     return BookingResponse(
         appointment_id=booking.appointment_id,
@@ -344,7 +347,7 @@ async def cancel_booking(
     appointment_id: int,
     body: BookingCancelRequest,
     purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: CalendarService = Depends(get_calendar_service),
 ) -> BookingCancelResponse:
     # We must verify the appointment belongs to the borrower's application
@@ -362,7 +365,7 @@ async def cancel_booking(
         POSApplication.contact_id == purl_ctx.contact_id,
         POSApplication.loan_id == appointment.loan_id,
     )
-    result = db.execute(stmt)
+    result = await db.execute(stmt)
     application = result.scalar_one_or_none()
     if application is None:
         # Don't reveal whether the appointment exists for someone else.
@@ -379,7 +382,7 @@ async def cancel_booking(
     # Clear the duplicate-prevention guard so the borrower can rebook.
     if application.submitted_appointment_id == appointment_id:
         application.submitted_appointment_id = None
-    db.commit()
+    await db.commit()
 
     return BookingCancelResponse(
         appointment_id=cancellation.appointment_id,

@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import logging
 import os
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +29,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
     @app.post("/api/v1/ai/autonomous-task")
     async def execute_autonomous_task(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user_flexible)
     ):
         """
@@ -291,16 +294,16 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                                 ai_generated=True
                                             )
                                             db.add(sms_record)
-                                            db.commit()
+                                            await db.commit()
                                         except Exception as db_err:
                                             logger.warning(f"Failed to log SMS to sms_messages: {db_err}")
-                                            db.rollback()
+                                            await db.rollback()
 
                                         # Also write to sms_panel_messages for Archive tab visibility
                                         try:
                                             import uuid as _uuid
                                             sender_name = f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip() or "AI Agent"
-                                            db.execute(text("""
+                                            await db.execute(text("""
                                                 INSERT INTO sms_panel_messages
                                                     (id, phone, contact_id, organization_id, direction, body,
                                                      sender_name, sender_user_id, status,
@@ -320,10 +323,10 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                                 "sender_user_id": current_user.id,
                                                 "telnyx_id": msg_id,
                                             })
-                                            db.commit()
+                                            await db.commit()
                                         except Exception as panel_err:
                                             logger.warning(f"Failed to log SMS to sms_panel_messages: {panel_err}")
-                                            db.rollback()
+                                            await db.rollback()
 
                                         tool_result = {
                                             "success": True,
@@ -356,7 +359,7 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                     lead_id=lead_id,
                                 )
                                 db.add(task_record)
-                                db.commit()
+                                await db.commit()
 
                                 tool_result = {
                                     "success": True,
@@ -387,7 +390,7 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                     lead_id=lead_id,
                                 )
                                 db.add(task_record)
-                                db.commit()
+                                await db.commit()
 
                                 tool_result = {
                                     "success": True,

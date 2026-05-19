@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from database.models.core import User, EmailSignature
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +63,7 @@ class LOProfileResponse(BaseModel):
 def get_lo_profile(
     lo_slug: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     _check_lo_profile_rate_limit(request)
     user = (

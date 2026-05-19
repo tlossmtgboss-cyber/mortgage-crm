@@ -20,6 +20,9 @@ import logging
 from routes.auth_deps import require_auth
 from auth.dependencies import get_current_user
 from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -380,7 +383,7 @@ async def health_check():
 
 @router.get("/alerts")
 async def get_rate_lock_alerts(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get rate lock expiration alerts for the current user's loans.
@@ -412,7 +415,7 @@ async def get_rate_lock_alerts(
 
 @router.post("/alerts/send")
 async def send_rate_lock_push_alerts(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Trigger push notifications for expiring rate locks.
@@ -440,7 +443,7 @@ async def send_rate_lock_push_alerts(
 
 @router.get("/alerts/summary")
 async def get_rate_lock_summary(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Lightweight summary for dashboard polling.

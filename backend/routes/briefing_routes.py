@@ -20,6 +20,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +99,7 @@ from auth.dependencies import get_current_user  # noqa: E402
 # --- Routes ---
 
 @router.get("/today")
-async def get_today_briefing(db: Session = Depends(get_db),
+async def get_today_briefing(db: AsyncSession = Depends(get_async_db),
                               current_user=Depends(get_current_user)):
     """Get current user's briefing for today."""
     MorningBriefing, _ = _get_deps()
@@ -111,13 +114,13 @@ async def get_today_briefing(db: Session = Depends(get_db),
     today = datetime.now(tz).date()
 
     try:
-        briefing = db.query(MorningBriefing).filter(
+        briefing = (await db.execute(select(MorningBriefing).where(
             MorningBriefing.user_id == current_user.id,
             MorningBriefing.briefing_date == today,
-        ).first()
+        ))).scalars().first()
     except Exception as e:
         logger.error("Briefing query failed for user %s: %s", current_user.id, e)
-        db.rollback()
+        await db.rollback()
         return Response(status_code=204)
 
     if not briefing:
@@ -148,7 +151,7 @@ async def get_today_briefing(db: Session = Depends(get_db),
 async def get_briefing_history(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=30),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get paginated briefing history."""
@@ -184,7 +187,7 @@ async def get_briefing_history(
 @router.post("/generate-now")
 async def generate_now(
     force: bool = Query(False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Manually trigger a briefing for current user."""
@@ -202,13 +205,13 @@ async def generate_now(
     level = MorningBriefingService.determine_level(current_user)
 
     try:
-        existing = db.query(MorningBriefing).filter(
+        existing = (await db.execute(select(MorningBriefing).where(
             MorningBriefing.user_id == current_user.id,
             MorningBriefing.briefing_date == today,
-        ).first()
+        ))).scalars().first()
     except Exception as e:
         logger.error("Briefing existence check failed: %s", e)
-        db.rollback()
+        await db.rollback()
         existing = None
 
     if existing and not force:
@@ -216,11 +219,11 @@ async def generate_now(
 
     if existing and force:
         try:
-            db.delete(existing)
-            db.commit()
+            await db.delete(existing)
+            await db.commit()
         except Exception as e:
             logger.error("Failed to delete existing briefing: %s", e)
-            db.rollback()
+            await db.rollback()
 
     # Try Celery first, fall back to synchronous generation
     try:
@@ -260,12 +263,12 @@ async def generate_now(
             team_data=ctx.team if ctx.team else None,
         )
         db.add(briefing)
-        db.commit()
+        await db.commit()
         return JSONResponse(status_code=201, content={"status": "generated", "message": "Briefing generated"})
     except HTTPException:
         raise
     except Exception as sync_err:
-        db.rollback()
+        await db.rollback()
         from sqlalchemy.exc import IntegrityError
         if isinstance(sync_err, IntegrityError):
             raise HTTPException(status_code=409, detail="Briefing already exists for today")
@@ -276,16 +279,16 @@ async def generate_now(
 @router.post("/{briefing_id}/viewed")
 async def mark_viewed(
     briefing_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Mark a briefing as viewed in-app."""
     MorningBriefing, _ = _get_deps()
 
-    briefing = db.query(MorningBriefing).filter(
+    briefing = (await db.execute(select(MorningBriefing).where(
         MorningBriefing.id == briefing_id,
         MorningBriefing.user_id == current_user.id,
-    ).first()
+    ))).scalars().first()
 
     if not briefing:
         raise HTTPException(status_code=404, detail="Briefing not found")
@@ -293,14 +296,14 @@ async def mark_viewed(
     if not briefing.viewed_in_app_at:
         briefing.viewed_in_app_at = datetime.now(timezone.utc)
         briefing.updated_at = datetime.now(timezone.utc)
-        db.commit()
+        await db.commit()
 
     return {"status": "ok"}
 
 
 @router.get("/preferences")
 async def get_preferences(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get briefing preferences (merged with defaults)."""
@@ -320,7 +323,7 @@ async def get_preferences(
 @router.put("/preferences")
 async def update_preferences(
     prefs: BriefingPreferencesSchema,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Update briefing preferences.
@@ -339,7 +342,7 @@ async def update_preferences(
         "thresholds": prefs.thresholds.model_dump(),
         "ai_tone": prefs.ai_tone,
     }
-    db.commit()
+    await db.commit()
 
     from services.morning_briefing_service import MorningBriefingService
     loaded = MorningBriefingService.load_preferences(current_user)

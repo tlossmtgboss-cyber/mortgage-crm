@@ -8,6 +8,9 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +22,7 @@ def register_search_routes(app, get_db, get_current_user_flexible, Lead, Loan, L
     async def global_search(
         q: str,
         limit: int = 20,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user_flexible)
     ):
         """

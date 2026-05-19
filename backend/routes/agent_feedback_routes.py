@@ -21,6 +21,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, cast, String
 from sqlalchemy.orm import Session
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +86,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/agent/feedback", tags=["Agent Feedback"])
     async def submit_agent_feedback(
         body: FeedbackSubmitRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -108,7 +111,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
                 response_time_ms=body.response_time_ms,
             )
             db.add(fb)
-            db.flush()  # get fb.id before commit
+            await db.flush()  # get fb.id before commit
 
             # Negative feedback -> create a learning example for training
             if body.rating == "negative" and body.query_text:
@@ -126,11 +129,11 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
                 )
                 db.add(example)
 
-            db.commit()
+            await db.commit()
             return FeedbackSubmitResponse(id=fb.id)
 
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.exception(f"Failed to record agent feedback: {e}")
             raise HTTPException(status_code=500, detail="Failed to record feedback")
 
@@ -141,7 +144,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
     async def get_feedback_stats(
         agent_role: Optional[str] = Query(default=None),
         days: int = Query(default=30, ge=1, le=365),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Aggregate feedback statistics, optionally filtered by agent role."""
@@ -227,7 +230,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
         rating: Optional[str] = Query(default=None, pattern="^(positive|negative|neutral)$"),
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return recent feedback entries with optional filters."""
@@ -277,7 +280,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
     async def get_feedback_trends(
         days: int = Query(default=30, ge=1, le=365),
         agent_role: Optional[str] = Query(default=None),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Return daily satisfaction scores over the given window."""
@@ -328,7 +331,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/agent/feedback/summary/generate", tags=["Agent Feedback"])
     async def generate_feedback_summary(
         body: SummaryGenerateRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -411,8 +414,8 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
                 common_complaints=common_complaints,
             )
             db.add(summary)
-            db.commit()
-            db.refresh(summary)
+            await db.commit()
+            await db.refresh(summary)
 
             return {
                 "id": summary.id,
@@ -432,7 +435,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
         except HTTPException:
             raise
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.exception(f"Failed to generate feedback summary: {e}")
             raise HTTPException(status_code=500, detail="Failed to generate feedback summary")
 
@@ -443,7 +446,7 @@ def register_agent_feedback_routes(app, get_db, get_current_user, **kwargs):
     async def get_improvement_suggestions(
         agent_role: Optional[str] = Query(default=None),
         limit: int = Query(default=10, ge=1, le=50),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """

@@ -35,6 +35,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.auth_deps import require_auth, current_user_dep
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +123,7 @@ _CLOSING_STAGES = frozenset({
 @router.get("/summary")
 async def get_dashboard_summary(
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Pipeline summary consumed by BackgroundSyncManager.swift (iOS background

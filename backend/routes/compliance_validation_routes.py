@@ -19,6 +19,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +65,7 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
     )
     async def validate_trid(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Run TRID fee tolerance validation for a loan.
@@ -91,7 +94,7 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
         if result.get("error"):
             raise HTTPException(status_code=404, detail=result["error"])
 
-        db.commit()
+        await db.commit()
         return result
 
     # -----------------------------------------------------------------
@@ -104,7 +107,7 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
     )
     async def validate_ecoa(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Run ECOA adverse action validation for a loan.
@@ -132,7 +135,7 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
         if result.get("error"):
             raise HTTPException(status_code=404, detail=result["error"])
 
-        db.commit()
+        await db.commit()
         return result
 
     # -----------------------------------------------------------------
@@ -145,7 +148,7 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
     )
     async def validate_hmda(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Run HMDA data validation for a loan.
@@ -175,7 +178,7 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
         if result.get("error"):
             raise HTTPException(status_code=404, detail=result["error"])
 
-        db.commit()
+        await db.commit()
         return result
 
     # -----------------------------------------------------------------
@@ -189,7 +192,7 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
     async def validate_stage_transition_endpoint(
         loan_id: int,
         body: StageTransitionRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Validate compliance requirements for a proposed loan stage transition.
@@ -224,5 +227,5 @@ def register_compliance_validation_routes(app, get_db, get_current_user, **kwarg
         if result.get("error"):
             raise HTTPException(status_code=404, detail=result["error"])
 
-        db.commit()
+        await db.commit()
         return result

@@ -15,6 +15,9 @@ from datetime import datetime
 from db import get_db
 from auth.auth import get_current_user
 from models.auth import User
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +74,7 @@ async def get_documentation_content(
     search: Optional[str] = Query(None, description="Search query"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -123,7 +126,7 @@ async def get_documentation_categories(
 @router.post("/analytics/view")
 async def track_content_view(
     data: Dict[str, Any],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Track when a user views documentation content for analytics."""
@@ -219,7 +222,7 @@ async def search_documentation(
 @router.get("/analytics/dashboard")
 async def get_documentation_analytics(
     days: int = Query(30, ge=1, le=365, description="Days to analyze"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get documentation usage analytics and metrics."""

@@ -15,6 +15,9 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +111,7 @@ def register_escalation_routes(app, get_db, get_current_user, **kwargs):
     async def list_escalations(
         assignee_id: Optional[int] = Query(default=None, description="Filter by assigned user"),
         include_assigned: bool = Query(default=True, description="Include assigned (not just pending)"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List pending and assigned agent escalations for the current organization.
@@ -141,7 +144,7 @@ def register_escalation_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/escalations", tags=["Agent Escalations"], status_code=201)
     async def create_escalation_endpoint(
         body: EscalationCreateRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Create a new agent escalation.
@@ -178,10 +181,10 @@ def register_escalation_routes(app, get_db, get_current_user, **kwargs):
                 context=body.context,
                 suggested_assignee=body.suggested_assignee,
             )
-            db.commit()
+            await db.commit()
             return {"status": "success", "escalation": result}
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.exception(f"Failed to create escalation: {e}")
             raise HTTPException(status_code=500, detail="Failed to create escalation")
 
@@ -193,7 +196,7 @@ def register_escalation_routes(app, get_db, get_current_user, **kwargs):
     async def assign_escalation(
         escalation_id: int,
         body: EscalationAssignRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Assign an escalation to a team member.
@@ -223,22 +226,22 @@ def register_escalation_routes(app, get_db, get_current_user, **kwargs):
                 esc.assigned_to = body.assignee_id
                 esc.assigned_at = datetime.now(tz.utc)
                 esc.status = "assigned"
-                db.flush()
-                db.commit()
+                await db.flush()
+                await db.commit()
 
                 from services.agent_escalation import _escalation_to_dict
                 result = _escalation_to_dict(esc)
             else:
                 # Auto-assign
                 result = auto_assign_escalation(db=db, escalation_id=escalation_id)
-                db.commit()
+                await db.commit()
 
             return {"status": "success", "escalation": result}
 
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.exception(f"Failed to assign escalation {escalation_id}: {e}")
             raise HTTPException(status_code=500, detail="Failed to assign escalation")
 
@@ -250,7 +253,7 @@ def register_escalation_routes(app, get_db, get_current_user, **kwargs):
     async def resolve_escalation_endpoint(
         escalation_id: int,
         body: EscalationResolveRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Mark an escalation as resolved with resolution notes.
@@ -278,13 +281,13 @@ def register_escalation_routes(app, get_db, get_current_user, **kwargs):
                 resolver_id=current_user.id,
                 resolution_notes=body.resolution_notes,
             )
-            db.commit()
+            await db.commit()
             return {"status": "success", "escalation": result}
 
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.exception(f"Failed to resolve escalation {escalation_id}: {e}")
             raise HTTPException(status_code=500, detail="Failed to resolve escalation")
 

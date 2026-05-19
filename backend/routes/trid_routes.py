@@ -17,6 +17,9 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +49,7 @@ def register_trid_routes(app, get_db, get_current_user, **kwargs):
             None,
             description="Filter by type: loan_estimate, closing_disclosure",
         ),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List all approaching and overdue TRID deadlines for the organization.
@@ -100,7 +103,7 @@ def register_trid_routes(app, get_db, get_current_user, **kwargs):
     )
     async def get_loan_trid_deadlines(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get detailed TRID deadline information for a specific loan.

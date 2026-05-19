@@ -25,6 +25,9 @@ from datetime import datetime, timezone
 import logging
 
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
@@ -127,7 +130,7 @@ async def get_file_timeline(
     direction: Optional[str] = Query(None, description="Filter by direction: inbound, outbound"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Return all communications for a loan file in reverse-chronological order.
@@ -178,7 +181,7 @@ async def get_file_timeline(
 @router.post("/{file_id}/timeline/mark-read", response_model=MarkReadResponse)
 async def mark_timeline_read(
     file_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Mark every unread message in this file as read by the current user.
@@ -223,7 +226,7 @@ async def mark_timeline_read(
         if participant:
             participant.last_read_at = datetime.now(timezone.utc)
 
-        db.commit()
+        await db.commit()
 
     return MarkReadResponse(file_id=file_id, marked_count=marked)
 
@@ -235,7 +238,7 @@ async def mark_timeline_read(
 @router.get("/{file_id}/timeline/unread-count", response_model=UnreadCountResponse)
 async def get_unread_count(
     file_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Return the number of messages in this file not yet read by the current user."""
@@ -269,7 +272,7 @@ async def trigger_ai_draft(
     file_id: int,
     body: DraftRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Trigger an AI draft reply for a specific inbound message.

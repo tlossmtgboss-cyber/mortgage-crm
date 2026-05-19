@@ -35,6 +35,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.auth_deps import require_auth, current_user_dep
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +108,7 @@ _CLOSING_STAGES = frozenset({
 @router.get("/dashboard")
 async def mobile_dashboard(
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Pipeline summary consumed by PerenniaWidget's NetworkService.fetchDashboard().
@@ -237,7 +240,7 @@ async def mobile_pipeline(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Pipeline stage breakdown consumed by PerenniaWidget's

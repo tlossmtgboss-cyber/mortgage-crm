@@ -19,6 +19,9 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import json
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +53,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/billing/check-feature", tags=["Billing"])
     async def check_feature_access(
         body: FeatureCheckRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -75,7 +78,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/billing/track-usage", tags=["Billing"])
     async def track_feature_usage(
         body: UsageTrackRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -108,7 +111,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/billing/prorate-change", tags=["Billing"])
     async def prorate_plan_change(
         body: PlanChangeRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -129,7 +132,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
 
         try:
             # Get current subscription
-            row = db.execute(text("""
+            row = await db.execute(text("""
                 SELECT tier, monthly_price, current_period_start, current_period_end,
                        billing_cycle, stripe_subscription_id
                 FROM organization_subscriptions
@@ -179,7 +182,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
             net_adjustment = round(charge - credit, 2)
 
             # Apply the tier change
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE organization_subscriptions
                 SET tier = :new_tier,
                     monthly_price = :new_price,
@@ -196,7 +199,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
             })
 
             # Log the proration event
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO audit_logs
                     (user_id, changed_by_id, change_type, entity_type, reason,
                      before_state, after_state, timestamp, organization_id)
@@ -212,7 +215,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
                     "credit": credit, "charge": charge, "net": net_adjustment,
                 }),
             })
-            db.commit()
+            await db.commit()
 
             return {
                 "status": "applied",
@@ -233,7 +236,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
         except HTTPException:
             raise
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Proration failed: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Plan change failed")
 
@@ -242,7 +245,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
     # ==================================================================
     @app.get("/api/v1/admin/billing/subscription", tags=["Billing"])
     async def get_org_subscription(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get full subscription details for the current organization."""
@@ -268,7 +271,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/billing/change-plan", tags=["Billing"])
     async def change_subscription_plan(
         body: PlanChangeRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Change subscription plan with proration (wraps prorate-change)."""
@@ -283,7 +286,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/admin/billing/invoices", tags=["Billing"])
     async def list_invoices(
         limit: int = 20,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List invoices for the current organization."""
@@ -293,7 +296,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, 'organization_id', None)
 
         try:
-            rows = db.execute(text("""
+            rows = await db.execute(text("""
                 SELECT id, invoice_number, status, total_amount, currency,
                        period_start, period_end, due_date, paid_at, created_at,
                        line_items, pdf_url
@@ -327,7 +330,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/billing/payment-method", tags=["Billing"])
     async def update_payment_method(
         body: PaymentMethodRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Update payment method for the organization (Stripe integration)."""
@@ -337,21 +340,21 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, 'organization_id', None)
 
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE organization_subscriptions
                 SET stripe_payment_method_id = :pm_id, updated_at = NOW()
                 WHERE organization_id = :org_id
             """), {"pm_id": body.stripe_payment_method_id, "org_id": org_id})
-            db.commit()
+            await db.commit()
             return {"status": "updated", "payment_method_id": body.stripe_payment_method_id}
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Payment method update failed: {e}")
             raise HTTPException(status_code=500, detail="Payment method update failed")
 
     @app.get("/api/v1/admin/billing/usage-summary", tags=["Billing"])
     async def get_usage_summary(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get detailed usage breakdown for the current billing period."""

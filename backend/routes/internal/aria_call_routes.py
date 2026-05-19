@@ -14,6 +14,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger("aria.internal.calls")
 
@@ -84,7 +87,7 @@ class VoicemailDropRequest(BaseModel):
 async def initiate_outbound_call(
     req: InitiateOutboundRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Initiate an outbound call via Telnyx, bridging into a LiveKit room."""
     _verify_internal_key(request)
@@ -104,9 +107,9 @@ async def initiate_outbound_call(
             rule_id=req.rule_id,
         )
         db.add(auth_record)
-        db.commit()
+        await db.commit()
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to record call authorization: {e}")
         return {"success": False, "error": "TCPA authorization record failed — call blocked for compliance"}
 
@@ -155,7 +158,7 @@ async def initiate_outbound_call(
 async def log_call(
     req: LogCallRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Log a completed call session to the database."""
     _verify_internal_key(request)
@@ -177,11 +180,11 @@ async def log_call(
             tools_executed=req.tools_executed or [],
         )
         db.add(session)
-        db.commit()
+        await db.commit()
         return {"success": True, "session_id": session.id}
     except Exception as e:
         logger.error(f"Failed to log call: {e}")
-        db.rollback()
+        await db.rollback()
         return {"success": False, "error": str(e)}
 
 
@@ -189,7 +192,7 @@ async def log_call(
 async def voicemail_drop(
     req: VoicemailDropRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Record a voicemail drop and send paired SMS."""
     _verify_internal_key(request)

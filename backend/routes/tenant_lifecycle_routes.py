@@ -18,6 +18,9 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone
 import json
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 # ── Table whitelist for dynamic SQL (prevent injection) ──
 _PURGE_SAFE_TABLES = frozenset({
@@ -88,7 +91,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/tenants/signup", tags=["Tenant Lifecycle"])
     async def self_service_signup(
         body: SignupRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         Self-service organization signup with admin user creation.
@@ -102,14 +105,14 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
         """
         try:
             # Check if org name or subdomain already taken
-            existing = db.execute(text("""
+            existing = await db.execute(text("""
                 SELECT id FROM organizations WHERE name = :name
             """), {"name": body.organization_name}).fetchone()
             if existing:
                 raise HTTPException(status_code=409, detail="Organization name already taken")
 
             # Check if email already registered
-            existing_user = db.execute(text("""
+            existing_user = await db.execute(text("""
                 SELECT id FROM users WHERE email = :email
             """), {"email": body.admin_email}).fetchone()
             if existing_user:
@@ -117,7 +120,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
 
             # 1. Create Organization
             subdomain = body.subdomain or body.organization_name.lower().replace(" ", "-")[:30]
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO organizations (name, subdomain, settings, is_active, created_at)
                 VALUES (:name, :subdomain, :settings, TRUE, NOW())
                 RETURNING id
@@ -133,7 +136,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
 
             # 2. Create admin user (PROV-003)
             pw_hash = get_password_hash(body.admin_password) if get_password_hash else "placeholder"
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO users
                     (email, first_name, last_name, hashed_password, role, permission_role,
                      organization_id, is_active, created_at)
@@ -151,7 +154,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
             # 3. Create trial subscription
             from subscription_models import SUBSCRIPTION_TIERS
             tier_config = SUBSCRIPTION_TIERS.get(body.tier, SUBSCRIPTION_TIERS["lead_management"])
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO organization_subscriptions
                     (organization_id, tier, status, billing_cycle, monthly_price,
                      trial_ends_at, current_period_start, current_period_end, created_at)
@@ -165,7 +168,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
                 "price": tier_config.get("price_monthly", 299),
             })
 
-            db.commit()
+            await db.commit()
 
             return {
                 "status": "created",
@@ -179,7 +182,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
         except HTTPException:
             raise
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Signup failed: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Signup failed")
 
@@ -189,7 +192,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/tenants/provision", tags=["Tenant Lifecycle"])
     async def provision_tenant(
         body: ProvisionRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -220,7 +223,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
     # ==================================================================
     @app.post("/api/v1/admin/org/export-data", tags=["Tenant Lifecycle"])
     async def export_org_data_before_deactivation(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -245,7 +248,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
         export_summary = {"organization_id": org_id, "tables": {}}
         for table in EXPORT_TABLES:
             try:
-                count = db.execute(text(
+                count = await db.execute(text(
                     f"SELECT COUNT(*) FROM {table} WHERE organization_id = :org_id"
                 ), {"org_id": org_id}).scalar() or 0
                 export_summary["tables"][table] = count
@@ -254,7 +257,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
                 export_summary["tables"][table] = "skipped"
 
         # Log export event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO audit_logs
                 (user_id, changed_by_id, change_type, entity_type, reason,
                  after_state, timestamp, organization_id)
@@ -266,7 +269,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
             "org_id": org_id,
             "data": json.dumps(export_summary),
         })
-        db.commit()
+        await db.commit()
 
         return {
             "status": "export_ready",
@@ -279,7 +282,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
     # ==================================================================
     @app.post("/api/v1/admin/org/reactivate", tags=["Tenant Lifecycle"])
     async def reactivate_organization(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -293,28 +296,28 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
 
         try:
             # Clear soft-delete flags on organization
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE organizations
                 SET is_active = TRUE, deleted_at = NULL, updated_at = NOW()
                 WHERE id = :org_id
             """), {"org_id": org_id})
 
             # Reactivate subscription if suspended
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE organization_subscriptions
                 SET status = 'active', updated_at = NOW()
                 WHERE organization_id = :org_id AND status IN ('suspended', 'canceled', 'past_due')
             """), {"org_id": org_id})
 
             # Reactivate users
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE users
                 SET is_active = TRUE
                 WHERE organization_id = :org_id AND is_active = FALSE
             """), {"org_id": org_id})
 
             # Audit log
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO audit_logs
                     (user_id, changed_by_id, change_type, entity_type, reason,
                      timestamp, organization_id)
@@ -323,11 +326,11 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
                      NOW(), :org_id)
             """), {"uid": current_user.id, "org_id": org_id})
 
-            db.commit()
+            await db.commit()
             return {"status": "reactivated", "organization_id": org_id}
 
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Reactivation failed: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Reactivation failed")
 
@@ -337,7 +340,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/org/hard-delete", tags=["Tenant Lifecycle"])
     async def hard_delete_organization(
         body: HardDeleteRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -356,7 +359,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, 'organization_id', None)
 
         # Verify org name confirmation
-        org = db.execute(text(
+        org = await db.execute(text(
             "SELECT name FROM organizations WHERE id = :id"
         ), {"id": org_id}).fetchone()
 
@@ -381,7 +384,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
                 if table not in _PURGE_SAFE_TABLES:
                     raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
                 try:
-                    result = db.execute(text(
+                    result = await db.execute(text(
                         f"DELETE FROM {table} WHERE organization_id = :org_id"
                     ), {"org_id": org_id})
                     purge_results[table] = result.rowcount
@@ -389,7 +392,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
                     purge_results[table] = f"error: {str(te)[:80]}"
 
             # Anonymize audit logs (retain for regulatory compliance)
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE audit_logs
                 SET before_state = '{"redacted": true}'::jsonb,
                     after_state = '{"redacted": true}'::jsonb,
@@ -398,16 +401,16 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
             """), {"org_id": org_id})
 
             # Delete users
-            user_count = db.execute(text(
+            user_count = await db.execute(text(
                 "DELETE FROM users WHERE organization_id = :org_id"
             ), {"org_id": org_id}).rowcount
 
             # Delete the organization itself
-            db.execute(text(
+            await db.execute(text(
                 "DELETE FROM organizations WHERE id = :org_id"
             ), {"org_id": org_id})
 
-            db.commit()
+            await db.commit()
 
             return {
                 "status": "permanently_deleted",
@@ -418,7 +421,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
             }
 
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Hard delete failed: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Deletion failed")
 
@@ -427,14 +430,14 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
     # ==================================================================
     @app.get("/api/v1/admin/org/onboarding", tags=["Tenant Lifecycle"])
     async def get_org_onboarding_status(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get organization-level onboarding progress."""
         org_id = getattr(current_user, 'organization_id', None)
 
         try:
-            org = db.execute(text(
+            org = await db.execute(text(
                 "SELECT settings FROM organizations WHERE id = :id"
             ), {"id": org_id}).fetchone()
 
@@ -466,14 +469,14 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/org/onboarding/step", tags=["Tenant Lifecycle"])
     async def complete_onboarding_step(
         body: OnboardingStepRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Mark an organization onboarding step as complete."""
         org_id = getattr(current_user, 'organization_id', None)
 
         try:
-            org = db.execute(text(
+            org = await db.execute(text(
                 "SELECT settings FROM organizations WHERE id = :id"
             ), {"id": org_id}).fetchone()
 
@@ -492,11 +495,11 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
             )
             settings["onboarding_completed"] = all_complete
 
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE organizations SET settings = CAST(:settings AS jsonb), updated_at = NOW()
                 WHERE id = :id
             """), {"settings": json.dumps(settings), "id": org_id})
-            db.commit()
+            await db.commit()
 
             return {
                 "step": body.step_key,
@@ -504,7 +507,7 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
                 "all_complete": all_complete,
             }
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Onboarding step update failed: {e}")
             raise HTTPException(status_code=500, detail="Update failed")
 

@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from utils.response import success_response, error_response, ErrorCodes
 import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +53,7 @@ def register_agent_metrics_routes(app, get_db, get_current_user, **kwargs):
     async def get_agent_metrics_summary(
         days: int = Query(default=30, ge=1, le=365, description="Lookback window in days"),
         organization_id: Optional[int] = Query(default=None, description="Filter by organization"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -84,7 +87,7 @@ def register_agent_metrics_routes(app, get_db, get_current_user, **kwargs):
         threshold_ms: int = Query(default=5000, ge=0, le=60000, description="Duration threshold in ms"),
         days: int = Query(default=30, ge=1, le=365, description="Lookback window in days"),
         organization_id: Optional[int] = Query(default=None, description="Filter by organization"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -119,7 +122,7 @@ def register_agent_metrics_routes(app, get_db, get_current_user, **kwargs):
         days: int = Query(default=7, ge=1, le=90, description="Lookback window in days"),
         organization_id: Optional[int] = Query(default=None, description="Filter by organization"),
         limit: int = Query(default=20, ge=1, le=100, description="Max error patterns to return"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """

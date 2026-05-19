@@ -317,27 +317,41 @@ class BusinessHoursCalculator:
         exclude_weekends: bool = True,
         exclude_holidays: bool = True,
         org_holidays: Optional[List[date]] = None,
+        state: Optional[str] = None,
     ):
         self.start_hour = start_hour
         self.end_hour = end_hour
         self.hours_per_day = end_hour - start_hour
         self.exclude_weekends = exclude_weekends
         self.exclude_holidays = exclude_holidays
-        # Merge federal + org-specific holidays
+        self.state = state.upper() if state else None
+        # Use central HolidayCalendar for state-aware holiday detection;
+        # fall back to the legacy federal-only set if import fails.
+        self._calendar = None
         self._holidays: set[date] = set()
         if exclude_holidays:
-            current_year = datetime.now(timezone.utc).year
-            self._holidays.update(_get_federal_holidays(current_year))
-            self._holidays.update(_get_federal_holidays(current_year + 1))
-        if org_holidays:
+            try:
+                from services.holiday_calendar import HolidayCalendar
+                self._calendar = HolidayCalendar(custom_closures=org_holidays)
+            except Exception:  # pragma: no cover — defensive fallback
+                current_year = datetime.now(timezone.utc).year
+                self._holidays.update(_get_federal_holidays(current_year))
+                self._holidays.update(_get_federal_holidays(current_year + 1))
+                if org_holidays:
+                    self._holidays.update(org_holidays)
+        elif org_holidays:
             self._holidays.update(org_holidays)
 
     def is_business_day(self, d: date) -> bool:
         """Check if a date is a business day."""
         if self.exclude_weekends and d.weekday() >= 5:
             return False
-        if self.exclude_holidays and d in self._holidays:
-            return False
+        if self.exclude_holidays:
+            if self._calendar is not None:
+                if self._calendar.is_holiday(d, state=self.state):
+                    return False
+            elif d in self._holidays:
+                return False
         return True
 
     def _clamp_to_business(self, dt: datetime) -> datetime:

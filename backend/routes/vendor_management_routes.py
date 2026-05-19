@@ -18,6 +18,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.auth_deps import current_user_dep
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +149,7 @@ def _order_to_dict(o) -> dict:
 @router.post("")
 async def create_vendor(
     body: VendorCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Create a new vendor for the organization."""
@@ -171,8 +174,8 @@ async def create_vendor(
         is_preferred=body.is_preferred,
     )
     db.add(vendor)
-    db.commit()
-    db.refresh(vendor)
+    await db.commit()
+    await db.refresh(vendor)
 
     logger.info(
         "Vendor created: id=%s name=%r type=%s org=%s",
@@ -189,7 +192,7 @@ async def list_vendors(
     is_preferred: Optional[bool] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """List vendors for the organization, optionally filtered by type."""
@@ -226,7 +229,7 @@ async def list_vendors(
 @router.get("/slow")
 async def list_slow_vendors(
     threshold_multiplier: float = Query(2.0, ge=1.0, description="Multiplier of avg turnaround to flag as slow"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -273,17 +276,17 @@ async def list_slow_vendors(
 @router.get("/{vendor_id}")
 async def get_vendor(
     vendor_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Get vendor details by ID."""
     _ensure_models()
     _ensure_tables(db)
 
-    vendor = db.query(_Vendor).filter(
+    vendor = (await db.execute(select(_Vendor).where(
         _Vendor.id == vendor_id,
         _Vendor.organization_id == current_user.organization_id,
-    ).first()
+    ))).scalars().first()
 
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -295,17 +298,17 @@ async def get_vendor(
 async def update_vendor(
     vendor_id: int,
     body: VendorUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Update a vendor's details."""
     _ensure_models()
     _ensure_tables(db)
 
-    vendor = db.query(_Vendor).filter(
+    vendor = (await db.execute(select(_Vendor).where(
         _Vendor.id == vendor_id,
         _Vendor.organization_id == current_user.organization_id,
-    ).first()
+    ))).scalars().first()
 
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -322,8 +325,8 @@ async def update_vendor(
         setattr(vendor, field, value)
 
     vendor.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(vendor)
+    await db.commit()
+    await db.refresh(vendor)
 
     logger.info("Vendor updated: id=%s fields=%s", vendor_id, list(update_data.keys()))
 
@@ -338,7 +341,7 @@ async def update_vendor(
 async def create_order(
     vendor_id: int,
     body: OrderCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Create a new order (appraisal, title, HOI, survey) for a vendor."""
@@ -347,10 +350,10 @@ async def create_order(
 
     org_id = current_user.organization_id
 
-    vendor = db.query(_Vendor).filter(
+    vendor = (await db.execute(select(_Vendor).where(
         _Vendor.id == vendor_id,
         _Vendor.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -380,8 +383,8 @@ async def create_order(
     vendor.total_orders = (vendor.total_orders or 0) + 1
     vendor.updated_at = datetime.now(timezone.utc)
 
-    db.commit()
-    db.refresh(order)
+    await db.commit()
+    await db.refresh(order)
 
     logger.info(
         "Vendor order created: id=%s vendor_id=%s loan_id=%s type=%s",
@@ -398,7 +401,7 @@ async def list_orders(
     order_type: Optional[str] = Query(None, description="Filter by order type"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """List orders for a specific vendor."""
@@ -408,10 +411,10 @@ async def list_orders(
     org_id = current_user.organization_id
 
     # Verify vendor exists in this org
-    vendor = db.query(_Vendor).filter(
+    vendor = (await db.execute(select(_Vendor).where(
         _Vendor.id == vendor_id,
         _Vendor.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -450,7 +453,7 @@ async def list_orders(
 @router.get("/{vendor_id}/performance")
 async def get_vendor_performance(
     vendor_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -462,10 +465,10 @@ async def get_vendor_performance(
 
     org_id = current_user.organization_id
 
-    vendor = db.query(_Vendor).filter(
+    vendor = (await db.execute(select(_Vendor).where(
         _Vendor.id == vendor_id,
         _Vendor.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")

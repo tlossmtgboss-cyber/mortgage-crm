@@ -20,6 +20,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger("aria.admin.staging")
 
@@ -53,7 +56,7 @@ async def _get_admin_user(request: Request, db: Session):
 @router.get("")
 async def list_staging(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     status: str = Query("pending_review"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -120,17 +123,17 @@ async def list_staging(
 async def approve_item(
     item_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Approve a staged item — commit to agent_memories."""
     user = await _get_admin_user(request, db)
     tenant_id = user.organization_id
 
     from database.models.memory_staging import MemoryStaging
-    item = db.query(MemoryStaging).filter(
+    item = (await db.execute(select(MemoryStaging).where(
         MemoryStaging.id == item_id,
         MemoryStaging.organization_id == tenant_id,
-    ).first()
+    ))).scalars().first()
 
     if not item:
         raise HTTPException(status_code=404, detail="Staging item not found")
@@ -151,22 +154,22 @@ async def approve_item(
     # Supersession check: if a preference with the same fact_key exists, supersede it
     superseded_id = None
     if item.fact_key:
-        existing = db.query(AgentMemory).filter(
+        existing = (await db.execute(select(AgentMemory).where(
             AgentMemory.borrower_id == item.borrower_id,
             AgentMemory.organization_id == tenant_id,
             AgentMemory.fact_key == item.fact_key,
             AgentMemory.superseded_by.is_(None),
-        ).first()
+        ))).scalars().first()
         if existing:
             superseded_id = existing.id
     else:
         # Episodic dedup: check content_hash for confirmation vs new fact
-        existing = db.query(AgentMemory).filter(
+        existing = (await db.execute(select(AgentMemory).where(
             AgentMemory.borrower_id == item.borrower_id,
             AgentMemory.organization_id == tenant_id,
             AgentMemory.content_hash == content_hash,
             AgentMemory.superseded_by.is_(None),
-        ).first()
+        ))).scalars().first()
         if existing:
             # Confirmation — refresh last_verified_at, don't insert new row
             existing.last_verified_at = datetime.now(timezone.utc)
@@ -183,7 +186,7 @@ async def approve_item(
             item.reviewed_by = user.id
             item.reviewed_at = datetime.now(timezone.utc)
             item.committed_memory_id = existing.id
-            db.commit()
+            await db.commit()
             return {"status": "confirmed", "memory_id": existing.id}
 
     memory = AgentMemory(
@@ -202,11 +205,11 @@ async def approve_item(
         content_hash=content_hash,
     )
     db.add(memory)
-    db.flush()
+    await db.flush()
 
     # Complete supersession: point old fact to new one
     if superseded_id:
-        old_mem = db.query(AgentMemory).filter(AgentMemory.id == superseded_id).first()
+        old_mem = (await db.execute(select(AgentMemory).where(AgentMemory.id == superseded_id))).scalars().first()
         if old_mem:
             old_mem.superseded_by = memory.id
         from database.models.memory_audit import MemoryAuditEvent
@@ -234,7 +237,7 @@ async def approve_item(
         details={"review_action": "approved", "reviewer_id": user.id},
     )
     db.add(audit)
-    db.commit()
+    await db.commit()
 
     return {"status": "approved", "memory_id": memory.id}
 
@@ -244,17 +247,17 @@ async def reject_item(
     item_id: int,
     body: RejectRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Reject a staged item — set terminal status."""
     user = await _get_admin_user(request, db)
     tenant_id = user.organization_id
 
     from database.models.memory_staging import MemoryStaging
-    item = db.query(MemoryStaging).filter(
+    item = (await db.execute(select(MemoryStaging).where(
         MemoryStaging.id == item_id,
         MemoryStaging.organization_id == tenant_id,
-    ).first()
+    ))).scalars().first()
 
     if not item:
         raise HTTPException(status_code=404, detail="Staging item not found")
@@ -279,7 +282,7 @@ async def reject_item(
         },
     )
     db.add(audit)
-    db.commit()
+    await db.commit()
 
     return {"status": "rejected"}
 
@@ -289,17 +292,17 @@ async def edit_item(
     item_id: int,
     body: EditRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Edit a staged item before approving."""
     user = await _get_admin_user(request, db)
     tenant_id = user.organization_id
 
     from database.models.memory_staging import MemoryStaging
-    item = db.query(MemoryStaging).filter(
+    item = (await db.execute(select(MemoryStaging).where(
         MemoryStaging.id == item_id,
         MemoryStaging.organization_id == tenant_id,
-    ).first()
+    ))).scalars().first()
 
     if not item:
         raise HTTPException(status_code=404, detail="Staging item not found")
@@ -327,7 +330,7 @@ async def edit_item(
         },
     )
     db.add(audit)
-    db.commit()
+    await db.commit()
 
     return {"status": "edited", "id": item.id}
 
@@ -335,7 +338,7 @@ async def edit_item(
 @router.get("/queue-depth")
 async def queue_depth(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return count of pending_review items for admin nav badge."""
     user = await _get_admin_user(request, db)

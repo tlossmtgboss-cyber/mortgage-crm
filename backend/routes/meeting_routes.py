@@ -19,6 +19,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from services.meeting_link_service import MeetingLinkService
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, mod
     _models = models_dict
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Get current user - wrapper that works at request time."""
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Auth dependency not configured")
@@ -91,7 +94,7 @@ async def generate_meeting_link(
     appointment_id: int,
     body: GenerateMeetingLinkRequest = GenerateMeetingLinkRequest(),
     request: Request = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Generate or regenerate a meeting link for an appointment.
 
@@ -109,9 +112,9 @@ async def generate_meeting_link(
     if not Appointment:
         raise HTTPException(status_code=500, detail="Scheduler models not loaded")
 
-    appointment = db.query(Appointment).filter(
+    appointment = (await db.execute(select(Appointment).where(
         Appointment.id == appointment_id
-    ).first()
+    ))).scalars().first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -145,7 +148,7 @@ async def generate_meeting_link(
                 dial_parts.append(f"Password: {result.password}")
             appointment.dial_in_info = "\n".join(dial_parts)
 
-        db.commit()
+        await db.commit()
         logger.info(
             f"Meeting link generated for appointment {appointment_id}: "
             f"provider={result.provider}"
@@ -172,7 +175,7 @@ async def generate_meeting_link(
 )
 async def get_meeting_room_info(
     room_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get meeting room information for the lobby page.
 
@@ -232,7 +235,7 @@ async def get_meeting_room_info(
 @router.get("/api/v1/meet/{room_id}/status")
 async def get_meeting_status(
     room_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Check meeting status for countdown/redirect logic.
 

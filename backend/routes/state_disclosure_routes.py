@@ -3,6 +3,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 router = APIRouter(prefix="/api/v1/admin/state-disclosures", tags=["State Disclosures"])
 
@@ -14,7 +17,7 @@ def register_state_disclosure_routes(app, get_db):
     async def list_state_disclosures(
         state: Optional[str] = Query(None, description="Filter by state code (e.g., CA)"),
         category: Optional[str] = Query(None, description="Filter by category"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         from database.models.state_disclosure import StateDisclosure
         query = db.query(StateDisclosure)
@@ -45,21 +48,21 @@ def register_state_disclosure_routes(app, get_db):
         disclosure_id: int,
         requirement: Optional[str] = None,
         regulatory_reference: Optional[str] = None,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         from database.models.state_disclosure import StateDisclosure
-        disc = db.query(StateDisclosure).filter(StateDisclosure.id == disclosure_id).first()
+        disc = (await db.execute(select(StateDisclosure).where(StateDisclosure.id == disclosure_id))).scalars().first()
         if not disc:
             raise HTTPException(status_code=404, detail="Disclosure not found")
         if requirement is not None:
             disc.requirement = requirement
         if regulatory_reference is not None:
             disc.regulatory_reference = regulatory_reference
-        db.commit()
+        await db.commit()
         return {"status": "updated", "id": disc.id}
 
     @router.get("/states")
-    async def list_available_states(db: Session = Depends(get_db)):
+    async def list_available_states(db: AsyncSession = Depends(get_async_db)):
         from database.models.state_disclosure import StateDisclosure
         from sqlalchemy import func as sqlfunc
         states = (

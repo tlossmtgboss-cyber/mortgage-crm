@@ -22,6 +22,9 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.auth_deps import require_auth, current_user_dep
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +51,7 @@ async def get_mobile_tasks(
     limit: int = Query(default=50, ge=1, le=200),
     include_workflow: bool = Query(default=False, description="Include workflow_task_instances metadata"),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return tasks from the `tasks` table for the authenticated user.
 
@@ -116,7 +119,7 @@ async def get_mobile_tasks(
     """
 
     try:
-        rows = db.execute(text(query), params).fetchall()
+        rows = await db.execute(text(query), params).fetchall()
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
         rows = []
@@ -171,7 +174,7 @@ async def get_mobile_tasks(
 @router.get("/tasks/summary")
 async def get_mobile_tasks_summary(
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return task count summaries for the mobile dashboard.
 
@@ -199,7 +202,7 @@ async def get_mobile_tasks_summary(
     """
 
     try:
-        row = db.execute(text(summary_sql), params).fetchone()
+        row = await db.execute(text(summary_sql), params).fetchone()
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
         row = None
@@ -244,7 +247,7 @@ async def update_mobile_task(
     task_id: int,
     body: TaskUpdateRequest,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update a task — PATCH /api/v1/mobile/tasks/{task_id}
 
@@ -309,10 +312,10 @@ async def update_mobile_task(
     task.updated_at = now
 
     try:
-        db.commit()
-        db.refresh(task)
+        await db.commit()
+        await db.refresh(task)
     except Exception as exc:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to update task %s: %s", task_id, exc)
         raise HTTPException(status_code=500, detail="Failed to update task")
 
@@ -400,10 +403,10 @@ async def _snooze_task(
         task.status = "pending"
 
     try:
-        db.commit()
-        db.refresh(task)
+        await db.commit()
+        await db.refresh(task)
     except Exception as exc:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to snooze task %s: %s", task_id, exc)
         raise HTTPException(status_code=500, detail="Failed to snooze task")
 
@@ -424,7 +427,7 @@ async def snooze_mobile_task(
     task_id: int,
     body: SnoozeRequest = Body(default=SnoozeRequest()),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Snooze a task — PATCH /api/v1/mobile/tasks/{task_id}/snooze
 

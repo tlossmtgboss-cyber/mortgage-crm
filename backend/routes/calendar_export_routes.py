@@ -19,6 +19,9 @@ import logging
 
 from db import get_db
 from services.calendar_export import CalendarExportService
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +95,7 @@ async def export_ics(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     user_id: Optional[int] = Query(None, description="Filter by assigned user ID"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Export appointments as an ICS file for calendar app import.
@@ -142,7 +145,7 @@ async def export_ics(
 async def export_single_ics(
     request: Request,
     appointment_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Export a single appointment as an ICS file.
@@ -154,10 +157,10 @@ async def export_single_ics(
     if Appointment is None:
         raise HTTPException(status_code=503, detail="Scheduler models not available")
 
-    appointment = db.query(Appointment).filter(
+    appointment = (await db.execute(select(Appointment).where(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
-    ).first()
+    ))).scalars().first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -195,7 +198,7 @@ async def export_pdf(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     user_id: Optional[int] = Query(None, description="Filter by assigned user ID"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Export schedule as a printable PDF (or HTML fallback).

@@ -19,6 +19,9 @@ import secrets
 
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ _TOKEN_LIFETIME_DAYS = 90
 async def get_ics_feed(
     token: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Serve the iCalendar feed for the given token.
@@ -82,10 +85,10 @@ async def get_ics_feed(
         # Deactivate expired token
         try:
             feed_token.is_active = False
-            db.commit()
+            await db.commit()
         except Exception as e:
             logger.warning(f"Failed to deactivate expired feed token: {e}")
-            db.rollback()
+            await db.rollback()
         raise HTTPException(
             status_code=401,
             detail="Calendar feed link has expired. Please regenerate your feed URL in calendar settings.",
@@ -93,25 +96,25 @@ async def get_ics_feed(
 
     # C3: Verify the token owner is still an active user (former employees must not retain access)
     from database.models.core import User
-    user = db.query(User).filter(User.id == feed_token.user_id).first()
+    user = (await db.execute(select(User).where(User.id == feed_token.user_id))).scalars().first()
     if not user or not getattr(user, "is_active", True):
         # Deactivate the token so it doesn't pass validation on future requests
         try:
             feed_token.is_active = False
-            db.commit()
+            await db.commit()
         except Exception as e:
             logger.warning(f"Failed to deactivate feed token for inactive user: {e}")
-            db.rollback()
+            await db.rollback()
         raise HTTPException(status_code=401, detail="User account inactive")
 
     # Update access tracking (non-blocking — don't fail the request on tracking errors)
     try:
         feed_token.access_count = (feed_token.access_count or 0) + 1
         feed_token.last_accessed_at = datetime.now(timezone.utc)
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.warning(f"Failed to update feed access tracking: {e}")
-        db.rollback()
+        await db.rollback()
 
     # Generate the ICS content
     try:
@@ -144,7 +147,7 @@ async def get_ics_feed(
 @router.post("/feed/generate-token")
 async def generate_feed_token(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Generate a new calendar feed URL token for the authenticated user.
@@ -196,7 +199,7 @@ async def generate_feed_token(
         expires_at=expires_at,
     )
     db.add(feed_token)
-    db.flush()
+    await db.flush()
 
     _audit_log(
         db, org_id, user_id, "created",
@@ -208,7 +211,7 @@ async def generate_feed_token(
         },
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     # Build the feed URLs
     base_url = _get_api_base_url(request)
@@ -239,7 +242,7 @@ async def generate_feed_token(
 @router.post("/feed/refresh-token")
 async def refresh_feed_token(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Refresh the authenticated user's calendar feed token.
@@ -294,7 +297,7 @@ async def refresh_feed_token(
         expires_at=expires_at,
     )
     db.add(feed_token)
-    db.flush()
+    await db.flush()
 
     _audit_log(
         db, org_id, user_id, "refreshed",
@@ -305,7 +308,7 @@ async def refresh_feed_token(
         },
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     base_url = _get_api_base_url(request)
     ics_path = f"/api/v1/scheduler/feed/{token}.ics"
@@ -331,7 +334,7 @@ async def refresh_feed_token(
 @router.delete("/feed/revoke")
 async def revoke_feed_token(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Revoke the authenticated user's active calendar feed token.
@@ -368,7 +371,7 @@ async def revoke_feed_token(
         changes={"revoked_count": revoked_count},
         request=request,
     )
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -384,7 +387,7 @@ async def revoke_feed_token(
 @router.get("/feed/status")
 async def get_feed_status(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Check whether the authenticated user has an active calendar feed

@@ -18,6 +18,19 @@ from functools import lru_cache
 from enum import Enum
 
 
+def _next_semver(current: str) -> str:
+    """Bump the minor segment of a semver string."""
+    try:
+        parts = [int(p) for p in current.split(".")]
+        while len(parts) < 3:
+            parts.append(0)
+        parts[1] += 1
+        parts[2] = 0
+        return ".".join(str(p) for p in parts[:3])
+    except Exception:  # noqa: BLE001
+        return "1.0.0"
+
+
 class Priority(str, Enum):
     """Section priority levels."""
     CORE = "core"
@@ -214,6 +227,10 @@ class LoadedPrompt:
     total_chars: int
     total_sections: int
     cache_key: str
+    # Wave 5 — D3 audit: callers can rely on this to know which versioned
+    # prompt they got. Format: "<prompt_id>@<semver>" (e.g. "ctx-mortgage@1.0.0").
+    # Optional; defaults to None for backward compatibility.
+    version_stamp: Optional[str] = None
 
 
 class PromptLoader:
@@ -399,13 +416,45 @@ class PromptLoader:
         # Combine content
         combined_content = '\n\n'.join(content_parts)
 
+        # Wave 5 — register/version this prompt. Idempotent on content hash.
+        version_stamp = self._register_versioned(context, combined_content)
+
         return LoadedPrompt(
             content=combined_content,
             sections_loaded=section_ids,
             total_chars=total_chars,
             total_sections=len(section_ids),
-            cache_key=context.to_cache_key()
+            cache_key=context.to_cache_key(),
+            version_stamp=version_stamp,
         )
+
+    def _register_versioned(self, context: LoadContext, content: str) -> Optional[str]:
+        """Best-effort register-on-load. Never raises into the caller."""
+        try:
+            from agents.orchestration.prompt_registry import get_default_registry
+
+            registry = get_default_registry()
+            # prompt_id is derived from the context cache key prefix so that
+            # logically distinct contexts get separate histories.
+            prompt_id = "ctx:" + context.to_cache_key()
+            existing = registry.get(prompt_id, None)
+            if existing is None:
+                rec = registry.register(prompt_id, "1.0.0", content, metadata={
+                    "domain": context.domain,
+                    "tags": list(context.tags or []),
+                })
+                return f"{prompt_id}@{rec['version']}"
+            # Idempotent: if hash matches, register() returns the same record.
+            same = registry.register(
+                prompt_id,
+                _next_semver(existing.get("version", "1.0.0")),
+                content,
+                metadata={"domain": context.domain, "tags": list(context.tags or [])},
+            )
+            return f"{prompt_id}@{same['version']}"
+        except Exception as _exc:
+            # Never break prompt loading because of versioning bookkeeping.
+            return None
 
     def get_section(self, section_id: str) -> Optional[str]:
         """Get a specific section by ID."""

@@ -31,6 +31,9 @@ from sqlalchemy.orm import Session
 from auth.dependencies import get_current_user_flexible
 from db import get_db
 from services.audit_events import audit_event
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +95,7 @@ def _build_pin_config() -> dict:
 async def get_certificate_pins(
     request: Request,
     user=Depends(get_current_user_flexible),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return current SPKI pin hashes for the app's pinned domains.
 
@@ -114,7 +117,7 @@ async def get_certificate_pins(
             user_agent=request.headers.get("user-agent"),
             metadata={"domains": list(pins.keys())},
         )
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.warning("Failed to audit certificate-pins fetch: %s", e)
 
@@ -151,7 +154,7 @@ class PinFailureRequest(BaseModel):
 async def report_pin_failure(
     payload: PinFailureRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Receive certificate pin validation failure reports from the iOS app.
 
@@ -202,7 +205,7 @@ async def report_pin_failure(
             )
 
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.exception("Failed to commit pin-failure audit events: %s", e)
 

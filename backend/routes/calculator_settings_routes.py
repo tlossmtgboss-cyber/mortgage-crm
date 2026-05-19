@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +57,12 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
 
     @app.post("/api/v1/settings/calculator-types/setup")
     async def setup_calculator_tables(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Create calculator_buyer_type_assignments table and add buyer_type column to leads."""
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS calculator_buyer_type_assignments (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -73,18 +76,18 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
                 )
             """))
 
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE INDEX IF NOT EXISTS idx_calc_buyer_type_user
                 ON calculator_buyer_type_assignments(user_id, buyer_type)
             """))
 
             # Add buyer_type column to leads if not exists
-            db.execute(text("""
+            await db.execute(text("""
                 ALTER TABLE leads ADD COLUMN IF NOT EXISTS buyer_type VARCHAR(50)
             """))
 
             # Custom buyer types table
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS custom_buyer_types (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -95,16 +98,16 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
                 )
             """))
 
-            db.commit()
+            await db.commit()
             return {"success": True, "message": "Calculator settings tables created"}
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Error setting up calculator tables: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.get("/api/v1/settings/calculator-types")
     async def get_calculator_settings(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get calculator types, buyer types, and current assignments."""
@@ -112,7 +115,7 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
             # Get custom buyer types for this user
             custom_types = []
             try:
-                rows = db.execute(text(
+                rows = await db.execute(text(
                     "SELECT type_id, label FROM custom_buyer_types WHERE user_id = :uid ORDER BY label"
                 ), {"uid": current_user.id}).fetchall()
                 custom_types = [{"id": r[0], "label": r[1]} for r in rows]
@@ -124,7 +127,7 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
             # Get current assignments
             assignments = []
             try:
-                rows = db.execute(text("""
+                rows = await db.execute(text("""
                     SELECT buyer_type, calculator_type, enabled, priority
                     FROM calculator_buyer_type_assignments
                     WHERE user_id = :uid
@@ -154,20 +157,20 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
     @app.put("/api/v1/settings/calculator-types")
     async def update_calculator_assignments(
         data: AssignmentUpdate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Bulk update calculator-buyer-type assignments."""
         try:
             # Delete existing assignments for this user
-            db.execute(text(
+            await db.execute(text(
                 "DELETE FROM calculator_buyer_type_assignments WHERE user_id = :uid"
             ), {"uid": current_user.id})
 
             # Insert new assignments
             for a in data.assignments:
                 if a.get("enabled", True):
-                    db.execute(text("""
+                    await db.execute(text("""
                         INSERT INTO calculator_buyer_type_assignments
                             (user_id, buyer_type, calculator_type, enabled, priority, updated_at)
                         VALUES (:uid, :bt, :ct, :enabled, :priority, NOW())
@@ -179,27 +182,27 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
                         "priority": a.get("priority", 0),
                     })
 
-            db.commit()
+            await db.commit()
             return {
                 "success": True,
                 "message": f"Saved {len([a for a in data.assignments if a.get('enabled', True)])} assignments",
             }
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Error updating calculator assignments: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.post("/api/v1/settings/calculator-types/buyer-types")
     async def add_custom_buyer_type(
         data: CustomBuyerType,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Add a custom buyer type."""
         try:
             type_id = f"custom_{data.label.lower().replace(' ', '_').replace('-', '_')}"
 
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO custom_buyer_types (user_id, label, type_id)
                 VALUES (:uid, :label, :type_id)
                 ON CONFLICT (user_id, type_id) DO NOTHING
@@ -208,34 +211,34 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
                 "label": data.label,
                 "type_id": type_id,
             })
-            db.commit()
+            await db.commit()
 
             return {"success": True, "buyer_type": {"id": type_id, "label": data.label}}
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Error adding custom buyer type: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.delete("/api/v1/settings/calculator-types/buyer-types/{type_id}")
     async def delete_custom_buyer_type(
         type_id: str,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Delete a custom buyer type and its assignments."""
         try:
-            db.execute(text(
+            await db.execute(text(
                 "DELETE FROM custom_buyer_types WHERE user_id = :uid AND type_id = :tid"
             ), {"uid": current_user.id, "tid": type_id})
 
-            db.execute(text(
+            await db.execute(text(
                 "DELETE FROM calculator_buyer_type_assignments WHERE user_id = :uid AND buyer_type = :tid"
             ), {"uid": current_user.id, "tid": type_id})
 
-            db.commit()
+            await db.commit()
             return {"success": True, "message": f"Deleted buyer type '{type_id}'"}
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Error deleting custom buyer type: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
 

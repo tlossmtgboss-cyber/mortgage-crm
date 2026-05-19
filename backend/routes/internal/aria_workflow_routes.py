@@ -14,6 +14,9 @@ import hmac
 import os
 
 from database import get_db
+from db import get_async_db
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("aria.internal.workflows")
 
@@ -39,7 +42,7 @@ class WorkflowRequest(BaseModel):
 async def trigger_workflow(
     req: WorkflowRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Dispatch a LangGraph workflow asynchronously.
