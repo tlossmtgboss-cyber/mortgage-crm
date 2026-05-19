@@ -128,7 +128,7 @@ class AIUsageTracker:
         self._openai_client = None
 
         # Cache pricing
-        self._pricing_cache = {}
+        self._pricing_cache: Dict[str, Any] = {}
 
     @property
     def anthropic_client(self):

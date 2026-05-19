@@ -82,6 +82,7 @@ class RateLimiter:
     """
 
     _instance: Optional["RateLimiter"] = None
+    _initialized: bool = False
 
     def __new__(cls, *args: Any, **kwargs: Any) -> "RateLimiter":
         """Singleton — ensures one shared counter store across all decorators."""

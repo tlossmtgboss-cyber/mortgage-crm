@@ -87,6 +87,7 @@ class AIBudgetTracker:
     """
 
     _instance: Optional["AIBudgetTracker"] = None
+    _initialized: bool = False
 
     def __new__(cls, *args: Any, **kwargs: Any) -> "AIBudgetTracker":
         """Singleton — one tracker per process."""

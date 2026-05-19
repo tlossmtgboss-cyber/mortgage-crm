@@ -111,7 +111,7 @@ class IdempotencyStore:
     LOCK_TTL_SECONDS = 30
 
     def __init__(self, redis_url: Optional[str] = None):
-        self._redis = None
+        self._redis: Any = None
         self._available = False
         self._redis_url = redis_url or os.getenv("REDIS_URL", "")
         self._connect()

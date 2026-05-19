@@ -8,12 +8,38 @@ integration test harness itself collects and executes correctly.
 """
 from __future__ import annotations
 
-import pytest
+import importlib.util
+import os
+import sys
+from pathlib import Path
 
-from agents.orchestration.compliance_guard import ComplianceGuard, compliance_guard
+import pytest
 
 
 pytestmark = pytest.mark.integration
+
+
+def _load_compliance_guard():
+    """Load the compliance_guard module by file path so we don't trigger the
+    heavy ``agents/__init__.py`` (which imports langgraph + the full agent
+    fleet). This keeps the integration test surface small and fast.
+    """
+    backend_dir = Path(__file__).resolve().parents[2]
+    target = backend_dir / "agents" / "orchestration" / "compliance_guard.py"
+    if not target.exists():  # pragma: no cover - safety net
+        pytest.skip(f"compliance_guard.py not found at {target}")
+    spec = importlib.util.spec_from_file_location(
+        "_perennia_compliance_guard_under_test", str(target)
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+_cg_module = _load_compliance_guard()
+ComplianceGuard = _cg_module.ComplianceGuard
+compliance_guard = _cg_module.compliance_guard
 
 
 @pytest.fixture
