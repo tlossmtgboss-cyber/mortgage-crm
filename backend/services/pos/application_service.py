@@ -282,11 +282,8 @@ class ApplicationService:
         if co_ssn is not None:
             pii.co_ssn_encrypted = co_ssn or None
         if dob is not None:
-            pii.dob = dob or None
-            # Dual-write: populate encrypted column alongside plain column
             pii.dob_encrypted = dob.isoformat() if dob else None
         if co_dob is not None:
-            pii.co_dob = co_dob or None
             pii.co_dob_encrypted = co_dob.isoformat() if co_dob else None
 
         session.flush()

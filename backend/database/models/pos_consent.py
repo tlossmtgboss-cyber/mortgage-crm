@@ -28,6 +28,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 
 from db import Base
@@ -45,6 +46,12 @@ class CreditAuthorization(Base):
     __table_args__ = (
         Index("ix_credit_auth_application_id", "application_id"),
         Index("ix_credit_auth_organization_id", "organization_id"),
+        Index(
+            "uq_credit_auth_one_per_app",
+            "application_id",
+            unique=True,
+            postgresql_where=text("authorized = true"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -76,6 +83,12 @@ class EConsentAgreement(Base):
     __table_args__ = (
         Index("ix_econsent_application_id", "application_id"),
         Index("ix_econsent_organization_id", "organization_id"),
+        Index(
+            "uq_econsent_one_per_app",
+            "application_id",
+            unique=True,
+            postgresql_where=text("consented = true"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
