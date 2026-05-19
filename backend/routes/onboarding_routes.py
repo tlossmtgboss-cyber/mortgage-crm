@@ -831,47 +831,76 @@ async def get_team_members(
         team_members = []
 
         for user in all_users:
-            # Extract metadata
-            metadata = user.user_metadata or {}
+            try:
+                metadata = getattr(user, 'user_metadata', None) or {}
 
-            # Try to find a matching role for this user (simplified - in production you'd have explicit user-role mapping)
-            member_data = {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "first_name": metadata.get("first_name"),
-                "last_name": metadata.get("last_name"),
-                "phone": metadata.get("phone"),
-                "role": user.role,
-                "title": metadata.get("title"),
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-                "onboarding_completed": user.onboarding_completed,
-                "tasks_count": 0
-            }
+                try:
+                    full_name = user.full_name
+                except Exception:
+                    full_name = metadata.get("first_name") or user.email
 
-            # Add to list
-            team_members.append(member_data)
+                try:
+                    created_at_iso = user.created_at.isoformat() if user.created_at else None
+                except Exception:
+                    created_at_iso = None
+
+                member_data = {
+                    "id": user.id,
+                    "email": user.email,
+                    "full_name": full_name,
+                    "first_name": metadata.get("first_name"),
+                    "last_name": metadata.get("last_name"),
+                    "phone": metadata.get("phone"),
+                    "role": getattr(user, 'role', None),
+                    "title": metadata.get("title"),
+                    "created_at": created_at_iso,
+                    "onboarding_completed": getattr(user, 'onboarding_completed', False),
+                    "tasks_count": 0
+                }
+
+                team_members.append(member_data)
+            except Exception as user_err:
+                logger.warning(
+                    f"Skipping user id={getattr(user, 'id', '?')} in team members listing: {user_err}",
+                    exc_info=True,
+                )
+                continue
 
         # No sample/demo data - only show real users from the database
 
         # Also include current user
-        current_metadata = current_user.user_metadata or {}
-        current_member = {
-            "id": current_user.id,
-            "email": current_user.email,
-            "full_name": current_user.full_name,
-            "first_name": current_metadata.get("first_name"),
-            "last_name": current_metadata.get("last_name"),
-            "phone": current_metadata.get("phone"),
-            "role": current_user.role or "Admin",
-            "title": current_metadata.get("title"),
-            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
-            "onboarding_completed": current_user.onboarding_completed,
-            "tasks_count": 0,
-            "is_current": True
-        }
+        try:
+            current_metadata = getattr(current_user, 'user_metadata', None) or {}
+            try:
+                current_full_name = current_user.full_name
+            except Exception:
+                current_full_name = current_metadata.get("first_name") or current_user.email
+            try:
+                current_created_iso = current_user.created_at.isoformat() if current_user.created_at else None
+            except Exception:
+                current_created_iso = None
 
-        team_members.insert(0, current_member)
+            current_member = {
+                "id": current_user.id,
+                "email": current_user.email,
+                "full_name": current_full_name,
+                "first_name": current_metadata.get("first_name"),
+                "last_name": current_metadata.get("last_name"),
+                "phone": current_metadata.get("phone"),
+                "role": getattr(current_user, 'role', None) or "Admin",
+                "title": current_metadata.get("title"),
+                "created_at": current_created_iso,
+                "onboarding_completed": getattr(current_user, 'onboarding_completed', False),
+                "tasks_count": 0,
+                "is_current": True
+            }
+
+            team_members.insert(0, current_member)
+        except Exception as cur_err:
+            logger.warning(
+                f"Could not build current_user entry for team members: {cur_err}",
+                exc_info=True,
+            )
 
         # Get role assignments and task counts (optional — not needed for scheduling modal)
         roles_data = []
@@ -909,8 +938,8 @@ async def get_team_members(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get team members error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Get team members error: {e}", exc_info=True)
+        return {"members": [], "team_members": [], "available_roles": []}
 
 
 @team_router.get("/members/{user_id}")
