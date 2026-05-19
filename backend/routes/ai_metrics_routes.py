@@ -7,6 +7,7 @@ hallucination tracking, response times, tool usage, and quality metrics.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
@@ -95,7 +96,7 @@ class VerifyResponseRequest(BaseModel):
 # =============================================================================
 
 # Import get_db from main database module
-from database import get_db
+from db import get_async_db
 
 # Import authentication dependency
 try:
@@ -114,7 +115,7 @@ except ImportError:
 async def get_hallucination_metrics(
     days: int = Query(7, ge=1, le=365, description="Number of days to analyze"),
     user_id: Optional[int] = Query(None, description="Filter by specific user"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get hallucination metrics for AI responses.
@@ -161,7 +162,7 @@ async def get_hallucination_metrics(
 async def get_agent_performance(
     days: int = Query(7, ge=1, le=365, description="Number of days to analyze"),
     user_id: Optional[int] = Query(None, description="Filter by specific user"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get agent performance metrics.
@@ -191,7 +192,7 @@ async def get_agent_performance(
 @router.get("/quality", response_model=AIQualityResponse)
 async def get_ai_quality_metrics(
     days: int = Query(7, ge=1, le=365, description="Number of days to analyze"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get AI quality metrics.
@@ -221,7 +222,7 @@ async def get_ai_quality_metrics(
 @router.get("/dashboard", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
     days: int = Query(7, ge=1, le=365, description="Number of days to analyze"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get comprehensive dashboard summary of all AI metrics.
@@ -252,7 +253,7 @@ async def get_dashboard_summary(
 async def get_response_time_breakdown(
     days: int = Query(7, ge=1, le=365, description="Number of days to analyze"),
     query_type: Optional[str] = Query(None, description="Filter by query type"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get detailed response time breakdown by query type.
@@ -279,7 +280,7 @@ async def get_response_time_breakdown(
 @router.get("/business")
 async def get_business_metrics(
     days: int = Query(7, ge=1, le=365, description="Number of days to analyze"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get business-level AI metrics.
@@ -313,7 +314,7 @@ async def get_business_metrics(
 @router.post("/verify-response")
 async def manually_verify_response(
     request: VerifyResponseRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """

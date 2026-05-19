@@ -7,11 +7,12 @@ and user feedback collection.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Optional
 import logging
 
-from db import get_db
+from db import get_async_db
 
 router = APIRouter(prefix="/api/v1/ai/metrics", tags=["AI Metrics Dashboard"])
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def get_current_user_flexible_dep():
 @router.get("/dashboard")
 async def get_ai_metrics_dashboard(
     days: int = 7,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -76,7 +77,7 @@ async def get_ai_metrics_dashboard(
 @router.get("/performance")
 async def get_ai_performance_metrics(
     days: int = 7,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -101,7 +102,7 @@ async def get_ai_performance_metrics(
 @router.get("/business")
 async def get_ai_business_metrics(
     days: int = 7,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -126,7 +127,7 @@ async def get_ai_business_metrics(
 @router.get("/quality")
 async def get_ai_quality_metrics(
     days: int = 7,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -152,7 +153,7 @@ async def get_ai_quality_metrics(
 async def get_ai_response_time_breakdown(
     days: int = 7,
     query_type: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -177,7 +178,7 @@ async def get_ai_response_time_breakdown(
 @router.post("/feedback")
 async def submit_ai_feedback(
     feedback: UserFeedbackRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """
@@ -233,7 +234,7 @@ async def record_followup_click(
     session_id: str,
     suggestion_text: str,
     suggestion_index: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """

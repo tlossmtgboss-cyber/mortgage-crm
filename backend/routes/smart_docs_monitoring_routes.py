@@ -21,8 +21,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ def _get_monitoring_service():
 
 @router.get("/monitoring/health")
 async def smart_docs_health(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     System health check for Smart Docs V2.
@@ -92,7 +93,7 @@ async def smart_docs_health(
 async def smart_docs_metrics(
     hours: int = Query(24, ge=1, le=720, description="Lookback period in hours"),
     org_id: Optional[int] = Query(None, description="Filter by org (admin only, default: all)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -121,7 +122,7 @@ async def smart_docs_metrics(
 @router.get("/monitoring/sla")
 async def smart_docs_sla(
     hours: int = Query(24, ge=1, le=720, description="Lookback period in hours"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -149,7 +150,7 @@ async def smart_docs_sla(
 async def smart_docs_costs(
     days: int = Query(30, ge=1, le=365, description="Lookback period in days"),
     org_id: Optional[int] = Query(None, description="Filter by org (admin only)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -178,7 +179,7 @@ async def smart_docs_costs(
 async def smart_docs_errors(
     hours: int = Query(24, ge=1, le=720, description="Lookback period in hours"),
     org_id: Optional[int] = Query(None, description="Filter by org (admin only)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -206,7 +207,7 @@ async def smart_docs_errors(
 @router.get("/monitoring/dashboard")
 async def smart_docs_monitoring_dashboard(
     hours: int = Query(24, ge=1, le=720, description="Lookback period in hours"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """

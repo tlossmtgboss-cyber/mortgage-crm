@@ -211,7 +211,7 @@ async def get_current_user_from_cookie(request: Request):
     db: Session = next(get_db())
     try:
         # Import here to avoid circular imports
-        from models import User  # type: ignore[attr-defined]
+        from models import User
         user = db.query(User).filter(User.id == token_data.user_id).first()
         if not user:
             raise HTTPException(

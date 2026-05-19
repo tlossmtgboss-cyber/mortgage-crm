@@ -20,8 +20,9 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ def _get_health_service():
 
 @router.get("/health")
 async def smart_docs_health(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Overall health check for Smart Docs V2.
@@ -99,7 +100,7 @@ async def smart_docs_health(
 
 @router.get("/health/detailed")
 async def smart_docs_health_detailed(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -126,7 +127,7 @@ async def smart_docs_health_detailed(
 
 @router.get("/health/ready")
 async def smart_docs_readiness(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Readiness probe for Smart Docs V2.
@@ -222,7 +223,7 @@ async def smart_docs_features(
 
 @router.post("/health/smoke-test")
 async def smart_docs_smoke_test(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """

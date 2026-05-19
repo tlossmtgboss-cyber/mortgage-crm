@@ -20,8 +20,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 from routes.auth_deps import require_auth, current_user_dep
 
 from services.conversion_analytics import (
@@ -85,7 +86,7 @@ def _get_org_id(user) -> int:
 async def api_track_outcome(
     body: TrackOutcomeRequest,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Record an appointment outcome (showed, no_show, cancelled, rescheduled)."""
     result = await track_appointment_outcome(body.appointment_id, body.outcome, db)
@@ -98,7 +99,7 @@ async def api_track_outcome(
 async def api_link_lead(
     body: LinkLeadRequest,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Associate an appointment with a lead for conversion tracking."""
     result = await link_appointment_to_lead(body.appointment_id, body.lead_id, db)
@@ -111,7 +112,7 @@ async def api_link_lead(
 async def api_link_loan(
     body: LinkLoanRequest,
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Associate an appointment with a loan for revenue attribution."""
     result = await link_appointment_to_loan(body.appointment_id, body.loan_id, db)
@@ -129,7 +130,7 @@ async def api_conversion_funnel(
     start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Full booking-to-funded conversion funnel."""
     org_id = _get_org_id(current_user)
@@ -141,7 +142,7 @@ async def api_source_performance(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Conversion metrics broken down by booking source."""
     org_id = _get_org_id(current_user)
@@ -153,7 +154,7 @@ async def api_lo_performance(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Per-LO appointment conversion leaderboard."""
     org_id = _get_org_id(current_user)
@@ -165,7 +166,7 @@ async def api_time_heatmap(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Day-of-week x hour-of-day appointment performance heatmap."""
     org_id = _get_org_id(current_user)
@@ -177,7 +178,7 @@ async def api_revenue_attribution(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Revenue attributed to appointments with monthly trend."""
     org_id = _get_org_id(current_user)
@@ -189,7 +190,7 @@ async def api_ai_performance(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Compare AI-booked vs manually-booked appointment performance."""
     org_id = _get_org_id(current_user)
@@ -201,7 +202,7 @@ async def api_weekly_trends(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Week-over-week appointment and conversion trends."""
     org_id = _get_org_id(current_user)

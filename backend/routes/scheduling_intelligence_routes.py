@@ -16,9 +16,10 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user
-from database import get_db
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ def _get_org_id(current_user) -> int:
 @router.get("/insights")
 async def get_scheduling_insights(
     days: int = Query(default=30, ge=7, le=365, description="Analysis period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -72,7 +73,7 @@ async def get_optimal_times(
     lead_id: int,
     lo_id: Optional[int] = Query(default=None, description="Loan officer ID (defaults to current user)"),
     days_ahead: int = Query(default=14, ge=1, le=60, description="Days to look ahead"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -101,7 +102,7 @@ async def get_optimal_times(
 @router.get("/lo-match/{lead_id}")
 async def get_lo_match(
     lead_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -127,7 +128,7 @@ async def get_lo_match(
 @router.get("/no-show-risk/{appointment_id}")
 async def get_no_show_risk(
     appointment_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -154,7 +155,7 @@ async def get_no_show_risk(
 async def get_conversion_trends_endpoint(
     days: int = Query(default=90, ge=7, le=365, description="Analysis period in days"),
     granularity: str = Query(default="week", regex="^(week|month)$", description="Trend granularity"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -181,7 +182,7 @@ async def get_conversion_trends_endpoint(
 @router.get("/patterns")
 async def get_conversion_patterns(
     days: int = Query(default=90, ge=7, le=365, description="Analysis period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -209,7 +210,7 @@ async def get_conversion_patterns(
 @router.get("/script-performance")
 async def get_script_performance_endpoint(
     days: int = Query(default=90, ge=7, le=365, description="Analysis period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -237,7 +238,7 @@ async def predict_duration(
     appointment_type: str = Query(..., description="Appointment type key (e.g. discovery_call)"),
     lo_id: Optional[int] = Query(default=None, description="Specific LO ID"),
     lead_source: Optional[str] = Query(default=None, description="Lead source filter"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -266,7 +267,7 @@ async def predict_duration(
 @router.get("/followup-timing/{appointment_id}")
 async def get_followup_timing(
     appointment_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """

@@ -19,6 +19,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from services.scheduling_optimizer import SchedulingOptimizer
@@ -42,10 +43,10 @@ def set_dependencies(get_db_func, get_current_user_func):
     _get_current_user_func = get_current_user_func
 
 
-from db import get_db
+from db import get_async_db
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Resolve current user via the injected auth function."""
     if _get_current_user_func is None:
         raise RuntimeError("Scheduling optimizer dependencies not set")
@@ -74,7 +75,7 @@ async def get_optimal_slots(
     duration_minutes: int = Query(30, ge=15, le=120, description="Appointment duration in minutes"),
     user_id: Optional[int] = Query(None, description="Specific user to check (defaults to current user)"),
     meeting_type: Optional[str] = Query(None, description="Meeting type filter"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get AI-ranked available time slots for a specific date.
@@ -118,7 +119,7 @@ async def get_optimal_slots(
 async def get_no_show_risk(
     email: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Predict no-show risk for a specific attendee based on their historical
@@ -153,7 +154,7 @@ async def get_no_show_risk(
 async def get_booking_insights(
     request: Request,
     days: int = Query(90, ge=7, le=365, description="Analysis period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Generate comprehensive scheduling insights for the organization.
@@ -186,7 +187,7 @@ async def get_best_times(
     request: Request,
     count: int = Query(10, ge=1, le=30, description="Number of top slots to return"),
     user_id: Optional[int] = Query(None, description="Specific user (defaults to current user)"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get the best available time slots for the next 7 business days,

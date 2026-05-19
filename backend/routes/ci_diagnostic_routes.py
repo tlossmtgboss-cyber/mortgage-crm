@@ -12,8 +12,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ async def ci_pipeline_status() -> PipelineStatusResponse:
 @router.post("/transcribe-test", dependencies=[Depends(_require_admin)])
 async def transcribe_test(
     body: TranscribeTestRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Transcribe a recording URL and run CI extraction.
 
@@ -191,7 +192,7 @@ async def transcribe_test(
 @router.post("/extract-test", dependencies=[Depends(_require_admin)])
 async def extract_test(
     body: TranscriptTestRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Run CI extraction on raw transcript text (skips transcription).
 

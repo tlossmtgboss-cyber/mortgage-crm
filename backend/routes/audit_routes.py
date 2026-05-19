@@ -15,6 +15,7 @@ to the caller's organization_id.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 from typing import Optional
 import logging
@@ -48,7 +49,7 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
         logger.warning("CalendarAuditLog model not found in models_dict — audit routes will be non-functional")
 
 
-from db import get_db
+from db import get_async_db
 
 
 from auth.dependencies import get_current_user  # dedup: was local wrapper
@@ -76,7 +77,7 @@ async def get_appointment_audit_trail(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get the complete audit trail for a specific appointment.
@@ -117,7 +118,7 @@ async def get_user_activity_log(
     days: int = Query(30, ge=1, le=365),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get a user's calendar activity log.
@@ -174,7 +175,7 @@ async def search_audit_logs(
     end_date: Optional[str] = Query(None, description="End date (ISO 8601)"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Search audit logs with multiple filter criteria.
@@ -240,7 +241,7 @@ async def search_audit_logs(
 async def get_suspicious_activity(
     request: Request,
     days: int = Query(7, ge=1, le=90),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Detect suspicious activity patterns in the calendar audit log.
@@ -280,7 +281,7 @@ async def get_suspicious_activity(
 async def get_audit_stats(
     request: Request,
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get aggregate audit statistics for the organization.
@@ -311,7 +312,7 @@ async def get_entity_audit_trail(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get audit trail for any entity type (appointment, booking_link, config, etc.).

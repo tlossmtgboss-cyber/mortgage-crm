@@ -197,7 +197,7 @@ class POSApplication(Base):
             "contact_id",
             "loan_id",
             unique=True,
-            postgresql_where=(status == POSStatus.DRAFT),  # type: ignore[arg-type]
+            postgresql_where=(status == POSStatus.DRAFT),
         ),
         Index("ix_pos_app_status_updated", "status", "updated_at"),
         Index("ix_pos_app_org_status", "organization_id", "status"),
