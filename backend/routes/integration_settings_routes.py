@@ -14,7 +14,9 @@ import logging
 import re
 import os
 from sqlalchemy.exc import SQLAlchemyError
-from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text as _sa_text
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +41,11 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user - wrapper that works at request time."""
+async def get_current_user(request: Request):
+    """Get current user - wrapper that works at request time.
+
+    Uses its own short-lived sync session so handlers can use `get_async_db()`.
+    """
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Auth dependency not configured")
 
@@ -48,7 +53,12 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
 
-    return await _get_current_user(token=token, request=request, db=db)
+    from database import SessionLocal
+    local_db = SessionLocal()
+    try:
+        return await _get_current_user(token=token, request=request, db=local_db)
+    finally:
+        local_db.close()
 
 
 # =============================================================================
@@ -469,7 +479,7 @@ INTEGRATIONS = {
 @router.get("")
 async def get_all_integrations(
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get all available integrations with their status."""
     try:
@@ -481,16 +491,16 @@ async def get_all_integrations(
         if user_id:
             from sqlalchemy import text
             try:
-                result = db.execute(text("""
+                result = (await db.execute(text("""
                     SELECT provider FROM user_integrations WHERE user_id = :user_id
-                """), {"user_id": int(user_id)}).fetchall()
+                """), {"user_id": int(user_id)})).fetchall()
                 connected_providers = {row[0] for row in result}
 
                 # Check for Retell AI connection
                 try:
-                    retell_result = db.execute(text("""
+                    retell_result = (await db.execute(text("""
                         SELECT 1 FROM user_retell_config WHERE user_id = :user_id
-                    """), {"user_id": int(user_id)}).fetchone()
+                    """), {"user_id": int(user_id)})).fetchone()
                     if retell_result:
                         connected_providers.add("retell")
                 except Exception as e:
@@ -498,10 +508,10 @@ async def get_all_integrations(
 
                 # Check for Gmail connection (tokens stored in user_metadata)
                 try:
-                    gmail_result = db.execute(text("""
+                    gmail_result = (await db.execute(text("""
                         SELECT user_metadata->>'gmail_connected' FROM users
                         WHERE id = :user_id
-                    """), {"user_id": int(user_id)}).fetchone()
+                    """), {"user_id": int(user_id)})).fetchone()
                     if gmail_result and gmail_result[0] == 'true':
                         connected_providers.add("gmail")
                 except Exception as e:
@@ -509,11 +519,11 @@ async def get_all_integrations(
 
                 # Check for Salesforce connection in integration_profiles table
                 try:
-                    sf_result = db.execute(text("""
+                    sf_result = (await db.execute(text("""
                         SELECT provider FROM integration_profiles
                         WHERE user_id = :user_id
                         AND status IN ('connected', 'active', 'mapping_required')
-                    """), {"user_id": int(user_id)}).fetchall()
+                    """), {"user_id": int(user_id)})).fetchall()
                     for row in sf_result:
                         connected_providers.add(row[0])
                 except Exception as e:
@@ -579,7 +589,7 @@ async def get_integration_categories(
 async def get_integration(
     integration_id: str,
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get specific integration details and configuration."""
     try:
@@ -600,10 +610,10 @@ async def get_integration(
         if user_id:
             from sqlalchemy import text
             try:
-                result = db.execute(text("""
+                result = (await db.execute(text("""
                     SELECT email, created_at FROM user_integrations
                     WHERE user_id = :user_id AND provider = :provider
-                """), {"user_id": int(user_id), "provider": integration_id}).fetchone()
+                """), {"user_id": int(user_id), "provider": integration_id})).fetchone()
                 if result:
                     is_connected = True
                     connected_email = result[0] if result[0] else None
@@ -645,7 +655,7 @@ async def update_integration_config(
     integration_id: str,
     config: IntegrationConfig,
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update integration configuration."""
     try:
@@ -701,7 +711,7 @@ async def set_integration_credentials(
     integration_id: str,
     credentials: Dict[str, Any],
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Set integration credentials (API keys, OAuth tokens, etc.)."""
     try:
@@ -1060,7 +1070,7 @@ async def trigger_sync(
     integration_id: str,
     sync_type: str = "full",  # full, incremental
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Trigger a manual sync for an integration."""
     try:
@@ -1105,7 +1115,7 @@ async def get_sync_history(
     integration_id: str,
     limit: int = 20,
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get sync history for an integration."""
     try:
@@ -1157,7 +1167,7 @@ async def get_sync_history(
 async def test_integration(
     integration_id: str,
     current_user = Depends(get_current_user),
-    db = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Test integration connection and credentials."""
     try:
