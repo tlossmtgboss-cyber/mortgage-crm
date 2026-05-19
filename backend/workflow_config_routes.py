@@ -133,10 +133,46 @@ def set_dependencies(db_dep, user_dep, models):
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
     if _get_current_user is None:
-        raise RuntimeError("Dependencies not set")
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     auth_header = request.headers.get("Authorization", "")
+    api_key_header = request.headers.get("X-API-Key", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
+
+    try:
+        try:
+            import inspect
+            sig = inspect.signature(_get_current_user)
+            params = sig.parameters
+        except Exception:
+            params = {}
+
+        if "request" in params and "db" in params and "token" not in params:
+            result = _get_current_user(request=request, db=db)
+        elif "token" in params:
+            result = _get_current_user(token=token, request=request, db=db)
+        else:
+            result = _get_current_user(request=request, db=db)
+
+        if inspect.iscoroutine(result):
+            return await result
+        return result
+    except HTTPException:
+        raise
+    except Exception as primary_err:
+        logger.warning(f"Primary auth dep failed in workflow_config: {primary_err}")
+        try:
+            from auth.dependencies import get_current_user_flexible as _fallback_user
+            result = _fallback_user(request=request, db=db)
+            import inspect as _inspect
+            if _inspect.iscoroutine(result):
+                return await result
+            return result
+        except HTTPException:
+            raise
+        except Exception as fallback_err:
+            logger.warning(f"Fallback auth dep failed in workflow_config: {fallback_err}")
+            raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 # =============================================================================

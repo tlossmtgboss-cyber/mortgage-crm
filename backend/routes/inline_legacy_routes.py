@@ -1242,8 +1242,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         # Create workflow config models using our Base
         workflow_config_models = create_workflow_config_models(Base)
 
-        # Set dependencies for the routes
-        set_workflow_config_deps(get_db, get_current_user, workflow_config_models)
+        # Set dependencies for the routes - prefer flexible auth (Bearer + X-API-Key)
+        set_workflow_config_deps(get_db, get_current_user_flexible, workflow_config_models)
 
         # Include the router
         app.include_router(workflow_config_router, tags=["Workflow Configuration"])
