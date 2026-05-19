@@ -208,7 +208,7 @@ class AriaContextLoader:
             return []
 
         placeholders = ", ".join(f":topic_{i}" for i in range(len(topics)))
-        params = {
+        params: Dict[str, Any] = {
             "borrower_id": borrower_id,
             "tenant_id": tenant_id,
         }

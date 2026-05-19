@@ -7,7 +7,7 @@ proxy inference rules. Updated without a deploy via DB.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger("aria.exclusion")
@@ -24,7 +24,7 @@ class ExclusionResult:
 class ExclusionChecker:
     def __init__(self, db: Session):
         self._db = db
-        self._rules = None
+        self._rules: Optional[List[Dict[str, Any]]] = None
 
     def _load_rules(self):
         if self._rules is not None:

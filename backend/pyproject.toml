@@ -101,12 +101,13 @@ show_missing = true
 # Wave 3 ramp: start at 5% to LOCK IN the floor and prevent regression.
 # Long-term aspirational target is 85% (documented in tests/COVERAGE.md).
 # Ramp schedule:
-#   Wave 3 (now): 5%
-#   Wave 4:       10%
+#   Wave 3:       5%
+#   Wave 4 (now): 10%   (Slice G — measured ~12% across integration suite
+#                        after adding 100 new tests in 11 modules)
 #   Wave 5:       25%
 #   Wave 6:       60%
 #   Wave 7+:      85%
-fail_under = 5
+fail_under = 10
 precision = 2
 
 [tool.coverage.html]
