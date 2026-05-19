@@ -17,15 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/guideline-updates", tags=["Guideline Updates"])
 
 
-async def get_current_user_lazy(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Lazy import auth dependency to avoid circular imports"""
-    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
-    return await _get_current_user_flexible(request, db)
-
-
+from auth.dependencies import get_current_user as get_current_user_lazy  # dedup
 # Pydantic Models
 class UpdateResponse(BaseModel):
     """Single guideline update response"""

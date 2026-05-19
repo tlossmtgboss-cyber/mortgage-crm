@@ -36,45 +36,7 @@ class UserProxy:
 
 
 # Auth dependency
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Get current user from JWT token."""
-    from auth.tokens import verify_access_token
-
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    try:
-        token = credentials.credentials
-        payload = verify_access_token(token)
-        if not payload:
-            raise HTTPException(status_code=401, detail="Invalid or revoked token")
-        email = payload.get("sub")
-
-        if not email:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        # Get user with raw SQL
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": email}
-        )
-        user_row = result.fetchone()
-
-        if not user_row:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        return UserProxy(user_row)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Auth error: {e}")
-        raise HTTPException(status_code=401, detail="Authentication failed")
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 def get_company_id_for_user(user):
     """Get company ID for user - generates UUID from user's company or ID"""
     if hasattr(user, 'company') and user.company:

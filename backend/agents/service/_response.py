@@ -401,7 +401,7 @@ class ResponseGenerationMixin:
 
             # Add context if provided
             if context:
-                initial_state["relevant_context"] = context
+                initial_state["relevant_context"] = context  # type: ignore[typeddict-unknown-key]
 
             # Import node functions
             from .nodes.analyze import analyze_query

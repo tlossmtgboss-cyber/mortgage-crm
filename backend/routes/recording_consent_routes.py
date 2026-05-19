@@ -58,12 +58,7 @@ def set_dependencies(user_dependency):
     _get_current_user = user_dependency
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user:
-        return await _get_current_user(request, db)
-    raise HTTPException(status_code=401, detail="Not authenticated")
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # -----------------------------------------------------------------
 # WebSocket Manager (session -> connected clients)
 # -----------------------------------------------------------------

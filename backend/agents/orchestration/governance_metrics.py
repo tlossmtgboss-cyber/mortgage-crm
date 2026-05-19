@@ -263,7 +263,7 @@ class GovernanceMetricsStore:
         try:
             top_n = max(1, int(top_n))
             with self._lock:
-                agent_ids = set()
+                agent_ids: set[str] = set()
                 agent_ids.update(self._compliance_count.keys())
                 agent_ids.update(self._hallucination_count.keys())
                 agent_ids.update(self._token_call_count.keys())
@@ -285,7 +285,7 @@ class GovernanceMetricsStore:
 
                 for aid in agent_ids:
                     role = self._agent_role.get(aid, "unknown")
-                    entry = {
+                    entry: Dict[str, Any] = {
                         "agent_id": aid,
                         "agent_role": role,
                         "compliance_events": self._compliance_count.get(aid, 0),

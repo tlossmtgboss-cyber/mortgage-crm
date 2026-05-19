@@ -1143,7 +1143,7 @@ class PowerPlayScheduler:
 
     async def run_amr_checks(self) -> List[PowerPlayResult]:
         """Check for clients due for Annual Mortgage Review"""
-        results = []
+        results: List[PowerPlayResult] = []
         now = datetime.now(timezone.utc)
 
         # Find clients with AMR due (within 30 days of close anniversary)

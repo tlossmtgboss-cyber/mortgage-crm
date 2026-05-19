@@ -51,14 +51,7 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
 from db import get_db
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user_func is None:
-        raise RuntimeError("Audit route dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user_func(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 def _get_org_id(user) -> int:
     """Get organization_id from user, raise 403 if missing."""
     org_id = getattr(user, "organization_id", None)

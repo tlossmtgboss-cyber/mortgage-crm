@@ -85,21 +85,7 @@ def set_dependencies(get_db_func, get_current_user_func):
     _get_current_user = get_current_user_func
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    request: Request = None,
-    db: Session = Depends(get_db)
-):
-    """
-    Async wrapper for current user dependency.
-    Calls the injected dependency function with proper parameters.
-    """
-    if _get_current_user is None:
-        raise RuntimeError("User dependency not configured. Call set_dependencies first.")
-    # Call the stored async function and await it
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 @router.get("/available", response_model=List[ModuleResponse])
 async def get_available_modules(db: Session = Depends(get_db)):
     """Get all available subscription modules with pricing."""

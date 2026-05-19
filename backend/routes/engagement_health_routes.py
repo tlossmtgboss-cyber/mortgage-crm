@@ -6,21 +6,22 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/engagement", tags=["Engagement Health"])
 
 
 @router.get("/health")
-async def engagement_health(db: Session = Depends(get_db)):
+async def engagement_health(db: AsyncSession = Depends(get_async_db)):
     """Report health of all engagement subsystems."""
     checks = {}
 
     # 1. Database connectivity
     try:
-        db.execute(text("SELECT 1"))
+        await db.execute(text("SELECT 1"))
         checks["database"] = "healthy"
     except Exception as e:
         checks["database"] = f"unhealthy: {e}"
@@ -37,7 +38,7 @@ async def engagement_health(db: Session = Depends(get_db)):
 
     # 5. Drip enrollment table exists
     try:
-        row = db.execute(text("SELECT COUNT(*) FROM drip_enrollments WHERE status = 'active'")).fetchone()
+        row = (await db.execute(text("SELECT COUNT(*) FROM drip_enrollments WHERE status = 'active'"))).fetchone()
         checks["drip_enrollments"] = f"healthy ({row[0]} active)"
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
@@ -46,7 +47,7 @@ async def engagement_health(db: Session = Depends(get_db)):
     # 6. Engagement events table exists
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-        row = db.execute(text("SELECT COUNT(*) FROM engagement_events WHERE created_at >= :cutoff"), {"cutoff": cutoff}).fetchone()
+        row = (await db.execute(text("SELECT COUNT(*) FROM engagement_events WHERE created_at >= :cutoff"), {"cutoff": cutoff})).fetchone()
         checks["engagement_events_24h"] = f"healthy ({row[0]} events)"
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
@@ -54,7 +55,7 @@ async def engagement_health(db: Session = Depends(get_db)):
 
     # 7. Speed-to-lead config
     try:
-        row = db.execute(text("SELECT COUNT(*) FROM speed_to_lead_config")).fetchone()
+        row = (await db.execute(text("SELECT COUNT(*) FROM speed_to_lead_config"))).fetchone()
         checks["speed_to_lead_config"] = f"healthy ({row[0]} orgs configured)"
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")

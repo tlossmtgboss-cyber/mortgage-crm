@@ -46,14 +46,7 @@ logger = logging.getLogger(__name__)
 # AUTH DEPENDENCY
 # ============================================================================
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user -- delegates to canonical auth."""
-    from auth.dependencies import get_current_user as _main_get_current_user
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _main_get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 router = APIRouter(
     prefix="/api/v1/content-marketing",
     tags=["content-marketing"],

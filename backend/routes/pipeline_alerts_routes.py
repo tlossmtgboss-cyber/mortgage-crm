@@ -18,8 +18,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_async_db
 from routes.auth_deps import require_auth, current_user_dep
 
 router = APIRouter(
@@ -38,7 +39,7 @@ _TERMINAL_STAGES = (
 async def get_pipeline_alerts(
     limit: int = Query(default=10, ge=1, le=50),
     current_user=Depends(current_user_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return urgent pipeline alerts for the authenticated user's loans."""
     user_id = current_user.id
@@ -91,7 +92,7 @@ async def get_pipeline_alerts(
     )
 
     try:
-        lock_rows = db.execute(lock_sql, lock_params).fetchall()
+        lock_rows = (await db.execute(lock_sql, lock_params)).fetchall()
     except Exception as _exc:  # noqa: BLE001
         lock_rows = []
 
@@ -148,7 +149,7 @@ async def get_pipeline_alerts(
     )
 
     try:
-        stale_rows = db.execute(stale_sql, stale_params).fetchall()
+        stale_rows = (await db.execute(stale_sql, stale_params)).fetchall()
     except Exception as _exc:  # noqa: BLE001
         stale_rows = []
 
@@ -199,7 +200,7 @@ async def get_pipeline_alerts(
     )
 
     try:
-        closing_rows = db.execute(closing_sql, closing_params).fetchall()
+        closing_rows = (await db.execute(closing_sql, closing_params)).fetchall()
     except Exception as _exc:  # noqa: BLE001
         closing_rows = []
 

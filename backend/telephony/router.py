@@ -71,27 +71,7 @@ def get_db():
     yield from _deps.db_func()
 
 
-async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Current user dependency.
-    Calls the main app's get_current_user with the required parameters.
-    """
-    if _deps.user_func is None:
-        raise RuntimeError("Dependencies not set - call set_dependencies() first")
-
-    # Extract token from Authorization header
-    auth_header = request.headers.get("Authorization", "")
-    token = ""
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-
-    # Call the main app's get_current_user
-    return await _deps.user_func(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # Call Tasks Endpoint - Tasks available for Power Dialer
 # =============================================================================

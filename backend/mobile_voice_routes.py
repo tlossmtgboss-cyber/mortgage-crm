@@ -1147,15 +1147,7 @@ async def list_available_voices():
 # User Voice Preference Endpoints
 # =============================================================================
 
-async def get_current_user_lazy(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Get current user with lazy import to avoid circular import issues"""
-    from auth.dependencies import get_current_user
-    return await get_current_user(request, db)
-
-
+from auth.dependencies import get_current_user as get_current_user_lazy  # dedup
 @router.get("/user-voice-preference")
 async def get_user_voice_preference(
     current_user: "User" = Depends(get_current_user_lazy),

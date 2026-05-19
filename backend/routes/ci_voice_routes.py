@@ -54,37 +54,7 @@ def set_dependencies(user_dependency, oauth2=None):
     _oauth2_scheme = oauth2
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user dependency wrapper."""
-    # Extract token from Authorization header
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if _get_current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service not initialized",
-        )
-
-    try:
-        return await _get_current_user(token=token, request=request, db=db)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # REQUEST/RESPONSE MODELS
 # =============================================================================

@@ -71,46 +71,7 @@ class UserProxy:
         self.name = name or email.split("@")[0]
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-) -> UserProxy:
-    """
-    Get current user from JWT token.
-    Falls back to demo user for development.
-    """
-    from auth.tokens import verify_access_token
-
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    try:
-        token = credentials.credentials
-        payload = verify_access_token(token)
-        if not payload:
-            raise HTTPException(status_code=401, detail="Invalid or revoked token")
-        email = payload.get("sub")
-
-        if not email:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": email}
-        )
-        row = result.fetchone()
-        if row:
-            return UserProxy(id=row[0], email=row[1], name=row[2])
-
-        raise HTTPException(status_code=401, detail="User not found")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"Auth error in market_chat")
-        raise HTTPException(status_code=401, detail="Authentication failed")
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # ================================================================
 # PYDANTIC MODELS
 # ================================================================

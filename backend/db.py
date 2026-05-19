@@ -37,6 +37,8 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import NullPool
 from starlette.requests import Request
 
+logger = logging.getLogger(__name__)
+
 # Async SQLAlchemy imports (asyncpg-backed; additive — does NOT replace sync engine)
 try:
     from sqlalchemy.ext.asyncio import (
@@ -48,8 +50,6 @@ try:
 except Exception as _exc:  # pragma: no cover - older SQLAlchemy  # noqa: BLE001
     logger.exception("unhandled exception")
     _ASYNC_SQLALCHEMY_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
 
 # Database URL from environment
 # Prefer pooled URL (PgBouncer) if available - handles connection pooling externally
@@ -278,7 +278,7 @@ if _ASYNC_SQLALCHEMY_AVAILABLE:
             # asyncpg does NOT accept libpq-style connect_args (sslmode, options,
             # keepalives, etc.). Strip query params handled by libpq and pass
             # asyncpg-friendly equivalents via connect_args.
-            _async_connect_args = {}
+            _async_connect_args: Dict[str, object] = {}
             # sslmode=require -> ssl=True for asyncpg
             if os.environ.get("DB_SSLMODE", "require") in ("require", "verify-ca", "verify-full"):
                 _async_connect_args["ssl"] = True

@@ -131,14 +131,7 @@ def set_dependencies(db_dep, user_dep, models):
     _models = models
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user is None:
-        raise RuntimeError("Dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # Workflow Configuration Endpoints
 # =============================================================================

@@ -36,17 +36,7 @@ def set_dependencies(get_db_func, get_current_user_func):
     _get_current_user = get_current_user_func
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    request: Request = None,
-    db: Session = Depends(get_db)
-):
-    """Async wrapper for current user dependency."""
-    if _get_current_user is None:
-        raise RuntimeError("User dependency not configured. Call set_dependencies first.")
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 async def require_owner(current_user = Depends(get_current_user)):
     """Require owner/admin role for access."""
     if current_user is None:

@@ -41,15 +41,7 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
     _models = models_dict
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Resolve current user using the injected auth function."""
-    if _get_current_user_func is None:
-        raise RuntimeError("Calendar export dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user_func(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 def _get_org_id(user) -> int:
     org_id = getattr(user, "organization_id", None)
     if org_id is None:

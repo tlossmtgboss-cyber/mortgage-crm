@@ -57,14 +57,7 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
     _models = models_dict
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user is None:
-        raise RuntimeError("Dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # ============================================================================
 # PYDANTIC SCHEMAS WITH VALIDATION
 # ============================================================================

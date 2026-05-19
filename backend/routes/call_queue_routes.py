@@ -62,12 +62,7 @@ def calc_wait_time(entered_at) -> float:
     return (now - dt).total_seconds()
 
 
-def get_current_user_flexible():
-    """Lazy import auth dependency"""
-    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
-    return _get_current_user_flexible
-
-
+from auth.dependencies import get_current_user_flexible  # dedup
 def get_telephony_provider():
     """Get telephony provider"""
     from telephony.provider import get_telephony_provider as _get_provider

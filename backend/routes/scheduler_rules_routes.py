@@ -18,11 +18,12 @@ set_dependencies() pattern used by scheduler_routes.py.
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 import logging
 
-from db import get_db
+from db import get_async_db
 from services.calendar_rules_engine import (
     SchedulingRules,
     RuleViolation,
@@ -58,7 +59,7 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
     _models = models_dict
 
 
-async def _get_current_user(request: Request, db: Session = Depends(get_db)):
+async def _get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Resolve the current user via the injected auth function."""
     if _get_current_user_func is None:
         raise HTTPException(status_code=503, detail="Scheduler rules not initialized")
@@ -116,7 +117,7 @@ class ValidateBookingRequest(BaseModel):
 @router.get("/rules/org-defaults")
 async def get_org_defaults(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get organization-level default scheduling rules."""
     user = await _get_current_user(request, db)
@@ -134,7 +135,7 @@ async def get_org_defaults(
 async def update_org_defaults(
     update: RulesUpdateRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Update organization-level default scheduling rules.
@@ -157,9 +158,9 @@ async def update_org_defaults(
         raise HTTPException(status_code=500, detail="Failed to save rules")
 
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to commit org default rules: {e}")
         raise HTTPException(status_code=500, detail="Failed to save rules")
 
@@ -173,7 +174,7 @@ async def update_org_defaults(
 async def get_lo_rules(
     lo_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get current scheduling rules for a specific loan officer."""
     user = await _get_current_user(request, db)
@@ -193,7 +194,7 @@ async def update_lo_rules(
     lo_id: int,
     update: RulesUpdateRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Update scheduling rules for a specific loan officer.
@@ -221,9 +222,9 @@ async def update_lo_rules(
         raise HTTPException(status_code=500, detail="Failed to save rules")
 
     try:
-        db.commit()
+        await db.commit()
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to commit LO rules: {e}")
         raise HTTPException(status_code=500, detail="Failed to save rules")
 
@@ -237,7 +238,7 @@ async def update_lo_rules(
 async def validate_booking(
     body: ValidateBookingRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Validate a proposed booking against all scheduling rules (dry-run).

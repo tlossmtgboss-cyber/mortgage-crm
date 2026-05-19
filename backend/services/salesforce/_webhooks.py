@@ -71,7 +71,7 @@ class OutboundSyncMixin:
             raise ValueError(f"Loan {loan_id} not found")
 
         # Map CRM loan fields to Salesforce Opportunity fields
-        opportunity_data = {
+        opportunity_data: Dict[str, Any] = {
             "Name": loan.borrower_name or f"Loan {loan.loan_number}",
             "Amount": float(loan.amount or 0),
             "StageName": self._map_crm_stage_to_salesforce(loan.stage),
@@ -80,7 +80,7 @@ class OutboundSyncMixin:
         }
 
         # Add custom fields if they exist in Salesforce
-        custom_fields = {
+        custom_fields: Dict[str, Any] = {
             "Loan_Number__c": loan.loan_number,
             "Property_Address__c": loan.property_address,
             "Loan_Type__c": loan.loan_type,
@@ -305,7 +305,7 @@ class OutboundSyncMixin:
 
         # Build comprehensive field mapping for Salesforce Lead
         # Standard Salesforce Lead fields
-        lead_data = {}
+        lead_data: Dict[str, Any] = {}
 
         # Basic contact info
         if lead.first_name:
@@ -383,7 +383,7 @@ class OutboundSyncMixin:
 
         # Custom fields (if they exist in Salesforce org)
         # These may fail if custom fields don't exist - that's OK
-        custom_fields = {}
+        custom_fields: Dict[str, Any] = {}
 
         # CRM tracking
         custom_fields["CRM_Lead_ID__c"] = str(lead.id)
@@ -827,7 +827,7 @@ class OutboundSyncMixin:
         user_id = profile.user_id
         since = datetime.now(timezone.utc) - timedelta(hours=since_hours)
 
-        results = {
+        results: Dict[str, Any] = {
             "success": True,
             "loans": {"pushed": 0, "failed": 0, "errors": []},
             "leads": {"pushed": 0, "failed": 0, "errors": []},

@@ -11,12 +11,13 @@ transformed from the rate_monitor_alerts table.
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, text
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
 
-from database import get_db
+from db import get_async_db
 from auth.dependencies import get_current_user
 from database.models import User
 
@@ -148,7 +149,7 @@ def _alert_to_background_dict(alert_row: dict) -> Optional[dict]:
     }
 
 
-def _fetch_alerts(db: Session, user: User, limit: int, status: Optional[str]) -> list:
+async def _fetch_alerts(db: AsyncSession, user: User, limit: int, status: Optional[str]) -> list:
     """Query rate_monitor_alerts joined with rate_monitor_targets to get
     loan_type and loan_term. Scoped to user's organization via mum_clients.
     Falls back gracefully if tables don't exist or user is None."""
@@ -174,13 +175,13 @@ def _fetch_alerts(db: Session, user: User, limit: int, status: Optional[str]) ->
             ORDER BY a.created_at DESC
             LIMIT :limit
         """)
-        rows = db.execute(sql, {"status": status, "limit": limit, "org_id": org_id}).mappings().all()
+        rows = (await db.execute(sql, {"status": status, "limit": limit, "org_id": org_id})).mappings().all()
         return [dict(row) for row in rows] if rows else []
     except Exception as e:
         # Table may not exist yet (migration not run)
         logger.debug(f"rate_monitor_alerts query failed (table may not exist): {e}")
         try:
-            db.rollback()
+            await db.rollback()
         except Exception as rollback_err:
             logger.debug(f"Rollback after rate_monitor query failure also failed: {rollback_err}")
         return []
@@ -205,7 +206,7 @@ def _safe_transform(rows: list, transform_fn) -> list:
 async def get_rate_monitor_alerts(
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return rate alerts formatted for the iOS CarPlay CPRateAlert model.
@@ -213,7 +214,7 @@ async def get_rate_monitor_alerts(
     Response is a plain JSON array so the CarPlay getArray decoder can
     parse it directly as [CPRateAlert]. Returns [] when no alerts exist.
     """
-    rows = _fetch_alerts(db, current_user, limit, status)
+    rows = await _fetch_alerts(db, current_user, limit, status)
     return _safe_transform(rows, _alert_to_carplay_dict)
 
 
@@ -221,7 +222,7 @@ async def get_rate_monitor_alerts(
 async def get_rate_alerts(
     limit: int = Query(10, ge=1, le=100),
     status: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return rate alerts formatted for the iOS BackgroundSyncManager RateAlert model.
@@ -229,5 +230,5 @@ async def get_rate_alerts(
     Response is a plain JSON array so the BackgroundSyncManager decoder
     can parse it directly as [RateAlert]. Returns [] when no alerts exist.
     """
-    rows = _fetch_alerts(db, current_user, limit, status)
+    rows = await _fetch_alerts(db, current_user, limit, status)
     return _safe_transform(rows, _alert_to_background_dict)

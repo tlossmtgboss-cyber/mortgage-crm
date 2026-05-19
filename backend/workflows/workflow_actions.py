@@ -42,7 +42,7 @@ class WorkflowActionExecutor:
 
     async def execute_actions(self, actions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Execute a list of workflow actions"""
-        results = {
+        results: Dict[str, Any] = {
             "total": len(actions),
             "successful": 0,
             "failed": 0,

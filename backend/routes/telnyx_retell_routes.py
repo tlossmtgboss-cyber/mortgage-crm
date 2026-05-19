@@ -43,13 +43,7 @@ def get_db():
     yield from _get_db()
 
 
-def get_current_user():
-    """Get current user."""
-    if _get_current_user is None:
-        raise HTTPException(status_code=500, detail="Auth dependency not configured")
-    return _get_current_user()
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # ==================== Request/Response Models ====================
 
 class ConnectNumberRequest(BaseModel):

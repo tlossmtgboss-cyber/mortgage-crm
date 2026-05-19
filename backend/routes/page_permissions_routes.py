@@ -44,24 +44,7 @@ def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, use
     logger.info("Page permissions routes dependencies set")
 
 
-async def get_current_user(request: Request):
-    """Get current user dependency - wrapper for injected dependency.
-
-    Uses its own short-lived sync session for auth; route handlers are free
-    to use `get_async_db()` independently.
-    """
-    if _get_current_user is None:
-        raise RuntimeError("Page permissions routes not initialized. Call set_dependencies first.")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    from database import SessionLocal
-    local_db = SessionLocal()
-    try:
-        return await _get_current_user(token=token, request=request, db=local_db)
-    finally:
-        local_db.close()
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # REQUEST/RESPONSE MODELS
 # =============================================================================

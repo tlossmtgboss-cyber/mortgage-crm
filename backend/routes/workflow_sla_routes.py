@@ -51,16 +51,7 @@ def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, use
     logger.info("Workflow SLA routes dependencies set")
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user dependency - wrapper for injected dependency."""
-    if _get_current_user is None:
-        raise RuntimeError("Workflow SLA routes not initialized. Call set_dependencies first.")
-    # Extract token from authorization header
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # REQUEST/RESPONSE MODELS
 # =============================================================================

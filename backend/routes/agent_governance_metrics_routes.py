@@ -28,23 +28,23 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+logger = logging.getLogger(__name__)
+
 # Lazy/late imports for resilience: if the FastAPI app can't satisfy these
 # at import time the router still loads, but every endpoint will 503.
 try:
-    from auth.dependencies import get_current_user  # type: ignore
+    from auth.dependencies import get_current_user
 except Exception as _exc:  # pragma: no cover - defensive  # noqa: BLE001
     logger.exception("unhandled exception")
-    def get_current_user():  # type: ignore[no-redef]
+    def get_current_user():
         raise HTTPException(status_code=503, detail="auth unavailable")
 
 try:
-    from middleware.admin_guard import require_admin  # type: ignore
+    from middleware.admin_guard import require_admin
 except Exception as _exc:  # pragma: no cover - defensive  # noqa: BLE001
     logger.exception("unhandled exception")
-    def require_admin():  # type: ignore[no-redef]
+    def require_admin():
         raise HTTPException(status_code=503, detail="admin guard unavailable")
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/agents/governance",

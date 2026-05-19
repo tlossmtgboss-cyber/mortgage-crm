@@ -46,13 +46,7 @@ def get_db():
     yield from _get_db()
 
 
-def get_current_user():
-    """Get current user dependency."""
-    if _get_current_user is None:
-        raise RuntimeError("Authentication not configured for Document Visibility routes")
-    return _get_current_user
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # Allowed roles for document visibility management
 DOCUMENT_VISIBILITY_ROLES = [
     'admin', 'site_admin', 'management', 'leadership',

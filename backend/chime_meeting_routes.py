@@ -46,14 +46,7 @@ def get_db():
     yield from _get_db_func()
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user_func is None:
-        raise RuntimeError("Chime meeting routes: dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user_func(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 def get_models():
     """Get the models dict. Raises RuntimeError if not initialized."""
     if _models is None:

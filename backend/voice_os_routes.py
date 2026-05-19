@@ -29,18 +29,7 @@ def set_auth_dependency(get_current_user_func):
         raise ValueError("Cannot set auth dependency to None")
     _get_current_user = get_current_user_func
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user - raises 503 if auth not initialized, 401 if not authenticated"""
-    if _get_current_user is None:
-        logger.error("Voice OS auth dependency not initialized - rejecting request")
-        raise HTTPException(status_code=503, detail="Auth not initialized")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # PYDANTIC MODELS
 # =============================================================================

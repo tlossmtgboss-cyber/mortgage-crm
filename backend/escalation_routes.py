@@ -21,15 +21,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["escalations"])
 
-async def get_current_user_lazy(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Lazy import wrapper to avoid circular imports"""
-    from auth.dependencies import get_current_user
-    return await get_current_user(request, db)
-
-
+from auth.dependencies import get_current_user as get_current_user_lazy  # dedup
 def get_models():
     """Lazy import models to avoid circular imports"""
     from database.models import User, Lead, Task

@@ -35,44 +35,7 @@ security = HTTPBearer(auto_error=False)
 
 
 # Auth dependency
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Get current user from JWT token."""
-    from auth.tokens import verify_access_token
-
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    try:
-        token = credentials.credentials
-        payload = verify_access_token(token)
-        if not payload:
-            raise HTTPException(status_code=401, detail="Invalid or revoked token")
-        email = payload.get("sub")
-
-        if not email:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        result = db.execute(
-            text("SELECT id, email, full_name, organization_id FROM users WHERE email = :email"),
-            {"email": email}
-        )
-        user_row = result.fetchone()
-
-        if not user_row:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        return {"user_id": user_row[0], "email": user_row[1], "name": user_row[2], "organization_id": user_row[3]}
-
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        logger.error(f"Auth error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 router = APIRouter(prefix="/api/v1/portal-video", tags=["Portal Video"])
 
 

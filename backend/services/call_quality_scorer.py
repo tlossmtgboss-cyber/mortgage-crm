@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def _safe_session():
     try:
-        from database import SessionLocal  # type: ignore
+        from database import SessionLocal
         return SessionLocal()
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("call_quality_scorer: SessionLocal unavailable (%s)", exc)
@@ -35,7 +35,7 @@ def _safe_session():
 
 def _safe_model():
     try:
-        from database.models.voice_call_session import VoiceCallSession  # type: ignore
+        from database.models.voice_call_session import VoiceCallSession
         return VoiceCallSession
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("call_quality_scorer: VoiceCallSession model unavailable (%s)", exc)

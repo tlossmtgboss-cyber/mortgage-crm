@@ -51,15 +51,7 @@ def set_dependencies(get_db_func: Callable, get_current_user_func: Callable):
     _get_current_user = get_current_user_func
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user - wrapper that works at request time."""
-    if _get_current_user is None:
-        raise HTTPException(status_code=500, detail="Auth dependency not configured")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 def get_user_id(current_user) -> int:
     """Extract user ID from current_user (handles both dict and object forms)."""
     if isinstance(current_user, dict):

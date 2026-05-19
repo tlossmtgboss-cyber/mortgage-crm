@@ -46,21 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 
-async def get_current_user(request: Request):
-    """Auth dependency using a dedicated short-lived sync session, so route
-    handlers may use `get_async_db()` independently."""
-    if _get_current_user is None:
-        raise HTTPException(status_code=500, detail="Auth dependency not configured")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    from database import SessionLocal
-    local_db = SessionLocal()
-    try:
-        return await _get_current_user(token=token, request=request, db=local_db)
-    finally:
-        local_db.close()
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # Pydantic Models
 # =============================================================================

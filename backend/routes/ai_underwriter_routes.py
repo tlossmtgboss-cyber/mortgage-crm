@@ -70,13 +70,7 @@ def get_db():
     yield from _get_db()
 
 
-def get_current_user():
-    """Get current user."""
-    if _get_current_user is None:
-        raise RuntimeError("User dependency not configured. Call set_dependencies first.")
-    return _get_current_user()
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # GUIDELINE KNOWLEDGE BASE
 # =============================================================================

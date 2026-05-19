@@ -304,18 +304,7 @@ class _UserWithPermissions:
         return permission in self._DEFAULT_PERMISSIONS
 
 
-async def get_current_user(request: Request = None, db: Session = Depends(get_db)):
-    """Auth dependency using real auth from main, wrapped with permission support."""
-    from auth.dependencies import get_current_user as _main_auth
-    from fastapi.security import OAuth2PasswordBearer
-    _scheme = OAuth2PasswordBearer(tokenUrl="token")
-    # Extract token from Authorization header
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
-    user = await _main_auth(token=token, request=request, db=db)
-    return _UserWithPermissions(user)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # API ENDPOINTS
 # =============================================================================

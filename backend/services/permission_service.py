@@ -634,12 +634,7 @@ def get_db():
     return db_getter()
 
 
-def get_current_user():
-    """Get current authenticated user from main app"""
-    from auth.dependencies import get_current_user as main_get_current_user
-    return main_get_current_user
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 def get_permission_service(db: Session = Depends(get_db)):
     """Get permission service instance with database session"""
     return PermissionService(db)

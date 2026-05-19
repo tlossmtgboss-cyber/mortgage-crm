@@ -63,7 +63,7 @@ class PostClosingWorkflowEngine:
 
     async def process_loan_closing(self, trigger: WorkflowTrigger, lead: LeadWorkflowData) -> Dict[str, Any]:
         """Process all workflows when a loan closes"""
-        results = []
+        results: List[Dict[str, Any]] = []
 
         # ================================================================
         # WORKFLOW 1: HIGH REFERRAL SOURCE (Score >= 80)

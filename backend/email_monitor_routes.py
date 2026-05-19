@@ -19,11 +19,7 @@ logger = logging.getLogger(__name__)
 
 from database import get_db
 # Lazy import to avoid circular imports
-async def get_current_user_flexible(request: Request, db: Session = Depends(get_db)):
-    """Lazy import wrapper to avoid circular imports"""
-    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
-    return await _get_current_user_flexible(request, db)
-
+from auth.dependencies import get_current_user_flexible  # dedup
 from models.email_monitor import (
     EmailMonitorCaptured,
     EmailCRMLink,

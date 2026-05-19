@@ -51,13 +51,7 @@ def set_dependencies(get_current_user_func=None):
     _get_current_user = get_current_user_func
 
 
-def get_current_user():
-    """Get current user dependency."""
-    if _get_current_user is None:
-        return None
-    return _get_current_user
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # Pydantic Schemas
 # =============================================================================

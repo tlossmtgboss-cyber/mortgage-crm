@@ -41,26 +41,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 
-async def get_current_user(request: Request):
-    """Get current user - wrapper that works at request time.
-
-    Uses its own short-lived sync session so handlers can use `get_async_db()`.
-    """
-    if _get_current_user is None:
-        raise HTTPException(status_code=500, detail="Auth dependency not configured")
-
-    # Authorization header only
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-
-    from database import SessionLocal
-    local_db = SessionLocal()
-    try:
-        return await _get_current_user(token=token, request=request, db=local_db)
-    finally:
-        local_db.close()
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 # =============================================================================
 # Custom Exceptions
 # =============================================================================

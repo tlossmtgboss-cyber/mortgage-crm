@@ -32,7 +32,7 @@ def _safe_session():
     """Lazy-import a DB session so this module is importable in unit tests
     without the full backend bootstrap."""
     try:
-        from database import SessionLocal  # type: ignore
+        from database import SessionLocal
         return SessionLocal()
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("call_queue_stats: SessionLocal unavailable (%s)", exc)
@@ -41,7 +41,7 @@ def _safe_session():
 
 def _safe_model():
     try:
-        from database.models.voice_call_session import VoiceCallSession  # type: ignore
+        from database.models.voice_call_session import VoiceCallSession
         return VoiceCallSession
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("call_queue_stats: VoiceCallSession model unavailable (%s)", exc)

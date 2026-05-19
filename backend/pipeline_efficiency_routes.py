@@ -28,14 +28,7 @@ def get_db():
         raise RuntimeError("Dependencies not set")
     yield from _get_db()
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user is None:
-        raise RuntimeError("Dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
-
-
+from auth.dependencies import get_current_user  # dedup: was local wrapper
 class TimeRange(str, Enum):
     SEVEN_DAYS = "7days"
     THIRTY_DAYS = "30days"
