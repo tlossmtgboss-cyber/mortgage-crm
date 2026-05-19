@@ -143,6 +143,21 @@ class GovernanceMetricsStore:
         self._token_output_total: Dict[str, int] = defaultdict(int)
         self._token_call_count: Dict[str, int] = defaultdict(int)
 
+        # Per-tool ring buffer + aggregates (Wave 5 — D3 audit remediation).
+        self._tool_events: Deque[Dict[str, Any]] = deque(maxlen=_BUFFER_MAXLEN)
+        self._tool_per_name: Dict[str, Deque[Dict[str, Any]]] = defaultdict(
+            lambda: deque(maxlen=_BUFFER_MAXLEN)
+        )
+        self._tool_call_count: Dict[str, int] = defaultdict(int)
+        self._tool_success_count: Dict[str, int] = defaultdict(int)
+        self._tool_input_tokens: Dict[str, int] = defaultdict(int)
+        self._tool_output_tokens: Dict[str, int] = defaultdict(int)
+        self._tool_cost_usd: Dict[str, float] = defaultdict(float)
+        # Bounded latency samples for percentile math.
+        self._tool_latencies: Dict[str, Deque[float]] = defaultdict(
+            lambda: deque(maxlen=_BUFFER_MAXLEN)
+        )
+
     # ------------------------------------------------------------------
     # Recording methods (callers wrap in try/except — but we are also
     # defensive here).
@@ -244,6 +259,60 @@ class GovernanceMetricsStore:
                 self._token_call_count[agent_id] += 1
         except Exception as exc:  # noqa: BLE001
             logger.debug("governance_metrics.record_token_usage swallowed: %s", exc)
+
+    def record_tool_call(
+        self,
+        agent_id: str,
+        agent_role: str,
+        tool_name: str,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        model: Optional[str] = None,
+        duration_ms: float = 0.0,
+        success: bool = True,
+    ) -> None:
+        """
+        Record a single @mortgage_tool dispatch with token usage, latency, and
+        success flag. Used to power the per-tool cost dashboard.
+        """
+        try:
+            agent_id = str(agent_id) if agent_id is not None else "unknown"
+            agent_role = str(agent_role) if agent_role is not None else "unknown"
+            tool_name = str(tool_name) if tool_name is not None else "unknown"
+            in_tok = max(0, int(input_tokens or 0))
+            out_tok = max(0, int(output_tokens or 0))
+            try:
+                dur_ms = float(duration_ms or 0.0)
+            except (TypeError, ValueError):
+                dur_ms = 0.0
+            success = bool(success)
+            cost = _estimate_cost(model, in_tok, out_tok)
+            event = {
+                "ts": _utc_now_iso(),
+                "agent_id": agent_id,
+                "agent_role": agent_role,
+                "tool_name": tool_name,
+                "input_tokens": in_tok,
+                "output_tokens": out_tok,
+                "total_tokens": in_tok + out_tok,
+                "model": str(model) if model else None,
+                "duration_ms": round(dur_ms, 3),
+                "success": success,
+                "estimated_cost": cost,
+            }
+            with self._lock:
+                self._agent_role[agent_id] = agent_role
+                self._tool_events.append(event)
+                self._tool_per_name[tool_name].append(event)
+                self._tool_call_count[tool_name] += 1
+                if success:
+                    self._tool_success_count[tool_name] += 1
+                self._tool_input_tokens[tool_name] += in_tok
+                self._tool_output_tokens[tool_name] += out_tok
+                self._tool_cost_usd[tool_name] += cost
+                self._tool_latencies[tool_name].append(dur_ms)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("governance_metrics.record_tool_call swallowed: %s", exc)
 
     # ------------------------------------------------------------------
     # Read methods
