@@ -240,7 +240,7 @@ async def save_user_telnyx_config(
 @router.get("/status", response_model=SetupStatus)
 async def get_setup_status(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get current Telnyx setup status for the user"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -272,7 +272,7 @@ async def get_setup_status(
 async def save_credentials(
     credentials: TelnyxCredentials,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Save Telnyx API key and validate it"""
     # Validate API key by making a test call
@@ -304,7 +304,7 @@ async def save_credentials(
 @router.get("/connections")
 async def list_connections(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List available TeXML Applications (voice connections)"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -337,7 +337,7 @@ async def list_connections(
 async def create_connection(
     application: TeXMLApplicationCreate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new TeXML Application for voice"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -382,7 +382,7 @@ async def create_connection(
 async def select_connection(
     connection_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Select an existing TeXML Application as the active connection"""
     await save_user_telnyx_config(
@@ -401,7 +401,7 @@ async def select_connection(
 @router.get("/messaging-profiles")
 async def list_messaging_profiles(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List available Messaging Profiles"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -433,7 +433,7 @@ async def list_messaging_profiles(
 async def create_messaging_profile(
     profile: MessagingProfileCreate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new Messaging Profile for SMS"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -474,7 +474,7 @@ async def create_messaging_profile(
 async def select_messaging_profile(
     profile_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Select an existing Messaging Profile as active"""
     await save_user_telnyx_config(
@@ -494,7 +494,7 @@ async def select_messaging_profile(
 async def search_phone_numbers(
     search: PhoneNumberSearch,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Search for available phone numbers"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -546,7 +546,7 @@ async def search_phone_numbers(
 async def purchase_phone_number(
     purchase: PhoneNumberPurchase,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Purchase a phone number"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -605,7 +605,7 @@ async def purchase_phone_number(
 @router.get("/phone-numbers")
 async def list_phone_numbers(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List user's phone numbers"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -641,7 +641,7 @@ async def configure_phone_number(
     connection_id: Optional[str] = None,
     messaging_profile_id: Optional[str] = None,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Configure a phone number with connection and messaging profile"""
     config = await get_user_telnyx_config(current_user.id, db)
@@ -673,12 +673,12 @@ async def configure_phone_number(
 @router.delete("/credentials")
 async def remove_credentials(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Remove Telnyx configuration for the user"""
     try:
-        db.execute(text("""
-            UPDATE user_twilio_config  -- Legacy table name
+        await db.execute(text("""
+            UPDATE user_twilio_config
             SET telnyx_api_key = NULL,
                 telnyx_connection_id = NULL,
                 telnyx_messaging_profile_id = NULL,
@@ -686,7 +686,7 @@ async def remove_credentials(
                 updated_at = NOW()
             WHERE user_id = :user_id
         """), {"user_id": current_user.id})
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
