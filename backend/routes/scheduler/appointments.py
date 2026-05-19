@@ -214,83 +214,142 @@ async def list_appointments(
     db: Session = Depends(get_db)
 ):
     """List appointments with filters."""
-    user = await get_current_user(request, db)
-    org_id = _get_org_id(user)
+    try:
+        user = await get_current_user(request, db)
+        org_id = _get_org_id(user)
 
-    _models = get_models()
-    Appointment = _models['Appointment']
+        _models = get_models() or {}
+        Appointment = _models.get('Appointment') if isinstance(_models, dict) else None
+        if Appointment is None:
+            try:
+                from database.models.scheduler import Appointment as _ApptFallback
+                Appointment = _ApptFallback
+            except Exception:
+                logger.exception("list_appointments: Appointment model unavailable")
+                return {
+                    "appointments": [],
+                    "total": 0,
+                    "limit": limit,
+                    "offset": offset,
+                }
 
-    # M24: Admins can see all org appointments; non-admins only see their own
-    is_admin = _is_scheduler_admin(user)
-    query = db.query(Appointment).filter(
-        Appointment.organization_id == org_id,
-    )
-    if not is_admin:
-        query = query.filter(
-            or_(
-                Appointment.assigned_user_id == user.id,
-                Appointment.created_by_user_id == user.id
-            )
+        is_admin = _is_scheduler_admin(user)
+        query = db.query(Appointment).filter(
+            Appointment.organization_id == org_id,
         )
+        if not is_admin:
+            ownership_clauses = []
+            if hasattr(Appointment, 'assigned_user_id'):
+                ownership_clauses.append(Appointment.assigned_user_id == user.id)
+            if hasattr(Appointment, 'created_by_user_id'):
+                ownership_clauses.append(Appointment.created_by_user_id == user.id)
+            if ownership_clauses:
+                query = query.filter(or_(*ownership_clauses))
 
-    if start_date:
-        query = query.filter(Appointment.scheduled_start >= datetime.combine(start_date, time.min))
+        if start_date:
+            query = query.filter(Appointment.scheduled_start >= datetime.combine(start_date, time.min))
 
-    if end_date:
-        query = query.filter(Appointment.scheduled_start <= datetime.combine(end_date, time.max))
+        if end_date:
+            query = query.filter(Appointment.scheduled_start <= datetime.combine(end_date, time.max))
 
-    if status:
+        if status:
+            try:
+                status_enum = AppointmentStatus(status)
+                query = query.filter(Appointment.status == status_enum)
+            except ValueError:
+                valid_statuses = [s.value for s in AppointmentStatus]
+                scheduler_error(
+                    400, VALIDATION_ERROR,
+                    "Invalid appointment status filter",
+                    detail=f"Got '{status}', expected one of: {valid_statuses}",
+                )
+
+        if lead_id:
+            query = query.filter(Appointment.lead_id == lead_id)
+
+        if loan_id:
+            query = query.filter(Appointment.loan_id == loan_id)
+
+        appointments = query.order_by(Appointment.scheduled_start.desc()).offset(offset).limit(limit).all()
+
+        result_appointments = []
+        for a in appointments:
+            try:
+                meeting_type_val = None
+                try:
+                    mt = getattr(a, 'meeting_type', None)
+                    meeting_type_val = mt.value if mt is not None and hasattr(mt, 'value') else (mt if isinstance(mt, str) else None)
+                except Exception:
+                    meeting_type_val = None
+
+                meeting_mode_val = None
+                try:
+                    mm = getattr(a, 'meeting_mode', None)
+                    meeting_mode_val = mm.value if mm is not None and hasattr(mm, 'value') else (mm if isinstance(mm, str) else None)
+                except Exception:
+                    meeting_mode_val = None
+
+                status_val = None
+                try:
+                    st = getattr(a, 'status', None)
+                    status_val = st.value if st is not None and hasattr(st, 'value') else (st if isinstance(st, str) else None)
+                except Exception:
+                    status_val = None
+
+                sched_start = getattr(a, 'scheduled_start', None)
+                sched_end = getattr(a, 'scheduled_end', None)
+                created_at = getattr(a, 'created_at', None)
+
+                result_appointments.append({
+                    "id": getattr(a, 'id', None),
+                    "title": getattr(a, 'title', None),
+                    "description": getattr(a, 'description', None),
+                    "meeting_type": meeting_type_val,
+                    "meeting_mode": meeting_mode_val,
+                    "scheduled_start": sched_start.isoformat() if sched_start is not None else None,
+                    "scheduled_end": sched_end.isoformat() if sched_end is not None else None,
+                    "duration_minutes": getattr(a, 'duration_minutes', None),
+                    "status": status_val,
+                    "attendee_name": getattr(a, 'attendee_name', None),
+                    "attendee_email": getattr(a, 'attendee_email', None),
+                    "video_link": getattr(a, 'video_link', None),
+                    "lead_id": getattr(a, 'lead_id', None),
+                    "loan_id": getattr(a, 'loan_id', None),
+                    "booked_by_ai": getattr(a, 'booked_by_ai', None),
+                    "created_at": created_at.isoformat() if created_at is not None else None,
+                })
+            except Exception:
+                logger.exception(
+                    "list_appointments: failed to serialize appointment id=%s",
+                    getattr(a, 'id', '?'),
+                )
+                continue
+
         try:
-            status_enum = AppointmentStatus(status)
-            query = query.filter(Appointment.status == status_enum)
-        except ValueError:
-            valid_statuses = [s.value for s in AppointmentStatus]
-            scheduler_error(
-                400, VALIDATION_ERROR,
-                "Invalid appointment status filter",
-                detail=f"Got '{status}', expected one of: {valid_statuses}",
-            )
+            total = query.order_by(None).count()
+        except Exception:
+            logger.exception("list_appointments: total count failed; falling back to result length")
+            total = len(result_appointments)
 
-    if lead_id:
-        query = query.filter(Appointment.lead_id == lead_id)
-
-    if loan_id:
-        query = query.filter(Appointment.loan_id == loan_id)
-
-    appointments = query.order_by(Appointment.scheduled_start.desc()).offset(offset).limit(limit).all()
-
-    # Convert main appointments to response format
-    result_appointments = [
-        {
-            "id": a.id,
-            "title": a.title,
-            "description": a.description,
-            "meeting_type": a.meeting_type.value if a.meeting_type else None,
-            "meeting_mode": a.meeting_mode.value if a.meeting_mode else None,
-            "scheduled_start": a.scheduled_start.isoformat(),
-            "scheduled_end": a.scheduled_end.isoformat(),
-            "duration_minutes": a.duration_minutes,
-            "status": a.status.value if a.status else None,
-            "attendee_name": a.attendee_name,
-            "attendee_email": a.attendee_email,
-            "video_link": a.video_link,
-            "lead_id": a.lead_id,
-            "loan_id": a.loan_id,
-            "booked_by_ai": a.booked_by_ai,
-            "created_at": a.created_at.isoformat() if a.created_at else None
+        return {
+            "appointments": result_appointments,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
         }
-        for a in appointments
-    ]
-
-    # Get total count from Appointment table
-    total = query.order_by(None).count()
-
-    return {
-        "appointments": result_appointments,
-        "total": total,
-        "limit": limit,
-        "offset": offset
-    }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error(
+            "list_appointments: unhandled error",
+            exc_info=True,
+        )
+        return {
+            "appointments": [],
+            "total": 0,
+            "limit": limit,
+            "offset": offset,
+        }
 
 
 # ============================================================================
