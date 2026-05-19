@@ -82,5 +82,20 @@ jobs:
           TESTING: "1"
           SECRET_KEY: ci-test-secret-key
           DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-bytes-min
+          # ----------------------------------------------------------------
+          # Portal test credentials (see docs/portal_test_credentials_setup.md)
+          # These resolve to empty strings until the repo owner provisions the
+          # matching GitHub Actions secrets — the test harness will then skip
+          # individual tests with a clear message rather than fail.
+          # ----------------------------------------------------------------
+          PERENNIA_TEST_API_BASE_URL: ${{ secrets.PERENNIA_TEST_API_BASE_URL }}
+          PERENNIA_TEST_PURL_TOKEN: ${{ secrets.PERENNIA_TEST_PURL_TOKEN }}
+          PERENNIA_TEST_PURL_TOKEN_TENANT_A: ${{ secrets.PERENNIA_TEST_PURL_TOKEN_TENANT_A }}
+          PERENNIA_TEST_PURL_TOKEN_TENANT_B: ${{ secrets.PERENNIA_TEST_PURL_TOKEN_TENANT_B }}
+          PERENNIA_TEST_ADMIN_JWT: ${{ secrets.PERENNIA_TEST_ADMIN_JWT }}
+          PERENNIA_TEST_WORKSPACE_ID: ${{ secrets.PERENNIA_TEST_WORKSPACE_ID }}
+          PERENNIA_TEST_BORROWER_READ_TOKEN: ${{ secrets.PERENNIA_TEST_BORROWER_READ_TOKEN }}
+          PERENNIA_TEST_EXPIRED_TOKEN: ${{ secrets.PERENNIA_TEST_EXPIRED_TOKEN }}
+          PERENNIA_TEST_TENANT_B_LOAN_ID: ${{ secrets.PERENNIA_TEST_TENANT_B_LOAN_ID }}
         run: |
           python -m pytest tests/test_golden_*.py tests/integration/ -v --maxfail=5

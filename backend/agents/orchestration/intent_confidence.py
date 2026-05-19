@@ -102,17 +102,30 @@ def _record_governance_event(
     may not be importable yet. Guard the import so this module is usable in
     isolation (and unit-testable without the dashboard wired up).
     """
-    try:
-        from agents.orchestration import governance_metrics  # type: ignore
-    except ImportError:
+    import sys as _sys
+
+    governance_metrics = None
+    # 1. Check already-loaded modules (test harnesses inject mocks here).
+    for candidate in (
+        "agents.orchestration.governance_metrics",
+        "services.governance_metrics",
+    ):
+        if candidate in _sys.modules:
+            governance_metrics = _sys.modules[candidate]
+            break
+
+    # 2. Fall back to a real import if no preloaded module is present.
+    if governance_metrics is None:
         try:
-            # Alternative location used by some sibling slices.
-            from services import governance_metrics  # type: ignore
+            from agents.orchestration import governance_metrics  # type: ignore
         except ImportError:
-            logger.debug(
-                "governance_metrics module not available; skipping metric record"
-            )
-            return
+            try:
+                from services import governance_metrics  # type: ignore
+            except ImportError:
+                logger.debug(
+                    "governance_metrics module not available; skipping metric record"
+                )
+                return
 
     recorder = getattr(governance_metrics, "record_compliance_event", None)
     if recorder is None:

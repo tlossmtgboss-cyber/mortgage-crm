@@ -12,7 +12,8 @@ Provides endpoints for:
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, select
 from typing import Optional, List, Callable, Any
 from pydantic import BaseModel
 from datetime import datetime
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/api/v1/page-permissions", tags=["Page Permissions"])
 # DEPENDENCY INJECTION STORAGE
 # ============================================================================
 
-from db import get_db
+from db import get_db, get_async_db
 
 _get_current_user: Callable = None
 _User: Any = None
@@ -43,13 +44,22 @@ def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, use
     logger.info("Page permissions routes dependencies set")
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user dependency - wrapper for injected dependency."""
+async def get_current_user(request: Request):
+    """Get current user dependency - wrapper for injected dependency.
+
+    Uses its own short-lived sync session for auth; route handlers are free
+    to use `get_async_db()` independently.
+    """
     if _get_current_user is None:
         raise RuntimeError("Page permissions routes not initialized. Call set_dependencies first.")
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
+    from database import SessionLocal
+    local_db = SessionLocal()
+    try:
+        return await _get_current_user(token=token, request=request, db=local_db)
+    finally:
+        local_db.close()
 
 
 # =============================================================================
@@ -121,12 +131,12 @@ class BulkPagePermissionRequest(BaseModel):
 
 @router.get("/categories")
 async def get_page_categories(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get all page categories."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, code, name, description, icon, display_order, default_visible
             FROM page_categories
             ORDER BY display_order
@@ -154,7 +164,7 @@ async def get_page_categories(
 @router.get("/my-pages")
 async def get_my_accessible_pages(
     category: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get all pages accessible by the current user."""
@@ -201,7 +211,7 @@ async def get_my_accessible_pages(
                 p.display_order
         """
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         pages = [
             {
@@ -243,7 +253,7 @@ async def get_my_accessible_pages(
 @router.get("/check/{page_path:path}")
 async def check_page_access(
     page_path: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Check if current user can access a specific page."""
@@ -256,7 +266,7 @@ async def check_page_access(
             page_path = "/" + page_path
 
         # Check for exact match or pattern match (for paths with :id)
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, path, min_role, is_active
             FROM pages
             WHERE path = :path OR path LIKE :pattern
@@ -279,12 +289,12 @@ async def check_page_access(
         page_id = page[0]
 
         # Check user override first
-        override = db.execute(text("""
+        override = (await db.execute(text("""
             SELECT can_view, can_edit, is_nav_visible
             FROM user_page_overrides
             WHERE user_id = :user_id AND page_id = :page_id
                 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-        """), {"user_id": user_id, "page_id": page_id}).fetchone()
+        """), {"user_id": user_id, "page_id": page_id})).fetchone()
 
         if override:
             return {
@@ -295,11 +305,11 @@ async def check_page_access(
             }
 
         # Check role permission
-        role_perm = db.execute(text("""
+        role_perm = (await db.execute(text("""
             SELECT can_view, can_edit, is_nav_visible
             FROM page_permissions
             WHERE page_id = :page_id AND role = :role
-        """), {"page_id": page_id, "role": user_role}).fetchone()
+        """), {"page_id": page_id, "role": user_role})).fetchone()
 
         if role_perm:
             return {
@@ -332,7 +342,7 @@ async def check_page_access(
 async def pin_page(
     page_id: int,
     request: PinPageRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Pin or unpin a page for the current user."""
@@ -340,13 +350,13 @@ async def pin_page(
         user_id = current_user.id
 
         # Check if override exists
-        existing = db.execute(text("""
+        existing = (await db.execute(text("""
             SELECT id FROM user_page_overrides
             WHERE user_id = :user_id AND page_id = :page_id
-        """), {"user_id": user_id, "page_id": page_id}).fetchone()
+        """), {"user_id": user_id, "page_id": page_id})).fetchone()
 
         if existing:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_page_overrides
                 SET is_pinned = :is_pinned, pin_order = :pin_order, updated_at = CURRENT_TIMESTAMP
                 WHERE user_id = :user_id AND page_id = :page_id
@@ -357,7 +367,7 @@ async def pin_page(
                 "pin_order": request.pin_order,
             })
         else:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO user_page_overrides (user_id, page_id, is_pinned, pin_order)
                 VALUES (:user_id, :page_id, :is_pinned, :pin_order)
             """), {
@@ -367,7 +377,7 @@ async def pin_page(
                 "pin_order": request.pin_order,
             })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -377,20 +387,20 @@ async def pin_page(
         }
     except SQLAlchemyError as e:
         logger.error(f"Error pinning page: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/pinned")
 async def get_pinned_pages(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get user's pinned pages."""
     try:
         user_id = current_user.id
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 p.id, p.path, p.name, p.icon, p.category,
                 upo.pin_order
@@ -428,7 +438,7 @@ async def get_pinned_pages(
 async def get_all_pages(
     category: Optional[str] = None,
     include_inactive: bool = False,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get all pages (admin view)."""
@@ -459,7 +469,7 @@ async def get_all_pages(
 
         query += " ORDER BY p.display_order"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         pages = [
             {
@@ -489,7 +499,7 @@ async def get_all_pages(
 @router.get("/admin/pages/{page_id}/permissions")
 async def get_page_permissions(
     page_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get all permissions for a specific page."""
@@ -499,22 +509,22 @@ async def get_page_permissions(
 
     try:
         # Get page info
-        page = db.execute(text("""
+        page = (await db.execute(text("""
             SELECT id, path, name, min_role FROM pages WHERE id = :page_id
-        """), {"page_id": page_id}).fetchone()
+        """), {"page_id": page_id})).fetchone()
 
         if not page:
             raise HTTPException(status_code=404, detail="Page not found")
 
         # Get role permissions
-        role_perms = db.execute(text("""
+        role_perms = (await db.execute(text("""
             SELECT role, can_view, can_edit, is_nav_visible
             FROM page_permissions
             WHERE page_id = :page_id
-        """), {"page_id": page_id}).fetchall()
+        """), {"page_id": page_id})).fetchall()
 
         # Get user overrides
-        user_overrides = db.execute(text("""
+        user_overrides = (await db.execute(text("""
             SELECT
                 upo.id, u.id as user_id, u.email, u.full_name,
                 upo.can_view, upo.can_edit, upo.is_nav_visible,
@@ -522,7 +532,7 @@ async def get_page_permissions(
             FROM user_page_overrides upo
             JOIN users u ON u.id = upo.user_id
             WHERE upo.page_id = :page_id
-        """), {"page_id": page_id}).fetchall()
+        """), {"page_id": page_id})).fetchall()
 
         return {
             "page": {
@@ -567,7 +577,7 @@ async def update_role_permission(
     page_id: int,
     role: str,
     request: RolePagePermissionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Update role-based permission for a page."""
@@ -580,12 +590,12 @@ async def update_role_permission(
 
     try:
         # Check if exists
-        existing = db.execute(text("""
+        existing = (await db.execute(text("""
             SELECT id FROM page_permissions WHERE page_id = :page_id AND role = :role
-        """), {"page_id": page_id, "role": role}).fetchone()
+        """), {"page_id": page_id, "role": role})).fetchone()
 
         if existing:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE page_permissions
                 SET can_view = :can_view, can_edit = :can_edit,
                     is_nav_visible = :is_nav_visible, updated_at = CURRENT_TIMESTAMP
@@ -598,7 +608,7 @@ async def update_role_permission(
                 "is_nav_visible": 1 if request.is_nav_visible else 0,
             })
         else:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO page_permissions (page_id, role, can_view, can_edit, is_nav_visible)
                 VALUES (:page_id, :role, :can_view, :can_edit, :is_nav_visible)
             """), {
@@ -609,7 +619,7 @@ async def update_role_permission(
                 "is_nav_visible": 1 if request.is_nav_visible else 0,
             })
 
-        db.commit()
+        await db.commit()
 
         # Log the change
         logger.info(f"User {current_user.id} updated page {page_id} permissions for role {role}")
@@ -626,7 +636,7 @@ async def update_role_permission(
         }
     except SQLAlchemyError as e:
         logger.error(f"Error updating role permission: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -635,7 +645,7 @@ async def create_user_page_override(
     user_id: int,
     page_id: int,
     request: UserPageOverrideRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Create or update a user-specific page override."""
@@ -645,12 +655,12 @@ async def create_user_page_override(
 
     try:
         # Check if override exists
-        existing = db.execute(text("""
+        existing = (await db.execute(text("""
             SELECT id FROM user_page_overrides WHERE user_id = :user_id AND page_id = :page_id
-        """), {"user_id": user_id, "page_id": page_id}).fetchone()
+        """), {"user_id": user_id, "page_id": page_id})).fetchone()
 
         if existing:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_page_overrides
                 SET can_view = :can_view, can_edit = :can_edit, is_nav_visible = :is_nav_visible,
                     override_reason = :reason, expires_at = :expires_at,
@@ -667,7 +677,7 @@ async def create_user_page_override(
                 "granted_by": current_user.id,
             })
         else:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO user_page_overrides
                     (user_id, page_id, can_view, can_edit, is_nav_visible, override_reason, expires_at, granted_by)
                 VALUES
@@ -683,7 +693,7 @@ async def create_user_page_override(
                 "granted_by": current_user.id,
             })
 
-        db.commit()
+        await db.commit()
 
         logger.info(f"User {current_user.id} created page override for user {user_id} on page {page_id}")
 
@@ -700,7 +710,7 @@ async def create_user_page_override(
         }
     except SQLAlchemyError as e:
         logger.error(f"Error creating user page override: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -708,7 +718,7 @@ async def create_user_page_override(
 async def delete_user_page_override(
     user_id: int,
     page_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Delete a user-specific page override."""
@@ -717,23 +727,23 @@ async def delete_user_page_override(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM user_page_overrides WHERE user_id = :user_id AND page_id = :page_id
         """), {"user_id": user_id, "page_id": page_id})
 
-        db.commit()
+        await db.commit()
 
         return {"success": True, "deleted": result.rowcount > 0}
     except SQLAlchemyError as e:
         logger.error(f"Error deleting user page override: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/admin/users/{user_id}/overrides")
 async def get_user_overrides(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get all page overrides for a specific user."""
@@ -742,7 +752,7 @@ async def get_user_overrides(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 upo.id, p.id as page_id, p.path, p.name,
                 upo.can_view, upo.can_edit, upo.is_nav_visible,
@@ -781,7 +791,7 @@ async def get_user_overrides(
 @router.post("/admin/bulk-update")
 async def bulk_update_permissions(
     request: BulkPagePermissionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Bulk update permissions for multiple pages."""
@@ -796,12 +806,12 @@ async def bulk_update_permissions(
         updated = 0
         for page_id in request.page_ids:
             # Check if exists
-            existing = db.execute(text("""
+            existing = (await db.execute(text("""
                 SELECT id FROM page_permissions WHERE page_id = :page_id AND role = :role
-            """), {"page_id": page_id, "role": request.role}).fetchone()
+            """), {"page_id": page_id, "role": request.role})).fetchone()
 
             if existing:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE page_permissions
                     SET can_view = :can_view, can_edit = :can_edit, updated_at = CURRENT_TIMESTAMP
                     WHERE page_id = :page_id AND role = :role
@@ -812,7 +822,7 @@ async def bulk_update_permissions(
                     "can_edit": 1 if request.can_edit else 0,
                 })
             else:
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO page_permissions (page_id, role, can_view, can_edit, is_nav_visible)
                     VALUES (:page_id, :role, :can_view, :can_edit, :can_view)
                 """), {
@@ -823,12 +833,12 @@ async def bulk_update_permissions(
                 })
             updated += 1
 
-        db.commit()
+        await db.commit()
 
         return {"success": True, "updated_count": updated}
     except SQLAlchemyError as e:
         logger.error(f"Error bulk updating permissions: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -842,19 +852,19 @@ async def log_page_access(
     access_granted: bool,
     denial_reason: Optional[str] = None,
     request: Request = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Log a page access attempt."""
     try:
         # Get page ID
-        page = db.execute(text("""
+        page = (await db.execute(text("""
             SELECT id FROM pages WHERE path = :path
-        """), {"path": page_path}).fetchone()
+        """), {"path": page_path})).fetchone()
 
         page_id = page[0] if page else None
 
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO page_access_log
                 (user_id, page_id, page_path, access_type, access_granted, denial_reason, ip_address, user_agent)
             VALUES
@@ -870,7 +880,7 @@ async def log_page_access(
             "ua": request.headers.get("User-Agent") if request else None,
         })
 
-        db.commit()
+        await db.commit()
 
         return {"logged": True}
     except SQLAlchemyError as e:
@@ -886,7 +896,7 @@ async def get_access_log(
     denied_only: bool = False,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get page access logs (admin only)."""
@@ -921,7 +931,7 @@ async def get_access_log(
 
         query += " ORDER BY pal.accessed_at DESC LIMIT :limit OFFSET :offset"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         logs = [
             {
@@ -954,7 +964,7 @@ async def get_access_log(
 @router.post("/admin/run-migration")
 async def run_page_permissions_migration(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin key for migration"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Run the page permissions migration on the production database.
@@ -970,7 +980,7 @@ async def run_page_permissions_migration(
 
         # Create page_categories table
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS page_categories (
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(100) NOT NULL UNIQUE,
@@ -991,7 +1001,7 @@ async def run_page_permissions_migration(
 
         # Create pages table
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS pages (
                     id SERIAL PRIMARY KEY,
                     category_id INTEGER REFERENCES page_categories(id),
@@ -1015,7 +1025,7 @@ async def run_page_permissions_migration(
 
         # Create page_permissions table
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS page_permissions (
                     id SERIAL PRIMARY KEY,
                     page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
@@ -1037,7 +1047,7 @@ async def run_page_permissions_migration(
 
         # Create user_page_overrides table
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS user_page_overrides (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -1063,7 +1073,7 @@ async def run_page_permissions_migration(
 
         # Create page_access_log table
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS page_access_log (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -1084,10 +1094,10 @@ async def run_page_permissions_migration(
                 logger.error(f"page_access_log table creation failed: {e}")
                 results["errors"].append("page_access_log: creation failed")
 
-        db.commit()
+        await db.commit()
 
         # Check if categories exist before seeding
-        category_count = db.execute(text("SELECT COUNT(*) FROM page_categories")).scalar()
+        category_count = (await db.execute(text("SELECT COUNT(*) FROM page_categories"))).scalar()
 
         if category_count == 0:
             # Seed categories
@@ -1108,7 +1118,7 @@ async def run_page_permissions_migration(
 
             for name, display_name, description, icon, order in categories:
                 try:
-                    db.execute(text("""
+                    await db.execute(text("""
                         INSERT INTO page_categories (name, display_name, description, icon, display_order)
                         VALUES (:name, :display_name, :description, :icon, :order)
                         ON CONFLICT (name) DO NOTHING
@@ -1117,14 +1127,14 @@ async def run_page_permissions_migration(
                     logger.error(f"Error seeding category {name}: {e}")
 
             results["data_seeded"].append(f"categories: {len(categories)}")
-            db.commit()
+            await db.commit()
 
         # Check if pages exist before seeding
-        page_count = db.execute(text("SELECT COUNT(*) FROM pages")).scalar()
+        page_count = (await db.execute(text("SELECT COUNT(*) FROM pages"))).scalar()
 
         if page_count == 0:
             # Get category IDs
-            cat_result = db.execute(text("SELECT id, name FROM page_categories"))
+            cat_result = await db.execute(text("SELECT id, name FROM page_categories"))
             category_map = {row[1]: row[0] for row in cat_result.fetchall()}
 
             # Seed core pages
@@ -1147,7 +1157,7 @@ async def run_page_permissions_migration(
             for cat_id, name, path, description, icon, order in pages:
                 if cat_id:
                     try:
-                        db.execute(text("""
+                        await db.execute(text("""
                             INSERT INTO pages (category_id, name, path, description, icon, display_order)
                             VALUES (:cat_id, :name, :path, :description, :icon, :order)
                             ON CONFLICT (path) DO NOTHING
@@ -1156,15 +1166,15 @@ async def run_page_permissions_migration(
                         logger.error(f"Error seeding page {name}: {e}")
 
             results["data_seeded"].append(f"pages: {len(pages)}")
-            db.commit()
+            await db.commit()
 
             # Seed default permissions for admin role
-            page_result = db.execute(text("SELECT id FROM pages"))
+            page_result = await db.execute(text("SELECT id FROM pages"))
             page_ids = [row[0] for row in page_result.fetchall()]
 
             for page_id in page_ids:
                 try:
-                    db.execute(text("""
+                    await db.execute(text("""
                         INSERT INTO page_permissions (page_id, role, can_view, can_edit, can_delete, can_admin)
                         VALUES (:page_id, 'admin', TRUE, TRUE, TRUE, TRUE)
                         ON CONFLICT (page_id, role) DO NOTHING
@@ -1173,7 +1183,7 @@ async def run_page_permissions_migration(
                     logger.error(f"Error seeding admin permission for page {page_id}: {e}")
 
             results["data_seeded"].append(f"permissions: {len(page_ids)} pages x admin role")
-            db.commit()
+            await db.commit()
 
         # Create indexes
         indexes = [
@@ -1188,11 +1198,11 @@ async def run_page_permissions_migration(
 
         for idx_sql in indexes:
             try:
-                db.execute(text(idx_sql))
+                await db.execute(text(idx_sql))
             except Exception as e:
                 logger.error(f"Error creating index: {e}")
 
-        db.commit()
+        await db.commit()
         results["indexes_created"] = len(indexes)
 
         return {
@@ -1203,5 +1213,5 @@ async def run_page_permissions_migration(
 
     except SQLAlchemyError as e:
         logger.error(f"Migration error: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

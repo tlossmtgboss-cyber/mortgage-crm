@@ -250,6 +250,14 @@ def register_ai_routes(app, get_db, get_current_user, get_current_user_flexible,
     except Exception as e:
         logger.warning(f"Agent Governance routes not loaded: {e}")
 
+    # Agent Governance Metrics routes (Wave 3 — per-agent governance dashboard)
+    try:
+        from routes.agent_governance_metrics_routes import router as agent_governance_metrics_router
+        app.include_router(agent_governance_metrics_router)
+        logger.info("Agent Governance Metrics routes loaded (Wave 3 D3 remediation #2)")
+    except Exception as e:
+        logger.warning(f"Agent Governance Metrics routes not loaded: {e}")
+
     # Agent Governance Settings routes
     try:
         from routes.agent_governance_settings_routes import router as agent_governance_settings_router

@@ -300,6 +300,13 @@ async def system_health_websocket(websocket: WebSocket):
         return
 
     await manager.connect_system(websocket, org_id)
+    ws_session_id = f"system_health:{org_id}:{id(websocket)}"
+    try:
+        await ws_session_manager.register(
+            ws_session_id, websocket, {"org_id": org_id, "kind": "system_health"}
+        )
+    except Exception as reg_exc:  # pragma: no cover - defensive
+        logger.debug(f"ws_session_manager.register failed: {reg_exc}")
 
     try:
         while True:
@@ -320,10 +327,20 @@ async def system_health_websocket(websocket: WebSocket):
             await asyncio.sleep(10)
 
     except WebSocketDisconnect:
-        manager.disconnect_system(websocket, org_id)
+        pass
     except SQLAlchemyError as e:
         logger.error(f"System WebSocket error: {e}")
-        manager.disconnect_system(websocket, org_id)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"System WebSocket unexpected error: {e}")
+    finally:
+        try:
+            manager.disconnect_system(websocket, org_id)
+        except Exception as cleanup_exc:  # pragma: no cover - defensive
+            logger.debug(f"disconnect_system cleanup failed: {cleanup_exc}")
+        try:
+            await ws_session_manager.unregister(ws_session_id)
+        except Exception as cleanup_exc:  # pragma: no cover - defensive
+            logger.debug(f"ws_session_manager.unregister failed: {cleanup_exc}")
 
 
 @router.websocket("/ws/alerts")
@@ -352,6 +369,14 @@ async def alerts_websocket(websocket: WebSocket):
         return
 
     last_check = datetime.now(timezone.utc)
+
+    ws_session_id = f"alerts:{org_id}:{id(websocket)}"
+    try:
+        await ws_session_manager.register(
+            ws_session_id, websocket, {"org_id": org_id, "kind": "alerts"}
+        )
+    except Exception as reg_exc:  # pragma: no cover - defensive
+        logger.debug(f"ws_session_manager.register failed: {reg_exc}")
 
     try:
         while True:
@@ -402,6 +427,13 @@ async def alerts_websocket(websocket: WebSocket):
         pass
     except SQLAlchemyError as e:
         logger.error(f"Alerts WebSocket error: {e}")
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"Alerts WebSocket unexpected error: {e}")
+    finally:
+        try:
+            await ws_session_manager.unregister(ws_session_id)
+        except Exception as cleanup_exc:  # pragma: no cover - defensive
+            logger.debug(f"ws_session_manager.unregister failed: {cleanup_exc}")
 
 
 # Export manager for use in other modules (e.g., to broadcast on events)
