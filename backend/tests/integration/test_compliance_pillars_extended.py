@@ -187,3 +187,23 @@ def _fcra_notice_complete(notice: dict) -> bool:
 def test_fcra_complete_notice_passes():
     notice = {field: "filled" for field in FCRA_REQUIRED_NOTICE_FIELDS}
     assert _fcra_notice_complete(notice) is True
+
+
+# Test 16: missing any FCRA notice field fails the completeness check
+@pytest.mark.parametrize("missing", FCRA_REQUIRED_NOTICE_FIELDS)
+def test_fcra_missing_field_fails(missing):
+    notice = {field: "filled" for field in FCRA_REQUIRED_NOTICE_FIELDS}
+    notice[missing] = ""  # blank = missing
+    assert _fcra_notice_complete(notice) is False
+
+
+# Test 17: HOEPA large-loan threshold uses 8.5% spread
+def test_hoepa_large_loan_spread_trigger():
+    # First-lien >$50k: trigger requires spread > 8.5
+    assert _hoepa_high_cost(apr=16.0, avg_prime=7.0, loan_amount=250_000) is True
+    assert _hoepa_high_cost(apr=15.0, avg_prime=7.0, loan_amount=250_000) is False
+
+
+# Test 18: ECOA clean reason text returns no hits
+def test_ecoa_clean_reason_returns_empty():
+    assert _ecoa_violated("Insufficient debt-to-income ratio per AUS findings.") == set()

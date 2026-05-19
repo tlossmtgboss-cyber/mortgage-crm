@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -22,6 +23,13 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
+
+# Ensure encryption_utils (which the services package may transitively pull
+# in) doesn't refuse to initialize in non-prod test runs. A throwaway Fernet
+# key is sufficient — we never encrypt real data in this test.
+os.environ.setdefault(
+    "DATA_ENCRYPTION_KEY", "dGVzdF9rZXlfZm9yX2NpX29ubHlfMDAwMDAwMDAwMDA="
+)
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 

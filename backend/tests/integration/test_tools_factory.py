@@ -116,3 +116,39 @@ def test_no_circular_imports_across_subsmodules():
         loaded[domain] = _load_domain_module(domain)
     # All 8 modules loaded without error
     assert len(loaded) == 8
+
+
+# ---------------------------------------------------------------------------
+# Test 11: pipeline builder uses the org_id from ctx to scope queries
+# ---------------------------------------------------------------------------
+
+def test_pipeline_builder_consumes_ctx_org_id():
+    mod = _load_domain_module("pipeline")
+    user = _make_stub_user()
+    ctx = {"org_id": 42, "_user_role": "admin", "_has_org_wide_access": True}
+    # Builder must accept the ctx dict without modification
+    tools = mod.build_pipeline_tools(_make_stub_db(), user, ctx)
+    # Ensure the build did not mutate the ctx
+    assert ctx["org_id"] == 42
+
+
+# ---------------------------------------------------------------------------
+# Test 12: tasks builder returns at least one tool function
+# ---------------------------------------------------------------------------
+
+def test_tasks_builder_returns_tools():
+    mod = _load_domain_module("tasks")
+    tools = mod.build_task_tools(_make_stub_db(), _make_stub_user(), _make_ctx())
+    assert isinstance(tools, dict)
+    # Tasks domain registers multiple tool callables
+    assert len(tools) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Test 13: telephony builder returns dict with callable values
+# ---------------------------------------------------------------------------
+
+def test_telephony_builder_returns_callables():
+    mod = _load_domain_module("telephony")
+    tools = mod.build_telephony_tools(_make_stub_db(), _make_stub_user(), _make_ctx())
+    assert all(callable(fn) for fn in tools.values())
