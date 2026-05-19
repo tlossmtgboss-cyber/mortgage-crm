@@ -53,6 +53,51 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# ---------------------------------------------------------------------------
+# Per-tool cost pricing table (USD per 1K tokens).
+#
+# Model keys align with CLAUDE.md naming (claude-sonnet-4-6 / claude-opus-4-7 /
+# claude-haiku-4-5). Rates are approximate; production should source from a
+# central pricing config that's refreshed when Anthropic updates list price.
+# ---------------------------------------------------------------------------
+
+_PRICING_PER_1K_TOKENS: Dict[str, Dict[str, float]] = {
+    "claude-opus-4-7": {"input": 0.015, "output": 0.075},
+    "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
+    "claude-haiku-4-5": {"input": 0.00080, "output": 0.0040},
+    # Fallback / unknown — use Sonnet pricing as a conservative midpoint.
+    "_default": {"input": 0.003, "output": 0.015},
+}
+
+
+def _estimate_cost(model: Optional[str], input_tokens: int, output_tokens: int) -> float:
+    """Estimate USD cost from token counts using the pricing table."""
+    try:
+        rate = _PRICING_PER_1K_TOKENS.get(str(model or ""), _PRICING_PER_1K_TOKENS["_default"])
+        in_cost = (max(0, int(input_tokens)) / 1000.0) * float(rate.get("input", 0.0))
+        out_cost = (max(0, int(output_tokens)) / 1000.0) * float(rate.get("output", 0.0))
+        return round(in_cost + out_cost, 6)
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
+def _percentile(values: List[float], pct: float) -> float:
+    """Compute pct-th percentile (0-100) on a small list. O(n log n)."""
+    if not values:
+        return 0.0
+    s = sorted(values)
+    if pct <= 0:
+        return float(s[0])
+    if pct >= 100:
+        return float(s[-1])
+    k = (len(s) - 1) * (pct / 100.0)
+    f = int(k)
+    c = min(f + 1, len(s) - 1)
+    if f == c:
+        return float(s[f])
+    return float(s[f] + (s[c] - s[f]) * (k - f))
+
+
 class GovernanceMetricsStore:
     """
     Thread-safe, in-memory store of recent governance events per agent.
