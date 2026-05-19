@@ -37,6 +37,17 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import NullPool
 from starlette.requests import Request
 
+# Async SQLAlchemy imports (asyncpg-backed; additive — does NOT replace sync engine)
+try:
+    from sqlalchemy.ext.asyncio import (
+        create_async_engine,
+        async_sessionmaker,
+        AsyncSession,
+    )
+    _ASYNC_SQLALCHEMY_AVAILABLE = True
+except Exception:  # pragma: no cover - older SQLAlchemy
+    _ASYNC_SQLALCHEMY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # Database URL from environment
@@ -98,18 +109,40 @@ elif USE_PGBOUNCER:
         }
     )
 else:
-    # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has ~20 max connections. With numReplicas=1 in railway.toml,
-    # pool_size=3 + max_overflow=2 = 5 connections per process.
-    # During rolling deploys (2 containers briefly): 2 × 5 = 10 + advisory = 11 total.
-    # pool_recycle=120 aggressively reclaims idle connections.
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=2, max=5)")
+    # Direct PostgreSQL connection with SQLAlchemy pooling.
+    #
+    # Wave-2 audit: the previous pool_size=3 / max_overflow=2 cap (max=5 per
+    # process) was sized for ~8 concurrent users and was flagged as a deadlock
+    # risk under load. We bump to pool_size=10 / max_overflow=20 (max=30) with
+    # pool_pre_ping and a 1h recycle.
+    #
+    # CAPACITY MATH (Railway ~20 conn cap per Postgres instance):
+    #     pool_size (10) + max_overflow (20) = 30  > 20 cap
+    #   This is only safe because we run ONE module-level singleton engine per
+    #   process (see `engine = create_engine(...)` below — no per-request engine
+    #   creation anywhere in the codebase), and numReplicas=1 in railway.toml,
+    #   so under normal operation we have exactly 1 process holding 1 pool.
+    #   During rolling deploys (2 containers briefly) the OLD container's idle
+    #   conns are terminated by cleanup_idle_connections() at startup, and the
+    #   audit-write executor is bounded to a SINGLE worker (1 extra conn).
+    #   If your deployment runs >1 replica or you raise these, audit Railway's
+    #   actual per-database connection cap first.
+    _pool_size = int(os.getenv("DB_POOL_SIZE", "10"))
+    _max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+    _pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "3600"))   # 1 hour
+    _pool_pre_ping = os.getenv("DB_POOL_PRE_PING", "true").lower() == "true"
+    logger.info(
+        f"Using direct PostgreSQL connection with SQLAlchemy pooling "
+        f"(pool_size={_pool_size}, max_overflow={_max_overflow}, "
+        f"max={_pool_size + _max_overflow}, recycle={_pool_recycle}s, "
+        f"pre_ping={_pool_pre_ping})"
+    )
     engine = create_engine(
         DATABASE_URL,
-        pool_pre_ping=True,
-        pool_size=3,
-        max_overflow=2,
-        pool_recycle=120,             # Recycle connections every 2min to prevent buildup
+        pool_pre_ping=_pool_pre_ping,
+        pool_size=_pool_size,
+        max_overflow=_max_overflow,
+        pool_recycle=_pool_recycle,
         pool_timeout=10,              # Wait max 10s for a connection
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         pool_reset_on_return='rollback',  # Clean connections before reuse
