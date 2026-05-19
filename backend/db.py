@@ -249,6 +249,78 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+# =============================================================================
+# Async engine (additive — coexists with sync engine; routes opt in via get_async_db)
+# =============================================================================
+#
+# Why additive: migrating all 346 route files at once is risky. The sync engine
+# (above) remains the default; routes that want async opt in by depending on
+# get_async_db() instead of get_db().
+#
+# Driver selection: prefer asyncpg for PostgreSQL. SQLite uses aiosqlite if
+# available (best-effort for local dev/tests). On any failure we set
+# async_engine = None so callers can detect unavailability.
+async_engine = None
+AsyncSessionLocal = None
+
+if _ASYNC_SQLALCHEMY_AVAILABLE:
+    try:
+        _async_url = None
+        if DATABASE_URL.startswith("postgresql+asyncpg://"):
+            _async_url = DATABASE_URL
+        elif DATABASE_URL.startswith("postgresql://"):
+            _async_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif DATABASE_URL.startswith("sqlite:///"):
+            _async_url = DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+
+        if _async_url and _async_url.startswith("postgresql+asyncpg"):
+            # asyncpg does NOT accept libpq-style connect_args (sslmode, options,
+            # keepalives, etc.). Strip query params handled by libpq and pass
+            # asyncpg-friendly equivalents via connect_args.
+            _async_connect_args = {}
+            # sslmode=require -> ssl=True for asyncpg
+            if os.environ.get("DB_SSLMODE", "require") in ("require", "verify-ca", "verify-full"):
+                _async_connect_args["ssl"] = True
+            if USE_PGBOUNCER:
+                # PgBouncer transaction mode is incompatible with prepared statements.
+                _async_connect_args["statement_cache_size"] = 0
+                async_engine = create_async_engine(
+                    _async_url,
+                    poolclass=NullPool,
+                    echo=False,
+                    connect_args=_async_connect_args,
+                )
+            else:
+                async_engine = create_async_engine(
+                    _async_url,
+                    pool_pre_ping=_pool_pre_ping,
+                    pool_size=_pool_size,
+                    max_overflow=_max_overflow,
+                    pool_recycle=_pool_recycle,
+                    pool_timeout=10,
+                    echo=False,
+                    connect_args=_async_connect_args,
+                )
+        elif _async_url and _async_url.startswith("sqlite+aiosqlite"):
+            async_engine = create_async_engine(_async_url, echo=False)
+
+        if async_engine is not None:
+            AsyncSessionLocal = async_sessionmaker(
+                async_engine,
+                expire_on_commit=False,
+                class_=AsyncSession,
+            )
+            logger.info(f"Async SQLAlchemy engine initialized (driver={_async_url.split('://', 1)[0]})")
+        else:
+            logger.info("Async SQLAlchemy engine NOT initialized (unsupported DATABASE_URL scheme)")
+    except Exception as _exc:  # pragma: no cover
+        logger.warning(f"Failed to initialize async SQLAlchemy engine: {_exc}")
+        async_engine = None
+        AsyncSessionLocal = None
+else:
+    logger.info("sqlalchemy.ext.asyncio not available — async engine disabled")
+
+
 def cleanup_idle_connections():
     """Terminate stale database connections at startup to prevent connection exhaustion.
 
@@ -413,6 +485,63 @@ def get_db(request: Request = None):
                     _tenant_connection_counts.pop(org_id, None)
                 else:
                     _tenant_connection_counts[org_id] = current - 1
+
+
+async def get_async_db(request: Request = None):
+    """Async database session dependency for FastAPI.
+
+    Async counterpart to `get_db()`. Yields an `AsyncSession` and, when a
+    PostgreSQL backend is in use, sets the same `app.current_tenant` RLS
+    session variable so Row-Level Security policies apply identically to
+    sync and async code paths.
+
+    Falls back to raising 503 if the async engine is unavailable (e.g.,
+    asyncpg not installed). Per-tenant connection counting is delegated to
+    the sync `get_db()` path — async routes share the SAME `MAX_DB_CONNECTIONS_PER_TENANT`
+    budget concept conceptually, but counting is intentionally not duplicated
+    here to avoid double-charging when a request touches both sessions.
+    """
+    if AsyncSessionLocal is None:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=503,
+            detail="Async database engine not initialized on this server.",
+        )
+
+    org_id = None
+    if request and hasattr(request, "state"):
+        org_id = getattr(request.state, "organization_id", None)
+
+    session = AsyncSessionLocal()
+    try:
+        # Set RLS tenant context on the async session (PostgreSQL only).
+        if org_id and DATABASE_URL.startswith("postgresql"):
+            try:
+                if not isinstance(org_id, int) or org_id <= 0:
+                    raise ValueError(
+                        f"organization_id must be a positive integer, got: {org_id}"
+                    )
+                # Mirrors database.tenant_mixin.set_tenant_context but for AsyncSession.
+                await session.execute(
+                    text("SET LOCAL app.current_tenant = :org_id"),
+                    {"org_id": str(org_id)},
+                )
+            except Exception as e:
+                env = os.environ.get(
+                    "RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development")
+                )
+                if env in ("production", "staging"):
+                    logger.error(f"CRITICAL: async RLS tenant context failed: {e}")
+                    await session.close()
+                    raise
+                if RLS_STRICT_MODE:
+                    logger.error(f"RLS_STRICT_MODE: async tenant context failed: {e}")
+                    await session.close()
+                    raise
+                logger.warning(f"Async RLS context failed (dev mode): {e}")
+        yield session
+    finally:
+        await session.close()
 
 
 @contextlib.contextmanager
