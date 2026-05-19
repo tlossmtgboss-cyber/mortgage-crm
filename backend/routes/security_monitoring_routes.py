@@ -74,7 +74,7 @@ async def require_admin_dep(request: Request):
 @router.get("/dashboard")
 async def get_security_dashboard(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(require_admin_dep)
 ):
     """
@@ -96,9 +96,9 @@ async def get_security_dashboard(
 
         # Get recent security events from database (tenant-scoped)
         _user_org_id = getattr(current_user, 'organization_id', None)
-        security_events = _get_recent_security_events(db, org_id=_user_org_id)
+        security_events = await _get_recent_security_events(db, org_id=_user_org_id)
 
-        # Get failed login attempts
+        # Get failed login attempts (in-memory middleware data; db arg unused)
         failed_logins = _get_failed_login_stats(app, db)
 
         return {
@@ -253,7 +253,7 @@ async def clear_rate_limit(
 
 @router.get("/events")
 async def get_security_events(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(require_admin_dep),
     limit: int = 100,
     event_type: Optional[str] = None
@@ -261,7 +261,7 @@ async def get_security_events(
     """Get recent security events from audit log (tenant-scoped)."""
     try:
         _user_org_id = getattr(current_user, 'organization_id', None)
-        events = _get_recent_security_events(db, limit=limit, event_type=event_type, org_id=_user_org_id)
+        events = await _get_recent_security_events(db, limit=limit, event_type=event_type, org_id=_user_org_id)
         return {
             "count": len(events),
             "events": events

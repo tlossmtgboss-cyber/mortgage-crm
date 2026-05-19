@@ -28,7 +28,8 @@ URL prefix: /api/v1/scheduler/  (applied by parent aggregator)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, or_, select
 from datetime import date, datetime, time, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field, validator
@@ -137,7 +138,7 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict, holiday_mo
     _holiday_models = holiday_models_dict
 
 
-from db import get_db
+from db import get_db, get_async_db
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
@@ -146,6 +147,21 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     return await _get_current_user_func(token=token, request=request, db=db)
+
+
+async def get_current_user_async(request: Request):
+    """Variant that uses its own short-lived sync session, freeing async
+    handlers to use `get_async_db()` independently."""
+    if _get_current_user_func is None:
+        raise RuntimeError("Holiday route dependencies not set")
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    from database import SessionLocal
+    local_db = SessionLocal()
+    try:
+        return await _get_current_user_func(token=token, request=request, db=local_db)
+    finally:
+        local_db.close()
 
 
 def _get_org_id(user) -> int:
@@ -215,30 +231,32 @@ async def list_holidays(
     year: Optional[int] = Query(None, ge=2020, le=2050),
     holiday_type: Optional[str] = Query(None),
     include_inactive: bool = Query(False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List holidays for the organization, optionally filtered by year and type."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
     Holiday = _get_holiday_model()
 
-    query = db.query(Holiday).filter(Holiday.organization_id == org_id)
+    stmt = select(Holiday).where(Holiday.organization_id == org_id)
 
     if not include_inactive:
-        query = query.filter(Holiday.is_active == True)
+        stmt = stmt.where(Holiday.is_active == True)
 
     if year:
         start = date(year, 1, 1)
         end = date(year, 12, 31)
-        query = query.filter(
+        stmt = stmt.where(
             Holiday.holiday_date >= start,
             Holiday.holiday_date <= end,
         )
 
     if holiday_type:
-        query = query.filter(Holiday.holiday_type == holiday_type)
+        stmt = stmt.where(Holiday.holiday_type == holiday_type)
 
-    holidays = query.order_by(Holiday.holiday_date).all()
+    stmt = stmt.order_by(Holiday.holiday_date)
+    result = await db.execute(stmt)
+    holidays = result.scalars().all()
 
     return {
         "holidays": [_serialize_holiday(h) for h in holidays],
@@ -250,10 +268,10 @@ async def list_holidays(
 async def create_holiday(
     data: HolidayCreate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a custom holiday (admin only)."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
 
     if not _is_admin(user):
@@ -262,15 +280,14 @@ async def create_holiday(
     Holiday = _get_holiday_model()
 
     # Check for duplicate
-    existing = (
-        db.query(Holiday)
-        .filter(
+    existing_result = await db.execute(
+        select(Holiday).where(
             Holiday.organization_id == org_id,
             Holiday.holiday_date == data.holiday_date,
             Holiday.name == data.name,
         )
-        .first()
     )
+    existing = existing_result.scalars().first()
     if existing:
         raise HTTPException(
             status_code=409,
@@ -289,8 +306,8 @@ async def create_holiday(
         created_by_id=user.id,
     )
     db.add(holiday)
-    db.commit()
-    db.refresh(holiday)
+    await db.commit()
+    await db.refresh(holiday)
 
     return {
         "message": "Holiday created",
@@ -303,10 +320,10 @@ async def update_holiday(
     holiday_id: int,
     data: HolidayUpdate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update a holiday (admin only)."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
 
     if not _is_admin(user):
@@ -314,11 +331,10 @@ async def update_holiday(
 
     Holiday = _get_holiday_model()
 
-    holiday = (
-        db.query(Holiday)
-        .filter(Holiday.id == holiday_id, Holiday.organization_id == org_id)
-        .first()
+    result = await db.execute(
+        select(Holiday).where(Holiday.id == holiday_id, Holiday.organization_id == org_id)
     )
+    holiday = result.scalars().first()
     if not holiday:
         raise HTTPException(status_code=404, detail="Holiday not found")
 
@@ -326,8 +342,8 @@ async def update_holiday(
     for field, value in update_data.items():
         setattr(holiday, field, value)
 
-    db.commit()
-    db.refresh(holiday)
+    await db.commit()
+    await db.refresh(holiday)
 
     return {
         "message": "Holiday updated",
@@ -339,10 +355,10 @@ async def update_holiday(
 async def delete_holiday(
     holiday_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete a holiday (admin only)."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
 
     if not _is_admin(user):
@@ -350,16 +366,15 @@ async def delete_holiday(
 
     Holiday = _get_holiday_model()
 
-    holiday = (
-        db.query(Holiday)
-        .filter(Holiday.id == holiday_id, Holiday.organization_id == org_id)
-        .first()
+    result = await db.execute(
+        select(Holiday).where(Holiday.id == holiday_id, Holiday.organization_id == org_id)
     )
+    holiday = result.scalars().first()
     if not holiday:
         raise HTTPException(status_code=404, detail="Holiday not found")
 
-    db.delete(holiday)
-    db.commit()
+    await db.delete(holiday)
+    await db.commit()
 
     return {"message": "Holiday deleted"}
 
@@ -401,36 +416,38 @@ async def list_pto_requests(
     status: Optional[str] = Query(None, description="Filter by status"),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     List PTO requests.
     Non-admins see only their own. Admins can filter by user_id.
     """
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
     PTORequest = _get_pto_model()
 
-    query = db.query(PTORequest).filter(
+    stmt = select(PTORequest).where(
         PTORequest.organization_id == org_id,
         PTORequest.is_active == True,
     )
 
     if _is_admin(user) and user_id:
-        query = query.filter(PTORequest.user_id == user_id)
+        stmt = stmt.where(PTORequest.user_id == user_id)
     elif not _is_admin(user):
-        query = query.filter(PTORequest.user_id == user.id)
+        stmt = stmt.where(PTORequest.user_id == user.id)
     # else: admin with no user_id filter sees all
 
     if status:
-        query = query.filter(PTORequest.status == status)
+        stmt = stmt.where(PTORequest.status == status)
 
     if start_date:
-        query = query.filter(PTORequest.end_date >= start_date)
+        stmt = stmt.where(PTORequest.end_date >= start_date)
     if end_date:
-        query = query.filter(PTORequest.start_date <= end_date)
+        stmt = stmt.where(PTORequest.start_date <= end_date)
 
-    pto_list = query.order_by(PTORequest.start_date.desc()).all()
+    stmt = stmt.order_by(PTORequest.start_date.desc())
+    result = await db.execute(stmt)
+    pto_list = result.scalars().all()
 
     return {
         "pto_requests": [_serialize_pto(p) for p in pto_list],
@@ -442,17 +459,16 @@ async def list_pto_requests(
 async def create_pto_request(
     data: PTORequestCreate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Submit a PTO request."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
     PTORequest = _get_pto_model()
 
     # Check for overlapping approved/pending PTO
-    overlap = (
-        db.query(PTORequest)
-        .filter(
+    overlap_result = await db.execute(
+        select(PTORequest).where(
             PTORequest.organization_id == org_id,
             PTORequest.user_id == user.id,
             PTORequest.is_active == True,
@@ -460,8 +476,8 @@ async def create_pto_request(
             PTORequest.start_date <= data.end_date,
             PTORequest.end_date >= data.start_date,
         )
-        .first()
     )
+    overlap = overlap_result.scalars().first()
     if overlap:
         raise HTTPException(
             status_code=409,
@@ -481,8 +497,8 @@ async def create_pto_request(
         status="pending",
     )
     db.add(pto)
-    db.commit()
-    db.refresh(pto)
+    await db.commit()
+    await db.refresh(pto)
 
     return {
         "message": "PTO request submitted",
@@ -494,18 +510,17 @@ async def create_pto_request(
 async def get_pto_request(
     pto_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get a single PTO request."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
     PTORequest = _get_pto_model()
 
-    pto = (
-        db.query(PTORequest)
-        .filter(PTORequest.id == pto_id, PTORequest.organization_id == org_id)
-        .first()
+    result = await db.execute(
+        select(PTORequest).where(PTORequest.id == pto_id, PTORequest.organization_id == org_id)
     )
+    pto = result.scalars().first()
     if not pto:
         raise HTTPException(status_code=404, detail="PTO request not found")
 
@@ -521,22 +536,21 @@ async def update_pto_request(
     pto_id: int,
     data: PTORequestUpdate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update a pending PTO request (own only, must still be pending)."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
     PTORequest = _get_pto_model()
 
-    pto = (
-        db.query(PTORequest)
-        .filter(
+    result = await db.execute(
+        select(PTORequest).where(
             PTORequest.id == pto_id,
             PTORequest.organization_id == org_id,
             PTORequest.user_id == user.id,
         )
-        .first()
     )
+    pto = result.scalars().first()
     if not pto:
         raise HTTPException(status_code=404, detail="PTO request not found")
 
@@ -550,8 +564,8 @@ async def update_pto_request(
     for field, value in update_data.items():
         setattr(pto, field, value)
 
-    db.commit()
-    db.refresh(pto)
+    await db.commit()
+    await db.refresh(pto)
 
     return {
         "message": "PTO request updated",
@@ -619,10 +633,10 @@ async def deny_pto_request(
     pto_id: int,
     data: PTOReviewRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Deny a PTO request (admin only)."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_async(request)
     org_id = _get_org_id(user)
 
     if not _is_admin(user):
@@ -630,14 +644,13 @@ async def deny_pto_request(
 
     PTORequest = _get_pto_model()
 
-    pto = (
-        db.query(PTORequest)
-        .filter(
+    result = await db.execute(
+        select(PTORequest).where(
             PTORequest.id == pto_id,
             PTORequest.organization_id == org_id,
         )
-        .first()
     )
+    pto = result.scalars().first()
     if not pto:
         raise HTTPException(status_code=404, detail="PTO request not found")
 
@@ -652,8 +665,8 @@ async def deny_pto_request(
     pto.reviewed_at = datetime.now(timezone.utc)
     pto.review_notes = data.notes
 
-    db.commit()
-    db.refresh(pto)
+    await db.commit()
+    await db.refresh(pto)
 
     return {
         "message": "PTO request denied",
