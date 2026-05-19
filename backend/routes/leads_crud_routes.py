@@ -331,21 +331,42 @@ async def get_leads(
 
         # Resolve org-wide Production Assistant 1 via ORM (EncryptedString needs ORM decryption)
         pa_name = None
-        try:
-            org_id = current_user.organization_id or 1
-            pa_row = db.execute(text("""
-                SELECT dra.user_id
-                FROM default_role_assignments dra
-                JOIN roles r ON r.id = dra.role_id
-                WHERE dra.organization_id = :org_id AND r.name = 'Production Assistant 1'
-                LIMIT 1
-            """), {"org_id": org_id}).fetchone()
-            if pa_row:
-                pa_user = db.query(User).filter(User.id == pa_row[0]).first()
-                if pa_user:
-                    pa_name = pa_user.full_name or None
-        except Exception as e:
-            logger.debug(f"Production assistant lookup: {e}")
+        org_id = getattr(current_user, 'organization_id', None)
+        if org_id:
+            try:
+                tables_exist = db.execute(text(
+                    "SELECT to_regclass('public.default_role_assignments') IS NOT NULL "
+                    "AND to_regclass('public.roles') IS NOT NULL"
+                )).scalar()
+                if tables_exist:
+                    pa_row = db.execute(text("""
+                        SELECT dra.user_id
+                        FROM default_role_assignments dra
+                        JOIN roles r ON r.id = dra.role_id
+                        WHERE dra.organization_id = :org_id AND r.name = 'Production Assistant 1'
+                        LIMIT 1
+                    """), {"org_id": org_id}).fetchone()
+                    if pa_row and pa_row[0] is not None:
+                        try:
+                            pa_user = db.query(User).filter(User.id == pa_row[0]).first()
+                            if pa_user:
+                                try:
+                                    pa_name = pa_user.full_name or None
+                                except Exception as fn_err:
+                                    logger.debug(f"Production assistant full_name decrypt failed: {fn_err}")
+                                    pa_name = None
+                        except Exception as q_err:
+                            logger.debug(f"Production assistant ORM lookup failed: {q_err}")
+                            try:
+                                db.rollback()
+                            except Exception:
+                                pass
+            except Exception as e:
+                logger.debug(f"Production assistant lookup skipped: {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
         # Convert to dict manually to avoid Pydantic validation issues
         result = []
@@ -406,11 +427,17 @@ async def get_leads(
             }
             result.append(lead_dict)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
-        logger.error(f"get_leads error: {e}")
+        logger.error(f"get_leads error ({type(e).__name__}): {e}")
         logger.error(f"get_leads traceback: {traceback.format_exc()}")
-        raise
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Failed to list leads: {type(e).__name__}")
 
 
 @router.get("/search")
