@@ -116,6 +116,45 @@ class SMSOptOutManager:
                 self.db.rollback()
                 logger.error(f"Failed to persist opt-out to DB: {e}")
 
+            # SMS-003: also mirror into contact_dnc_status so DNC-aware code paths
+            # (power dialer, voicemail drops, broadcast SMS) reject this number
+            # immediately.  ContactDNCStatus currently lacks ``revoked_at`` and
+            # ``permanent`` columns — see TODO below.
+            #
+            # TODO(migration): add the following columns to contact_dnc_status:
+            #   ALTER TABLE contact_dnc_status
+            #     ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ,
+            #     ADD COLUMN IF NOT EXISTS permanent  BOOLEAN NOT NULL DEFAULT FALSE,
+            #     ADD COLUMN IF NOT EXISTS source     VARCHAR(50);
+            # Then update this INSERT to populate revoked_at + permanent=TRUE.
+            try:
+                from sqlalchemy import text as _text
+                org_id_int = int(tenant_id) if tenant_id and str(tenant_id).isdigit() else None
+                self.db.execute(
+                    _text("""
+                        INSERT INTO contact_dnc_status (phone_number, reason, organization_id, created_at)
+                        VALUES (:phone, :reason, :org_id, NOW())
+                        ON CONFLICT (phone_number, organization_id)
+                            DO UPDATE SET reason = EXCLUDED.reason
+                    """),
+                    {
+                        "phone": normalized,
+                        "reason": f"SMS_OPTOUT:{reason[:80]} (permanent=TRUE,revoked_at=NOW())",
+                        "org_id": org_id_int,
+                    },
+                )
+                self.db.commit()
+            except Exception as dnc_err:
+                # Non-fatal — sms_opt_outs is the authoritative store; DNC mirror is best-effort.
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
+                logger.warning(
+                    "SMS-003: failed to mirror opt-out into contact_dnc_status: %s",
+                    dnc_err,
+                )
+
         return record
 
     def opt_in(self, phone: str, tenant_id: Optional[str] = None) -> bool:

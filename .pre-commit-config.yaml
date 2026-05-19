@@ -62,7 +62,18 @@ repos:
           Stops the auth-duplication regression. There are already ~146 copies
           of get_current_user across the codebase; do not add more in
           backend/routes/ or backend/api/. Import from auth.dependencies instead.
-        entry: bash -c 'files=$(git diff --cached --name-only --diff-filter=AM | grep -E "^backend/(routes|api)/.*\.py$" || true); if [ -z "$files" ]; then exit 0; fi; bad=""; for f in $files; do if grep -nE "^[[:space:]]*(async[[:space:]]+)?def[[:space:]]+get_current_user[[:space:]]*\(" "$f" >/dev/null 2>&1; then bad="$bad $f"; fi; done; if [ -n "$bad" ]; then echo "ERROR: new get_current_user definition(s) detected in:$bad"; echo "Import from auth.dependencies instead of redefining."; exit 1; fi; exit 0'
+        entry: >-
+          bash -c 'files=$(git diff --cached --name-only --diff-filter=AM
+          | grep -E "^backend/(routes|api)/.*\.py$" || true);
+          if [ -z "$files" ]; then exit 0; fi;
+          bad="";
+          for f in $files; do
+          if grep -nE "^[[:space:]]*(async[[:space:]]+)?def[[:space:]]+get_current_user[[:space:]]*\(" "$f" >/dev/null 2>&1;
+          then bad="$bad $f"; fi; done;
+          if [ -n "$bad" ]; then
+          echo "ERROR new get_current_user definition(s) detected in$bad";
+          echo "Import from auth.dependencies instead of redefining.";
+          exit 1; fi; exit 0'
         language: system
         pass_filenames: false
 

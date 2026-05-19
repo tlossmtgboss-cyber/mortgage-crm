@@ -1388,6 +1388,14 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     except Exception as e:
         logger.warning(f"AMD voicemail routes skipped: {e}")
 
+    # Slybroadcast delivery-status webhook (TCPA-D4)
+    try:
+        from routes.slybroadcast_webhook_routes import router as slybroadcast_webhook_router
+        app.include_router(slybroadcast_webhook_router, tags=["Slybroadcast Webhook"])
+        logger.info("Slybroadcast webhook routes loaded")
+    except Exception as e:
+        logger.warning(f"Slybroadcast webhook routes skipped: {e}")
+
     # Speed to Lead
     try:
         from routes.speed_to_lead_routes import router as speed_to_lead_router
