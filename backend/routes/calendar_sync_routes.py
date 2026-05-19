@@ -45,7 +45,7 @@ def _safe_decrypt(value: str) -> str:
         return value
     try:
         return decrypt_value(value)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         # Value is not a valid Fernet token — treat as plaintext (pre-migration)
         logger.debug("Token appears to be plaintext (pre-encryption migration); returning as-is")
         return value
@@ -1491,7 +1491,7 @@ def _is_safe_redirect(url: str) -> bool:
             if url.startswith(prefix):
                 return True
         return False
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return False
 
 

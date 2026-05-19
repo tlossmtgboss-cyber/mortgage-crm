@@ -345,18 +345,18 @@ def configure_graceful_degradation(app: FastAPI, SessionLocal, health_checker):
                 _redis_url = os.getenv("REDIS_URL")
                 if _redis_url:
                     _redis_client = _redis_lib.from_url(_redis_url, socket_timeout=5)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             try:
                 _db = SessionLocal()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             _breaker = None
             try:
                 from services.circuit_breaker import CircuitBreaker
                 _breaker = CircuitBreaker(name="anthropic_api", failure_threshold=5, recovery_timeout=30)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             try:
@@ -377,7 +377,7 @@ def configure_graceful_degradation(app: FastAPI, SessionLocal, health_checker):
                 if _db:
                     try:
                         _db.close()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
         _startup_degradation_check = _startup_check
@@ -397,7 +397,7 @@ def configure_graceful_degradation(app: FastAPI, SessionLocal, health_checker):
                     if _db:
                         try:
                             _db.close()
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
                             pass
 
             health_checker.register_check("graceful_degradation", check_degradation_level)

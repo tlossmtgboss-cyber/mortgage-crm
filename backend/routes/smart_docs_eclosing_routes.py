@@ -404,7 +404,7 @@ async def handle_webhook(
 
     try:
         raw_body = await request.body()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="Failed to read request body")
 
     signature = request.headers.get("X-Webhook-Signature", "")

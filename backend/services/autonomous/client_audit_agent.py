@@ -502,7 +502,7 @@ class ClientAuditAgent:
             from services.autonomous.confidence_graduation import ConfidenceGraduationService
             grad_service = ConfidenceGraduationService(self.db)
             needs_approval = grad_service.requires_approval(self.org_id, "create_task")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # Default to requiring approval
 
         # Map severity to task priority (Task.priority is a String)

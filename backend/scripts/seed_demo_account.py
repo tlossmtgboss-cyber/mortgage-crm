@@ -691,7 +691,7 @@ def _nuke_demo_org(db, org_id):
             db.execute(text("SAVEPOINT nuke_sp"))
             db.execute(text(f"DELETE FROM {table} WHERE organization_id = :oid"), {"oid": org_id})
             db.execute(text("RELEASE SAVEPOINT nuke_sp"))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             db.execute(text("ROLLBACK TO SAVEPOINT nuke_sp"))
 
     # Users (delete subscriptions first via user_id)
@@ -701,7 +701,7 @@ def _nuke_demo_org(db, org_id):
         for uid in user_ids:
             db.execute(text("DELETE FROM subscriptions WHERE user_id = :uid"), {"uid": uid})
         db.execute(text("RELEASE SAVEPOINT nuke_users_sp"))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         db.execute(text("ROLLBACK TO SAVEPOINT nuke_users_sp"))
 
     db.execute(text("DELETE FROM users WHERE organization_id = :oid"), {"oid": org_id})

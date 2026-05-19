@@ -184,8 +184,9 @@ class RefinanceOutreachService:
             recipient_tz_name = resolve_recipient_timezone(opportunity.client_phone)
             recipient_tz = ZoneInfo(recipient_tz_name)
             recipient_hour = datetime.now(timezone.utc).astimezone(recipient_tz).hour
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Fallback to server time if timezone resolution fails
+            logger.exception("unhandled exception")
             recipient_hour = datetime.now().hour
             recipient_tz_name = "server"
 

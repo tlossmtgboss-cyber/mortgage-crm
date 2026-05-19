@@ -218,7 +218,7 @@ def _get_opt_out_count(db: Session, days: int, user_id: Optional[int]) -> int:
             {"days": days},
         ).fetchone()
         return row[0] if row else 0
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return 0
 
 
@@ -233,5 +233,5 @@ def _get_compliance_blocks(db: Session, days: int, user_id: Optional[int]) -> in
             params,
         ).fetchone()
         return row[0] if row else 0
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return 0

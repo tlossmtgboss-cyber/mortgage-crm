@@ -182,7 +182,7 @@ def _log_execution(db: Session, result: AgentExecutionResult):
         logger.warning(f"Failed to log agent execution: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -213,7 +213,7 @@ def run_agent_for_org(
             skip_db = SessionLocal()
             _log_execution(skip_db, result)
             skip_db.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return result
 
@@ -247,7 +247,7 @@ def run_agent_for_org(
         try:
             db.rollback()
             _log_execution(db, result)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     finally:
         db.close()

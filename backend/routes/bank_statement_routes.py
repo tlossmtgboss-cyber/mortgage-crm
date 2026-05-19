@@ -425,7 +425,7 @@ async def download_worksheet(
             ip_address=_get_client_ip(request),
             details={"worksheet_id": worksheet_id, "borrower_name": worksheet.borrower_name},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return StreamingResponse(

@@ -221,7 +221,8 @@ class ContextLogger:
         success = True
         try:
             yield
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             success = False
             raise
         finally:

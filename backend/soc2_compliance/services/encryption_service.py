@@ -146,7 +146,7 @@ class EncryptionService:
             decoded = base64.urlsafe_b64decode(value.encode("utf-8"))
             # Fernet tokens start with version byte 0x80
             return decoded[0:1] == b'\x80'
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return False
 
     @staticmethod

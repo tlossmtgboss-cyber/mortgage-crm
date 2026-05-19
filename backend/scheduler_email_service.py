@@ -47,7 +47,7 @@ def _resolve_organizer_name(team_member_name: Optional[str], organization_id: Op
             from services.company_name_resolver import resolve_company_name
             with SessionLocal() as db:
                 return resolve_company_name(db, organization_id)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     return os.getenv("COMPANY_NAME", "The Tim Loss Team")
 

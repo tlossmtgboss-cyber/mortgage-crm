@@ -310,7 +310,7 @@ async def receive_audit_log(
         logger.exception("[SecurityAudit] Failed to commit audit batch: %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return AuditLogResponse(
             status="ok", received=len(entries), persisted=0, chain_valid=chain_valid,

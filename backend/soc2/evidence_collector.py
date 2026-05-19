@@ -114,7 +114,7 @@ def _try_connect_db() -> bool:
         _db_session = Session()
         _db_session.execute(text("SELECT 1"))
         return True
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         _db_session = None
         return False
 
@@ -613,7 +613,7 @@ def collect_vendor_registry() -> EvidenceSection:
         if m:
             try:
                 vendors = ast.literal_eval(m.group(1))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 vendors = [{"note": "Could not parse vendor list from seed script"}]
 
     return EvidenceSection(

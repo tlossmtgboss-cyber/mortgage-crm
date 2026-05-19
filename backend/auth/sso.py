@@ -569,7 +569,7 @@ def process_saml_response(
                     raise ValueError("SAML Assertion has expired (NotOnOrAfter)")
             except ValueError:
                 raise  # re-raise our own ValueError
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 logger.warning(f"Could not parse NotOnOrAfter: {not_on_or_after}")
 
         # Audience restriction

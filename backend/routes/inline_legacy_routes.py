@@ -2455,17 +2455,17 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
             try:
                 from tasks.salesforce_sync_tasks import register_salesforce_sync_jobs
                 register_salesforce_sync_jobs(scheduler)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             try:
                 from tasks.sla_tasks import setup_sla_scheduler
                 setup_sla_scheduler(scheduler)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             try:
                 from tasks.ops_manager_tasks import setup_ops_manager_scheduler
                 setup_ops_manager_scheduler(scheduler)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # Ensure scheduler is started after all jobs registered

@@ -114,7 +114,7 @@ class KBAService:
         try:
             normalized = answer.lower().strip().encode("utf-8")
             return bcrypt.checkpw(normalized, hashed.encode("utf-8"))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return False
 
     # ------------------------------------------------------------------

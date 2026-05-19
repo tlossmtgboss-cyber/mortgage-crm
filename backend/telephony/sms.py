@@ -65,7 +65,7 @@ def _get_client(api_key: Optional[str] = None):
             import telnyx
             _client = telnyx.Telnyx(api_key=key, timeout=10.0)
             return _client
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.exception("Failed to initialise Telnyx client")
             return None
 
@@ -211,10 +211,11 @@ def _record_to_panel(
                 organization_id=organization_id,
             )
             _db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             try:
                 _db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         finally:
             _db.close()

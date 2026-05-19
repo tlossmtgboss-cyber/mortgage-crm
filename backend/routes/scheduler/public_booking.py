@@ -525,7 +525,8 @@ async def get_public_booking_page(
             if any(t.organization_id is None for t in types):
                 try:
                     db.commit()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     db.rollback()
             for t in types:
                 appointment_types.append({

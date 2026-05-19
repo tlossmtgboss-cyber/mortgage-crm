@@ -291,7 +291,8 @@ def _get_time_bucket(tz_str: str) -> str:
         from zoneinfo import ZoneInfo
         tz = ZoneInfo(tz_str)
         local_hour = datetime.now(tz).hour
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         local_hour = datetime.now(timezone.utc).hour  # Fallback to UTC
 
     if local_hour < 8 or local_hour >= 21:
@@ -884,7 +885,7 @@ def _log_engagement_event(
         logger.warning("Failed to log engagement event: %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -914,7 +915,7 @@ def _log_activity(
         logger.debug("Failed to log activity: %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -1041,7 +1042,7 @@ def _create_lo_task(
         logger.debug("Failed to create LO task: %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -1286,7 +1287,7 @@ async def orchestrate_lead_engagement(
             )
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # 9. Determine and schedule next touchpoint
@@ -1575,10 +1576,11 @@ async def process_engagement_queue(
                         WHERE id = :eid
                     """), {"eid": event_id})
                     db.commit()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     try:
                         db.rollback()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
             except Exception as e:

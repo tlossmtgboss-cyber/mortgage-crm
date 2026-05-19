@@ -2046,7 +2046,7 @@ class MergeIntelligenceService(OrgAwareService):
         try:
             reader = PdfReader(io.BytesIO(pdf_content))
             return len(reader.pages)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return 0
 
     def _run_quality_check(self, pdf_content: bytes) -> QualityCheckResult:
@@ -2100,7 +2100,8 @@ class MergeIntelligenceService(OrgAwareService):
                             issues.append(
                                 "First page has no extractable text (may be scanned/image)"
                             )
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         issues.append("Could not extract text from first page")
 
             except Exception as e:

@@ -119,7 +119,8 @@ class DocumentReviewPipeline:
         try:
             document.status = ProcessingStatus.SCANNING.value
             self.db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to set SCANNING status for document %s", document_id)
             return ProcessingResult(
@@ -160,7 +161,8 @@ class DocumentReviewPipeline:
             document.status = ProcessingStatus.PROCESSING.value
             try:
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
                 logger.exception("Failed to set PROCESSING status for document %s", document_id)
                 raise
@@ -231,7 +233,8 @@ class DocumentReviewPipeline:
 
             try:
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
                 logger.exception("Failed to commit final decision for document %s", document_id)
                 raise
@@ -262,7 +265,8 @@ class DocumentReviewPipeline:
             try:
                 document.status = ProcessingStatus.ERROR.value
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
                 logger.exception("Failed to record error status for document %s", document_id)
 
@@ -432,7 +436,8 @@ class DocumentReviewPipeline:
         document.reviewed_by = "SYSTEM"
         try:
             self.db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to commit rejection for document %s", document.id)
 
@@ -501,7 +506,8 @@ class DocumentReviewPipeline:
         self.db.add(event)
         try:
             self.db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to log policy event for document %s", document_id)
 
@@ -661,7 +667,8 @@ class DocumentReviewPipeline:
         document.status = ProcessingStatus.UPLOADED.value
         try:
             self.db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             raise RuntimeError(f"Failed to reset document {document_id} state for reprocessing")
 
@@ -719,7 +726,8 @@ class DocumentReviewPipeline:
 
         try:
             self.db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to commit manual review for document %s", document_id)
             raise

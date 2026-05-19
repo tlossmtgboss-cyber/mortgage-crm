@@ -281,7 +281,8 @@ Respond ONLY with JSON: {{"value": "extracted_value_or_null", "confident": true_
     try:
         parsed = json.loads(response.content.strip())
         value = parsed.get("value")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         value = None
 
     updated_slots = {**state["slots"]}

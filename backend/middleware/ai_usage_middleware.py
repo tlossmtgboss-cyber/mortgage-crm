@@ -235,7 +235,7 @@ class AIUsageTracker:
                 logger.debug(f"ai_cost_records insert skipped: {cost_err}")
                 try:
                     self.db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
         except Exception as e:
@@ -505,7 +505,7 @@ def log_ai_usage(
             logger.debug(f"ai_cost_records insert skipped: {cost_err}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return request_id

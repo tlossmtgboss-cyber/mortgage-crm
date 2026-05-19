@@ -146,12 +146,12 @@ class SMSScheduler:
             logger.warning(f"Failed to persist SMS job {job.job_id}: {e}")
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     def _load_jobs(self) -> None:
@@ -205,7 +205,7 @@ class SMSScheduler:
             self._loaded_from_db = True
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     def _ensure_loaded(self) -> None:
@@ -417,7 +417,7 @@ class SMSScheduler:
         try:
             tz = pytz.timezone(timezone)
             return tz.localize(dt).astimezone(pytz.utc).replace(tzinfo=None)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.warning(f"Invalid timezone '{timezone}', treating as UTC")
             return dt
 

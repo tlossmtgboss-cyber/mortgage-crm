@@ -69,7 +69,8 @@ async def push_event_to_salesforce(
             WHERE e.id = :eid
         """), {"eid": crm_event_id}).fetchone()
         org_id = row[0] if row else None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         org_id = None
     finally:
         lookup_db.close()

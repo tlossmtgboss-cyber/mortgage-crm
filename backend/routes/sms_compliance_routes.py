@@ -237,15 +237,17 @@ async def sms_inbound_webhook(
             "org_id": org_id, "now": datetime.now(timezone.utc),
         })
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
 
     # ── STOP keywords ──
     if keyword in STOP_KEYWORDS:
         try:
             _opt_out(db, from_number, org_id, keyword)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Still send the legally-required STOP confirmation
+            logger.exception("unhandled exception")
             await _send_sms(to=from_number, from_=to_number, body=STOP_REPLY)
             # Return 500 so Telnyx retries the webhook — opt-out MUST persist
             return JSONResponse(
@@ -264,7 +266,8 @@ async def sms_inbound_webhook(
     if keyword in START_KEYWORDS:
         try:
             _opt_in(db, from_number, org_id, keyword)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             await _send_sms(to=from_number, from_=to_number, body=START_REPLY)
             return JSONResponse(
                 {"status": "error", "detail": "opt-in failed to persist"},

@@ -155,7 +155,8 @@ async def get_org_booking_branding(
     if isinstance(testimonials, str):
         try:
             testimonials = json.loads(testimonials)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             testimonials = []
 
     return {
@@ -217,7 +218,8 @@ async def get_lo_booking_branding(
     if isinstance(testimonials, str):
         try:
             testimonials = json.loads(testimonials)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             testimonials = []
 
     lo_name_parts = [lo_row[1] or "", lo_row[2] or ""]
@@ -313,7 +315,8 @@ async def update_booking_branding(
     if isinstance(testimonials, str):
         try:
             testimonials = json.loads(testimonials)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             testimonials = []
 
     return {
@@ -414,7 +417,8 @@ async def preview_booking_branding(
     if isinstance(testimonials, str):
         try:
             testimonials = json.loads(testimonials)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             testimonials = []
 
     booking_url = None
@@ -466,14 +470,14 @@ def register_booking_branding_routes(app, get_db=None, get_current_user=None):
                     conn.execute(_text(
                         f"ALTER TABLE organizations ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
                     ))
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             try:
                 conn.execute(_text(
                     "CREATE UNIQUE INDEX IF NOT EXISTS ix_organizations_booking_slug "
                     "ON organizations (booking_slug) WHERE booking_slug IS NOT NULL"
                 ))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             conn.commit()
     except Exception as e:

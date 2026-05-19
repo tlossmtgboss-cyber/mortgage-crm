@@ -173,7 +173,7 @@ def process_webhook_event(
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, organization_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
     try:
         # Get connection and sync event

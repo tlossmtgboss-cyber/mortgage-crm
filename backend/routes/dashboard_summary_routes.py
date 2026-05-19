@@ -56,7 +56,7 @@ def _cache_get(org_id: int) -> dict | None:
         redis_val = cache_get(f"pipeline:dashboard:org:{org_id}:summary")
         if redis_val is not None:
             return redis_val
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     # In-memory fallback
     with _cache_lock:
@@ -75,7 +75,7 @@ def _cache_set(org_id: int, data: dict) -> None:
     try:
         from services.cache_service import cache_set
         cache_set(f"pipeline:dashboard:org:{org_id}:summary", data, ttl=_CACHE_TTL_SECONDS)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     # In-memory fallback
     with _cache_lock:
@@ -93,7 +93,7 @@ def _cache_invalidate(org_id: int) -> bool:
     try:
         from services.cache_service import cache_delete
         cache_delete(f"pipeline:dashboard:org:{org_id}:summary")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     with _cache_lock:
         return _cache.pop(org_id, None) is not None
@@ -229,7 +229,7 @@ async def get_dashboard_summary(
                 )
                 .scalar()
             ) or 0
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         result = {

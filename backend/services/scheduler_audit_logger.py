@@ -207,12 +207,12 @@ def _extract_request_info(request: Any) -> Dict[str, Optional[str]]:
     try:
         if hasattr(request, "client") and request.client:
             ip = request.client.host
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     try:
         if hasattr(request, "headers"):
             ua = str(request.headers.get("user-agent", ""))[:255] or None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     return {"ip_address": ip, "user_agent": ua}
 

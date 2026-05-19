@@ -1,0 +1,86 @@
+# .github/workflows/golden-tests.yml
+#
+# Golden test gate for Perennia AI backend.
+#
+# These tests are the "thin red line": auth, lead CRUD, loan state transitions,
+# portal login, and pipeline load. If any of these fail, no PR may merge.
+#
+# The existing test.yml has a `golden-flow-tests` job that selects by pytest
+# marker (`-m "golden or critical"`). This workflow is intentionally distinct:
+# it selects by file glob (`test_golden_*.py`) and pins dependencies from
+# requirements.lock so the golden suite is reproducible bit-for-bit.
+
+name: Golden Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: golden-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golden-tests:
+    name: Golden tests (file-pattern, locked deps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_perennia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcairo2-dev pkg-config
+
+      - name: Install pinned dependencies from requirements.lock
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          # Ensure pytest tooling is present even if not in the lock
+          pip install pytest pytest-asyncio pytest-timeout httpx
+
+      - name: Discover golden tests
+        working-directory: ./backend
+        run: |
+          python -m pytest tests/test_golden_*.py --collect-only -q
+
+      - name: Run golden tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_perennia
+          TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test_perennia
+          TESTING: "1"
+          SECRET_KEY: ci-test-secret-key
+          DATA_ENCRYPTION_KEY: ci-test-encryption-key-32-bytes-min
+        run: |
+          python -m pytest tests/test_golden_*.py -v --maxfail=3

@@ -929,7 +929,7 @@ async def available_time_slots_function(
         data = {}
         try:
             data = await request.json()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         date = data.get("date")
 

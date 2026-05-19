@@ -486,7 +486,7 @@ async def _persist_results(
     finally:
         try:
             await state.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

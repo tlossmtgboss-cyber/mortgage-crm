@@ -900,7 +900,8 @@ def analyze_trends(
             f"{cs_dt.strftime(fmt_display)} – {ce_dt.strftime(fmt_display)}, {ce_dt.year}"
             f" vs {ps_dt.strftime(fmt_display)} – {pe_dt.strftime(fmt_display)}, {pe_dt.year}"
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         period_label = f"{cs} – {ce} vs {ps} – {pe}"
 
     # 5. Resolve email address

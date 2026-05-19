@@ -243,7 +243,7 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
                 ).fetchone()
                 if _org_row:
                     _org_id = _org_row[0]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             _handler = CampaignReplyHandler()
@@ -449,7 +449,7 @@ def _store_panel_inbound(
                 ).fetchone()
                 if row:
                     org_id = row[0]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         db.execute(

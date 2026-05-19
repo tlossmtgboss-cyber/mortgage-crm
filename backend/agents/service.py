@@ -24,6 +24,13 @@ from .anthropic_client import get_anthropic_client, get_async_anthropic_client
 from .orchestrator import run_orchestrator, OrchestratorSession
 from .state import create_initial_state, QueryIntent
 
+# D3: governance hooks — cost / compliance / hallucination guardrails
+try:
+    from .orchestration.governance_hooks import run_post_response_governance
+    _GOVERNANCE_HOOKS_AVAILABLE = True
+except Exception:  # pragma: no cover - never break agent path
+    _GOVERNANCE_HOOKS_AVAILABLE = False
+
 # Import optimized prompt system (local to agents package)
 try:
     from .prompt_integration import OptimizedPromptService
@@ -324,6 +331,23 @@ class AIAgentService:
 
             # Log the interaction
             await self._log_interaction(message, result)
+
+            # D3: post-response governance (compliance + token + hallucination)
+            if _GOVERNANCE_HOOKS_AVAILABLE:
+                try:
+                    _response_text = result.get("response", "") if isinstance(result, dict) else ""
+                    _usage = result.get("usage", {}) if isinstance(result, dict) else {}
+                    run_post_response_governance(
+                        agent_id=str(getattr(self.current_user, "id", "unknown")),
+                        agent_role=getattr(self.current_user, "role", "loan_officer"),
+                        response_text=_response_text,
+                        input_tokens=int(_usage.get("input_tokens", 0) or 0),
+                        output_tokens=int(_usage.get("output_tokens", 0) or 0),
+                        context_data=result if isinstance(result, dict) else None,
+                    )
+                except Exception as _gov_exc:  # pragma: no cover
+                    logger.debug(f"Governance hook non-fatal failure: {_gov_exc}")
+            # TODO: wire compliance_guard hard-block escalation into existing alert channel
 
             return result
 

@@ -8,6 +8,21 @@ version = "1.0.0"
 description = "Perennia AI Mortgage CRM Backend"
 requires-python = ">=3.10"
 
+[tool.ruff]
+# Enforce no bare excepts going forward. Other agents may extend this block.
+target-version = "py310"
+
+[tool.ruff.lint]
+# E722 = bare `except:`; BLE001 = blind `except Exception:` without naming/handling.
+select = ["E722", "BLE001"]
+extend-select = []
+
+[tool.ruff.lint.per-file-ignores]
+# Migrations and tests are allowed to keep broad excepts.
+"migrations/**" = ["BLE001", "E722"]
+"alembic/**" = ["BLE001", "E722"]
+"tests/**" = ["BLE001", "E722"]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]

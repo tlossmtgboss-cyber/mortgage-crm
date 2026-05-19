@@ -976,6 +976,22 @@ app = create_app(
 )
 
 # ============================================================================
+# OWASP SECURITY HEADERS — registered after create_app so it sits at the top
+# of the middleware chain (Starlette runs middleware in reverse-add order, so
+# the last add_middleware call is the outermost wrapper). This guarantees the
+# headers are applied to every response, including those produced by other
+# middleware layers below it. Existing middleware (including the legacy
+# security_middleware.SecurityHeadersMiddleware wired up inside create_app) is
+# intentionally left untouched — this is additive.
+# ============================================================================
+try:
+    from middleware.security_headers import SecurityHeadersMiddleware as _OWASPSecurityHeadersMiddleware
+    app.add_middleware(_OWASPSecurityHeadersMiddleware)
+    logger.info("OWASP SecurityHeadersMiddleware registered")
+except Exception as _e:  # pragma: no cover — defensive, must never crash boot
+    logger.error(f"Failed to register OWASP SecurityHeadersMiddleware: {_e}")
+
+# ============================================================================
 # BACKWARD COMPATIBILITY RE-EXPORTS
 # ============================================================================
 # Many files do `from main import X`. These re-exports MUST remain.

@@ -796,7 +796,7 @@ async def update_settings_section(
         if section == "team" and payload.members:
             for member in payload.members:
                 invalidate_scheduler_config_cache(user_id=member.user_id, org_id=org_id)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Cache invalidation failure is non-critical
 
     # Return the updated section

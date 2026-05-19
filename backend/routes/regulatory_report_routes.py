@@ -527,7 +527,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
                 ip_address=_get_client_ip(request),
                 details={"report_id": report_id, "report_type": row[0], "record_count": row[6]},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return {

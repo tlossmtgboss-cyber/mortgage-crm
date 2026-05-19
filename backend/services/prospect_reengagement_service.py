@@ -991,7 +991,7 @@ def _check_tcpa_hours(phone: str) -> tuple:
             return False, f"Outside TCPA hours ({hour}:00 local in {tz_name}). Allowed: 8AM-9PM."
 
         return True, ""
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return True, ""
 
 
@@ -1143,7 +1143,7 @@ def run_prospect_reengagement_scan():
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(session, org_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             stale_days = cfg.get("stale_days") or 30
             daily_limit = cfg.get("daily_limit") or 20

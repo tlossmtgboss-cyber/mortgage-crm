@@ -56,7 +56,7 @@ def _get_cached(cache: dict, user_id: int, redis_prefix: str = "") -> dict | Non
             redis_val = cache_get(f"{redis_prefix}:{user_id}")
             if redis_val is not None:
                 return redis_val
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     # In-memory fallback
     entry = cache.get(user_id)
@@ -72,7 +72,7 @@ def _set_cached(cache: dict, user_id: int, data: dict, ttl: int, redis_prefix: s
         try:
             from services.cache_service import cache_set
             cache_set(f"{redis_prefix}:{user_id}", data, ttl=ttl)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     cache[user_id] = {"data": data, "expires": time.time() + ttl}
 

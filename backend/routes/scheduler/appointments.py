@@ -403,7 +403,7 @@ async def export_appointments_ics(
             ip_address=_get_client_ip(request),
             details={"start_date": start.isoformat(), "end_date": end.isoformat(), "appointment_count": len(appointments)},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return Response(

@@ -89,7 +89,8 @@ def _set_if_missing(record: logging.LogRecord, attr: str, getter) -> None:
         try:
             value = getter()
             setattr(record, attr, value)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             setattr(record, attr, None)
 
 

@@ -86,7 +86,8 @@ class CIWebSocketManager:
         for ws in list(self._connections.get(session_id, [])):
             try:
                 await ws.send_json(message)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 dead.append(ws)
         if dead:
             conns = self._connections.get(session_id, [])
@@ -504,7 +505,7 @@ async def handle_telnyx_webhook(
 
     try:
         session_id = RecordingConsentService.decode_client_state(client_state)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.error(f"Could not decode client_state: {client_state}")
         return {"status": "error", "message": "Invalid client_state"}
 

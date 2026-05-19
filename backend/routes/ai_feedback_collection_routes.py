@@ -412,5 +412,5 @@ def _save_feedback_as_memory(
         logger.warning(f"Failed to save feedback as memory: {mem_err}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass

@@ -226,7 +226,8 @@ def _check_1_1_tables_exist(db: Session) -> CheckResult:
         try:
             db.execute(text(f"SELECT 1 FROM {t} LIMIT 0"))
             existing.add(t)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
     missing = [t for t in all_tables if t not in existing]
     return CheckResult(
@@ -246,7 +247,8 @@ def _check_1_2_org_columns(db: Session) -> CheckResult:
     for t in SMS_TENANT_TABLES:
         try:
             db.execute(text(f"SELECT organization_id FROM {t} LIMIT 0"))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             missing_col.append(t)
     return CheckResult(
@@ -266,7 +268,8 @@ def _check_1_3_missing_org_tables(db: Session) -> CheckResult:
     for t in SMS_TABLES_MISSING_ORG:
         try:
             db.execute(text(f"SELECT organization_id FROM {t} LIMIT 0"))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             confirmed_missing.append(t)
     return CheckResult(
@@ -1089,7 +1092,7 @@ def _check_4_2_no_hardcoded_credentials() -> CheckResult:
                 for m in matches:
                     if "os.getenv" not in content[max(0, content.index(m) - 50):content.index(m)]:
                         findings.append(f"{filepath}: {m[:20]}...")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             continue
     return CheckResult(
         check_id="SMS-4.2",
@@ -1304,7 +1307,8 @@ def _check_5_4_archive_all_paths() -> CheckResult:
                 paths_with_panel_write.append(name)
             else:
                 paths_missing.append(name)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             paths_missing.append(f"{name} (import error)")
 
     return CheckResult(

@@ -196,7 +196,7 @@ def is_fernet_token(value: str) -> bool:
     try:
         decoded = base64.urlsafe_b64decode(value.encode("utf-8"))
         return decoded[0:1] == b"\x80"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return False
 
 
@@ -269,7 +269,7 @@ def rotate_table(engine, table_name, pk_col, encrypted_cols, new_fernet, old_fer
                     new_fernet.decrypt(value.encode("utf-8"))
                     skipped_values += 1
                     continue
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
                 # Try decrypting with old key and re-encrypting

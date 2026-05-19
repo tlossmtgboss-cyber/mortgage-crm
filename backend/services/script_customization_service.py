@@ -52,7 +52,7 @@ class ScriptCustomizationService:
             if row and row["config_data"]:
                 import json
                 return json.loads(row["config_data"]) if isinstance(row["config_data"], str) else row["config_data"]
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.debug("organization_ai_configs table not available, using defaults")
 
         return self._default_config(organization_id)

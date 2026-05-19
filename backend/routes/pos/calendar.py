@@ -225,9 +225,10 @@ async def create_hold(
                 try:
                     appointment_type_id = _resolve_appointment_type_id(mt, link)
                     break
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     continue
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             appointment_type_id = None
 
     held = await service._bridge.hold_slot(  # noqa: SLF001 — intentional cross-module

@@ -694,7 +694,7 @@ class SmartDocsRollbackService:
                     """)
                 ).scalar()
                 impact.income_calculations_affected = income_count or 0
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # Determine safety level (if not already blocked)

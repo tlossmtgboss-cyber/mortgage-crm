@@ -356,13 +356,14 @@ def _is_quiet_hours(tz_str: str) -> bool:
         if QUIET_HOURS_START <= now or now < QUIET_HOURS_END:
             return True
         return False
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         # Unknown timezone - use Eastern
+        logger.exception("unhandled exception")
         try:
             tz = ZoneInfo("America/New_York")
             now = datetime.now(tz).time()
             return QUIET_HOURS_START <= now or now < QUIET_HOURS_END
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return False
 
 
@@ -376,10 +377,11 @@ def _get_lead_timezone(db: Session, lead_id: Optional[int]) -> Optional[str]:
             {"id": lead_id},
         ).fetchone()
         return row[0] if row and row[0] else None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return None
 
@@ -482,10 +484,11 @@ def _log_compliance_check(
         )
         nested.commit()
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

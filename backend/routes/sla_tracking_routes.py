@@ -1342,7 +1342,7 @@ async def export_sla_report(
             ip_address=_get_client_ip(request),
             details={"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return StreamingResponse(

@@ -1478,7 +1478,7 @@ class Form1084Service:
             dec_part = abs_val - int_part
             formatted_int = f"{int_part:,}"
             return f"{sign}${formatted_int}.{str(dec_part.quantize(Decimal('0.01')))[2:]}"
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return ""
 
     @staticmethod
@@ -1488,7 +1488,7 @@ class Form1084Service:
             return Decimal("0")
         try:
             return Decimal(str(value))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return Decimal("0")
 
 

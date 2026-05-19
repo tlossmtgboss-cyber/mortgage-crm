@@ -277,7 +277,8 @@ def _create_crm_event(account: MSAccount, payload: dict[str, Any]) -> int:
         appt_id = appointment.id
         db.commit()
         return appt_id
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         raise
     finally:
@@ -317,7 +318,8 @@ def _update_crm_event(account: MSAccount, crm_event_id: int, payload: dict[str, 
 
         appt.last_synced_at = datetime.now(timezone.utc)
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         raise
     finally:
@@ -335,7 +337,8 @@ def _delete_crm_event(account: MSAccount, crm_event_id: int) -> None:
             appt.cancelled_at = datetime.now(timezone.utc)
             appt.cancellation_reason = "Deleted in Outlook"
             db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
     finally:
         db.close()

@@ -509,5 +509,5 @@ class ConversationMemory:
             logger.warning(f"Failed to cache conversation summary: {e}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass

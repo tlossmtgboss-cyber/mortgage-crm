@@ -211,7 +211,7 @@ class MumImportService:
             if commit:
                 try:
                     self.db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             result["errors"].append(str(e))
 
@@ -314,6 +314,6 @@ class MumImportService:
             if commit:
                 try:
                     self.db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             return {"created": False, "error": str(e)}

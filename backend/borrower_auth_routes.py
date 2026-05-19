@@ -237,7 +237,7 @@ def verify_borrower_token(token: str) -> Optional[dict]:
                 if token_blacklist.is_blacklisted(token):
                     logger.warning(f"Rejected blacklisted borrower token: {jti[:8]}...")
                     return None
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         return payload
     except jwt.ExpiredSignatureError:

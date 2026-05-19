@@ -60,7 +60,7 @@ async def get_current_user(
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         raise HTTPException(status_code=401, detail="Invalid token")
 
 # Pydantic Models

@@ -89,10 +89,8 @@ def get_db():
     yield from _get_db()
 
 
-async def get_current_user(request: Request = None, db: Session = Depends(get_db)):
-    """Resolve authenticated user via auth.dependencies (proper async DI)."""
-    auth_fn = _get_auth()
-    return await auth_fn(request=request, db=db)
+# Use canonical auth (deduped from local wrapper)
+from auth.dependencies import get_current_user  # noqa: E402
 
 
 # --- Routes ---
@@ -106,7 +104,8 @@ async def get_today_briefing(db: Session = Depends(get_db),
     user_tz = getattr(current_user, "timezone", None) or "America/Chicago"
     try:
         tz = ZoneInfo(user_tz)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         tz = ZoneInfo("America/Chicago")
 
     today = datetime.now(tz).date()
@@ -195,7 +194,8 @@ async def generate_now(
     user_tz = getattr(current_user, "timezone", None) or "America/Chicago"
     try:
         tz = ZoneInfo(user_tz)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         tz = ZoneInfo("America/Chicago")
 
     today = datetime.now(tz).date()

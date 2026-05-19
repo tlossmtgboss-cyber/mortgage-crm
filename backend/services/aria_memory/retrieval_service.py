@@ -195,7 +195,7 @@ class AriaRetrievalService:
                 return None
             parsed = json.loads(data)
             return RetrievalResult.model_validate(parsed)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return None
 
     def _cache_set(self, key: str, result: RetrievalResult) -> None:
@@ -203,7 +203,7 @@ class AriaRetrievalService:
             return
         try:
             self._redis.setex(key, CACHE_TTL_SECONDS, result.model_dump_json())
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.warning("Redis cache set failed for %s", key)
 
     def invalidate_cache(self, scope: str, tenant_id: int, borrower_id: int) -> None:
@@ -214,7 +214,7 @@ class AriaRetrievalService:
             keys = self._redis.keys(pattern)
             if keys:
                 self._redis.delete(*keys)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.warning("Redis cache invalidation failed")
 
     def _log_audit_event(self, **kwargs) -> None:

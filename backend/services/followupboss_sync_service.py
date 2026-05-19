@@ -327,7 +327,8 @@ class FollowUpBossSyncService:
             sync_event.completed_at = datetime.now(timezone.utc)
             try:
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
             return None, False
 
@@ -414,7 +415,8 @@ class FollowUpBossSyncService:
             sync_event.error_message = str(e)
             try:
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
             return None
 
@@ -538,7 +540,8 @@ class FollowUpBossSyncService:
             sync_event.completed_at = datetime.now(timezone.utc)
             try:
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
             return False
 
@@ -632,7 +635,8 @@ class FollowUpBossSyncService:
             sync_event.error_message = str(e)
             try:
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
             return False
 
@@ -712,7 +716,8 @@ class FollowUpBossSyncService:
             connection.last_error = str(e)
             try:
                 self.db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 self.db.rollback()
 
         return stats

@@ -92,7 +92,7 @@ async def get_pipeline_alerts(
 
     try:
         lock_rows = db.execute(lock_sql, lock_params).fetchall()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         lock_rows = []
 
     for row in lock_rows:
@@ -149,7 +149,7 @@ async def get_pipeline_alerts(
 
     try:
         stale_rows = db.execute(stale_sql, stale_params).fetchall()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         stale_rows = []
 
     for row in stale_rows:
@@ -200,7 +200,7 @@ async def get_pipeline_alerts(
 
     try:
         closing_rows = db.execute(closing_sql, closing_params).fetchall()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         closing_rows = []
 
     # Flag loans closing soon with fewer than 5 active documents

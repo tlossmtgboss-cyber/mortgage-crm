@@ -602,7 +602,7 @@ class MobileVoiceSession:
                     })
                     try:
                         await self.websocket.close(code=4002, reason="Idle timeout")
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
                     self.is_active = False
                     break
@@ -699,7 +699,7 @@ class MobileVoiceSession:
 
                 try:
                     audio_bytes = base64.b64decode(audio_data)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     logger.warning("[MobileVoiceSession] Invalid base64 audio data")
                     await self._send_event("error", {"message": "Invalid audio data"})
                     return
@@ -844,7 +844,7 @@ class MobileVoiceSession:
             logger.error(f"[MobileVoiceSession] Failed to persist session: {e}")
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
 
@@ -1050,7 +1050,7 @@ async def synthesize_text(request: Request, db: Session = Depends(get_db)):
             raise HTTPException(401, "Authentication required")
     except HTTPException:
         raise
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         raise HTTPException(401, "Authentication required")
 
     # Rate limit: 30 requests/minute per user

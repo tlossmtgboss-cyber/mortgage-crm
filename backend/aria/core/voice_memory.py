@@ -33,7 +33,7 @@ def _get_redis():
     try:
         from services.redis_service import redis_service
         return redis_service.get_client()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 

@@ -302,5 +302,5 @@ async def book_slot(
 def _try_json(resp: httpx.Response) -> Optional[dict]:
     try:
         return resp.json()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None

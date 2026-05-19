@@ -290,7 +290,7 @@ def register_shutdown_event(app: FastAPI):
             from integrations.imessage import shutdown_clients
             await shutdown_clients()
             logger.info("BlueBubbles httpx clients closed")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

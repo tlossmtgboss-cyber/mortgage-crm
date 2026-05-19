@@ -114,7 +114,7 @@ async def serve_team_vcard(token: str):
                     "phone": m.phone,
                     "email": m.email,
                 })
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         # Priority 2: Fall back to auto-discovery from Lead/Loan data

@@ -776,7 +776,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 ip_address=_get_client_ip(request),
                 details={"year": year, "reportable_loans": len(reportable)},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         # Return as streaming response with appropriate headers
@@ -842,7 +842,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 ip_address=_get_client_ip(request),
                 details={"year": year, "source": "hmda_export_service"},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return StreamingResponse(
@@ -1455,7 +1455,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 {"id": lead_id},
             ).fetchall()
             activities = [dict(row._mapping) for row in rows] if rows else []
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         documents = []
@@ -1468,7 +1468,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 {"id": lead_id},
             ).fetchall()
             documents = [dict(row._mapping) for row in rows] if rows else []
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         tasks = []
@@ -1478,7 +1478,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 {"id": lead_id},
             ).fetchall()
             tasks = [dict(row._mapping) for row in rows] if rows else []
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         export_data = {
@@ -1508,7 +1508,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 ip_address=_get_client_ip(request),
                 details={"lead_id": lead_id},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         logger.info(
             f"GDPR data export for lead {lead_id} by user {current_user.id}"

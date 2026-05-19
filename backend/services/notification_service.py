@@ -274,7 +274,8 @@ class NotificationService:
                     part = MIMEBase(*mime_type.split("/", 1)) if "/" in mime_type else MIMEBase("application", "octet-stream")
                     try:
                         raw = base64.b64decode(content)
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         raw = content.encode("utf-8") if isinstance(content, str) else content
                     part.set_payload(raw)
                     encoders.encode_base64(part)
@@ -1078,7 +1079,7 @@ class NotificationService:
                     try:
                         from database.tenant_mixin import set_tenant_context
                         set_tenant_context(_panel_db, organization_id)
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
                 try:
                     from integrations.sms_delivery_tracker import record_message_sent
@@ -1087,7 +1088,8 @@ class NotificationService:
                         message, organization_id=organization_id,
                     )
                     _panel_db.commit()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     _panel_db.rollback()
                 finally:
                     _panel_db.close()

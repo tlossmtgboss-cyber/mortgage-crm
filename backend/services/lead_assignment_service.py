@@ -215,7 +215,7 @@ def _assign_round_robin(
                 "SELECT id FROM lead_assignment_configs "
                 "WHERE organization_id = :org_id FOR UPDATE"
             ), {"org_id": org_id})
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # SQLite doesn't support FOR UPDATE; proceed without lock
 
         idx = config.round_robin_index or 0

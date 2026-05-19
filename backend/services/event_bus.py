@@ -241,7 +241,7 @@ class EventBus:
                 for error_handler in self._error_handlers:
                     try:
                         error_handler(event, handler, e)
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
         if results["failed"]:

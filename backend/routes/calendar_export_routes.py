@@ -136,7 +136,7 @@ async def export_ics(
             export_format="ics", ip_address=_get_client_ip(request),
             details={"start_date": start_date, "end_date": end_date, "appointment_count": len(appointments)},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return StreamingResponse(
@@ -183,7 +183,7 @@ async def export_single_ics(
             export_format="ics", ip_address=_get_client_ip(request),
             details={"appointment_id": appointment_id},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return StreamingResponse(
@@ -247,7 +247,7 @@ async def export_pdf(
             export_format="pdf", ip_address=_get_client_ip(request),
             details={"start_date": start_date, "end_date": end_date, "appointment_count": len(appointments)},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return StreamingResponse(

@@ -117,7 +117,7 @@ def _get_appointment_model():
     try:
         from services.appointment._models import get_model
         return get_model("Appointment")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     # Fallback: load from factory directly
     try:
@@ -135,14 +135,14 @@ def _get_scheduler_config_model():
     try:
         from services.appointment._models import get_model
         return get_model("SchedulerConfig")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     try:
         from smart_scheduler_models import create_smart_scheduler_models
         from db import Base
         models = create_smart_scheduler_models(Base)
         return models.get("SchedulerConfig")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 
@@ -1078,7 +1078,7 @@ def _schedule_reminders(
                     ).first()
                     if appt_type and getattr(appt_type, "reminder_schedule", None):
                         reminder_hours = appt_type.reminder_schedule
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # Use default
 
         scheduled_start = appointment.scheduled_start

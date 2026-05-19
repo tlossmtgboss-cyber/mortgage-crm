@@ -177,7 +177,7 @@ def has_exif_data(file_bytes: bytes) -> bool:
         exif_data = img.getexif()
         img.close()
         return len(exif_data) > 0
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return False
 
 
@@ -209,5 +209,5 @@ def get_gps_info(file_bytes: bytes) -> Optional[dict]:
             return dict(gps_ifd)
         return None
 
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None

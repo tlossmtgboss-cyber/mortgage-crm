@@ -42,7 +42,7 @@ def _mask_ip(ip_str: str) -> str:
         if ":" in ip_str:
             segments = ip_str.rsplit(":", 1)
             return f"{segments[0]}:***"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     return "***"
 

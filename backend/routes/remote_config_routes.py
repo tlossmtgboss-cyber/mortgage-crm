@@ -209,7 +209,7 @@ def _try_get_current_user(request: Request, get_current_user, get_db):
         try:
             from auth.tokens import verify_access_token
             payload = verify_access_token(token)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return None, db
 
         if not payload:

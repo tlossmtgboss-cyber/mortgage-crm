@@ -1753,7 +1753,8 @@ class SchedulerService:
         try:
             from services.scheduled_jobs import get_all_jobs
             registry_jobs = get_all_jobs()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             registry_jobs = []
 
         # Build lookup of APScheduler runtime info

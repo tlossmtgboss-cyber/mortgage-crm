@@ -157,7 +157,7 @@ def _check_auth_rate_limit_multi(client_id: str, limits: list) -> tuple:
                     ttl = r.ttl(key)
                     if ttl and ttl > 0:
                         retry_after = ttl
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             return False, retry_after
     return True, 0
@@ -188,7 +188,7 @@ def _log_access_event_bg(
                 try:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(session, tenant_id)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             try:
                 svc = AccessControlService(session)
@@ -594,10 +594,11 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
             from auth.account_lockout import reset_failed_login
             if hasattr(user, 'failed_login_attempts') and user.failed_login_attempts:
                 reset_failed_login(db, user)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # Update last_activity_at on successful login
@@ -608,7 +609,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         except Exception as e:
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             logger.debug(f"Failed to update last_activity_at in login: {e}")
 
@@ -778,7 +779,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         try:
             db.rollback()
             db.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         # Login is the most critical endpoint — retry once with a fresh DB session.
         # Transient connection failures (pool exhaustion, brief network blip) often
@@ -792,7 +793,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
                 finally:
                     try:
                         retry_db.close()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
             except HTTPException:
                 raise  # Auth failures (401, 423, etc.) from retry — propagate normally
@@ -806,7 +807,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         try:
             from utils.error_handling import _record_error
             _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         # Minimum delay to prevent timing oracle — DB errors return instantly vs.
         # ~100-200ms for password hash comparison, leaking DB availability state.
@@ -824,7 +825,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         try:
             from utils.error_handling import _record_error
             _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         from fastapi.responses import JSONResponse
         return JSONResponse(
@@ -838,7 +839,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         try:
             from utils.error_handling import _record_error
             _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         # Return as JSONResponse so production error handler doesn't strip the detail
         from fastapi.responses import JSONResponse
@@ -1010,7 +1011,7 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
                 try:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(_db, _logout_org_id)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             try:
                 revoke_manager_impersonation_sessions(current_user.id, _db)

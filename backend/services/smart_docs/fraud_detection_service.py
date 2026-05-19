@@ -2373,7 +2373,7 @@ class FraudDetectionService:
             """
             row = self.db.execute(text(query), {"lid": loan_id, **self._org_params()}).fetchone()
             return row.job_title if row else None
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return None
 
     def _build_recommendations(

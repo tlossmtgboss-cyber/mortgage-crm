@@ -28,7 +28,8 @@ def _get_scoped_session(org_id=None):
         if org_id is not None:
             db.execute(text("SET app.current_tenant = :org_id"), {"org_id": str(org_id)})
         yield db
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         raise
     finally:
@@ -72,7 +73,8 @@ def dispatch_briefings():
 
             try:
                 tz = ZoneInfo(user_tz)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 tz = ZoneInfo("America/Chicago")
 
             local_now = now_utc.astimezone(tz)
@@ -93,7 +95,7 @@ def dispatch_briefings():
 
                 if exists:
                     continue
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 continue
 
             # Determine level
@@ -112,7 +114,8 @@ def dispatch_briefings():
                             LIMIT 1
                         """), {"uid": user_id}).fetchone()
                     level = "manager" if has_reports else "individual"
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     level = "individual"
             else:
                 level = "individual"

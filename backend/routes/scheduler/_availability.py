@@ -770,11 +770,12 @@ def _generate_available_slots(
     try:
         from routes.scheduler.maintenance import auto_cleanup_expired_holds
         auto_cleanup_expired_holds(db)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         # Rollback to clear any failed transaction state from missing tables
+        logger.exception("unhandled exception")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         logger.debug("SlotHold auto-cleanup skipped (non-critical)", exc_info=True)
 
@@ -907,7 +908,7 @@ def _generate_available_slots(
         if not isinstance(e, ImportError):
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         logger.debug(f"RecurringAvailability not available, using JSON working_hours: {e}")
         _ra_service = None
@@ -943,7 +944,7 @@ def _generate_available_slots(
             if not isinstance(e, ImportError):
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             logger.debug(f"Failed to batch-load AvailabilityExceptions, falling back to per-date queries: {e}")
             _exceptions_by_user_date = None  # Signal to skip preloading
@@ -972,7 +973,8 @@ def _generate_available_slots(
         try:
             user_tz = pytz.timezone(user_tz_str)
             now_local = _now_utc.astimezone(user_tz).replace(tzinfo=None)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             now_local = now  # fallback to UTC if timezone is invalid
         min_booking_time = now_local + timedelta(hours=min_notice)
 

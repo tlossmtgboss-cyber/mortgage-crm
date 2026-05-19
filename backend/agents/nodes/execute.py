@@ -478,7 +478,7 @@ async def _emit_cross_agent_events(
         from db import SessionLocal
         push_svc = get_agent_notification_service()
         push_db = SessionLocal()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Push notifications unavailable -- degrade gracefully
 
     try:
@@ -678,7 +678,7 @@ async def _emit_cross_agent_events(
         if push_db is not None:
             try:
                 push_db.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
 

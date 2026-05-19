@@ -393,7 +393,7 @@ async def _inactivity_watchdog(
                     if app and not app.is_finalized:
                         await state_ref.pause(app)
                         logger.info("Auto-paused due to inactivity", extra={"loan_id": app.loan_id})
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             break
 
@@ -411,7 +411,8 @@ async def _health_check() -> dict:
         await state.redis.ping()
         health["redis"] = True
         await state.close()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         health["status"] = "degraded"
     return health
 

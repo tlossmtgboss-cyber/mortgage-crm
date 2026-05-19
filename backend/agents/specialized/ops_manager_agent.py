@@ -255,7 +255,7 @@ def _get_completed_type_value(db):
             if "complete" in r[0].lower():
                 _RESOLVED_COMPLETED_TYPE = r[0]
                 return r[0]
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     return None
 
@@ -652,10 +652,11 @@ class OpsManagerAgent(SpecializedAgent):
         if resolved_count > 0:
             try:
                 db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             logger.info(f"Auto-resolved {resolved_count} stale ops tasks")
 
@@ -691,7 +692,7 @@ class OpsManagerAgent(SpecializedAgent):
                     logger.warning(f"Auto-resolve failed, continuing sweep: {ar_err}")
                     try:
                         db.rollback()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
             # Run each sub-sweep with savepoints so one failure doesn't abort the whole sweep
@@ -719,7 +720,7 @@ class OpsManagerAgent(SpecializedAgent):
                     logger.warning(f"Sub-sweep '{name}' failed, rolling back savepoint: {sub_err}")
                     try:
                         db.rollback()  # Rolls back to savepoint, not entire transaction
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
                     sub_results[name] = ToolResult(success=False, error=str(sub_err))
 
@@ -774,7 +775,7 @@ class OpsManagerAgent(SpecializedAgent):
                     logger.warning(f"Failed to send notifications: {notif_err}")
                     try:
                         db.rollback()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
             # Record sweep result (table created by migrations/create_ops_sweep_results.py)
@@ -810,7 +811,7 @@ class OpsManagerAgent(SpecializedAgent):
                 logger.warning(f"Failed to record sweep result: {e}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
             return ToolResult(
@@ -913,10 +914,11 @@ class OpsManagerAgent(SpecializedAgent):
 
         try:
             db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # --- Push notifications (new: send to mobile devices) ---
@@ -1115,7 +1117,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -1289,7 +1291,7 @@ class OpsManagerAgent(SpecializedAgent):
                 logger.warning(f"COMPLIANCE_OPEN check skipped (table may not exist): {e}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
                 by_category["COMPLIANCE_OPEN"] = 0
 
@@ -1326,7 +1328,7 @@ class OpsManagerAgent(SpecializedAgent):
                 logger.warning(f"DOC_MISSING check skipped (table may not exist): {e}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
                 by_category["DOC_MISSING"] = 0
 
@@ -1353,7 +1355,7 @@ class OpsManagerAgent(SpecializedAgent):
                                     borrower_name=loan.borrower_name or "",
                                     loan_number=loan.loan_number or "",
                                 )
-                            except Exception:
+                            except Exception as _exc:  # noqa: BLE001
                                 pass
 
                     # Lock expirations: push to each affected LO
@@ -1368,7 +1370,7 @@ class OpsManagerAgent(SpecializedAgent):
                                     borrower_name=loan.borrower_name or "",
                                     loan_number=loan.loan_number or "",
                                 )
-                            except Exception:
+                            except Exception as _exc:  # noqa: BLE001
                                 pass
 
                     # Doc expirations: push to each affected LO
@@ -1387,7 +1389,7 @@ class OpsManagerAgent(SpecializedAgent):
                                             borrower_name=loan.borrower_name or "",
                                             loan_number=loan.loan_number or "",
                                         )
-                                    except Exception:
+                                    except Exception as _exc:  # noqa: BLE001
                                         pass
 
                 except Exception as push_err:
@@ -1417,7 +1419,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -1515,7 +1517,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -1590,8 +1592,9 @@ class OpsManagerAgent(SpecializedAgent):
                         " LIMIT :limit"
                     )
                     gaps = db.execute(text(gaps_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     # Column may not exist — skip this role
+                    logger.exception("unhandled exception")
                     gaps = []
 
                 role_label = role.replace("_", " ").title()
@@ -1631,7 +1634,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -1717,7 +1720,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -1792,7 +1795,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -1878,7 +1881,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -1989,7 +1992,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Priority queue error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -2106,7 +2109,8 @@ class OpsManagerAgent(SpecializedAgent):
                         "message": f"Only {doc_count} active documents on file (minimum 3 expected)",
                         "deduction": deduction,
                     })
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 doc_count = -1  # Unknown
 
             # 4. Lock expiration risk
@@ -2145,7 +2149,8 @@ class OpsManagerAgent(SpecializedAgent):
                         "message": f"{alert_count} open critical/high compliance alert(s)",
                         "deduction": deduction,
                     })
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 alert_count = -1  # Unknown (table may not exist)
 
             # Clamp score
@@ -2188,7 +2193,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Loan health check error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
@@ -2320,7 +2325,8 @@ class OpsManagerAgent(SpecializedAgent):
                     """), {"loan_id": loan_id, "milestone_pattern": f"%{milestone}%"}).fetchone()
                     if not milestone_check:
                         reasons.append(f"Required milestone '{milestone}' not completed")
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     warnings.append(f"Could not verify milestone '{milestone}' — table query failed")
 
             # Check disallow_if_open_exception_types
@@ -2336,7 +2342,8 @@ class OpsManagerAgent(SpecializedAgent):
                     """), {"loan_id": loan_id, "exc_type": f"%{exc_type}%"}).fetchone()
                     if open_alert:
                         reasons.append(f"Open '{exc_type}' exception blocks transition: {open_alert.title}")
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     warnings.append(f"Could not verify '{exc_type}' exceptions — table query failed")
 
             allowed = len(reasons) == 0
@@ -2361,7 +2368,7 @@ class OpsManagerAgent(SpecializedAgent):
             logger.error(f"Stage transition eval error: {e}\n{tb}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:

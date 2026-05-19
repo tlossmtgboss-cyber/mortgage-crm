@@ -311,7 +311,7 @@ def _is_tcpa_quiet_hours(
         else:
             tz = ZoneInfo(tz_name)
             local_now = datetime.now(tz).time()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         # If timezone resolution fails, be conservative: assume quiet hours
         return True
 
@@ -339,7 +339,8 @@ def _is_weekend(phone: Optional[str] = None) -> bool:
         import pytz
         tz = pytz.timezone(tz_name)
         local_now = datetime.now(tz)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         local_now = datetime.now(timezone.utc)
     return local_now.weekday() in (5, 6)
 
@@ -461,7 +462,7 @@ def _log_stl_event(
         logger.warning(f"Failed to log STL event: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -493,7 +494,7 @@ def _log_activity(
         logger.warning(f"Failed to log activity: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -703,7 +704,7 @@ async def _execute_stl_call(
         try:
             from database.tenant_mixin import set_tenant_context
             set_tenant_context(db, organization_id)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     try:

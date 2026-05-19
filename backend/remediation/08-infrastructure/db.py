@@ -93,7 +93,8 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             # If the route didn't commit, rollback to release locks
             if session.in_transaction():
                 await session.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             await session.rollback()
             raise
         finally:

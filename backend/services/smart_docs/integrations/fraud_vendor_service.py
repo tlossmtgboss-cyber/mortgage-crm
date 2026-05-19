@@ -618,9 +618,9 @@ class InternalFraudAnalyzer:
                                                 f"Page {page_num + 1}, font {font_key}: "
                                                 f"unusual encoding {enc_str}"
                                             )
-                                except Exception:
+                                except Exception as _exc:  # noqa: BLE001
                                     continue
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
                 # Detect potential overlaid content by checking content streams
@@ -664,7 +664,7 @@ class InternalFraudAnalyzer:
                                             "position": pos_key,
                                             "overlap_count": count,
                                         })
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
             # Deduplicate fonts
@@ -762,15 +762,15 @@ class InternalFraudAnalyzer:
                                         dpi_x = round(int(str(width)) / (page_width / 72.0))
                                         dpi_y = round(int(str(height)) / (page_height / 72.0))
                                         img_info["dpi"] = (dpi_x, dpi_y)
-                            except Exception:
+                            except Exception as _exc:  # noqa: BLE001
                                 pass
 
                             images_info.append(img_info)
                             image_index += 1
 
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
                             continue
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     continue
 
             return images_info

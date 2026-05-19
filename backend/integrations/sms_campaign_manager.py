@@ -168,12 +168,12 @@ class SMSCampaignManager:
             logger.warning(f"Failed to persist campaign {campaign.campaign_id}: {e}")
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     def _load_campaigns(self) -> None:
@@ -240,7 +240,7 @@ class SMSCampaignManager:
             self._loaded_from_db = True
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     def _ensure_loaded(self) -> None:

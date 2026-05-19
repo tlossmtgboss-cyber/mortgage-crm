@@ -344,7 +344,7 @@ def _parse_process_flow_async(document_id: int, *, db=None, organization_id: int
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, organization_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
     try:
         # Get the document

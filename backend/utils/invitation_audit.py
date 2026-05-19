@@ -128,7 +128,7 @@ def log_invite_event(
                 # Do NOT commit here — let the caller's transaction handle it.
                 # If the caller rolls back, the audit row rolls back too, which
                 # is fine because the action itself didn't happen.
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 # Table might not exist yet, or actor_id might be invalid.
                 # Fall through to the application logger.
                 logger.debug("admin_audit_log insert skipped (table may not exist)")

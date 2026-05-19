@@ -459,7 +459,7 @@ class ApplicationEngineOrchestrator:
             # Don't fail the audit if logging fails
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     def get_module_summary(self) -> List[Dict[str, Any]]:

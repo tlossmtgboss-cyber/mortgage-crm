@@ -33,7 +33,7 @@ async def ingest_call_record(
                 f"/communications/callRecords/{record_id}",
                 params={"$expand": "sessions($expand=segments)"},
             )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         log.exception("Failed to fetch callRecord %s", record_id)
         return
 

@@ -117,7 +117,7 @@ class MicrosoftOutlookClient:
                 error_data = {}
                 try:
                     error_data = response.json()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
                 error_code = error_data.get("error", "unknown")
                 error_desc = error_data.get("error_description", response.text[:200])

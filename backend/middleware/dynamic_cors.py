@@ -247,7 +247,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
             try:
                 from utils.error_handling import _record_error
                 _record_error(request.method, request.url.path, type(e).__name__, str(e), tb_str)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             from starlette.responses import JSONResponse
             response = JSONResponse(

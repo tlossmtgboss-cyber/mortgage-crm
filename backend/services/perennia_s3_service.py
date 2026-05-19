@@ -622,7 +622,8 @@ class PerenniaS3Service:
                 file_obj.seek(0, 2)  # Seek to end
                 file_size = file_obj.tell()
                 file_obj.seek(0)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 file_size = -1
 
             logger.info(

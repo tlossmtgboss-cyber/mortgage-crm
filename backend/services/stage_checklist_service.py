@@ -412,7 +412,8 @@ class StageChecklistService:
             logger.exception(
                 "DB error on stage change for loan=%s", loan_id
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception(
                 "Unexpected error on stage change for loan=%s", loan_id
@@ -498,7 +499,7 @@ class StageChecklistService:
             )
             return {r[0] for r in rows}
 
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Table may not exist yet
             return set()
 

@@ -658,7 +658,8 @@ class DocumentSearchService:
         # Fallback: if the join above doesn't work due to ORM mapping, use raw SQL
         try:
             doc_ids = [row[0] for row in doc_ids_query.all()]
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             result = db.execute(
                 text(
                     "SELECT sd.id FROM smart_documents sd "

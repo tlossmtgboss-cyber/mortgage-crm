@@ -467,7 +467,7 @@ class RescheduleService:
                     lo = self.db.query(User).filter(User.id == appt.assigned_user_id).first()
                     if lo:
                         lo_name = f"{getattr(lo, 'first_name', '')} {getattr(lo, 'last_name', '')}".strip()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
             send_appointment_update_email(

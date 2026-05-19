@@ -2965,7 +2965,7 @@ async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
                 try:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(db, _ws_org_id)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
         if not user:
@@ -3106,7 +3106,7 @@ async def run_agents_background(
                 if _org_row and _org_row[0]:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(db, _org_row[0])
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         try:

@@ -66,7 +66,8 @@ class UnifiedCalendarService:
                 if source_warning:
                     try:
                         sp.rollback()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         self.db.rollback()
                     warnings.append(source_warning)
                 else:
@@ -76,10 +77,11 @@ class UnifiedCalendarService:
             except Exception as e:
                 try:
                     sp.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     try:
                         self.db.rollback()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
                 warnings.append(f"{source_name}: {str(e)}")
                 logger.warning(f"Unified calendar source '{source_name}' failed: {e}")

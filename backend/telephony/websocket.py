@@ -115,7 +115,8 @@ class WebSocketManager:
                     for ws in list(self.active_connections.get(agent_id, set())):
                         try:
                             await ws.send_json({"type": "ping"})
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
+                            logger.exception("unhandled exception")
                             disconnected.add(ws)
 
                     for ws in disconnected:

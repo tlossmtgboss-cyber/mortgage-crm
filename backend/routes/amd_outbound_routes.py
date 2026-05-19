@@ -123,7 +123,7 @@ async def get_user_telephony_config_legacy(user_id: int, db: Session) -> Optiona
         # Rollback to clear the failed transaction state
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return None
 
@@ -150,7 +150,7 @@ async def get_user_telnyx_config(user_id: int, db: Session) -> Optional[Dict]:
         logger.debug(f"No user Telnyx config found: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # Fall back to system config from environment
@@ -331,7 +331,7 @@ def ensure_amd_table_exists(db: Session):
         logger.warning(f"Could not ensure AMD table exists (may already exist): {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

@@ -896,7 +896,7 @@ class ESignFieldDetectorService:
             try:
                 text = file_content.decode("utf-8")
                 return [text] if text.strip() else []
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 return []
 
     def _extract_pdf_pages(self, file_content: bytes) -> List[str]:
@@ -1300,7 +1300,7 @@ class ESignFieldDetectorService:
             ]
             nearby_chars.sort(key=lambda c: (float(c.get("top", 0)), float(c.get("x0", 0))))
             return "".join(c.get("text", "") for c in nearby_chars)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return ""
 
     def _extract_label_from_nearby(self, text: str) -> str:

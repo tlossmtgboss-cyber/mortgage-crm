@@ -216,7 +216,7 @@ def validate_password(
                             f"You cannot reuse any of your last {HISTORY_DEPTH} passwords."
                         )
                         break
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     # Corrupted hash — skip silently
                     continue
         except Exception as exc:
@@ -277,7 +277,7 @@ def record_failed_login(
         logger.debug("Failed to record login attempt: %s", exc)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -301,7 +301,7 @@ def record_successful_login(
         logger.debug("Failed to record successful login: %s", exc)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -376,5 +376,5 @@ def record_password_change(
         logger.warning("Failed to record password change: %s", exc)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass

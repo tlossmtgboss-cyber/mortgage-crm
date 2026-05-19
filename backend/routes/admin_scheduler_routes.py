@@ -55,7 +55,8 @@ async def scheduler_status(request: Request):
 
     try:
         running = scheduler_service.scheduler.running
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         running = False
 
     jobs = scheduler_service.get_job_status()
@@ -70,7 +71,7 @@ async def scheduler_status(request: Request):
         lock_svc = get_lock_service()
         redis = lock_svc._get_redis()
         redis_available = redis is not None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return {

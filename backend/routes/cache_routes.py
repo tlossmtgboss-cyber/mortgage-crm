@@ -66,21 +66,24 @@ def register_cache_routes(app, get_db, get_current_user, **kwargs):
         try:
             from integrations.pinecone_service import vector_memory
             result["embedding_cache"] = vector_memory.get_embedding_cache_stats()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             result["embedding_cache"] = {"error": "unavailable"}
 
         # 2. Pinecone query cache (in-memory TTL in services/ai_memory_service)
         try:
             from services.ai_memory_service import _pinecone_query_cache
             result["pinecone_query_cache"] = _pinecone_query_cache.stats()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             result["pinecone_query_cache"] = {"error": "unavailable"}
 
         # 3. LLM response cache (Redis-backed)
         try:
             from services.llm_cache_service import llm_cache
             result["llm_cache"] = llm_cache.get_stats()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             result["llm_cache"] = {"error": "unavailable"}
 
         # 4. Tool execution cache (Redis-backed, in gather node)
@@ -88,7 +91,8 @@ def register_cache_routes(app, get_db, get_current_user, **kwargs):
             from core.cache import cache
             stats = await cache.get_stats()
             result["tool_cache"] = stats
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             result["tool_cache"] = {"error": "unavailable"}
 
         return result

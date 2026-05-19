@@ -233,7 +233,7 @@ class SalesforceOAuthService:
             logger.warning(f"Calendar sync init failed (non-fatal): {e}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         try:
@@ -242,7 +242,7 @@ class SalesforceOAuthService:
             logger.warning(f"Schema discovery queue failed (non-fatal): {e}")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return {

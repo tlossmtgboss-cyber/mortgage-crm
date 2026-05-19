@@ -2852,7 +2852,7 @@ class OCREnhancementService:
                     if pdf.pages:
                         text = pdf.pages[0].extract_text() or ""
                         return text[:2000]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         if mime_type and mime_type.startswith("image/") and HAS_TESSERACT and HAS_PIL:
@@ -2860,7 +2860,7 @@ class OCREnhancementService:
                 image = Image.open(io.BytesIO(file_bytes))
                 text = pytesseract.image_to_string(image)
                 return text[:2000]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return ""

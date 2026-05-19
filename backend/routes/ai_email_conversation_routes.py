@@ -1047,7 +1047,7 @@ async def generate_ai_response(
         if _org_id_email:
             from database.tenant_mixin import set_tenant_context
             set_tenant_context(db, _org_id_email)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     try:

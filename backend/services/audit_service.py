@@ -175,7 +175,7 @@ def cleanup_old_audit_events(db: Session, retention_days: int = 2555) -> Dict[st
         db.execute(text(
             "ALTER TABLE audit_logs DISABLE TRIGGER ALL"
         ))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Trigger may not exist in dev/test environments
 
     result = db.execute(
@@ -188,7 +188,7 @@ def cleanup_old_audit_events(db: Session, retention_days: int = 2555) -> Dict[st
         db.execute(text(
             "ALTER TABLE audit_logs ENABLE TRIGGER ALL"
         ))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     db.commit()

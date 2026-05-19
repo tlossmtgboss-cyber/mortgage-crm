@@ -1521,7 +1521,7 @@ class AIResolutionEngine:
             ).first()
             if result and result[0] is not None:
                 return str(result[0])
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         # Fallback: check loan_application_data JSON column
@@ -1540,7 +1540,7 @@ class AIResolutionEngine:
             ).first()
             if result and result[0] is not None:
                 return str(result[0]).strip('"')
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return None

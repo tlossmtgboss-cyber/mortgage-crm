@@ -239,7 +239,7 @@ def _get_sso_config(db: Session, organization_id: int):
                 "Migrate to sso_configurations for consistency."
             )
             return legacy
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return None

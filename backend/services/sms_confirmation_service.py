@@ -495,7 +495,8 @@ class SMSConfirmationService:
                         message, organization_id=organization_id,
                     )
                     _panel_db.commit()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     _panel_db.rollback()
                 finally:
                     _panel_db.close()

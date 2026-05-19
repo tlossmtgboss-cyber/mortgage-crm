@@ -575,7 +575,7 @@ class ClaudeVisionOCREngine(OCREngine):
                         page_number=0, text="", confidence=0.0,
                         engine_used=self.name,
                     )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # If we cannot check, proceed anyway
 
         start = time.monotonic()
@@ -1851,7 +1851,7 @@ class DocumentOCRService:
                             (time.monotonic() - overall_start) * 1000
                         ),
                     )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # If check fails, proceed with processing
 
         doc_format = self.detect_format(file_bytes, mime_type, filename)

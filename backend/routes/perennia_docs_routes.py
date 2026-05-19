@@ -92,7 +92,7 @@ async def process_document_background(document_id: int):
                 if _org_row_rls and _org_row_rls.organization_id:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(db, _org_row_rls.organization_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         if not doc:

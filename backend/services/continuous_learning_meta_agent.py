@@ -173,7 +173,7 @@ class ContinuousLearningMetaAgent:
         if session is not None and session is not self.db:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     def run_learning_cycle(
@@ -685,7 +685,7 @@ class ContinuousLearningMetaAgent:
             summary["errors"].append(str(e))
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         finally:
             self._close_fallback(session)
@@ -724,7 +724,7 @@ class ContinuousLearningMetaAgent:
             logger.exception(f"Error applying optimization {optimization_id}: {e}")
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return {"success": False, "reason": str(e)}
         finally:
@@ -761,7 +761,7 @@ class ContinuousLearningMetaAgent:
             logger.exception(f"Error rolling back optimization {optimization_id}: {e}")
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return {"success": False, "reason": str(e)}
         finally:
@@ -866,7 +866,7 @@ class ContinuousLearningMetaAgent:
             logger.exception(f"Error evaluating optimization impact: {e}")
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return {"status": "error", "reason": str(e)}
         finally:
@@ -1122,7 +1122,7 @@ class ContinuousLearningMetaAgent:
                     )
                 booked_count = booked.count()
                 booking_rate = booked_count / max(total, 1)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # Booking data unavailable — leave at 0
 
             # Escalation: count feedback flagged as escalated
@@ -1669,7 +1669,7 @@ class ContinuousLearningMetaAgent:
             if owns_session:
                 try:
                     session.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             return None
         finally:

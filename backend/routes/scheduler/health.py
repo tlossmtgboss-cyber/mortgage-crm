@@ -126,7 +126,7 @@ def _check_calendar_sync(db: Session, org_id: int) -> dict:
         ) or 0
         if failed_syncs > 0:
             status = "warning"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # CalendarEventMap may not exist yet
 
     return {

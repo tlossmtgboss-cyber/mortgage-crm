@@ -225,7 +225,7 @@ class DealBreakerService:
                 "loan_amount": getattr(lead, "loan_amount", None),
             }
             return self.evaluate(borrower_data)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.exception(f"Failed to evaluate lead {lead_id}")
             result = DealBreakerResult(lead_id=lead_id, has_deal_breakers=False)
             result.recommended_action = "error"

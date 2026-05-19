@@ -107,12 +107,13 @@ class AuditMiddleware(BaseHTTPMiddleware):
             try:
                 session.execute(text("SELECT 1 FROM soc2_audit_log LIMIT 0"))
                 return True
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 session.rollback()
                 return False
             finally:
                 session.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return False
 
     async def dispatch(

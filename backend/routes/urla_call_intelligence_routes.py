@@ -738,7 +738,7 @@ async def _compute_basic_analytics(
                     if cipher and raw:
                         try:
                             raw = cipher.decrypt(raw.encode()).decode()
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
                             pass
                     from agents.urla.models import URLAApplication
                     app = URLAApplication.model_validate_json(raw)
@@ -810,7 +810,7 @@ async def list_urla_sessions(
                     if cipher and raw:
                         try:
                             raw = cipher.decrypt(raw.encode()).decode()
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
                             pass
 
                     from agents.urla.models import URLAApplication

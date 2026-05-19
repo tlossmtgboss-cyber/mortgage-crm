@@ -1911,7 +1911,7 @@ def _safe_format(template: str, variables: Dict[str, str]) -> str:
 
     try:
         return template.format_map(SafeDict(variables))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return template
 
 
@@ -1924,7 +1924,7 @@ def _is_read_filter(filter_clause) -> bool:
     try:
         clause_str = str(filter_clause)
         return "is_read" in clause_str
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return False
 
 

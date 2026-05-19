@@ -822,7 +822,7 @@ async def _process_google_changes(
                         existing.last_error = str(e)[:500]
                         existing.updated_at = datetime.now(timezone.utc)
                         db.flush()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     logger.debug("Could not persist sync failure status")
 
     except Exception as e:
@@ -969,7 +969,7 @@ async def _process_outlook_notification(
                         existing.last_error = f"HTTP {resp.status_code} fetching event"
                         existing.updated_at = datetime.now(timezone.utc)
                         db.flush()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     logger.debug("Could not persist Outlook sync failure status")
 
     except Exception as e:

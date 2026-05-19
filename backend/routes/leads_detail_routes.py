@@ -209,7 +209,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     """), {"org_id": user_org_id}).fetchone()
                     if enc_cfg:
                         _enc_cfg_cache[user_org_id] = enc_cfg
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # Encompass table may not exist
 
         try:
@@ -608,7 +608,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             if lead.stage_changed_at:
                 try:
                     duration_days = (now - lead.stage_changed_at.replace(tzinfo=timezone.utc)).days
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     duration_days = None
 
             # Track when stage changed for workflow day calculations

@@ -49,7 +49,8 @@ def process_render_job(self, job_id: int):
             "SELECT organization_id FROM video_render_jobs WHERE id = :jid"
         ), {"jid": job_id}).fetchone()
         org_id = row[0] if row else None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         org_id = None
     finally:
         lookup_db.close()

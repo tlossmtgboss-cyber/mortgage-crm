@@ -124,7 +124,7 @@ def _ensure_routing_table(db: Session):
         logger.debug("Routing table ensure failed (non-fatal): %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -325,7 +325,7 @@ async def route_inbound_call(
                 logger.warning(f"Failed to log routing: {log_err}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
             caller_name = result.get("caller_name", "")
@@ -787,7 +787,7 @@ async def diagnose_call_routing():
                             "issue": f"Assistant '{name}' ({aid}) not found in Vapi (HTTP {resp.status_code})",
                             "fix": f"Update ASSISTANT_CONFIG['{name}']['id'] with a valid Vapi assistant ID",
                         })
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     if not issues:

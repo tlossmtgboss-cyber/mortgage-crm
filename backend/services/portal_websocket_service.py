@@ -190,7 +190,8 @@ class PortalConnectionManager:
             try:
                 await ws.send_json(message)
                 sent += 1
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 dead.append(ws)
 
         if dead:

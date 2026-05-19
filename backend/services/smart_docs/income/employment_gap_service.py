@@ -2535,7 +2535,7 @@ class EmploymentGapService:
             if not cleaned or cleaned == "":
                 return ZERO
             return Decimal(cleaned).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return ZERO
 
     @staticmethod

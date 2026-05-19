@@ -1350,8 +1350,9 @@ class CapacityPlanningService:
                 int(r.cnt) * COMPLEXITY_WEIGHTS.get(r.doc_type, 1.0)
                 for r in rows
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Fallback: use unweighted pending count
+            logger.exception("unhandled exception")
             try:
                 rows2 = self.db.execute(text("""
                     SELECT COUNT(*) AS cnt
@@ -1362,7 +1363,7 @@ class CapacityPlanningService:
                       AND assigned_to_user_id = :user_id
                 """), {"org_id": org_id, "user_id": user_id}).fetchone()
                 return float(rows2.cnt) if rows2 else 0.0
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 return 0.0
 
     def _get_bottleneck_doc_types(self, org_id: int) -> List[Dict[str, Any]]:

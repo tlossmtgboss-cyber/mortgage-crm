@@ -1675,6 +1675,7 @@ def _log_notification(
             },
         )
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         # Table may not exist; silently skip audit logging
+        logger.exception("unhandled exception")
         db.rollback()

@@ -149,7 +149,8 @@ class CallConnectionManager:
         for ws in conns:
             try:
                 await ws.send_json(data)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 dead.append(ws)
         for ws in dead:
             if ws in conns:
@@ -234,7 +235,7 @@ async def handle_inbound_call(
 
     try:
         body = await request.json()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return JSONResponse({"status": "invalid_body"}, status_code=400)
 
     if not _verify_webhook_secret(request, body):

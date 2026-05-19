@@ -20,7 +20,7 @@ def run_schema_creation(engine, Base, database_url: str, environment: str, auto_
     # Import models to register them with Base before create_all
     try:
         import salesforce_integration_models  # noqa: F401
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     # Skip auto-create in production unless explicitly enabled

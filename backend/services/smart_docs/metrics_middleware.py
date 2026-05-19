@@ -63,7 +63,8 @@ class SmartDocsMetricsMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             status_code = response.status_code
             success = status_code < 400
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             success = False
             raise
         finally:

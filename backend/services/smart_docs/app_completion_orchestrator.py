@@ -441,7 +441,8 @@ class AppCompletionOrchestrator:
             text_ids = {r.get("item_id") for r in plan.text_items}
             call_ids = {r.get("item_id") for r in plan.call_items}
             portal_ids = {r.get("item_id") for r in plan.portal_items}
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Resolution routing failed for review %s — rolled back pending adds", review.id)
             return {"error": "resolution_routing_failed", "review_id": review.id, "loan_id": lid}
@@ -468,7 +469,7 @@ class AppCompletionOrchestrator:
             if reqs:
                 staged = _run_async(svc.stage_documents(lid, review.id, reqs))
                 docs_staged = len(staged) if isinstance(staged, list) else 0
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.exception("Document staging failed for review %s", review.id)
 
         # --- 7. Determine next action and queue ---
@@ -1014,7 +1015,7 @@ class AppCompletionOrchestrator:
         try:
             _run_async(self._cal(org).mark_completed(
                 appointment_id, len(items_resolved) if items_resolved else 0, call_notes))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.exception("Calendar mark_completed failed for %s", appointment_id)
             appt.booking_status = "COMPLETED"
             appt.completed_at = _now()
@@ -1036,7 +1037,7 @@ class AppCompletionOrchestrator:
                     eng = self._score_eng(org)
                     for iid in items_resolved:
                         eng.recalculate_after_resolution(appt.review_id, iid)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     logger.exception("Score recalc failed after call completion")
         self.db.commit()
         return {"appointment_id": appointment_id, "status": "completed", "items_resolved_count": count}
@@ -1048,7 +1049,7 @@ class AppCompletionOrchestrator:
             return {"error": "appointment_not_found"}
         try:
             _run_async(self._cal(appt.organization_id).cancel_appointment(appointment_id, reason or "cancelled"))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.exception("Calendar cancel failed for %s", appointment_id)
             appt.booking_status = "CANCELLED"
             appt.cancelled_at = _now()

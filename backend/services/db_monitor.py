@@ -106,7 +106,8 @@ def get_pool_stats() -> Dict[str, Any]:
         # Get raw status string
         try:
             pool_status_text = pool.status()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             pool_status_text = "unavailable"
 
         return {

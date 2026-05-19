@@ -1331,7 +1331,7 @@ async def create_employee_invite(
                          org_id=getattr(current_user, 'organization_id', None),
                          target_email=invite_data.email,
                          details={"role": invite_data.permission_role})
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     db.commit()
@@ -1515,7 +1515,7 @@ async def accept_invite(request: Request, body: InviteAcceptRequest, db: Session
         try:
             from utils.invitation_audit import log_invite_event
             log_invite_event(db, "invite_accept_failed", details={"reason": "invalid_token"}, ip_address=_client_ip)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         raise HTTPException(status_code=404, detail="Invite not found")
 
@@ -1525,7 +1525,7 @@ async def accept_invite(request: Request, body: InviteAcceptRequest, db: Session
             log_invite_event(db, "invite_accept_failed", invite_id=invite.id,
                              target_email=invite.email, details={"reason": f"status_{invite.status.value}"},
                              ip_address=_client_ip)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         raise HTTPException(status_code=400, detail=f"Invite has been {invite.status.value}")
 
@@ -1537,7 +1537,7 @@ async def accept_invite(request: Request, body: InviteAcceptRequest, db: Session
             log_invite_event(db, "invite_accept_failed", invite_id=invite.id,
                              target_email=invite.email, details={"reason": "expired"},
                              ip_address=_client_ip)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         raise HTTPException(status_code=400, detail="Invite has expired")
 
@@ -1621,7 +1621,7 @@ async def accept_invite(request: Request, body: InviteAcceptRequest, db: Session
                          org_id=_org_id, target_email=invite.email,
                          details={"user_id": user.id, "role": invite.permission_role},
                          ip_address=_client_ip)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     # Generate JWT token for immediate login
@@ -1734,7 +1734,7 @@ async def revoke_invite(
         from utils.invitation_audit import log_invite_event
         log_invite_event(db, "invite_revoked", invite_id=invite.id, actor_id=current_user.id,
                          org_id=_org_id, target_email=invite.email)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return {"success": True, "message": "Invite revoked"}
@@ -1832,7 +1832,7 @@ async def resend_invite(
         from utils.invitation_audit import log_invite_event
         log_invite_event(db, "invite_resent", invite_id=invite.id, actor_id=current_user.id,
                          org_id=_org_id, target_email=invite.email)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return {

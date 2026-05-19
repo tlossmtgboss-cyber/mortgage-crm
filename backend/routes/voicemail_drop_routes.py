@@ -178,17 +178,8 @@ AREA_CODE_TIMEZONE = {
 # Runtime Import Helpers
 # =============================================================================
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """
-    Get current user - wrapper that imports from main at runtime to avoid circular imports.
-    """
-    import main
-
-    # Get token from Authorization header
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-
-    return await main.get_current_user(token=token, request=request, db=db)
+# Use canonical auth (deduped from local wrapper)
+from auth.dependencies import get_current_user
 
 
 def get_voicemail_drop_model():
@@ -697,7 +688,7 @@ async def _send_followup_sms(
     if organization_id:
         try:
             set_tenant_context(db, organization_id)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     try:
         from telephony.sms import send_sms_verified_async
@@ -764,7 +755,7 @@ async def _send_followup_sms(
                 drop.followup_sms_sent = False
                 drop.followup_sms_blocked_reason = f"Error: {str(e)[:480]}"
                 db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     finally:
         db.close()
@@ -2449,7 +2440,7 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
         ).fetchone()
         if _org_row and _org_row[0]:
             set_tenant_context(db, _org_row[0])
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     try:
         VoicemailCampaign = get_voicemail_campaign_model()

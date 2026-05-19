@@ -117,7 +117,7 @@ class LiveSessionRunner:
         if self._stt:
             try:
                 await self._stt.disconnect()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             self._stt = None
 

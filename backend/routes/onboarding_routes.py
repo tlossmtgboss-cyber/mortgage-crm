@@ -1030,7 +1030,8 @@ async def get_team_member_work_hours(
             if isinstance(business_hours, str):
                 import json as _json
                 business_hours = _json.loads(business_hours)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             business_hours = {}
 
         return {

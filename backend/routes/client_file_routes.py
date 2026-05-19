@@ -1377,7 +1377,7 @@ def get_document_download_url(
         from services.smart_docs.s3_storage_service import generate_presigned_url
         url = generate_presigned_url(doc.storage_key)
         return {"url": url, "filename": doc.original_filename or doc.file_name}
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         raise HTTPException(501, "document download not available")
 
 
@@ -1538,7 +1538,7 @@ async def _send_sms_from_client_file(
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(record_db, org_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             row = record_db.execute(sa_text("""
@@ -1581,7 +1581,7 @@ async def _send_sms_from_client_file(
     finally:
         try:
             record_db.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     event_id = f"sms-{sms_row_id}" if sms_row_id else (

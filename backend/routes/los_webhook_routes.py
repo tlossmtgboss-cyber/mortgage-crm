@@ -444,10 +444,10 @@ def register_los_webhook_routes(app, get_db, **kwargs):
                     loan.encompass_loan_id = los_loan_id
                     try:
                         db.flush()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
                 return loan
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         # Last resort: scan user_metadata (org-scoped only, never cross-tenant)
@@ -466,7 +466,7 @@ def register_los_webhook_routes(app, get_db, **kwargs):
                             loan.encompass_loan_id = los_loan_id
                             try:
                                 db.flush()
-                            except Exception:
+                            except Exception as _exc:  # noqa: BLE001
                                 pass
                         return loan
             except Exception as e:

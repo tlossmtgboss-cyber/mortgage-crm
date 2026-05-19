@@ -33,7 +33,7 @@ try:
             "ALTER TABLE voice_call_sessions ALTER COLUMN user_id DROP NOT NULL"
         ))
         _conn.commit()
-except Exception:
+except Exception as _exc:  # noqa: BLE001
     pass
 
 

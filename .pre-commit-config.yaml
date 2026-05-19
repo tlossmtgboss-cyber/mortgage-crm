@@ -37,12 +37,35 @@ repos:
     rev: v0.8.4
     hooks:
       - id: ruff
-        args: [--fix]
+        # E722 = no bare except. B = flake8-bugbear. E/F = standard.
+        args: [--fix, --select, "E,F,E722,B"]
       - id: ruff-format
+
+  # Mypy type-checking for backend
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: mypy (backend)
+        args: [--ignore-missing-imports, --no-strict-optional]
+        files: ^backend/.*\.py$
+        additional_dependencies:
+          - types-redis
+          - types-requests
 
   # Frontend checks
   - repo: local
     hooks:
+      - id: no-duplicate-get-current-user
+        name: Block new get_current_user duplicates in routes/api
+        description: |
+          Stops the auth-duplication regression. There are already ~146 copies
+          of get_current_user across the codebase; do not add more in
+          backend/routes/ or backend/api/. Import from auth.dependencies instead.
+        entry: bash -c 'files=$(git diff --cached --name-only --diff-filter=AM | grep -E "^backend/(routes|api)/.*\.py$" || true); if [ -z "$files" ]; then exit 0; fi; bad=""; for f in $files; do if grep -nE "^[[:space:]]*(async[[:space:]]+)?def[[:space:]]+get_current_user[[:space:]]*\(" "$f" >/dev/null 2>&1; then bad="$bad $f"; fi; done; if [ -n "$bad" ]; then echo "ERROR: new get_current_user definition(s) detected in:$bad"; echo "Import from auth.dependencies instead of redefining."; exit 1; fi; exit 0'
+        language: system
+        pass_filenames: false
+
       - id: no-localstorage-jwt
         name: Block localStorage JWT patterns
         description: Prevent regression to localStorage auth

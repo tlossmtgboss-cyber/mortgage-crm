@@ -324,7 +324,8 @@ class CalendarSyncOrchestrator:
                 """),
                 {"user_id": user_id},
             ).fetchall()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             rows = []
 
         for row in rows:
@@ -349,7 +350,8 @@ class CalendarSyncOrchestrator:
                 """),
                 {"user_id": user_id},
             ).fetchall()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             rows = []
 
         for row in rows:
@@ -386,7 +388,7 @@ class CalendarSyncOrchestrator:
                         access_token = decrypt_token(access_token)
                         if refresh_token:
                             refresh_token = decrypt_token(refresh_token)
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         logger.warning("Could not decrypt microsoft_oauth_tokens; using raw values")
 
                     providers.append(("outlook", {
@@ -394,7 +396,7 @@ class CalendarSyncOrchestrator:
                         "refresh_token": refresh_token,
                         "expires_at": ms_row[2].isoformat() if ms_row[2] else None,
                     }))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # Table may not exist yet
 
         return providers

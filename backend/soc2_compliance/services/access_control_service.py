@@ -137,7 +137,7 @@ class AccessControlService:
                     alert_type="warning" if risk_score < 80 else "error",
                     tags=tags + [f"risk_score:{risk_score}"],
                 )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # DataDog unavailable — non-blocking
 
         # Log and escalate high-risk anomalous logins

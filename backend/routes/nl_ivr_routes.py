@@ -1180,5 +1180,5 @@ def _log_call_report(payload: Dict, db: Session):
         logger.error(f"Failed to log NL IVR call report: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass

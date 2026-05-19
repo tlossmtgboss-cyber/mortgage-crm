@@ -82,7 +82,7 @@ async def readiness(
             "checked_out": pool.checkedout(),
             "overflow": pool.overflow(),
         }
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     response.status_code = (

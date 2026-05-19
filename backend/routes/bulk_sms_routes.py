@@ -255,7 +255,8 @@ def _is_quiet_hours(state: Optional[str]) -> bool:
     tz_name = STATE_TIMEZONE_MAP.get((state or "").upper(), "America/New_York")
     try:
         tz = ZoneInfo(tz_name)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         tz = ZoneInfo("America/New_York")
     now_local = datetime.now(tz).time()
     # Quiet if before 8 AM or at/after 9 PM
@@ -426,7 +427,7 @@ async def _execute_campaign(campaign_id: str, org_id: int, user_id: int):
             ).fetchone()
             if user_row:
                 sender_name = f"{user_row.first_name or ''} {user_row.last_name or ''}".strip() or "Campaign"
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # keep default "Campaign"
 
         # Mark as sending

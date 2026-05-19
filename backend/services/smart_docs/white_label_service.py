@@ -598,7 +598,7 @@ def _contrast_text(bg_hex: str) -> str:
         r, g, b = _hex_to_rgb(bg_hex)
         lum = _relative_luminance(r, g, b)
         return "#ffffff" if lum < 0.5 else "#1f2937"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return "#1f2937"
 
 
@@ -1130,7 +1130,8 @@ a:hover {{
         try:
             pr, pg, pb = _hex_to_rgb(primary_color)
             brand_r, brand_g, brand_b = pr / 255.0, pg / 255.0, pb / 255.0
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             brand_r, brand_g, brand_b = 0.10, 0.34, 0.86
 
         # -- Header band --
@@ -1842,7 +1843,7 @@ a:hover {{
             g = max(0, int(g * (1 - amount)))
             b = max(0, int(b * (1 - amount)))
             return f"#{r:02x}{g:02x}{b:02x}"
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return hex_color
 
     def _lighten(self, hex_color: str, amount: float = 0.90) -> str:
@@ -1853,7 +1854,7 @@ a:hover {{
             g = int(g + (255 - g) * amount)
             b = int(b + (255 - b) * amount)
             return f"#{min(r, 255):02x}{min(g, 255):02x}{min(b, 255):02x}"
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return hex_color
 
     async def get_default_template(self, template_key: str) -> Optional[Dict[str, str]]:

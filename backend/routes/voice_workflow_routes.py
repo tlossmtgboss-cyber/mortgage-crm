@@ -211,7 +211,7 @@ async def voice_workflow_websocket(
                         user_id = result[0]
                 if not user_id:
                     user_id = payload.get("user_id")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # Not a valid JWT, try session token
 
         # Fall back to session token

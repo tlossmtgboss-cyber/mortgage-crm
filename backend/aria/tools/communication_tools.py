@@ -164,7 +164,8 @@ class CommunicationTools:
                     requester_user_id=int(lo["id"]),
                 )
                 db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 db.rollback()
                 raise
             finally:

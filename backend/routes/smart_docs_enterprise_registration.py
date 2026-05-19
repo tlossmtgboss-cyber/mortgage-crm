@@ -92,7 +92,8 @@ class SmartDocsMetricsMiddleware(BaseHTTPMiddleware):
         start = time.monotonic()
         try:
             response = await call_next(request)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.request_count += 1
             self.error_count += 1
             self.total_duration_ms += round(

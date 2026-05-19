@@ -547,7 +547,7 @@ async def get_consent_status(
                             sms_ok = False
                         if getattr(pref, "do_not_call", False):
                             call_ok = False
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         msg = "Consent assumed (no explicit certificate on file)."

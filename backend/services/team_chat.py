@@ -585,7 +585,7 @@ class TeamChatService:
         try:
             self.redis.zadd(key, {str(user_id): score})
             self.redis.expire(key, self.TYPING_TTL_SECONDS * 4)
-        except Exception:  # noqa: BLE001
+        except Exception as _exc:  # noqa: BLE001
             logger.warning("team_chat.set_typing.redis_failed", exc_info=True)
 
     def get_typing(
@@ -608,7 +608,7 @@ class TeamChatService:
                 m.decode() if isinstance(m, bytes) else m for m in (members or [])
             ]
             return {"typing_user_ids": ids}
-        except Exception:  # noqa: BLE001
+        except Exception as _exc:  # noqa: BLE001
             logger.warning("team_chat.get_typing.redis_failed", exc_info=True)
             return {"typing_user_ids": []}
 
@@ -686,7 +686,7 @@ class TeamChatService:
                 online_ids = {
                     (m.decode() if isinstance(m, bytes) else m) for m in (raw or [])
                 }
-            except Exception:  # noqa: BLE001
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return [

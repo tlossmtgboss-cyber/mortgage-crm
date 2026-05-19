@@ -314,7 +314,8 @@ def _find_most_recent_consent(
                 """),
                 params,
             ).fetchone()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _safe_rollback(db)
             # Fall back to unscoped query if org_id type mismatch
             row = db.execute(
@@ -474,7 +475,7 @@ def _safe_rollback(db: Session) -> None:
     """Rollback without raising if the session is in a bad state."""
     try:
         db.rollback()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
 

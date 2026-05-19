@@ -106,7 +106,7 @@ def main():
                 ), {"oid": org_id}).scalar()
                 if cnt > 0:
                     print(f"  {tname}: {cnt} rows")
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         for tname, cols in sorted(user_tables.items()):
@@ -119,7 +119,7 @@ def main():
                         )).scalar()
                         if cnt > 0:
                             print(f"  {tname} (by {col}): {cnt} rows")
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
         # 5. Delete org-scoped data with retry loop for FK ordering
@@ -189,7 +189,7 @@ def main():
                 if cnt > 0:
                     print(f"  ⚠️  {tname}: {cnt} rows remaining")
                     remaining_data += cnt
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         if remaining_data == 0:

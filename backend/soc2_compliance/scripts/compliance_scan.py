@@ -363,7 +363,8 @@ class ComplianceScanner:
                         issues.append(f"Fernet key decodes to {len(decoded)} bytes (expected 32)")
                     else:
                         evidence["fernet_key_format"] = "valid"
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     issues.append("Fernet key is not valid base64")
                     evidence["fernet_key_format"] = "invalid"
 

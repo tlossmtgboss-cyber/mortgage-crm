@@ -167,7 +167,7 @@ def _get_request_id(request: Request) -> str:
     # Try request.state (set by logging middleware)
     try:
         return getattr(request.state, "request_id", "unknown")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return "unknown"
 
 
@@ -392,7 +392,7 @@ class RequestValidatorMiddleware(BaseHTTPMiddleware):
                                 )
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         logger.debug(
                             "Body scan error (non-fatal) | request_id=%s path=%s",
                             request_id, path, exc_info=True,

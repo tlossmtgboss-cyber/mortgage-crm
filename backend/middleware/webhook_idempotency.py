@@ -46,7 +46,8 @@ Usage — database-backed:
         try:
             # ... process the webhook ...
             mark_processed(db, idem["key"], response_code=200)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             mark_failed(db, idem["key"], response_code=500)
             raise
 
@@ -194,7 +195,7 @@ def get_webhook_stats() -> dict:
                 rkey_str = rkey.decode() if isinstance(rkey, bytes) else rkey
                 prov = rkey_str.replace(_DLQ_REDIS_PREFIX, "")
                 dlq_sizes[prov] = redis.llen(rkey_str)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # Also merge in-memory DLQ counts
@@ -236,7 +237,7 @@ def _get_redis():
     try:
         from services.redis_service import get_redis_client
         return get_redis_client()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 

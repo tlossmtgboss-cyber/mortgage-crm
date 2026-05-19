@@ -130,7 +130,8 @@ class SMSConnectionManager:
         for ws in self._connections.get(key, []):
             try:
                 await ws.send_json(message)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 dead.append(ws)
         for ws in dead:
             self.disconnect(org_id, phone, ws)
@@ -145,7 +146,8 @@ class SMSConnectionManager:
                 for ws in conns:
                     try:
                         await ws.send_json(message)
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         dead_pairs.append((key, ws))
         for key, ws in dead_pairs:
             conns = self._connections.get(key, [])
@@ -244,10 +246,11 @@ def _ensure_tables(db: Session):
             db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_delivery_to_phone ON sms_delivery_log (to_phone)"))
             db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_delivery_org ON sms_delivery_log (organization_id)"))
             db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
     except Exception as e:
         db.rollback()
@@ -284,7 +287,7 @@ def _resolve_contact_name(db: Session, phone: str, org_id: Optional[int]) -> str
         logger.debug("_resolve_contact_name failed: %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     return ""
 
@@ -340,7 +343,7 @@ async def get_conversation(
         """(Re)set RLS tenant context for the current transaction."""
         try:
             db.execute(text("SET LOCAL app.current_tenant = :org_id"), {"org_id": str(org_id)})
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # 1. Outbound from sms_delivery_log (existing Telnyx tracking table)
@@ -375,11 +378,12 @@ async def get_conversation(
                         name = f"{user_row[0] or ''} {user_row[1] or ''}".strip()
                         if name and not name.isdigit():
                             sender_name = name
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     try:
                         db.rollback()
                         _set_rls()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
             messages.append({
@@ -397,7 +401,7 @@ async def get_conversation(
         try:
             db.rollback()
             _set_rls()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # 2. Messages from sms_panel_messages (two-way table, tenant-isolated)
@@ -424,7 +428,7 @@ async def get_conversation(
         try:
             from utils.media_storage import get_media_storage
             _media_storage = get_media_storage()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         for r in rows:
@@ -462,7 +466,7 @@ async def get_conversation(
         logger.warning(f"sms_panel_messages query failed (messages may be incomplete): {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # Deduplicate: panel messages share telnyx_message_id with delivery_log.
@@ -690,7 +694,7 @@ async def send_sms(
     }
     try:
         await sms_manager.broadcast(org_id, req.to, ws_msg)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     safe_sender = user_name if (user_name and not user_name.isdigit()) else "You"
@@ -799,7 +803,8 @@ async def sms_websocket(websocket: WebSocket, phone: str):
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
         sms_manager.disconnect(org_id, phone, websocket)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         sms_manager.disconnect(org_id, phone, websocket)
 
 
@@ -889,7 +894,7 @@ async def get_unread_sms_count(
         logger.warning(f"Unread SMS count query failed: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return {"unread_count": 0}
 

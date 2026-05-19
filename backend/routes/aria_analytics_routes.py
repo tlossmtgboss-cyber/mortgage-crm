@@ -153,7 +153,7 @@ async def get_aria_stats(
             for row in tool_rows:
                 top_intents.append({"intent": row[0], "count": row[1]})
                 tools_used_count += row[1]
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # tools_used column may not exist or may not be JSONB
             pass
 
@@ -303,8 +303,9 @@ async def get_time_saved(
                     "minutes_saved_per_use": minutes,
                     "total_minutes_saved": round(saved, 1),
                 }
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Fallback: estimate based on conversation count
+            logger.exception("unhandled exception")
             total_minutes_saved = conv_row * 3.0  # ~3 min saved per conversation
 
         return TimeSavedEstimate(
@@ -375,7 +376,7 @@ async def get_conversations(
                     parsed = json.loads(row[6]) if isinstance(row[6], str) else row[6]
                     if isinstance(parsed, list):
                         tools_list = parsed
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             results.append(ConversationLogEntry(

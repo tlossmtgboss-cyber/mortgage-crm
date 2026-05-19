@@ -189,7 +189,8 @@ class _FileConnectionManager:
             try:
                 await ws.send_json(message)
                 sent += 1
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 dead.append(ws)
 
         # Clean up dead connections outside broadcast lock

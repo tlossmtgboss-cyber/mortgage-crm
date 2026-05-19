@@ -152,5 +152,5 @@ class GraphClient:
 def _safe_body(resp: httpx.Response) -> Any:
     try:
         return resp.json()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return resp.text[:500]

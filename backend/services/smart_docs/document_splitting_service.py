@@ -1332,7 +1332,7 @@ Return ONLY the JSON array, no other text.""",
                         box = page.mediabox
                         width = int(float(box.width))
                         height = int(float(box.height))
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
                 previews.append(PagePreview(

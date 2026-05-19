@@ -416,7 +416,7 @@ class PDFForensicsService:
 
                         images.append(img_info)
 
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         continue
 
         except Exception as e:
@@ -845,7 +845,7 @@ class PDFForensicsService:
                     if name.startswith("/"):
                         name = name[1:]
                     fonts.append(name)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 continue
 
         return fonts
@@ -856,7 +856,7 @@ class PDFForensicsService:
             content = file_bytes[:200000].decode("latin-1", errors="replace")
             matches = re.findall(r'/BaseFont\s*/([^\s/\[\]<>()]+)', content)
             return list(set(matches))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return []
 
     def _extract_metadata_regex(
@@ -905,7 +905,7 @@ class PDFForensicsService:
                     contents = contents.get_object()
                 if hasattr(contents, 'get_data'):
                     return contents.get_data()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return None
 
@@ -915,7 +915,7 @@ class PDFForensicsService:
             media_box = page.get("/MediaBox")
             if media_box:
                 return float(str(media_box[2])), float(str(media_box[3]))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return None, None
 

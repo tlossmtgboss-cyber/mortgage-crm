@@ -11,7 +11,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime,
-    Text, ForeignKey, JSON, Index, UniqueConstraint, text
+    Text, ForeignKey, JSON, Index, UniqueConstraint, text, Numeric
 )
 
 from db import Base
@@ -81,7 +81,7 @@ class SMSResponsePattern(Base):
     times_accepted = Column(Integer, default=0)
     times_edited = Column(Integer, default=0)
     times_rejected = Column(Integer, default=0)
-    success_rate = Column(Float, default=0)
+    success_rate = Column(Numeric(8, 5), default=0)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -106,7 +106,7 @@ class LoanReconciliationService:
                 if org_id_val:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(self._own_db, int(org_id_val))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         return self._own_db
 

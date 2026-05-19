@@ -194,7 +194,7 @@ async def list_leads_v2(
         # Authenticate
         try:
             current_user = await get_current_user_flexible(request)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return _problem_response(ProblemDetail(
                 type="https://api.perenniaai.com/problems/unauthorized",
                 title="Unauthorized",
@@ -313,7 +313,7 @@ async def get_lead_v2(
     try:
         try:
             current_user = await get_current_user_flexible(request)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return _problem_response(ProblemDetail(
                 type="https://api.perenniaai.com/problems/unauthorized",
                 title="Unauthorized",
@@ -384,7 +384,7 @@ async def create_lead_v2(
     try:
         try:
             current_user = await get_current_user_flexible(request)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return _problem_response(ProblemDetail(
                 type="https://api.perenniaai.com/problems/unauthorized",
                 title="Unauthorized",
@@ -489,7 +489,7 @@ async def update_lead_v2(
     try:
         try:
             current_user = await get_current_user_flexible(request)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return _problem_response(ProblemDetail(
                 type="https://api.perenniaai.com/problems/unauthorized",
                 title="Unauthorized",

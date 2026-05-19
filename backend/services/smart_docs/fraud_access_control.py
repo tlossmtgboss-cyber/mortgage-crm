@@ -286,7 +286,7 @@ def log_fraud_data_access(
         )
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

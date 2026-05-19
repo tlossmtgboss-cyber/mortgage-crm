@@ -128,7 +128,7 @@ class DripTriggerEngine:
                     result = {"action": action.action, "status": "logged", "detail": action.detail}
 
                 results.append(result)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 logger.exception(f"Failed to execute trigger action {action.action} for lead {lead_id}")
                 results.append({"action": action.action, "status": "failed"})
 

@@ -611,7 +611,7 @@ async def test_assignment(
                 "SELECT first_name || ' ' || last_name FROM users WHERE id = :uid"
             ), {"uid": result_user_id}).scalar()
             user_name = row
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     return success_response(

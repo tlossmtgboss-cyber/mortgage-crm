@@ -1092,7 +1092,7 @@ async def generate_ai_sms_response(
             if _org_row and _org_row[0]:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, _org_row[0])
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     try:
         import openai

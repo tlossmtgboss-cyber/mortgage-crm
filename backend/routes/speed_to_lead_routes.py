@@ -69,7 +69,7 @@ def _is_tcpa_quiet_hours(state: Optional[str] = None) -> bool:
         tz = pytz.timezone(tz_name)
         local_now = datetime.now(tz).time()
         return local_now < TCPA_START or local_now >= TCPA_END
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         # If timezone check fails, default to conservative (allow)
         return False
 
@@ -226,7 +226,7 @@ async def _execute_speed_to_lead(
             try:
                 from routes.sms_compliance_routes import is_opted_out
                 opted_out = is_opted_out(db, lead.phone, org_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             if not opted_out:
@@ -268,7 +268,8 @@ async def _execute_speed_to_lead(
                         "org_id": org_id, "lo_id": assigned_lo_id, "now": now,
                     })
                     db.commit()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     db.rollback()
             else:
                 _log_stl_event(db, lead_id, org_id, "call_failed", {})
@@ -296,7 +297,8 @@ def _log_stl_event(db: Session, lead_id: int, org_id: Optional[int], event: str,
             "now": datetime.now(timezone.utc),
         })
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
 
 
@@ -444,5 +446,5 @@ async def speed_to_lead_metrics(
             "leads_routed": stats.routed if stats else 0,
             "completed": stats.completed if stats else 0,
         }
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return {"period_days": days, "total_leads_triggered": 0, "note": "Events table not yet created"}

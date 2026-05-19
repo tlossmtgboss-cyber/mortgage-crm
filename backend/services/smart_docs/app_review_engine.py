@@ -1401,7 +1401,7 @@ def _plausibility_employment_future_start(loan: dict) -> Optional[dict]:
             start_date = start_date_str if isinstance(start_date_str, date) else start_date_str.date()
         else:
             return None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
     if start_date > date.today():

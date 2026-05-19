@@ -893,5 +893,5 @@ def check_token(request: Request, db: Session = Depends(get_db)):
         contact = db.query(PURLContact).filter(PURLContact.id == ctx.get("contact_id")).first()
         name = contact.first_name if contact else ""
         return TokenCheckResponse(valid=True, borrower_name=name or "")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return TokenCheckResponse(valid=False)

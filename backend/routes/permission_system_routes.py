@@ -1140,7 +1140,7 @@ async def export_compliance_report(
                     resource_type="compliance_report", export_format="csv",
                     ip_address=_get_client_ip(request),
                 )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             return StreamingResponse(

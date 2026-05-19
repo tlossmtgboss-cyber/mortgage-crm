@@ -72,7 +72,8 @@ def _check_sweep_rate_limit(org_id):
                 import redis
                 _redis_sweep_client = redis.Redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
                 _redis_sweep_client.ping()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _redis_sweep_client = None
 
     key = f"ratelimit:ops_sweep:{org_id or 'global'}"
@@ -85,7 +86,7 @@ def _check_sweep_rate_limit(org_id):
                 return ttl
             _redis_sweep_client.setex(key, _SWEEP_COOLDOWN_SECONDS, "1")
             return 0
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # Fall back to in-memory
@@ -120,11 +121,11 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
         try:
             db.execute(text("SELECT 1 FROM ops_sweep_results LIMIT 0"))
             logger.info("ops_sweep_results table verified")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.warning("ops_sweep_results table not found — ensure migrations have run")
         finally:
             db.close()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     # ====================================================================

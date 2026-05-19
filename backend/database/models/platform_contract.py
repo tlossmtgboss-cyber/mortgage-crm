@@ -11,7 +11,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime,
-    Text, ForeignKey, JSON, Date
+    Text, ForeignKey, JSON, Date, Numeric
 )
 from sqlalchemy.orm import relationship
 
@@ -49,7 +49,7 @@ class PlatformContract(Base):
     renewal_term_months = Column(Integer, nullable=True)
 
     # Financial
-    contract_value = Column(Float, nullable=True)
+    contract_value = Column(Numeric(14, 2), nullable=True)
     billing_frequency = Column(String(20), nullable=True)  # monthly, quarterly, annually
 
     # Signer info (denormalized for display)

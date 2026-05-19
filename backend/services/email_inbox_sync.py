@@ -73,7 +73,7 @@ def _parse_dt(raw: Optional[str]) -> Optional[datetime]:
     try:
         raw = raw.rstrip("Z")
         return datetime.fromisoformat(raw).replace(tzinfo=timezone.utc)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 

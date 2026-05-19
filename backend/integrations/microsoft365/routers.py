@@ -249,7 +249,7 @@ async def disconnect_account(
             try:
                 async with GraphClient(db, account) as gc:
                     await gc.delete(f"/subscriptions/{sub.graph_subscription_id}")
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 log.warning("Could not delete Graph subscription %s on disconnect", sub.id)
         db.delete(account)
         db.commit()

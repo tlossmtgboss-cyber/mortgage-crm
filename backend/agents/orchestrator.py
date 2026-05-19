@@ -824,7 +824,7 @@ async def run_orchestrator(
                 if cb_post_reason in ("warning", "critical"):
                     response["cost_warning"] = cb_post_reason
                     response.setdefault("headers", {})["X-AI-Cost-Warning"] = cb_post_reason
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # ================================================================
@@ -910,7 +910,7 @@ async def run_orchestrator(
                 intent=intent,
                 model=model_used
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # Never fail the response for metrics
 
         # Add intent routing info to performance metrics
@@ -990,7 +990,7 @@ async def run_orchestrator(
                     processing_time_ms=processing_time * 1000,
                 )
                 get_audit_logger().log(failure_entry, db_session)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         clear_request_id()

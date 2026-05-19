@@ -59,7 +59,8 @@ class PipelineTools:
                 row = result.fetchone()
                 if row:
                     return {"id": row[0], "created_at": row[1].isoformat() if row[1] else datetime.now(timezone.utc).isoformat()}
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 db.rollback()
                 # Fallback: append to lead.notes text field
                 try:
@@ -129,7 +130,7 @@ class PipelineTools:
                 ), {"loan_id": loan_id}).fetchall()
                 return [{"id": r[0], "title": r[1], "due_date": str(r[2]) if r[2] else None,
                          "status": r[3]} for r in rows]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 return []
             finally:
                 db.close()
@@ -148,7 +149,7 @@ class PipelineTools:
                 ), {"loan_id": loan_id}).fetchall()
                 return [{"id": r[0], "name": r[1], "received": r[2] == "completed",
                          "status": r[2]} for r in rows]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 return []
             finally:
                 db.close()

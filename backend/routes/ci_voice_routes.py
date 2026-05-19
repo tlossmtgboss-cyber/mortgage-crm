@@ -2242,7 +2242,7 @@ async def export_recordings(
                     ip_address=_get_client_ip(request),
                     details={"record_count": len(data)},
                 )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return {"recordings": data, "count": len(data)}
 
@@ -2284,7 +2284,7 @@ async def export_recordings(
                     ip_address=_get_client_ip(request),
                     details={"record_count": len(rows)},
                 )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             return StreamingResponse(

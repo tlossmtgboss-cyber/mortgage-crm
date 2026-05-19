@@ -177,7 +177,8 @@ class AuditLogger:
                     db_session.flush()
                     self._has_extended_columns = True
                     return
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     if self._has_extended_columns is None:
                         self._has_extended_columns = False
                         logger.info("[AUDIT] Extended columns not found, using base schema")
@@ -241,7 +242,7 @@ class AuditLogger:
                     usage.get('input_tokens', 0),
                     usage.get('output_tokens', 0),
                 )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return 0, 0
 

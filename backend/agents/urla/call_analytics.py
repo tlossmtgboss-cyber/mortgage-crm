@@ -196,7 +196,7 @@ async def _scan_applications(
 
         try:
             app = await state.load_application(tenant_id, loan_id)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.warning("Failed to deserialize URLA record %s", key, exc_info=True)
             continue
 

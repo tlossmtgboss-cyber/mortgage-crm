@@ -474,7 +474,7 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 ip_address=_get_client_ip(request),
                 details={"start_date": start_date_str, "end_date": end_date_str, "funded_count": funded_count},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return StreamingResponse(

@@ -142,7 +142,7 @@ class STTFallbackService:
                 if self._provider == STTProvider.DEEPGRAM:
                     await self._ws.send(json.dumps({"type": "CloseStream"}))
                 await self._ws.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         if self._status == STTStatus.DEGRADED and self._audio_buffer:

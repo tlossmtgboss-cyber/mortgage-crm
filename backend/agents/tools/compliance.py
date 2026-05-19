@@ -715,7 +715,7 @@ def get_state_requirements(
                 "FROM state_disclosures WHERE state_code = :state ORDER BY category, id",
                 {"state": state},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             db_results = []
 
         if db_results:

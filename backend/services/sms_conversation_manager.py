@@ -163,7 +163,7 @@ class SMSConversationManager:
                 lead = db.query(Lead).filter(Lead.phone == phone).first()
                 if lead:
                     lead_id = lead.id
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             conversation = SMSConversation(

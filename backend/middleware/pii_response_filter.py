@@ -321,7 +321,7 @@ def _extract_user_id_from_request(request: Request) -> Optional[str]:
         if token_data is None:
             return None
         return str(getattr(token_data, "user_id", None) or getattr(token_data, "sub", None))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 

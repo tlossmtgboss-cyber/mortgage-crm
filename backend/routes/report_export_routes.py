@@ -180,7 +180,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
             try:
                 from utils.export_audit import log_export_event, _get_client_ip
                 log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type="sla_compliance_report", export_format="pdf", ip_address=_get_client_ip(request), details={"period_days": period_days})
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return _maybe_gzip_streaming(pdf_bytes, "application/pdf", filename, encoding)
 
@@ -190,7 +190,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
             try:
                 from utils.export_audit import log_export_event, _get_client_ip
                 log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type="sla_compliance_report", export_format="xlsx", ip_address=_get_client_ip(request), details={"period_days": period_days})
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return _maybe_gzip_streaming(
                 xlsx_bytes,
@@ -257,7 +257,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 ip_address=_get_client_ip(request),
                 details={"record_count": len(data), "total_rows": total_rows, "filters": filters},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         encoding = _accept_gzip(request)
@@ -327,7 +327,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 ip_address=_get_client_ip(request),
                 details={"record_count": len(data), "total_rows": total_rows, "date_from": date_from, "date_to": date_to},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         encoding = _accept_gzip(request)
@@ -383,7 +383,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
                 ip_address=_get_client_ip(request),
                 details={"record_count": len(data), "total_rows": total_rows, "period_days": period_days},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         encoding = _accept_gzip(request)
@@ -441,7 +441,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         try:
             from utils.export_audit import log_export_event, _get_client_ip
             log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type=body.report_type, export_format="pdf", ip_address=_get_client_ip(request), details={"title": body.title})
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         encoding = _accept_gzip(request)
@@ -482,7 +482,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         try:
             from utils.export_audit import log_export_event, _get_client_ip
             log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type=body.report_type, export_format="xlsx", ip_address=_get_client_ip(request), details={"title": body.title})
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         encoding = _accept_gzip(request)
@@ -527,7 +527,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         try:
             from utils.export_audit import log_export_event, _get_client_ip
             log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type=body.report_type, export_format="csv", ip_address=_get_client_ip(request), details={"title": body.title})
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         filename = f"{body.report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"

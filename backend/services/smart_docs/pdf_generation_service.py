@@ -645,8 +645,9 @@ class PDFGenerationService:
                         preserveAspectRatio=True,
                         mask="auto",
                     )
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     # Fallback: try with reportlab ImageReader
+                    logger.exception("unhandled exception")
                     try:
                         from reportlab.lib.utils import ImageReader
                         img_reader = ImageReader(io.BytesIO(image_bytes))
@@ -1414,7 +1415,7 @@ class PDFGenerationService:
             # Subtract /Type /Pages (the parent node)
             pages_count = pdf_content.count(b"/Type /Pages")
             return max(count - pages_count, 1)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return 0
 
     # ------------------------------------------------------------------
@@ -1671,7 +1672,7 @@ def _image_reader_path(buf: io.BytesIO):
     try:
         from reportlab.lib.utils import ImageReader
         return ImageReader(buf)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return buf
 
 

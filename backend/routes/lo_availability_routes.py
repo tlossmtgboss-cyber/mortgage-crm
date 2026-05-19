@@ -276,7 +276,8 @@ def _is_lo_available(db: Session, user_id: int) -> bool:
             import pytz
             tz = pytz.timezone(avail.timezone or "America/Chicago")
             now_in_tz = datetime.now(tz)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             now_in_tz = datetime.now(timezone.utc)
         now_time_val = now_in_tz.time()
         now_weekday = now_in_tz.weekday()  # 0=Monday
@@ -323,7 +324,8 @@ def get_available_los(db: Session, organization_id: int) -> list:
             import pytz
             tz = pytz.timezone(avail.timezone or "America/Chicago")
             now_in_tz = datetime.now(tz)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             now_in_tz = datetime.now(timezone.utc)
         if not _is_within_schedule(db, avail.user_id, now_in_tz.time(), now_in_tz.weekday()):
             continue
@@ -593,7 +595,8 @@ async def find_available_los(
             import pytz
             tz = pytz.timezone(avail.timezone or "America/Chicago")
             now_in_tz = datetime.now(tz)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             now_in_tz = datetime.now(timezone.utc)
 
         if not _is_within_schedule(db, user.id, now_in_tz.time(), now_in_tz.weekday()):
@@ -643,7 +646,8 @@ async def get_lo_availability(
         import pytz
         tz = pytz.timezone(avail.timezone or "America/Chicago")
         now_in_tz = datetime.now(tz)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         now_in_tz = datetime.now(timezone.utc)
     in_schedule = _is_within_schedule(db, user_id, now_in_tz.time(), now_in_tz.weekday())
 

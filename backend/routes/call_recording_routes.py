@@ -235,7 +235,7 @@ def _is_allowed_recording_url(url: str) -> bool:
         if host.endswith(".amazonaws.com") or host.endswith(".r2.dev") or host.endswith(".cloudfront.net"):
             return True
         return False
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return False
 
 

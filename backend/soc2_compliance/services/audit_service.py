@@ -175,7 +175,7 @@ class AuditService:
                     alert_type="warning" if severity == SeverityLevel.HIGH else "error",
                     tags=tags,
                 )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # DataDog unavailable — non-blocking
 
         return log_id

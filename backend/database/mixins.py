@@ -182,7 +182,7 @@ class SoftDeleteQuery(Query):
                     self._query_filter = self.filter(
                         model.deleted_at.is_(None)
                     )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # column_descriptions may not be available in all contexts
             # (e.g. bulk updates). Fail open — callers can add explicit
             # filters if needed.

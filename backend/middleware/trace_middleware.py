@@ -81,7 +81,8 @@ class TraceIDMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             duration_ms = round((time.monotonic() - start) * 1000, 2)
             if not skip_log:
                 logger.error(

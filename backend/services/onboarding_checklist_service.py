@@ -451,7 +451,7 @@ def _check_provisioning_method(db, org_id: int) -> Dict:
             WHERE organization_id = :org_id
         """), {"org_id": org_id}).fetchone()
         invite_count = invite_row[0] if invite_row else 0
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Table may not exist
 
     # Check total active users beyond the initial admin

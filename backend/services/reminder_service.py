@@ -126,7 +126,8 @@ class ReminderService:
             import pytz
             tz = pytz.timezone(tz_name)
             local_start = start.astimezone(tz) if start.tzinfo else pytz.utc.localize(start).astimezone(tz)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             local_start = start
 
         date_str = local_start.strftime("%B %d, %Y")  # e.g. "March 12, 2026"

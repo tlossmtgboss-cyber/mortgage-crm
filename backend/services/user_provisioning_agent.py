@@ -702,7 +702,7 @@ class UserProvisioningAgent:
             # Non-fatal: state tracking failure should not block onboarding
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     async def _record_onboarding_error(
@@ -735,7 +735,7 @@ class UserProvisioningAgent:
             )
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     async def _notify_manager(

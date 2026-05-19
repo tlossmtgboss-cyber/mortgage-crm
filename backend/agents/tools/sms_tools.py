@@ -212,7 +212,8 @@ def get_sms_conversation_history(
                    LIMIT :limit""",
                 {"pattern": phone_pattern, "limit": limit},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             messages = []
 
     if not messages:

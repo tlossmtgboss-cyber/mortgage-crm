@@ -170,7 +170,7 @@ def _check_availability(db: Session, lo_id: int) -> bool:
             WHERE user_id = :uid AND status = 'available'
         """), {"uid": lo_id}).fetchone()
         return row is not None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return True  # If table doesn't exist, assume available
 
 

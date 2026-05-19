@@ -1,0 +1,30 @@
+# Ruff configuration for Perennia AI backend.
+# Mirrors the .pre-commit-config.yaml ruff hook so local + CI behave the same.
+
+line-length = 120
+target-version = "py311"
+
+exclude = [
+    "migrations/",
+    "alembic/",
+    "node_modules/",
+    ".next/",
+    "build/",
+    "dist/",
+    ".venv/",
+    "venv/",
+]
+
+[lint]
+# E   = pycodestyle errors
+# F   = pyflakes
+# E722 = bare except (explicitly listed even though included in E)
+# B   = flake8-bugbear
+select = ["E", "F", "E722", "B"]
+
+# Allow long strings and lines inside generated/legacy areas.
+ignore = []
+
+[lint.per-file-ignores]
+"backend/tests/*" = ["E501", "B011"]
+"backend/scripts/*" = ["E501"]

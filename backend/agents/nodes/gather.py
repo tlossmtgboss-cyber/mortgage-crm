@@ -221,7 +221,7 @@ async def execute_tool(
                             logger.info(f"Tool {tool_name} CACHE HIT (after stampede wait)")
                             return tool_call
                     # Timed out waiting — proceed with execution
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # Redis lock failed — proceed without stampede protection
 
         # Set tenant context before executing any registry tool.
@@ -269,7 +269,7 @@ async def execute_tool(
                 # Release stampede lock
                 try:
                     await cache.delete(f"lock:{cache_key}")
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
                 logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms (cached for {ttl}s)")
             else:

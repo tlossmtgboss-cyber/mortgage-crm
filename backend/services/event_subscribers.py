@@ -306,7 +306,7 @@ async def on_any_appointment_event_audit_log(event: Event) -> None:
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(session, int(org_id))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             log_entry = AuditLog(
@@ -386,7 +386,7 @@ async def on_pos_application_submitted_promote(event: Event) -> None:
         try:
             from database.tenant_mixin import set_tenant_context
             set_tenant_context(session, int(org_id))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     try:
         # ----- Resolve the Lead ------------------------------------------------
@@ -599,7 +599,7 @@ async def on_pos_application_submitted_audit(event: Event) -> None:
             try:
                 from database.tenant_mixin import set_tenant_context as _stc
                 _stc(session, int(org_id))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             activity = Activity(
@@ -660,7 +660,7 @@ async def on_pos_application_submitted_notify_lo(event: Event) -> None:
             try:
                 from database.tenant_mixin import set_tenant_context as _stc
                 _stc(session, int(_notify_org_id))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             lead = session.query(Lead).filter(Lead.id == int(contact_id)).first()
@@ -992,7 +992,7 @@ async def on_pos_application_submitted_mismo_email(event: Event) -> None:
             try:
                 from database.tenant_mixin import set_tenant_context as _stc
                 _stc(session, int(_org_id))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             lead = session.query(Lead).filter(Lead.id == int(contact_id)).first()
@@ -1167,7 +1167,7 @@ async def on_pos_appointment_booked_create_task(event: Event) -> None:
         try:
             from database.tenant_mixin import set_tenant_context as _stc
             _stc(session, int(org_id))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     try:
         task = Task(
@@ -1232,7 +1232,7 @@ async def on_pos_appointment_booked_notify_lo(event: Event) -> None:
             try:
                 from database.tenant_mixin import set_tenant_context as _stc
                 _stc(session, int(_appt_org_id))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             lo = session.query(User).filter(User.id == int(lo_user_id)).first()

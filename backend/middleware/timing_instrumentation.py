@@ -178,7 +178,8 @@ class MiddlewareTimingWrapper(BaseHTTPMiddleware):
         start = time.perf_counter()
         try:
             response = await self._wrapped_dispatch(request, call_next)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             elapsed_ms = (time.perf_counter() - start) * 1000
             _record_timing(request, self.name, elapsed_ms)
             _stats.record(self.name, elapsed_ms)
@@ -306,7 +307,8 @@ def wrap_middleware_for_timing(
             start = time.perf_counter()
             try:
                 response = await super().dispatch(request, call_next)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 _record_timing(request, name, elapsed_ms)
                 _stats.record(name, elapsed_ms)

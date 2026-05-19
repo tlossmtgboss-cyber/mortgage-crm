@@ -459,7 +459,7 @@ def get_mum_refinance_candidates(
             )
             if row and row.get("value"):
                 market_rate = float(row["value"])
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         with get_db() as db:

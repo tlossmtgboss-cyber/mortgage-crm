@@ -294,7 +294,7 @@ class PrivacyComplianceService:
             )
             if result.scalar() > 0:
                 overrides["loans"] = "Active loan in pipeline — GLBA retention required"
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         try:
@@ -312,7 +312,7 @@ class PrivacyComplianceService:
             )
             if result.scalar() > 0:
                 overrides["loans"] = "Funded loan within 7-year RESPA retention window"
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         overrides["voice_consents"] = "TCPA consent records retained per 5-year regulatory requirement"

@@ -60,7 +60,7 @@ def record_failed_login(db: Session, user) -> dict:
         logger.warning(f"Failed to record login attempt: {type(e).__name__}: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return {"locked": False, "attempts": 0, "error": str(e)}
 
@@ -76,7 +76,7 @@ def reset_failed_login(db: Session, user):
         logger.warning(f"Failed to reset login counter: {type(e).__name__}: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

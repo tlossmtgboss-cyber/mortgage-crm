@@ -489,7 +489,7 @@ async def verify_mfa_login(
             )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired MFA session token",

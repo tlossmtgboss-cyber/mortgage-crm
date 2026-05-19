@@ -195,7 +195,7 @@ def _create_agent_task_if_needed(
                         break
                 if not task_type and rows:
                     task_type = rows[0][0]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             cols = ["title", "description", "priority", "category", "created_at"]

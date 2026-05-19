@@ -123,7 +123,8 @@ def transactional(func):
             db.commit()
             logger.debug("Transaction committed for %s", func.__qualname__)
             return result
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             logger.exception(
                 "Transaction rolled back for %s", func.__qualname__,
@@ -168,7 +169,8 @@ def atomic_operation(db: Session, *, nested: bool = False):
             yield savepoint
             savepoint.commit()
             logger.debug("Savepoint committed")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             savepoint.rollback()
             logger.debug("Savepoint rolled back")
             raise
@@ -177,7 +179,8 @@ def atomic_operation(db: Session, *, nested: bool = False):
             yield db
             db.commit()
             logger.debug("Atomic operation committed")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             logger.debug("Atomic operation rolled back")
             raise

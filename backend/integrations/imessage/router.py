@@ -286,7 +286,7 @@ async def receive_webhook(
 
     try:
         await svc.ingest_event(db, line=line, event=event, raw_body=body)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.exception("imessage.webhook.ingest_failed", extra={"line_id": str(line_id), "type": event.type})
         return {"ok": False}
     return {"ok": True}

@@ -10,7 +10,7 @@ escalation chain support.
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, JSON, Float,
-    ForeignKey, Index,
+    ForeignKey, Index, Numeric,
 )
 from db import Base
 
@@ -36,7 +36,7 @@ class DocSLAConfig(Base):
     #   PACKAGE_GENERATION     - Submission package generation
     #   SIGNING_COMPLETION     - E-signature completion by all parties
     target_hours = Column(Float, nullable=False)  # SLA target in business hours
-    warning_threshold_pct = Column(Float, default=75.0)  # Warn at this % of SLA
+    warning_threshold_pct = Column(Numeric(8, 5), default=75.0)  # Warn at this % of SLA
     business_hours_only = Column(Boolean, default=True)
     business_hours_start = Column(Integer, default=8)   # 8 AM
     business_hours_end = Column(Integer, default=18)     # 6 PM

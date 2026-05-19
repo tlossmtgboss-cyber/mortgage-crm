@@ -522,7 +522,8 @@ class EmailDeliveryService:
                 err_body = response.json()
                 errors = err_body.get("errors", [])
                 err_msg = "; ".join(e.get("message", "") for e in errors) or response.text
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 err_msg = response.text or f"HTTP {response.status_code}"
 
             logger.warning(
@@ -690,7 +691,8 @@ class EmailDeliveryService:
                     err_data.get("error", {}).get("message")
                     or f"HTTP {response.status_code}"
                 )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 err_msg = f"HTTP {response.status_code}"
 
             logger.warning(
@@ -984,7 +986,8 @@ class EmailDeliveryService:
                     err_data.get("error", {}).get("message")
                     or f"HTTP {response.status_code}"
                 )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 err_msg = f"HTTP {response.status_code}"
 
             logger.warning(

@@ -483,7 +483,8 @@ async def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = M
     except asyncio.TimeoutError:
         _circuit_record_failure()
         raise RuntimeError("Claude API timeout after 30s for email composition")
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         _circuit_record_failure()
         raise
 

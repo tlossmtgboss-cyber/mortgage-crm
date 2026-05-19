@@ -41,7 +41,7 @@ async def handle_webhook(
     try:
         body = await request.json()
         batch = GraphNotificationBatch.model_validate(body)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         log.exception("Invalid webhook body")
         return Response(status_code=202)
 
@@ -126,7 +126,7 @@ async def _dispatch_notification(
             db.commit()
         finally:
             db.close()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         log.exception("Notification dispatch failed (kind=%s)", kind)
 
 

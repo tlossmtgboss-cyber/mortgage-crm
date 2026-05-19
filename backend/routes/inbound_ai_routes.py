@@ -310,7 +310,7 @@ def _ensure_inbound_config_table(db: Session):
         logger.debug("vapi_inbound_configs DDL check (non-fatal): %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -323,7 +323,8 @@ def _get_inbound_config(db: Session, org_id: int) -> Dict[str, Any]:
             FROM vapi_inbound_configs
             WHERE organization_id = :org_id
         """), {"org_id": org_id}).fetchone()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         row = None
 
     if row:
@@ -519,7 +520,7 @@ async def _get_or_create_vapi_assistant(
         logger.warning("Could not persist Vapi assistant ID: %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # Also record in vapi_assistants table for unified tracking
@@ -546,7 +547,7 @@ async def _get_or_create_vapi_assistant(
         logger.debug("vapi_assistants insert skipped (non-fatal): %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     logger.info(
@@ -592,7 +593,7 @@ def _log_inbound_call(
         logger.debug("Failed to log inbound call (non-fatal): %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
     return call_id
 
@@ -630,7 +631,7 @@ def _create_task_for_lo(
         logger.warning("Failed to create task for LO (non-fatal): %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -673,7 +674,7 @@ def _log_lead_activity(
         logger.debug("Failed to log lead activity (non-fatal): %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -721,7 +722,7 @@ async def inbound_call_webhook(
     """
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     event_data = payload.get("data", {})
@@ -749,14 +750,16 @@ async def inbound_call_webhook(
             import base64
             decoded = base64.b64decode(client_state_raw).decode("utf-8")
             client_state = json.loads(decoded)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Might be plain text/JSON
+            logger.exception("unhandled exception")
             if client_state_raw in ("lo_ring",):
                 client_state = {"type": client_state_raw}
             else:
                 try:
                     client_state = json.loads(client_state_raw)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     client_state = {"raw": client_state_raw}
 
     # --- Handle LO ring timeout / no-answer ---
@@ -795,7 +798,7 @@ async def inbound_call_webhook(
                                 "organization_id": row.organization_id,
                                 "org_name": row.org_name or "our team",
                             })
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
                 background_tasks.add_task(
@@ -1076,7 +1079,7 @@ async def vapi_inbound_webhook(
     """
     try:
         payload = json.loads(raw_body)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     message = payload.get("message", {})
@@ -1270,7 +1273,7 @@ async def vapi_inbound_webhook(
             logger.warning("Failed to log end-of-call report: %s", e)
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # Log activity
@@ -1468,7 +1471,7 @@ async def update_inbound_config_endpoint(
         logger.error("Failed to update inbound config: %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         raise HTTPException(status_code=500, detail="Failed to update configuration")
 
@@ -1516,10 +1519,11 @@ async def provision_inbound_assistant(
             WHERE organization_id = :org_id
         """), {"org_id": org_id})
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     assistant_id = await _get_or_create_vapi_assistant(

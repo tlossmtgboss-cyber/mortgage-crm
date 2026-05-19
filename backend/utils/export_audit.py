@@ -138,6 +138,6 @@ def _get_client_ip(request) -> Optional[str]:
             return forwarded.split(",")[0].strip()
         if request.client:
             return request.client.host
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     return None

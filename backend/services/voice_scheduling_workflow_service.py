@@ -299,7 +299,8 @@ class VoiceSchedulingWorkflowService:
             )
             self.db.add(activity)
             savepoint.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             savepoint.rollback()
             raise
 
@@ -353,7 +354,8 @@ class VoiceSchedulingWorkflowService:
                 )
                 self.db.add(activity)
                 savepoint.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 savepoint.rollback()
                 logger.exception(
                     "Failed to expire workflow atomically",
@@ -423,7 +425,8 @@ class VoiceSchedulingWorkflowService:
             )
             self.db.add(activity)
             savepoint.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             savepoint.rollback()
             raise
 

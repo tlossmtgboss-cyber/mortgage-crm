@@ -106,7 +106,7 @@ def _extract_spki_hashes(hostname: str, port: int = 443, timeout: float = 10.0) 
                 if hasattr(tls_sock, "get_verified_chain"):
                     try:
                         chain_certs = tls_sock.get_verified_chain() or []
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
                 for cert_obj in chain_certs:
@@ -116,7 +116,7 @@ def _extract_spki_hashes(hostname: str, port: int = 443, timeout: float = 10.0) 
                             h = _der_cert_to_spki_hash(cert_der)
                             if h and h not in hashes:
                                 hashes.append(h)
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         continue
 
     except Exception as exc:

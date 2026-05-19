@@ -1870,7 +1870,7 @@ class FieldMappingService:
                 analytics.correction_rate = round(
                     (event_stats.corrected / event_stats.total_events) * 100, 1
                 )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Table may not exist yet; analytics are best-effort
             logger.debug("Mapping analytics events table not available; skipping event stats")
 

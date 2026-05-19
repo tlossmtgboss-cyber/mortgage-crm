@@ -236,7 +236,8 @@ async def book_lo_meeting(
                 "duration_minutes": duration_minutes,
                 "borrower_name": borrower_name,
             }
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             raise
         finally:

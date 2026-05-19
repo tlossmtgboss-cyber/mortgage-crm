@@ -142,7 +142,7 @@ async def shutdown_clients() -> None:
         for client in _CLIENT_REGISTRY.values():
             try:
                 await client.aclose()
-            except Exception:  # noqa: BLE001
+            except Exception as _exc:  # noqa: BLE001
                 logger.exception("imessage.client.close_failed")
         _CLIENT_REGISTRY.clear()
     with _SERVICE_LOCK:

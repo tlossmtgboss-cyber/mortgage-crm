@@ -220,7 +220,8 @@ def _update_campaign_stats(db: Session, campaign_id: Optional[int], field: str):
             {"id": campaign_id},
         )
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
 
 

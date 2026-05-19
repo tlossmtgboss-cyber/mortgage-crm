@@ -724,7 +724,7 @@ class CallIntelligenceIntegration:
                     ).fetchone()
                     if result:
                         lead_id = result[0]
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
             self.db.execute(

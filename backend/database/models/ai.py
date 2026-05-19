@@ -14,7 +14,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric
 )
 from sqlalchemy.orm import relationship
 
@@ -142,7 +142,7 @@ class AILearningMetric(Base):
     approved_count = Column(Integer, default=0)
     rejected_count = Column(Integer, default=0)
     auto_approved_count = Column(Integer, default=0)
-    accuracy_rate = Column(Float, default=0.0)  # approved / total
+    accuracy_rate = Column(Numeric(8, 5), default=0.0)  # approved / total
 
     # Thresholds
     confidence_threshold = Column(Float, default=0.95)  # Min confidence for auto-approve
@@ -287,8 +287,8 @@ class AIColleagueLearningMetric(Base):
     action_id = Column(String(100), ForeignKey("ai_colleague_actions.action_id", ondelete="CASCADE"))
     metric_type = Column(String(100), nullable=False, index=True)
     metric_name = Column(String(100), nullable=False)
-    metric_value = Column(Float, nullable=False)
-    baseline_value = Column(Float)
+    metric_value = Column(Numeric(14, 2), nullable=False)
+    baseline_value = Column(Numeric(14, 2))
     improvement_percentage = Column(Float)
 
     # Context
@@ -321,7 +321,7 @@ class AIPerformanceDaily(Base):
     # Success
     successful_actions = Column(Integer, default=0)
     failed_actions = Column(Integer, default=0)
-    success_rate = Column(Float)
+    success_rate = Column(Numeric(8, 5))
 
     # Response
     avg_customer_response_time = Column(Float)
@@ -331,7 +331,7 @@ class AIPerformanceDaily(Base):
 
     # Impact
     avg_impact_score = Column(Float)
-    total_business_value = Column(Float)
+    total_business_value = Column(Numeric(14, 2))
 
     # Confidence
     avg_confidence_score = Column(Float)
@@ -403,9 +403,9 @@ class AIHealthScore(Base):
 
     # Metrics
     total_actions = Column(Integer)
-    autonomous_rate = Column(Float)
-    approval_rate = Column(Float)
-    success_rate = Column(Float)
+    autonomous_rate = Column(Numeric(8, 5))
+    approval_rate = Column(Numeric(8, 5))
+    success_rate = Column(Numeric(8, 5))
     avg_confidence = Column(Float)
     learning_velocity = Column(Float)
 
@@ -427,8 +427,8 @@ class AIMetricsDaily(Base):
     tasks_total = Column(Integer, default=0)
     tasks_auto_completed = Column(Integer, default=0)
     tasks_escalated_to_humans = Column(Integer, default=0)
-    automation_rate = Column(Float, default=0.0)  # Percentage
-    escalation_rate = Column(Float, default=0.0)  # Percentage
+    automation_rate = Column(Numeric(8, 5), default=0.0)  # Percentage
+    escalation_rate = Column(Numeric(8, 5), default=0.0)  # Percentage
     avg_ai_resolution_time_seconds = Column(Float, default=0.0)
     total_time_saved_seconds = Column(Float, default=0.0)
     ai_improvement_index = Column(Float, default=100.0)  # Composite score

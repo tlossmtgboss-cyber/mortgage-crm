@@ -92,7 +92,8 @@ async def on_application_escalation(event: Event) -> None:
 
             session.commit()
             logger.info("Escalation processed: lead=%s trigger=%s", contact_id, trigger)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             session.rollback()
             raise
         finally:
@@ -154,7 +155,8 @@ async def on_meeting_booked(event: Event) -> None:
             session.add(task)
             session.commit()
             logger.info("Meeting booked handler: appointment=%s", appointment_id)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             session.rollback()
             raise
         finally:
@@ -200,7 +202,8 @@ async def on_document_suggested(event: Event) -> None:
             )
             session.add(activity)
             session.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             session.rollback()
             raise
         finally:
@@ -250,7 +253,8 @@ async def on_application_stall(event: Event) -> None:
             session.add(task)
             session.commit()
             logger.info("Stall task created: lead=%s section=%s", contact_id, section)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             session.rollback()
             raise
         finally:

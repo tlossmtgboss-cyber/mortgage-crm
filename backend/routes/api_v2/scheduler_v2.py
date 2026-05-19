@@ -279,7 +279,7 @@ async def list_appointments_v2(
                     query = query.filter(
                         _Appointment.organization_id == user.organization_id
                     )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # Public or unauthenticated context
 
         if status:
@@ -478,7 +478,7 @@ async def create_appointment_v2(
                 appt.organization_id = user.organization_id
             if hasattr(user, "id"):
                 appt.user_id = user.id
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         db.add(appt)

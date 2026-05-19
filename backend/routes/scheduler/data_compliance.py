@@ -297,7 +297,7 @@ async def export_borrower_data(
             ip_address=_get_client_ip(request),
             details={"borrower_email_masked": _mask_email(email), "counts": export_payload["counts"]},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     db.commit()
@@ -765,7 +765,7 @@ async def export_audit_log(
             ip_address=_get_client_ip(request),
             details={"days": days, "entry_count": len(entries)},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     db.commit()

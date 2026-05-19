@@ -416,7 +416,7 @@ async def send_message_stream(
                 try:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(async_db, _user_org_id)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             try:
                 agent_message = AgentChatMessage(

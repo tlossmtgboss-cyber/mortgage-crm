@@ -505,7 +505,7 @@ class SLAEnforcementService:
                         org_holidays.append(date.fromisoformat(entry))
                     except (ValueError, TypeError):
                         pass
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return BusinessHoursCalculator(
@@ -1106,7 +1106,7 @@ class SLAEnforcementService:
                 )
                 for uid, fn, ln in users:
                     user_names[uid] = f"{fn or ''} {ln or ''}".strip() or f"User {uid}"
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         results: List[UserSLAPerformance] = []

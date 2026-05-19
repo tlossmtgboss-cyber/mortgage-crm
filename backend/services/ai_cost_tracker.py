@@ -54,7 +54,7 @@ def _get_redis_client():
     try:
         from services.redis_service import redis_service
         return redis_service.get_client()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 
@@ -218,7 +218,7 @@ class AICostTracker:
             logger.error("Failed to record AI cost: %s", e)
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return cost

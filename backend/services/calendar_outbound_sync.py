@@ -105,7 +105,7 @@ async def push_appointment_created(db: Session, appointment: Any, user: Any) -> 
         logger.error("Outbound sync: push_appointment_created failed for %s: %s", appointment.id, e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -138,7 +138,7 @@ async def push_appointment_updated(db: Session, appointment: Any, user: Any) -> 
         logger.error("Outbound sync: push_appointment_updated failed for %s: %s", appointment.id, e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -171,7 +171,7 @@ async def push_appointment_cancelled(db: Session, appointment: Any, user: Any) -
         logger.error("Outbound sync: push_appointment_cancelled failed for %s: %s", appointment.id, e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

@@ -36,7 +36,7 @@ def _send_compliance_alert(failed_checks, warning_checks, total):
         statsd.gauge("soc2.compliance_scan.passed", total - len(failed_checks) - len(warning_checks))
         statsd.gauge("soc2.compliance_scan.failed", len(failed_checks))
         statsd.gauge("soc2.compliance_scan.warnings", len(warning_checks))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     if not failed_checks:
@@ -77,7 +77,7 @@ def _send_compliance_alert(failed_checks, warning_checks, total):
             alert_type="error",
             tags=["soc2:compliance_scan", f"failed:{len(failed_checks)}"],
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
 

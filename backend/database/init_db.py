@@ -1612,7 +1612,7 @@ def init_db():
                 ]:
                     try:
                         conn.execute(text(col_stmt))
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass  # Column already exists
                 conn.commit()
                 logger.info("✅ scheduled_reports table created/verified (ER-9.11)")

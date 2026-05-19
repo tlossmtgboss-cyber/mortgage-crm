@@ -167,7 +167,7 @@ async def _route_inbound_to_livekit(
                 )
                 await asyncio.sleep(4)
                 await client.post(f"{base_url}/hangup", headers=headers, json={})
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return
 
@@ -238,7 +238,7 @@ def _ensure_idempotency_table(db: Session):
     except Exception as e:
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         logger.debug("Idempotency table creation skipped: %s", e)
         _idem_table_checked = True
@@ -326,7 +326,7 @@ async def handle_telnyx_webhook(
         idem_key = None
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         logger.warning("Webhook idempotency check skipped: %s", idem_err)
 
@@ -399,7 +399,7 @@ async def handle_telnyx_webhook(
         if idem_key:
             try:
                 mark_failed(db, idem_key, response_code=200)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         # Return 200 to prevent provider retries — log error for investigation
         from fastapi.responses import JSONResponse
@@ -583,7 +583,7 @@ async def handle_call_answered(event: TelnyxCallEvent, db: Session):
         """), {"call_id": call_control_id}).fetchone()
         if _ans_row:
             _ans_org_id = _ans_row[0]
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Best-effort tenant resolution
 
     if _ans_org_id:
@@ -622,7 +622,7 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
         """), {"call_id": call_control_id}).fetchone()
         if _hup_row:
             _hup_org_id = _hup_row[0]
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Best-effort tenant resolution
 
     if _hup_org_id:
@@ -687,7 +687,7 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
             """), {"message_id": message_id}).fetchone()
         if _org_row:
             _sms_status_org_id = _org_row[0]
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     logger.info(
@@ -736,7 +736,7 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
                     _phone_row[0], message_id, normalized_status,
                     org_id=_sms_status_org_id,
                 )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # 3. Update sms_messages table (general SMS log)
@@ -884,7 +884,7 @@ async def _handle_sms_opt_keyword(
     except Exception as e:
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         logger.warning("sms_opt_keyword: org lookup failed: %s", e)
 
@@ -1555,7 +1555,7 @@ async def _aria_sms_ai_background_task(
         if db is not None:
             try:
                 db.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
 
@@ -1774,7 +1774,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 """), {"to_phone": normalized_to}).fetchone()
                 if _re_org_row:
                     _re_org_id = _re_org_row[0]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             try:
                 import uuid as _uuid
@@ -1879,7 +1879,8 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     "content": message_body,
                 })
                 db.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 db.rollback()
 
             # Store inbound for audit trail (fast DB op -- keep in request)
@@ -2090,7 +2091,8 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                             "message_id": event.message_id,
                         })
                         db.commit()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         db.rollback()
 
                     try:
@@ -2187,7 +2189,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     ), {"to_phone": normalized_to}).fetchone()
                     if _aco_org_row:
                         _aco_org_id = _aco_org_row[0]
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
                 db.execute(sa_text("""
                     INSERT INTO sms_panel_messages
@@ -2443,7 +2445,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 """), {"lid": int(_inbound_contact_id), "org_id": _inbound_org_id}).fetchone()
                 if _name_row and _name_row[0] and _name_row[0].strip():
                     _contact_display = _name_row[0].strip()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         from routes.sms_conversation_routes import notify_inbound_sms
@@ -2474,7 +2476,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 """), {"pattern": _from_pattern, "org_id": _inbound_org_id}).fetchone()
                 if _lead_name_row:
                     _contact_name = _lead_name_row[0]
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             _ar_result = _auto_respond(
@@ -2574,7 +2576,7 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
         """), {"call_id": call_control_id}).fetchone()
         if _rec_row:
             _rec_org_id = _rec_row[0]
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Best-effort
 
     if _rec_org_id:
@@ -2702,7 +2704,7 @@ async def _transcribe_and_process_recording(
             )
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # -----------------------------------------------------------------
@@ -2812,7 +2814,7 @@ async def _transcribe_and_process_recording(
         try:
             from database.tenant_mixin import set_tenant_context
             set_tenant_context(db, org_id)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         # -----------------------------------------------------------------
@@ -2857,7 +2859,7 @@ async def _transcribe_and_process_recording(
         if db is not None:
             try:
                 db.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
 

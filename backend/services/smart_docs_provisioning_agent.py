@@ -155,7 +155,8 @@ class SmartDocsProvisioningAgent:
                 borrower_id,
                 loan_id,
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             logger.exception(
                 "Unexpected error provisioning portal for borrower=%s loan=%s",
@@ -263,7 +264,8 @@ class SmartDocsProvisioningAgent:
                 user_id,
                 org_id,
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             logger.exception(
                 "Unexpected error provisioning team portal for user=%s org=%s",

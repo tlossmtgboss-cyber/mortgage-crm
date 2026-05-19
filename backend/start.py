@@ -206,11 +206,11 @@ def main():
                     release_cursor = lock_conn.cursor()
                     release_cursor.execute("SELECT pg_advisory_unlock(728371)")
                     release_cursor.close()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
             try:
                 lock_conn.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # Verify schema is at Alembic head revision

@@ -310,7 +310,8 @@ async def test_sso_config(
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         if resp.status < 500:
                             saml_sso_url_reachable = True
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     warnings.append(f"SAML: Could not reach SSO URL ({config.sso_url}): {e}")
 
     # --- OIDC checks ---

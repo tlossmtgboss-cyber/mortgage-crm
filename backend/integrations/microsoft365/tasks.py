@@ -30,7 +30,7 @@ async def renew_expiring_subscriptions(db: Session) -> int:
         try:
             await renew_subscription(db, sub)
             renewed += 1
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             log.exception(
                 "Failed to renew subscription %s (kind=%s)", sub.id, sub.kind
             )
@@ -66,7 +66,7 @@ async def delta_sync_account(db: Session, account: MSAccount) -> dict[str, int]:
                         try:
                             await ingest_message(db, account, msg_id)
                             counts["emails"] += 1
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
                             log.exception(
                                 "Delta-sync email ingest failed (graph_id=%s)", msg_id
                             )
@@ -77,7 +77,7 @@ async def delta_sync_account(db: Session, account: MSAccount) -> dict[str, int]:
                     continue
                 account.email_delta_link = delta_response.get("@odata.deltaLink")
                 break
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             log.exception("Email delta sync failed for account=%s", account.id)
 
         try:
@@ -100,7 +100,7 @@ async def delta_sync_account(db: Session, account: MSAccount) -> dict[str, int]:
                         try:
                             await pull_outlook_event_into_crm(db, account, evt_id)
                             counts["events"] += 1
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
                             log.exception(
                                 "Delta-sync calendar pull failed (graph_id=%s)", evt_id
                             )
@@ -111,7 +111,7 @@ async def delta_sync_account(db: Session, account: MSAccount) -> dict[str, int]:
                     continue
                 account.calendar_delta_link = delta_response.get("@odata.deltaLink")
                 break
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             log.exception("Calendar delta sync failed for account=%s", account.id)
 
     db.flush()
@@ -130,7 +130,7 @@ async def delta_sync_all_active_accounts(db: Session) -> None:
                     "Delta sync account=%s emails=%s events=%s",
                     acc.id, counts["emails"], counts["events"],
                 )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 log.exception("Delta sync failed for account=%s", acc.id)
 
     await asyncio.gather(*[_run(a) for a in accounts])
@@ -147,7 +147,7 @@ async def garbage_collect_subscriptions(db: Session) -> int:
         try:
             await delete_subscription(db, sub)
             deleted += 1
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             log.exception("GC failed for subscription %s", sub.id)
 
     log.info("Garbage-collected %s expired subscriptions", deleted)

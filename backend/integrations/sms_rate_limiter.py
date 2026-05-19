@@ -81,7 +81,7 @@ def check_rate_limit(
     if random.random() < 0.01:
         try:
             cleanup_old_rate_records(db, days_to_keep=7)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # Non-critical cleanup failure
 
     return True, "Rate limit check passed"
@@ -206,7 +206,7 @@ def check_recipient_frequency(
         logger.warning(f"Recipient frequency check failed (allowing send): {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     return result
@@ -278,7 +278,7 @@ def _count_recent(
             {"value": value, "window": window_seconds},
         ).fetchone()
         return row[0] if row else 0
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return 0
 
 
@@ -294,5 +294,5 @@ def _count_global_recent(db: Session, window_seconds: int) -> int:
             {"window": window_seconds},
         ).fetchone()
         return row[0] if row else 0
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return 0

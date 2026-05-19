@@ -208,7 +208,8 @@ class AIBudgetTracker:
         try:
             from services.ai_cost_tracker import calculate_cost as _calc
             cost = float(_calc(model, input_tokens, output_tokens))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             cost = self.get_cost_estimate(agent_type)
 
         # Record in the in-memory sliding window

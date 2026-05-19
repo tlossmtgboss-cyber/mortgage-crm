@@ -408,7 +408,8 @@ async def subscribe_contact(
         db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         logger.exception("Failed to enrol contact in credit monitoring")
         raise HTTPException(status_code=500, detail="Failed to create monitoring subscription.")
@@ -442,7 +443,8 @@ async def cancel_monitoring(
         db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         logger.exception("Failed to cancel subscription id=%s", subscription_id)
         raise HTTPException(status_code=500, detail="Failed to cancel subscription.")
@@ -644,7 +646,8 @@ async def action_alert(
         db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         logger.exception("Failed to action alert id=%s", alert_id)
         raise HTTPException(status_code=500, detail="Failed to record action.")
@@ -818,7 +821,8 @@ async def receive_bureau_webhook(
             message="Alert processed successfully.",
         )
 
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         logger.exception(
             "Failed to process bureau webhook for subscription=%s reference=%s",

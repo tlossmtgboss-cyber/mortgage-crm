@@ -35,7 +35,7 @@ def main():
                             DELETE FROM {table} 
                             WHERE loan_id IN (SELECT id FROM loans WHERE borrower_name = :name)
                         """), {"name": name})
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
                 # Delete the loans
@@ -60,7 +60,7 @@ def main():
                             AND last_name = ANY(:last_names)
                         )
                     """), {"first_names": sample_first_names, "last_names": sample_last_names})
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
             result = conn.execute(text("""

@@ -1135,11 +1135,11 @@ async def connect_salesforce(
         # Ensure integration_profiles table has all required columns before OAuth
         try:
             fix_salesforce_schema(db)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         logger.info(f"Generating Salesforce auth URL for user {user_id}, return_url: {return_url}")
@@ -1252,7 +1252,7 @@ async def oauth_callback(
         logger.error(f"OAuth callback traceback: {traceback.format_exc()}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         from urllib.parse import quote
         msg = quote(f"{type(e).__name__}: {str(e)[:100]}")
@@ -1275,7 +1275,7 @@ async def get_connection_status(
     finally:
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     try:
@@ -1515,7 +1515,7 @@ async def get_schema_objects(
         logger.warning(f"Could not get mapped field counts: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # Get enabled status per object
@@ -1529,7 +1529,7 @@ async def get_schema_objects(
         logger.warning(f"Could not get enabled status: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     return {
@@ -1579,7 +1579,7 @@ async def get_object_schema(
         logger.warning(f"Could not get mapped fields for {object_name}: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     # Annotate each field with its mapped status

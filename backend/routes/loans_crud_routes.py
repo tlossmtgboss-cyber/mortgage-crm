@@ -700,7 +700,7 @@ async def create_loan(
             # Ensure session is clean after a failed post-commit operation
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return response

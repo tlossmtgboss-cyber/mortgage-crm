@@ -39,7 +39,8 @@ async def engagement_health(db: Session = Depends(get_db)):
     try:
         row = db.execute(text("SELECT COUNT(*) FROM drip_enrollments WHERE status = 'active'")).fetchone()
         checks["drip_enrollments"] = f"healthy ({row[0]} active)"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         checks["drip_enrollments"] = "table missing"
 
     # 6. Engagement events table exists
@@ -47,14 +48,16 @@ async def engagement_health(db: Session = Depends(get_db)):
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         row = db.execute(text("SELECT COUNT(*) FROM engagement_events WHERE created_at >= :cutoff"), {"cutoff": cutoff}).fetchone()
         checks["engagement_events_24h"] = f"healthy ({row[0]} events)"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         checks["engagement_events"] = "table missing"
 
     # 7. Speed-to-lead config
     try:
         row = db.execute(text("SELECT COUNT(*) FROM speed_to_lead_config")).fetchone()
         checks["speed_to_lead_config"] = f"healthy ({row[0]} orgs configured)"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         checks["speed_to_lead_config"] = "table missing"
 
     overall = "healthy" if all("healthy" in str(v) or "configured" in str(v) for v in checks.values()) else "degraded"

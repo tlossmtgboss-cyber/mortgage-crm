@@ -456,7 +456,8 @@ def _summarize_last_interaction(
             time_str = f"{int(age.total_seconds() / 3600)} hours ago"
         else:
             time_str = f"{age.days} day{'s' if age.days != 1 else ''} ago"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         time_str = "recently"
 
     content_preview = latest["content"][:120] if latest["content"] else ""

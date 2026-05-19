@@ -851,7 +851,7 @@ Rules:
                         if txn["type"] not in ("debit", "credit"):
                             txn["type"] = "debit"
                         valid_txns.append(txn)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     continue
 
             logger.info(

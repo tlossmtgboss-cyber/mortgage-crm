@@ -214,7 +214,7 @@ class AIEmailComposer:
                 temperature=0.7,
             )
             return response.choices[0].message.content.strip()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.exception("LLM email generation failed, using fallback")
             return "<p>We'd love to help with your mortgage needs. Please reach out at your convenience.</p>"
 

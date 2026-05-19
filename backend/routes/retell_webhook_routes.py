@@ -129,7 +129,7 @@ def _process_call_ended(payload: dict, *, db: Session = None, organization_id: i
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, organization_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
     try:
         call_data = payload.get("data", {})
@@ -201,7 +201,7 @@ def _process_call_analyzed(payload: dict, *, db: Session = None, organization_id
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, organization_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
     try:
         call_data = payload.get("data", {})

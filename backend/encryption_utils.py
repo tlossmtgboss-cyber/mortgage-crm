@@ -85,7 +85,8 @@ class EncryptionManager:
                 try:
                     legacy_pbkdf2_key = _derive_key_pbkdf2(secret_key, salt=_LEGACY_HARDCODED_SALT, iterations=_LEGACY_ITERATIONS)
                     self._legacy_pbkdf2_fernet = Fernet(legacy_pbkdf2_key)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     self._legacy_pbkdf2_fernet = None
             else:
                 self._legacy_pbkdf2_fernet = None
@@ -94,7 +95,7 @@ class EncryptionManager:
             try:
                 legacy_key = _derive_key_legacy(secret_key)
                 self._legacy_fernet = Fernet(legacy_key)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         if initialized:
@@ -121,7 +122,7 @@ class EncryptionManager:
             return self.fernet.decrypt(encrypted_value.encode()).decode()
         except InvalidToken:
             pass
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         # Try legacy PBKDF2 key (old salt/iterations)
         if self._legacy_pbkdf2_fernet:
@@ -129,13 +130,13 @@ class EncryptionManager:
                 result = self._legacy_pbkdf2_fernet.decrypt(encrypted_value.encode()).decode()
                 logger.info("Decrypted with legacy PBKDF2 params — re-encrypt to migrate")
                 return result
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         # Try pre-PBKDF2 legacy key
         if self._legacy_fernet:
             try:
                 return self._legacy_fernet.decrypt(encrypted_value.encode()).decode()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         # Not Fernet-encrypted (pre-existing plaintext row) or key mismatch
         logger.warning(f"Decryption returned plaintext — value may not be encrypted (prefix: {encrypted_value[:4]}...)")

@@ -418,6 +418,9 @@ from .tcpa_smart_docs import (
 # Business rule configuration (database-backed thresholds & limits)
 from .business_rules import BusinessRuleConfig
 
+# Loan state change audit (D5 — SOC 2 durable transition log, INSERT-ONLY)
+from .loan_state_audit import LoanStateChangeAudit
+
 # Calendar event mapping (provider-agnostic sync)
 from .calendar_event_map import CalendarEventMap
 
@@ -1438,4 +1441,9 @@ __all__ = [
     # =====================
     "BuilderApplication",
     "BuilderDocument",
+
+    # =====================
+    # Loan State Change Audit (D5 — SOC 2)
+    # =====================
+    "LoanStateChangeAudit",
 ]

@@ -10,8 +10,9 @@ Defines request/response models for:
 """
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from enum import Enum
 
 
@@ -120,6 +121,8 @@ class TriggerFromEventEnum(str, Enum):
 
 class SLAMeasureBase(BaseModel):
     """Base schema for SLA Measure."""
+    model_config = ConfigDict(json_encoders={Decimal: str})
+
     milestone_type: MilestoneTypeEnum
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
@@ -127,7 +130,7 @@ class SLAMeasureBase(BaseModel):
     target_unit: TimeUnitEnum = TimeUnitEnum.HOURS
     trigger_from: Optional[str] = "previous_milestone"  # What event triggers the SLA timer
     trigger_from_is_default: bool = False  # If true, this trigger is the default for this milestone type
-    warning_threshold_pct: float = Field(default=75, ge=0, le=100)
+    warning_threshold_pct: Decimal = Field(default=Decimal("75"), ge=0, le=100)
     critical_threshold_pct: float = Field(default=100, ge=0, le=200)
     applies_to_loan_types: Optional[List[str]] = None
     applies_to_channels: Optional[List[str]] = None
@@ -143,13 +146,15 @@ class SLAMeasureCreate(SLAMeasureBase):
 
 class SLAMeasureUpdate(BaseModel):
     """Schema for updating an SLA Measure."""
+    model_config = ConfigDict(json_encoders={Decimal: str})
+
     name: Optional[str] = None
     description: Optional[str] = None
     target_value: Optional[float] = None
     target_unit: Optional[TimeUnitEnum] = None
     trigger_from: Optional[str] = None  # What event triggers the SLA timer
     trigger_from_is_default: Optional[bool] = None  # Make this the default trigger
-    warning_threshold_pct: Optional[float] = None
+    warning_threshold_pct: Optional[Decimal] = None
     critical_threshold_pct: Optional[float] = None
     applies_to_loan_types: Optional[List[str]] = None
     applies_to_channels: Optional[List[str]] = None

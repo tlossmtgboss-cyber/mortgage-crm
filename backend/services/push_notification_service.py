@@ -641,7 +641,7 @@ class PushNotificationService:
         if self._httpx_client:
             try:
                 self._httpx_client.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             self._httpx_client = None
 
@@ -747,7 +747,7 @@ def send_push_to_org(
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, org_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         else:
             _owns_session = False

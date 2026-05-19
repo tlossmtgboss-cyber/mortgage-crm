@@ -114,7 +114,7 @@ class FieldEncryptor:
         try:
             decoded = base64.urlsafe_b64decode(value.encode("utf-8"))
             return decoded[0:1] == b"\x80"
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return False
 
     # ------------------------------------------------------------------

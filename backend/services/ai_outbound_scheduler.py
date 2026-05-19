@@ -1551,7 +1551,8 @@ def _is_within_calling_hours(tz_name: str) -> bool:
 
     try:
         tz = ZoneInfo(tz_name)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         tz = ZoneInfo("America/Chicago")
 
     local_now = datetime.now(tz)
@@ -1564,7 +1565,8 @@ def _next_calling_window(tz_name: str) -> datetime:
     try:
         from zoneinfo import ZoneInfo
         tz = ZoneInfo(tz_name)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         from zoneinfo import ZoneInfo
         tz = ZoneInfo("America/Chicago")
 
@@ -1682,5 +1684,5 @@ def ensure_outbound_tables(db: Session) -> None:
         logger.warning(f"Outbound table creation note: {e}")
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass

@@ -201,7 +201,7 @@ class ConversationAILearningService:
         if owned and session is not None:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # ------------------------------------------------------------------
@@ -237,7 +237,7 @@ class ConversationAILearningService:
             logger.warning("Failed to persist training example %s: %s", example.id, e)
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         finally:
             self._close_if_owned(session, owned)
@@ -293,7 +293,7 @@ class ConversationAILearningService:
             logger.warning("Failed to persist knowledge gap %s: %s", gap.id, e)
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         finally:
             self._close_if_owned(session, owned)
@@ -350,7 +350,7 @@ class ConversationAILearningService:
             )
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         finally:
             self._close_if_owned(session, owned)
@@ -815,7 +815,7 @@ class ConversationAILearningService:
             logger.warning("Failed to resolve knowledge gap %s in DB: %s", gap_id, e)
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return False
         finally:
@@ -1223,7 +1223,7 @@ class ConversationAILearningService:
             logger.warning("Failed to record feedback: %s", e)
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             return None
         finally:
@@ -1400,7 +1400,7 @@ class ConversationAILearningService:
                     logger.debug("Failed to update usage counts: %s", e)
                     try:
                         session.rollback()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
             return results

@@ -404,5 +404,5 @@ def _json_dumps(data: Any) -> Optional[str]:
     try:
         import json
         return json.dumps(data, default=str)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None

@@ -204,7 +204,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             status_code = response.status_code
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             duration_ms = round((time.monotonic() - start) * 1000, 2)
             logger.error(
                 "Request failed with unhandled exception",

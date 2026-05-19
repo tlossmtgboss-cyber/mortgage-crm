@@ -576,7 +576,8 @@ class ImportService:
 
             savepoint.commit()
 
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             savepoint.rollback()
             raise
 
@@ -1279,7 +1280,8 @@ def save_upload_to_temp(file_stream: BinaryIO, filename: str) -> str:
                 if not chunk:
                     break
                 f.write(chunk)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         os.unlink(tmp_path)
         raise
     return tmp_path

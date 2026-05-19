@@ -230,7 +230,7 @@ class DripSequence(Base):
     total_enrolled = Column(Integer, default=0)
     total_completed = Column(Integer, default=0)
     total_exited_early = Column(Integer, default=0)
-    avg_completion_rate = Column(Float)
+    avg_completion_rate = Column(Numeric(8, 5))
 
     is_active = Column(Boolean, default=True)
     is_template = Column(Boolean, default=False)  # Pre-built template vs custom

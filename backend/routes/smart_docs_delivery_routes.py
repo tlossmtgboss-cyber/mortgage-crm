@@ -430,7 +430,7 @@ def _bg_send_needs_list(
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, organization_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
     try:
         loan = _get_loan_details(db, loan_id)
@@ -516,7 +516,7 @@ def _bg_send_reminder(
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, organization_id)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
     try:
         loan = _get_loan_details(db, loan_id)
@@ -590,7 +590,7 @@ def _bg_send_batch_item(
         if _org_row and _org_row[0]:
             from database.tenant_mixin import set_tenant_context
             set_tenant_context(db, _org_row[0])
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     try:
         loan = _get_loan_details(db, loan_id)

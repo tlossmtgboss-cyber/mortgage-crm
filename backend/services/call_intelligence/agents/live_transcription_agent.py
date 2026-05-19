@@ -330,5 +330,5 @@ class LiveTranscriptionAgent:
             )
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass

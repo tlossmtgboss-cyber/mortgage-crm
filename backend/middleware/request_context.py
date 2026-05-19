@@ -232,7 +232,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             status_code = response.status_code
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             duration_ms = round((time.monotonic() - start) * 1000, 2)
             # Re-check user/org in case auth ran during the request
             user_id_late, org_id_late = _extract_user_org(request)

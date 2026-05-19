@@ -97,13 +97,13 @@ def _persist_invocation_sync(
         logger.warning(f"Failed to persist AgentInvocation: {e}")
         try:
             session.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return False
     finally:
         try:
             session.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -568,7 +568,7 @@ class PerformanceTracker:
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # ------------------------------------------------------------------
@@ -640,7 +640,7 @@ class PerformanceTracker:
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # ------------------------------------------------------------------
@@ -706,7 +706,7 @@ class PerformanceTracker:
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # ------------------------------------------------------------------
@@ -787,7 +787,7 @@ class PerformanceTracker:
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     # ------------------------------------------------------------------
@@ -871,13 +871,13 @@ class PerformanceTracker:
             logger.error(f"flush_to_db failed: {e}")
             try:
                 session.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             flushed = 0
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         return flushed

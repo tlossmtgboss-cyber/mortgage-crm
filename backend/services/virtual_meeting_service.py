@@ -490,7 +490,7 @@ class GoogleMeetProvider(MeetingProvider):
                 try:
                     error_data = response.json()
                     error_msg = error_data.get("error", {}).get("message", error_msg)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
                 return MeetingResult.failure("google_meet", error_msg)
 

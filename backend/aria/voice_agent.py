@@ -241,7 +241,7 @@ class AriaVoiceAgent(Agent):
         if self.session and self.session.room:
             try:
                 await self.session.room.disconnect()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     async def _call_backend(self, endpoint: str, payload: dict):
@@ -332,7 +332,7 @@ class AriaVoiceAgent(Agent):
             if slots:
                 top_slots = slots[:3]
                 proposed_times = ", ".join(s.get("display", "") for s in top_slots)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         result = await self._call_backend(
@@ -1437,7 +1437,7 @@ class AriaVoiceAgent(Agent):
             started = datetime.fromisoformat(self._session_data.get("started_at", ""))
             ended = datetime.fromisoformat(self._session_data.get("ended_at", ""))
             return int((ended - started).total_seconds())
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return 0
 
     async def on_exit(self) -> None:

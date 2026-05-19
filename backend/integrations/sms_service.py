@@ -36,7 +36,7 @@ class SMSClient:
         if db and not config.get("api_key"):
             try:
                 db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         self._api_key = config.get("api_key") or os.getenv("TELNYX_API_KEY", "")
         self.from_number = (
@@ -110,7 +110,7 @@ class SMSClient:
         if self.db:
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # 2. Rate Limiting
@@ -163,7 +163,7 @@ class SMSClient:
                         logger.warning("Post-send recording failed (SMS was sent): %s", rec_err)
                         try:
                             self.db.rollback()
-                        except Exception:
+                        except Exception as _exc:  # noqa: BLE001
                             pass
 
                 return {"success": True, "message_id": msg_id}

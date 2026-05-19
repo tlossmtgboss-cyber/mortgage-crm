@@ -182,7 +182,7 @@ def upload_voice_sample(
         with io.BytesIO(audio_data) as buf:
             y, sr = librosa.load(buf, sr=None, mono=True)
         duration_s = len(y) / sr
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     # Insert sample record

@@ -167,7 +167,17 @@ except SQLAlchemyError as e:
 purl_router = APIRouter(prefix="/api/purl", tags=["PURL Portal"])
 
 # Internal PURL management router (user auth)
-purl_admin_router = APIRouter(prefix="/api/v1/purl-admin", tags=["PURL Administration"])
+# Router-wide admin guard: every endpoint under /api/v1/purl-admin requires an
+# admin/owner/super_admin role. Individual handlers may still inject their own
+# `get_authenticated_user()` dependency for the User object; this guard runs
+# in addition and enforces the role check.
+from middleware.admin_guard import require_admin as _require_admin
+
+purl_admin_router = APIRouter(
+    prefix="/api/v1/purl-admin",
+    tags=["PURL Administration"],
+    dependencies=[Depends(_require_admin)],
+)
 
 
 # =============================================================================

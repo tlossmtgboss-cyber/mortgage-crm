@@ -228,7 +228,7 @@ async def get_current_user_or_api_key(
                 user = await gcu(token, request, db)
                 if user:
                     return user
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 # JWT decode failed — fall through to API key check below.
                 pass
 
@@ -270,7 +270,7 @@ async def _extract_org_id_from_body(request: Request) -> Optional[int]:
         body = await request.json()
         org_id = body.get("organization_id")
         return int(org_id) if org_id is not None else None
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 

@@ -117,7 +117,8 @@ async def get_mobile_tasks(
 
     try:
         rows = db.execute(text(query), params).fetchall()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         rows = []
 
     tasks = []
@@ -199,7 +200,8 @@ async def get_mobile_tasks_summary(
 
     try:
         row = db.execute(text(summary_sql), params).fetchone()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         row = None
 
     if row:

@@ -259,7 +259,7 @@ def _safe_decimal(value: Any) -> Optional[str]:
     try:
         d = Decimal(str(value))
         return str(d.quantize(Decimal("0.01")))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return _safe_str(value)
 
 

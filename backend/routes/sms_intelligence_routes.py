@@ -1770,7 +1770,7 @@ async def process_incoming_sms(sms_id: int):
         if _sms_org and _sms_org[0]:
             from database.tenant_mixin import set_tenant_context
             set_tenant_context(db, _sms_org[0])
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
     try:
         # Get the SMS

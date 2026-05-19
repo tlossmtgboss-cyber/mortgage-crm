@@ -1756,7 +1756,7 @@ async def export_mismo_xml(
                 ip_address=_get_client_ip(request),
                 details={"application_id": application.id},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return Response(
@@ -1820,7 +1820,7 @@ async def admin_export_mismo_xml(
                 ip_address=_get_client_ip(request),
                 details={"application_id": application_id},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return Response(
@@ -2358,7 +2358,7 @@ async def export_application_mismo(
             ip_address=_get_client_ip(request),
             details={"application_id": application_id},
         )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return Response(

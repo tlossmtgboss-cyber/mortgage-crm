@@ -1283,8 +1283,9 @@ class SmartDocsI18nService:
                 self._org_default_language = row[0]
             else:
                 self._org_default_language = DEFAULT_LANGUAGE
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             # Table may not exist; fall back to English
+            logger.exception("unhandled exception")
             self._org_default_language = DEFAULT_LANGUAGE
 
         return self._org_default_language

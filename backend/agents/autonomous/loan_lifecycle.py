@@ -281,7 +281,7 @@ def condition_chase(
                             tier = "critical"
                         elif tier == "medium":
                             tier = "high"
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
         # ----- Dedup: skip if LO action task created recently -----

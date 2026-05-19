@@ -1088,7 +1088,7 @@ def format_briefing_as_html(briefing: LOBriefing) -> str:
                 dti_color = c_warning
             else:
                 dti_color = c_success
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         parts.append(
             f'<tr><td style="padding:4px 20px;font-size:14px;">'

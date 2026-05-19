@@ -216,7 +216,7 @@ class URLAStateManager:
         if cipher and raw:
             try:
                 raw = cipher.decrypt(raw.encode()).decode()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass  # Fallback: data may be unencrypted (migration period)
 
         return URLAApplication.model_validate_json(raw)

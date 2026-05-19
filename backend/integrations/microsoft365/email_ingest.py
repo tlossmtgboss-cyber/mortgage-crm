@@ -34,7 +34,7 @@ async def ingest_message(
                     ),
                 },
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             log.exception(
                 "Could not fetch message graph_id=%s account=%s",
                 graph_message_id, account.id,

@@ -268,7 +268,7 @@ async def browser_voice_websocket(websocket: WebSocket):
                 logger.warning(f"Periodic transcript flush failed: {flush_err}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
     try:
@@ -509,7 +509,7 @@ async def browser_voice_websocket(websocket: WebSocket):
                                                 logger.error(f"Failed to save CI transcript: {save_err}")
                                                 try:
                                                     db.rollback()
-                                                except Exception:
+                                                except Exception as _exc:  # noqa: BLE001
                                                     pass
                                         # P2: Cancel flush task before resetting state
                                         if ci_state.get("flush_task"):
@@ -615,7 +615,7 @@ async def browser_voice_websocket(websocket: WebSocket):
                 logger.error(f"Failed to save CI transcript on disconnect: {e}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
         if openai_ws:

@@ -311,7 +311,8 @@ async def seed_demo_data(
                     ALTER TABLE {tbl} ALTER COLUMN {col} TYPE VARCHAR(100) USING {col}::text
                 """))
                 nested.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 nested.rollback()
             if enum_name:
                 if enum_name not in _ENUM_FIX_TYPES:
@@ -320,7 +321,8 @@ async def seed_demo_data(
                     nested2 = db.begin_nested()
                     db.execute(_text(f"DROP TYPE IF EXISTS {enum_name}"))
                     nested2.commit()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     nested2.rollback()
 
         db.commit()
@@ -343,7 +345,8 @@ async def seed_demo_data(
                 sp = db.begin_nested()
                 db.execute(_text(f"DELETE FROM {table} WHERE organization_id = :oid"), {"oid": org_id})
                 sp.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 sp.rollback()
 
         db.commit()
@@ -413,13 +416,15 @@ async def seed_demo_data(
                 sp = db.begin_nested()
                 db.execute(_text(f"DELETE FROM {fk_table} WHERE loan_id IN ({_loan_subq})"), _loan_pattern_param)
                 sp.commit()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 sp.rollback()
         try:
             sp = db.begin_nested()
             db.execute(_text("DELETE FROM loans WHERE loan_number LIKE :loan_pattern"), _loan_pattern_param)
             sp.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             sp.rollback()
 
         # ── LOANS ──
@@ -627,7 +632,8 @@ async def seed_demo_data(
                        "created": now - timedelta(days=_random.randint(1, 10)), "resolved": resolved_at})
                 alerts_count += 1
             _sp_ca.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _sp_ca.rollback()
 
         # ── REFERRAL PARTNERS (table may not exist) ──
@@ -657,7 +663,8 @@ async def seed_demo_data(
                        "created": now - timedelta(days=_random.randint(30, 365))})
                 partners_count += 1
             _sp_rp.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _sp_rp.rollback()
 
         # ── MUM CLIENTS (Portfolio — table may not exist) ──
@@ -691,7 +698,8 @@ async def seed_demo_data(
                        "uid": demo_user_id, "created": now - timedelta(days=days_since)})
                 mum_count += 1
             _sp_mum.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _sp_mum.rollback()
 
         # ── SCHEDULER CONFIG & APPOINTMENTS (tables may not exist) ──
@@ -770,7 +778,8 @@ async def seed_demo_data(
                        "created": sched_start - timedelta(days=_random.randint(1, 5)), "updated": now})
                 appts_count += 1
             _sp_sched.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _sp_sched.rollback()
 
         # ── STAGE HISTORY (table may not exist) ──
@@ -803,7 +812,8 @@ async def seed_demo_data(
                            "by": demo_user_id})
                     sh_count += 1
             _sp_sh.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _sp_sh.rollback()
 
         # ── DISCLOSURE EVENTS (table may not exist) ──
@@ -832,7 +842,8 @@ async def seed_demo_data(
                            "dm": "esign", "ot": True, "created": now - timedelta(days=_random.randint(3, 10))})
                     disc_count += 1
             _sp_de.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _sp_de.rollback()
 
         # ── LOAN FEES (table may not exist) ──
@@ -858,7 +869,8 @@ async def seed_demo_data(
                            "le": le, "cd": cd, "now": now})
                     fee_count += 1
             _sp_lf.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             _sp_lf.rollback()
 
         db.commit()
@@ -2405,7 +2417,7 @@ www.perenniaai.com
                 subject=f"[Perennia AI] New newsletter subscriber: {request.email}",
                 body=f"New newsletter subscription from {request.email}\nSource: website footer\nIP: {req.client.host if req.client else 'Unknown'}",
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         logger.info(f"Newsletter subscription: {request.email}")

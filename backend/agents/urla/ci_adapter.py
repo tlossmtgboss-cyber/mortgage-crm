@@ -396,7 +396,7 @@ async def _create_voice_session(
         logger.warning("Failed to create VoiceCallSession: %s", e)
         try:
             db_session.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return None
 

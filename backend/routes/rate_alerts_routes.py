@@ -225,7 +225,7 @@ def _fetch_alerts(
         logger.debug("rate_monitor_alerts query failed (table may not exist): %s", e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return []
 
@@ -246,7 +246,7 @@ def _count_alerts(db: Session, user, status: Optional[str]) -> int:
         """)
         row = db.execute(sql, {"status": status, "org_id": org_id}).scalar()
         return int(row) if row else 0
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return 0
 
 

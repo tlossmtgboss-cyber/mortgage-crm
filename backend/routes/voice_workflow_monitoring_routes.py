@@ -735,7 +735,7 @@ async def export_voice_workflow_gdpr_data(
                 ip_address=_get_client_ip(request),
                 details={"workflow_count": len(workflows), "contact_phone_last4": normalized_phone[-4:] if len(normalized_phone) >= 4 else "****"},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return {

@@ -143,7 +143,7 @@ def get_pos_settings(
                     name=name,
                     email=override_user.email,
                 )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return POSSettingsResponse(

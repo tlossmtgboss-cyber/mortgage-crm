@@ -80,7 +80,7 @@ def check_sms_consent(phone: str, organization_id: int = None, db=None) -> tuple
                 try:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(db, organization_id)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
         except Exception as e:
             logger.error(f"Cannot create DB session: {e}")
@@ -127,7 +127,7 @@ def check_sms_consent(phone: str, organization_id: int = None, db=None) -> tuple
                     ).first()
                     if pref:
                         recipient_tz = getattr(pref, 'timezone', None)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # Timezone lookup is best-effort
 
         if not recipient_tz:

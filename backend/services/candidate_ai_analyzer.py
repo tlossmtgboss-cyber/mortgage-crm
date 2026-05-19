@@ -641,7 +641,7 @@ Be thorough but objective. Base scores only on available evidence. If data is li
             logger.warning(f"Failed to log AI audit for candidate {candidate_id}: {e}")
             try:
                 self.db.rollback()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
     def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:

@@ -2004,7 +2004,8 @@ def seed_content_library(db: Session, force_reseed: bool = False) -> int:
     try:
         db.commit()
         logger.info("Content library seeded: %d templates inserted.", inserted)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         logger.exception("Failed to seed content library.")
         raise

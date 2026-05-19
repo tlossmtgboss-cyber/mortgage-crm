@@ -1074,7 +1074,7 @@ def register_health_routes(app, get_db, **kwargs):
                             payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
                             if payload.get("sub"):
                                 authenticated = True
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
         if not authenticated:
@@ -1621,7 +1621,7 @@ def register_health_routes(app, get_db, **kwargs):
                             payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
                             if payload.get("sub"):
                                 authenticated = True
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
         if not authenticated:
@@ -1861,7 +1861,7 @@ def register_health_routes(app, get_db, **kwargs):
                 redis_url = _os.getenv("REDIS_URL")
                 if redis_url:
                     redis_client = redis_lib.from_url(redis_url, socket_timeout=5)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             # Build DB session (best-effort)
@@ -1869,7 +1869,7 @@ def register_health_routes(app, get_db, **kwargs):
             try:
                 if SessionLocal:
                     db = SessionLocal()
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             # Build circuit breaker (best-effort)
@@ -1881,7 +1881,7 @@ def register_health_routes(app, get_db, **kwargs):
                     failure_threshold=5,
                     recovery_timeout=30,
                 )
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
 
             try:
@@ -1914,7 +1914,7 @@ def register_health_routes(app, get_db, **kwargs):
                 if db:
                     try:
                         db.close()
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
                         pass
 
         except Exception as e:
@@ -2114,7 +2114,7 @@ def _authenticate_admin(request: Request) -> bool:
                 payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
                 if payload.get("sub"):
                     return True
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     return False
@@ -2180,12 +2180,12 @@ def _deep_check_redis():
         try:
             info = r.info(section="memory")
             memory_used = info.get("used_memory_human", "unknown")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         try:
             info_clients = r.info(section="clients")
             connected_clients = info_clients.get("connected_clients", "unknown")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         r.close()
@@ -2250,7 +2250,7 @@ def _deep_check_memory():
                         rss_kb = int(line.split()[1])
                         rss_mb = round(rss_kb / 1024, 1)
                         break
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     if rss_mb is None:

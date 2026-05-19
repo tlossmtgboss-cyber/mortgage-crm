@@ -818,7 +818,7 @@ async def test_import_one_closed_loan(
                 try:
                     from database.tenant_mixin import set_tenant_context
                     set_tenant_context(test_db, importer.organization_id)
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
             # Connect to Salesforce

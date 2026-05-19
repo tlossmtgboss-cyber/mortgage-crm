@@ -132,7 +132,7 @@ def record_open(db: Session, tracking_id: str, ip: str = None, user_agent: str =
 
         # Update lead score +2 if we can find the lead
         _update_lead_score(db, tracking_id, delta=2)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.exception(f"Failed to record open for tracking_id={tracking_id}")
         db.rollback()
 
@@ -162,7 +162,7 @@ def record_click(db: Session, tracking_id: str, link_hash: str, ip: str = None, 
 
         # Update lead score +5
         _update_lead_score(db, tracking_id, delta=5)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.exception(f"Failed to record click for tracking_id={tracking_id}")
         db.rollback()
 
@@ -211,5 +211,5 @@ def _update_lead_score(db: Session, tracking_id: str, delta: int):
             if lead and hasattr(lead, "ai_score") and lead.ai_score is not None:
                 lead.ai_score = min(100, (lead.ai_score or 0) + delta)
                 db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.debug(f"Could not update lead score for tracking_id={tracking_id}")

@@ -441,7 +441,7 @@ async def download_comparison_pdf(
                 ip_address=_get_client_ip(request),
                 details={"comparison_id": comparison_id},
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return Response(

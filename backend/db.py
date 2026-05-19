@@ -191,7 +191,7 @@ def on_checkout_overflow_track(dbapi_conn, connection_record, connection_proxy):
                         f"(pool_size={pool.size()}, checked_out={pool.checkedout()}, "
                         f"max_overflow={getattr(pool, '_max_overflow', '?')})"
                     )
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass  # Never let monitoring break request flow
 
 # Slow query logging

@@ -1053,7 +1053,7 @@ def birthday_anniversary(
         # Roll back the failed probe so subsequent queries work
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
     try:

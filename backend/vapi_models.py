@@ -229,7 +229,8 @@ def ensure_vapi_ci_columns(db) -> None:
             logger.warning("Could not add vapi_calls.%s: %s", col_name, e)
     try:
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
 
 

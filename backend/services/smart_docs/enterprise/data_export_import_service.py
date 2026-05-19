@@ -2854,7 +2854,8 @@ class DataExportImportService:
                     code="NON_UTF8_ENCODING",
                     message="File is not UTF-8 encoded; using Latin-1 fallback.",
                 ))
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 issues.append(ValidationIssue(
                     severity="error",
                     code="ENCODING_ERROR",

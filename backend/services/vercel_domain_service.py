@@ -87,7 +87,8 @@ def _classify_vercel_error(resp: httpx.Response, domain: str) -> VercelDomainErr
     status_code = resp.status_code
     try:
         body = resp.json()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         body = {"message": resp.text}
 
     error_code = body.get("error", {}).get("code", "") if isinstance(body.get("error"), dict) else ""

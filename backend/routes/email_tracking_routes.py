@@ -34,7 +34,7 @@ async def track_open(tracking_id: str, request: Request, db=Depends(get_db), sig
         ip = request.client.host if request.client else None
         ua = request.headers.get("user-agent", "")
         record_open(db, tracking_id, ip=ip, user_agent=ua)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.debug(f"Failed to record open for {tracking_id}", exc_info=True)
     return Response(content=PIXEL_GIF, media_type="image/gif",
                     headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
@@ -61,7 +61,7 @@ async def track_click(tracking_id: str, link_hash: str, request: Request, db=Dep
         result_url = record_click(db, tracking_id, link_hash, ip=ip, user_agent=ua)
         if result_url:
             original_url = result_url
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.debug(f"Failed to record click for {tracking_id}/{link_hash}", exc_info=True)
     return RedirectResponse(url=original_url, status_code=302)
 

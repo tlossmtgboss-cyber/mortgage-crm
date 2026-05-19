@@ -150,7 +150,7 @@ async def get_mum_clients_portfolio(
                 logger.warning(f"Failed to batch lookup loan details for MUM: {e}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
         lead_details_map = {}
@@ -168,7 +168,7 @@ async def get_mum_clients_portfolio(
                 logger.warning(f"Failed to batch lookup lead details for MUM: {e}")
                 try:
                     db.rollback()
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
                     pass
 
         for client in mum_clients:

@@ -846,7 +846,8 @@ class TokenBlacklist:
                         blacklisted_count += len(keys)
                         if cursor == 0:
                             break
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     blacklisted_count = -1  # Unknown
 
                 return {

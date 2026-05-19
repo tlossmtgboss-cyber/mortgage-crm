@@ -216,7 +216,8 @@ class BorrowerPrepService:
                 Document.status == "active",
             ).all()
             existing_types = {d.doc_type for d in existing_docs} if existing_docs else set()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             existing_types = set()
 
         readiness = []

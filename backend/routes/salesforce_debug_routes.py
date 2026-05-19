@@ -47,7 +47,7 @@ def _sanitize_instance_url(url: Optional[str]) -> Optional[str]:
     try:
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.hostname}"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return url[:50] if len(url) > 50 else url
 
 

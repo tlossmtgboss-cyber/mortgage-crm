@@ -30,7 +30,7 @@ def _get_client():
     try:
         from services.redis_service import redis_service
         return redis_service.get_client()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return None
 
 
@@ -52,7 +52,7 @@ def cache_get(key: str):
         try:
             from services.redis_service import redis_service
             redis_service.record_failure()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         return None
 
@@ -70,7 +70,7 @@ def cache_set(key: str, value, ttl: int = 60):
         try:
             from services.redis_service import redis_service
             redis_service.record_failure()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 
@@ -93,7 +93,7 @@ def cache_delete_pattern(pattern: str):
         try:
             from services.redis_service import redis_service
             redis_service.record_failure()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
 

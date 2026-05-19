@@ -209,7 +209,7 @@ def check_calling_window(
     # Use ZoneInfo for proper DST-aware conversion
     try:
         tz = ZoneInfo(tz_name)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         logger.warning(f"Invalid timezone '{tz_name}', falling back to America/New_York")
         tz_name = "America/New_York"
         tz = ZoneInfo(tz_name)

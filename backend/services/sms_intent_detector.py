@@ -164,7 +164,7 @@ class SMSIntentDetector:
                 entities=self._extract_entities(message),
                 method="llm",
             )
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.debug("LLM intent detection failed, falling back to keyword", exc_info=True)
             return self.detect_intent(message)
 

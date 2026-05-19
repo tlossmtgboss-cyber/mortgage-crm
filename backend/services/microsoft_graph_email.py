@@ -260,7 +260,7 @@ class MicrosoftGraphEmailService:
             try:
                 error_json = resp.json()
                 error_body = error_json.get("error", {}).get("message", resp.text)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             logger.error(
                 "Microsoft Graph sendMail failed (%d) for %s: %s",
@@ -299,7 +299,7 @@ class MicrosoftGraphEmailService:
             error_detail = resp.text
             try:
                 error_detail = resp.json().get("error", {}).get("message", resp.text)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
             logger.error("Microsoft Graph /me failed (%d): %s", resp.status_code, error_detail)
             raise ValueError(f"Failed to fetch user profile: {error_detail}")

@@ -254,7 +254,7 @@ class TRIDValidator:
             return value
         try:
             return Decimal(str(value))
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return Decimal("0")
 
     def _log_compliance_decision(

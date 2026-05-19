@@ -162,7 +162,7 @@ def validate_image_dimensions(image_bytes: bytes) -> Tuple[int, int]:
             img = Image.open(io.BytesIO(image_bytes))
             width, height = img.size
             img.close()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             return (0, 0)
 
     max_w, max_h = MAX_IMAGE_DIMENSIONS
@@ -477,7 +477,7 @@ def _estimate_pdf_pages(content: bytes) -> int:
         from PyPDF2 import PdfReader
         reader = PdfReader(io.BytesIO(content))
         return len(reader.pages)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return 0

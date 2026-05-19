@@ -271,7 +271,7 @@ def _process_event(redis: Any, stream: str, event_id: str, fields: dict) -> None
 
     try:
         result = handler(event)
-    except Exception:  # noqa: BLE001
+    except Exception as _exc:  # noqa: BLE001
         logger.exception(
             "team_chat_bot.handler_failed",
             extra={"stream": stream, "kind": event_kind},
@@ -306,7 +306,7 @@ def _process_event(redis: Any, stream: str, event_id: str, fields: dict) -> None
                 source_object_label=source_object_label,
             )
             session.commit()
-    except Exception:  # noqa: BLE001
+    except Exception as _exc:  # noqa: BLE001
         logger.exception(
             "team_chat_bot.post_failed",
             extra={
@@ -335,7 +335,7 @@ def run_worker_loop(redis: Any, consumer_id: str = "0") -> None:
                 block=5000,
             )
             backoff = 1
-        except Exception:  # noqa: BLE001
+        except Exception as _exc:  # noqa: BLE001
             logger.exception("team_chat_bot.xreadgroup_failed")
             time.sleep(min(backoff, 30))
             backoff = min(backoff * 2, 30)

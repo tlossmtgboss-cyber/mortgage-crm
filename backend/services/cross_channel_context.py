@@ -490,7 +490,7 @@ def _get_last_call(db: Session, lead_id: int, organization_id: int) -> Optional[
                 action_items = meta.get("action_items", [])
                 if not summary and activity.content:
                     summary = activity.content
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return {
@@ -539,7 +539,7 @@ def _get_sms_context(db: Session, lead_id: int, organization_id: int) -> Optiona
             )
             if last_msg:
                 last_message_text = last_msg.content[:200] if last_msg.content else None
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
 
         return {
@@ -635,7 +635,7 @@ def _get_email_history(db: Session, lead_id: int, organization_id: int) -> Optio
                     last_opened = row.last_at.isoformat() if row.last_at else None
                 elif row.event_type == "click":
                     total_clicks = row.cnt
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.debug(f"Could not fetch email tracking events for lead {lead_id}")
 
         return {
@@ -829,7 +829,7 @@ def _derive_channel_preference(db: Session, lead_id: int, organization_id: int, 
             channels = pref.preferred_channels
             if isinstance(channels, list) and channels:
                 return channels[0]
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     # 3. Infer from activity counts (last 90 days)
@@ -856,7 +856,7 @@ def _derive_channel_preference(db: Session, lead_id: int, organization_id: int, 
             }
             best = max(counts, key=lambda r: r.cnt)
             return channel_map.get(best.type, str(best.type))
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return "unknown"
@@ -882,7 +882,7 @@ def _relative_time(iso_str: Optional[str]) -> str:
             return f"{hours} hours ago"
         minutes = delta.seconds // 60
         return f"{minutes} minutes ago" if minutes > 0 else "just now"
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         return str(iso_str)
 
 

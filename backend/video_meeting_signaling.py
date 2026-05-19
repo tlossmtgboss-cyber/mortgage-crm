@@ -242,7 +242,7 @@ async def websocket_video_meeting(
             msg = json.loads(raw)
             if isinstance(msg, dict) and msg.get("type") == "auth":
                 token = msg.get("token", "")
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass  # Token is optional for meetings (guest participants)
 
     # Server-side host verification via JWT + DB lookup

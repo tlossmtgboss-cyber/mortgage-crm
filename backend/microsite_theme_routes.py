@@ -73,17 +73,8 @@ ensure_microsite_columns_exist()
 
 # Use canonical RLS-aware get_db from db.py
 from db import get_db
-
-
-async def get_current_user(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Get current authenticated user."""
-    from auth.dependencies import get_current_user_flexible
-    # Use the flexible auth from main.py
-    return await get_current_user_flexible(request=request, db=db)
+# Use canonical flexible auth (deduped from local wrapper)
+from auth.dependencies import get_current_user_flexible as get_current_user
 
 
 # =============================================================================

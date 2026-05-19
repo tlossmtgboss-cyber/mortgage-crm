@@ -185,7 +185,7 @@ def get_aria_context(
                 lo_user_id = lo.id
                 lo_phone = getattr(lo, "phone", None)
                 lo_email = getattr(lo, "email", None)
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
         pass
 
     return {

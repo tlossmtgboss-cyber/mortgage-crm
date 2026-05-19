@@ -233,7 +233,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["leads"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["leads"] = 0
 
@@ -285,7 +286,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["loans"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["loans"] = 0
 
@@ -327,7 +329,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["activities"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["activities"] = 0
 
@@ -384,7 +387,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["appointments"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["appointments"] = 0
 
@@ -469,7 +473,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["compliance_alerts"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["compliance_alerts"] = 0
 
@@ -514,7 +519,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["documents"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["documents"] = 0
 
@@ -577,7 +583,7 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["morning_briefings"] = str(e)
         try:
             db.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             pass
         counts["morning_briefings"] = 0
 
@@ -639,7 +645,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["mum_clients"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["mum_clients"] = 0
 
@@ -711,7 +718,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["tasks"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["tasks"] = 0
 
@@ -766,7 +774,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["calendar_events"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["calendar_events"] = 0
 
@@ -821,7 +830,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["notifications"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["notifications"] = 0
 
@@ -900,7 +910,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["sms_conversations"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["sms_conversations"] = 0
 
@@ -957,7 +968,8 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
         errors["referral_partners"] = str(e)
         try:
             savepoint.rollback()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
         counts["referral_partners"] = 0
 
@@ -966,12 +978,14 @@ def seed_demo_data(db: Session, organization_id: int, user_id: int) -> Dict[str,
     # ------------------------------------------------------------------
     try:
         db.commit()
-    except Exception:
+    except Exception as _exc:  # noqa: BLE001
+        logger.exception("unhandled exception")
         db.rollback()
         logger.warning("Final commit failed — rolling back and retrying")
         try:
             db.commit()
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             db.rollback()
             logger.exception("Second commit attempt also failed")
 
@@ -1091,7 +1105,7 @@ def clear_demo_data(db: Session, organization_id: int) -> Dict[str, Any]:
             )
             counts[entity_type] = deleted
             logger.info("Deleted %d demo %s records", deleted, entity_type)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
             logger.exception("Failed to delete demo %s records", entity_type)
             db.rollback()
             counts[entity_type] = 0

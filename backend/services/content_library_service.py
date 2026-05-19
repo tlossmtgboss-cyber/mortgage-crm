@@ -538,7 +538,8 @@ class ContentLibraryService:
         try:
             self.db.commit()
             self.db.refresh(log)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to track content usage for item %s", template_id)
             raise
@@ -589,7 +590,8 @@ class ContentLibraryService:
         try:
             self.db.commit()
             self.db.refresh(log)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to update engagement outcome for log %s", log_id)
             raise
@@ -663,7 +665,8 @@ class ContentLibraryService:
         try:
             self.db.commit()
             self.db.refresh(fork)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to fork template %s", template_id)
             raise
@@ -709,7 +712,8 @@ class ContentLibraryService:
         try:
             self.db.commit()
             self.db.refresh(item)
-        except Exception:
+        except Exception as _exc:  # noqa: BLE001
+            logger.exception("unhandled exception")
             self.db.rollback()
             logger.exception("Failed to approve content item %s", template_id)
             raise

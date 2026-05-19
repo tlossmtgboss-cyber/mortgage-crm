@@ -92,7 +92,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, _admin_org)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             result = {
@@ -414,7 +414,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             try:
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, _admin_org2)
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
                 pass
         try:
             from services.salesforce.sync_service import salesforce_sync
@@ -2697,7 +2697,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                         ))
                         if r.rowcount > 0:
                             cleaned[f"{child_tbl}.{child_col}"] = r.rowcount
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         db.rollback()
                         # Column might be NOT NULL — delete child rows instead
                         try:
@@ -2721,7 +2722,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                         ))
                         if r.rowcount > 0:
                             cleaned[f"{child_tbl}.{child_col}"] = r.rowcount
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         db.rollback()
                         try:
                             r = db.execute(text(
@@ -2824,7 +2826,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                         cleaned[f"{child_tbl}.{child_col} nulled"] = r.rowcount
                 except ValueError:
                     logger.warning(f"Blocked invalid identifier from information_schema: {child_tbl}.{child_col}")
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     db.rollback()
                     try:
                         safe_tbl = _safe_identifier(child_tbl)
@@ -2833,7 +2836,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                             cleaned[f"{child_tbl} deleted"] = r.rowcount
                     except ValueError:
                         logger.warning(f"Blocked invalid identifier: {child_tbl}")
-                    except Exception:
+                    except Exception as _exc:  # noqa: BLE001
+                        logger.exception("unhandled exception")
                         db.rollback()
 
             # Phase 2: Delete from specific CRM tables
@@ -2870,7 +2874,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     r = db.execute(text("DELETE FROM " + _safe_identifier(tbl)))
                     if r.rowcount > 0:
                         cleaned[tbl] = r.rowcount
-                except Exception:
+                except Exception as _exc:  # noqa: BLE001
+                    logger.exception("unhandled exception")
                     db.rollback()
 
             # Phase 3: Delete loans then leads (parents)
@@ -2976,7 +2981,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             try:
                 r = db.execute(text("SELECT COUNT(*) FROM " + _safe_identifier(tbl))).scalar()
                 counts[tbl] = r
-            except Exception:
+            except Exception as _exc:  # noqa: BLE001
+                logger.exception("unhandled exception")
                 db.rollback()
                 counts[tbl] = "(table not found)"
 
