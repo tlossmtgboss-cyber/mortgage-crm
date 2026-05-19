@@ -9,20 +9,38 @@ Covers:
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 
 import pytest
 
-# Make backend/ importable when running pytest from repo root
+# Load the three guardrail modules directly by file path. This avoids
+# importing `agents/__init__.py`, which pulls in langgraph and other
+# runtime deps that aren't needed for these pure-logic tests.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_BACKEND = os.path.abspath(os.path.join(_HERE, ".."))
-if _BACKEND not in sys.path:
-    sys.path.insert(0, _BACKEND)
+_ORCH_DIR = os.path.abspath(os.path.join(_HERE, "..", "agents", "orchestration"))
 
-from agents.orchestration.compliance_guard import ComplianceGuard, compliance_guard  # noqa: E402
-from agents.orchestration.hallucination_guard import HallucinationGuard, hallucination_guard  # noqa: E402
-from agents.orchestration.token_budget import TokenBudgetManager  # noqa: E402
+
+def _load(mod_name: str, filename: str):
+    spec = importlib.util.spec_from_file_location(
+        mod_name, os.path.join(_ORCH_DIR, filename)
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_token_budget_mod = _load("token_budget_isolated", "token_budget.py")
+_compliance_mod = _load("compliance_guard_isolated", "compliance_guard.py")
+_hallucination_mod = _load("hallucination_guard_isolated", "hallucination_guard.py")
+
+TokenBudgetManager = _token_budget_mod.TokenBudgetManager
+ComplianceGuard = _compliance_mod.ComplianceGuard
+compliance_guard = _compliance_mod.compliance_guard
+HallucinationGuard = _hallucination_mod.HallucinationGuard
+hallucination_guard = _hallucination_mod.hallucination_guard
 
 
 # ---------- TokenBudgetManager -----------------------------------------

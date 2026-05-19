@@ -67,7 +67,7 @@ _HARD_BLOCK_PATTERNS: List[tuple[str, str, Pattern[str]]] = [
 
 # Specific APR detection (e.g. "APR of 6.5%" or "6.5% APR")
 _APR_NUMERIC = re.compile(
-    r"\b(APR\s+of\s+\d+(\.\d+)?\s*%|\d+(\.\d+)?\s*%\s*APR)\b",
+    r"(APR\s+of\s+\d+(\.\d+)?\s*%|\d+(\.\d+)?\s*%\s*APR)",
     re.IGNORECASE,
 )
 _APR_DISCLOSURE = re.compile(

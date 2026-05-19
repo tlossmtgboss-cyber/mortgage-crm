@@ -263,6 +263,49 @@ scheduler = AsyncIOScheduler(
     }
 )
 
+
+# ---------------------------------------------------------------------------
+# D5 Workflow — midnight daily workflow-task generation
+# ---------------------------------------------------------------------------
+def generate_daily_workflow_tasks():
+    """
+    Cron entrypoint: regenerate workflow tasks for every active loan based
+    on current SLA milestone dates. Runs at 00:05 daily so every LO starts
+    the day with an up-to-date task list.
+
+    Best-effort — failures are logged but never raised, so a single broken
+    workflow cannot poison the scheduler.
+    """
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+    try:
+        from routes.workflow_sla_routes import (
+            run_scheduled_workflow_tasks_background,
+        )
+        result = run_scheduled_workflow_tasks_background()
+        _log.info("generate_daily_workflow_tasks complete: %s", result)
+        return result
+    except Exception as exc:
+        _log.error("generate_daily_workflow_tasks failed: %s", exc)
+        return {"success": False, "error": str(exc)}
+
+
+try:
+    from apscheduler.triggers.cron import CronTrigger as _CronTrigger
+    scheduler.add_job(
+        generate_daily_workflow_tasks,
+        trigger=_CronTrigger(hour=0, minute=5),
+        id="generate_daily_workflow_tasks",
+        name="D5: Daily workflow-task regeneration (00:05)",
+        replace_existing=True,
+    )
+except Exception as _e:  # pragma: no cover
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "Failed to register daily workflow-task cron: %s", _e
+    )
+
+
 # Use RLS-aware get_db from database.py
 get_db = _get_db_from_database
 

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone, time as dt_time
 from typing import Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -793,17 +793,73 @@ async def create_voicemail_drop(
 
         phone_number = data.get("phone_number")
         recipient_name = data.get("recipient_name", "")
+        recipient_email = data.get("recipient_email") or data.get("email")
         message = data.get("message")
         lead_id = data.get("lead_id")
         loan_id = data.get("loan_id")
         template_id = data.get("template_id")
         send_followup_sms = data.get("send_followup_sms", True)
+        # TCPA-D4: audio duration (seconds) when caller pre-validates an upload
+        duration_seconds = data.get("duration_seconds")
 
         if not phone_number:
             raise HTTPException(status_code=400, detail="Phone number is required")
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
+
+        # --- TCPA-D4: explicit consent_revoked_at enforcement (BorrowerProfile) ---
+        # Fail-closed on revocation; fail-open on lookup error.  Runs BEFORE the
+        # broader run_compliance_checks because we want a deterministic 403 body
+        # the frontend can act on (revoked_at timestamp).
+        try:
+            from database.models.borrower import BorrowerProfile
+            lookup_email = recipient_email
+            if not lookup_email and lead_id:
+                try:
+                    import main as _main_for_lead
+                    _lead = db.query(_main_for_lead.Lead).filter(
+                        _main_for_lead.Lead.id == lead_id
+                    ).first()
+                    if _lead and getattr(_lead, "email", None):
+                        lookup_email = _lead.email
+                except Exception as _lead_err:
+                    logger.warning(
+                        "TCPA-D4: lead email lookup failed (fail-open): %s", _lead_err
+                    )
+            if lookup_email:
+                borrower_for_consent = db.query(BorrowerProfile).filter(
+                    BorrowerProfile.email == lookup_email
+                ).first()
+                if borrower_for_consent and getattr(
+                    borrower_for_consent, "consent_revoked_at", None
+                ) is not None:
+                    revoked_ts = borrower_for_consent.consent_revoked_at
+                    try:
+                        revoked_iso = revoked_ts.isoformat()
+                    except Exception:
+                        revoked_iso = str(revoked_ts)
+                    logger.warning(
+                        "TCPA-D4: voicemail blocked — consent revoked for %s at %s",
+                        mask_phone(phone_number),
+                        revoked_iso,
+                    )
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "error": "consent_revoked",
+                            "message": "Recipient has revoked communication consent — voicemail blocked under TCPA.",
+                            "revoked_at": revoked_iso,
+                        },
+                    )
+        except HTTPException:
+            raise
+        except Exception as _consent_err:
+            # Fail-open on lookup error per spec
+            logger.warning(
+                "TCPA-D4: BorrowerProfile consent lookup failed (fail-open): %s",
+                _consent_err,
+            )
 
         # --- TCPA Compliance Checks ---
         org_id = getattr(current_user, 'organization_id', None)
@@ -819,6 +875,95 @@ async def create_voicemail_drop(
                 f"(user={current_user.id})"
             )
             raise HTTPException(status_code=403, detail=rejection_reason)
+
+        # --- TCPA-D4: audio duration validation (>= 5 seconds) ---
+        # Slybroadcast hard-rejects audio < 5s.  We pre-validate via either:
+        #   1. mutagen on the local file referenced by template.audio_url, or
+        #   2. caller-supplied duration_seconds in the request body.
+        # If neither is available and we're about to submit to Slybroadcast,
+        # fail-closed with HTTP 400.
+        delivery_method_for_check = None
+        _template_audio_url_for_check = None
+        try:
+            if template_id:
+                # Best-effort: re-read template to know which delivery_method we'll use
+                from sqlalchemy import text as _text
+                _row = db.execute(
+                    _text("SELECT delivery_method, audio_url FROM voicemail_templates WHERE id = :tid"),
+                    {"tid": template_id},
+                ).fetchone()
+                if _row:
+                    delivery_method_for_check = _row[0]
+                    _template_audio_url_for_check = _row[1]
+            if not delivery_method_for_check:
+                delivery_method_for_check = os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
+        except Exception:
+            delivery_method_for_check = os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
+
+        _needs_sb_check = delivery_method_for_check in ("slybroadcast", "ringless")
+        if _needs_sb_check:
+            MIN_DURATION = 5.0
+            duration_ok = False
+            # Path 1: mutagen on local file referenced by template
+            try:
+                if _template_audio_url_for_check:
+                    local_filename = str(_template_audio_url_for_check).rstrip("/").split("/")[-1]
+                    upload_dir = os.path.join(
+                        os.path.dirname(__file__), "..", "uploads", "voicemail_audio"
+                    )
+                    local_path = os.path.join(upload_dir, local_filename)
+                    if os.path.isfile(local_path):
+                        try:
+                            import mutagen  # noqa: F401
+                            from mutagen.mp3 import MP3 as _MP3
+                            audio_obj = _MP3(local_path)
+                            if audio_obj.info.length >= MIN_DURATION:
+                                duration_ok = True
+                            else:
+                                logger.warning(
+                                    "TCPA-D4: audio file too short via mutagen: %.2fs",
+                                    audio_obj.info.length,
+                                )
+                                return JSONResponse(
+                                    status_code=400,
+                                    content={
+                                        "error": "audio_too_short",
+                                        "message": f"Audio is {audio_obj.info.length:.1f}s; Slybroadcast requires >= {MIN_DURATION:.0f}s.",
+                                    },
+                                )
+                        except ImportError:
+                            # mutagen unavailable; fall through to duration_seconds path
+                            pass
+            except Exception as _dur_err:
+                logger.debug("TCPA-D4: mutagen check skipped: %s", _dur_err)
+
+            # Path 2: caller-supplied duration_seconds
+            if not duration_ok:
+                if duration_seconds is None:
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": "audio_too_short",
+                            "message": "duration_seconds required when audio length cannot be measured server-side.",
+                        },
+                    )
+                try:
+                    if float(duration_seconds) < MIN_DURATION:
+                        return JSONResponse(
+                            status_code=400,
+                            content={
+                                "error": "audio_too_short",
+                                "message": f"Audio is {float(duration_seconds):.1f}s; Slybroadcast requires >= {MIN_DURATION:.0f}s.",
+                            },
+                        )
+                except (TypeError, ValueError):
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": "audio_too_short",
+                            "message": "duration_seconds must be numeric.",
+                        },
+                    )
 
         # --- Rate Limiting ---
         is_allowed, rate_msg = await check_rate_limit(current_user.id, db, organization_id=org_id)

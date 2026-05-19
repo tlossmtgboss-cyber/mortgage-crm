@@ -488,6 +488,63 @@ class LoanReconciliationService:
             except Exception as e2:
                 logger.error(f"Error in _write_audit_log (rollback): {e2}")
 
+        # D5: Also write to the durable SOC 2 audit table. Best-effort —
+        # the helper itself never raises, but guard anyway so existing
+        # legacy audit behavior is fully preserved.
+        try:
+            self._record_state_change_audit(loan_id, result)
+        except Exception as e:
+            logger.debug(f"D5 audit record skipped: {e}")
+
+    def _record_state_change_audit(
+        self,
+        loan_id: int,
+        result: ReconciliationResult,
+    ) -> None:
+        """Emit a durable D5 audit row for the SOC 2 trail."""
+        # Skip pure no-op / dedup transitions
+        if result.action == ReconciliationAction.SKIP:
+            return
+        if not result.new_stage:
+            return  # nothing to audit for unmapped stages here
+
+        info = self._get_loan_info(loan_id) or {}
+        org_id = info.get("organization_id")
+        if not org_id:
+            return  # cannot scope to tenant — skip silently
+
+        # Derive pipeline category from action / stages.
+        if result.should_promote_mum or result.action == ReconciliationAction.PROMOTE_TO_MUM:
+            to_pipeline = "mum"
+        elif result.action == ReconciliationAction.ARCHIVE:
+            to_pipeline = "archived"
+        else:
+            to_pipeline = "active_loans"
+        from_pipeline = "active_loans" if result.old_stage else "leads"
+
+        metadata = {
+            "action": result.action.value,
+            "salesforce_raw_stage": result.salesforce_raw_stage,
+            "is_backward_movement": result.is_backward_movement,
+            "warnings": list(result.warnings),
+            "admin_review_reason": result.admin_review_reason,
+            "extra": dict(result.audit_metadata or {}),
+        }
+
+        from services.loan_state_audit_service import record_state_change
+        record_state_change(
+            self.db,
+            loan_id=loan_id,
+            organization_id=org_id,
+            from_stage=result.old_stage,
+            to_stage=result.new_stage,
+            from_pipeline=from_pipeline,
+            to_pipeline=to_pipeline,
+            trigger_source="salesforce_reconciliation",
+            actor_user_id=None,
+            metadata=metadata,
+        )
+
     def _store_raw_sf_stage(self, loan_id: int, raw_stage: str) -> None:
         """Persist the original Salesforce stage value on the loan record."""
         try:

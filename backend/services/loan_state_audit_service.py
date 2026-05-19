@@ -24,16 +24,41 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
-def _coerce_uuid(value: Any) -> Optional[uuid.UUID]:
-    """Best-effort coercion to UUID. Returns None if value can't be coerced."""
+# Stable namespace for deriving deterministic UUIDs from legacy integer IDs.
+# Keep constant — never change after the table has rows or audit lookups break.
+_LEGACY_INT_ID_NS = uuid.UUID("d5a4d171-0000-4000-8000-000000000005")
+
+
+def _coerce_uuid(value: Any, *, kind: str = "id") -> Optional[uuid.UUID]:
+    """
+    Best-effort coercion to UUID.
+
+    * Already a UUID → returned as-is.
+    * String that parses as UUID → returned.
+    * Integer (or numeric string) → deterministic UUIDv5 in the legacy
+      namespace, so the same int always maps to the same UUID. This lets the
+      audit table serve the current Integer-FK schema today and a future
+      UUID-FK schema without code changes.
+    * Anything else → ``None``.
+    """
     if value is None:
         return None
     if isinstance(value, uuid.UUID):
         return value
-    try:
-        return uuid.UUID(str(value))
-    except (ValueError, AttributeError, TypeError):
+    s = str(value).strip()
+    if not s:
         return None
+    try:
+        return uuid.UUID(s)
+    except (ValueError, AttributeError, TypeError):
+        pass
+    # Fall back to deterministic UUIDv5 for legacy integer IDs.
+    try:
+        if s.lstrip("-").isdigit():
+            return uuid.uuid5(_LEGACY_INT_ID_NS, f"{kind}:{s}")
+    except Exception:
+        return None
+    return None
 
 
 def record_state_change(
@@ -62,7 +87,7 @@ def record_state_change(
     the caller when possible.
     """
     # Coerce types
-    org_uuid = _coerce_uuid(organization_id)
+    org_uuid = _coerce_uuid(organization_id, kind="org")
     if org_uuid is None:
         logger.warning(
             "loan_state_audit: refusing to record — invalid organization_id=%r",
@@ -109,14 +134,14 @@ def record_state_change(
 
         row = LoanStateChangeAudit(
             loan_id=int(loan_id),
-            lead_id=_coerce_uuid(lead_id),
+            lead_id=_coerce_uuid(lead_id, kind="lead"),
             organization_id=org_uuid,
             from_stage=from_stage,
             to_stage=to_stage,
             from_pipeline=from_pipeline,
             to_pipeline=to_pipeline,
             trigger_source=trigger_source,
-            actor_user_id=_coerce_uuid(actor_user_id),
+            actor_user_id=_coerce_uuid(actor_user_id, kind="user"),
             audit_metadata=dict(metadata) if metadata else None,
         )
         own_db.add(row)
