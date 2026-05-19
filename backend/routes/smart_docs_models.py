@@ -31,10 +31,13 @@ def _verify_loan_tenant(db: Session, loan_id: int, current_user) -> None:
     """Verify the requesting user's org owns the loan. Raises 404 if not."""
     org_id = getattr(current_user, 'organization_id', None)
     is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
-    if org_id and not is_platform_admin:
-        loan_org = _get_loan_org_id(db, loan_id)
-        if loan_org is not None and loan_org != org_id:
-            raise HTTPException(status_code=404, detail="Not found")
+    if is_platform_admin:
+        return
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    loan_org = _get_loan_org_id(db, loan_id)
+    if loan_org is not None and loan_org != org_id:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 def _verify_document_tenant(db: Session, document_id: int, current_user):

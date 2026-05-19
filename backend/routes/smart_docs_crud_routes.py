@@ -200,13 +200,10 @@ async def get_needs_list(
     generator = NeedsListGenerator(db)
     result = generator.get_needs_list(loan_id)
 
-    # Fetch borrower info from loans table (use engine to bypass RLS filtering)
-    from db import engine as _engine
-    with _engine.connect() as conn:
-        loan_info = conn.execute(text("""
-            SELECT borrower_name, borrower_email, loan_number, stage
-            FROM loans WHERE id = :loan_id
-        """), {"loan_id": loan_id}).fetchone()
+    loan_info = db.execute(text("""
+        SELECT borrower_name, borrower_email, loan_number, stage
+        FROM loans WHERE id = :loan_id
+    """), {"loan_id": loan_id}).fetchone()
 
     if loan_info:
         result["borrower_name"] = loan_info.borrower_name
@@ -582,7 +579,6 @@ async def upload_document(
     )
 
     response = pipeline.result_to_dict(result)
-    response["storage_key"] = storage_key
     response["filename"] = safe_filename
     return response
 
@@ -667,10 +663,8 @@ async def download_document(
     )
 
     if not result.get("success"):
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate download URL: {result.get('error')}"
-        )
+        logger.error("Presigned URL generation failed for doc %s: %s", document_id, result.get("error"))
+        raise HTTPException(status_code=502, detail="Document storage temporarily unavailable")
 
     try:
         from utils.export_audit import log_export_event, _get_client_ip
@@ -683,6 +677,21 @@ async def download_document(
         )
     except Exception as e:
         logger.warning("Failed to log export event for document %s: %s", document_id, e)
+
+    try:
+        event = DocPolicyEvent(
+            loan_id=document.loan_id,
+            event_type="DOCUMENT_DOWNLOADED",
+            payload={
+                "document_id": document_id,
+                "user_id": getattr(current_user, "id", None),
+                "file_name": document.file_name,
+            },
+        )
+        db.add(event)
+        db.commit()
+    except Exception as e:
+        logger.warning("Download audit event failed for doc %s: %s", document_id, e)
 
     return {
         "document_id": document.id,
