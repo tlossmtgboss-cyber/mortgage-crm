@@ -107,7 +107,7 @@ def require_tenant_filter(
         )
 
     return db.query(model_class).filter(
-        model_class.organization_id == org_id
+        model_class.organization_id == org_id  # type: ignore[attr-defined]
     )
 
 

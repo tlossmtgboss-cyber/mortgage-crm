@@ -140,7 +140,7 @@ class QualityAnalyzer:
             Analysis results with score, breakdown, and recommendations
         """
         prompt_lower = prompt.lower()
-        results = {
+        results: Dict[str, Any] = {
             "total_score": 0,
             "max_score": 100,
             "category_scores": {},

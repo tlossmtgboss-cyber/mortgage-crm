@@ -35,6 +35,10 @@ from db import (
     get_db_url,
     get_pool_status,
     get_pool_stats,
+    # Async additions (Wave-2 pool/async migration)
+    async_engine,
+    AsyncSessionLocal,
+    get_async_db,
 )
 
 # Export tenant utilities
@@ -83,6 +87,9 @@ __all__ = [
     "get_db_url",
     "get_pool_status",
     "get_pool_stats",
+    "async_engine",
+    "AsyncSessionLocal",
+    "get_async_db",
     # Tenant isolation
     "TenantMixin",
     "TenantSession",

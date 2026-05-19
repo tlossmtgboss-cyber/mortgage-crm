@@ -22,9 +22,10 @@ import httpx
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text as sa_text
 
-from database import get_db, SessionLocal
+from database import get_db, SessionLocal, get_async_db
 from middleware.webhook_verification import require_telnyx_webhook as _require_telnyx_webhook_strict
 
 _TELNYX_IP_PREFIXES = ("192.76.120.", "185.246.41.", "103.115.244.")
@@ -2894,18 +2895,18 @@ async def texml_hangup(request: Request):
 async def texml_voicemail(
     tracking_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """TeXML response to play voicemail message"""
     _validate_texml_request(request)
     if not tracking_id or not str(tracking_id).isdigit():
         raise HTTPException(status_code=400, detail="Invalid tracking ID")
     # Get call info
-    result = db.execute(sa_text("""
+    result = (await db.execute(sa_text("""
         SELECT voicemail_message, voicemail_audio, client_name, lo_name, purpose
         FROM amd_outbound_calls
         WHERE id = :tracking_id
-    """), {"tracking_id": tracking_id}).fetchone()
+    """), {"tracking_id": tracking_id})).fetchone()
 
     response = TeXMLResponse()
 
@@ -2916,12 +2917,12 @@ async def texml_voicemail(
     voicemail_message, voicemail_audio, client_name, lo_name, purpose = result
 
     # Update status
-    db.execute(sa_text("""
+    await db.execute(sa_text("""
         UPDATE amd_outbound_calls
         SET status = 'voicemail_left', handling_method = 'voicemail_tts'
         WHERE id = :tracking_id
     """), {"tracking_id": tracking_id})
-    db.commit()
+    await db.commit()
 
     response.pause(length=1)
 
@@ -2953,18 +2954,18 @@ async def texml_voicemail(
 async def texml_connect_ai(
     tracking_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """TeXML response to connect call to AI via WebSocket stream"""
     _validate_texml_request(request)
     if not tracking_id or not str(tracking_id).isdigit():
         raise HTTPException(status_code=400, detail="Invalid tracking ID")
     # Get call info
-    result = db.execute(sa_text("""
+    result = (await db.execute(sa_text("""
         SELECT client_name, to_number, purpose, lo_name
         FROM amd_outbound_calls
         WHERE id = :tracking_id
-    """), {"tracking_id": tracking_id}).fetchone()
+    """), {"tracking_id": tracking_id})).fetchone()
 
     response = TeXMLResponse()
 
@@ -2975,12 +2976,12 @@ async def texml_connect_ai(
     client_name, to_number, purpose, lo_name = result
 
     # Update status
-    db.execute(sa_text("""
+    await db.execute(sa_text("""
         UPDATE amd_outbound_calls
         SET status = 'connected', handling_method = 'ai_stream'
         WHERE id = :tracking_id
     """), {"tracking_id": tracking_id})
-    db.commit()
+    await db.commit()
 
     # Get domain for WebSocket
     domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN') or 'api.perenniaai.com'

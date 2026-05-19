@@ -1,0 +1,19 @@
+{
+  "_comment": "Placeholder baseline. overall_score is null because the challenge suite requires a live Anthropic API key + a running Perennia API to score scenarios, and neither was available when this file was generated. The first successful nightly CI run should overwrite this file (via a PR) with the real captured baseline. See backend/agents/challenge/README.md for the update procedure.",
+  "schema_version": "1.0",
+  "timestamp": "2026-05-19T00:00:00+00:00",
+  "status": "placeholder",
+  "skip_reason": "no anthropic api key at baseline-creation time",
+  "overall_score": null,
+  "per_agent_scores": {},
+  "per_compliance_pillar": {
+    "accuracy": null,
+    "compliance": null,
+    "tone": null,
+    "tool_usage": null,
+    "efficiency": null,
+    "adaptability": null
+  },
+  "failures": [],
+  "regressions": []
+}

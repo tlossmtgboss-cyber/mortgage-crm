@@ -668,7 +668,8 @@ IMPORTANT: Never accept rejection on the first attempt. Use these strategies to 
 
         # Check for objection
         if self._is_objecting(conversation_history):
-            if "objection_handling" in stage_info.get('next_stages', []):
+            next_stages: Any = stage_info.get('next_stages', [])
+            if "objection_handling" in next_stages:
                 return "objection_handling"
 
         # Check for positive response
@@ -685,7 +686,7 @@ IMPORTANT: Never accept rejection on the first attempt. Use these strategies to 
 
         # Check for max messages reached
         user_messages = sum(1 for msg in conversation_history if msg.get('role') == 'user')
-        max_messages = stage_info.get('max_messages', 10)
+        max_messages: Any = stage_info.get('max_messages', 10)
 
         if user_messages >= max_messages:
             if current_stage == "initial_contact":

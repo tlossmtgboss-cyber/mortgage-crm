@@ -1,0 +1,53 @@
+name: Agent Challenge (PR Gate)
+
+# Per-PR gate that runs the agent challenge suite against the current
+# baseline. Merge is blocked when the runner exits non-zero (regression
+# detected). When no ANTHROPIC_API_KEY secret is configured for the PR
+# (e.g. fork-originated PRs), the runner emits a structured skip and
+# exits 0 — the gate becomes a no-op rather than a false failure.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/agents/**'
+      - 'backend/agents/challenge/**'
+      - '.github/workflows/agent-challenge-*.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  challenge-gate:
+    name: Agent challenge regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Compile-check challenge package
+        run: python3 -m compileall backend/agents/challenge/ -q
+
+      - name: Run agent challenge regression gate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PERENNIA_API_URL: ${{ secrets.PERENNIA_API_URL }}
+          PERENNIA_API_USER: ${{ secrets.PERENNIA_API_USER }}
+          PERENNIA_API_PASS: ${{ secrets.PERENNIA_API_PASS }}
+        run: |
+          python3 -m backend.agents.challenge.runner \
+            --output json \
+            --baseline backend/agents/challenge/baseline.json

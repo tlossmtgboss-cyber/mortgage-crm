@@ -51,7 +51,7 @@ _DATE_LONG_RE = re.compile(
 )
 
 
-def _normalize(s: str) -> str:
+def _normalize(s: Any) -> str:
     return re.sub(r"\s+", "", str(s)).lower()
 
 
