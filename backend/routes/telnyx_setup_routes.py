@@ -29,7 +29,7 @@ _get_current_user = None
 _get_db = None
 
 
-from db import get_db
+from db import get_db, get_async_db
 
 
 def set_dependencies(user_model, current_user_func, db_func):
@@ -42,15 +42,23 @@ def set_dependencies(user_model, current_user_func, db_func):
 
 from fastapi import Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request):
+    """Auth dependency using a dedicated short-lived sync session, so route
+    handlers may use `get_async_db()` independently."""
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Auth dependency not configured")
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user(token=token, request=request, db=db)
+    from database import SessionLocal
+    local_db = SessionLocal()
+    try:
+        return await _get_current_user(token=token, request=request, db=local_db)
+    finally:
+        local_db.close()
 
 
 # =============================================================================
