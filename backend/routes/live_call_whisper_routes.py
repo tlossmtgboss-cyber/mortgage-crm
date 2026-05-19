@@ -24,6 +24,7 @@ from services.live_call_whisper_service import (
     Whisper,
     WhisperType,
 )
+from services.websocket_session_manager import ws_session_manager
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,17 @@ async def websocket_endpoint(websocket: WebSocket, call_id: str):
         auth_db.close()
 
     await manager.connect(websocket, call_id, skip_accept=True)
+
+    # CQ-006 fix: register with central session manager for idle-prune coverage.
+    ws_session_id = f"whisper:{call_id}:{id(websocket)}"
+    try:
+        await ws_session_manager.register(
+            ws_session_id,
+            websocket,
+            {"call_id": call_id, "kind": "live_call_whisper"},
+        )
+    except Exception as reg_exc:  # pragma: no cover - registry must not break the route
+        logger.debug(f"ws_session_manager.register failed: {reg_exc}")
 
     try:
         # Send connection confirmation

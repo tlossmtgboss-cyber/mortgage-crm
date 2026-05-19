@@ -111,7 +111,7 @@ class ComplianceGuard:
     Pre-response regulatory scanner. See module docstring for tier definitions.
     """
 
-    def validate_response(self, text: str, agent_role: str) -> Dict:
+    def validate_response(self, text: str, agent_role: str, agent_id: Optional[str] = None) -> Dict:
         """
         Scan `text` for compliance red flags.
 
@@ -121,9 +121,16 @@ class ComplianceGuard:
                 "violations":           list,   # each item: {regulation, rule, severity, snippet}
                 "escalation_required":  bool,   # True iff any hard-block matched
             }
+
+        Side-effect: emits the result to the in-process ``governance_metrics``
+        store for the per-agent governance dashboard. The metrics call is
+        wrapped in try/except so a telemetry failure NEVER raises into the
+        caller's response path.
         """
         if not text or not isinstance(text, str):
-            return {"passed": True, "violations": [], "escalation_required": False}
+            result = {"passed": True, "violations": [], "escalation_required": False}
+            self._emit_metrics(agent_id, agent_role, result)
+            return result
 
         violations: List[Dict] = []
         escalation_required = False
@@ -186,11 +193,33 @@ class ComplianceGuard:
                 "agent_role": agent_role,
             })
 
-        return {
+        result = {
             "passed": passed,
             "violations": violations,
             "escalation_required": escalation_required,
         }
+        self._emit_metrics(agent_id, agent_role, result)
+        return result
+
+    @staticmethod
+    def _emit_metrics(agent_id: Optional[str], agent_role: str, result: Dict) -> None:
+        """
+        Forward a validate_response result to ``governance_metrics``.
+
+        Lazy-import + try/except so a metrics failure never leaks into the
+        caller's response path.
+        """
+        try:
+            from agents.orchestration.governance_metrics import governance_metrics
+            governance_metrics.record_compliance_event(
+                agent_id=agent_id or agent_role or "unknown",
+                agent_role=agent_role or "unknown",
+                violation_count=len(result.get("violations", []) or []),
+                violations=result.get("violations", []) or [],
+                escalated=bool(result.get("escalation_required", False)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("compliance_guard metrics emit swallowed: %s", exc)
 
 
 # Module-level singleton

@@ -55,6 +55,15 @@ from ._queries import (
 # SyncResult extracted to _state.py — re-exported for backwards compatibility
 from ._state import SyncResult
 
+# Pure mapping helpers extracted to _mapping.py
+from ._mapping import (
+    map_crm_stage_to_salesforce,
+    map_crm_lead_stage_to_salesforce,
+    remap_loan_fields_for_lead,
+    group_mappings_by_object,
+    group_mappings_by_entity,
+)
+
 
 class SalesforceSyncService:
     """Handles bidirectional data synchronization"""
@@ -1258,26 +1267,14 @@ class SalesforceSyncService:
         mappings: List[FieldMapping]
     ) -> Dict[str, List[FieldMapping]]:
         """Group mappings by source object"""
-        result = {}
-        for mapping in mappings:
-            obj = mapping.source_object
-            if obj not in result:
-                result[obj] = []
-            result[obj].append(mapping)
-        return result
+        return group_mappings_by_object(mappings)
 
     def _group_mappings_by_entity(
         self,
         mappings: List[FieldMapping]
     ) -> Dict[str, List[FieldMapping]]:
         """Group mappings by target entity"""
-        result = {}
-        for mapping in mappings:
-            entity = mapping.target_entity
-            if entity not in result:
-                result[entity] = []
-            result[entity].append(mapping)
-        return result
+        return group_mappings_by_entity(mappings)
 
     def _generate_sync_hash(self, data: Dict[str, Any]) -> str:
         """Generate MD5 hash for change detection"""
@@ -2098,42 +2095,7 @@ class SalesforceSyncService:
         Used when a Salesforce record needs to go to the leads table but
         the field mappings targeted loan columns.
         """
-        lead_data = {}
-
-        # Direct column name mappings (loan → lead)
-        field_map = {
-            'borrower_name': 'name',
-            'borrower_email': 'email',
-            'borrower_phone': 'phone',
-            'amount': 'loan_amount',
-            'property_city': 'city',
-            'property_state': 'state',
-            'property_zip': 'zip_code',
-            'rate': 'interest_rate',
-            'coborrower_name': 'co_applicant_name',
-            'co_borrower_email': 'co_applicant_email',
-            'purchase_price': 'property_value',
-        }
-
-        for key, value in data.items():
-            if value is None or value == '':
-                continue
-            if key in field_map:
-                lead_data[field_map[key]] = value
-            elif key in self.VALID_LEAD_COLUMNS:
-                # Field name is already valid for leads
-                lead_data[key] = value
-            # else: drop fields that have no lead equivalent
-
-        # Build name from first/last if not set
-        if not lead_data.get('name'):
-            first = data.get('borrower_first_name', '') or lead_data.get('first_name', '')
-            last = data.get('borrower_last_name', '') or lead_data.get('last_name', '')
-            combined = f"{first} {last}".strip()
-            if combined:
-                lead_data['name'] = combined
-
-        return lead_data
+        return remap_loan_fields_for_lead(data, self.VALID_LEAD_COLUMNS)
 
     async def _promote_lead_to_loan(
         self,
@@ -4128,33 +4090,11 @@ class SalesforceSyncService:
 
     def _map_crm_stage_to_salesforce(self, crm_stage: str) -> str:
         """Map CRM loan stage to Salesforce Opportunity stage"""
-        stage_mapping = {
-            'Application': 'Qualification',
-            'Processing': 'Needs Analysis',
-            'Submitted': 'Proposal/Price Quote',
-            'Underwriting': 'Negotiation/Review',
-            'Conditional Approval': 'Negotiation/Review',
-            'Approved': 'Negotiation/Review',
-            'CTC': 'Negotiation/Review',
-            'Clear to Close': 'Negotiation/Review',
-            'Docs Out': 'Negotiation/Review',
-            'Closing': 'Negotiation/Review',
-            'Funded': 'Closed Won',
-            'Cancelled': 'Closed Lost',
-            'Denied': 'Closed Lost',
-        }
-        return stage_mapping.get(crm_stage, 'Qualification')
+        return map_crm_stage_to_salesforce(crm_stage)
 
     def _map_crm_lead_stage_to_salesforce(self, crm_stage: str) -> str:
         """Map CRM lead stage to Salesforce Lead status"""
-        stage_mapping = {
-            'new': 'Open - Not Contacted',
-            'contacted': 'Working - Contacted',
-            'qualified': 'Closed - Converted',
-            'unqualified': 'Closed - Not Converted',
-            'converted': 'Closed - Converted',
-        }
-        return stage_mapping.get(crm_stage, 'Open - Not Contacted')
+        return map_crm_lead_stage_to_salesforce(crm_stage)
 
 
 # Export singleton instance

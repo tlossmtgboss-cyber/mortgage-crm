@@ -1090,7 +1090,8 @@ def _resolve_agents_for_intent(intent: str) -> List[str]:
 async def classify_intent(
     query: str,
     anthropic_client = None,
-    use_llm_fallback: bool = True
+    use_llm_fallback: bool = True,
+    apply_gate: bool = True,
 ) -> Dict[str, Any]:
     """
     Classify query intent using fast pattern matching, with LLM fallback.
@@ -1118,16 +1119,27 @@ async def classify_intent(
     """
     start = time.time()
 
+    # Lazy-import the confidence gate so this module remains importable even
+    # if the orchestration package shuffles (sibling Wave 3 agents may move it).
+    def _gate(result: Dict[str, Any]) -> Dict[str, Any]:
+        if not apply_gate:
+            return result
+        try:
+            from .orchestration.intent_confidence import apply_confidence_gate
+        except ImportError:  # pragma: no cover - defensive
+            return result
+        return apply_confidence_gate(result, query=query if isinstance(query, str) else "")
+
     # Guard against None/empty/non-string input
     if not query or not isinstance(query, str):
-        return {
+        return _gate({
             "intent": "general",
             "confidence": 0.0,
             "agents": _resolve_agents_for_intent("general"),
             "method": "fallback",
             "matched_pattern": None,
             "elapsed_ms": 0.0,
-        }
+        })
     # Truncate long inputs to prevent regex DoS on adversarial strings
     query = query[:1000]
 
@@ -1148,14 +1160,14 @@ async def classify_intent(
         logger.info(
             f"[INTENT] {method}: {intent} (conf={confidence:.2f}) in {elapsed:.1f}ms"
         )
-        return {
+        return _gate({
             "intent": intent,
             "confidence": confidence,
             "agents": _resolve_agents_for_intent(intent),
             "method": method,
             "matched_pattern": pattern,
             "elapsed_ms": elapsed
-        }
+        })
 
     # Fall back to LLM if enabled
     if use_llm_fallback:
@@ -1174,25 +1186,25 @@ async def classify_intent(
                 f"(conf={confidence:.2f})"
             )
 
-        return {
+        return _gate({
             "intent": intent,
             "confidence": confidence,
             "agents": _resolve_agents_for_intent(intent),
             "method": "llm",
             "matched_pattern": None,
             "elapsed_ms": elapsed
-        }
+        })
 
     # Default fallback
     elapsed = (time.time() - start) * 1000
-    return {
+    return _gate({
         "intent": "general",
         "confidence": 0.3,
         "agents": _resolve_agents_for_intent("general"),
         "method": "fallback",
         "matched_pattern": None,
         "elapsed_ms": elapsed
-    }
+    })
 
 
 # =============================================================================

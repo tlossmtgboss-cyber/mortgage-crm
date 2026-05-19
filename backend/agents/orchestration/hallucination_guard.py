@@ -96,7 +96,13 @@ def _extract_claims(text: str) -> List[str]:
 class HallucinationGuard:
     """Conservative numeric/date grounding check for agent responses."""
 
-    def verify_claims(self, response_text: str, context_data: Optional[Dict]) -> Dict:
+    def verify_claims(
+        self,
+        response_text: str,
+        context_data: Optional[Dict],
+        agent_id: Optional[str] = None,
+        agent_role: Optional[str] = None,
+    ) -> Dict:
         """
         Check every numeric/date claim in `response_text` against `context_data`.
 
@@ -106,13 +112,20 @@ class HallucinationGuard:
                 "unverified_claims":  list[str],      # claims with no support
                 "confidence":         float,          # verified / total (1.0 if zero claims)
             }
+
+        Side-effect: emits the result to ``governance_metrics`` for the
+        per-agent dashboard. Metrics failures are swallowed.
         """
         if not response_text or not isinstance(response_text, str):
-            return {"verified": True, "unverified_claims": [], "confidence": 1.0}
+            res = {"verified": True, "unverified_claims": [], "confidence": 1.0}
+            self._emit_metrics(agent_id, agent_role, res)
+            return res
 
         claims = _extract_claims(response_text)
         if not claims:
-            return {"verified": True, "unverified_claims": [], "confidence": 1.0}
+            res = {"verified": True, "unverified_claims": [], "confidence": 1.0}
+            self._emit_metrics(agent_id, agent_role, res)
+            return res
 
         context_values: Set[str] = set()
         if context_data is not None:
@@ -136,11 +149,35 @@ class HallucinationGuard:
 
         total = len(claims)
         confidence = (verified_count / total) if total else 1.0
-        return {
+        res = {
             "verified": len(unverified) == 0,
             "unverified_claims": unverified,
             "confidence": round(confidence, 4),
         }
+        self._emit_metrics(agent_id, agent_role, res)
+        return res
+
+    @staticmethod
+    def _emit_metrics(
+        agent_id: Optional[str],
+        agent_role: Optional[str],
+        result: Dict,
+    ) -> None:
+        """
+        Forward verify_claims result to the in-process governance metrics
+        store. Lazy-import + try/except so a telemetry failure NEVER leaks
+        into the caller's response path.
+        """
+        try:
+            from agents.orchestration.governance_metrics import governance_metrics
+            governance_metrics.record_hallucination_event(
+                agent_id=agent_id or agent_role or "unknown",
+                agent_role=agent_role or "unknown",
+                confidence=float(result.get("confidence", 1.0)),
+                unverified_claims=list(result.get("unverified_claims", []) or []),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("hallucination_guard metrics emit swallowed: %s", exc)
 
 
 # Module-level singleton

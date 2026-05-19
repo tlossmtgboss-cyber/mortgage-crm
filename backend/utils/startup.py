@@ -16,6 +16,55 @@ from sqlalchemy.pool import NullPool
 logger = logging.getLogger(__name__)
 
 
+# Columns migrated by alembic revision 2026_05_19_float_to_numeric.
+# Mirrors DOLLAR_COLUMNS + RATE_COLUMNS in that migration file.
+_FLOAT_TO_NUMERIC_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("ai_colleague_learning_metrics", "metric_value"),
+    ("ai_colleague_learning_metrics", "baseline_value"),
+    ("ai_performance_daily", "total_business_value"),
+    ("platform_contracts", "contract_value"),
+    ("drip_sequences", "avg_completion_rate"),
+    ("sms_response_patterns", "success_rate"),
+    ("ai_learning_metrics", "accuracy_rate"),
+    ("ai_performance_daily", "success_rate"),
+    ("ai_health_score", "autonomous_rate"),
+    ("ai_health_score", "approval_rate"),
+    ("ai_health_score", "success_rate"),
+    ("ai_metrics_daily", "automation_rate"),
+    ("ai_metrics_daily", "escalation_rate"),
+    ("smart_docs_sla_configs", "warning_threshold_pct"),
+)
+
+
+def _check_float_to_numeric_applied(engine) -> list[tuple[str, str]]:
+    """Return list of (table, column) pairs still stored as Float in live DB.
+
+    An empty list means the migration was applied successfully. A non-empty
+    list signals a deployment mistake (forgot `alembic upgrade head`) and is
+    a TRID compliance risk because IEEE 754 cannot exactly represent cents.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    inspector = sa_inspect(engine)
+    drift: list[tuple[str, str]] = []
+    existing_tables = set(inspector.get_table_names())
+
+    for table_name, column_name in _FLOAT_TO_NUMERIC_COLUMNS:
+        if table_name not in existing_tables:
+            # Table not yet created — not drift, just an unprovisioned DB.
+            continue
+        for col in inspector.get_columns(table_name):
+            if col["name"] != column_name:
+                continue
+            type_str = str(col["type"]).upper()
+            # Postgres reports DOUBLE PRECISION / REAL / FLOAT for Float;
+            # NUMERIC / DECIMAL for the migrated type.
+            if "NUMERIC" not in type_str and "DECIMAL" not in type_str:
+                drift.append((table_name, column_name))
+            break
+    return drift
+
+
 def startup_checks(engine, session_factory) -> dict:
     """Run startup health checks and log configuration.
 
@@ -108,6 +157,33 @@ def startup_checks(engine, session_factory) -> dict:
         else:
             results["checks_passed"] += 1
             logger.info("Startup check: VAPI_WEBHOOK_SECRET configured OK")
+
+    # 5. Verify Float -> Numeric migration was applied to live schema.
+    #    Catches the "forgot to run alembic upgrade head" deployment failure
+    #    that leaves TRID-violation Float columns in production.
+    try:
+        float_drift = _check_float_to_numeric_applied(engine)
+        if float_drift:
+            results["checks_failed"] += 1
+            results["float_migration_drift"] = float_drift
+            logger.warning(
+                "Startup check: Float -> Numeric migration NOT fully applied — "
+                f"{len(float_drift)} column(s) still Float in live schema: "
+                f"{', '.join(f'{t}.{c}' for t, c in float_drift)} — "
+                "run `alembic upgrade head` to remediate (TRID compliance risk)"
+            )
+        else:
+            results["checks_passed"] += 1
+            results["float_migration_drift"] = []
+            logger.info(
+                "Startup check: Float -> Numeric migration applied to all 14 "
+                "financial columns OK"
+            )
+    except Exception as e:
+        # Don't fail startup if introspection breaks — just log it.
+        logger.warning(
+            f"Startup check: Float -> Numeric drift check failed to run — {e}"
+        )
 
     elapsed = time.monotonic() - start
     results["startup_check_time_ms"] = round(elapsed * 1000, 1)

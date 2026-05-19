@@ -80,14 +80,37 @@ class TokenBudgetManager:
                 self._warned_80pct.add(key)
             return True
 
-    def record_usage(self, agent_id: str, input_tokens: int, output_tokens: int) -> None:
-        """Increment the running counter for today's usage."""
+    def record_usage(
+        self,
+        agent_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        agent_role: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> None:
+        """
+        Increment the running counter for today's usage and emit to the
+        in-process governance metrics store. Metrics emit is wrapped in
+        try/except so a telemetry failure NEVER leaks into the caller.
+        """
         delta = int(input_tokens) + int(output_tokens)
         if delta <= 0:
             return
         with self._lock:
             key = self._today_key(agent_id)
             self._usage[key] = self._usage.get(key, 0) + delta
+
+        try:
+            from agents.orchestration.governance_metrics import governance_metrics
+            governance_metrics.record_token_usage(
+                agent_id=str(agent_id),
+                agent_role=str(agent_role or "unknown"),
+                input_tokens=int(input_tokens or 0),
+                output_tokens=int(output_tokens or 0),
+                model=model,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("token_budget metrics emit swallowed: %s", exc)
 
     def get_usage(self, agent_id: str) -> dict:
         """Return current usage snapshot for agent_id (today)."""

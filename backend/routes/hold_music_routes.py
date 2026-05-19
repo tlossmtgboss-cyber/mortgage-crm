@@ -166,14 +166,14 @@ TWILIO_DEFAULT_MUSIC = DEFAULT_HOLD_MUSIC
 @router.post("")
 async def create_hold_music(
     music: HoldMusicCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Create a new hold music entry"""
     try:
         # If setting as default, unset other defaults
         if music.is_default:
-            db.execute(text("UPDATE hold_music SET is_default = FALSE WHERE is_default = TRUE"))
+            await db.execute(text("UPDATE hold_music SET is_default = FALSE WHERE is_default = TRUE"))
 
         # Validate audio URL if provided
         audio_url = music.audio_url
@@ -189,7 +189,7 @@ async def create_hold_music(
         # Serialize comfort messages
         comfort_json = json.dumps(music.comfort_messages) if music.comfort_messages else None
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO hold_music
             (name, description, source_type, audio_url, twilio_music_name,
              duration_seconds, is_default, comfort_messages, comfort_message_interval,
@@ -211,14 +211,14 @@ async def create_hold_music(
             "created_by": current_user.id if current_user else None
         })
 
-        # For SQLite compatibility
+        # PostgreSQL RETURNING id
         try:
             music_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in create_hold_music: {e}")
-            music_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            music_id = None
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -227,7 +227,7 @@ async def create_hold_music(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating hold music: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -235,7 +235,7 @@ async def create_hold_music(
 @router.get("")
 async def list_hold_music(
     include_inactive: bool = False,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """List all hold music entries"""
@@ -250,7 +250,7 @@ async def list_hold_music(
             " " + where_clause +
             " ORDER BY is_default DESC, name ASC"
         )
-        results = db.execute(text(sql)).fetchall()
+        results = (await db.execute(text(sql))).fetchall()
 
         music_list = []
         for row in results:
@@ -317,18 +317,18 @@ get_twilio_defaults = get_default_hold_music_library
 @router.get("/{music_id}")
 async def get_hold_music(
     music_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Get a specific hold music entry"""
     try:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT id, name, description, source_type, audio_url, twilio_music_name,
                    duration_seconds, is_default, is_active, comfort_messages,
                    comfort_message_interval, created_at
             FROM hold_music
             WHERE id = :music_id
-        """), {"music_id": music_id}).fetchone()
+        """), {"music_id": music_id})).fetchone()
 
         if not result:
             raise HTTPException(status_code=404, detail="Hold music not found")
@@ -367,22 +367,22 @@ async def get_hold_music(
 async def update_hold_music(
     music_id: int,
     music: HoldMusicUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Update a hold music entry"""
     try:
         # Check if exists
-        existing = db.execute(text(
+        existing = (await db.execute(text(
             "SELECT id FROM hold_music WHERE id = :music_id"
-        ), {"music_id": music_id}).fetchone()
+        ), {"music_id": music_id})).fetchone()
 
         if not existing:
             raise HTTPException(status_code=404, detail="Hold music not found")
 
         # If setting as default, unset other defaults
         if music.is_default:
-            db.execute(text(
+            await db.execute(text(
                 "UPDATE hold_music SET is_default = FALSE WHERE is_default = TRUE AND id != :music_id"
             ), {"music_id": music_id})
 
@@ -419,15 +419,15 @@ async def update_hold_music(
 
         if updates:
             sql = "UPDATE hold_music SET " + ", ".join(updates) + " WHERE id = :music_id"
-            db.execute(text(sql), params)
-            db.commit()
+            await db.execute(text(sql), params)
+            await db.commit()
 
         return {"success": True, "message": "Hold music updated"}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error updating hold music: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -435,17 +435,17 @@ async def update_hold_music(
 @router.delete("/{music_id}")
 async def delete_hold_music(
     music_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Delete (deactivate) a hold music entry"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE hold_music SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
             WHERE id = :music_id
         """), {"music_id": music_id})
 
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Hold music not found")
@@ -455,7 +455,7 @@ async def delete_hold_music(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error deleting hold music: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -463,21 +463,21 @@ async def delete_hold_music(
 @router.post("/{music_id}/set-default")
 async def set_default_hold_music(
     music_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Set a hold music entry as the default"""
     try:
         # Unset all defaults
-        db.execute(text("UPDATE hold_music SET is_default = FALSE"))
+        await db.execute(text("UPDATE hold_music SET is_default = FALSE"))
 
         # Set new default
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE hold_music SET is_default = TRUE, updated_at = CURRENT_TIMESTAMP
             WHERE id = :music_id AND is_active = TRUE
         """), {"music_id": music_id})
 
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Hold music not found or inactive")
@@ -487,7 +487,7 @@ async def set_default_hold_music(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error setting default: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
