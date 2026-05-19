@@ -122,8 +122,8 @@ async def _get_portal_v2_user(request: Request) -> Dict:
 
     try:
         claims = PortalV2TokenService.verify_token(token)
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid or expired portal token")
 
     return claims
 
