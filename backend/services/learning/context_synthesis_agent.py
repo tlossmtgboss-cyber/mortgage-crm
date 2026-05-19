@@ -205,7 +205,7 @@ If you find no durable patterns, return an empty learned_preferences dict with c
                 key_str = json.dumps(v, sort_keys=True, default=str)
                 value_counts[key_str] = value_counts.get(key_str, 0) + 1
 
-            best_key = max(value_counts, key=value_counts.get)  # type: ignore[arg-type]
+            best_key = max(value_counts, key=value_counts.get)
             best_value = json.loads(best_key)
 
             pref_key = f"{cluster.event_type}_{cluster.context_key}"

@@ -41,14 +41,14 @@ repos:
         args: [--fix, --select, "E,F,E722,B"]
       - id: ruff-format
 
-  # Mypy type-checking for backend
+  # Mypy type-checking for backend (Slice F scope — must mirror mypy.ini `files = ...`)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
       - id: mypy
         name: mypy (backend)
-        args: [--ignore-missing-imports, --no-strict-optional]
-        files: ^backend/.*\.py$
+        args: [--config-file=mypy.ini]
+        files: '^backend/(auth/.*\.py|middleware/.*\.py|agents/orchestration/.*\.py|agents/nodes/.*\.py|agents/service/_(response|session|tools|voice)\.py|services/loan_state_audit_service\.py|services/loan_reconciliation_service\.py|services/salesforce/_(auth|mapping|queries|state|webhooks)\.py|services/websocket_session_manager\.py|services/call_queue_stats\.py|services/call_quality_scorer\.py|services/los_integration/.*\.py|services/compliance/.*\.py|services/calculator_scenarios/.*\.py|services/aria_memory/.*\.py|services/calendar_providers/.*\.py|services/media/.*\.py|services/service_cost_integrations/.*\.py|services/content_marketing/.*\.py|services/pos/.*\.py|services/learning/.*\.py|services/appointment/.*\.py|services/application_engine/.*\.py|db\.py|database/models/.*\.py|schemas/.*\.py|routes/(security_monitoring|agent_governance_metrics|slybroadcast_webhook)_routes\.py|workflows/.*\.py)$'
         additional_dependencies:
           - types-redis
           - types-requests
