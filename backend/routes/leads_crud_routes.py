@@ -12,6 +12,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_, cast, String, text
+from sqlalchemy.exc import IntegrityError, DataError, SQLAlchemyError
 from typing import Optional, List
 from datetime import datetime, timezone
 import logging
@@ -102,8 +103,17 @@ async def create_lead(
         logger.warning(f"Lead validation failed: {validation_err}")
         raise HTTPException(status_code=422, detail=str(validation_err))
 
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        logger.warning(
+            f"Lead create rejected: user {getattr(current_user, 'id', None)} has no organization_id"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Your user account is not associated with an organization. Contact an administrator.",
+        )
+
     try:
-        # Sanitize free-text fields that bypass Pydantic (e.g., source, employer_name)
         from validation.common import sanitize_string
         model_data = lead_data.model_dump()
         for text_field in ("source", "employer_name", "address", "city", "lender",
@@ -114,20 +124,61 @@ async def create_lead(
         db_lead = Lead(
             **model_data,
             owner_id=current_user.id,
-            organization_id=getattr(current_user, 'organization_id', None),
-            lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
+            organization_id=org_id,
+            lead_received_date=datetime.now(timezone.utc),
         )
 
-        # Calculate AI score
-        db_lead.ai_score = calculate_lead_score(db_lead)
+        try:
+            db_lead.ai_score = calculate_lead_score(db_lead)
+        except Exception as score_err:
+            logger.warning(
+                f"calculate_lead_score failed ({type(score_err).__name__}: {score_err}); defaulting to 50"
+            )
+            db_lead.ai_score = 50
         db_lead.sentiment = "positive" if db_lead.ai_score >= 75 else "neutral" if db_lead.ai_score >= 50 else "needs-attention"
         db_lead.next_action = "Initial contact and needs assessment"
 
         db.add(db_lead)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError as ie:
+            db.rollback()
+            msg = str(getattr(ie, 'orig', ie)).lower()
+            if 'uix_lead_email_org' in msg or ('email' in msg and 'unique' in msg) or 'duplicate key' in msg:
+                logger.info(
+                    f"Duplicate lead email for org {org_id}: {model_data.get('email')!r}"
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail="A lead with this email already exists in your organization.",
+                )
+            if 'ck_lead_has_contact' in msg:
+                raise HTTPException(
+                    status_code=400,
+                    detail="At least one contact method (email or phone) is required.",
+                )
+            if 'organization_id' in msg and 'null' in msg:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Lead must be associated with an organization.",
+                )
+            logger.error(
+                f"IntegrityError creating lead (org={org_id}): {type(ie).__name__}: {ie}",
+                exc_info=True,
+            )
+            raise HTTPException(status_code=400, detail="Invalid lead data — database constraint violated.")
+        except DataError as de:
+            db.rollback()
+            logger.warning(f"DataError creating lead (org={org_id}): {type(de).__name__}: {de}")
+            raise HTTPException(status_code=400, detail="Invalid lead data — value out of range or wrong type.")
 
-        from services.client_file_service import ensure_client_file
-        ensure_client_file(db, db_lead)
+        try:
+            from services.client_file_service import ensure_client_file
+            ensure_client_file(db, db_lead)
+        except Exception as cf_err:
+            logger.warning(
+                f"ensure_client_file failed for lead (pre-commit): {type(cf_err).__name__}: {cf_err}"
+            )
 
         db.commit()
         db.refresh(db_lead)
@@ -194,10 +245,30 @@ async def create_lead(
             "created_at": db_lead.created_at.isoformat() if db_lead.created_at else None,
         }
 
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        logger.error(
+            f"DB error creating lead (org={org_id}, user={getattr(current_user, 'id', None)}): "
+            f"{type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail="Failed to create lead (database error)")
     except Exception as e:
-        logger.error(f"Error creating lead: {e}", exc_info=True)
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to create lead")
+        logger.error(
+            f"Unexpected error creating lead (org={org_id}, user={getattr(current_user, 'id', None)}): "
+            f"{type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Failed to create lead: {type(e).__name__}")
 
 
 
