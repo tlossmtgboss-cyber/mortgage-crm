@@ -5,13 +5,15 @@ Configure the AI assistant's email identity and behavior
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, select
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime, timezone
 import logging
 
 from database import get_db, Base
+from db import get_async_db
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -114,33 +116,34 @@ class EmailSetupStatus(BaseModel):
     issues: list[str]
 
 
-# Helper function to get or create settings
-def get_or_create_settings(db: Session) -> AIEmailSettings:
+# Helper function to get or create settings (async)
+async def get_or_create_settings(db: AsyncSession) -> AIEmailSettings:
     """Get existing settings or create default ones"""
-    settings = db.query(AIEmailSettings).first()
+    result = await db.execute(select(AIEmailSettings))
+    settings = result.scalars().first()
     if not settings:
         settings = AIEmailSettings()
         db.add(settings)
-        db.commit()
-        db.refresh(settings)
+        await db.commit()
+        await db.refresh(settings)
     return settings
 
 
 # Routes
 @router.get("", response_model=AIEmailSettingsResponse)
-async def get_ai_email_settings(db: Session = Depends(get_db)):
+async def get_ai_email_settings(db: AsyncSession = Depends(get_async_db)):
     """Get current AI email settings"""
-    settings = get_or_create_settings(db)
+    settings = await get_or_create_settings(db)
     return settings
 
 
 @router.put("", response_model=AIEmailSettingsResponse)
 async def update_ai_email_settings(
     updates: AIEmailSettingsUpdate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update AI email settings"""
-    settings = get_or_create_settings(db)
+    settings = await get_or_create_settings(db)
 
     update_data = updates.dict(exclude_unset=True)
     _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
@@ -154,19 +157,19 @@ async def update_ai_email_settings(
             settings.from_name = f"{settings.assistant_name} from {settings.company_name}"
 
     settings.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(settings)
+    await db.commit()
+    await db.refresh(settings)
 
     logger.info(f"AI email settings updated: {update_data}")
     return settings
 
 
 @router.get("/status", response_model=EmailSetupStatus)
-async def get_email_setup_status(db: Session = Depends(get_db)):
+async def get_email_setup_status(db: AsyncSession = Depends(get_async_db)):
     """Check email setup status including DNS and mailbox configuration"""
     import subprocess
 
-    settings = get_or_create_settings(db)
+    settings = await get_or_create_settings(db)
     email = settings.assistant_email
     domain = email.split('@')[1] if '@' in email else ''
 
@@ -224,12 +227,12 @@ async def get_email_setup_status(db: Session = Depends(get_db)):
 @router.post("/test-email")
 async def send_test_email(
     to_email: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a test email from the AI assistant"""
     from email_service import EmailService
 
-    settings = get_or_create_settings(db)
+    settings = await get_or_create_settings(db)
 
     try:
         email_service = EmailService()
@@ -274,9 +277,9 @@ async def send_test_email(
 
 
 @router.get("/dns-instructions")
-async def get_dns_instructions(db: Session = Depends(get_db)):
+async def get_dns_instructions(db: AsyncSession = Depends(get_async_db)):
     """Get DNS setup instructions for the configured domain"""
-    settings = get_or_create_settings(db)
+    settings = await get_or_create_settings(db)
     email = settings.assistant_email
     domain = email.split('@')[1] if '@' in email else ''
     domain_prefix = domain.replace('.', '-') if domain else 'your-domain'

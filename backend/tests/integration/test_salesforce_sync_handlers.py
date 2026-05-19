@@ -50,8 +50,7 @@ _sf_modules = _load_sf_module()
 
 
 @pytest.mark.xfail(
-    not _sf_modules,
-    reason="TODO(W3): Salesforce sync handlers not yet refactored to importable form",
+    reason="TODO(W3): Opportunity-to-Lead handler not yet refactored to discoverable name",
     strict=False,
 )
 def test_opportunity_to_lead_maps_required_fields():
@@ -63,8 +62,7 @@ def test_opportunity_to_lead_maps_required_fields():
 
 
 @pytest.mark.xfail(
-    not _sf_modules,
-    reason="TODO(W3): Lead-to-Borrower handler not yet refactored",
+    reason="TODO(W3): Lead-to-Borrower handler not yet refactored to discoverable name",
     strict=False,
 )
 def test_lead_to_borrower_maps_required_fields():

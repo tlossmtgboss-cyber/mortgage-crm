@@ -64,8 +64,11 @@ from ._mapping import (
     group_mappings_by_entity,
 )
 
+# Outbound (CRM → Salesforce) push handlers extracted to _webhooks.py
+from ._webhooks import OutboundSyncMixin
 
-class SalesforceSyncService:
+
+class SalesforceSyncService(OutboundSyncMixin):
     """Handles bidirectional data synchronization"""
 
     # Circuit breaker: max consecutive failures before auto-disabling sync
