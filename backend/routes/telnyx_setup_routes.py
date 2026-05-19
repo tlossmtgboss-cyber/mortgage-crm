@@ -141,15 +141,15 @@ def get_telnyx_client(api_key: str):
         )
 
 
-async def get_user_telnyx_config(user_id: int, db: Session) -> Optional[Dict[str, Any]]:
+async def get_user_telnyx_config(user_id: int, db: AsyncSession) -> Optional[Dict[str, Any]]:
     """Get user's Telnyx configuration from database"""
     try:
-        result = db.execute(text("""
+        result = (await db.execute(text("""
             SELECT telnyx_api_key, telnyx_connection_id,
                    telnyx_messaging_profile_id, telnyx_phone_number
-            FROM user_twilio_config  -- Legacy table name
+            FROM user_twilio_config
             WHERE user_id = :user_id
-        """), {"user_id": user_id}).fetchone()
+        """), {"user_id": user_id})).fetchone()
 
         if result:
             return {
@@ -166,7 +166,7 @@ async def get_user_telnyx_config(user_id: int, db: Session) -> Optional[Dict[str
 
 async def save_user_telnyx_config(
     user_id: int,
-    db: Session,
+    db: AsyncSession,
     api_key: str = None,
     connection_id: str = None,
     messaging_profile_id: str = None,
@@ -175,9 +175,9 @@ async def save_user_telnyx_config(
     """Save user's Telnyx configuration to database"""
     try:
         # Check if record exists
-        exists = db.execute(text("""
-            SELECT 1 FROM user_twilio_config WHERE user_id = :user_id  -- Legacy table name
-        """), {"user_id": user_id}).fetchone()
+        exists = (await db.execute(text("""
+            SELECT 1 FROM user_twilio_config WHERE user_id = :user_id
+        """), {"user_id": user_id})).fetchone()
 
         if exists:
             # Build update query dynamically
@@ -200,15 +200,15 @@ async def save_user_telnyx_config(
             if updates:
                 updates.append("updated_at = NOW()")
                 query = (
-                    "UPDATE user_twilio_config "  # Legacy table name
+                    "UPDATE user_twilio_config "
                     "SET " + ", ".join(updates) + " "
                     "WHERE user_id = :user_id"
                 )
-                db.execute(text(query), params)
+                await db.execute(text(query), params)
         else:
             # Insert new record
-            db.execute(text("""
-                INSERT INTO user_twilio_config (  -- Legacy table name
+            await db.execute(text("""
+                INSERT INTO user_twilio_config (
                     user_id, telnyx_api_key, telnyx_connection_id,
                     telnyx_messaging_profile_id, telnyx_phone_number,
                     provider, created_at, updated_at
@@ -225,11 +225,11 @@ async def save_user_telnyx_config(
                 "phone_number": phone_number,
             })
 
-        db.commit()
+        await db.commit()
         return True
     except Exception as e:
         logger.error(f"Error saving Telnyx config: {e}")
-        db.rollback()
+        await db.rollback()
         return False
 
 
