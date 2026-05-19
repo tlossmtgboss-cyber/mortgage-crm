@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ProductionPredictor.css';
-import { getToken, getUserData } from '../utils/tokenStore';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+import { getUserData } from '../utils/tokenStore';
+import api from '../services/api';
 
 // Trend icons and colors
 const TREND_CONFIG = {
@@ -65,47 +64,22 @@ export function ProductionPredictorDashboard({ entityId: entityIdProp, entityTyp
     setError(null);
 
     try {
-      const token = getToken();
-      const authHeaders = {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      };
-
       // Fetch all data in parallel
       const [summaryRes, goalRes, conversionRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/production-predictor/summary/${entityId}?entity_type=${entityType}`, {
-          headers: authHeaders,
-        }),
-        fetch(`${API_BASE}/api/v1/production-predictor/goal-attainment`, {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({
-            entity_id: entityId,
-            goal_units: 10,
-            goal_volume: 4000000,
-            goal_period_start: new Date().toISOString().split('T')[0].slice(0, 7) + '-01',
-            goal_period_end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
-          }),
-        }),
-        fetch(`${API_BASE}/api/v1/production-predictor/conversions/${entityId}?days=90`, {
-          headers: authHeaders,
-        }),
+        api.get(`/api/v1/production-predictor/summary/${entityId}?entity_type=${entityType}`).catch(() => null),
+        api.post('/api/v1/production-predictor/goal-attainment', {
+          entity_id: entityId,
+          goal_units: 10,
+          goal_volume: 4000000,
+          goal_period_start: new Date().toISOString().split('T')[0].slice(0, 7) + '-01',
+          goal_period_end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+        }).catch(() => null),
+        api.get(`/api/v1/production-predictor/conversions/${entityId}?days=90`).catch(() => null),
       ]);
 
-      if (summaryRes.ok) {
-        const data = await summaryRes.json();
-        setSummary(data);
-      }
-
-      if (goalRes.ok) {
-        const data = await goalRes.json();
-        setGoalAttainment(data);
-      }
-
-      if (conversionRes.ok) {
-        const data = await conversionRes.json();
-        setConversions(data);
-      }
+      if (summaryRes?.data) setSummary(summaryRes.data);
+      if (goalRes?.data) setGoalAttainment(goalRes.data);
+      if (conversionRes?.data) setConversions(conversionRes.data);
     } catch (err) {
       console.error('Error fetching production data:', err);
       setError(err.message);
@@ -757,17 +731,8 @@ export function ProductionPredictorWidget({ entityId, compact = false }) {
 
   const fetchSummary = async () => {
     try {
-      const token = getToken();
-      const res = await fetch(
-        `${API_BASE}/api/v1/production-predictor/summary/${entityId}?entity_type=lo`,
-        {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setSummary(data);
-      }
+      const { data } = await api.get(`/api/v1/production-predictor/summary/${entityId}?entity_type=lo`);
+      setSummary(data);
     } catch (err) {
       console.error('Error fetching summary:', err);
     } finally {

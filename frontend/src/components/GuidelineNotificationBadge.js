@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../services/api';
+import api from '../services/api';
 import './GuidelineNotificationBadge.css';
-import { getToken } from '../utils/tokenStore';
 
 const GuidelineNotificationBadge = ({ userId }) => {
   const [hasNewUpdates, setHasNewUpdates] = useState(false);
@@ -15,20 +14,11 @@ const GuidelineNotificationBadge = ({ userId }) => {
 
   const checkForNewUpdates = async () => {
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/api/v1/guideline-updates/check-new?user_id=${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const response = await api.get('/api/v1/guideline-updates/check-new', {
+        params: { user_id: userId }
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to check for new updates');
-      }
-
-      const data = await response.json();
-      setHasNewUpdates(data.has_new_updates);
-      setUnreadCount(data.unread_count);
+      setHasNewUpdates(response.data.has_new_updates);
+      setUnreadCount(response.data.unread_count);
     } catch (error) {
       console.error('Error checking for new updates:', error);
     }

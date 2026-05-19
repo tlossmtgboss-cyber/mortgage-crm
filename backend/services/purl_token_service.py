@@ -200,16 +200,22 @@ class PURLTokenService:
             )
             return None
 
-        # Update last_used_at using raw SQL to avoid foreign key resolution issues
+        # Update last_used_at — flush only, don't commit. The route handler
+        # owns the transaction and will commit when it's done. Committing here
+        # would finalize the session prematurely; failing without rollback
+        # would leave the session in a broken state for the route handler.
         try:
             from sqlalchemy import text
             self.db.execute(
                 text("UPDATE purl_access_tokens SET last_used_at = :now WHERE id = :id"),
                 {"now": datetime.now(timezone.utc), "id": token_record.id}
             )
-            self.db.commit()
+            self.db.flush()
         except SQLAlchemyError as e:
-            # Don't fail verification if we can't update last_used_at
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
             logger.warning(f"Failed to update last_used_at for token {token_record.id}: {e}")
 
         return {

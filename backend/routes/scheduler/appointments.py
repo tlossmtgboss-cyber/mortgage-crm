@@ -204,8 +204,8 @@ class AppointmentTimelineResponse(BaseModel):
 @router.get("/appointments", response_model=AppointmentListResponse)
 async def list_appointments(
     request: Request,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     status: Optional[str] = None,
     lead_id: Optional[int] = None,
     loan_id: Optional[int] = None,
@@ -234,10 +234,18 @@ async def list_appointments(
         )
 
     if start_date:
-        query = query.filter(Appointment.scheduled_start >= datetime.combine(start_date, time.min))
+        try:
+            parsed_start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            parsed_start = datetime.combine(date.fromisoformat(start_date), time.min)
+        query = query.filter(Appointment.scheduled_start >= parsed_start)
 
     if end_date:
-        query = query.filter(Appointment.scheduled_start <= datetime.combine(end_date, time.max))
+        try:
+            parsed_end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            parsed_end = datetime.combine(date.fromisoformat(end_date), time.max)
+        query = query.filter(Appointment.scheduled_start <= parsed_end)
 
     if status:
         try:

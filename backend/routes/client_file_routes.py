@@ -197,6 +197,24 @@ def get_client_file(
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
+    # Backfill name from linked lead if missing
+    if not cf.first_name and not cf.last_name and cf.lead_id:
+        try:
+            from database.models.lead_loan import Lead
+            lead = db.get(Lead, cf.lead_id)
+            if lead:
+                first = lead.first_name
+                last = lead.last_name
+                if not first and not last and getattr(lead, "name", None):
+                    parts = lead.name.strip().split(" ", 1)
+                    first = parts[0]
+                    last = parts[1] if len(parts) > 1 else ""
+                if first or last:
+                    cf.first_name = first or ""
+                    cf.last_name = last or ""
+                    db.flush()
+        except Exception as e:
+            logger.warning("Could not backfill name from lead %s: %s", cf.lead_id, e)
     try:
         loan = _active_loan(db, cf, current_user.organization_id)
     except Exception as e:
@@ -665,44 +683,47 @@ def list_timeline(
                 ))
 
         if client_phone:
-            normalized = client_phone.strip().replace("-", "").replace("(", "").replace(")", "").replace(" ", "")
-            if not normalized.startswith("+"):
-                normalized = "+1" + normalized if len(normalized) == 10 else "+" + normalized
-            conv_ids = [
-                c.id for c in db.execute(
-                    select(SMSConversation.id).where(
-                        SMSConversation.organization_id == org_id,
-                        SMSConversation.phone_number == normalized,
+            try:
+                normalized = client_phone.strip().replace("-", "").replace("(", "").replace(")", "").replace(" ", "")
+                if not normalized.startswith("+"):
+                    normalized = "+1" + normalized if len(normalized) == 10 else "+" + normalized
+                conv_ids = [
+                    c.id for c in db.execute(
+                        select(SMSConversation.id).where(
+                            SMSConversation.organization_id == org_id,
+                            SMSConversation.phone_number == normalized,
+                        )
+                    ).scalars()
+                ]
+                if conv_ids:
+                    phone_sms_q = (
+                        select(SMSMessage)
+                        .where(
+                            SMSMessage.conversation_id.in_(conv_ids),
+                            SMSMessage.organization_id == org_id,
+                        )
+                        .order_by(SMSMessage.created_at.desc())
+                        .limit(limit)
                     )
-                ).scalars()
-            ]
-            if conv_ids:
-                phone_sms_q = (
-                    select(SMSMessage)
-                    .where(
-                        SMSMessage.conversation_id.in_(conv_ids),
-                        SMSMessage.organization_id == org_id,
-                    )
-                    .order_by(SMSMessage.created_at.desc())
-                    .limit(limit)
-                )
-                for s in db.execute(phone_sms_q).scalars():
-                    if s.id in seen_sms_ids:
-                        continue
-                    seen_sms_ids.add(s.id)
-                    inbound = s.direction == "inbound"
-                    events.append(_make_timeline_event(
-                        id=f"sms-{s.id}",
-                        client_file_id=str(client_file_id),
-                        org_id=str(org_id),
-                        kind="message_received_sms" if inbound else "message_sent_sms",
-                        event_category="texts",
-                        occurred_at=s.created_at,
-                        headline="Text received" if inbound else "Text sent",
-                        body=s.message,
-                        actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
-                        related_message_id=s.provider_message_id,
-                    ))
+                    for s in db.execute(phone_sms_q).scalars():
+                        if s.id in seen_sms_ids:
+                            continue
+                        seen_sms_ids.add(s.id)
+                        inbound = s.direction == "inbound"
+                        events.append(_make_timeline_event(
+                            id=f"sms-{s.id}",
+                            client_file_id=str(client_file_id),
+                            org_id=str(org_id),
+                            kind="message_received_sms" if inbound else "message_sent_sms",
+                            event_category="texts",
+                            occurred_at=s.created_at,
+                            headline="Text received" if inbound else "Text sent",
+                            body=s.message,
+                            actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
+                            related_message_id=s.provider_message_id,
+                        ))
+            except Exception:
+                pass
 
     # ── Emails (outbound via email_messages + inbound via emails) ──────
     if category in ("all", "emails") and lead_id:

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ActivityPane } from "./ActivityPane";
 import { Avatar, deriveInitials } from "./primitives/Avatar";
@@ -11,6 +11,23 @@ import { LIFECYCLE_STAGE_LABEL } from "./format";
 import { toast } from "../utils/toast";
 import type { ClientFile } from "./types";
 import "./styles.css";
+
+// @ts-ignore — JS modal components
+import SMSModal from "../components/SMSModal";
+// @ts-ignore
+import EmailComposerModal from "../components/EmailComposerModal";
+// @ts-ignore
+import CreateTaskModal from "../components/CreateTaskModal";
+// @ts-ignore
+import ScheduleAppointmentModal from "../components/ScheduleAppointmentModal";
+// @ts-ignore
+import VideoCallScheduleModal from "../components/VideoCallScheduleModal";
+// @ts-ignore
+import VoicemailDrop from "../components/VoicemailDrop";
+// @ts-ignore
+import EscalationModal from "../components/EscalationModal";
+// @ts-ignore
+import SendApplicationModal from "../components/SendApplicationModal";
 
 interface Props {
   clientFileId: string;
@@ -78,6 +95,20 @@ function ClientFileHeader({ client }: { client: ClientFile }) {
   );
 }
 
+function clientToLeadShape(client: ClientFile) {
+  return {
+    id: client.lead_id,
+    first_name: client.first_name,
+    last_name: client.last_name,
+    name: [client.first_name, client.last_name].filter(Boolean).join(" "),
+    email: client.primary_email,
+    phone: client.primary_phone,
+    property_address: client.property_address
+      ? [client.property_address.street, client.property_address.city, client.property_address.state, client.property_address.zip].filter(Boolean).join(", ")
+      : undefined,
+  };
+}
+
 export function ClientFileView({ clientFileId, currentUserId }: Props) {
   const { data: client, isLoading, error, refetch } = useClientFile(clientFileId, {
     retry: 2,
@@ -85,14 +116,23 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
   });
   const navigate = useNavigate();
 
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+
   const handleQuickAction = useCallback((key: string) => {
     if (!client) return;
-    const leadId = client.lead_id;
-    if (!leadId) {
-      toast.error("No linked lead — open Lead Details first");
+    if (key === "portals" && client.lead_id) {
+      navigate(`/leads/${client.lead_id}`, { state: { openAction: "client_portal" } });
       return;
     }
-    navigate(`/leads/${leadId}`, { state: { openAction: key } });
+    if (key === "record_video" && client.lead_id) {
+      navigate(`/leads/${client.lead_id}`, { state: { openAction: "record" } });
+      return;
+    }
+    if (key === "application" && client.lead_id) {
+      navigate(`/leads/${client.lead_id}`, { state: { openAction: "send_application" } });
+      return;
+    }
+    setActiveModal(key);
   }, [client, navigate]);
 
   if (isLoading) {
@@ -150,6 +190,8 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
     );
   }
 
+  const lead = client ? clientToLeadShape(client) : null;
+
   return (
     <div className="pf-cf">
       <ClientFileHeader client={client} />
@@ -168,6 +210,56 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
           <QuickActionsRail clientFileId={clientFileId} client={client} onAction={handleQuickAction} />
         </aside>
       </div>
+
+      {/* Quick Action Modals — open inline instead of navigating away */}
+      {lead && (
+        <>
+          <SMSModal
+            isOpen={activeModal === "sms"}
+            onClose={() => setActiveModal(null)}
+            lead={lead}
+          />
+          <EmailComposerModal
+            isOpen={activeModal === "email"}
+            onClose={() => setActiveModal(null)}
+            recipient={{ email: client.primary_email, name: lead.name }}
+            entityType="lead"
+            entityData={lead}
+          />
+          <CreateTaskModal
+            isOpen={activeModal === "task"}
+            onClose={() => setActiveModal(null)}
+            lead={lead}
+            onTaskCreated={() => setActiveModal(null)}
+          />
+          <ScheduleAppointmentModal
+            isOpen={activeModal === "appointment"}
+            onClose={() => setActiveModal(null)}
+            onSuccess={() => setActiveModal(null)}
+            borrower={lead}
+          />
+          <VideoCallScheduleModal
+            isOpen={activeModal === "video"}
+            onClose={() => setActiveModal(null)}
+            borrower={lead}
+            onStartVideoCall={() => {}}
+          />
+          <EscalationModal
+            isOpen={activeModal === "escalation"}
+            onClose={() => setActiveModal(null)}
+            lead={lead}
+          />
+          {activeModal === "voicemail" && client.primary_phone && (
+            <VoicemailDrop
+              phoneNumber={client.primary_phone}
+              recipientName={lead.name}
+              leadId={client.lead_id}
+              loanId={null}
+              onClose={() => setActiveModal(null)}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

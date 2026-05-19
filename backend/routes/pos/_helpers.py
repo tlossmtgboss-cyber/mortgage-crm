@@ -163,6 +163,12 @@ def application_to_response_dict(application: POSApplication) -> dict:
         s.section_key: s.is_complete for s in application.sections
     }
     pii = application.pii
+    try:
+        has_ssn = bool(pii and pii.ssn_encrypted)
+        has_co_ssn = bool(pii and pii.co_ssn_encrypted)
+        has_dob = bool(pii and (getattr(pii, "dob_encrypted", None) or getattr(pii, "dob", None)))
+    except Exception:
+        has_ssn = has_co_ssn = has_dob = False
     return {
         "id": application.id,
         "loan_id": application.loan_id,
@@ -174,7 +180,7 @@ def application_to_response_dict(application: POSApplication) -> dict:
         "created_at": application.created_at,
         "updated_at": application.updated_at,
         "sections_complete": sections_complete,
-        "has_ssn": bool(pii and pii.ssn_encrypted),
-        "has_co_ssn": bool(pii and pii.co_ssn_encrypted),
-        "has_dob": bool(pii and pii.dob),
+        "has_ssn": has_ssn,
+        "has_co_ssn": has_co_ssn,
+        "has_dob": has_dob,
     }

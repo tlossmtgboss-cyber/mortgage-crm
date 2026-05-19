@@ -379,17 +379,23 @@ def require_calendar_permission(permission: CalendarPermission):
         from db import get_db as _get_db
 
         # If db wasn't injected (shouldn't happen in FastAPI), create one
+        _own_db = False
         if db is None:
             from db import SessionLocal
             db = SessionLocal()
+            _own_db = True
 
-        user = await _get_current_user(request, db)
-        if not CalendarAccessControl.has_permission(user, permission):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Insufficient calendar permissions. Required: {permission.value}",
-            )
-        return user
+        try:
+            user = await _get_current_user(request, db)
+            if not CalendarAccessControl.has_permission(user, permission):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Insufficient calendar permissions. Required: {permission.value}",
+                )
+            return user
+        finally:
+            if _own_db:
+                db.close()
 
     # Return a dependency that FastAPI can inject
     # We need to use the same pattern as existing code (manual token extraction)

@@ -1,13 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
 import './ITHelpdeskAdmin.css';
 import { toast } from '../utils/toast';
-
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+import api from '../services/api';
 
 function ITHelpdeskAdmin() {
   const [tickets, setTickets] = useState([]);
@@ -37,24 +31,15 @@ function ITHelpdeskAdmin() {
       if (categoryFilter !== 'all') params.append('category', categoryFilter);
       if (searchQuery) params.append('search', searchQuery);
 
-      const response = await fetch(`${API_BASE}/api/v1/it-helpdesk/admin/tickets?${params}`, {
-        headers: getAuthHeaders()
+      const { data } = await api.get(`/api/v1/it-helpdesk/admin/tickets?${params}`);
+      setTickets(data.tickets || []);
+      setStats(data.stats || {
+        total: data.tickets?.length || 0,
+        open: 0,
+        awaiting_approval: 0,
+        resolved: 0,
+        critical: 0
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTickets(data.tickets || []);
-        setStats(data.stats || {
-          total: data.tickets?.length || 0,
-          open: 0,
-          awaiting_approval: 0,
-          resolved: 0,
-          critical: 0
-        });
-      } else {
-        console.error('Failed to fetch admin tickets');
-        setTickets([]);
-      }
     } catch (error) {
       console.error('Error fetching admin tickets:', error);
       setTickets([]);
@@ -65,13 +50,8 @@ function ITHelpdeskAdmin() {
 
   const fetchTeamMembers = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/users`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMembers(data || []);
-      }
+      const { data } = await api.get('/api/v1/users');
+      setTeamMembers(data || []);
     } catch (error) {
       console.error('Error fetching team members:', error);
     }
@@ -84,23 +64,14 @@ function ITHelpdeskAdmin() {
 
   const updateTicketStatus = async (ticketId, newStatus) => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/it-helpdesk/admin/tickets/${ticketId}/status`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (response.ok) {
-        fetchTickets();
-        if (selectedTicket?.id === ticketId) {
-          setSelectedTicket({ ...selectedTicket, status: newStatus });
-        }
-      } else {
-        toast.error('Failed to update ticket status');
+      await api.put(`/api/v1/it-helpdesk/admin/tickets/${ticketId}/status`, { status: newStatus });
+      fetchTickets();
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket({ ...selectedTicket, status: newStatus });
       }
     } catch (error) {
       console.error('Error updating ticket status:', error);
-      toast.error('Error updating ticket status');
+      toast.error('Failed to update ticket status');
     }
   };
 
@@ -111,19 +82,10 @@ function ITHelpdeskAdmin() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/it-helpdesk/admin/tickets/${ticketId}/assign`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ assigned_to: assignedTo })
-      });
-
-      if (response.ok) {
-        toast.success('Ticket assigned successfully');
-        fetchTickets();
-        setAssignedTo('');
-      } else {
-        toast.error('Failed to assign ticket');
-      }
+      await api.put(`/api/v1/it-helpdesk/admin/tickets/${ticketId}/assign`, { assigned_to: assignedTo });
+      toast.success('Ticket assigned successfully');
+      fetchTickets();
+      setAssignedTo('');
     } catch (error) {
       console.error('Error assigning ticket:', error);
       toast.error('Error assigning ticket');
@@ -137,19 +99,10 @@ function ITHelpdeskAdmin() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/it-helpdesk/admin/tickets/${ticketId}/notes`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ note: adminNotes })
-      });
-
-      if (response.ok) {
-        toast.success('Note added successfully');
-        setAdminNotes('');
-        fetchTickets();
-      } else {
-        toast.error('Failed to add note');
-      }
+      await api.post(`/api/v1/it-helpdesk/admin/tickets/${ticketId}/notes`, { note: adminNotes });
+      toast.success('Note added successfully');
+      setAdminNotes('');
+      fetchTickets();
     } catch (error) {
       console.error('Error adding note:', error);
       toast.error('Error adding note');

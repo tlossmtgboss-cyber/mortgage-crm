@@ -116,6 +116,32 @@ async def upload_document(
             detail="File must have a filename",
         )
 
+    # SEC-002: MIME type allowlist — mortgage documents only.
+    _ALLOWED_MIME_TYPES = {
+        "application/pdf",
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/tiff",
+        "image/heic",
+        "image/heif",
+    }
+    _ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".heic", ".heif"}
+
+    content_type = (file.content_type or "").lower().strip()
+    if content_type not in _ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file type. Allowed: PDF, JPEG, PNG, TIFF, HEIC.",
+        )
+
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file extension. Allowed: .pdf, .jpg, .jpeg, .png, .tiff, .heic.",
+        )
+
     # Read the file content and compute size.
     content = await file.read()
     file_size = len(content)
@@ -125,11 +151,10 @@ async def upload_document(
     if file_size > max_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds maximum size of 25 MB",
+            detail="File exceeds maximum size of 25 MB",
         )
 
-    # Generate a unique filename for storage.
-    ext = os.path.splitext(file.filename)[1] if file.filename else ""
+    # Generate a unique filename with validated extension.
     storage_filename = f"{uuid.uuid4().hex}{ext}"
 
     try:

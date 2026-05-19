@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { sanitizeText, sanitizeHTML, SafeHTML } from '../../utils/sanitize';
 import ScheduleMeetingButton from './ScheduleMeetingButton';
 import './ClipPlayer.css';
@@ -60,7 +60,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
         ? `/api/v1/clips/watch/${shareToken}/view`
         : `/api/v1/clips/${clip.id}/view`;
 
-      await axios.post(endpoint, {
+      await api.post(endpoint, {
         session_id: sessionId,
         user_agent: navigator.userAgent,
         referrer: document.referrer || null
@@ -84,7 +84,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
         ? `/api/v1/clips/watch/${shareToken}/progress`
         : `/api/v1/clips/${clip.id}/progress`;
 
-      await axios.post(endpoint, {
+      await api.post(endpoint, {
         session_id: sessionId,
         watched_seconds: Math.floor(video.currentTime),
         completion_rate: progress,
@@ -133,7 +133,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
   // Load comments
   const loadComments = async () => {
     try {
-      const response = await axios.get(`/api/v1/clips/${clip.id}/comments`);
+      const response = await api.get(`/api/v1/clips/${clip.id}/comments`);
       setComments(response.data.comments || []);
     } catch (err) {
       console.error('Error loading comments:', err);
@@ -256,7 +256,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
     if (!newComment.trim()) return;
 
     try {
-      await axios.post(`/api/v1/clips/${clip.id}/comments`, {
+      await api.post(`/api/v1/clips/${clip.id}/comments`, {
         comment_text: newComment,
         timestamp_seconds: Math.floor(currentTime)
       });

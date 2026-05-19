@@ -5,11 +5,10 @@
  * Allows admins to create, edit, publish, and organize documentation content.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { API_BASE_URL } from '../services/api';
+import api from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './DocumentationAdmin.css';
-import { getToken } from '../utils/tokenStore';
 
 function DocumentationAdmin() {
   const { isAdmin } = usePermissions();
@@ -51,17 +50,8 @@ function DocumentationAdmin() {
   // Load content list
   const loadContentList = useCallback(async () => {
     try {
-      const token = getToken();
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-      
-      const response = await fetch(`${API_BASE_URL}/api/v1/enterprise-docs/admin/content`, { headers });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setContentList(data.content || []);
-      } else {
-        console.error('Failed to load content list');
-      }
+      const response = await api.get('/api/v1/enterprise-docs/admin/content');
+      setContentList(response.data.content || []);
     } catch (error) {
       console.error('Error loading content list:', error);
     }
@@ -70,17 +60,8 @@ function DocumentationAdmin() {
   // Load statistics
   const loadStats = useCallback(async () => {
     try {
-      const token = getToken();
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-      
-      const response = await fetch(`${API_BASE_URL}/api/v1/enterprise-docs/admin/stats`, { headers });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      } else {
-        console.error('Failed to load stats');
-      }
+      const response = await api.get('/api/v1/enterprise-docs/admin/stats');
+      setStats(response.data);
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -94,45 +75,33 @@ function DocumentationAdmin() {
   // Handle content creation/update
   const handleSaveContent = async () => {
     try {
-      const token = getToken();
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
-      
-      const url = isEditing 
-        ? `${API_BASE_URL}/api/v1/enterprise-docs/admin/content/${selectedContent.id}`
-        : `${API_BASE_URL}/api/v1/enterprise-docs/admin/content`;
-      
-      const method = isEditing ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: JSON.stringify(contentForm)
-      });
-      
-      if (response.ok) {
-        toast.success(`Content ${isEditing ? 'updated' : 'created'} successfully`);
-        await loadContentList();
-        setActiveTab('content-list');
-        setSelectedContent(null);
-        setIsEditing(false);
-        setContentForm({
-          title: '',
-          description: '',
-          content: '',
-          category: 'api-reference',
-          content_type: 'reference',
-          tags: [],
-          is_featured: false,
-          is_published: false,
-          estimated_read_time: '',
-          external_url: ''
-        });
+      const url = isEditing
+        ? `/api/v1/enterprise-docs/admin/content/${selectedContent.id}`
+        : '/api/v1/enterprise-docs/admin/content';
+
+      if (isEditing) {
+        await api.put(url, contentForm);
       } else {
-        toast.error('Failed to save content');
+        await api.post(url, contentForm);
       }
+
+      toast.success(`Content ${isEditing ? 'updated' : 'created'} successfully`);
+      await loadContentList();
+      setActiveTab('content-list');
+      setSelectedContent(null);
+      setIsEditing(false);
+      setContentForm({
+        title: '',
+        description: '',
+        content: '',
+        category: 'api-reference',
+        content_type: 'reference',
+        tags: [],
+        is_featured: false,
+        is_published: false,
+        estimated_read_time: '',
+        external_url: ''
+      });
     } catch (error) {
       console.error('Error saving content:', error);
       toast.error('Error saving content');
@@ -142,21 +111,10 @@ function DocumentationAdmin() {
   // Handle content publish/unpublish
   const handleTogglePublish = async (contentId, currentStatus) => {
     try {
-      const token = getToken();
-      const headers = { 'Authorization': `Bearer ${token}` };
-      
       const action = currentStatus ? 'unpublish' : 'publish';
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/enterprise-docs/admin/content/${contentId}/${action}`,
-        { method: 'POST', headers }
-      );
-      
-      if (response.ok) {
-        toast.success(`Content ${action}ed successfully`);
-        await loadContentList();
-      } else {
-        toast.error(`Failed to ${action} content`);
-      }
+      await api.post(`/api/v1/enterprise-docs/admin/content/${contentId}/${action}`);
+      toast.success(`Content ${action}ed successfully`);
+      await loadContentList();
     } catch (error) {
       console.error(`Error ${currentStatus ? 'unpublishing' : 'publishing'} content:`, error);
       toast.error('Error updating content status');

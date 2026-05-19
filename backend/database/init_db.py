@@ -1994,6 +1994,22 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ POS 1003 tables note: {e}")
 
+        # Add encrypted DOB columns to pos_application_pii (GLBA/CCPA)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(sa_text(
+                    "ALTER TABLE pos_application_pii "
+                    "ADD COLUMN IF NOT EXISTS dob_encrypted VARCHAR"
+                ))
+                conn.execute(sa_text(
+                    "ALTER TABLE pos_application_pii "
+                    "ADD COLUMN IF NOT EXISTS co_dob_encrypted VARCHAR"
+                ))
+                conn.commit()
+            logger.info("✅ Encrypted DOB columns ready on pos_application_pii")
+        except Exception as e:
+            logger.warning(f"⚠️ Encrypted DOB columns note: {e}")
+
         # Add partial unique index on sms_ai_conversations (active phone+org)
         try:
             import importlib
@@ -2030,6 +2046,35 @@ def init_db():
                 logger.info("Added structured_output column to pos_ai_qa_messages")
         except Exception as e:
             logger.debug("structured_output column migration: %s", e)
+
+        # Create pos_borrower_messages table (POS portal internal messaging)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(sa_text("""
+                    CREATE TABLE IF NOT EXISTS pos_borrower_messages (
+                        id              SERIAL      PRIMARY KEY,
+                        application_id  UUID        NOT NULL REFERENCES pos_applications(id) ON DELETE CASCADE,
+                        organization_id INTEGER     NOT NULL,
+                        sender_user_id  INTEGER,
+                        sender_name     VARCHAR(128) NOT NULL,
+                        sender_role     VARCHAR(64)  NOT NULL DEFAULT 'Loan Officer',
+                        content         TEXT         NOT NULL,
+                        read_at         TIMESTAMPTZ,
+                        created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+                    )
+                """))
+                conn.execute(sa_text(
+                    "CREATE INDEX IF NOT EXISTS ix_pos_msg_app_created "
+                    "ON pos_borrower_messages (application_id, created_at)"
+                ))
+                conn.execute(sa_text(
+                    "CREATE INDEX IF NOT EXISTS ix_pos_msg_app_unread "
+                    "ON pos_borrower_messages (application_id, read_at)"
+                ))
+                conn.commit()
+            logger.info("✅ pos_borrower_messages table ready")
+        except Exception as e:
+            logger.warning(f"⚠️ pos_borrower_messages table note: {e}")
 
         # Ensure tloss@cmgfi.com has full admin permissions
         try:

@@ -1,16 +1,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
-import { getAuthHeaders } from '../utils/auth';
 import './UserBulkUpload.css';
-import { getToken } from '../utils/tokenStore';
-
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Upload stages
 const STAGES = {
@@ -94,16 +86,9 @@ function UserBulkUpload() {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/admin/users/bulk/parse`,
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${getToken()}`,
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      );
+      const response = await api.post('/api/v1/admin/users/bulk/parse', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
 
       const { headers, preview, total_rows } = response.data;
       setFileHeaders(headers);
@@ -129,10 +114,7 @@ function UserBulkUpload() {
       setColumnMapping(autoMapping);
 
       // Load roles for assignment
-      const rolesRes = await axios.get(
-        `${API_BASE_URL}/api/v1/admin/users/roles`,
-        { headers: getAuthHeaders() }
-      );
+      const rolesRes = await api.get('/api/v1/admin/users/roles');
       setRoles(rolesRes.data || []);
 
       setStage(STAGES.MAPPING);
@@ -172,16 +154,9 @@ function UserBulkUpload() {
       formData.append('file', file);
       formData.append('column_mapping', JSON.stringify(columnMapping));
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/admin/users/bulk/validate`,
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${getToken()}`,
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      );
+      const response = await api.post('/api/v1/admin/users/bulk/validate', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
 
       setValidationResults(response.data);
       setStage(STAGES.VALIDATION);
@@ -206,20 +181,13 @@ function UserBulkUpload() {
         formData.append('default_role_id', defaultRoleId);
       }
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/admin/users/bulk/process`,
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${getToken()}`,
-            'Content-Type': 'multipart/form-data'
-          },
-          onUploadProgress: (progressEvent) => {
-            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setProcessingProgress(Math.min(progress, 50)); // Upload is 50%
-          }
+      const response = await api.post('/api/v1/admin/users/bulk/process', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setProcessingProgress(Math.min(progress, 50)); // Upload is 50%
         }
-      );
+      });
 
       setProcessedUsers(response.data.results || []);
       setProcessingProgress(100);

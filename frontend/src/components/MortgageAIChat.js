@@ -9,10 +9,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './MortgageAIChat.css';
-
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
+import api from '../services/api';
 
 const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -64,19 +61,16 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
 
   const fetchChatInfo = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/public/themes/chat/${userSlug}/info`);
-      if (response.ok) {
-        const data = await response.json();
-        setLoanOfficer(data.loan_officer);
-        // Add greeting message
-        if (data.greeting) {
-          setMessages([{
-            id: 'greeting',
-            role: 'assistant',
-            content: data.greeting,
-            timestamp: new Date()
-          }]);
-        }
+      const { data } = await api.get(`/api/v1/public/themes/chat/${userSlug}/info`);
+      setLoanOfficer(data.loan_officer);
+      // Add greeting message
+      if (data.greeting) {
+        setMessages([{
+          id: 'greeting',
+          role: 'assistant',
+          content: data.greeting,
+          timestamp: new Date()
+        }]);
       }
     } catch (error) {
       console.error('Error fetching chat info:', error);
@@ -85,11 +79,8 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
 
   const fetchAvailability = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/public/themes/chat/${userSlug}/availability?days_ahead=7`);
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableSlots(data.slots || []);
-      }
+      const { data } = await api.get(`/api/v1/public/themes/chat/${userSlug}/availability?days_ahead=7`);
+      setAvailableSlots(data.slots || []);
     } catch (error) {
       console.error('Error fetching availability:', error);
     }
@@ -118,17 +109,11 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
         content: m.content
       }));
 
-      const response = await fetch(`${API_BASE}/api/v1/public/themes/chat/${userSlug}/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userMessage,
-          session_id: sessionId,
-          conversation_history: conversationHistory
-        })
+      const { data } = await api.post(`/api/v1/public/themes/chat/${userSlug}/message`, {
+        message: userMessage,
+        session_id: sessionId,
+        conversation_history: conversationHistory
       });
-
-      const data = await response.json();
 
       if (data.session_id) {
         setSessionId(data.session_id);
@@ -191,21 +176,15 @@ const MortgageAIChat = ({ userSlug, themeConfig = {} }) => {
     setBookingStatus('loading');
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/public/themes/chat/${userSlug}/book`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contact_name: bookingForm.name,
-          contact_email: bookingForm.email,
-          contact_phone: bookingForm.phone,
-          appointment_date: bookingForm.selectedSlot.date,
-          appointment_time: bookingForm.selectedSlot.start_time,
-          appointment_type: 'consultation',
-          notes: `Booked via AI chat assistant`
-        })
+      const { data } = await api.post(`/api/v1/public/themes/chat/${userSlug}/book`, {
+        contact_name: bookingForm.name,
+        contact_email: bookingForm.email,
+        contact_phone: bookingForm.phone,
+        appointment_date: bookingForm.selectedSlot.date,
+        appointment_time: bookingForm.selectedSlot.start_time,
+        appointment_type: 'consultation',
+        notes: `Booked via AI chat assistant`
       });
-
-      const data = await response.json();
 
       if (data.success) {
         setBookingStatus('success');

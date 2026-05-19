@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import ClipRecorder from './ClipRecorder';
 import ClipPlayer from './ClipPlayer';
 import ScheduleMeetingButton from './ScheduleMeetingButton';
@@ -34,7 +34,7 @@ const ClipLibrary = () => {
   const loadClips = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/v1/clips/', {
+      const response = await api.get('/api/v1/clips/', {
         params: {
           status: statusFilter || undefined,
           search: searchQuery || undefined,
@@ -53,7 +53,7 @@ const ClipLibrary = () => {
   // Load templates
   const loadTemplates = async () => {
     try {
-      const response = await axios.get('/api/v1/clips/templates');
+      const response = await api.get('/api/v1/clips/templates');
       setTemplates(response.data.templates || []);
     } catch (err) {
       console.error('Error loading templates:', err);
@@ -82,7 +82,7 @@ const ClipLibrary = () => {
   // Handle share
   const handleShare = async (clipId) => {
     try {
-      const response = await axios.post(`/api/v1/clips/${clipId}/shares`, shareSettings);
+      const response = await api.post(`/api/v1/clips/${clipId}/shares`, shareSettings);
 
       // Copy share URL to clipboard
       if (response.data.share_url) {
@@ -108,7 +108,7 @@ const ClipLibrary = () => {
   // Handle delete
   const handleDelete = async (clipId) => {
     try {
-      await axios.delete(`/api/v1/clips/${clipId}`);
+      await api.delete(`/api/v1/clips/${clipId}`);
       setClips(prev => prev.filter(c => c.id !== clipId));
     } catch (err) {
       console.error('Error deleting clip:', err);

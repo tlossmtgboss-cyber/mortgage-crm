@@ -265,9 +265,44 @@ class POSApplicationPII(Base):
     ssn_encrypted = Column(EncryptedString, nullable=True)
     co_ssn_encrypted = Column(EncryptedString, nullable=True)
 
-    # Date of birth — stored unencrypted (low sensitivity, queryable for age checks).
-    dob = Column(Date, nullable=True)
-    co_dob = Column(Date, nullable=True)
+    # ---------- Date of Birth (GLBA/CCPA PII) ----------
+    # MIGRATION: Plain-text Date columns are kept for backward compatibility
+    # during the transition period.  New writes should populate the
+    # *_encrypted columns.  Once all rows are migrated, drop the plain
+    # columns with:
+    #   ALTER TABLE pos_application_pii DROP COLUMN dob;
+    #   ALTER TABLE pos_application_pii DROP COLUMN co_dob;
+    dob = Column(Date, nullable=True)  # DEPRECATED — migrate to dob_encrypted
+    co_dob = Column(Date, nullable=True)  # DEPRECATED — migrate to co_dob_encrypted
+
+    # Encrypted DOB (stored as ISO-8601 string, e.g. "1985-03-15")
+    dob_encrypted = Column(EncryptedString, nullable=True)
+    co_dob_encrypted = Column(EncryptedString, nullable=True)
+
+    @property
+    def dob_date(self):
+        """Return DOB as a date object, preferring the encrypted column.
+
+        Falls back to the legacy plain-text column for un-migrated rows.
+        """
+        if self.dob_encrypted:
+            try:
+                from datetime import date as _date_type
+                return _date_type.fromisoformat(self.dob_encrypted)
+            except (ValueError, TypeError):
+                pass
+        return self.dob
+
+    @property
+    def co_dob_date(self):
+        """Return co-borrower DOB as a date object, preferring the encrypted column."""
+        if self.co_dob_encrypted:
+            try:
+                from datetime import date as _date_type
+                return _date_type.fromisoformat(self.co_dob_encrypted)
+            except (ValueError, TypeError):
+                pass
+        return self.co_dob
 
     updated_at = Column(
         DateTime(timezone=True),

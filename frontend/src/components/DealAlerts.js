@@ -9,9 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './DealAlerts.css';
 import { toast } from '../utils/toast';
-import { getToken } from '../utils/tokenStore';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+import api from '../services/api';
 
 // =============================================================================
 // Alert Priority Badge
@@ -230,19 +228,11 @@ export function DealAlertsBell({ userId }) {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const token = getToken();
       const params = new URLSearchParams();
       if (userId) params.append('user_id', userId);
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/deal-alerts/summary?${params}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data);
-      }
+      const { data } = await api.get(`/api/v1/deal-alerts/summary?${params}`);
+      setSummary(data);
     } catch (error) {
       console.error('Error fetching alert summary:', error);
     }
@@ -251,16 +241,8 @@ export function DealAlertsBell({ userId }) {
   const fetchRecentAlerts = useCallback(async () => {
     setLoading(true);
     try {
-      const token = getToken();
-      const response = await fetch(
-        `${API_BASE}/api/v1/deal-alerts/?status=active&limit=5`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setAlerts(data);
-      }
+      const { data } = await api.get('/api/v1/deal-alerts/?status=active&limit=5');
+      setAlerts(data);
     } catch (error) {
       console.error('Error fetching alerts:', error);
     } finally {
@@ -497,26 +479,16 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const token = getToken();
-      const headers = { Authorization: `Bearer ${token}` };
-
       // Fetch summary, alerts, and priority actions in parallel
       const [summaryRes, alertsRes, actionsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/deal-alerts/summary`, { headers }),
-        fetch(`${API_BASE}/api/v1/deal-alerts/?${new URLSearchParams(filters)}`, { headers }),
-        fetch(`${API_BASE}/api/v1/deal-alerts/priority-actions`, { headers }),
+        api.get('/api/v1/deal-alerts/summary').catch(() => null),
+        api.get(`/api/v1/deal-alerts/?${new URLSearchParams(filters)}`).catch(() => null),
+        api.get('/api/v1/deal-alerts/priority-actions').catch(() => null),
       ]);
 
-      if (summaryRes.ok) {
-        setSummary(await summaryRes.json());
-      }
-      if (alertsRes.ok) {
-        setAlerts(await alertsRes.json());
-      }
-      if (actionsRes.ok) {
-        const data = await actionsRes.json();
-        setPriorityActions(data.priority_actions || []);
-      }
+      if (summaryRes?.data) setSummary(summaryRes.data);
+      if (alertsRes?.data) setAlerts(alertsRes.data);
+      if (actionsRes?.data) setPriorityActions(actionsRes.data.priority_actions || []);
     } catch (error) {
       console.error('Error fetching deal alerts:', error);
     } finally {
@@ -531,16 +503,9 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
   const handleScanPipeline = async () => {
     setScanning(true);
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/v1/deal-alerts/scan`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast.success(`Scan complete: ${result.alerts_generated} new alerts generated`);
-        fetchData();
-      }
+      const { data: result } = await api.get('/api/v1/deal-alerts/scan');
+      toast.success(`Scan complete: ${result.alerts_generated} new alerts generated`);
+      fetchData();
     } catch (error) {
       console.error('Error scanning pipeline:', error);
     } finally {
@@ -550,11 +515,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
 
   const handleAcknowledge = async (alertId) => {
     try {
-      const token = getToken();
-      await fetch(`${API_BASE}/api/v1/deal-alerts/${alertId}/acknowledge`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.post(`/api/v1/deal-alerts/${alertId}/acknowledge`);
       fetchData();
     } catch (error) {
       console.error('Error acknowledging alert:', error);
@@ -563,15 +524,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
 
   const handleResolve = async (alertId) => {
     try {
-      const token = getToken();
-      await fetch(`${API_BASE}/api/v1/deal-alerts/${alertId}/resolve`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ resolution_note: 'Resolved via dashboard' }),
-      });
+      await api.post(`/api/v1/deal-alerts/${alertId}/resolve`, { resolution_note: 'Resolved via dashboard' });
       fetchData();
     } catch (error) {
       console.error('Error resolving alert:', error);
@@ -580,15 +533,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
 
   const handleSnooze = async (alertId, hours) => {
     try {
-      const token = getToken();
-      await fetch(`${API_BASE}/api/v1/deal-alerts/${alertId}/snooze`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ snooze_hours: hours }),
-      });
+      await api.post(`/api/v1/deal-alerts/${alertId}/snooze`, { snooze_hours: hours });
       fetchData();
     } catch (error) {
       console.error('Error snoozing alert:', error);
@@ -599,15 +544,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
     if (selectedAlerts.length === 0) return;
 
     try {
-      const token = getToken();
-      await fetch(`${API_BASE}/api/v1/deal-alerts/bulk-acknowledge`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ alert_ids: selectedAlerts }),
-      });
+      await api.post('/api/v1/deal-alerts/bulk-acknowledge', { alert_ids: selectedAlerts });
       setSelectedAlerts([]);
       fetchData();
     } catch (error) {
@@ -819,16 +756,13 @@ export function DealAlertsWidget({ userId, onViewAll }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = getToken();
-        const headers = { Authorization: `Bearer ${token}` };
-
         const [summaryRes, alertsRes] = await Promise.all([
-          fetch(`${API_BASE}/api/v1/deal-alerts/summary`, { headers }),
-          fetch(`${API_BASE}/api/v1/deal-alerts/?status=active&priority=critical&limit=3`, { headers }),
+          api.get('/api/v1/deal-alerts/summary').catch(() => null),
+          api.get('/api/v1/deal-alerts/?status=active&priority=critical&limit=3').catch(() => null),
         ]);
 
-        if (summaryRes.ok) setSummary(await summaryRes.json());
-        if (alertsRes.ok) setAlerts(await alertsRes.json());
+        if (summaryRes?.data) setSummary(summaryRes.data);
+        if (alertsRes?.data) setAlerts(alertsRes.data);
       } catch (error) {
         console.error('Error fetching widget data:', error);
       } finally {

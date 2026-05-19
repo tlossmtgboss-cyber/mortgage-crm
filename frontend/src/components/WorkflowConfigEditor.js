@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './WorkflowConfigEditor.css';
 import { toast } from '../utils/toast';
-import { getToken } from '../utils/tokenStore';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+import api from '../services/api';
 
 // Communication method columns - default for most workflows (uses "Realtor")
 const DEFAULT_COMMUNICATION_METHODS = [
@@ -97,91 +95,74 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const fetchWorkflowConfig = useCallback(async () => {
     try {
       setLoading(true);
-      const token = getToken();
-      const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch roles AND assignments from shared team-roles API (single source of truth)
       try {
-        const rolesResponse = await fetch(`${API_BASE}/api/v1/settings/team-roles`, { headers });
-        if (rolesResponse.ok) {
-          const rolesData = await rolesResponse.json();
-          const fetchedAssignments = rolesData.assignments || [];
-          setDynamicRoles(fetchedAssignments);
+        const { data: rolesData } = await api.get('/api/v1/settings/team-roles');
+        const fetchedAssignments = rolesData.assignments || [];
+        setDynamicRoles(fetchedAssignments);
 
-          // Convert to responsibility roles format
-          const dynamicRoleEntries = fetchedAssignments.map(role => ({
-            id: role.role_id,
-            key: `dynamic_${role.role_id}`,
-            label: getAbbreviation(role.role_name),
-            fullName: role.role_name,
-            roleValue: role.role_name.toLowerCase().replace(/\s+/g, '_'),
-            canDelete: false,
-            isLegacy: false,
-            isDynamic: true
+        // Convert to responsibility roles format
+        const dynamicRoleEntries = fetchedAssignments.map(role => ({
+          id: role.role_id,
+          key: `dynamic_${role.role_id}`,
+          label: getAbbreviation(role.role_name),
+          fullName: role.role_name,
+          roleValue: role.role_name.toLowerCase().replace(/\s+/g, '_'),
+          canDelete: false,
+          isLegacy: false,
+          isDynamic: true
+        }));
+
+        // Keep AI role at the end
+        const aiRole = DEFAULT_RESPONSIBILITY_ROLES.find(r => r.key === 'ai');
+        setResponsibilityRoles([...dynamicRoleEntries, aiRole]);
+
+        // Build role assignments from the shared data
+        const sharedAssignments = fetchedAssignments
+          .filter(a => a.user_id)
+          .map(a => ({
+            id: a.role_id,
+            role_id: a.role_id,
+            user_id: a.user_id,
+            role: a.role_name.toLowerCase().replace(/\s+/g, '_'),
           }));
-
-          // Keep AI role at the end
-          const aiRole = DEFAULT_RESPONSIBILITY_ROLES.find(r => r.key === 'ai');
-          setResponsibilityRoles([...dynamicRoleEntries, aiRole]);
-
-          // Build role assignments from the shared data
-          const sharedAssignments = fetchedAssignments
-            .filter(a => a.user_id)
-            .map(a => ({
-              id: a.role_id,
-              role_id: a.role_id,
-              user_id: a.user_id,
-              role: a.role_name.toLowerCase().replace(/\s+/g, '_'),
-            }));
-          setRoleAssignments(sharedAssignments);
-        }
+        setRoleAssignments(sharedAssignments);
       } catch (roleErr) {
         console.warn('Could not fetch roles from team-roles API, using defaults:', roleErr);
       }
 
       // Fetch workflow configuration
-      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}`, { headers });
-
-      if (!response.ok) {
-        // If workflow doesn't exist, try to seed defaults first
-        if (response.status === 404) {
-          await fetch(`${API_BASE}/api/v1/workflow-config/seed`, {
-            method: 'POST',
-            headers
-          });
-          // Try again
-          const retryResponse = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}`, { headers });
-          if (retryResponse.ok) {
-            const data = await retryResponse.json();
-            setWorkflowConfig(data);
-            setDays(data.days || []);
-            setRoleAssignments(data.role_assignments || []);
-          } else {
-            throw new Error('Workflow not found');
-          }
-        } else {
-          throw new Error('Failed to fetch workflow configuration');
-        }
-      } else {
-        const data = await response.json();
+      try {
+        const { data } = await api.get(`/api/v1/workflow-config/workflows/${workflowKey}`);
         setWorkflowConfig(data);
         setDays(data.days || []);
         setRoleAssignments(data.role_assignments || []);
+      } catch (err) {
+        // If workflow doesn't exist, try to seed defaults first
+        if (err.response?.status === 404) {
+          await api.post('/api/v1/workflow-config/seed');
+          // Try again
+          const { data } = await api.get(`/api/v1/workflow-config/workflows/${workflowKey}`);
+          setWorkflowConfig(data);
+          setDays(data.days || []);
+          setRoleAssignments(data.role_assignments || []);
+        } else {
+          throw err;
+        }
       }
 
       // Fetch users for role assignment
-      const usersResponse = await fetch(`${API_BASE}/api/v1/users`, { headers });
-      if (usersResponse.ok) {
-        const usersData = await usersResponse.json();
+      try {
+        const { data: usersData } = await api.get('/api/v1/users');
         setUsers(usersData.users || usersData || []);
-      }
+      } catch (e) { /* ignore */ }
 
       // Fetch alerts for this workflow
-      const alertsResponse = await fetch(`${API_BASE}/api/v1/workflow-config/alerts?workflow_key=${workflowKey}&unresolved_only=true`, { headers });
-      if (alertsResponse.ok) {
-        const alertsData = await alertsResponse.json();
+      try {
+        const { data: alertsData } = await api.get(`/api/v1/workflow-config/alerts?workflow_key=${workflowKey}&unresolved_only=true`);
         setAlerts(alertsData || []);
-      }
+      } catch (e) { /* ignore */ }
 
       setError(null);
     } catch (err) {
@@ -228,21 +209,10 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ [field]: newValue })
-      });
-
-      if (response.ok) {
-        setDays(prev => prev.map(d =>
-          d.id === dayId ? { ...d, [field]: newValue } : d
-        ));
-      }
+      await api.put(`/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, { [field]: newValue });
+      setDays(prev => prev.map(d =>
+        d.id === dayId ? { ...d, [field]: newValue } : d
+      ));
     } catch (err) {
       console.error('Error updating communication method:', err);
     } finally {
@@ -260,7 +230,6 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = getToken();
 
       if (isDynamic && roleData?.id) {
         // For dynamic roles, use the role_responsibilities JSON field
@@ -268,25 +237,15 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         const roleIdStr = String(roleData.id);
         const newValue = !roleResponsibilities[roleIdStr];
 
-        // Use the dedicated endpoint for role responsibilities
-        const response = await fetch(
-          `${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}/role-responsibility`,
-          {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ role_id: roleData.id, responsible: newValue })
-          }
+        await api.put(
+          `/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}/role-responsibility`,
+          { role_id: roleData.id, responsible: newValue }
         );
 
-        if (response.ok) {
-          const updatedRoleResp = { ...roleResponsibilities, [roleIdStr]: newValue };
-          setDays(prev => prev.map(d =>
-            d.id === dayId ? { ...d, role_responsibilities: updatedRoleResp } : d
-          ));
-        }
+        const updatedRoleResp = { ...roleResponsibilities, [roleIdStr]: newValue };
+        setDays(prev => prev.map(d =>
+          d.id === dayId ? { ...d, role_responsibilities: updatedRoleResp } : d
+        ));
       } else {
         // Legacy roles use individual boolean columns
         const fieldMap = {
@@ -304,20 +263,10 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         }
         const newValue = !day[field];
 
-        const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ [field]: newValue })
-        });
-
-        if (response.ok) {
-          setDays(prev => prev.map(d =>
-            d.id === dayId ? { ...d, [field]: newValue } : d
-          ));
-        }
+        await api.put(`/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, { [field]: newValue });
+        setDays(prev => prev.map(d =>
+          d.id === dayId ? { ...d, [field]: newValue } : d
+        ));
       }
     } catch (err) {
       console.error('Error updating responsibility:', err);
@@ -331,29 +280,20 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     try {
       setSaving(true);
       setSaveSuccess(false);
-      const token = getToken();
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
 
       // Save each day's configuration
       const savePromises = days.map(day =>
-        fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${day.id}`, {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({
-            phone_enabled: day.phone_enabled,
-            text_enabled: day.text_enabled,
-            email_enabled: day.email_enabled,
-            referral_partner_enabled: day.referral_partner_enabled,
-            lo_responsible: day.lo_responsible,
-            jr_lo_responsible: day.jr_lo_responsible,
-            production_asst_responsible: day.production_asst_responsible,
-            concierge_responsible: day.concierge_responsible,
-            ai_responsible: day.ai_responsible,
-            role_responsibilities: day.role_responsibilities || {}
-          })
+        api.put(`/api/v1/workflow-config/workflows/${workflowKey}/days/${day.id}`, {
+          phone_enabled: day.phone_enabled,
+          text_enabled: day.text_enabled,
+          email_enabled: day.email_enabled,
+          referral_partner_enabled: day.referral_partner_enabled,
+          lo_responsible: day.lo_responsible,
+          jr_lo_responsible: day.jr_lo_responsible,
+          production_asst_responsible: day.production_asst_responsible,
+          concierge_responsible: day.concierge_responsible,
+          ai_responsible: day.ai_responsible,
+          role_responsibilities: day.role_responsibilities || {}
         })
       );
 
@@ -378,28 +318,17 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          day_label: newDay.label,
-          day_value: parseInt(newDay.value),
-          day_order: days.length + 1
-        })
+      const { data: result } = await api.post(`/api/v1/workflow-config/workflows/${workflowKey}/days`, {
+        day_label: newDay.label,
+        day_value: parseInt(newDay.value),
+        day_order: days.length + 1
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        // Backend returns {success: true, day: {...}} - extract the day object
-        const addedDay = result.day || result;
-        setDays(prev => [...prev, addedDay].sort((a, b) => a.day_order - b.day_order));
-        setNewDay({ label: '', value: '' });
-        setShowAddDay(false);
-      }
+      // Backend returns {success: true, day: {...}} - extract the day object
+      const addedDay = result.day || result;
+      setDays(prev => [...prev, addedDay].sort((a, b) => a.day_order - b.day_order));
+      setNewDay({ label: '', value: '' });
+      setShowAddDay(false);
     } catch (err) {
       console.error('Error adding day:', err);
     } finally {
@@ -411,15 +340,8 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const handleDeleteDay = async (dayId) => {
     try {
       setSaving(true);
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        setDays(prev => prev.filter(d => d.id !== dayId));
-      }
+      await api.delete(`/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`);
+      setDays(prev => prev.filter(d => d.id !== dayId));
     } catch (err) {
       console.error('Error deleting day:', err);
     } finally {
@@ -443,29 +365,19 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${editingDay.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          day_label: editDayForm.label,
-          day_value: editDayForm.value ? parseInt(editDayForm.value) : null,
-          repeat_weekly: editDayForm.repeat_weekly
-        })
+      await api.put(`/api/v1/workflow-config/workflows/${workflowKey}/days/${editingDay.id}`, {
+        day_label: editDayForm.label,
+        day_value: editDayForm.value ? parseInt(editDayForm.value) : null,
+        repeat_weekly: editDayForm.repeat_weekly
       });
 
-      if (response.ok) {
-        setDays(prev => prev.map(d =>
-          d.id === editingDay.id
-            ? { ...d, day_label: editDayForm.label, day_value: editDayForm.value ? parseInt(editDayForm.value) : null, repeat_weekly: editDayForm.repeat_weekly }
-            : d
-        ));
-        setEditingDay(null);
-        setEditDayForm({ label: '', value: '', repeat_weekly: false });
-      }
+      setDays(prev => prev.map(d =>
+        d.id === editingDay.id
+          ? { ...d, day_label: editDayForm.label, day_value: editDayForm.value ? parseInt(editDayForm.value) : null, repeat_weekly: editDayForm.repeat_weekly }
+          : d
+      ));
+      setEditingDay(null);
+      setEditDayForm({ label: '', value: '', repeat_weekly: false });
     } catch (err) {
       console.error('Error updating day:', err);
     } finally {
@@ -477,11 +389,6 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const handleAssignUser = async (roleKey, userId, roleData = null) => {
     try {
       setSaving(true);
-      const token = getToken();
-      const authHeaders = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
 
       const roleId = roleData?.id;
       if (!roleId) {
@@ -489,32 +396,22 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         return;
       }
 
-      let response;
       if (userId) {
         // Assign: POST /api/v1/settings/team-roles/{roleId}
-        response = await fetch(`${API_BASE}/api/v1/settings/team-roles/${roleId}`, {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({ user_id: parseInt(userId) })
-        });
+        await api.post(`/api/v1/settings/team-roles/${roleId}`, { user_id: parseInt(userId) });
       } else {
         // Unassign: DELETE /api/v1/settings/team-roles/{roleId}
-        response = await fetch(`${API_BASE}/api/v1/settings/team-roles/${roleId}`, {
-          method: 'DELETE',
-          headers: authHeaders
-        });
+        await api.delete(`/api/v1/settings/team-roles/${roleId}`);
       }
 
-      if (response.ok) {
-        // Update local state
-        setRoleAssignments(prev => {
-          const filtered = prev.filter(ra => ra.role_id !== roleId);
-          if (userId) {
-            filtered.push({ id: roleId, role_id: roleId, user_id: parseInt(userId) });
-          }
-          return filtered;
-        });
-      }
+      // Update local state
+      setRoleAssignments(prev => {
+        const filtered = prev.filter(ra => ra.role_id !== roleId);
+        if (userId) {
+          filtered.push({ id: roleId, role_id: roleId, user_id: parseInt(userId) });
+        }
+        return filtered;
+      });
 
       setEditingRole(null);
       setShowRoleDropdown(null);
@@ -543,21 +440,12 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   // Check day health
   const runHealthCheck = async (dayId) => {
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}/check-health`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setDays(prev => prev.map(d =>
-          d.id === dayId ? { ...d, health_status: result.health_status, health_message: result.health_message } : d
-        ));
-
-        // Refresh alerts
-        fetchWorkflowConfig();
-      }
+      const { data: result } = await api.post(`/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}/check-health`);
+      setDays(prev => prev.map(d =>
+        d.id === dayId ? { ...d, health_status: result.health_status, health_message: result.health_message } : d
+      ));
+      // Refresh alerts
+      fetchWorkflowConfig();
     } catch (err) {
       console.error('Error running health check:', err);
     }
@@ -644,21 +532,13 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = getToken();
 
       // Update each day that has the deleted role's tasks
       for (const day of days) {
         if (day[fromField]) {
-          await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${day.id}`, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              [fromField]: false,
-              [toField]: true
-            })
+          await api.put(`/api/v1/workflow-config/workflows/${workflowKey}/days/${day.id}`, {
+            [fromField]: false,
+            [toField]: true
           });
         }
       }

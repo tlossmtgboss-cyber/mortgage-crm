@@ -11,7 +11,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, UniqueConstraint
+    Text, ForeignKey, JSON, Enum as SQLEnum, UniqueConstraint, Numeric
 )
 from sqlalchemy.orm import relationship
 
@@ -85,8 +85,8 @@ class GoalKeyResult(Base):
     id = Column(Integer, primary_key=True, index=True)
     goal_id = Column(Integer, ForeignKey("user_goals.id", ondelete="CASCADE"), nullable=False, index=True)
     metric = Column(String(255), nullable=False)  # "Close loans", "Total volume"
-    target = Column(Float, nullable=False)  # 15, 5000000
-    current = Column(Float, default=0)  # Current progress
+    target = Column(Numeric(18, 2), nullable=False)  # 15, 5000000
+    current = Column(Numeric(18, 2), default=0)  # Current progress
     unit = Column(String(50), nullable=True)  # "loans", "dollars", "percent"
     status = Column(SQLEnum('not_started', 'on_track', 'at_risk', 'ahead', 'completed', name='key_result_status'), default='not_started')
 

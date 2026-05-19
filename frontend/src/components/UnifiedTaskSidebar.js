@@ -1,13 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './UnifiedTaskSidebar.css';
 import { toast } from '../utils/toast';
-import { getToken } from '../utils/tokenStore';
-
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+import api from '../services/api';
 
 const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
   const [tasks, setTasks] = useState([]);
@@ -31,18 +25,10 @@ const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
   const fetchUnifiedTasks = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/v1/unified-tasks`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTasks(data.tasks || []);
-        if (onTaskCountChange) {
-          onTaskCountChange(data.total_count || 0);
-        }
+      const { data } = await api.get('/api/v1/unified-tasks');
+      setTasks(data.tasks || []);
+      if (onTaskCountChange) {
+        onTaskCountChange(data.total_count || 0);
       }
     } catch (error) {
       console.error('Error fetching unified tasks:', error);
@@ -169,18 +155,11 @@ Loan Officer`;
 
     // API call in background
     try {
-      await fetch(`${API_BASE_URL}/api/v1/unified-tasks/${taskToApprove.id}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          source: taskToApprove.source,
-          approved_response: isEditing ? editedResponse : (taskToApprove.ai_suggested_response || editedResponse),
-          feedback: feedbackText || null,
-          send_via: sendVia
-        })
+      await api.post(`/api/v1/unified-tasks/${taskToApprove.id}/approve`, {
+        source: taskToApprove.source,
+        approved_response: isEditing ? editedResponse : (taskToApprove.ai_suggested_response || editedResponse),
+        feedback: feedbackText || null,
+        send_via: sendVia
       });
     } catch (err) {
       console.error('Approve failed:', err);
@@ -265,29 +244,16 @@ Loan Officer`;
     setAiAcknowledgment('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/ai/training/instruction`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          instruction: feedbackText,
-          task_context: {
-            task_type: selectedTask.source || 'general',
-            borrower_name: selectedTask.client_name || '',
-            task_title: selectedTask.title || '',
-            stage: selectedTask.stage || ''
-          }
-        })
+      const { data } = await api.post('/api/v1/ai/training/instruction', {
+        instruction: feedbackText,
+        task_context: {
+          task_type: selectedTask.source || 'general',
+          borrower_name: selectedTask.client_name || '',
+          task_title: selectedTask.title || '',
+          stage: selectedTask.stage || ''
+        }
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAiAcknowledgment(data.acknowledgment || 'Training instruction received! I will apply this to future messages.');
-      } else {
-        setAiAcknowledgment('Training instruction saved. AI will apply this guidance to future tasks.');
-      }
+      setAiAcknowledgment(data.acknowledgment || 'Training instruction received! I will apply this to future messages.');
     } catch (error) {
       console.error('Failed to train AI:', error);
       setAiAcknowledgment('Instruction noted. Will apply to future tasks.');
@@ -303,32 +269,17 @@ Loan Officer`;
     setRegeneratingChannel(channel);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/ai/regenerate-message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          task_id: selectedTask.id,
-          task_source: selectedTask.source,
-          channel: channel,
-          client_name: selectedTask.client_name,
-          task_title: selectedTask.title,
-          stage: selectedTask.stage,
-          training_instruction: feedbackText || null
-        })
+      const { data } = await api.post('/api/v1/ai/regenerate-message', {
+        task_id: selectedTask.id,
+        task_source: selectedTask.source,
+        channel: channel,
+        client_name: selectedTask.client_name,
+        task_title: selectedTask.title,
+        stage: selectedTask.stage,
+        training_instruction: feedbackText || null
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setEditedResponse(data.message || data.generated_message || generateChannelMessage(channel));
-        setSendVia(channel);
-      } else {
-        // Fallback to local generation
-        setEditedResponse(generateChannelMessage(channel));
-        setSendVia(channel);
-      }
+      setEditedResponse(data.message || data.generated_message || generateChannelMessage(channel));
+      setSendVia(channel);
     } catch (error) {
       console.error('Failed to regenerate message:', error);
       // Fallback to local generation

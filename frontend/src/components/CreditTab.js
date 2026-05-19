@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../services/api';
+import api, { API_BASE_URL } from '../services/api';
 import './CreditTab.css';
 import { getToken } from '../utils/tokenStore';
 
@@ -19,25 +19,12 @@ function CreditTab({ leadId, loanId, borrowerId, formData = {} }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  // Helper function for authenticated API calls
+  // Helper function for authenticated API calls using centralized api
   const fetchWithAuth = async (endpoint, options = {}) => {
-    const token = getToken();
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...options.headers
-    };
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers
-    });
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    return response.json();
+    const method = (options.method || 'GET').toLowerCase();
+    const body = options.body ? JSON.parse(options.body) : undefined;
+    const { data } = await api[method](endpoint, body);
+    return data;
   };
 
   // Load credit data on mount

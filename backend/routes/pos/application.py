@@ -115,20 +115,16 @@ def get_section(
         (s for s in application.sections if s.section_key == section_key),
         None,
     )
-    pii = application.pii
+    pii_flags = _safe_pii_flags(application.pii)
 
     if section is None:
-        # Empty section is fine — return an empty body so the frontend can
-        # render an unfilled form without a 404 round-trip.
         return SectionResponse(
             section_key=section_key,  # type: ignore[arg-type]
             data={},
             is_complete=False,
             completed_at=None,
             updated_at=application.updated_at,
-            has_ssn=bool(pii and pii.ssn_encrypted),
-            has_co_ssn=bool(pii and pii.co_ssn_encrypted),
-            has_dob=bool(pii and pii.dob),
+            **pii_flags,
         )
 
     return SectionResponse(
@@ -137,9 +133,7 @@ def get_section(
         is_complete=section.is_complete,
         completed_at=section.completed_at,
         updated_at=section.updated_at,
-        has_ssn=bool(pii and pii.ssn_encrypted),
-        has_co_ssn=bool(pii and pii.co_ssn_encrypted),
-        has_dob=bool(pii and pii.dob),
+        **pii_flags,
     )
 
 
@@ -189,8 +183,7 @@ def update_section(
     db.commit()
     db.refresh(application)
 
-    pii = application.pii
-    # Include application metadata so the frontend can skip a second GET.
+    pii_flags = _safe_pii_flags(application.pii)
     app_meta = ApplicationResponse(**application_to_response_dict(application))
     return SectionResponse(
         section_key=section.section_key,  # type: ignore[arg-type]
@@ -198,9 +191,7 @@ def update_section(
         is_complete=section.is_complete,
         completed_at=section.completed_at,
         updated_at=section.updated_at,
-        has_ssn=bool(pii and pii.ssn_encrypted),
-        has_co_ssn=bool(pii and pii.co_ssn_encrypted),
-        has_dob=bool(pii and pii.dob),
+        **pii_flags,
         application=app_meta,
     )
 
@@ -252,6 +243,18 @@ async def submit_application(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _safe_pii_flags(pii) -> dict:
+    """Extract PII presence flags without crashing on missing columns."""
+    try:
+        return {
+            "has_ssn": bool(pii and pii.ssn_encrypted),
+            "has_co_ssn": bool(pii and pii.co_ssn_encrypted),
+            "has_dob": bool(pii and (getattr(pii, "dob_encrypted", None) or getattr(pii, "dob", None))),
+        }
+    except Exception:
+        return {"has_ssn": False, "has_co_ssn": False, "has_dob": False}
 
 
 def _build_confirmation_number(app: POSApplication) -> str:

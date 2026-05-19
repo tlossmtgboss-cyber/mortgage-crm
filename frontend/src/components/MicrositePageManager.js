@@ -9,13 +9,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
+import api from '../services/api';
 import './MicrositePageManager.css';
-
-// API base URL
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
 
 // Page type icons
 const PAGE_ICONS = {
@@ -73,20 +68,15 @@ const MicrositePageManager = ({ onToast }) => {
   // Fetch pages
   const fetchPages = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setPages(data);
-      }
+      const { data } = await api.get('/api/v1/microsites/my-microsite/pages');
+      setPages(data);
     } catch (err) {
       console.error('Error fetching pages:', err);
       onToast?.('Failed to load pages', 'error');
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders, onToast]);
+  }, [onToast]);
 
   useEffect(() => {
     fetchPages();
@@ -96,34 +86,24 @@ const MicrositePageManager = ({ onToast }) => {
   const handleCreatePage = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          ...newPage,
-          display_order: pages.length
-        })
+      const { data } = await api.post('/api/v1/microsites/my-microsite/pages', {
+        ...newPage,
+        display_order: pages.length
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setPages(prev => [...prev, data]);
-        setShowAddModal(false);
-        setNewPage({
-          page_type: 'about',
-          slug: 'about',
-          title: 'About Me',
-          is_enabled: true,
-          show_in_nav: true
-        });
-        onToast?.('Page created successfully!', 'success');
-      } else {
-        const err = await response.json();
-        onToast?.(err.detail || 'Failed to create page', 'error');
-      }
+      setPages(prev => [...prev, data]);
+      setShowAddModal(false);
+      setNewPage({
+        page_type: 'about',
+        slug: 'about',
+        title: 'About Me',
+        is_enabled: true,
+        show_in_nav: true
+      });
+      onToast?.('Page created successfully!', 'success');
     } catch (err) {
       console.error('Error creating page:', err);
-      onToast?.('Failed to create page', 'error');
+      onToast?.(err.response?.data?.detail || 'Failed to create page', 'error');
     } finally {
       setSaving(false);
     }
@@ -133,26 +113,15 @@ const MicrositePageManager = ({ onToast }) => {
   const handleUpdatePage = async (slug, updates) => {
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages/${slug}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(updates)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setPages(prev => prev.map(p => p.slug === slug ? data : p));
-        if (editingPage?.slug === slug) {
-          setEditingPage(data);
-        }
-        onToast?.('Page updated!', 'success');
-      } else {
-        const err = await response.json();
-        onToast?.(err.detail || 'Failed to update page', 'error');
+      const { data } = await api.put(`/api/v1/microsites/my-microsite/pages/${slug}`, updates);
+      setPages(prev => prev.map(p => p.slug === slug ? data : p));
+      if (editingPage?.slug === slug) {
+        setEditingPage(data);
       }
+      onToast?.('Page updated!', 'success');
     } catch (err) {
       console.error('Error updating page:', err);
-      onToast?.('Failed to update page', 'error');
+      onToast?.(err.response?.data?.detail || 'Failed to update page', 'error');
     } finally {
       setSaving(false);
     }
@@ -166,24 +135,15 @@ const MicrositePageManager = ({ onToast }) => {
 
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages/${slug}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        setPages(prev => prev.filter(p => p.slug !== slug));
-        if (editingPage?.slug === slug) {
-          setEditingPage(null);
-        }
-        onToast?.('Page deleted', 'success');
-      } else {
-        const err = await response.json();
-        onToast?.(err.detail || 'Failed to delete page', 'error');
+      await api.delete(`/api/v1/microsites/my-microsite/pages/${slug}`);
+      setPages(prev => prev.filter(p => p.slug !== slug));
+      if (editingPage?.slug === slug) {
+        setEditingPage(null);
       }
+      onToast?.('Page deleted', 'success');
     } catch (err) {
       console.error('Error deleting page:', err);
-      onToast?.('Failed to delete page', 'error');
+      onToast?.(err.response?.data?.detail || 'Failed to delete page', 'error');
     } finally {
       setSaving(false);
     }
@@ -209,11 +169,7 @@ const MicrositePageManager = ({ onToast }) => {
     const reorder = newPages.map((p, i) => ({ slug: p.slug, display_order: i }));
 
     try {
-      await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages/reorder`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(reorder)
-      });
+      await api.post('/api/v1/microsites/my-microsite/pages/reorder', reorder);
       setPages(newPages.map((p, i) => ({ ...p, displayOrder: i })));
     } catch (err) {
       console.error('Error reordering:', err);
@@ -228,11 +184,7 @@ const MicrositePageManager = ({ onToast }) => {
     const reorder = newPages.map((p, i) => ({ slug: p.slug, display_order: i }));
 
     try {
-      await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages/reorder`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(reorder)
-      });
+      await api.post('/api/v1/microsites/my-microsite/pages/reorder', reorder);
       setPages(newPages.map((p, i) => ({ ...p, displayOrder: i })));
     } catch (err) {
       console.error('Error reordering:', err);

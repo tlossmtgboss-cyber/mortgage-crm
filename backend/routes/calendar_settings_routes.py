@@ -1040,15 +1040,19 @@ async def get_team_settings(
             ORDER BY u.first_name, u.last_name
         """), {"org_id": org_id}).fetchall()
 
+        from encryption_utils import decrypt_value
+
         team = []
         for m in members:
+            first = decrypt_value(m.first_name) or ''
+            last = decrypt_value(m.last_name) or ''
             team.append({
                 "user_id": m.id,
-                "name": f"{m.first_name or ''} {m.last_name or ''}".strip(),
+                "name": f"{first} {last}".strip(),
                 "email": m.email,
                 "role": m.role or "employee",
                 "title": m.title or "",
-                "phone": m.phone or "",
+                "phone": decrypt_value(m.phone) or "",
                 "is_active": m.is_active,
                 "max_daily_appointments": m.max_meetings_per_day or 8,
                 "is_accepting_appointments": m.scheduler_active if m.scheduler_active is not None else True,

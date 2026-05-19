@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './VideoCallScheduleModal.css';
-import { getToken } from '../utils/tokenStore';
+import api from '../services/api';
 // v2.0 - Fixed "Failed to fetch" error - build 20251215-1140
-
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
 
 const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall }) => {
   // Initialize weekStart to today - will be reset when modal opens
@@ -84,22 +80,14 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
     if (!memberId) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/team/members/${memberId}/work-hours`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
+      const { data } = await api.get(`/api/v1/team/members/${memberId}/work-hours`);
+      setTeamMemberWorkHours({
+        work_hours_start: data.work_hours_start || '09:00',
+        work_hours_end: data.work_hours_end || '17:00',
+        work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMemberWorkHours({
-          work_hours_start: data.work_hours_start || '09:00',
-          work_hours_end: data.work_hours_end || '17:00',
-          work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-        });
-      }
     } catch (error) {
-      console.error('Error fetching team member work hours:', error);
+      // Keep default work hours
     }
   }, []);
 
@@ -109,27 +97,17 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
 
     try {
       // Fetch all team members directly (more reliable)
-      const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-      });
+      const { data } = await api.get('/api/v1/team/members');
+      const members = data.team_members || data || [];
+      setTeamMembers(members);
 
-      if (allMembersResponse.ok) {
-        const data = await allMembersResponse.json();
-        const members = data.team_members || data || [];
-        setTeamMembers(members);
-
-        // Auto-select first team member if available
-        if (members.length > 0) {
-          const firstMemberId = members[0].member_id || members[0].user_id || members[0].id || '';
-          setSelectedTeamMember(String(firstMemberId));
-          if (firstMemberId) {
-            fetchTeamMemberWorkHours(firstMemberId);
-          }
+      // Auto-select first team member if available
+      if (members.length > 0) {
+        const firstMemberId = members[0].member_id || members[0].user_id || members[0].id || '';
+        setSelectedTeamMember(String(firstMemberId));
+        if (firstMemberId) {
+          fetchTeamMemberWorkHours(firstMemberId);
         }
-      } else {
-        console.warn('Failed to fetch team members:', allMembersResponse.status);
       }
     } catch (error) {
       console.error('Error fetching team members:', error);
@@ -204,24 +182,21 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
 
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
-      const response = await fetch(
-        `${API_BASE}/api/v1/scheduler/public/book/demo/slots?date=${dateStr}&appointment_type_id=1&duration_minutes=30`
+      const { data } = await api.get(
+        `/api/v1/scheduler/public/book/demo/slots?date=${dateStr}&appointment_type_id=1&duration_minutes=30`
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        const slots = (data.available_slots || []).map(slot => ({
-          ...slot,
-          start_time: slot.start,
-          display: formatTime(slot.start)
-        }));
-        setAvailableSlots(slots);
+      const slots = (data.available_slots || []).map(slot => ({
+        ...slot,
+        start_time: slot.start,
+        display: formatTime(slot.start)
+      }));
+      setAvailableSlots(slots);
 
-        if (slots.length > 0) {
-          setSelectedTime(slots[0].start_time);
-        } else {
-          setSelectedTime('');
-        }
+      if (slots.length > 0) {
+        setSelectedTime(slots[0].start_time);
+      } else {
+        setSelectedTime('');
       }
     } catch (err) {
       console.error('Error fetching slots:', err);
@@ -272,50 +247,37 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
     try {
       // Create instant video call room using the meetings API
       const borrowerName = borrower?.name || `${borrower?.first_name || ''} ${borrower?.last_name || ''}`.trim() || 'Client';
-      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({
-          room_name: `Call with ${borrowerName}`,
-          room_description: `Video call with ${borrowerName}`,
-          provider: 'internal',
-          duration_minutes: 30,
-          waiting_room_enabled: false,
-          recording_enabled: true,
-          transcription_enabled: true,
-          ai_assistant_enabled: true,
-          password_protected: false,
-          max_participants: 10,
-          lead_id: borrower?.id || null,
-          meeting_type: 'client_call',
-        }),
+      const { data } = await api.post('/api/v1/meetings/rooms', {
+        room_name: `Call with ${borrowerName}`,
+        room_description: `Video call with ${borrowerName}`,
+        provider: 'internal',
+        duration_minutes: 30,
+        waiting_room_enabled: false,
+        recording_enabled: true,
+        transcription_enabled: true,
+        ai_assistant_enabled: true,
+        password_protected: false,
+        max_participants: 10,
+        lead_id: borrower?.id || null,
+        meeting_type: 'client_call',
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        // Open video call in new window using the room code
-        // Backend returns: { success: true, meeting: { room_code: "..." } }
-        const roomCode = data.meeting?.room_code || data.room_code || data.room?.room_code;
-        if (roomCode) {
-          const roomUrl = `${window.location.origin}/meeting/${roomCode}`;
-          window.open(roomUrl, '_blank', 'width=1200,height=800');
-          if (onStartVideoCall) {
-            onStartVideoCall({ room_url: roomUrl, room_code: roomCode, ...data });
-          }
-          onClose();
-        } else {
-          throw new Error('No room code returned from server');
+      // Open video call in new window using the room code
+      // Backend returns: { success: true, meeting: { room_code: "..." } }
+      const roomCode = data.meeting?.room_code || data.room_code || data.room?.room_code;
+      if (roomCode) {
+        const roomUrl = `${window.location.origin}/meeting/${roomCode}`;
+        window.open(roomUrl, '_blank', 'width=1200,height=800');
+        if (onStartVideoCall) {
+          onStartVideoCall({ room_url: roomUrl, room_code: roomCode, ...data });
         }
+        onClose();
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create meeting room');
+        throw new Error('No room code returned from server');
       }
     } catch (err) {
       console.error('Error starting video call:', err);
-      setError(err.message || 'Failed to start video call. Please try again.');
+      setError(err.response?.data?.detail || err.message || 'Failed to start video call. Please try again.');
     } finally {
       setStartingCall(false);
     }
@@ -349,27 +311,18 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
       'Team Member';
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/public/book/demo/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointment_type_id: 1,
-          start_time: selectedTime,
-          duration_minutes: 30,
-          attendee_name: borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim(),
-          attendee_email: borrower.email || borrower.borrower_email,
-          attendee_phone: borrower.phone || borrower.borrower_phone || '',
-          notes: `Video Call scheduled\nAppointment with: ${teamMemberName}`,
-          meeting_mode: 'video',
-          team_member_id: selectedTeamMember,
-          team_member_name: teamMemberName
-        })
+      await api.post('/api/v1/scheduler/public/book/demo/confirm', {
+        appointment_type_id: 1,
+        start_time: selectedTime,
+        duration_minutes: 30,
+        attendee_name: borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim(),
+        attendee_email: borrower.email || borrower.borrower_email,
+        attendee_phone: borrower.phone || borrower.borrower_phone || '',
+        notes: `Video Call scheduled\nAppointment with: ${teamMemberName}`,
+        meeting_mode: 'video',
+        team_member_id: selectedTeamMember,
+        team_member_name: teamMemberName
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to schedule video call');
-      }
 
       setSuccess(true);
 
@@ -378,7 +331,7 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
       }, 2000);
     } catch (err) {
       console.error('Error scheduling video call:', err);
-      setError(err.message || 'Failed to schedule video call. Please try again.');
+      setError(err.response?.data?.detail || err.message || 'Failed to schedule video call. Please try again.');
     } finally {
       setSubmitting(false);
     }

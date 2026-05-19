@@ -1,14 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import './AccountVerification.css';
 import { setTokens } from '../utils/tokenStore';
-
-// API base URL
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function AccountVerification() {
   const navigate = useNavigate();
@@ -61,7 +55,7 @@ function AccountVerification() {
     setLoading(true);
     setError('');
     try {
-      await axios.post(`${API_BASE_URL}/api/v1/verification/resend-email`, {
+      await api.post('/api/v1/verification/resend-email', {
         email,
         user_id: userId
       });
@@ -91,7 +85,7 @@ function AccountVerification() {
     setLoading(true);
     setError('');
     try {
-      await axios.post(`${API_BASE_URL}/api/v1/verification/send-phone-code`, {
+      await api.post('/api/v1/verification/send-phone-code', {
         phone: phoneNumber,
         method: verificationMethod,
         user_id: userId
@@ -115,7 +109,7 @@ function AccountVerification() {
     setLoading(true);
     setError('');
     try {
-      await axios.post(`${API_BASE_URL}/api/v1/verification/verify-phone`, {
+      await api.post('/api/v1/verification/verify-phone', {
         phone: phoneNumber,
         code: verificationCode,
         user_id: userId

@@ -1,18 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import CategoryTasksModal from '../components/CategoryTasksModal';
 import PermissionsStep from '../components/onboarding/steps/PermissionsStep';
 import FeatureSelection from '../components/FeatureSelection';
-import { getAuthHeaders } from '../utils/auth';
 import './UserCreationWizard.css';
-
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Wizard Steps
 const STEPS = {
@@ -149,10 +142,10 @@ function UserCreationWizard() {
     setLoading(true);
     try {
       const [rolesRes, categoriesRes, responsibilitiesRes, templatesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/roles`, { headers: getAuthHeaders() }).catch(() => ({ data: null })),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/categories`, { headers: getAuthHeaders() }).catch(() => ({ data: null })),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/responsibilities`, { headers: getAuthHeaders() }).catch(() => ({ data: null })),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/permission-templates`, { headers: getAuthHeaders() }).catch(() => ({ data: null }))
+        api.get('/api/v1/admin/users/roles').catch(() => ({ data: null })),
+        api.get('/api/v1/admin/users/categories').catch(() => ({ data: null })),
+        api.get('/api/v1/admin/users/responsibilities').catch(() => ({ data: null })),
+        api.get('/api/v1/admin/users/permission-templates').catch(() => ({ data: null }))
       ]);
 
       // Handle nested response structure: { success: true, data: { roles: [...] } }
@@ -228,10 +221,7 @@ function UserCreationWizard() {
 
     if (roleId) {
       try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/v1/admin/users/roles/${roleId}/defaults`,
-          { headers: getAuthHeaders() }
-        );
+        const response = await api.get(`/api/v1/admin/users/roles/${roleId}/defaults`);
         const defaults = response.data;
         updateFormData({
           selected_categories: defaults.category_ids || [],
@@ -263,11 +253,7 @@ function UserCreationWizard() {
         custom_permissions: formData.custom_permissions
       };
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/admin/users/create`,
-        payload,
-        { headers: getAuthHeaders() }
-      );
+      const response = await api.post('/api/v1/admin/users/create', payload);
 
       const result = response.data;
       updateFormData({
@@ -291,11 +277,7 @@ function UserCreationWizard() {
     setError(null);
 
     try {
-      await axios.post(
-        `${API_BASE_URL}/api/v1/admin/users/${formData.created_user_id}/resend-activation`,
-        {},
-        { headers: getAuthHeaders() }
-      );
+      await api.post(`/api/v1/admin/users/${formData.created_user_id}/resend-activation`);
 
       nextStep(); // Move to activation confirmation
     } catch (err) {

@@ -6,10 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import api from '../services/api';
 import './FeatureManagement.css';
-import { getToken } from '../utils/tokenStore';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Category metadata for grouping
 const CATEGORY_META = {
@@ -41,29 +39,19 @@ function FeatureManagement({ companyId = 1 }) {
   const fetchFeatures = useCallback(async () => {
     try {
       setLoading(true);
-      const token = getToken();
-      const headers = { 'Authorization': `Bearer ${token}` };
 
-      // Fetch company feature access
-      const response = await fetch(
-        `${API_BASE}/api/v1/features/company/${companyId}/access`,
-        { headers }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setFeatures(data.features || []);
-        setSetupComplete(true);
-      } else if (response.status === 404) {
-        // Tables might not exist yet - try to set them up
-        setSetupComplete(false);
-      } else {
-        throw new Error('Failed to fetch features');
-      }
+      const response = await api.get(`/api/v1/features/company/${companyId}/access`);
+      setFeatures(response.data.features || []);
+      setSetupComplete(true);
       setError(null);
     } catch (err) {
       console.error('Error fetching features:', err);
-      setError(err.message);
+      if (err.status === 404 || err.response?.status === 404) {
+        // Tables might not exist yet - try to set them up
+        setSetupComplete(false);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -76,23 +64,10 @@ function FeatureManagement({ companyId = 1 }) {
   const runSetup = async () => {
     try {
       setSaving(true);
-      const token = getToken();
-      const response = await fetch(
-        `${API_BASE}/api/v1/features/migrate/full-setup`,
-        {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        setSuccessMessage(`Setup complete! ${result.features_seeded?.length || 0} features created.`);
-        setTimeout(() => setSuccessMessage(null), 3000);
-        fetchFeatures();
-      } else {
-        throw new Error('Setup failed');
-      }
+      const response = await api.post('/api/v1/features/migrate/full-setup');
+      setSuccessMessage(`Setup complete! ${response.data.features_seeded?.length || 0} features created.`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      fetchFeatures();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -103,33 +78,18 @@ function FeatureManagement({ companyId = 1 }) {
   const toggleFeatureAccess = async (featureKey, currentEnabled) => {
     try {
       setSaving(true);
-      const token = getToken();
-      const response = await fetch(
-        `${API_BASE}/api/v1/features/company/${companyId}/access/${featureKey}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            is_enabled: !currentEnabled
-          })
-        }
-      );
+      await api.put(`/api/v1/features/company/${companyId}/access/${featureKey}`, {
+        is_enabled: !currentEnabled
+      });
 
-      if (response.ok) {
-        // Update local state
-        setFeatures(prev => prev.map(f =>
-          f.feature_key === featureKey
-            ? { ...f, access: { ...f.access, is_enabled: !currentEnabled } }
-            : f
-        ));
-        setSuccessMessage(`Feature ${!currentEnabled ? 'enabled' : 'disabled'} successfully`);
-        setTimeout(() => setSuccessMessage(null), 2000);
-      } else {
-        throw new Error('Failed to update feature');
-      }
+      // Update local state
+      setFeatures(prev => prev.map(f =>
+        f.feature_key === featureKey
+          ? { ...f, access: { ...f.access, is_enabled: !currentEnabled } }
+          : f
+      ));
+      setSuccessMessage(`Feature ${!currentEnabled ? 'enabled' : 'disabled'} successfully`);
+      setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -140,7 +100,6 @@ function FeatureManagement({ companyId = 1 }) {
   const bulkEnableAll = async (category = null) => {
     try {
       setSaving(true);
-      const token = getToken();
 
       const featuresToEnable = features
         .filter(f => !f.access?.is_enabled)
@@ -154,28 +113,14 @@ function FeatureManagement({ companyId = 1 }) {
         return;
       }
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/features/company/${companyId}/access/bulk`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            feature_keys: featuresToEnable,
-            is_enabled: true
-          })
-        }
-      );
+      await api.post(`/api/v1/features/company/${companyId}/access/bulk`, {
+        feature_keys: featuresToEnable,
+        is_enabled: true
+      });
 
-      if (response.ok) {
-        fetchFeatures();
-        setSuccessMessage(`${featuresToEnable.length} features enabled`);
-        setTimeout(() => setSuccessMessage(null), 2000);
-      } else {
-        throw new Error('Bulk update failed');
-      }
+      fetchFeatures();
+      setSuccessMessage(`${featuresToEnable.length} features enabled`);
+      setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -186,7 +131,6 @@ function FeatureManagement({ companyId = 1 }) {
   const bulkDisableAll = async (category = null) => {
     try {
       setSaving(true);
-      const token = getToken();
 
       const featuresToDisable = features
         .filter(f => f.access?.is_enabled)
@@ -199,28 +143,14 @@ function FeatureManagement({ companyId = 1 }) {
         return;
       }
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/features/company/${companyId}/access/bulk`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            feature_keys: featuresToDisable,
-            is_enabled: false
-          })
-        }
-      );
+      await api.post(`/api/v1/features/company/${companyId}/access/bulk`, {
+        feature_keys: featuresToDisable,
+        is_enabled: false
+      });
 
-      if (response.ok) {
-        fetchFeatures();
-        setSuccessMessage(`${featuresToDisable.length} features disabled`);
-        setTimeout(() => setSuccessMessage(null), 2000);
-      } else {
-        throw new Error('Bulk update failed');
-      }
+      fetchFeatures();
+      setSuccessMessage(`${featuresToDisable.length} features disabled`);
+      setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err) {
       setError(err.message);
     } finally {

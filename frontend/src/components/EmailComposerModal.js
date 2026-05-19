@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import VideoRecorder from './video/VideoRecorder';
 import './EmailComposerModal.css';
-import { getToken } from '../utils/tokenStore';
+import api, { API_BASE_URL } from '../services/api';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 const APP_BASE = process.env.REACT_APP_BASE_URL || 'https://app.perenniaai.com';
 
 // Email templates organized by category
@@ -103,15 +102,8 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
     if (isOpen) {
       const checkSfStatus = async () => {
         try {
-          const response = await fetch(`${API_BASE}/api/integrations/salesforce/status`, {
-            headers: { 'Authorization': `Bearer ${getToken()}` }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setSfConnected(data.connected === true);
-          } else {
-            setSfConnected(false);
-          }
+          const { data } = await api.get('/api/integrations/salesforce/status');
+          setSfConnected(data.connected === true);
         } catch (err) {
           setSfConnected(false);
         }
@@ -125,13 +117,8 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
     if (isOpen) {
       const fetchBookingLinks = async () => {
         try {
-          const response = await fetch(`${API_BASE}/api/v1/scheduler/booking-links`, {
-            headers: { 'Authorization': `Bearer ${getToken()}` }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setBookingLinks(data.booking_links || []);
-          }
+          const { data } = await api.get('/api/v1/scheduler/booking-links');
+          setBookingLinks(data.booking_links || []);
         } catch (err) {
           console.error('Failed to fetch booking links:', err);
         }
@@ -139,10 +126,6 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
       fetchBookingLinks();
     }
   }, [isOpen]);
-
-  const getToken = () => {
-    return getToken();
-  };
 
   const handleTemplateSelect = async (template) => {
     setSelectedTemplate(template);
@@ -159,27 +142,15 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
     // Generate AI email based on template
     setIsGenerating(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai/generate-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
-        },
-        body: JSON.stringify({
-          template_id: template.id,
-          template_name: template.name,
-          recipient_name: recipient?.name || 'Valued Client',
-          recipient_email: recipient?.email || '',
-          entity_type: entityType, // 'lead', 'loan', 'mum'
-          entity_data: entityData || {},
-        })
+      const { data } = await api.post('/api/v1/ai/generate-email', {
+        template_id: template.id,
+        template_name: template.name,
+        recipient_name: recipient?.name || 'Valued Client',
+        recipient_email: recipient?.email || '',
+        entity_type: entityType, // 'lead', 'loan', 'mum'
+        entity_data: entityData || {},
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate email');
-      }
-
-      const data = await response.json();
       setSubject(data.subject || `${template.name}`);
       setEmailBody(data.body || '');
       setStep(2);
@@ -210,29 +181,16 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai/send-composed-email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`
-        },
-        body: JSON.stringify({
-          to_email: recipient.email,
-          to_name: recipient.name || '',
-          subject: subject,
-          body: emailBody,
-          entity_type: entityType,
-          entity_id: entityData?.id,
-          template_used: selectedTemplate?.id || 'custom',
-        })
+      const { data: responseData } = await api.post('/api/v1/ai/send-composed-email', {
+        to_email: recipient.email,
+        to_name: recipient.name || '',
+        subject: subject,
+        body: emailBody,
+        entity_type: entityType,
+        entity_id: entityData?.id,
+        template_used: selectedTemplate?.id || 'custom',
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to send email');
-      }
-
-      const responseData = await response.json();
       setSendMethod(responseData.send_method || null);
       setSuccess(true);
       setStep(3);
@@ -263,32 +221,18 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
     setError(null);
 
     try {
-      const token = getToken();
-
       // Step 1: Get presigned upload URL
-      const uploadUrlResponse = await fetch(`${API_BASE}/api/v1/portal-video/upload-url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          portal_type: 'email',
-          recipient_id: 0,
-          content_type: 'video/webm',
-          filename: `email_video_${Date.now()}.webm`
-        })
+      const { data: uploadData } = await api.post('/api/v1/portal-video/upload-url', {
+        portal_type: 'email',
+        recipient_id: 0,
+        content_type: 'video/webm',
+        filename: `email_video_${Date.now()}.webm`
       });
 
-      if (!uploadUrlResponse.ok) {
-        const errData = await uploadUrlResponse.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.error || 'Failed to get upload URL');
-      }
-
-      const { upload_url, video_key } = await uploadUrlResponse.json();
+      const { upload_url, video_key } = uploadData;
       setVideoUploadProgress(20);
 
-      // Step 2: Upload blob to S3
+      // Step 2: Upload blob to S3 (raw fetch - external presigned URL)
       const uploadResponse = await fetch(upload_url, {
         method: 'PUT',
         headers: { 'Content-Type': 'video/webm' },
@@ -298,22 +242,15 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
       if (!uploadResponse.ok) throw new Error('Failed to upload video to storage');
       setVideoUploadProgress(70);
 
-      // Step 3: Complete upload (non-blocking — video is already on S3)
+      // Step 3: Complete upload (non-blocking -- video is already on S3)
       try {
-        await fetch(`${API_BASE}/api/v1/portal-video/complete`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            portal_type: 'email',
-            recipient_id: 0,
-            video_key: video_key,
-            message: null,
-            send_notification: false,
-            duration_seconds: duration
-          })
+        await api.post('/api/v1/portal-video/complete', {
+          portal_type: 'email',
+          recipient_id: 0,
+          video_key: video_key,
+          message: null,
+          send_notification: false,
+          duration_seconds: duration
         });
       } catch (completeErr) {
         console.warn('Video metadata save failed (non-critical):', completeErr);
@@ -321,7 +258,7 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
       setVideoUploadProgress(100);
 
       // Insert video marker into email body
-      const videoUrl = `${API_BASE}/api/v1/portal-video/view/${video_key}`;
+      const videoUrl = `${API_BASE_URL}/api/v1/portal-video/view/${video_key}`;
       const videoMarker = `\n[VIDEO MESSAGE - Click to watch: ${videoUrl}]\n`;
       setEmailBody(prev => prev + videoMarker);
       setHasVideoAttached(true);

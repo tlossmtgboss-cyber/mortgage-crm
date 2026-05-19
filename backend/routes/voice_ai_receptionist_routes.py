@@ -870,6 +870,7 @@ async def telephony_sms_webhook(
             db.execute(text("""
                 CREATE TABLE IF NOT EXISTS sms_conversations (
                     id SERIAL PRIMARY KEY,
+                    organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
                     phone_number VARCHAR(50) NOT NULL,
                     user_id INTEGER REFERENCES users(id),
                     lead_id INTEGER REFERENCES leads(id),
@@ -886,7 +887,9 @@ async def telephony_sms_webhook(
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
+            db.execute(text("ALTER TABLE sms_conversations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE"))
             db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conv_phone ON sms_conversations(phone_number)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conversations_organization_id ON sms_conversations(organization_id)"))
             db.commit()
             logger.info("SMS conversations table ensured to exist")
         except Exception as table_err:
@@ -1235,12 +1238,42 @@ async def list_sms_conversations(
     current_user = Depends(get_current_user_dep())
 ):
     """List SMS conversations. Use include_all=true to see all conversations (admin only)"""
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS sms_conversations (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+                phone_number VARCHAR(50) NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                lead_id INTEGER REFERENCES leads(id),
+                loan_id INTEGER REFERENCES loans(id),
+                contact_id INTEGER,
+                contact_name VARCHAR(255),
+                is_active BOOLEAN DEFAULT TRUE,
+                ai_enabled BOOLEAN DEFAULT TRUE,
+                last_message_at TIMESTAMP,
+                last_ai_response_at TIMESTAMP,
+                message_count INTEGER DEFAULT 0,
+                context JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.execute(text("ALTER TABLE sms_conversations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conversations_organization_id ON sms_conversations(organization_id)"))
+        db.commit()
+    except Exception:
+        db.rollback()
+
     main = get_models()
     SMSConversation = main.SMSConversation
+    org_id = getattr(current_user, 'organization_id', None)
 
     query = db.query(SMSConversation)
 
-    # If not including all, filter by user or show unassigned
+    if org_id:
+        query = query.filter(SMSConversation.organization_id == org_id)
+
     if not include_all:
         query = query.filter(
             (SMSConversation.user_id == current_user.id) |
@@ -1250,7 +1283,7 @@ async def list_sms_conversations(
     if active_only:
         query = query.filter(SMSConversation.is_active == True)
 
-    conversations = query.order_by(SMSConversation.last_message_at.desc()).limit(limit).all()
+    conversations = query.order_by(SMSConversation.last_message_at.desc().nullslast()).limit(limit).all()
 
     return {
         "conversations": [

@@ -262,7 +262,7 @@ class ApplicationCompletenessReview(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     loan_id = Column(String, nullable=False, index=True)  # ref loans.id
     borrower_id = Column(String, nullable=True)  # ref leads.id
 
@@ -342,7 +342,7 @@ class MissingItem(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     review_id = Column(
         Integer,
         ForeignKey("application_completeness_reviews.id"),
@@ -416,7 +416,7 @@ class DocumentStagingRequest(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     review_id = Column(
         Integer,
         ForeignKey("application_completeness_reviews.id"),
@@ -498,7 +498,7 @@ class BorrowerCommunicationLog(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     loan_id = Column(String, nullable=False, index=True)  # ref loans.id
     review_id = Column(
         Integer,
@@ -578,7 +578,7 @@ class AppointmentCoordination(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     loan_id = Column(String, nullable=False, index=True)  # ref loans.id
     review_id = Column(
         Integer,
@@ -658,7 +658,7 @@ class ApplicationScoreHistory(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     loan_id = Column(String, nullable=False, index=True)  # ref loans.id
     review_id = Column(
         Integer,

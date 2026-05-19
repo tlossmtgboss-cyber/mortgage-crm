@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
 import './AIEmailSetup.css';
-
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
+import api from '../services/api';
 
 const AIEmailSetup = () => {
   const [settings, setSettings] = useState(null);
@@ -19,13 +15,8 @@ const AIEmailSetup = () => {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai-email-settings`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
-      }
+      const { data } = await api.get('/api/v1/ai-email-settings');
+      setSettings(data);
     } catch (err) {
       console.error('Error fetching settings:', err);
       setMessage({ type: 'error', text: 'Failed to load settings' });
@@ -34,13 +25,8 @@ const AIEmailSetup = () => {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai-email-settings/status`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStatus(data);
-      }
+      const { data } = await api.get('/api/v1/ai-email-settings/status');
+      setStatus(data);
     } catch (err) {
       console.error('Error fetching status:', err);
     }
@@ -48,13 +34,8 @@ const AIEmailSetup = () => {
 
   const fetchDnsInstructions = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai-email-settings/dns-instructions`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setDnsInstructions(data);
-      }
+      const { data } = await api.get('/api/v1/ai-email-settings/dns-instructions');
+      setDnsInstructions(data);
     } catch (err) {
       console.error('Error fetching DNS instructions:', err);
     }
@@ -73,24 +54,13 @@ const AIEmailSetup = () => {
     setSaving(true);
     setMessage(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai-email-settings`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(settings)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
-        setMessage({ type: 'success', text: 'Settings saved successfully!' });
-        // Refresh status after save
-        fetchStatus();
-      } else {
-        const err = await response.json();
-        setMessage({ type: 'error', text: err.detail || 'Failed to save settings' });
-      }
+      const { data } = await api.put('/api/v1/ai-email-settings', settings);
+      setSettings(data);
+      setMessage({ type: 'success', text: 'Settings saved successfully!' });
+      fetchStatus();
     } catch (err) {
-      setMessage({ type: 'error', text: 'Error saving settings: ' + err.message });
+      const detail = err.response?.data?.detail || err.message;
+      setMessage({ type: 'error', text: detail || 'Failed to save settings' });
     } finally {
       setSaving(false);
     }
@@ -105,20 +75,11 @@ const AIEmailSetup = () => {
     setTestingEmail(true);
     setMessage(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/ai-email-settings/test-email?to_email=${encodeURIComponent(testEmail)}`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMessage({ type: 'success', text: `Test email sent to ${testEmail}! Check your inbox.` });
-      } else {
-        const err = await response.json();
-        setMessage({ type: 'error', text: err.detail || 'Failed to send test email' });
-      }
+      await api.post(`/api/v1/ai-email-settings/test-email?to_email=${encodeURIComponent(testEmail)}`);
+      setMessage({ type: 'success', text: `Test email sent to ${testEmail}! Check your inbox.` });
     } catch (err) {
-      setMessage({ type: 'error', text: 'Error sending test email: ' + err.message });
+      const detail = err.response?.data?.detail || err.message;
+      setMessage({ type: 'error', text: detail || 'Failed to send test email' });
     } finally {
       setTestingEmail(false);
     }

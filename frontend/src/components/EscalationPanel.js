@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { API_BASE_URL } from '../services/api';
+import api, { teamAPI } from '../services/api';
 import './EscalationPanel.css';
-import { getToken } from '../utils/tokenStore';
 
 function EscalationPanel() {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -48,17 +47,12 @@ function EscalationPanel() {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/leads/search?q=${encodeURIComponent(borrowerSearch)}&limit=10`, {
-          headers: {
-            'Authorization': `Bearer ${getToken()}`,
-          },
+        const response = await api.get('/api/v1/leads/search', {
+          params: { q: borrowerSearch, limit: 10 }
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          setBorrowerSuggestions(data.leads || data || []);
-          setShowSuggestions(true);
-        }
+        const data = response.data;
+        setBorrowerSuggestions(data.leads || data || []);
+        setShowSuggestions(true);
       } catch (error) {
         console.error('Error searching borrowers:', error);
       }
@@ -70,16 +64,8 @@ function EscalationPanel() {
 
   const loadTeamMembers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMembers(data.team_members || data || []);
-      }
+      const data = await teamAPI.getMembers();
+      setTeamMembers(data || []);
     } catch (error) {
       console.error('Error loading team members:', error);
     }
@@ -135,19 +121,11 @@ function EscalationPanel() {
         formData.append('attachments', file);
       });
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/escalations`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-        body: formData,
+      const response = await api.post('/api/v1/escalations', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create escalation');
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       // Success - clear form
       setSuccessMessage('Escalation sent successfully!');

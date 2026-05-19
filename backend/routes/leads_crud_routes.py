@@ -147,6 +147,21 @@ async def create_lead(
         except Exception as e:
             logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
 
+        # Workflow enrollment — creates tasks with role assignment and SLA due dates
+        try:
+            from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+            wf_result = trigger_workflow_evaluation_for_lead(
+                db=db,
+                lead_id=lead_id,
+                new_stage=str(db_lead.stage) if db_lead.stage else "New",
+                lead_source=lead_data.source if hasattr(lead_data, 'source') else None,
+                user_id=current_user.id,
+            )
+            if wf_result.get("status") == "enrolled":
+                logger.info(f"Lead {lead_id} enrolled in workflow '{wf_result.get('workflow_key')}'")
+        except Exception as e:
+            logger.warning(f"Workflow enrollment failed for lead {lead_id}: {e}")
+
         # Speed-to-lead hook — triggers AI call / SMS in background
         try:
             from services.lead_creation_hooks import on_lead_created

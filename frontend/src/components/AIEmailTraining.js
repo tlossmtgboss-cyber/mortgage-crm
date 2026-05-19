@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
 import './AIEmailTraining.css';
-
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
+import api from '../services/api';
 
 const AIEmailTraining = () => {
   const [emails, setEmails] = useState([]);
@@ -29,13 +25,8 @@ const AIEmailTraining = () => {
       if (source !== 'all') params.append('source', source);
       const queryString = params.toString() ? `?${params.toString()}` : '';
 
-      const response = await fetch(`${API_BASE}/api/v1/email-training/emails${queryString}`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setEmails(data);
-      }
+      const { data } = await api.get(`/api/v1/email-training/emails${queryString}`);
+      setEmails(data);
     } catch (err) {
       console.error('Error fetching emails:', err);
     }
@@ -43,13 +34,8 @@ const AIEmailTraining = () => {
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/email-training/stats`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      const { data } = await api.get('/api/v1/email-training/stats');
+      setStats(data);
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
@@ -83,25 +69,14 @@ const AIEmailTraining = () => {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/email-training/emails/${selectedEmail.id}/review`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(feedbackForm)
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Feedback submitted successfully!' });
-        // Refresh data
-        await Promise.all([fetchEmails(), fetchStats()]);
-        // Update selected email
-        const updatedEmail = { ...selectedEmail, ...feedbackForm };
-        setSelectedEmail(updatedEmail);
-      } else {
-        const err = await response.json();
-        setMessage({ type: 'error', text: err.detail || 'Failed to submit feedback' });
-      }
+      await api.post(`/api/v1/email-training/emails/${selectedEmail.id}/review`, feedbackForm);
+      setMessage({ type: 'success', text: 'Feedback submitted successfully!' });
+      await Promise.all([fetchEmails(), fetchStats()]);
+      const updatedEmail = { ...selectedEmail, ...feedbackForm };
+      setSelectedEmail(updatedEmail);
     } catch (err) {
-      setMessage({ type: 'error', text: 'Error submitting feedback: ' + err.message });
+      const detail = err.response?.data?.detail || err.message;
+      setMessage({ type: 'error', text: detail || 'Failed to submit feedback' });
     } finally {
       setSubmitting(false);
     }

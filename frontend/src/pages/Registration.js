@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
 import { formatPhoneNumber } from '../utils/phoneUtils';
-import { API_BASE_URL } from '../services/api';
+import api, { API_BASE_URL, authAPI } from '../services/api';
 import './Registration.css';
 
 function Registration() {
@@ -36,7 +35,7 @@ function Registration() {
 
   const loadPlans = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/v1/plans`);
+      const response = await api.get('/api/v1/plans');
       setPlans(response.data.plans);
     } catch (error) {
       console.error('Failed to load plans:', error);
@@ -53,7 +52,7 @@ function Registration() {
 
     setPromoValidating(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/validate-promo`, {
+      const response = await api.post('/api/v1/auth/validate-promo', {
         code: code.toUpperCase()
       });
       setPromoValid(true);
@@ -145,7 +144,7 @@ function Registration() {
     setError('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/auth/register`, {
+      const response = await api.post('/api/v1/auth/register', {
         email: formData.email,
         password: formData.password,
         full_name: `${formData.first_name} ${formData.last_name}`.trim(),

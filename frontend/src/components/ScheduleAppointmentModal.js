@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ScheduleAppointmentModal.css';
 import useFocusTrap from '../hooks/useFocusTrap';
-import { getToken } from '../utils/tokenStore';
+import api from '../services/api';
 // v4.0 - Server-side availability, focus trap, phone validation, improved UX 20260309
-
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
 
 // Phone validation: accepts formats like (555) 123-4567, 555-123-4567, +15551234567, etc.
 const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
@@ -103,20 +99,12 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     if (!memberId) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/team/members/${memberId}/work-hours`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
+      const { data } = await api.get(`/api/v1/team/members/${memberId}/work-hours`);
+      setTeamMemberWorkHours({
+        work_hours_start: data.work_hours_start || '09:00',
+        work_hours_end: data.work_hours_end || '17:00',
+        work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMemberWorkHours({
-          work_hours_start: data.work_hours_start || '09:00',
-          work_hours_end: data.work_hours_end || '17:00',
-          work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-        });
-      }
     } catch {
       // Keep default work hours
     }
@@ -130,28 +118,19 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
 
     try {
       // Fetch all team members directly (more reliable)
-      const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-      });
+      const { data: allMembersData } = await api.get('/api/v1/team/members');
 
-      if (allMembersResponse.ok) {
-        const data = await allMembersResponse.json();
-        const members = data.team_members || data || [];
-        setTeamMembers(members);
+      const members = allMembersData.team_members || allMembersData || [];
+      setTeamMembers(members);
 
-        // Auto-select first team member (usually current user) if available
-        if (members.length > 0) {
-          const firstMemberId = members[0].member_id || members[0].user_id || members[0].id || '';
-          setSelectedTeamMember(String(firstMemberId));
-          // Fetch work hours for first team member
-          if (firstMemberId) {
-            fetchTeamMemberWorkHours(firstMemberId);
-          }
+      // Auto-select first team member (usually current user) if available
+      if (members.length > 0) {
+        const firstMemberId = members[0].member_id || members[0].user_id || members[0].id || '';
+        setSelectedTeamMember(String(firstMemberId));
+        // Fetch work hours for first team member
+        if (firstMemberId) {
+          fetchTeamMemberWorkHours(firstMemberId);
         }
-      } else {
-        setTeamMembersError('Could not load team members. Please select manually or try again.');
       }
     } catch {
       setTeamMembersError('Failed to connect to server. Team member list unavailable.');
@@ -188,20 +167,12 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   // Fetch appointment types to get duration_minutes
   const fetchAppointmentTypes = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const types = data.appointment_types || [];
-        // Use the first active appointment type's duration, or default to 30
-        if (types.length > 0) {
-          const firstType = types[0];
-          const duration = firstType.default_duration_minutes || 30;
-          setDurationMinutes(duration);
-        }
+      const { data } = await api.get('/api/v1/scheduler/appointment-types');
+      const types = data.appointment_types || [];
+      if (types.length > 0) {
+        const firstType = types[0];
+        const duration = firstType.default_duration_minutes || 30;
+        setDurationMinutes(duration);
       }
     } catch {
       // Keep default duration
@@ -286,40 +257,27 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       const dateStr = selectedDate.toISOString().split('T')[0];
       const userIds = selectedTeamMember ? [parseInt(selectedTeamMember)] : [];
 
-      const response = await fetch(`${API_BASE}/api/v1/scheduler/available-slots`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify({
-          start_date: dateStr,
-          end_date: dateStr,
-          duration_minutes: durationMinutes,
-          user_ids: userIds.length > 0 ? userIds : undefined,
-        }),
+      const { data } = await api.post('/api/v1/scheduler/available-slots', {
+        start_date: dateStr,
+        end_date: dateStr,
+        duration_minutes: durationMinutes,
+        user_ids: userIds.length > 0 ? userIds : undefined,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const serverSlots = (data.available_slots || []).map((slot) => {
-          const startStr = slot.start || slot.start_time;
-          const slotDate = new Date(startStr);
-          return {
-            start_time: slotDate.toISOString(),
-            display: slotDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-          };
-        });
+      const serverSlots = (data.available_slots || []).map((slot) => {
+        const startStr = slot.start || slot.start_time;
+        const slotDate = new Date(startStr);
+        return {
+          start_time: slotDate.toISOString(),
+          display: slotDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+        };
+      });
 
-        setAvailableSlots(serverSlots);
-        if (serverSlots.length > 0) {
-          setSelectedTime(serverSlots[0].start_time);
-        } else {
-          setSelectedTime('');
-        }
+      setAvailableSlots(serverSlots);
+      if (serverSlots.length > 0) {
+        setSelectedTime(serverSlots[0].start_time);
       } else {
-        // API returned error - fall back to client-side generation
-        generateSlotsFromWorkHours();
+        setSelectedTime('');
       }
     } catch {
       // Network error - fall back to client-side generation
@@ -398,8 +356,6 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     try {
       // Use authenticated endpoint to ensure appointment is linked to current user
       const attendeeName = borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim();
-      const appointmentUrl = `${API_BASE}/api/v1/scheduler/appointments`;
-      const token = getToken();
 
       // Determine if borrower is a lead or loan object and set IDs correctly
       // Leads have: id (lead id), no loan_number field
@@ -422,27 +378,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         assigned_user_id: parseInt(selectedTeamMember) || null
       };
 
-      const response = await fetch(appointmentUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      // Try to parse response
-      let result;
-      try {
-        const responseText = await response.text();
-        result = JSON.parse(responseText);
-      } catch (parseErr) {
-        throw new Error(`Server returned invalid response (status ${response.status})`);
-      }
-
-      if (!response.ok) {
-        throw new Error(result.detail || `Server error: ${response.status}`);
-      }
+      const { data: result } = await api.post('/api/v1/scheduler/appointments', requestBody);
 
       setSuccess(true);
       setEmailSent(result.email_sent === true);
@@ -460,8 +396,10 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     } catch (err) {
       // Provide more specific error messages
       let errorMessage = 'Failed to schedule appointment. Please try again.';
-      if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+      if (err.code === 'ERR_NETWORK') {
         errorMessage = 'Unable to connect to server. Please check your internet connection or try again later.';
+      } else if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
       } else if (err.message) {
         errorMessage = err.message;
       }

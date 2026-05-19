@@ -2578,7 +2578,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             "leads_no_phone": []
         }
 
-        try:
+        try:  # noqa: matched by finally→db.close() below
             # Get leads by status — scoped to current user + tenant
             query = text("""
                 SELECT id, first_name, last_name, phone, email, stage
@@ -2689,6 +2689,8 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             db.rollback()
             logger.error(f"Error in bulk_lead_outreach: {e}")
             return {"success": False, "error": "Internal server error"}
+        finally:
+            db.close()
 
     tools["bulk_lead_outreach"] = execute_bulk_lead_outreach
 

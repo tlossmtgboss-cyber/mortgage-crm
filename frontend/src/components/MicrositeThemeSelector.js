@@ -6,14 +6,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { getAuthHeaders } from '../utils/auth';
+import api from '../services/api';
 import './MicrositeThemeSelector.css';
 import MicrositeThemeCustomizer from './MicrositeThemeCustomizer';
-
-// API base URL
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
 
 const MicrositeThemeSelector = ({ onThemeSelect }) => {
   const [loading, setLoading] = useState(true);
@@ -32,15 +27,10 @@ const MicrositeThemeSelector = ({ onThemeSelect }) => {
 
   const fetchMicrosite = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setMicrosite(data);
-        if (data.themeConfig) {
-          setThemeConfig(data.themeConfig);
-        }
+      const { data } = await api.get('/api/v1/microsites/my-microsite');
+      setMicrosite(data);
+      if (data.themeConfig) {
+        setThemeConfig(data.themeConfig);
       }
     } catch (err) {
       console.error('Error fetching microsite:', err);
@@ -51,13 +41,8 @@ const MicrositeThemeSelector = ({ onThemeSelect }) => {
 
   const fetchUserSlug = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/preview-url`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUserSlug(data.slug);
-      }
+      const { data } = await api.get('/api/v1/microsites/preview-url');
+      setUserSlug(data.slug);
     } catch (err) {
       console.error('Error fetching user slug:', err);
     }
@@ -67,22 +52,13 @@ const MicrositeThemeSelector = ({ onThemeSelect }) => {
   const handlePublish = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/publish`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        await fetchMicrosite();
-        setSuccessMessage('Microsite published successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        const err = await response.json();
-        setError(err.detail || 'Failed to publish');
-      }
+      await api.post('/api/v1/microsites/my-microsite/publish');
+      await fetchMicrosite();
+      setSuccessMessage('Microsite published successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Error publishing:', err);
-      setError('Failed to publish microsite');
+      setError(err.response?.data?.detail || 'Failed to publish microsite');
     } finally {
       setSaving(false);
     }

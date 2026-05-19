@@ -110,6 +110,54 @@ export const getEnabledQuestions = (applicationConfig, defaultQuestions) => {
 };
 
 /**
+ * Build a dynamic needs/checklist from current declarations.
+ * @param {Object} declarations - Current declaration answers
+ * @param {string} applicationType - 'purchase' or 'refinance'
+ * @returns {Array} Needs list items
+ */
+export const buildNeedsList = (declarations, applicationType = 'purchase') => {
+  const needs = [];
+  needs.push({ id: 'id', label: "Driver's license or passport", category: 'identity' });
+  if (declarations.citizenship_status && declarations.citizenship_status !== 'us_citizen') {
+    needs.push({ id: 'green_card', label: 'Unexpired Green Card (front & back)', category: 'identity' });
+    if (declarations.citizenship_status === 'non_permanent_resident')
+      needs.push({ id: 'visa_docs', label: 'Visa documentation (I-94, EAD, etc.)', category: 'identity' });
+  }
+  if (declarations.self_employed === 'yes' || declarations.self_employed === 'side_business') {
+    needs.push({ id: 'tax_returns', label: '2 years tax returns', category: 'income' });
+    needs.push({ id: 'profit_loss', label: 'Year-to-date P&L statement', category: 'income' });
+    if (declarations.write_off_expenses === 'yes')
+      needs.push({ id: 'business_bank_statements', label: '12 months business bank statements', category: 'income' });
+  } else {
+    needs.push({ id: 'paystubs', label: 'Recent pay stubs (30 days)', category: 'income' });
+    needs.push({ id: 'w2', label: 'W-2s (last 2 years)', category: 'income' });
+  }
+  if (declarations.veteran && declarations.veteran !== 'no')
+    needs.push({ id: 'dd214', label: 'DD-214 or Certificate of Eligibility', category: 'military' });
+  if (declarations.irs_balance_owed === 'yes' || declarations.irs_balance_owed === 'payment_plan')
+    needs.push({ id: 'irs_docs', label: 'IRS payment arrangement documentation', category: 'legal' });
+  if (declarations.credit_application_approved === 'yes')
+    needs.push({ id: 'new_account_statement', label: 'New account statement (loan/credit card)', category: 'assets' });
+  needs.push({ id: 'bank_statements', label: 'Bank statements (2 months)', category: 'assets' });
+  // Application-type-specific items
+  if (applicationType === 'refinance') {
+    needs.push({ id: 'mortgage_statement', label: 'Current mortgage statement', category: 'property' });
+    needs.push({ id: 'hoi', label: 'Homeowners insurance declaration', category: 'property' });
+    if (declarations.refi_goal === 'cash_out')
+      needs.push({ id: 'home_value', label: 'Recent appraisal or home value estimate', category: 'property' });
+  }
+  if (applicationType === 'purchase') {
+    if (declarations.gift_funds === 'yes') {
+      needs.push({ id: 'gift_letter', label: 'Gift letter from donor', category: 'assets' });
+      needs.push({ id: 'gift_source', label: 'Donor bank statements', category: 'assets' });
+    }
+    if (declarations.found_property === 'yes')
+      needs.push({ id: 'purchase_contract', label: 'Purchase contract', category: 'property' });
+  }
+  return needs;
+};
+
+/**
  * Build portal redirect URL for post-submission redirect.
  * @param {string|null} portalUrl - Portal URL from submission response
  * @param {string} appLabel - Application type label for logging

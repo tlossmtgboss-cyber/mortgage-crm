@@ -46,7 +46,7 @@ class PIIAuditLog(Base):
     # Context
     reason = Column(Text)  # Business justification for access
     request_id = Column(String(255))  # For tracing
-    organization_id = Column(String(255), index=True)
+    organization_id = Column(Integer, index=True)
 
     # Result
     success = Column(Boolean, default=True)

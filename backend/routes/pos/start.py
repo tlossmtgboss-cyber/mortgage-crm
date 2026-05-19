@@ -54,21 +54,46 @@ IP_RATE_LIMIT = 5
 IP_RATE_WINDOW_MINUTES = 10
 
 
-# ── IP rate limiter (in-memory, resets on deploy) ──────────────────
-# NOTE: This tracker lives in process memory and resets on every deploy.
-# For production-grade rate limiting, migrate to Redis-backed tracking
-# (e.g., redis INCR with TTL). Acceptable for now because Railway deploys
-# are infrequent and the window is short (10 min).
+# ── IP rate limiter (Redis-backed with in-memory fallback) ────────
+# SEC-003: Primary rate limiting via Redis INCR with TTL so limits survive
+# deploys. Falls back to in-memory tracking if Redis is unavailable.
 
 _ip_tracker: dict[str, list[float]] = defaultdict(list)
 _ip_lock = Lock()
 
 
+def _get_redis():
+    """Get Redis client, returning None if unavailable."""
+    try:
+        from services.redis_service import get_redis_client
+        return get_redis_client()
+    except Exception:
+        return None
+
+
 def _check_ip_rate_limit(ip: str):
+    redis = _get_redis()
+    if redis:
+        try:
+            key = f"pos_rate:{ip}"
+            count = redis.incr(key)
+            if count == 1:
+                redis.expire(key, IP_RATE_WINDOW_MINUTES * 60)
+            if count > IP_RATE_LIMIT:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many requests. Please try again in a few minutes.",
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Redis rate limit check failed, falling back to in-memory: {e}")
+
+    # In-memory fallback
     now = datetime.now(timezone.utc).timestamp()
     cutoff = now - (IP_RATE_WINDOW_MINUTES * 60)
     with _ip_lock:
-        # Evict oldest entries if tracker grows too large (prevent unbounded growth)
         if len(_ip_tracker) > 10000:
             oldest_keys = sorted(
                 _ip_tracker.keys(),
@@ -79,7 +104,6 @@ def _check_ip_rate_limit(ip: str):
 
         timestamps = [t for t in _ip_tracker.get(ip, []) if t > cutoff]
         if not timestamps:
-            # Clean up empty entries
             _ip_tracker.pop(ip, None)
         else:
             _ip_tracker[ip] = timestamps

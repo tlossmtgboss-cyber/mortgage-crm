@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '../utils/toast';
-import { API_BASE_URL } from '../services/api';
+import api, { teamAPI } from '../services/api';
 import './WorkflowRoleAssignment.css';
-import { getToken } from '../utils/tokenStore';
 
 /**
  * WorkflowRoleAssignment Component
@@ -21,44 +20,25 @@ function WorkflowRoleAssignment({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
 
-  const getAuthHeaders = useCallback(() => ({
-    'Authorization': `Bearer ${getToken()}`,
-    'Content-Type': 'application/json',
-  }), []);
-
   // Load org-wide role assignments (roles + current assignments in one call)
   const loadRoleAssignments = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles`, {
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRoleAssignments(data.assignments || []);
-      } else {
-        console.error('Failed to load role assignments');
-      }
+      const response = await api.get('/api/v1/settings/team-roles');
+      setRoleAssignments(response.data.assignments || []);
     } catch (error) {
       console.error('Error loading role assignments:', error);
     }
-  }, [getAuthHeaders]);
+  }, []);
 
   // Load team members for dropdown options
   const loadTeamMembers = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMembers(data.team_members || data || []);
-      }
+      const data = await teamAPI.getMembers();
+      setTeamMembers(data || []);
     } catch (error) {
       console.error('Error loading team members:', error);
     }
-  }, [getAuthHeaders]);
+  }, []);
 
   // Load all data
   useEffect(() => {
@@ -89,48 +69,32 @@ function WorkflowRoleAssignment({
     try {
       if (userId) {
         // Assign user to role org-wide
-        const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ user_id: parseInt(userId) }),
+        const response = await api.post(`/api/v1/settings/team-roles/${roleId}`, {
+          user_id: parseInt(userId),
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          toast.success(data.message || 'Role assigned successfully');
+        toast.success(response.data.message || 'Role assigned successfully');
 
-          // Update local state
-          const selectedUser = teamMembers.find(m => m.id === parseInt(userId));
-          const userName = selectedUser?.name || `${selectedUser?.first_name || ''} ${selectedUser?.last_name || ''}`.trim();
-          setRoleAssignments(prev =>
-            prev.map(a => a.role_id === roleId
-              ? { ...a, user_id: parseInt(userId), user_name: userName }
-              : a
-            )
-          );
-        } else {
-          const error = await response.json();
-          toast.error(error.detail || 'Failed to assign role');
-        }
+        // Update local state
+        const selectedUser = teamMembers.find(m => m.id === parseInt(userId));
+        const userName = selectedUser?.name || `${selectedUser?.first_name || ''} ${selectedUser?.last_name || ''}`.trim();
+        setRoleAssignments(prev =>
+          prev.map(a => a.role_id === roleId
+            ? { ...a, user_id: parseInt(userId), user_name: userName }
+            : a
+          )
+        );
       } else {
         // Remove assignment
-        const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
-          method: 'DELETE',
-          headers: getAuthHeaders(),
-        });
+        await api.delete(`/api/v1/settings/team-roles/${roleId}`);
 
-        if (response.ok) {
-          toast.success('Role assignment removed');
-          setRoleAssignments(prev =>
-            prev.map(a => a.role_id === roleId
-              ? { ...a, user_id: null, user_name: '' }
-              : a
-            )
-          );
-        } else {
-          const error = await response.json();
-          toast.error(error.detail || 'Failed to remove assignment');
-        }
+        toast.success('Role assignment removed');
+        setRoleAssignments(prev =>
+          prev.map(a => a.role_id === roleId
+            ? { ...a, user_id: null, user_name: '' }
+            : a
+          )
+        );
       }
 
       if (onUpdate) {

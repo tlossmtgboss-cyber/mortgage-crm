@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import './ActivateAccount.css';
-
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const STAGES = {
   VALIDATING: 'validating',
@@ -43,7 +37,7 @@ function ActivateAccount() {
 
   const validateToken = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/admin/users/activate/validate`, {
+      const response = await api.post('/api/v1/admin/users/activate/validate', {
         token
       });
 
@@ -56,7 +50,7 @@ function ActivateAccount() {
       }
     } catch (err) {
       console.error('Token validation error:', err);
-      const errorDetail = err.response?.data?.detail || 'Failed to validate token';
+      const errorDetail = err.response?.data?.detail || err.detail || 'Failed to validate token';
 
       if (errorDetail.includes('expired')) {
         setStage(STAGES.EXPIRED);
@@ -109,7 +103,7 @@ function ActivateAccount() {
     setError(null);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/admin/users/activate/complete`, {
+      const response = await api.post('/api/v1/admin/users/activate/complete', {
         token,
         password
       });
@@ -121,7 +115,7 @@ function ActivateAccount() {
       }
     } catch (err) {
       console.error('Activation error:', err);
-      setError(err.response?.data?.detail || 'Failed to activate account. Please try again.');
+      setError(err.response?.data?.detail || err.detail || 'Failed to activate account. Please try again.');
     } finally {
       setLoading(false);
     }

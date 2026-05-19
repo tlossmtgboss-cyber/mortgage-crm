@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { API_BASE_URL } from '../services/api';
+import api from '../services/api';
 import './DocumentIntakeManager.css';
 import { toast } from '../utils/toast';
-import { getToken } from '../utils/tokenStore';
 
 function DocumentIntakeManager() {
   const [loading, setLoading] = useState(true);
@@ -21,23 +20,12 @@ function DocumentIntakeManager() {
     setLoading(true);
     try {
       const [intakesRes, typesRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/v1/document-intake/pending`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        }),
-        fetch(`${API_BASE_URL}/api/v1/document-intake/doc-types`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        })
+        api.get('/api/v1/document-intake/pending'),
+        api.get('/api/v1/document-intake/doc-types')
       ]);
 
-      if (intakesRes.ok) {
-        const data = await intakesRes.json();
-        setPendingIntakes(data);
-      }
-
-      if (typesRes.ok) {
-        const data = await typesRes.json();
-        setDocTypes(data);
-      }
+      setPendingIntakes(intakesRes.data);
+      setDocTypes(typesRes.data);
     } catch (error) {
       console.error('Error loading document intake data:', error);
       setMessage({ type: 'error', text: 'Failed to load document intake data' });
@@ -53,15 +41,9 @@ function DocumentIntakeManager() {
   // Load intake details when selected
   const loadIntakeDetails = async (intakeId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/${intakeId}`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setIntakeDetails(data);
-        setSelectedIntake(intakeId);
-      }
+      const response = await api.get(`/api/v1/document-intake/${intakeId}`);
+      setIntakeDetails(response.data);
+      setSelectedIntake(intakeId);
     } catch (error) {
       console.error('Error loading intake details:', error);
       setMessage({ type: 'error', text: 'Failed to load intake details' });
@@ -78,23 +60,15 @@ function DocumentIntakeManager() {
 
     try {
       const [borrowersRes, loansRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/v1/leads?search=${encodeURIComponent(query)}&limit=5`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        }),
-        fetch(`${API_BASE_URL}/api/v1/loans?search=${encodeURIComponent(query)}&limit=5`, {
-          headers: { 'Authorization': `Bearer ${getToken()}` }
-        })
+        api.get('/api/v1/leads', { params: { search: query, limit: 5 } }),
+        api.get('/api/v1/loans', { params: { search: query, limit: 5 } })
       ]);
 
-      if (borrowersRes.ok) {
-        const data = await borrowersRes.json();
-        setBorrowerResults(data.slice ? data.slice(0, 5) : []);
-      }
+      const bData = borrowersRes.data;
+      setBorrowerResults(bData.slice ? bData.slice(0, 5) : []);
 
-      if (loansRes.ok) {
-        const data = await loansRes.json();
-        setLoanResults(data.slice ? data.slice(0, 5) : []);
-      }
+      const lData = loansRes.data;
+      setLoanResults(lData.slice ? lData.slice(0, 5) : []);
     } catch (error) {
       console.error('Error searching entities:', error);
     }
@@ -104,30 +78,16 @@ function DocumentIntakeManager() {
   const handleClassify = async (attachmentId, classification) => {
     setClassifying(attachmentId);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/attachments/${attachmentId}/classify`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(classification)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMessage({ type: 'success', text: `Classified as ${classification.doc_type}` });
-        // Reload intake details
-        if (selectedIntake) {
-          loadIntakeDetails(selectedIntake);
-        }
-        loadData();
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.detail || 'Failed to classify' });
+      await api.post(`/api/v1/document-intake/attachments/${attachmentId}/classify`, classification);
+      setMessage({ type: 'success', text: `Classified as ${classification.doc_type}` });
+      // Reload intake details
+      if (selectedIntake) {
+        loadIntakeDetails(selectedIntake);
       }
+      loadData();
     } catch (error) {
       console.error('Error classifying attachment:', error);
-      setMessage({ type: 'error', text: 'Error classifying attachment' });
+      setMessage({ type: 'error', text: error.detail || error.response?.data?.detail || 'Error classifying attachment' });
     } finally {
       setClassifying(null);
       setTimeout(() => setMessage({ type: '', text: '' }), 5000);
@@ -138,28 +98,15 @@ function DocumentIntakeManager() {
   const handleDiscard = async (attachmentId, reason) => {
     setClassifying(attachmentId);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/attachments/${attachmentId}/discard`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ reason })
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Attachment discarded' });
-        if (selectedIntake) {
-          loadIntakeDetails(selectedIntake);
-        }
-        loadData();
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.detail || 'Failed to discard' });
+      await api.post(`/api/v1/document-intake/attachments/${attachmentId}/discard`, { reason });
+      setMessage({ type: 'success', text: 'Attachment discarded' });
+      if (selectedIntake) {
+        loadIntakeDetails(selectedIntake);
       }
+      loadData();
     } catch (error) {
       console.error('Error discarding attachment:', error);
-      setMessage({ type: 'error', text: 'Error discarding attachment' });
+      setMessage({ type: 'error', text: error.detail || error.response?.data?.detail || 'Error discarding attachment' });
     } finally {
       setClassifying(null);
       setTimeout(() => setMessage({ type: '', text: '' }), 5000);
@@ -169,26 +116,15 @@ function DocumentIntakeManager() {
   // Update match
   const handleUpdateMatch = async (intakeId, borrowerId, loanId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/${intakeId}/match`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ borrower_id: borrowerId, loan_id: loanId })
+      await api.put(`/api/v1/document-intake/${intakeId}/match`, {
+        borrower_id: borrowerId, loan_id: loanId
       });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Match updated' });
-        loadIntakeDetails(intakeId);
-        loadData();
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.detail || 'Failed to update match' });
-      }
+      setMessage({ type: 'success', text: 'Match updated' });
+      loadIntakeDetails(intakeId);
+      loadData();
     } catch (error) {
       console.error('Error updating match:', error);
-      setMessage({ type: 'error', text: 'Error updating match' });
+      setMessage({ type: 'error', text: error.detail || error.response?.data?.detail || 'Error updating match' });
     }
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };
@@ -196,23 +132,14 @@ function DocumentIntakeManager() {
   // Complete classification task
   const handleCompleteTask = async (taskId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/tasks/${taskId}/complete`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getToken()}` }
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Classification task completed!' });
-        setSelectedIntake(null);
-        setIntakeDetails(null);
-        loadData();
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.detail || 'Cannot complete - some attachments pending' });
-      }
+      await api.post(`/api/v1/document-intake/tasks/${taskId}/complete`);
+      setMessage({ type: 'success', text: 'Classification task completed!' });
+      setSelectedIntake(null);
+      setIntakeDetails(null);
+      loadData();
     } catch (error) {
       console.error('Error completing task:', error);
-      setMessage({ type: 'error', text: 'Error completing task' });
+      setMessage({ type: 'error', text: error.detail || error.response?.data?.detail || 'Error completing task' });
     }
     setTimeout(() => setMessage({ type: '', text: '' }), 5000);
   };

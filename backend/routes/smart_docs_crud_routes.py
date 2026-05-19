@@ -183,6 +183,15 @@ async def get_needs_list(
     """Get the current needs list for a loan with borrower info and document URLs."""
     from sqlalchemy import text
 
+    try:
+        exists = db.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'smart_document_requests')"
+        )).scalar()
+        if not exists:
+            return {"requests": [], "total": 0, "borrower_name": None, "loan_number": None}
+    except Exception:
+        return {"requests": [], "total": 0, "borrower_name": None, "loan_number": None}
+
     _verify_loan_tenant(db, loan_id, current_user)
 
     # Get org_id for tenant validation in S3 operations
@@ -1389,9 +1398,19 @@ async def get_applicants_with_outstanding_docs(
     Get all applicants/loans that have outstanding document requests (needs list items not fulfilled).
     Returns grouped by loan with summary of outstanding requirements.
     """
-    from sqlalchemy import func, distinct, case
+    from sqlalchemy import func, distinct, case, text as sa_text
     from models.purl import PURLLoan, PURLWorkspace
     from database.models.lead_loan import Loan
+
+    # Ensure table exists before querying
+    try:
+        exists = db.execute(sa_text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'smart_document_requests')"
+        )).scalar()
+        if not exists:
+            return {"total": 0, "page": page, "limit": limit, "total_pages": 0, "applicants": []}
+    except Exception:
+        return {"total": 0, "page": page, "limit": limit, "total_pages": 0, "applicants": []}
 
     # Tenant isolation
     org_id = getattr(current_user, 'organization_id', None)

@@ -12,12 +12,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { sanitizeHTML } from '../utils/sanitize';
 import './MicrositeThemeCustomizer.css';
-import { getToken } from '../utils/tokenStore';
-
-// API base URL
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com';
+import api from '../services/api';
 
 // Preset color palettes
 const COLOR_PRESETS = [
@@ -127,78 +122,61 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
   const fetchProfileData = async () => {
     try {
       setLoading(true);
-      const token = getToken();
 
       // Fetch microsite profile (use /my-microsite endpoint)
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
+      const { data } = await api.get('/api/v1/microsites/my-microsite');
+      const content = data.content_json || {};
+      const branding = data.branding_json || {};
+
+      // Set branding from branding_json
+      setLogoUrl(branding.logoUrl || '');
+      setHeadshotUrl(branding.heroImageUrl || '');
+
+      // Set theme config from branding_json
+      if (branding.primaryColor || branding.secondaryColor || branding.fontFamily) {
+        setConfig(prev => ({
+          ...prev,
+          primaryColor: branding.primaryColor || prev.primaryColor,
+          secondaryColor: branding.secondaryColor || prev.secondaryColor,
+          fontFamily: branding.fontFamily || prev.fontFamily,
+        }));
+      }
+
+      // Set social links from content_json
+      const socialData = content.socialLinks || {};
+      setSocialLinks({
+        facebook: socialData.facebook || '',
+        linkedin: socialData.linkedin || '',
+        instagram: socialData.instagram || '',
+        tiktok: socialData.tiktok || '',
+        youtube: socialData.youtube || '',
+        twitter: socialData.twitter || '',
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const content = data.content_json || {};
-        const branding = data.branding_json || {};
+      // Set footer content from content_json
+      setFooterContent({
+        companyName: content.companyName || '',
+        nmls: content.nmls || '',
+        disclaimer: content.disclaimer || '',
+        showEqualHousing: content.showEqualHousing !== false,
+      });
 
-        // Set branding from branding_json
-        setLogoUrl(branding.logoUrl || '');
-        setHeadshotUrl(branding.heroImageUrl || '');
-
-        // Set theme config from branding_json
-        if (branding.primaryColor || branding.secondaryColor || branding.fontFamily) {
-          setConfig(prev => ({
-            ...prev,
-            primaryColor: branding.primaryColor || prev.primaryColor,
-            secondaryColor: branding.secondaryColor || prev.secondaryColor,
-            fontFamily: branding.fontFamily || prev.fontFamily,
-          }));
-        }
-
-        // Set social links from content_json
-        const socialData = content.socialLinks || {};
-        setSocialLinks({
-          facebook: socialData.facebook || '',
-          linkedin: socialData.linkedin || '',
-          instagram: socialData.instagram || '',
-          tiktok: socialData.tiktok || '',
-          youtube: socialData.youtube || '',
-          twitter: socialData.twitter || '',
-        });
-
-        // Set footer content from content_json
-        setFooterContent({
-          companyName: content.companyName || '',
-          nmls: content.nmls || '',
-          disclaimer: content.disclaimer || '',
-          showEqualHousing: content.showEqualHousing !== false,
-        });
-
-        // Set profile content from content_json
-        setProfileContent({
-          headline: content.headline || '',
-          tagline: content.tagline || '',
-          bioExtended: content.bioExtended || '',
-          yearsExperience: content.yearsExperience || '',
-          totalLoansFunded: content.totalLoansFunded || '',
-          specialties: content.specialties || [],
-          ctaText: content.ctaText || 'Get Started Today',
-          ctaSecondaryText: content.ctaSecondaryText || 'Check Your Rate',
-        });
-      }
+      // Set profile content from content_json
+      setProfileContent({
+        headline: content.headline || '',
+        tagline: content.tagline || '',
+        bioExtended: content.bioExtended || '',
+        yearsExperience: content.yearsExperience || '',
+        totalLoansFunded: content.totalLoansFunded || '',
+        specialties: content.specialties || [],
+        ctaText: content.ctaText || 'Get Started Today',
+        ctaSecondaryText: content.ctaSecondaryText || 'Check Your Rate',
+      });
 
       // Pages are managed separately - skip for now if endpoint doesn't exist
       try {
-        const pagesResponse = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        });
-
-        if (pagesResponse.ok) {
-          const pagesData = await pagesResponse.json();
-          setPages(pagesData.pages || pagesData || []);
-        }
+        const { data: pagesData } = await api.get('/api/v1/microsites/my-microsite/pages');
+        setPages(pagesData.pages || pagesData || []);
       } catch (pageErr) {
         console.log('Pages endpoint not available yet');
         setPages([]);
@@ -280,26 +258,13 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       formData.append('file', file);
       formData.append('asset_type', 'logo');
 
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/upload-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-        body: formData
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setLogoUrl(data.url);
-        showMessage('success', 'Logo uploaded successfully');
-        setHasChanges(true);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
-      }
+      const { data } = await api.post('/api/v1/microsites/my-microsite/upload-image', formData);
+      setLogoUrl(data.url);
+      showMessage('success', 'Logo uploaded successfully');
+      setHasChanges(true);
     } catch (err) {
       console.error('Logo upload error:', err);
-      showMessage('error', err.message || 'Failed to upload logo');
+      showMessage('error', err.response?.data?.detail || err.message || 'Failed to upload logo');
     } finally {
       setUploadingLogo(false);
     }
@@ -326,26 +291,13 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       formData.append('file', file);
       formData.append('asset_type', 'headshot');
 
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/upload-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-        body: formData
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setHeadshotUrl(data.url);
-        showMessage('success', 'Photo uploaded successfully');
-        setHasChanges(true);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Upload failed: ${response.status}`);
-      }
+      const { data } = await api.post('/api/v1/microsites/my-microsite/upload-image', formData);
+      setHeadshotUrl(data.url);
+      showMessage('success', 'Photo uploaded successfully');
+      setHasChanges(true);
     } catch (err) {
       console.error('Headshot upload error:', err);
-      showMessage('error', err.message || 'Failed to upload photo');
+      showMessage('error', err.response?.data?.detail || err.message || 'Failed to upload photo');
     } finally {
       setUploadingHeadshot(false);
     }
@@ -385,8 +337,6 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      const token = getToken();
-
       // Build content_json with all profile data
       const content_json = {
         // Profile content
@@ -417,26 +367,15 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       };
 
       // Save profile data using backend's expected structure
-      const profileResponse = await fetch(`${API_BASE}/api/v1/microsites/my-microsite`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          content_json,
-          branding_json,
-        })
+      await api.put('/api/v1/microsites/my-microsite', {
+        content_json,
+        branding_json,
       });
 
-      if (profileResponse.ok) {
-        setHasChanges(false);
-        showMessage('success', 'All changes saved successfully');
-        if (onSave) {
-          onSave(config);
-        }
-      } else {
-        throw new Error('Failed to save');
+      setHasChanges(false);
+      showMessage('success', 'All changes saved successfully');
+      if (onSave) {
+        onSave(config);
       }
     } catch (err) {
       console.error('Error saving:', err);
@@ -626,11 +565,6 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
     }
 
     try {
-      const token = getToken();
-      const url = editingPage
-        ? `${API_BASE}/api/v1/microsites/my-microsite/pages/${editingPage.slug}`
-        : `${API_BASE}/api/v1/microsites/my-microsite/pages`;
-
       // Defense-in-depth: sanitize content before sending to API even though
       // handlePageFormChange already sanitizes on input. Prevents stored XSS
       // if any code path bypasses the input handler.
@@ -662,26 +596,18 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
         show_in_nav: true,
       };
 
-      const response = await fetch(url, {
-        method: editingPage ? 'PUT' : 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        showMessage('success', editingPage ? 'Page updated' : 'Page created successfully!');
-        closePageModal();
-        fetchProfileData(); // Refresh pages
+      if (editingPage) {
+        await api.put(`/api/v1/microsites/my-microsite/pages/${editingPage.slug}`, payload);
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to save page');
+        await api.post('/api/v1/microsites/my-microsite/pages', payload);
       }
+
+      showMessage('success', editingPage ? 'Page updated' : 'Page created successfully!');
+      closePageModal();
+      fetchProfileData(); // Refresh pages
     } catch (err) {
       console.error('Error saving page:', err);
-      showMessage('error', err.message || 'Failed to save page');
+      showMessage('error', err.response?.data?.detail || err.message || 'Failed to save page');
     }
   };
 
@@ -689,19 +615,9 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
     if (!window.confirm(`Are you sure you want to delete "${page.title}"?`)) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages/${page.slug}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        }
-      });
-
-      if (response.ok) {
-        showMessage('success', 'Page deleted');
-        fetchProfileData();
-      } else {
-        throw new Error('Failed to delete page');
-      }
+      await api.delete(`/api/v1/microsites/my-microsite/pages/${page.slug}`);
+      showMessage('success', 'Page deleted');
+      fetchProfileData();
     } catch (err) {
       console.error('Error deleting page:', err);
       showMessage('error', 'Failed to delete page');

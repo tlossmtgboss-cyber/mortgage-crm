@@ -11,9 +11,8 @@
 import React, { useState, useEffect } from 'react';
 import { sanitizeHTML } from '../utils/sanitize';
 import './PreApprovalLetterModal.css';
+import api from '../services/api';
 import { getToken } from '../utils/tokenStore';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 // Steps in the modal flow
 const STEPS = {
@@ -114,25 +113,22 @@ const PreApprovalLetterModal = ({
     setStep(STEPS.OVER_LIMIT);
   };
 
+  // Helper: get auth token (supports partner portal fallback)
+  const getAuthToken = () => getToken() || localStorage.getItem('partnerToken');
+
   const notifyLoanOfficer = async () => {
-    const token = getToken() || localStorage.getItem('partnerToken');
     const priceNum = parseFloat(purchasePrice.replace(/[,$]/g, ''));
 
     try {
-      await fetch(`${API_BASE}/api/v1/realtor-portal/preapproval/notify-overlimit`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          lead_id: client.id,
-          partner_id: partnerId,
-          requested_purchase_price: priceNum,
-          max_approved_amount: maxLoanAmount,
-          max_purchase_price: maxPurchasePrice,
-          borrower_name: client.borrower_name || client.name
-        })
+      await api.post('/api/v1/realtor-portal/preapproval/notify-overlimit', {
+        lead_id: client.id,
+        partner_id: partnerId,
+        requested_purchase_price: priceNum,
+        max_approved_amount: maxLoanAmount,
+        max_purchase_price: maxPurchasePrice,
+        borrower_name: client.borrower_name || client.name
+      }, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
       });
     } catch (err) {
       console.error('Error notifying LO:', err);
@@ -144,28 +140,20 @@ const PreApprovalLetterModal = ({
     setLoading(true);
     setError(null);
 
-    const token = getToken() || localStorage.getItem('partnerToken');
     const priceNum = includePurchasePrice ? parseFloat(purchasePrice.replace(/[,$]/g, '')) : null;
     const finalLoanAmount = calculatedLoanAmount || maxLoanAmount;
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/realtor-portal/leads/${client.id}/generate-preapproval`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          include_property_address: includePropertyAddress,
-          property_address: includePropertyAddress ? propertyAddress : null,
-          include_purchase_price: includePurchasePrice,
-          purchase_price: priceNum,
-          calculated_loan_amount: finalLoanAmount,
-          partner_id: partnerId
-        })
+      const { data } = await api.post(`/api/v1/realtor-portal/leads/${client.id}/generate-preapproval`, {
+        include_property_address: includePropertyAddress,
+        property_address: includePropertyAddress ? propertyAddress : null,
+        include_purchase_price: includePurchasePrice,
+        purchase_price: priceNum,
+        calculated_loan_amount: finalLoanAmount,
+        partner_id: partnerId
+      }, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
       });
-
-      const data = await response.json();
 
       if (data.success) {
         setLetterData(data);
@@ -189,26 +177,21 @@ const PreApprovalLetterModal = ({
   const handleDownloadPDF = async () => {
     if (!letterData?.letter_id) return;
 
-    const token = getToken() || localStorage.getItem('partnerToken');
-
     try {
-      const response = await fetch(`${API_BASE}/api/v1/realtor-portal/letters/${letterData.letter_id}/pdf`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await api.get(`/api/v1/realtor-portal/letters/${letterData.letter_id}/pdf`, {
+        responseType: 'blob',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
       });
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `PreApproval_${client.borrower_name || client.name}_${new Date().toISOString().split('T')[0]}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
+      const blob = response.data;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `PreApproval_${client.borrower_name || client.name}_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (err) {
       console.error('Error downloading PDF:', err);
     }
@@ -218,18 +201,11 @@ const PreApprovalLetterModal = ({
     if (!letterData?.letter_id) return;
 
     setEmailSending(true);
-    const token = getToken() || localStorage.getItem('partnerToken');
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/realtor-portal/letters/${letterData.letter_id}/email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const { data } = await api.post(`/api/v1/realtor-portal/letters/${letterData.letter_id}/email`, {}, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
       });
-
-      const data = await response.json();
       if (data.success) {
         setEmailSent(true);
       }

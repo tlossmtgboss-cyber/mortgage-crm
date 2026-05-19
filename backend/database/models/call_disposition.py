@@ -17,7 +17,7 @@ class CallDisposition(Base):
     lead_id = Column(String, ForeignKey("leads.id"), nullable=True, index=True)
     loan_id = Column(String, nullable=True, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
 
     # Disposition outcome
     disposition = Column(String, nullable=False)  # answered, voicemail, no_answer, busy, wrong_number, dnc, callback, transferred

@@ -694,6 +694,15 @@ from .ai_cost_record import AICostRecord
 # Builder Application models (CMG Builder Portal submissions)
 from .builder_application import BuilderApplication, BuilderDocument
 
+# Rate Watch models (market rate polling, targets, refi opportunities)
+from .rate_watch import (
+    RateWatchRunLog,
+    RateObservation,
+    RateMarginConfig,
+    BorrowerTargetRate,
+    RefiOpportunityEvent,
+)
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1438,4 +1447,13 @@ __all__ = [
     # =====================
     "BuilderApplication",
     "BuilderDocument",
+
+    # =====================
+    # Rate Watch
+    # =====================
+    "RateWatchRunLog",
+    "RateObservation",
+    "RateMarginConfig",
+    "BorrowerTargetRate",
+    "RefiOpportunityEvent",
 ]

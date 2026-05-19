@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import './ApplicationSlidesEditor.css';
-import { getToken } from '../utils/tokenStore';
+import api from '../services/api';
 
 // Default stages for Purchase application
 const DEFAULT_PURCHASE_STAGES = [
@@ -73,7 +73,7 @@ const DEFAULT_REFINANCE_QUESTIONS = [
   { id: 'current_rate', question: 'What is your current interest rate?', stageId: 'property', required: false, type: 'text' },
 ];
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+// API calls use centralized api module
 
 const QUESTION_TYPES = [
   { value: 'choice', label: 'Multiple Choice' },
@@ -174,30 +174,22 @@ const ApplicationSlidesEditor = () => {
   const loadConfiguration = useCallback(async () => {
     setLoading(true);
     try {
-      const token = getToken();
-
       // Load purchase config
-      const purchaseRes = await fetch(`${API_URL}/api/v1/settings/application-slides?app_type=purchase`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-      if (purchaseRes.ok) {
-        const data = await purchaseRes.json();
+      try {
+        const { data } = await api.get('/api/v1/settings/application-slides?app_type=purchase');
         setPurchaseStages(data.stages || DEFAULT_PURCHASE_STAGES.map(s => ({ ...s, enabled: true })));
         setPurchaseQuestions(mergeQuestionsWithDefaults(data.declarationQuestions, DEFAULT_PURCHASE_QUESTIONS));
-      } else {
+      } catch {
         setPurchaseStages(DEFAULT_PURCHASE_STAGES.map(s => ({ ...s, enabled: true })));
         setPurchaseQuestions(DEFAULT_PURCHASE_QUESTIONS.map(q => ({ ...q, enabled: true })));
       }
 
       // Load refinance config
-      const refinanceRes = await fetch(`${API_URL}/api/v1/settings/application-slides?app_type=refinance`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-      if (refinanceRes.ok) {
-        const data = await refinanceRes.json();
+      try {
+        const { data } = await api.get('/api/v1/settings/application-slides?app_type=refinance');
         setRefinanceStages(data.stages || DEFAULT_REFINANCE_STAGES.map(s => ({ ...s, enabled: true })));
         setRefinanceQuestions(mergeQuestionsWithDefaults(data.declarationQuestions, DEFAULT_REFINANCE_QUESTIONS));
-      } else {
+      } catch {
         setRefinanceStages(DEFAULT_REFINANCE_STAGES.map(s => ({ ...s, enabled: true })));
         setRefinanceQuestions(DEFAULT_REFINANCE_QUESTIONS.map(q => ({ ...q, enabled: true })));
       }
@@ -221,25 +213,15 @@ const ApplicationSlidesEditor = () => {
     setSaving(true);
     setSaveMessage(null);
     try {
-      const token = getToken();
-
-      const response = await fetch(`${API_URL}/api/v1/settings/application-slides?app_type=${appType}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stages,
-          declarationQuestions: questions,
-          profileFields: []
-        })
+      await api.post(`/api/v1/settings/application-slides?app_type=${appType}`, {
+        stages,
+        declarationQuestions: questions,
+        profileFields: []
       });
 
-      if (response.ok) {
-        setHasChanges(false);
-        setSaveMessage({ type: 'success', text: `${appType === 'purchase' ? 'Purchase' : 'Refinance'} configuration saved!` });
-        setTimeout(() => setSaveMessage(null), 3000);
-      } else {
-        setSaveMessage({ type: 'error', text: 'Failed to save configuration' });
-      }
+      setHasChanges(false);
+      setSaveMessage({ type: 'success', text: `${appType === 'purchase' ? 'Purchase' : 'Refinance'} configuration saved!` });
+      setTimeout(() => setSaveMessage(null), 3000);
     } catch (error) {
       console.error('Failed to save configuration:', error);
       setSaveMessage({ type: 'error', text: 'Failed to save configuration' });

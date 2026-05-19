@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { commandCenterAPI, tasksAPI, reconciliationAPI } from '../services/api';
+import api, { commandCenterAPI, tasksAPI, reconciliationAPI, leadsAPI } from '../services/api';
 import TaskDetailPanel from './shared/TaskDetailPanel';
 import ReconciliationDetailPanel from './shared/ReconciliationDetailPanel';
 import CallDetailPanel from './shared/CallDetailPanel';
 import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import './ActionSidebar.css';
 import { toast } from '../utils/toast';
-import { getToken } from '../utils/tokenStore';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const navigate = useNavigate();
@@ -31,16 +28,14 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   // Fetch workflow tasks (same source as Tasks page) for Tasks tab
   const fetchWorkflowTasks = useCallback(async () => {
     try {
-      const token = getToken();
-
       // Fetch workflow tasks - SAME endpoint as Tasks page
-      const workflowResponse = await fetch(`${API_BASE}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const workflowResponse = await api.get('/api/v1/workflow-config/all-workflow-tasks', {
+        params: { days_ahead: 14 }
+      }).catch(() => ({ data: {} }));
 
       let wfTasks = [];
-      if (workflowResponse.ok) {
-        const workflowData = await workflowResponse.json();
+      if (workflowResponse.data) {
+        const workflowData = workflowResponse.data;
         wfTasks = (workflowData.tasks || []).map(task => ({
           id: task.id,
           title: task.title,
@@ -334,15 +329,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       if (typeof itemId === 'number' || (!itemIdStr.includes('-') && !isNaN(itemId))) {
         // Workflow task - update lead's last_contact to mark as complete
         if (item.lead_id) {
-          const token = getToken();
-          await fetch(`${API_BASE}/api/v1/leads/${item.lead_id}`, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ last_contact: new Date().toISOString() })
-          });
+          await leadsAPI.update(item.lead_id, { last_contact: new Date().toISOString() });
         } else if (item.loan_id) {
           // For loan tasks, we could update loan's last_activity
           // Workflow task completion for loan - no additional action needed
@@ -355,15 +342,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       }
       // For follow-up items, update the lead's last_contact date
       else if (itemIdStr.startsWith('followup_lead_') && item.entity_id) {
-        const token = getToken();
-        await fetch(`${API_BASE}/api/v1/leads/${item.entity_id}`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ last_contact: new Date().toISOString() })
-        });
+        await leadsAPI.update(item.entity_id, { last_contact: new Date().toISOString() });
       }
       // For deadline items and other types, just dismiss from UI
       else if (itemIdStr.startsWith('deadline_') || itemIdStr.startsWith('sla_') || itemIdStr.startsWith('active_loan_')) {

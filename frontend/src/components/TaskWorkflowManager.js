@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../services/api';
+import api from '../services/api';
 import './TaskWorkflowManager.css';
-import { getToken } from '../utils/tokenStore';
 
 function TaskWorkflowManager() {
   const navigate = useNavigate();
@@ -86,15 +85,8 @@ function TaskWorkflowManager() {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/users`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.users || data || []);
-      }
+      const response = await api.get('/api/v1/users');
+      setUsers(response.data.users || response.data || []);
     } catch (error) {
       console.error('Error loading users:', error);
     }
@@ -109,17 +101,8 @@ function TaskWorkflowManager() {
   const loadTeamMembersForStage = async (stageKey) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}/team-members`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMembers(data.team_members || []);
-      } else {
-        setTeamMembers([]);
-      }
+      const response = await api.get(`/api/v1/workflow-stages/${stageKey}/team-members`);
+      setTeamMembers(response.data.team_members || []);
     } catch (error) {
       console.error('Error loading team members:', error);
       setTeamMembers([]);
@@ -130,16 +113,9 @@ function TaskWorkflowManager() {
 
   const loadWorkflowStages = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.stages) {
-          setWorkflowStages(data.stages);
-        }
+      const response = await api.get('/api/v1/workflow-stages');
+      if (response.data.stages) {
+        setWorkflowStages(response.data.stages);
       }
     } catch (error) {
       console.error('Error loading workflow stages:', error);
@@ -229,22 +205,10 @@ function TaskWorkflowManager() {
   const handleSaveWorkflow = async (stageKey) => {
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          tasks: workflowStages[stageKey].tasks
-        })
+      await api.put(`/api/v1/workflow-stages/${stageKey}`, {
+        tasks: workflowStages[stageKey].tasks
       });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: `${workflowStages[stageKey].name} workflow saved successfully!` });
-      } else {
-        setMessage({ type: 'error', text: 'Failed to save workflow' });
-      }
+      setMessage({ type: 'success', text: `${workflowStages[stageKey].name} workflow saved successfully!` });
     } catch (error) {
       console.error('Error saving workflow:', error);
       setMessage({ type: 'error', text: 'Error saving workflow' });

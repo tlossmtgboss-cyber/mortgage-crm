@@ -577,27 +577,8 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Account temporarily locked")
 
     # Check for impersonation
-    if request:
-        impersonation_token = request.headers.get("X-Impersonation-Token")
-        if impersonation_token:
-            session = db.query(ImpersonationSession).filter(
-                ImpersonationSession.session_token == impersonation_token,
-                ImpersonationSession.is_active == True,
-                ImpersonationSession.expires_at > datetime.now(timezone.utc),
-                ImpersonationSession.manager_id == actual_user.id
-            ).first()
-
-            if session:
-                impersonated_user = db.query(User).filter(
-                    User.id == session.impersonated_user_id
-                ).first()
-
-                if impersonated_user:
-                    logger.info(f"Impersonation active: user {actual_user.id} -> user {impersonated_user.id} (mode: {session.mode})")
-                    request.state.impersonation_session = session
-                    request.state.impersonation_mode = session.mode
-                    request.state.actual_user = actual_user
-                    return impersonated_user
+    from auth.dependencies import resolve_impersonation
+    actual_user = resolve_impersonation(request, actual_user, db)
 
     # Update last_activity_at (throttled to every 5 minutes)
     try:
@@ -683,28 +664,8 @@ async def get_current_user_flexible(
 
             actual_user = db.query(User).filter(User.id == api_key.user_id).first()
             if actual_user:
-                impersonation_token = request.headers.get("X-Impersonation-Token")
-                if impersonation_token:
-                    session = db.query(ImpersonationSession).filter(
-                        ImpersonationSession.session_token == impersonation_token,
-                        ImpersonationSession.is_active == True,
-                        ImpersonationSession.expires_at > datetime.now(timezone.utc),
-                        ImpersonationSession.manager_id == actual_user.id
-                    ).first()
-
-                    if session:
-                        impersonated_user = db.query(User).filter(
-                            User.id == session.impersonated_user_id
-                        ).first()
-
-                        if impersonated_user:
-                            logger.info(f"Impersonation active (API key): user {actual_user.id} -> user {impersonated_user.id} (mode: {session.mode})")
-                            request.state.impersonation_session = session
-                            request.state.impersonation_mode = session.mode
-                            request.state.actual_user = actual_user
-                            return impersonated_user
-
-                return actual_user
+                from auth.dependencies import resolve_impersonation
+                return resolve_impersonation(request, actual_user, db, auth_method="API key")
 
         raise credentials_exception
 
@@ -772,28 +733,8 @@ async def get_current_user_flexible(
         if actual_user is None:
             raise credentials_exception
 
-        impersonation_token = request.headers.get("X-Impersonation-Token")
-        if impersonation_token:
-            session = db.query(ImpersonationSession).filter(
-                ImpersonationSession.session_token == impersonation_token,
-                ImpersonationSession.is_active == True,
-                ImpersonationSession.expires_at > datetime.now(timezone.utc),
-                ImpersonationSession.manager_id == actual_user.id
-            ).first()
-
-            if session:
-                impersonated_user = db.query(User).filter(
-                    User.id == session.impersonated_user_id
-                ).first()
-
-                if impersonated_user:
-                    logger.info(f"Impersonation active (Bearer API key): user {actual_user.id} -> user {impersonated_user.id} (mode: {session.mode})")
-                    request.state.impersonation_session = session
-                    request.state.impersonation_mode = session.mode
-                    request.state.actual_user = actual_user
-                    return impersonated_user
-
-        return actual_user
+        from auth.dependencies import resolve_impersonation
+        return resolve_impersonation(request, actual_user, db, auth_method="Bearer API key")
 
     # JWT token
     if _USE_SECURE_TOKENS:
@@ -830,28 +771,8 @@ async def get_current_user_flexible(
         raise HTTPException(status_code=401, detail="Account temporarily locked")
 
     # Check for impersonation
-    impersonation_token = request.headers.get("X-Impersonation-Token")
-    if impersonation_token:
-        session = db.query(ImpersonationSession).filter(
-            ImpersonationSession.session_token == impersonation_token,
-            ImpersonationSession.is_active == True,
-            ImpersonationSession.expires_at > datetime.now(timezone.utc),
-            ImpersonationSession.manager_id == actual_user.id
-        ).first()
-
-        if session:
-            impersonated_user = db.query(User).filter(
-                User.id == session.impersonated_user_id
-            ).first()
-
-            if impersonated_user:
-                logger.info(f"Impersonation active (flexible): user {actual_user.id} -> user {impersonated_user.id} (mode: {session.mode})")
-                request.state.impersonation_session = session
-                request.state.impersonation_mode = session.mode
-                request.state.actual_user = actual_user
-                return impersonated_user
-
-    return actual_user
+    from auth.dependencies import resolve_impersonation
+    return resolve_impersonation(request, actual_user, db, auth_method="flexible")
 
 
 # ============================================================================

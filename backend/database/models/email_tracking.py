@@ -1,7 +1,7 @@
 """Email open/click tracking models."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Index
+from sqlalchemy import Column, Integer, String, DateTime, Index
 from db import Base
 
 
@@ -20,7 +20,7 @@ class EmailTrackingEvent(Base):
     link_hash = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (

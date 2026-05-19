@@ -14,7 +14,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric
 )
 from sqlalchemy.orm import relationship
 
@@ -216,7 +216,7 @@ class AIAuditLog(Base):
     execution_time_ms = Column(Integer)
     model_used = Column(String)  # gpt-4o, whisper-1, etc.
     tokens_used = Column(Integer)
-    cost_estimate = Column(Float)
+    cost_estimate = Column(Numeric(18, 2))
     session_id = Column(String, index=True)  # Group related actions
     parent_action_id = Column(Integer, ForeignKey("ai_audit_logs.id"))  # For action chains
     is_reversible = Column(Boolean, default=False)
@@ -331,7 +331,7 @@ class AIPerformanceDaily(Base):
 
     # Impact
     avg_impact_score = Column(Float)
-    total_business_value = Column(Float)
+    total_business_value = Column(Numeric(18, 2))
 
     # Confidence
     avg_confidence_score = Column(Float)

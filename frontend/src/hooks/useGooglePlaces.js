@@ -43,10 +43,6 @@ const loadGooglePlaces = () => {
     const apiKey = process.env.REACT_APP_GOOGLE_PLACES_API_KEY;
 
     if (!apiKey) {
-      // Log in development to help developers configure Places
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Google Places] API key not configured (REACT_APP_GOOGLE_PLACES_API_KEY). Address autocomplete will use manual entry mode.');
-      }
       isScriptLoading = false;
       callbacks.forEach(cb => cb.resolve());
       callbacks.length = 0;

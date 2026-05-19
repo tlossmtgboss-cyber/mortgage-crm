@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { getAuthHeaders } from '../../utils/auth';
+import api from '../../services/api';
 import './PURLWidget.css';
 import { toast } from '../../utils/toast';
 
@@ -16,7 +15,6 @@ function PURLWidget({ leadId, loanId, contactData }) {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState(null);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   const PURL_DOMAIN = process.env.REACT_APP_PURL_DOMAIN || 'http://localhost:3000';
 
   useEffect(() => {
@@ -29,9 +27,8 @@ function PURLWidget({ leadId, loanId, contactData }) {
       const entityId = leadId || loanId;
       const entityType = leadId ? 'lead' : 'loan';
 
-      const response = await axios.get(
-        `${API_URL}/api/v1/purl-admin/workspaces/by-${entityType}/${entityId}`,
-        { headers: getAuthHeaders() }
+      const response = await api.get(
+        `/api/v1/purl-admin/workspaces/by-${entityType}/${entityId}`
       );
 
       if (response.data.workspace) {
@@ -59,8 +56,8 @@ function PURLWidget({ leadId, loanId, contactData }) {
     setError(null);
 
     try {
-      const response = await axios.post(
-        `${API_URL}/api/v1/purl-admin/workspaces`,
+      const response = await api.post(
+        '/api/v1/purl-admin/workspaces',
         {
           first_name: contactData.firstName || contactData.first_name || 'Client',
           last_name: contactData.lastName || contactData.last_name || '',
@@ -70,8 +67,7 @@ function PURLWidget({ leadId, loanId, contactData }) {
           loan_amount: contactData.loanAmount || contactData.loan_amount,
           lead_id: leadId,
           loan_id: loanId
-        },
-        { headers: getAuthHeaders() }
+        }
       );
 
       setWorkspace(response.data);
@@ -97,10 +93,9 @@ function PURLWidget({ leadId, loanId, contactData }) {
     }
 
     try {
-      const response = await axios.post(
-        `${API_URL}/api/v1/purl-admin/workspaces/${workspace.workspace_id || workspace.id}/tokens`,
-        { scope: 'write', expires_in_days: 365 },
-        { headers: getAuthHeaders() }
+      const response = await api.post(
+        `/api/v1/purl-admin/workspaces/${workspace.workspace_id || workspace.id}/tokens`,
+        { scope: 'write', expires_in_days: 365 }
       );
 
       setTokens([response.data, ...tokens]);
@@ -122,10 +117,9 @@ function PURLWidget({ leadId, loanId, contactData }) {
     }
 
     try {
-      await axios.post(
-        `${API_URL}/api/v1/purl-admin/tokens/${tokenId}/revoke`,
-        { reason: 'Revoked by loan officer' },
-        { headers: getAuthHeaders() }
+      await api.post(
+        `/api/v1/purl-admin/tokens/${tokenId}/revoke`,
+        { reason: 'Revoked by loan officer' }
       );
 
       setTokens(tokens.map(t =>
@@ -148,10 +142,8 @@ function PURLWidget({ leadId, loanId, contactData }) {
 
   const handleResendEmail = async () => {
     try {
-      await axios.post(
-        `${API_URL}/api/v1/purl-admin/workspaces/${workspace.workspace_id || workspace.id}/resend-invite`,
-        {},
-        { headers: getAuthHeaders() }
+      await api.post(
+        `/api/v1/purl-admin/workspaces/${workspace.workspace_id || workspace.id}/resend-invite`
       );
       setError(null);
       toast.success('Invitation email resent!');

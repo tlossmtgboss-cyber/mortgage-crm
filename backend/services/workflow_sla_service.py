@@ -133,8 +133,8 @@ class WorkflowSLAService:
             lead.current_workflow_instance_id = instance.id
             self.db.commit()
 
-            # Generate initial tasks
-            tasks_created = self._generate_due_tasks(instance)
+            # Generate initial tasks with full role assignment and linked tasks
+            tasks_created = self._generate_tasks_with_assignments(instance)
 
             logger.info(f"Lead {lead_id} enrolled in workflow '{workflow_key}' (instance {instance.id})")
 
@@ -222,8 +222,8 @@ class WorkflowSLAService:
             loan.current_workflow_instance_id = instance.id
             self.db.commit()
 
-            # Generate initial tasks
-            tasks_created = self._generate_due_tasks(instance)
+            # Generate initial tasks with full role assignment and linked tasks
+            tasks_created = self._generate_tasks_with_assignments(instance)
 
             logger.info(f"Loan {loan_id} enrolled in workflow '{workflow_key}' (instance {instance.id})")
 
@@ -292,8 +292,8 @@ class WorkflowSLAService:
             instance.paused_at = None
             self.db.commit()
 
-            # Generate any tasks that became due while paused
-            tasks_created = self._generate_due_tasks(instance)
+            # Generate any tasks that became due while paused (with role assignment)
+            tasks_created = self._generate_tasks_with_assignments(instance)
 
             logger.info(f"Workflow instance {instance_id} resumed")
             return {"success": True, "message": "Workflow resumed", "tasks_created": tasks_created}
@@ -885,6 +885,37 @@ class WorkflowSLAService:
         })
 
         return result.rowcount
+
+    def _generate_tasks_with_assignments(self, instance) -> int:
+        """
+        Generate tasks using TaskGeneratorService for full role assignment and linked tasks.
+
+        Unlike _generate_due_tasks (raw SQL, no linked tasks), this creates both
+        workflow_task_instances AND linked tasks in the main tasks table with
+        role-based assignment and SLA due dates.
+        """
+        try:
+            inst_id = instance.id if hasattr(instance, 'id') else instance.get('id')
+            if not inst_id:
+                logger.warning("Cannot generate tasks: no instance ID")
+                return 0
+
+            from services.workflow_task_generator import TaskGeneratorService
+            task_gen = TaskGeneratorService(self.db)
+            result = task_gen.generate_tasks_for_instance(inst_id)
+
+            if result.get("success"):
+                count = result.get("tasks_created", 0)
+                logger.info(f"TaskGenerator created {count} tasks (with linked tasks) for instance {inst_id}")
+                return count
+            else:
+                error = result.get("error", "unknown")
+                logger.warning(f"TaskGenerator failed for instance {inst_id}: {error}, falling back to basic generation")
+                return self._generate_due_tasks(instance)
+
+        except Exception as e:
+            logger.warning(f"TaskGenerator error for instance, falling back: {e}")
+            return self._generate_due_tasks(instance)
 
     def _generate_due_tasks(self, instance) -> int:
         """

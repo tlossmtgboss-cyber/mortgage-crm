@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../services/api';
+import api, { teamAPI } from '../services/api';
 import './TeamAssignment.css';
-import { getToken } from '../utils/tokenStore';
 
 function TeamAssignment({ leadId, onUpdate }) {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -17,16 +16,8 @@ function TeamAssignment({ leadId, onUpdate }) {
 
   const loadTeamMembers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMembers(data.team_members || data || []);
-      }
+      const data = await teamAPI.getMembers();
+      setTeamMembers(data || []);
     } catch (error) {
       console.error('Error loading team members:', error);
     } finally {
@@ -36,16 +27,8 @@ function TeamAssignment({ leadId, onUpdate }) {
 
   const loadAssignedMembers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments`, {
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAssignedMembers(data.assignments || []);
-      }
+      const response = await api.get(`/api/v1/leads/${leadId}/team-assignments`);
+      setAssignedMembers(response.data.assignments || []);
     } catch (error) {
       // If endpoint doesn't exist, start with empty assignments
       console.error('Error loading assignments:', error);
@@ -69,12 +52,7 @@ function TeamAssignment({ leadId, onUpdate }) {
 
   const deleteAssignment = async (assignmentId) => {
     try {
-      await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments/${assignmentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
-      });
+      await api.delete(`/api/v1/leads/${leadId}/team-assignments/${assignmentId}`);
     } catch (error) {
       console.error('Error deleting assignment:', error);
     }
@@ -96,23 +74,13 @@ function TeamAssignment({ leadId, onUpdate }) {
     // Save to backend
     if (memberId && leadId) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${getToken()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_id: parseInt(memberId),
-            role: selectedMember?.role || 'Team Member',
-          }),
+        const response = await api.post(`/api/v1/leads/${leadId}/team-assignments`, {
+          user_id: parseInt(memberId),
+          role: selectedMember?.role || 'Team Member',
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          updatedAssignments[index].id = data.id;
-          setAssignedMembers([...updatedAssignments]);
-        }
+        updatedAssignments[index].id = response.data.id;
+        setAssignedMembers([...updatedAssignments]);
       } catch (error) {
         console.error('Error saving assignment:', error);
       }

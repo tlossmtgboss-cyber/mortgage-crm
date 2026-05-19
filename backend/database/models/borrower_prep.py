@@ -1,7 +1,7 @@
 """Borrower prep sequence models for pre-appointment preparation."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index
 from db import Base
 
 
@@ -15,7 +15,7 @@ class BorrowerPrepSequence(Base):
     id = Column(String, primary_key=True, default=_uuid)
     appointment_id = Column(String, nullable=False, index=True)
     lead_id = Column(String, ForeignKey("leads.id"), nullable=True)
-    organization_id = Column(String, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
     appointment_type = Column(String, nullable=False)  # pre_approval_consult, rate_lock_call, closing_prep
     status = Column(String, default="active")  # active, completed, cancelled
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

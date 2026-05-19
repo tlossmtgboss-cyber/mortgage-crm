@@ -450,6 +450,33 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
             logger.warning(f"Login rate limit exceeded for {client_ip}")
             _raise_rate_limit(retry_after, "Too many login attempts. Please try again later.")
 
+    # Per-username lockout check (Enterprise Security Check 4.4 — distributed attack defense)
+    # This runs BEFORE the DB lookup so it catches credential stuffing even for
+    # non-existent accounts, and blocks distributed attacks from many IPs.
+    if not _is_retry:
+        try:
+            from auth.account_lockout import check_username_locked, LOCKOUT_MESSAGE
+            is_locked, minutes_left = check_username_locked(form_data.username)
+            if is_locked:
+                logger.warning(
+                    "Login blocked: username '%s' locked (%d min remaining) — per-username lockout",
+                    form_data.username, minutes_left,
+                )
+                _log_access_event_bg(
+                    attempted_email=form_data.username,
+                    success=False, event_type="account_locked",
+                    failure_reason="username_locked_distributed",
+                    ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail=LOCKOUT_MESSAGE,
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.debug("Per-username lockout check skipped: %s", e)
+
     try:
         models = get_models()
         User = models['User']
@@ -467,6 +494,13 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
 
         # Check user exists and has a valid hashed_password before verification
         if not user:
+            # Record per-username failure even for non-existent accounts
+            # to prevent username enumeration via distributed attacks
+            try:
+                from auth.account_lockout import record_username_failure
+                record_username_failure(form_data.username)
+            except Exception:
+                pass
             _log_access_event_bg(
                 attempted_email=form_data.username,
                 success=False, failure_reason="user_not_found",
@@ -517,21 +551,21 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
             db.rollback()  # Recover session — failed SQL poisons the transaction
             logger.debug(f"SSO enforcement check skipped: {e}")
 
-        # Account lockout check (Enterprise Security Check 4.4)
+        # Account lockout check — DB columns (Enterprise Security Check 4.4)
         try:
-            from auth.account_lockout import check_account_locked, record_failed_login, reset_failed_login
+            from auth.account_lockout import check_account_locked, record_failed_login, reset_failed_login, LOCKOUT_MESSAGE
             if check_account_locked(user):
-                logger.warning(f"Login attempt on locked account: {user_email}")
+                logger.warning(f"Login attempt on locked account (DB): {user_email}")
                 _log_access_event_bg(
                     user_id=user_id, tenant_id=user_org_id,
                     attempted_email=form_data.username,
                     success=False, event_type="account_locked",
-                    failure_reason="account_locked",
+                    failure_reason="account_locked_db",
                     ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
                 )
                 raise HTTPException(
                     status_code=status.HTTP_423_LOCKED,
-                    detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
+                    detail=LOCKOUT_MESSAGE,
                 )
         except HTTPException:
             raise
@@ -554,11 +588,15 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
             )
 
         if not auth_funcs['verify_password'](form_data.password, user_hashed_password):
-            # Record failed login attempt (Enterprise Security Check 4.4)
+            # Record failed login attempt — both per-username and per-user DB
+            # (Enterprise Security Check 4.4)
             try:
-                from auth.account_lockout import record_failed_login
+                from auth.account_lockout import record_failed_login, record_username_failure, LOCKOUT_MESSAGE
+                # Per-username tracker (catches distributed attacks)
+                username_result = record_username_failure(form_data.username)
+                # Per-user DB tracker (persistent across restarts)
                 lockout_result = record_failed_login(db, user)
-                if lockout_result.get("locked"):
+                if lockout_result.get("locked") or username_result.get("locked"):
                     logger.warning(f"Account locked after failed attempts: {user_email}")
                     _log_access_event_bg(
                         user_id=user_id, tenant_id=user_org_id,
@@ -569,7 +607,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
                     )
                     raise HTTPException(
                         status_code=status.HTTP_423_LOCKED,
-                        detail="Account has been locked due to too many failed login attempts. Please try again in 30 minutes.",
+                        detail=LOCKOUT_MESSAGE,
                     )
             except HTTPException:
                 raise  # Re-raise the 423 HTTPException
@@ -589,9 +627,11 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Successful login - reset failed login counter (Enterprise Security Check 4.4)
+        # Successful login - reset failed login counters (Enterprise Security Check 4.4)
+        # Clear both per-username (in-memory/Redis) and per-user (DB) trackers
         try:
-            from auth.account_lockout import reset_failed_login
+            from auth.account_lockout import reset_failed_login, clear_username_failures
+            clear_username_failures(form_data.username)
             if hasattr(user, 'failed_login_attempts') and user.failed_login_attempts:
                 reset_failed_login(db, user)
         except Exception:
@@ -692,10 +732,11 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         # This token allows ONLY /api/v1/auth/mfa/* endpoints so the user can
         # complete setup. Full access is blocked until MFA is enabled.
         #
-        # EXCEPTION: If no MFA setup UI exists in the frontend, issuing a
-        # restricted token creates an unresolvable redirect loop. Fall through
-        # to full-token issuance with a warning until the MFA setup flow is built.
-        _MFA_SETUP_UI_EXISTS = False  # flip when frontend MFA setup page is shipped
+        # When the user's org (or admin role) mandates MFA but they haven't
+        # enrolled yet, issue a restricted mfa_setup token that ONLY allows
+        # the /api/v1/auth/mfa/* endpoints.  The frontend should redirect
+        # to the MFA enrollment page when it receives mfa_setup_required=true.
+        _MFA_SETUP_UI_EXISTS = True  # Backend enforcement is active; frontend routes to MFA setup
         if mfa_setup_required and _MFA_SETUP_UI_EXISTS:
             mfa_setup_token_data = {
                 "sub": user_email,
@@ -734,13 +775,15 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
             }
 
         if mfa_setup_required and not _MFA_SETUP_UI_EXISTS:
+            # Dead path — _MFA_SETUP_UI_EXISTS is True.  Kept as safety net
+            # in case the flag is reverted during frontend work.
             logger.warning(
-                f"MFA setup required but no UI available — issuing full token for {user_email} "
+                f"MFA setup required but enforcement flag disabled — issuing full token for {user_email} "
                 f"(org_enforced={org_mfa_required}, admin_enforced={admin_mfa_required}). "
-                f"BUILD THE MFA SETUP PAGE to enforce properly."
+                f"Set _MFA_SETUP_UI_EXISTS = True to enforce."
             )
 
-        # Full token issuance (no MFA required)
+        # Full token issuance (no MFA required, or MFA enforcement disabled)
         access_token = auth_funcs['create_access_token'](
             data={"sub": user_email},
             user_id=user_id,
@@ -757,7 +800,9 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
             "token_type": "bearer",
             "expires_in": config['ACCESS_TOKEN_EXPIRE_MINUTES'] * 60,  # seconds
             "mfa_required": False,
-            "mfa_setup_required": False,
+            # Surface mfa_setup_required even in the full-token path so the
+            # frontend can show a nudge / banner when enforcement is disabled.
+            "mfa_setup_required": mfa_setup_required,
             "user": {
                 "id": user_id,
                 "email": user_email,

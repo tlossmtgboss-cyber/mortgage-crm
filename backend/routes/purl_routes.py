@@ -613,18 +613,39 @@ async def upload_document_direct(
 
     verify_workspace_access(context, slug)
 
+    # SEC-002: MIME type and extension validation
+    _ALLOWED_MIME_TYPES = {
+        "application/pdf", "image/jpeg", "image/jpg",
+        "image/png", "image/tiff", "image/heic", "image/heif",
+    }
+    _ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".heic", ".heif"}
+
+    content_type = (file.content_type or "").lower().strip()
+    if content_type not in _ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Allowed: PDF, JPEG, PNG, TIFF, HEIC.",
+        )
+
+    raw_ext = os.path.splitext(file.filename or "")[1].lower()
+    if raw_ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file extension. Allowed: .pdf, .jpg, .jpeg, .png, .tiff, .heic.",
+        )
+
     # Create storage directory if needed
     storage_dir = FilePath(os.getenv("LOCAL_UPLOAD_PATH", "uploads"))
     doc_dir = storage_dir / "org" / str(context.organization_id) / "workspaces" / str(context.workspace_id) / "documents"
     doc_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate unique filename
+    # Generate unique filename with validated extension
     upload_id = uuid.uuid4().hex
-    safe_filename = "".join(c for c in file.filename if c.isalnum() or c in "._- ")[:200]
+    safe_filename = f"{upload_id}{raw_ext}"
     storage_key = f"org/{context.organization_id}/workspaces/{context.workspace_id}/documents/{upload_id}/{safe_filename}"
 
     # Save file locally
-    file_path = doc_dir / f"{upload_id}_{safe_filename}"
+    file_path = doc_dir / safe_filename
     content = await file.read()
     file_size = len(content)
 

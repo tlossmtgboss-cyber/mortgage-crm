@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { emailSignatureAPI, API_BASE_URL } from '../services/api';
-import { getToken } from '../utils/tokenStore';
+import api, { emailSignatureAPI } from '../services/api';
 
 function PreApprovalLetterSettings() {
   const [loading, setLoading] = useState(true);
@@ -42,15 +41,15 @@ function PreApprovalLetterSettings() {
       setSignature(signatureData);
 
       // Load pre-approval letter settings
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/api/v1/settings/pre-approval-letter`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data) {
-          setLetterSettings(prev => ({ ...prev, ...data }));
+      try {
+        const response = await api.get('/api/v1/settings/pre-approval-letter');
+        if (response.data) {
+          setLetterSettings(prev => ({ ...prev, ...response.data }));
+        }
+      } catch (settingsErr) {
+        // Settings may not exist yet, ignore 404
+        if (settingsErr.status !== 404 && settingsErr.response?.status !== 404) {
+          throw settingsErr;
         }
       }
     } catch (err) {
@@ -89,22 +88,9 @@ function PreApprovalLetterSettings() {
       setSaving(true);
       setError(null);
 
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/api/v1/settings/pre-approval-letter`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(letterSettings)
-      });
-
-      if (response.ok) {
-        setSuccessMessage('Pre-approval letter settings saved successfully!');
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } else {
-        throw new Error('Failed to save settings');
-      }
+      await api.post('/api/v1/settings/pre-approval-letter', letterSettings);
+      setSuccessMessage('Pre-approval letter settings saved successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Error saving settings:', err);
       setError('Failed to save pre-approval letter settings');

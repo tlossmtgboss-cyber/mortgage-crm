@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import babel from 'vite-plugin-babel';
 import path from 'path';
@@ -6,6 +6,10 @@ import path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
+
+  // Load env vars with both VITE_ and REACT_APP_ prefixes so they're
+  // available in this config file (process.env only has system vars here).
+  const env = loadEnv(mode, process.cwd(), ['VITE_', 'REACT_APP_']);
 
   return {
     plugins: [
@@ -85,13 +89,27 @@ export default defineConfig(({ mode }) => {
       },
     },
 
-    // Environment variable prefix (Vite uses VITE_ by default)
-    envPrefix: ['VITE_'],
+    // Environment variable prefix — include REACT_APP_ for CRA backward compatibility
+    envPrefix: ['VITE_', 'REACT_APP_'],
 
     // Define global constants (for process.env compatibility)
+    // All REACT_APP_* references are replaced at build time so they don't resolve to undefined.
+    // Values come from: system env vars (CI/Railway) > .env files > fallback to ''.
     define: {
       // Provide process.env.NODE_ENV for libraries that expect it
       'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+      // CRA-to-Vite compatibility: map every process.env.REACT_APP_* used in src/
+      'process.env.REACT_APP_API_URL': JSON.stringify(env.REACT_APP_API_URL || ''),
+      'process.env.REACT_APP_API_BASE': JSON.stringify(env.REACT_APP_API_BASE || ''),
+      'process.env.REACT_APP_BASE_URL': JSON.stringify(env.REACT_APP_BASE_URL || ''),
+      'process.env.REACT_APP_PERENNIA_API_BASE': JSON.stringify(env.REACT_APP_PERENNIA_API_BASE || ''),
+      'process.env.REACT_APP_WS_URL': JSON.stringify(env.REACT_APP_WS_URL || ''),
+      'process.env.REACT_APP_ENABLE_WEBSOCKET': JSON.stringify(env.REACT_APP_ENABLE_WEBSOCKET || ''),
+      'process.env.REACT_APP_GOOGLE_PLACES_API_KEY': JSON.stringify(env.REACT_APP_GOOGLE_PLACES_API_KEY || ''),
+      'process.env.REACT_APP_FRED_API_KEY': JSON.stringify(env.REACT_APP_FRED_API_KEY || ''),
+      'process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY': JSON.stringify(env.REACT_APP_STRIPE_PUBLISHABLE_KEY || ''),
+      'process.env.REACT_APP_TURNSTILE_SITE_KEY': JSON.stringify(env.REACT_APP_TURNSTILE_SITE_KEY || ''),
+      'process.env.REACT_APP_PURL_DOMAIN': JSON.stringify(env.REACT_APP_PURL_DOMAIN || ''),
     },
 
     // Optimize dependencies

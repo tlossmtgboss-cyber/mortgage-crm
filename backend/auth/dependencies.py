@@ -290,6 +290,69 @@ def verify_password(plain: str, hashed: str) -> bool:
     return _vp(plain, hashed)
 
 
+def resolve_impersonation(request: Request, authenticated_user, db: Session, auth_method: str = ""):
+    """Check for impersonation header and return impersonated user if authorized.
+
+    Centralises the impersonation lookup that was previously duplicated across
+    every auth path in main.py.  If the ``X-Impersonation-Token`` header is
+    present and maps to a valid, active session for *authenticated_user*, the
+    impersonated user is returned along with request-state annotations.
+    Otherwise *authenticated_user* is returned unchanged.
+
+    Args:
+        request: The incoming FastAPI request (used to read the header and
+            annotate ``request.state``).
+        authenticated_user: The already-verified user object.
+        db: Active SQLAlchemy session.
+        auth_method: Short label included in log messages so the auth path
+            that triggered impersonation is identifiable (e.g. ``"API key"``,
+            ``"Bearer API key"``, ``"flexible"``, or ``""`` for the default
+            ``get_current_user`` JWT path).
+
+    Returns:
+        The impersonated ``User`` if a valid session exists, otherwise
+        *authenticated_user*.
+    """
+    if request is None:
+        return authenticated_user
+
+    impersonation_token = request.headers.get("X-Impersonation-Token")
+    if not impersonation_token:
+        return authenticated_user
+
+    from datetime import datetime, timezone as _tz
+
+    # Lazy-import models to avoid circular imports at module load time.
+    from database.models import ImpersonationSession, User
+
+    session = db.query(ImpersonationSession).filter(
+        ImpersonationSession.session_token == impersonation_token,
+        ImpersonationSession.is_active == True,
+        ImpersonationSession.expires_at > datetime.now(_tz.utc),
+        ImpersonationSession.manager_id == authenticated_user.id,
+    ).first()
+
+    if not session:
+        return authenticated_user
+
+    impersonated_user = db.query(User).filter(
+        User.id == session.impersonated_user_id,
+    ).first()
+
+    if not impersonated_user:
+        return authenticated_user
+
+    label = f" ({auth_method})" if auth_method else ""
+    logger.info(
+        f"Impersonation active{label}: user {authenticated_user.id} "
+        f"-> user {impersonated_user.id} (mode: {session.mode})"
+    )
+    request.state.impersonation_session = session
+    request.state.impersonation_mode = session.mode
+    request.state.actual_user = authenticated_user
+    return impersonated_user
+
+
 __all__ = [
     'require_auth',
     'get_current_user',
@@ -301,4 +364,5 @@ __all__ = [
     'oauth2_scheme',
     'get_password_hash',
     'verify_password',
+    'resolve_impersonation',
 ]

@@ -11,6 +11,14 @@ export { DECLARATION_QUESTIONS } from './declarationQuestions';
 export { PLANNING_QUESTIONS } from './planningQuestions';
 export { getRequiredDocuments } from './documentRequirements';
 
+// Refinance-specific stage components
+export { default as ProfileStage } from './ProfileStage';
+export { default as IncomeStage } from './IncomeStage';
+export { default as PropertyStage } from './PropertyStage';
+export { default as GoalsStage } from './GoalsStage';
+export { default as ReviewStage } from './ReviewStage';
+export { default as PlanningStage } from './PlanningStage';
+
 // Re-export shared components for convenience
 export {
   Icon,
@@ -32,4 +40,5 @@ export {
   getEnabledStages,
   getEnabledQuestions,
   buildRedirectUrl,
+  buildNeedsList,
 } from '../application-shared';

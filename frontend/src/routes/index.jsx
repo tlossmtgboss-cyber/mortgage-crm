@@ -104,6 +104,14 @@ const PortfolioDetail = lazyRetry(() => import('../pages/PortfolioDetail'));
 const MumClientDetail = lazyRetry(() => import('../pages/MumClientDetail'));
 const YearOverYear = lazyRetry(() => import('../pages/YearOverYear'));
 const RateMonitor = lazyRetry(() => import('../pages/RateMonitor'));
+const RateMonitorV1 = lazyRetry(() => import('../pages/RateMonitorV1'));
+const RateMonitorV2 = lazyRetry(() => import('../pages/RateMonitorV2'));
+const RateMonitorV3 = lazyRetry(() => import('../pages/RateMonitorV3'));
+const RateMonitorV4 = lazyRetry(() => import('../pages/RateMonitorV4'));
+const RateMonitorV5 = lazyRetry(() => import('../pages/RateMonitorV5'));
+const RateMonitorV6 = lazyRetry(() => import('../pages/RateMonitorV6'));
+const RateMonitorV7 = lazyRetry(() => import('../pages/RateMonitorV7'));
+const RateMonitorV8 = lazyRetry(() => import('../pages/RateMonitorV8'));
 const Tasks = lazyRetry(() => import('../pages/Tasks'));
 // SMSTasks removed — merged into unified Tasks page
 const Calendar = lazyRetry(() => import('../pages/Calendar'));
@@ -631,6 +639,14 @@ export function getRoutes(layoutProps, options = {}) {
     // Portfolio
     <Route key="/portfolio" path="/portfolio" element={withMainLayout(Portfolio)} />,
     <Route key="/rate-monitor" path="/rate-monitor" element={withMainLayout(RateMonitor)} />,
+    <Route key="/rate-monitor/v1" path="/rate-monitor/v1" element={withMainLayout(RateMonitorV1)} />,
+    <Route key="/rate-monitor/v2" path="/rate-monitor/v2" element={withMainLayout(RateMonitorV2)} />,
+    <Route key="/rate-monitor/v3" path="/rate-monitor/v3" element={withMainLayout(RateMonitorV3)} />,
+    <Route key="/rate-monitor/v4" path="/rate-monitor/v4" element={withMainLayout(RateMonitorV4)} />,
+    <Route key="/rate-monitor/v5" path="/rate-monitor/v5" element={withMainLayout(RateMonitorV5)} />,
+    <Route key="/rate-monitor/v6" path="/rate-monitor/v6" element={withMainLayout(RateMonitorV6)} />,
+    <Route key="/rate-monitor/v7" path="/rate-monitor/v7" element={withMainLayout(RateMonitorV7)} />,
+    <Route key="/rate-monitor/v8" path="/rate-monitor/v8" element={withMainLayout(RateMonitorV8)} />,
     <Route key="/closed-loans" path="/closed-loans" element={withMainLayout(ClosedLoans)} />,
     <Route key="/portfolio/detail" path="/portfolio/detail" element={withMainLayout(PortfolioDetail)} />,
     <Route key="/portfolio/year-over-year" path="/portfolio/year-over-year" element={withMainLayout(YearOverYear)} />,
