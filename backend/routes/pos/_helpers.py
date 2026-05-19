@@ -25,6 +25,9 @@ from services.pos.application_service import (
     ApplicationService,
     AuditContext,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +70,7 @@ def build_audit_context(
 def resolve_application_for_borrower(
     application_id: UUID,
     purl_ctx: PURLAuthContext = Depends(require_purl_token),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: ApplicationService = Depends(get_application_service),
 ) -> POSApplication:
     """Fetch an application or 404 — never reveal cross-borrower existence.
@@ -93,7 +96,7 @@ def resolve_application_for_borrower(
 def resolve_application_for_borrower_write(
     application_id: UUID,
     purl_ctx: PURLAuthContext = Depends(require_purl_write_scope),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     service: ApplicationService = Depends(get_application_service),
 ) -> POSApplication:
     """Same as `resolve_application_for_borrower` but requires WRITE scope."""

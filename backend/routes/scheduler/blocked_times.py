@@ -27,6 +27,9 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin, _audit_log,
 )
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +45,7 @@ async def list_blocked_times(
     request: Request,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List blocked time periods"""
     user = await get_current_user(request, db)
@@ -91,7 +94,7 @@ async def list_blocked_times(
 async def create_blocked_time(
     block_data: BlockedTimeCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a blocked time period (lunch breaks, OOO, personal blocks, etc.)"""
     user = await get_current_user(request, db)
@@ -126,8 +129,8 @@ async def create_blocked_time(
     db.add(blocked)
     _audit_log(db, org_id, user.id, 'created', 'blocked_time',
                changes={'title': block_data.title, 'applies_to_all': applies_to_all}, request=request)
-    db.commit()
-    db.refresh(blocked)
+    await db.commit()
+    await db.refresh(blocked)
 
     return {"message": "Blocked time created", "blocked_time_id": blocked.id}
 
@@ -136,7 +139,7 @@ async def create_blocked_time(
 async def delete_blocked_time(
     block_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a blocked time period"""
     user = await get_current_user(request, db)
@@ -145,11 +148,11 @@ async def delete_blocked_time(
     _models = get_models()
     BlockedTime = _models['BlockedTime']
 
-    blocked = db.query(BlockedTime).filter(
+    blocked = (await db.execute(select(BlockedTime).where(
         BlockedTime.id == block_id,
         BlockedTime.organization_id == org_id,
         BlockedTime.user_id == user.id
-    ).first()
+    ))).scalars().first()
 
     if not blocked:
         raise HTTPException(status_code=404, detail="Blocked time not found")
@@ -157,6 +160,6 @@ async def delete_blocked_time(
     _audit_log(db, org_id, user.id, 'deleted', 'blocked_time',
                entity_id=block_id, changes={'title': blocked.title}, request=request)
     blocked.is_active = False
-    db.commit()
+    await db.commit()
 
     return {"message": "Blocked time deleted"}

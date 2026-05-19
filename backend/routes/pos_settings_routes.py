@@ -16,6 +16,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +75,7 @@ def _ensure_user_slug(db: Session, user) -> str | None:
 @router.get("/settings", response_model=POSSettingsResponse)
 def get_pos_settings(
     user=Depends(_get_current_user()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> POSSettingsResponse:
     org_id = user.organization_id
     org_slug: str | None = None
@@ -161,7 +164,7 @@ class CalendarUserUpdateRequest(BaseModel):
 def update_pos_calendar_user(
     body: CalendarUserUpdateRequest,
     user=Depends(_get_current_user()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     org_id = user.organization_id
 

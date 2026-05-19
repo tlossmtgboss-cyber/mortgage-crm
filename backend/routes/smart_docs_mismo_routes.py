@@ -25,6 +25,9 @@ from services.smart_docs.integrations.mismo_mapper_service import (
     MISMOMapperService,
     get_mismo_mapper_service,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +42,7 @@ router = APIRouter(tags=["MISMO Data Mapping"])
 async def preview_mismo_data(
     loan_id: int,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Preview MISMO-mapped data for a loan.
 
@@ -76,7 +79,7 @@ async def generate_mismo_xml(
     loan_id: int,
     version: str = "3.6",
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Generate MISMO 3.6 XML for a loan.
 
@@ -112,7 +115,7 @@ async def generate_mismo_xml(
 async def check_mismo_completeness(
     loan_id: int,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Check MISMO field completeness for a loan.
 
@@ -141,7 +144,7 @@ async def check_mismo_completeness(
 async def generate_mcd_report(
     loan_id: int,
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Generate Mortgage Compliance Dataset v2.0 report.
 

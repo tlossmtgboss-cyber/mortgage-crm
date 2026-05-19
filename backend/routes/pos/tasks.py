@@ -25,6 +25,9 @@ from ._helpers import (
     resolve_application_for_borrower,
     resolve_application_for_borrower_write,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger("pos.tasks.routes")
 
@@ -110,7 +113,7 @@ def _task_to_response(task: Task) -> BorrowerTaskResponse:
 def list_tasks(
     include_completed: bool = Query(False, description="Include completed tasks"),
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> BorrowerTaskListResponse:
     """Return tasks linked to the application's loan.
 
@@ -165,7 +168,7 @@ def list_tasks(
 def complete_task(
     task_id: int,
     application: POSApplication = Depends(resolve_application_for_borrower_write),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> BorrowerTaskResponse:
     """Allow the borrower to mark a task as completed.
 

@@ -19,6 +19,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +88,7 @@ def register_state_licensing_routes(app, get_db, get_current_user, **kwargs):
     async def check_lo_state_license_endpoint(
         user_id: int = Query(..., description="Loan officer user ID"),
         state: str = Query(..., min_length=2, max_length=2, description="Two-letter state code"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Check if a loan officer holds an active license for a specific state.
@@ -112,7 +115,7 @@ def register_state_licensing_routes(app, get_db, get_current_user, **kwargs):
         tags=["Compliance"],
     )
     async def find_licensing_violations_endpoint(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Find all loans in the organization where the assigned LO may not
@@ -146,7 +149,7 @@ def register_state_licensing_routes(app, get_db, get_current_user, **kwargs):
     )
     async def get_lo_license_summary_endpoint(
         user_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get a summary of all state licenses held by a loan officer.
@@ -170,7 +173,7 @@ def register_state_licensing_routes(app, get_db, get_current_user, **kwargs):
     )
     async def validate_loan_assignment_endpoint(
         body: ValidateAssignmentRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Validate that a loan officer is licensed in the loan's property state.

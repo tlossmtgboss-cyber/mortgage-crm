@@ -22,6 +22,9 @@ from database.models.pos import POSApplication
 from middleware.purl_auth import check_purl_rate_limit
 
 from ._helpers import resolve_application_for_borrower
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
+from sqlalchemy import select
 
 logger = logging.getLogger("pos.team.routes")
 
@@ -82,7 +85,7 @@ def _user_to_member(user: User, role: str, *, is_primary_lo: bool = False) -> Te
 )
 def get_team(
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> TeamResponse:
     members: list[TeamMemberResponse] = []
     seen_ids: set[int] = set()
