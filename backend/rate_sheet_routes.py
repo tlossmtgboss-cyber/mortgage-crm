@@ -213,6 +213,10 @@ async def list_rate_sheets(
         }
     except Exception as e:
         logger.warning(f"Error fetching rate sheets (table may not exist): {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return {'sheets': [], 'total': 0, 'limit': limit, 'offset': offset}
 
 
@@ -335,6 +339,10 @@ async def list_opportunities(
         )
     except Exception as e:
         logger.warning(f"Error fetching opportunities (table may not exist): {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return {'opportunities': [], 'total': 0, 'limit': limit, 'offset': offset}
 
 
@@ -350,7 +358,21 @@ async def get_opportunities_dashboard(
         return detector.get_dashboard_metrics()
     except Exception as e:
         logger.warning(f"Error fetching opportunities dashboard (table may not exist): {e}")
-        return {'total': 0, 'by_status': {}, 'by_priority': {}, 'recent': []}
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {
+            'by_status': {
+                'identified': 0, 'sms_sent': 0, 'called': 0,
+                'scheduled': 0, 'converted': 0,
+            },
+            'by_priority': {'urgent': 0, 'high': 0},
+            'pending_total': 0,
+            'total_monthly_savings': 0,
+            'total_annual_savings': 0,
+            'recent_rate_sheets': [],
+        }
 
 
 @router.get("/opportunities/{opportunity_id}")

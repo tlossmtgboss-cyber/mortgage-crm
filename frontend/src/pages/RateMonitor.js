@@ -411,55 +411,55 @@ function RateMonitor() {
 
   const getPriorityClass = (priority) => {
     switch (priority) {
-      case 'urgent': return 'priority-urgent';
-      case 'high': return 'priority-high';
-      case 'medium': return 'priority-medium';
-      case 'low': return 'priority-low';
+      case 'urgent': return 'rm-priority-urgent';
+      case 'high': return 'rm-priority-high';
+      case 'medium': return 'rm-priority-medium';
+      case 'low': return 'rm-priority-low';
       default: return '';
     }
   };
 
   const getStatusClass = (status) => {
     switch (status) {
-      case 'pending': return 'status-pending';
-      case 'identified': return 'status-pending';
-      case 'acknowledged': return 'status-acknowledged';
-      case 'sms_sent': return 'status-acknowledged';
-      case 'called': return 'status-called';
-      case 'scheduled': return 'status-called';
-      case 'converted': return 'status-converted';
-      case 'dismissed': return 'status-dismissed';
-      case 'declined': return 'status-dismissed';
+      case 'pending': return 'rm-status-pending';
+      case 'identified': return 'rm-status-pending';
+      case 'acknowledged': return 'rm-status-acknowledged';
+      case 'sms_sent': return 'rm-status-acknowledged';
+      case 'called': return 'rm-status-called';
+      case 'scheduled': return 'rm-status-called';
+      case 'converted': return 'rm-status-converted';
+      case 'dismissed': return 'rm-status-dismissed';
+      case 'declined': return 'rm-status-dismissed';
       default: return '';
     }
   };
 
   const getSheetStatusClass = (status) => {
     switch (status) {
-      case 'parsed': return 'status-success';
-      case 'processing': return 'status-processing';
-      case 'failed': return 'status-error';
-      default: return 'status-pending';
+      case 'parsed': return 'rm-status-success';
+      case 'processing': return 'rm-status-processing';
+      case 'failed': return 'rm-status-error';
+      default: return 'rm-status-pending';
     }
   };
 
   if (loading) {
     return (
-      <div className="rate-monitor-page">
-        <div className="loading-spinner">Loading...</div>
+      <div className="rm-page">
+        <div className="rm-loading">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="rate-monitor-page">
-      <div className="page-header">
-        <div className="header-content">
-          <h1>Rate Monitor</h1>
-          <p className="subtitle">Track refinance opportunities for MUM clients</p>
+    <div className="rm-page">
+      <div className="rm-header">
+        <div className="rm-header-content">
+          <h1 className="rm-title">Rate Monitor</h1>
+          <p className="rm-subtitle">Track refinance opportunities for MUM clients</p>
         </div>
-        <div className="header-actions">
-          <button className="btn-primary" onClick={handleCreateTarget}>
+        <div className="rm-header-actions">
+          <button className="rm-btn-primary" onClick={handleCreateTarget}>
             + New Rate Target
           </button>
         </div>
@@ -467,50 +467,50 @@ function RateMonitor() {
 
       {/* Current Rates Banner */}
       {currentRates && (
-        <div className="rates-banner">
-          <div className="rates-banner-content">
-            <span className="rates-label">Current Rates:</span>
-            <span className="rate-item">
+        <div className="rm-rates-banner">
+          <div className="rm-rates-banner-content">
+            <span className="rm-rates-label">Current Rates:</span>
+            <span className="rm-rate-item">
               <strong>30-Year:</strong> {formatRate(currentRates['30_year'])}
             </span>
-            <span className="rate-item">
+            <span className="rm-rate-item">
               <strong>15-Year:</strong> {formatRate(currentRates['15_year'])}
             </span>
             {currentRates.is_mock && (
-              <span className="mock-badge">Mock Data</span>
+              <span className="rm-mock-badge">Mock Data</span>
             )}
           </div>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="tabs-container">
+      <div className="rm-tabs">
         <button
-          className={`tab ${activeTab === 'dashboard' ? 'active' : ''}`}
+          className={`rm-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
           Dashboard
         </button>
         <button
-          className={`tab ${activeTab === 'rateSheets' ? 'active' : ''}`}
+          className={`rm-tab ${activeTab === 'rateSheets' ? 'active' : ''}`}
           onClick={() => setActiveTab('rateSheets')}
         >
           Rate Sheets ({rateSheets.length})
         </button>
         <button
-          className={`tab ${activeTab === 'opportunities' ? 'active' : ''}`}
+          className={`rm-tab ${activeTab === 'opportunities' ? 'active' : ''}`}
           onClick={() => setActiveTab('opportunities')}
         >
           Opportunities ({opportunitiesTotal})
         </button>
         <button
-          className={`tab ${activeTab === 'targets' ? 'active' : ''}`}
+          className={`rm-tab ${activeTab === 'targets' ? 'active' : ''}`}
           onClick={() => setActiveTab('targets')}
         >
           Rate Targets ({targetsTotal})
         </button>
         <button
-          className={`tab ${activeTab === 'alerts' ? 'active' : ''}`}
+          className={`rm-tab ${activeTab === 'alerts' ? 'active' : ''}`}
           onClick={() => setActiveTab('alerts')}
         >
           Alerts ({alertsTotal})
@@ -519,109 +519,109 @@ function RateMonitor() {
 
       {/* Dashboard Tab */}
       {activeTab === 'dashboard' && (
-        <div className="dashboard-content">
+        <div className="rm-dashboard">
           {metrics ? (
             <>
-              <div className="metrics-grid">
-                <div className="metric-card">
-                  <div className="metric-value">{metrics.active_monitors ?? 0}</div>
-                  <div className="metric-label">Active Monitors</div>
+              <div className="rm-metrics-grid">
+                <div className="rm-metric-card">
+                  <div className="rm-metric-value">{metrics.active_monitors ?? 0}</div>
+                  <div className="rm-metric-label">Active Monitors</div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-value">{metrics.auto_call_enabled ?? 0}</div>
-                  <div className="metric-label">Auto-Call Enabled</div>
+                <div className="rm-metric-card">
+                  <div className="rm-metric-value">{metrics.auto_call_enabled ?? 0}</div>
+                  <div className="rm-metric-label">Auto-Call Enabled</div>
                 </div>
-                <div className="metric-card highlight">
-                  <div className="metric-value">{metrics.pending_alerts ?? 0}</div>
-                  <div className="metric-label">Pending Alerts</div>
+                <div className="rm-metric-card highlight">
+                  <div className="rm-metric-value">{metrics.pending_alerts ?? 0}</div>
+                  <div className="rm-metric-label">Pending Alerts</div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-value">{metrics.high_priority_alerts ?? 0}</div>
-                  <div className="metric-label">High Priority</div>
+                <div className="rm-metric-card">
+                  <div className="rm-metric-value">{metrics.high_priority_alerts ?? 0}</div>
+                  <div className="rm-metric-label">High Priority</div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-value">{metrics.alerts_today ?? 0}</div>
-                  <div className="metric-label">Alerts Today</div>
+                <div className="rm-metric-card">
+                  <div className="rm-metric-value">{metrics.alerts_today ?? 0}</div>
+                  <div className="rm-metric-label">Alerts Today</div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-value">{metrics.calls_made_this_month ?? 0}</div>
-                  <div className="metric-label">Calls This Month</div>
+                <div className="rm-metric-card">
+                  <div className="rm-metric-value">{metrics.calls_made_this_month ?? 0}</div>
+                  <div className="rm-metric-label">Calls This Month</div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-value">{metrics.appointments_this_month ?? 0}</div>
-                  <div className="metric-label">Appointments</div>
+                <div className="rm-metric-card">
+                  <div className="rm-metric-value">{metrics.appointments_this_month ?? 0}</div>
+                  <div className="rm-metric-label">Appointments</div>
                 </div>
-                <div className="metric-card success">
-                  <div className="metric-value">{metrics.conversions_this_month ?? 0}</div>
-                  <div className="metric-label">Conversions</div>
+                <div className="rm-metric-card success">
+                  <div className="rm-metric-value">{metrics.conversions_this_month ?? 0}</div>
+                  <div className="rm-metric-label">Conversions</div>
                 </div>
               </div>
 
               {/* Opportunities Summary */}
               {opportunitiesMetrics && (
-                <div className="opportunities-summary">
+                <div className="rm-opp-summary">
                   <h3>Refinance Opportunities</h3>
-                  <div className="summary-stats">
-                    <div className="stat">
-                      <span className="stat-value">{opportunitiesMetrics.pending_total || 0}</span>
-                      <span className="stat-label">Pending</span>
+                  <div className="rm-summary-stats">
+                    <div className="rm-stat">
+                      <span className="rm-stat-value">{opportunitiesMetrics.pending_total || 0}</span>
+                      <span className="rm-stat-label">Pending</span>
                     </div>
-                    <div className="stat">
-                      <span className="stat-value">{opportunitiesMetrics.by_priority?.urgent || 0}</span>
-                      <span className="stat-label">Urgent</span>
+                    <div className="rm-stat">
+                      <span className="rm-stat-value">{opportunitiesMetrics.by_priority?.urgent || 0}</span>
+                      <span className="rm-stat-label">Urgent</span>
                     </div>
-                    <div className="stat highlight">
-                      <span className="stat-value">{formatCurrency(opportunitiesMetrics.total_monthly_savings)}</span>
-                      <span className="stat-label">Monthly Savings Potential</span>
+                    <div className="rm-stat highlight">
+                      <span className="rm-stat-value">{formatCurrency(opportunitiesMetrics.total_monthly_savings)}</span>
+                      <span className="rm-stat-label">Monthly Savings Potential</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="savings-summary">
+              <div className="rm-savings-summary">
                 <h3>Potential Monthly Savings from Pending Alerts</h3>
-                <div className="savings-value">{formatCurrency(metrics.pending_monthly_savings)}</div>
+                <div className="rm-savings-value">{formatCurrency(metrics.pending_monthly_savings)}</div>
               </div>
             </>
           ) : (
-            <div className="no-alerts-message">
+            <div className="rm-empty-state">
               <p>No rate monitoring data available yet.</p>
               <p>Set up rate targets to start tracking refinance opportunities for your clients.</p>
-              <button className="btn-primary" onClick={handleCreateTarget} style={{ marginTop: '12px' }}>
+              <button className="rm-btn-primary" onClick={handleCreateTarget} style={{ marginTop: '12px' }}>
                 + New Rate Target
               </button>
             </div>
           )}
 
           {/* Recent Pending Alerts Preview */}
-          <div className="recent-alerts-section">
-            <div className="section-header">
+          <div className="rm-recent-alerts">
+            <div className="rm-section-header">
               <h3>Recent Pending Alerts</h3>
-              <button className="btn-link" onClick={() => setActiveTab('alerts')}>
+              <button className="rm-btn-link" onClick={() => setActiveTab('alerts')}>
                 View All
               </button>
             </div>
-            <div className="alerts-preview">
+            <div className="rm-alerts-preview">
               {alerts.filter(a => a.status === 'pending').slice(0, 5).map(alert => (
-                <div key={alert.id} className="alert-preview-item">
-                  <div className="alert-info">
-                    <span className="client-name">{alert.client_name || 'Unknown Client'}</span>
-                    <span className={`priority-badge ${getPriorityClass(alert.priority)}`}>
+                <div key={alert.id} className="rm-alert-preview-item">
+                  <div className="rm-alert-info">
+                    <span className="rm-client-name">{alert.client_name || 'Unknown Client'}</span>
+                    <span className={`rm-priority-badge ${getPriorityClass(alert.priority)}`}>
                       {alert.priority}
                     </span>
                   </div>
-                  <div className="alert-savings">
+                  <div className="rm-alert-savings">
                     {formatCurrency(alert.monthly_savings)}/month potential savings
                   </div>
-                  <div className="alert-actions">
+                  <div className="rm-alert-actions">
                     <button
-                      className="btn-sm btn-primary"
+                      className="rm-btn-sm rm-btn-primary"
                       onClick={() => handleInitiateCall(alert.id)}
                     >
                       Call
                     </button>
                     <button
-                      className="btn-sm btn-secondary"
+                      className="rm-btn-sm rm-btn-secondary"
                       onClick={() => handleViewMumClient(alert.mum_client_id)}
                     >
                       View
@@ -630,7 +630,7 @@ function RateMonitor() {
                 </div>
               ))}
               {alerts.filter(a => a.status === 'pending').length === 0 && (
-                <div className="no-alerts">No pending alerts</div>
+                <div className="rm-no-alerts">No pending alerts</div>
               )}
             </div>
           </div>
@@ -639,14 +639,14 @@ function RateMonitor() {
 
       {/* Rate Sheets Tab */}
       {activeTab === 'rateSheets' && (
-        <div className="rate-sheets-content">
+        <div className="rm-sheets">
           {/* Upload Section */}
-          <div className="upload-section">
+          <div className="rm-upload">
             <h3>Upload Rate Sheet</h3>
-            <p className="upload-description">
+            <p className="rm-upload-desc">
               Upload a rate sheet (PDF/Excel) and AI will extract the rates. Then scan to find refinance opportunities.
             </p>
-            <div className="upload-controls">
+            <div className="rm-upload-controls">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -655,46 +655,46 @@ function RateMonitor() {
                 style={{ display: 'none' }}
               />
               <button
-                className="btn-primary"
+                className="rm-btn-primary"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
               >
                 {uploading ? uploadProgress : 'Choose File'}
               </button>
-              <span className="file-types">Accepts: PDF, Excel, CSV</span>
+              <span className="rm-file-types">Accepts: PDF, Excel, CSV</span>
             </div>
           </div>
 
           {/* Recent Uploads */}
-          <div className="recent-uploads">
+          <div className="rm-recent-uploads">
             <h3>Recent Rate Sheets</h3>
-            <div className="sheets-list">
+            <div className="rm-sheets-list">
               {rateSheets.map(sheet => (
-                <div key={sheet.id} className="sheet-item">
-                  <div className="sheet-info">
-                    <span className="sheet-filename">{sheet.filename}</span>
-                    <span className={`sheet-status ${getSheetStatusClass(sheet.status)}`}>
+                <div key={sheet.id} className="rm-sheet-item">
+                  <div className="rm-sheet-info">
+                    <span className="rm-sheet-filename">{sheet.filename}</span>
+                    <span className={`rm-sheet-status ${getSheetStatusClass(sheet.status)}`}>
                       {sheet.status}
                     </span>
                     {sheet.lender_name && (
-                      <span className="sheet-lender">{sheet.lender_name}</span>
+                      <span className="rm-sheet-lender">{sheet.lender_name}</span>
                     )}
                   </div>
-                  <div className="sheet-meta">
+                  <div className="rm-sheet-meta">
                     <span>{sheet.rates_count || 0} rates</span>
                     <span>{new Date(sheet.created_at).toLocaleDateString()}</span>
                   </div>
-                  <div className="sheet-actions">
+                  <div className="rm-sheet-actions">
                     {sheet.status === 'parsed' && (
                       <>
                         <button
-                          className="btn-sm btn-primary"
+                          className="rm-btn-sm rm-btn-primary"
                           onClick={() => handleScanSheet(sheet.id)}
                         >
                           Scan Opportunities
                         </button>
                         <button
-                          className="btn-sm btn-secondary"
+                          className="rm-btn-sm rm-btn-secondary"
                           onClick={() => handleViewSheetRates(sheet)}
                         >
                           View Rates
@@ -702,7 +702,7 @@ function RateMonitor() {
                       </>
                     )}
                     <button
-                      className="btn-sm btn-danger"
+                      className="rm-btn-sm rm-btn-danger"
                       onClick={() => handleDeleteSheet(sheet.id)}
                     >
                       Delete
@@ -711,22 +711,22 @@ function RateMonitor() {
                 </div>
               ))}
               {rateSheets.length === 0 && (
-                <div className="no-sheets">No rate sheets uploaded yet</div>
+                <div className="rm-no-sheets">No rate sheets uploaded yet</div>
               )}
             </div>
           </div>
 
           {/* Parsed Rates Modal/Section */}
           {selectedSheet && (
-            <div className="rates-section">
-              <div className="section-header">
+            <div className="rm-rates-section">
+              <div className="rm-section-header">
                 <h3>Rates from: {selectedSheet.filename}</h3>
-                <button className="btn-link" onClick={() => setSelectedSheet(null)}>
+                <button className="rm-btn-link" onClick={() => setSelectedSheet(null)}>
                   Close
                 </button>
               </div>
-              <div className="rates-table-container">
-                <table className="data-table">
+              <div className="rm-rates-table-container">
+                <table className="rm-table">
                   <thead>
                     <tr>
                       <th>Loan Type</th>
@@ -743,7 +743,7 @@ function RateMonitor() {
                       <tr key={rate.id}>
                         <td>{rate.loan_type}</td>
                         <td>{rate.loan_term}yr</td>
-                        <td className="rate-cell">{formatRate(rate.rate)}</td>
+                        <td className="rm-rate-cell">{formatRate(rate.rate)}</td>
                         <td>{rate.apr ? formatRate(rate.apr) : '-'}</td>
                         <td>{rate.points || 0}</td>
                         <td>
@@ -757,7 +757,7 @@ function RateMonitor() {
                     ))}
                     {sheetRates.length === 0 && (
                       <tr>
-                        <td colSpan="7" className="no-data">No rates parsed</td>
+                        <td colSpan="7" className="rm-no-data">No rates parsed</td>
                       </tr>
                     )}
                   </tbody>
@@ -770,27 +770,27 @@ function RateMonitor() {
 
       {/* Opportunities Tab */}
       {activeTab === 'opportunities' && (
-        <div className="opportunities-content">
+        <div className="rm-opportunities">
           {/* Opportunities Metrics */}
           {opportunitiesMetrics && (
-            <div className="opp-metrics-bar">
-              <div className="opp-metric">
+            <div className="rm-opp-metrics">
+              <div className="rm-opp-metric">
                 <span className="label">Identified:</span>
                 <span className="value">{opportunitiesMetrics.by_status?.identified || 0}</span>
               </div>
-              <div className="opp-metric">
+              <div className="rm-opp-metric">
                 <span className="label">SMS Sent:</span>
                 <span className="value">{opportunitiesMetrics.by_status?.sms_sent || 0}</span>
               </div>
-              <div className="opp-metric">
+              <div className="rm-opp-metric">
                 <span className="label">Called:</span>
                 <span className="value">{opportunitiesMetrics.by_status?.called || 0}</span>
               </div>
-              <div className="opp-metric">
+              <div className="rm-opp-metric">
                 <span className="label">Scheduled:</span>
                 <span className="value">{opportunitiesMetrics.by_status?.scheduled || 0}</span>
               </div>
-              <div className="opp-metric success">
+              <div className="rm-opp-metric success">
                 <span className="label">Converted:</span>
                 <span className="value">{opportunitiesMetrics.by_status?.converted || 0}</span>
               </div>
@@ -798,7 +798,7 @@ function RateMonitor() {
           )}
 
           {/* Filters and Bulk Actions */}
-          <div className="filters-bar">
+          <div className="rm-filters">
             <select
               value={opportunityFilters.status}
               onChange={(e) => setOpportunityFilters({ ...opportunityFilters, status: e.target.value })}
@@ -823,7 +823,7 @@ function RateMonitor() {
             </select>
             {selectedOpportunities.length > 0 && (
               <button
-                className="btn-primary"
+                className="rm-btn-primary"
                 onClick={handleBulkOutreach}
                 disabled={processingOutreach}
               >
@@ -833,8 +833,8 @@ function RateMonitor() {
           </div>
 
           {/* Opportunities Table */}
-          <div className="opportunities-table-container">
-            <table className="data-table">
+          <div className="rm-opp-table-container">
+            <table className="rm-table">
               <thead>
                 <tr>
                   <th>
@@ -855,7 +855,7 @@ function RateMonitor() {
               </thead>
               <tbody>
                 {opportunities.map(opp => (
-                  <tr key={opp.id} className={`priority-row-${opp.priority}`}>
+                  <tr key={opp.id} className={`rm-priority-row-${opp.priority}`}>
                     <td>
                       <input
                         type="checkbox"
@@ -864,31 +864,31 @@ function RateMonitor() {
                       />
                     </td>
                     <td>
-                      <div className="client-info">
-                        <span className="client-name">{opp.client_name || 'Unknown'}</span>
+                      <div className="rm-client-info">
+                        <span className="rm-client-name">{opp.client_name || 'Unknown'}</span>
                         {opp.client_phone && (
-                          <span className="client-phone">{opp.client_phone}</span>
+                          <span className="rm-client-phone">{opp.client_phone}</span>
                         )}
                       </div>
                     </td>
-                    <td className="rate-cell">{formatRate(opp.current_rate)}</td>
-                    <td className="rate-cell highlight">{formatRate(opp.new_rate)}</td>
-                    <td className="savings-cell">{formatCurrency(opp.monthly_savings)}</td>
+                    <td className="rm-rate-cell">{formatRate(opp.current_rate)}</td>
+                    <td className="rm-rate-cell highlight">{formatRate(opp.new_rate)}</td>
+                    <td className="rm-savings-cell">{formatCurrency(opp.monthly_savings)}</td>
                     <td>
-                      <span className={`priority-badge ${getPriorityClass(opp.priority)}`}>
+                      <span className={`rm-priority-badge ${getPriorityClass(opp.priority)}`}>
                         {opp.priority}
                       </span>
                     </td>
                     <td>
-                      <span className={`status-badge ${getStatusClass(opp.status)}`}>
+                      <span className={`rm-status-badge ${getStatusClass(opp.status)}`}>
                         {(opp.status || 'unknown').replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="actions-cell">
+                    <td className="rm-actions">
                       {(opp.status === 'identified' || opp.status === 'sms_sent') && (
                         <>
                           <button
-                            className="btn-sm btn-primary"
+                            className="rm-btn-sm rm-btn-primary"
                             onClick={() => handleSingleOutreach(opp.id, false)}
                             disabled={processingOutreach}
                             title="Send SMS + Call"
@@ -896,7 +896,7 @@ function RateMonitor() {
                             Outreach
                           </button>
                           <button
-                            className="btn-sm btn-secondary"
+                            className="rm-btn-sm rm-btn-secondary"
                             onClick={() => handleSingleOutreach(opp.id, true)}
                             disabled={processingOutreach}
                             title="Call Only"
@@ -907,7 +907,7 @@ function RateMonitor() {
                       )}
                       {opp.status === 'called' && (
                         <button
-                          className="btn-sm btn-success"
+                          className="rm-btn-sm rm-btn-success"
                           onClick={() => handleMarkConverted(opp.id)}
                         >
                           Convert
@@ -915,7 +915,7 @@ function RateMonitor() {
                       )}
                       {opp.status !== 'converted' && opp.status !== 'declined' && (
                         <button
-                          className="btn-sm btn-secondary"
+                          className="rm-btn-sm rm-btn-secondary"
                           onClick={() => handleUpdateOpportunityStatus(opp.id, 'declined')}
                         >
                           Decline
@@ -926,7 +926,7 @@ function RateMonitor() {
                 ))}
                 {opportunities.length === 0 && (
                   <tr>
-                    <td colSpan="8" className="no-data">
+                    <td colSpan="8" className="rm-no-data">
                       No opportunities found. Upload a rate sheet and scan to find opportunities.
                     </td>
                   </tr>
@@ -939,8 +939,8 @@ function RateMonitor() {
 
       {/* Targets Tab */}
       {activeTab === 'targets' && (
-        <div className="targets-content">
-          <div className="filters-bar">
+        <div className="rm-targets">
+          <div className="rm-filters">
             <select
               value={targetFilters.status}
               onChange={(e) => setTargetFilters({ ...targetFilters, status: e.target.value })}
@@ -950,7 +950,7 @@ function RateMonitor() {
               <option value="paused">Paused</option>
               <option value="triggered">Triggered</option>
             </select>
-            <label className="checkbox-label">
+            <label className="rm-checkbox-label">
               <input
                 type="checkbox"
                 checked={targetFilters.isActive}
@@ -960,8 +960,8 @@ function RateMonitor() {
             </label>
           </div>
 
-          <div className="targets-table-container">
-            <table className="data-table">
+          <div className="rm-table-container">
+            <table className="rm-table">
               <thead>
                 <tr>
                   <th>Client</th>
@@ -975,63 +975,63 @@ function RateMonitor() {
               </thead>
               <tbody>
                 {targets.map(target => (
-                  <tr key={target.id} className={!target.is_active ? 'inactive-row' : ''}>
+                  <tr key={target.id} className={!target.is_active ? 'rm-inactive-row' : ''}>
                     <td>
                       <span
-                        className="client-link"
+                        className="rm-client-link"
                         onClick={() => handleViewMumClient(target.mum_client_id)}
                       >
                         {target.client_name || `Client #${target.mum_client_id}`}
                       </span>
                       {target.client_rate && (
-                        <div className="client-rate-info">
+                        <div className="rm-client-rate-info">
                           Current: {formatRate(target.client_rate)}
                         </div>
                       )}
                     </td>
                     <td>
-                      <span className="target-type">{(target.target_type || '').replace(/_/g, ' ')}</span>
+                      <span className="rm-target-type">{(target.target_type || '').replace(/_/g, ' ')}</span>
                     </td>
                     <td>{target.threshold_description}</td>
                     <td>
-                      <span className={`status-badge ${target.status}`}>
+                      <span className={`rm-status-badge ${target.status}`}>
                         {target.status}
                       </span>
                     </td>
                     <td>
-                      <span className={`auto-call-badge ${target.auto_call_enabled ? 'enabled' : 'disabled'}`}>
+                      <span className={`rm-auto-badge ${target.auto_call_enabled ? 'enabled' : 'disabled'}`}>
                         {target.auto_call_enabled ? 'On' : 'Off'}
                       </span>
                     </td>
                     <td>{target.trigger_count || 0}</td>
-                    <td className="actions-cell">
+                    <td className="rm-actions">
                       <button
-                        className="btn-icon"
+                        className="rm-btn-icon"
                         onClick={() => handleToggleActive(target)}
                         title={target.is_active ? 'Pause' : 'Activate'}
                       >
-                        {target.is_active ? '⏸' : '▶'}
+                        {target.is_active ? 'Pause' : 'Start'}
                       </button>
                       <button
-                        className="btn-icon"
+                        className="rm-btn-icon"
                         onClick={() => handleEditTarget(target)}
                         title="Edit"
                       >
-                        ✏️
+                        Edit
                       </button>
                       <button
-                        className="btn-icon delete"
+                        className="rm-btn-icon delete"
                         onClick={() => handleDeleteTarget(target.id)}
                         title="Delete"
                       >
-                        🗑️
+                        Delete
                       </button>
                     </td>
                   </tr>
                 ))}
                 {targets.length === 0 && (
                   <tr>
-                    <td colSpan="7" className="no-data">
+                    <td colSpan="7" className="rm-no-data">
                       No rate targets found. Click "New Rate Target" to create one.
                     </td>
                   </tr>
@@ -1044,8 +1044,8 @@ function RateMonitor() {
 
       {/* Alerts Tab */}
       {activeTab === 'alerts' && (
-        <div className="alerts-content">
-          <div className="filters-bar">
+        <div className="rm-alerts">
+          <div className="rm-filters">
             <select
               value={alertFilters.status}
               onChange={(e) => setAlertFilters({ ...alertFilters, status: e.target.value })}
@@ -1069,77 +1069,77 @@ function RateMonitor() {
             </select>
           </div>
 
-          <div className="alerts-list">
+          <div className="rm-alerts-list">
             {alerts.map(alert => (
-              <div key={alert.id} className={`alert-card ${getPriorityClass(alert.priority)}`}>
-                <div className="alert-header">
-                  <div className="alert-client">
+              <div key={alert.id} className={`rm-alert-card ${getPriorityClass(alert.priority)}`}>
+                <div className="rm-alert-header">
+                  <div className="rm-alert-client">
                     <h4
-                      className="client-link"
+                      className="rm-client-link"
                       onClick={() => handleViewMumClient(alert.mum_client_id)}
                     >
                       {alert.client_name || `Client #${alert.mum_client_id}`}
                     </h4>
-                    <span className={`priority-badge ${getPriorityClass(alert.priority)}`}>
+                    <span className={`rm-priority-badge ${getPriorityClass(alert.priority)}`}>
                       {alert.priority}
                     </span>
-                    <span className={`status-badge ${getStatusClass(alert.status)}`}>
+                    <span className={`rm-status-badge ${getStatusClass(alert.status)}`}>
                       {alert.status}
                     </span>
                   </div>
-                  <div className="alert-date">
+                  <div className="rm-alert-date">
                     {new Date(alert.created_at).toLocaleDateString()}
                   </div>
                 </div>
 
-                <div className="alert-body">
-                  <div className="rate-comparison">
-                    <div className="rate-item">
+                <div className="rm-alert-body">
+                  <div className="rm-rate-comparison">
+                    <div className="rm-rate-item">
                       <span className="label">Current Rate:</span>
                       <span className="value">{formatRate(alert.client_rate)}</span>
                     </div>
-                    <div className="rate-arrow">→</div>
-                    <div className="rate-item">
+                    <div className="rm-rate-arrow">→</div>
+                    <div className="rm-rate-item">
                       <span className="label">Market Rate:</span>
                       <span className="value highlight">{formatRate(alert.market_rate)}</span>
                     </div>
                   </div>
 
-                  <div className="savings-info">
-                    <div className="savings-item">
+                  <div className="rm-savings-info">
+                    <div className="rm-savings-item">
                       <span className="label">Monthly Savings:</span>
                       <span className="value">{formatCurrency(alert.monthly_savings)}</span>
                     </div>
-                    <div className="savings-item">
+                    <div className="rm-savings-item">
                       <span className="label">Annual Savings:</span>
                       <span className="value">{formatCurrency(alert.annual_savings)}</span>
                     </div>
                   </div>
 
                   {alert.call_status && (
-                    <div className="call-status">
+                    <div className="rm-call-status">
                       <span className="label">Call Status:</span>
                       <span className={`value ${alert.call_status}`}>
                         {alert.call_status}
                       </span>
                       {alert.call_outcome && (
-                        <span className="call-outcome"> - {alert.call_outcome}</span>
+                        <span className="rm-call-outcome"> - {alert.call_outcome}</span>
                       )}
                     </div>
                   )}
                 </div>
 
-                <div className="alert-actions">
+                <div className="rm-alert-actions">
                   {alert.status === 'pending' && (
                     <>
                       <button
-                        className="btn-primary"
+                        className="rm-btn-primary"
                         onClick={() => handleInitiateCall(alert.id)}
                       >
                         Initiate Call
                       </button>
                       <button
-                        className="btn-secondary"
+                        className="rm-btn-secondary"
                         onClick={() => handleUpdateAlertStatus(alert.id, 'acknowledged')}
                       >
                         Acknowledge
@@ -1149,13 +1149,13 @@ function RateMonitor() {
                   {alert.status === 'acknowledged' && (
                     <>
                       <button
-                        className="btn-primary"
+                        className="rm-btn-primary"
                         onClick={() => handleInitiateCall(alert.id)}
                       >
                         Initiate Call
                       </button>
                       <button
-                        className="btn-secondary"
+                        className="rm-btn-secondary"
                         onClick={() => handleUpdateAlertStatus(alert.id, 'dismissed')}
                       >
                         Dismiss
@@ -1165,13 +1165,13 @@ function RateMonitor() {
                   {alert.status === 'called' && (
                     <>
                       <button
-                        className="btn-success"
+                        className="rm-btn-success"
                         onClick={() => handleUpdateAlertStatus(alert.id, 'converted')}
                       >
                         Mark Converted
                       </button>
                       <button
-                        className="btn-secondary"
+                        className="rm-btn-secondary"
                         onClick={() => handleUpdateAlertStatus(alert.id, 'dismissed')}
                       >
                         Dismiss
@@ -1179,7 +1179,7 @@ function RateMonitor() {
                     </>
                   )}
                   <button
-                    className="btn-link"
+                    className="rm-btn-link"
                     onClick={() => handleViewMumClient(alert.mum_client_id)}
                   >
                     View Client
@@ -1188,7 +1188,7 @@ function RateMonitor() {
               </div>
             ))}
             {alerts.length === 0 && (
-              <div className="no-alerts-message">
+              <div className="rm-empty-state">
                 No alerts found matching your filters.
               </div>
             )}
