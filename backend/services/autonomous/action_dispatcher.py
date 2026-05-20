@@ -166,43 +166,53 @@ class ActionDispatcher:
         self.db.execute(text(sql), p)
 
     def _replay_send_sms(self, payload: dict) -> None:
-        """Replay a send_sms action — queue an SMS for delivery."""
+        """Replay a send_sms action — send via Telnyx."""
+        phone = payload.get("phone") or payload.get("to")
+        message = payload.get("message") or payload.get("text", "")
         logger.info(
             "SMS replay for action: to=%s, message preview=%s",
-            payload.get("phone"), (payload.get("message") or "")[:50],
+            phone, message[:50],
         )
+        if not phone or not message:
+            logger.warning("SMS replay missing phone or message in payload")
+            return
         try:
-            from services.sms_service import send_sms
+            from telephony.sms import send_sms
             send_sms(
-                to=payload["phone"],
-                message=payload["message"],
-                from_number=payload.get("from_number"),
+                to=phone,
+                text=message,
                 organization_id=self.org_id,
             )
         except ImportError:
-            logger.warning("SMS service not available for replay")
-        except KeyError as e:
-            logger.warning("SMS replay missing required field: %s", e)
+            logger.warning("telephony.sms not available for replay")
+        except Exception as e:
+            logger.warning("SMS replay failed: %s", e)
 
     def _replay_send_email(self, payload: dict) -> None:
-        """Replay a send_email action — queue an email for delivery."""
+        """Replay a send_email action via NotificationService."""
+        to_email = payload.get("to_email") or payload.get("email")
+        subject = payload.get("subject", "")
+        body = payload.get("body") or payload.get("message") or payload.get("html_content", "")
         logger.info(
             "Email replay for action: to=%s, subject=%s",
-            payload.get("to_email"), (payload.get("subject") or "")[:50],
+            to_email, subject[:50],
         )
+        if not to_email:
+            logger.warning("Email replay missing to_email in payload")
+            return
         try:
-            from services.email_service import send_email
-            send_email(
-                to_email=payload["to_email"],
-                subject=payload["subject"],
-                body=payload.get("body", ""),
-                from_user_id=self._resolve_user(payload),
-                organization_id=self.org_id,
+            from services.notification_service import NotificationService
+            svc = NotificationService()
+            svc.send_email(
+                to_email=to_email,
+                subject=subject,
+                html_content=body,
+                org_id=self.org_id,
             )
         except ImportError:
-            logger.warning("Email service not available for replay")
-        except KeyError as e:
-            logger.warning("Email replay missing required field: %s", e)
+            logger.warning("NotificationService not available for replay")
+        except Exception as e:
+            logger.warning("Email replay failed: %s", e)
 
     def _replay_create_compliance_alert(self, payload: dict) -> None:
         """Replay a create_compliance_alert action."""
