@@ -353,55 +353,98 @@ class OpportunityDetectionService:
         return opp.to_dict()
 
     def get_dashboard_metrics(self) -> Dict[str, Any]:
-        """Get dashboard metrics for opportunities."""
-        from models.rate_sheet import RefinanceOpportunity, RateSheet
+        """Get dashboard metrics for opportunities.
 
-        # Counts by status
-        identified = self.db.query(RefinanceOpportunity).filter(
-            RefinanceOpportunity.status == 'identified'
-        ).count()
+        Returns empty/zero metrics if the underlying tables do not exist
+        in the database (e.g. rate_sheets / refinance_opportunities have
+        not been created in production yet).
+        """
+        _empty = {
+            'by_status': {
+                'identified': 0, 'sms_sent': 0, 'called': 0,
+                'scheduled': 0, 'converted': 0,
+            },
+            'by_priority': {'urgent': 0, 'high': 0},
+            'pending_total': 0,
+            'total_monthly_savings': 0,
+            'total_annual_savings': 0,
+            'recent_rate_sheets': [],
+        }
 
-        sms_sent = self.db.query(RefinanceOpportunity).filter(
-            RefinanceOpportunity.status == 'sms_sent'
-        ).count()
+        try:
+            from models.rate_sheet import RefinanceOpportunity, RateSheet
+        except ImportError as exc:
+            logger.warning("Could not import rate sheet models: %s", exc)
+            return _empty
 
-        called = self.db.query(RefinanceOpportunity).filter(
-            RefinanceOpportunity.status == 'called'
-        ).count()
+        # Query opportunity counts -- wrapped so a missing table returns
+        # the empty fallback instead of a 500.
+        try:
+            identified = self.db.query(RefinanceOpportunity).filter(
+                RefinanceOpportunity.status == 'identified'
+            ).count()
 
-        scheduled = self.db.query(RefinanceOpportunity).filter(
-            RefinanceOpportunity.status == 'scheduled'
-        ).count()
+            sms_sent = self.db.query(RefinanceOpportunity).filter(
+                RefinanceOpportunity.status == 'sms_sent'
+            ).count()
 
-        converted = self.db.query(RefinanceOpportunity).filter(
-            RefinanceOpportunity.status == 'converted'
-        ).count()
+            called = self.db.query(RefinanceOpportunity).filter(
+                RefinanceOpportunity.status == 'called'
+            ).count()
 
-        # Priority counts
-        urgent = self.db.query(RefinanceOpportunity).filter(
-            RefinanceOpportunity.priority == 'urgent',
-            RefinanceOpportunity.status.in_(['identified', 'sms_sent']),
-        ).count()
+            scheduled = self.db.query(RefinanceOpportunity).filter(
+                RefinanceOpportunity.status == 'scheduled'
+            ).count()
 
-        high = self.db.query(RefinanceOpportunity).filter(
-            RefinanceOpportunity.priority == 'high',
-            RefinanceOpportunity.status.in_(['identified', 'sms_sent']),
-        ).count()
+            converted = self.db.query(RefinanceOpportunity).filter(
+                RefinanceOpportunity.status == 'converted'
+            ).count()
 
-        # Total potential savings from pending opportunities
-        from sqlalchemy import func
-        total_savings_result = self.db.query(
-            func.sum(RefinanceOpportunity.monthly_savings)
-        ).filter(
-            RefinanceOpportunity.status.in_(['identified', 'sms_sent'])
-        ).scalar()
+            urgent = self.db.query(RefinanceOpportunity).filter(
+                RefinanceOpportunity.priority == 'urgent',
+                RefinanceOpportunity.status.in_(['identified', 'sms_sent']),
+            ).count()
 
-        total_monthly_savings = float(total_savings_result or 0)
+            high = self.db.query(RefinanceOpportunity).filter(
+                RefinanceOpportunity.priority == 'high',
+                RefinanceOpportunity.status.in_(['identified', 'sms_sent']),
+            ).count()
 
-        # Recent rate sheets
-        recent_sheets = self.db.query(RateSheet).filter(
-            RateSheet.status == 'parsed'
-        ).order_by(RateSheet.created_at.desc()).limit(5).all()
+            from sqlalchemy import func
+            total_savings_result = self.db.query(
+                func.sum(RefinanceOpportunity.monthly_savings)
+            ).filter(
+                RefinanceOpportunity.status.in_(['identified', 'sms_sent'])
+            ).scalar()
+
+            total_monthly_savings = float(total_savings_result or 0)
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "Could not query refinance_opportunities table "
+                "(may not exist): %s", exc,
+            )
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
+            return _empty
+
+        # Recent rate sheets (separate try so opportunity metrics still
+        # return even if rate_sheets table has issues)
+        recent_sheets_data: List[Dict[str, Any]] = []
+        try:
+            recent_sheets = self.db.query(RateSheet).filter(
+                RateSheet.status == 'parsed'
+            ).order_by(RateSheet.created_at.desc()).limit(5).all()
+            recent_sheets_data = [s.to_dict() for s in recent_sheets]
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "Could not query rate_sheets table (may not exist): %s", exc,
+            )
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
         return {
             'by_status': {
@@ -418,5 +461,5 @@ class OpportunityDetectionService:
             'pending_total': identified + sms_sent,
             'total_monthly_savings': round(total_monthly_savings, 2),
             'total_annual_savings': round(total_monthly_savings * 12, 2),
-            'recent_rate_sheets': [sheet.to_dict() for sheet in recent_sheets],
+            'recent_rate_sheets': recent_sheets_data,
         }

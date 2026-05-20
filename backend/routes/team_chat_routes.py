@@ -4,6 +4,7 @@ Adapted from the lo_surface package for Perennia's import conventions.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, Optional
@@ -13,6 +14,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from db import get_db
+
+logger = logging.getLogger(__name__)
 
 
 def get_current_user_dep():
@@ -85,6 +88,14 @@ def _own_message_or_403(svc: Any, message_id: uuid.UUID, user_id: int) -> None:
         raise HTTPException(403, "not your message")
 
 
+def _safe_rollback(db: Session) -> None:
+    """Best-effort rollback — swallows errors from already-closed sessions."""
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Routes
 # ─────────────────────────────────────────────────────────────────────────
@@ -99,8 +110,8 @@ def list_messages(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> list[dict]:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         return svc.list_messages(
             organization_id=user.organization_id,
             client_file_id=client_file_id,
@@ -111,8 +122,8 @@ def list_messages(
     except PermissionError as e:
         raise HTTPException(403, str(e))
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("team_chat.list_messages failed: %s", e)
+        logger.warning("team_chat.list_messages failed: %s", e, exc_info=True)
+        _safe_rollback(db)
         return []
 
 
@@ -127,8 +138,8 @@ def send_message(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         msg = svc.post_human_message(
             organization_id=user.organization_id,
             client_file_id=client_file_id,
@@ -137,14 +148,14 @@ def send_message(
             mentioned_user_ids=body.mentioned_user_ids,
             attachments=[a.model_dump() for a in body.attachments],
         )
+        db.commit()
+        return svc._serialize_message(
+            msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
+        )
     except PermissionError as e:
         raise HTTPException(403, str(e))
     except ValueError as e:
         raise HTTPException(400, str(e))
-    db.commit()
-    return svc._serialize_message(
-        msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
-    )
 
 
 @router.patch("/clients/{client_file_id}/team-chat/messages/{message_id}")
@@ -156,21 +167,21 @@ def edit_message(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         msg = svc.edit_message(
             message_id=message_id,
             actor_user_id=user.id,
             body=payload.body,
         )
+        db.commit()
+        return svc._serialize_message(
+            msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
+        )
     except PermissionError as e:
         raise HTTPException(403, str(e))
     except ValueError as e:
         raise HTTPException(404, str(e))
-    db.commit()
-    return svc._serialize_message(
-        msg, actor_user_id=user.id, reactions_by_emoji={}, users_by_id={}
-    )
 
 
 @router.delete(
@@ -184,12 +195,12 @@ def delete_message(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> None:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         svc.delete_message(message_id=message_id, actor_user_id=user.id)
+        db.commit()
     except PermissionError as e:
         raise HTTPException(403, str(e))
-    db.commit()
 
 
 @router.post("/clients/{client_file_id}/team-chat/messages/{message_id}/pin")
@@ -231,16 +242,16 @@ def get_pinned(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> Optional[dict]:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         return svc.get_pinned(
             organization_id=user.organization_id,
             client_file_id=client_file_id,
             actor_user_id=user.id,
         )
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("team_chat.get_pinned failed: %s", e)
+        logger.warning("team_chat.get_pinned failed: %s", e, exc_info=True)
+        _safe_rollback(db)
         return None
 
 
@@ -297,12 +308,12 @@ def list_members(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> list[dict]:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         return svc.list_members(organization_id=user.organization_id, client_file_id=client_file_id)
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("team_chat.list_members failed: %s", e)
+        logger.warning("team_chat.list_members failed: %s", e, exc_info=True)
+        _safe_rollback(db)
         return []
 
 
@@ -314,8 +325,8 @@ def mark_read(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         result = svc.mark_read(
             organization_id=user.organization_id,
             client_file_id=client_file_id,
@@ -325,9 +336,8 @@ def mark_read(
         db.commit()
         return result
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("team_chat.mark_read failed: %s", e)
-        db.rollback()
+        logger.warning("team_chat.mark_read failed: %s", e, exc_info=True)
+        _safe_rollback(db)
         return {"channel_id": "", "user_id": str(user.id), "last_read_message_id": str(payload.last_read_message_id)}
 
 
@@ -338,16 +348,16 @@ def unread_count(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         return svc.unread_count(
             organization_id=user.organization_id,
             client_file_id=client_file_id,
             user_id=user.id,
         )
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("team_chat.unread_count failed: %s", e)
+        logger.warning("team_chat.unread_count failed: %s", e, exc_info=True)
+        _safe_rollback(db)
         return {"unread": 0, "mentions": 0}
 
 
@@ -361,14 +371,14 @@ def set_typing(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> None:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         svc.set_typing(
             organization_id=user.organization_id, client_file_id=client_file_id, user_id=user.id
         )
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("team_chat.set_typing failed: %s", e)
+        logger.warning("team_chat.set_typing failed: %s", e, exc_info=True)
+        _safe_rollback(db)
 
 
 @router.get("/clients/{client_file_id}/team-chat/typing")
@@ -378,12 +388,12 @@ def get_typing(
     db: Session = Depends(get_db),
     redis: Any = Depends(get_redis),
 ) -> dict:
-    svc = _svc(db, redis)
     try:
+        svc = _svc(db, redis)
         return svc.get_typing(
             organization_id=user.organization_id, client_file_id=client_file_id
         )
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("team_chat.get_typing failed: %s", e)
+        logger.warning("team_chat.get_typing failed: %s", e, exc_info=True)
+        _safe_rollback(db)
         return {"typing_user_ids": []}
