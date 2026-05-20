@@ -257,6 +257,7 @@ def add_risk_flag(
 def get_active_risks(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get active risk flags for a loan."""
     service = PortalLifecycleService(db)
@@ -267,14 +268,14 @@ def get_active_risks(
 def resolve_risk_flag(
     flag_id: int = Path(..., description="Risk flag ID"),
     resolution_notes: Optional[str] = Body(None),
-    user_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Resolve a risk flag."""
     service = PortalLifecycleService(db)
     return service.resolve_risk_flag(
         flag_id=flag_id,
-        resolved_by=user_id,
+        resolved_by=str(current_user.id),
         resolution_notes=resolution_notes,
     )
 
@@ -289,6 +290,7 @@ def get_loan_milestones(
     include_tasks: bool = Query(True),
     borrower_view: bool = Query(False),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get all milestones for a loan with optional task details."""
     service = PortalMilestoneService(db)
@@ -303,6 +305,7 @@ def get_loan_milestones(
 def get_milestone_progress(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get overall milestone progress for a loan."""
     service = PortalMilestoneService(db)
@@ -315,6 +318,7 @@ def generate_milestones(
     stage: LifecycleStage = Query(...),
     expected_close_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Generate milestone instances for a loan based on templates."""
     service = PortalMilestoneService(db)
@@ -329,8 +333,8 @@ def generate_milestones(
 def update_milestone(
     milestone_id: int = Path(..., description="Milestone ID"),
     request: MilestoneUpdateRequest = Body(...),
-    user_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Update milestone status."""
     service = PortalMilestoneService(db)
@@ -338,7 +342,7 @@ def update_milestone(
         milestone_id=milestone_id,
         status=request.status,
         notes=request.notes,
-        updated_by=user_id,
+        updated_by=str(current_user.id),
     )
 
 
@@ -348,6 +352,7 @@ def get_milestone_timeline(
     view_type: str = Query("horizontal"),
     borrower_view: bool = Query(False),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get milestone data formatted for timeline visualization."""
     service = PortalMilestoneService(db)
@@ -362,6 +367,7 @@ def get_milestone_timeline(
 def get_journey_summary(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get journey summary for dashboard display."""
     service = PortalMilestoneService(db)
@@ -376,6 +382,7 @@ def get_journey_summary(
 def get_task_details(
     task_id: int = Path(..., description="Task ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get detailed task information."""
     service = PortalMilestoneService(db)
