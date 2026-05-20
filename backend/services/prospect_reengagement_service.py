@@ -457,16 +457,24 @@ class ProspectReEngagementService:
                 return {"status": "scheduling", "response": response_text}
 
         else:
-            # Ambiguous or continuing conversation
+            # Ambiguous or continuing conversation. If Aria proposed specific
+            # times in this turn, promote the conversation to the scheduling
+            # state so the next inbound is treated as a possible time pick.
+            proposed = ai_result.get("proposed_times") or []
             new_state = next_state or conv_data["state"]
+            if proposed:
+                new_state = "scheduling"
             if new_state == "initial_outreach_sent":
                 new_state = "awaiting_reply"
 
-            self._update_conversation(conv_id, {
+            update_payload = {
                 "state": new_state,
                 "messages": messages,
                 "turn_count": conv_data["turn_count"] + 1,
-            })
+            }
+            if proposed:
+                update_payload["proposed_times"] = proposed
+            self._update_conversation(conv_id, update_payload)
             self._send_and_log(conv_data, response_text, messages)
             return {"status": new_state, "response": response_text}
 
@@ -497,36 +505,45 @@ class ProspectReEngagementService:
             history_lines.append(f"{role_label}: {m['content']}")
         history_text = "\n".join(history_lines)
 
-        # Fetch available slots if entering scheduling state
-        available_slots_text = ""
-        if current_state == "scheduling" or "yes" in inbound_message.lower():
-            available_slots_text = self._get_available_slots_text(conv_data)
+        # Always inject real LO calendar availability so Aria can propose
+        # specific times on every turn, even when the lead asks a question
+        # rather than committing. Without this, the LLM tends to deflect
+        # ("the LO will reach out") instead of actively scheduling.
+        available_slots_text = self._get_available_slots_text(conv_data)
 
-        system_prompt = f"""You are an AI assistant helping schedule a mortgage consultation call on behalf of loan officer {lo_name}.
+        system_prompt = f"""You are {lo_name}'s scheduling assistant. Your single job is to BOOK a consultation call between {lead_name} and {lo_name}.
 
-You are texting with {lead_name}. Keep messages under 280 characters (2 SMS segments max). Be warm, professional, and concise.
+You are texting with {lead_name}. Keep each SMS under 280 characters (2 segments). Be warm, professional, and decisive — never wishy-washy.
 
 Current conversation state: {current_state}
 
-INSTRUCTIONS:
-1. First, classify the lead's intent from their message. Possible intents:
-   - "interested" — they want to talk/schedule (yes, sure, sounds good, etc.)
-   - "confirm_time" — they are confirming a specific time slot
-   - "decline" — they are not interested (no thanks, not now, maybe later, etc.)
-   - "opt_out" — they want to stop receiving messages (STOP, unsubscribe, etc.)
-   - "ambiguous" — unclear, need to ask a clarifying question
+GROUND RULES (non-negotiable):
+- NEVER say "{lo_name} will reach out", "will contact you", "will get back to you", "will call you later", or anything that defers the booking to a future human action. YOU are the one booking the time, right now, in this conversation.
+- NEVER end a reply without either (a) proposing 2-3 specific times from the available slots, or (b) confirming a specific time the lead just gave.
+- Do NOT use emojis. Do NOT mention AI or automation. Speak as {lo_name}'s human-sounding assistant.
+- Do NOT quote rates, fees, or loan terms. If asked about rates/fees, briefly say {lo_name} will cover that on the call, then propose times.
 
-2. If interested or confirming, help schedule. If declining, be gracious.
+INTENT CLASSIFICATION (pick one):
+- "interested"   — they want to talk/schedule, but haven't committed to a specific time yet (yes, sure, sounds good, vague questions, anything not a clear no)
+- "confirm_time" — they named or accepted a SPECIFIC date+time (e.g. "Thursday at 2pm", "yes that works", "tomorrow morning at 10")
+- "decline"      — they are clearly not interested (no thanks, not now, lose my number, maybe later)
+- "opt_out"     — STOP / unsubscribe / quit
+- "ambiguous"   — they asked a question or made small talk; you should ANSWER briefly and then propose specific times in the SAME message
 
-3. Do NOT use emojis. Do NOT mention AI or automation. Speak as if you are {lo_name}'s assistant.
+RESPONSE PLAYBOOK BY INTENT:
+- interested OR ambiguous → answer their question in one sentence (if any), then propose 2-3 specific times from the available slots below. Example: "Happy to walk you through it on a quick call. I've got Wed 10am, Thu 2pm, or Fri 9am — which works?"
+- confirm_time → confirm the exact day/time and set parsed_time. Example: "Perfect, locking you in for Thursday at 2pm. {lo_name} will call you then and you'll get a confirmation + reminder."
+- decline → be gracious, leave the door open. Example: "All good — if anything changes, just text back and we'll find a time."
+- opt_out → short acknowledgement, no further pitch.
 
-{f"Available appointment slots:{chr(10)}{available_slots_text}" if available_slots_text else ""}
+AVAILABLE TIMES on {lo_name}'s calendar (use ONLY these — do not invent times):
+{available_slots_text if available_slots_text else "(no specific slots loaded — ask the lead for 2 day/time options that work for them this week)"}
 
 Respond with EXACTLY this JSON format (no markdown, no extra text):
 {{"intent": "interested|confirm_time|decline|opt_out|ambiguous", "response_text": "your SMS reply here", "next_state": "scheduling|declined|opt_out|awaiting_reply", "parsed_time": null, "decline_reason": null, "proposed_times": []}}
 
-If intent is confirm_time, set parsed_time to the ISO datetime they confirmed (e.g., "2026-03-03T14:00:00").
-If proposing times, include 2-3 options in proposed_times as ISO strings."""
+- If intent is confirm_time, set parsed_time to the ISO datetime they confirmed (e.g. "2026-03-03T14:00:00").
+- For interested or ambiguous intents, ALWAYS populate proposed_times with 2-3 ISO datetimes drawn from the available slots, and reference those exact times in response_text."""
 
         user_prompt = f"""Conversation history:
 {history_text}
@@ -542,11 +559,31 @@ Classify intent and generate response:"""
             return parsed
         except Exception as e:
             logger.error(f"AI response generation failed: {e}")
+            # Fallback: never punt to the LO — keep the booking flow moving.
+            # If we have real slots, surface the first two so the lead can pick.
+            fallback_text = (
+                f"Happy to set you up with {lo_name}. What day/time works "
+                "best for you this week? I can lock it in right now."
+            )
+            try:
+                if available_slots_text and available_slots_text.startswith("-"):
+                    first_two = [
+                        line[2:] for line in available_slots_text.splitlines()[:2]
+                        if line.startswith("- ")
+                    ]
+                    if first_two:
+                        fallback_text = (
+                            f"Want me to put you on {lo_name}'s calendar? "
+                            f"I've got {first_two[0]} or {first_two[-1]} open — which works?"
+                        )
+            except Exception:
+                pass
             return {
                 "intent": "ambiguous",
-                "response_text": f"Thanks for your reply! Let me have {lo_name} reach out to you directly.",
-                "next_state": "awaiting_reply",
+                "response_text": fallback_text,
+                "next_state": "scheduling",
                 "parsed_time": None,
+                "proposed_times": [],
             }
 
     def _get_available_slots_text(self, conv_data: Dict) -> str:
