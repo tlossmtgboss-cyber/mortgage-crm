@@ -395,7 +395,7 @@ class EmailIdentityResolver:
                         FROM leads
                         WHERE lower(email) = :email
                         AND owner_id = :user_id
-                        AND status NOT IN ('dead', 'closed_lost')
+                        AND stage NOT IN ('dead', 'closed_lost')
                         ORDER BY created_at DESC
                         LIMIT 1
                         """
@@ -436,7 +436,7 @@ class EmailIdentityResolver:
                         FROM loans
                         WHERE (lower(borrower_email) = :email OR lower(coborrower_email) = :email)
                         AND loan_officer_id = :user_id
-                        AND status NOT IN ('cancelled', 'withdrawn')
+                        AND stage NOT IN ('CANCELLED', 'WITHDRAWN')
                         ORDER BY created_at DESC
                         LIMIT 1
                         """
@@ -631,7 +631,7 @@ class EmailIdentityResolver:
                         OR lower(borrower_name) LIKE :name_pattern
                     )
                     AND loan_officer_id = :user_id
-                    AND status NOT IN ('cancelled', 'withdrawn')
+                    AND stage NOT IN ('CANCELLED', 'WITHDRAWN')
                     ORDER BY created_at DESC
                     LIMIT 1
                     """
@@ -663,7 +663,7 @@ class EmailIdentityResolver:
                         lower(name) = :full_name
                         OR lower(name) LIKE :name_pattern
                     )
-                    AND status NOT IN ('dead', 'closed_lost')
+                    AND stage NOT IN ('dead', 'closed_lost')
                     ORDER BY created_at DESC
                     LIMIT 1
                     """
@@ -951,7 +951,7 @@ class EmailIdentityResolver:
                     WHERE email IS NOT NULL
                     AND email != ''
                     AND owner_id = :user_id
-                    AND status NOT IN ('dead', 'closed_lost')
+                    AND stage NOT IN ('dead', 'closed_lost')
                     ON CONFLICT (email_address, user_id)
                     DO UPDATE SET lead_id = EXCLUDED.lead_id, client_name = EXCLUDED.client_name
                 """),
@@ -968,7 +968,7 @@ class EmailIdentityResolver:
                     WHERE borrower_email IS NOT NULL
                     AND borrower_email != ''
                     AND loan_officer_id = :user_id
-                    AND status NOT IN ('cancelled', 'withdrawn')
+                    AND stage NOT IN ('CANCELLED', 'WITHDRAWN')
                     ON CONFLICT (email_address, user_id)
                     DO UPDATE SET loan_id = EXCLUDED.loan_id, client_name = EXCLUDED.client_name
                 """),
