@@ -109,6 +109,14 @@ from .ai import (
     AITrainingEvent,
 )
 
+# Autonomous agent models (progressive autonomy / confidence graduation)
+from .autonomous_task import (
+    AutonomousTask,
+    TaskExecution,
+    AgentAction,
+)
+from .action_type_confidence import ActionTypeConfidence
+
 # Referral models
 from .referral import (
     ReferralPartner,
@@ -788,6 +796,14 @@ __all__ = [
     "AIMetricsDaily",
     "AIChangelogDaily",
     "AITrainingEvent",
+
+    # =====================
+    # Autonomous Agents (Progressive Autonomy)
+    # =====================
+    "AutonomousTask",
+    "TaskExecution",
+    "AgentAction",
+    "ActionTypeConfidence",
 
     # =====================
     # Referral

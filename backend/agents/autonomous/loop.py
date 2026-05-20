@@ -42,6 +42,10 @@ class AgentFrequency(str, Enum):
     HOURLY = "hourly"
     EVERY_2_HOURS = "every_2_hours"
     EVERY_4_HOURS = "every_4_hours"
+    EVERY_6_HOURS = "every_6_hours"
+    DAILY_2AM = "daily_2am"
+    DAILY_4AM = "daily_4am"
+    DAILY_5AM = "daily_5am"
     DAILY_6AM = "daily_6am"
     DAILY_7AM = "daily_7am"
     DAILY_8AM = "daily_8am"
@@ -63,6 +67,10 @@ FREQUENCY_CRON = {
     AgentFrequency.HOURLY: {"minute": "0"},
     AgentFrequency.EVERY_2_HOURS: {"minute": "0", "hour": "*/2"},
     AgentFrequency.EVERY_4_HOURS: {"minute": "0", "hour": "*/4"},
+    AgentFrequency.EVERY_6_HOURS: {"minute": "0", "hour": "*/6"},
+    AgentFrequency.DAILY_2AM: {"hour": "2", "minute": "0"},
+    AgentFrequency.DAILY_4AM: {"hour": "4", "minute": "0"},
+    AgentFrequency.DAILY_5AM: {"hour": "5", "minute": "0"},
     AgentFrequency.DAILY_6AM: {"hour": "6", "minute": "5"},
     AgentFrequency.DAILY_7AM: {"hour": "7", "minute": "2"},
     AgentFrequency.DAILY_8AM: {"hour": "8", "minute": "7"},
@@ -345,6 +353,13 @@ def register_all_autonomous_agents(scheduler_or_service):
         from agents.autonomous import sla_enforcer  # noqa: F401
     except ImportError as e:
         logger.warning(f"Core autonomous agents failed to import: {e}")
+
+    # Learning pipeline agents (confidence graduation, health monitoring, stale cleanup)
+    # These replace the Celery-based learning_tasks that never ran in production.
+    try:
+        from agents.autonomous import learning_pipeline  # noqa: F401
+    except ImportError as e:
+        logger.warning(f"Learning pipeline agents failed to import: {e}")
 
     # Fleet agents (40 additional agents across 8 modules)
     # Disabled by default — enable via ENABLE_FLEET_AGENTS=true when DB can handle the load

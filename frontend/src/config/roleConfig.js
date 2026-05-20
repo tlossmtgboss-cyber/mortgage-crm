@@ -303,6 +303,28 @@ export const NAVIGATION_ITEMS = {
       { path: '/voice/talk', label: 'Talk to Agent', icon: 'fa-microphone' },
     ]
   },
+  // AI Agent management - admin/site_admin only
+  missionControl: {
+    path: '/mission-control',
+    label: 'Mission Control',
+    matchPaths: ['/mission-control'],
+    module: 'base',
+    adminOnly: true
+  },
+  agentDashboard: {
+    path: '/agents',
+    label: 'Agent Dashboard',
+    matchPaths: ['/agents', '/agent/'],
+    module: 'base',
+    adminOnly: true
+  },
+  agentGym: {
+    path: '/agent-gym',
+    label: 'Agent Gym',
+    matchPaths: ['/agent-gym'],
+    module: 'base',
+    adminOnly: true
+  },
   // Admin-only navigation items
   adminPanel: {
     path: '/admin',
@@ -347,6 +369,9 @@ export const ROLE_NAVIGATION = {
     'profitability',
     'usageIntelligence',    // Owner-only: Usage costs & pricing
     'opsManager',           // Ops Manager: Pipeline health & impediments
+    'missionControl',       // Mission Control: AI agent health & metrics
+    'agentDashboard',       // Agent Dashboard: 22 AI agents overview
+    'agentGym',             // Agent Gym: Agent training & testing
     'capacity',
     'productionPredictor',
     'dealAlerts'
@@ -371,7 +396,10 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    'opsManager'            // Ops Manager: Pipeline health & impediments
+    'opsManager',           // Ops Manager: Pipeline health & impediments
+    'missionControl',       // Mission Control: AI agent health & metrics
+    'agentDashboard',       // Agent Dashboard: 22 AI agents overview
+    'agentGym'              // Agent Gym: Agent training & testing
   ],
 
   // Loan Officer - Full sales navigation
@@ -894,10 +922,19 @@ export const MASTER_ADMIN_NAVIGATION = [
     key: 'management',
     label: 'Management',
     path: '/accounting',
-    matchPaths: ['/master-manager', '/usage-intelligence', '/voice', '/dialer', '/conversation-intelligence'],
+    matchPaths: ['/master-manager', '/usage-intelligence', '/voice', '/dialer', '/conversation-intelligence', '/mission-control', '/agents', '/agent-gym'],
     children: [
       { path: '/master-manager', label: 'Capacity', icon: 'fa-chart-pie' },
       { path: '/usage-intelligence', label: 'Usage Intelligence', icon: 'fa-chart-bar' },
+      {
+        label: 'AI Agents',
+        icon: 'fa-brain',
+        children: [
+          { path: '/mission-control', label: 'Mission Control' },
+          { path: '/agents', label: 'Agent Dashboard' },
+          { path: '/agent-gym', label: 'Agent Gym' },
+        ]
+      },
       {
         label: 'Voice & Calls',
         icon: 'fa-phone-volume',

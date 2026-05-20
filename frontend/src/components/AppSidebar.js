@@ -10,12 +10,14 @@ const SECTION_MAP = {
   pipeline: ['dashboard', 'leads', 'activeLoans', 'portfolio', 'rateMonitor'],
   workflow: ['tasks', 'smsTasks', 'reconciliation', 'smartDocs', 'marketing', 'calendar'],
   intelligence: ['briefing', 'scorecard', 'goalTracker', 'partners', 'aiUnderwriter', 'market', 'profitability'],
+  aiAgents: ['missionControl', 'agentDashboard', 'agentGym', 'opsManager', 'usageIntelligence'],
 };
 
 const SECTION_LABELS = {
   pipeline: null,
   workflow: 'Workflow',
   intelligence: 'Intelligence',
+  aiAgents: 'AI Agents',
 };
 
 const ICONS = {
@@ -37,6 +39,11 @@ const ICONS = {
   aiUnderwriter: '⚛',
   market: '◈',
   profitability: '$',
+  missionControl: '⚙',
+  agentDashboard: '⚛',
+  agentGym: '⏣',
+  opsManager: '⊞',
+  usageIntelligence: '⟐',
 };
 
 const BADGE_CLASSES = {

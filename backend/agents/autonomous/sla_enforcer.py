@@ -168,6 +168,7 @@ def _create_task(
     description: str,
     priority: str,
     gateway=None,
+    notify_user_id: Optional[int] = None,
 ) -> bool:
     """Insert a task record for the SLA escalation. Returns True if executed."""
     _params = {
@@ -190,6 +191,7 @@ def _create_task(
             "create_task", _do_insert,
             target_entity="loan", target_id=loan_id,
             description=f"SLA escalation task: {title}",
+            notify_user_id=notify_user_id,
         )
     else:
         _do_insert()
@@ -207,6 +209,7 @@ def _send_notification(
     days: int,
     sla: int,
     gateway=None,
+    notify_user_id: Optional[int] = None,
 ) -> bool:
     """Insert an in-app notification for a single recipient. Returns True if executed."""
     level_labels = {
@@ -240,6 +243,7 @@ def _send_notification(
             "create_notification", _do_insert,
             target_entity="loan", target_id=None,
             description=f"SLA {level} notification for {borrower_name} ({loan_number}) to user {user_id}",
+            notify_user_id=notify_user_id,
         )
     else:
         _do_insert()
@@ -373,6 +377,7 @@ def sla_enforcer(
         if _create_task(
             db, organization_id, loan_id, recipients[0],
             title, description, priority, gateway=gateway,
+            notify_user_id=recipients[0],
         ):
             actions += 1
 
@@ -383,6 +388,7 @@ def sla_enforcer(
                     db, organization_id, uid, level,
                     loan_number, borrower_name, stage,
                     days_int, sla, gateway=gateway,
+                    notify_user_id=uid,
                 ):
                     notifications_sent += 1
             except Exception as e:

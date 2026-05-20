@@ -41,6 +41,9 @@ def run_migration(engine):
     )
     from database.models.agent_memory import AgentConversation, AgentMemory, AgentContext
     from database.models.agent_metrics import AgentInvocation, create_tables_if_needed as create_metrics_tables
+    from database.models.action_type_confidence import (
+        ActionTypeConfidence, create_tables_if_needed as create_confidence_tables,
+    )
 
     tables_created = []
 
@@ -68,6 +71,13 @@ def run_migration(engine):
         tables_created.append("agent_invocations")
     except Exception as e:
         logger.warning(f"Agent metrics tables: {e}")
+
+    # Confidence graduation table (drives the progressive autonomy system)
+    try:
+        create_confidence_tables(engine)
+        tables_created.append("action_type_confidence")
+    except Exception as e:
+        logger.warning(f"Action type confidence table: {e}")
 
     # Agent memory tables (use Base.metadata.create_all with specific tables)
     try:

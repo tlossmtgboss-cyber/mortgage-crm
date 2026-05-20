@@ -97,6 +97,24 @@ def run_all_startup_migrations(engine: Any) -> None:
     except Exception as e:
         logger.error(f"AI autonomy table creation FAILED: {e}", exc_info=True)
 
+    # Fix agent_actions.execution_id nullable + add approval queue index
+    try:
+        from sqlalchemy import text as _text
+        with engine.connect() as conn:
+            conn.execute(_text("""
+                ALTER TABLE agent_actions
+                ALTER COLUMN execution_id DROP NOT NULL
+            """))
+            conn.execute(_text("""
+                CREATE INDEX IF NOT EXISTS ix_agentact_org_status
+                ON agent_actions (organization_id, status)
+            """))
+            conn.commit()
+        logger.info("agent_actions: execution_id nullable fix + org_status index applied")
+    except Exception as e:
+        if "already" not in str(e).lower() and "does not exist" not in str(e).lower():
+            logger.warning(f"agent_actions schema fix: {e}")
+
     # Webhook idempotency table (separate from AI autonomy)
     try:
         from database.models.webhook_idempotency import create_tables_if_needed as _create_webhook_tables

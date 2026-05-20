@@ -81,6 +81,7 @@ class ActionGateway:
         target_id: Optional[int] = None,
         description: str = "",
         payload: Optional[dict] = None,
+        notify_user_id: Optional[int] = None,
     ) -> bool:
         """Propose an action through the confidence gate.
 
@@ -88,6 +89,10 @@ class ActionGateway:
 
         Safety-critical action types in ALWAYS_EXECUTE bypass the gate
         and execute immediately (compliance alerts must never be delayed).
+
+        If ``notify_user_id`` is provided and the action is auto-executed
+        (graduated), an in-app Notification is created so the user knows
+        AI handled it.
         """
         if action_type in self.ALWAYS_EXECUTE:
             try:
@@ -116,6 +121,10 @@ class ActionGateway:
                 self._auto_executed += 1
                 self._record_action(action_type, "completed", False,
                                     target_entity, target_id, description, payload)
+                self._notify_auto_action(
+                    notify_user_id, action_type, description,
+                    target_entity, target_id,
+                )
                 return True
             except Exception as e:
                 logger.warning("Auto-executed action %s failed: %s", action_type, e)
@@ -158,6 +167,51 @@ class ActionGateway:
             self.db.flush()
         except Exception as e:
             logger.warning("Failed to record AgentAction: %s", e)
+
+    def _notify_auto_action(
+        self,
+        user_id: Optional[int],
+        action_type: str,
+        description: str,
+        target_entity: Optional[str],
+        target_id: Optional[int],
+    ):
+        """Create an in-app Notification so the user knows AI auto-handled something."""
+        if not user_id:
+            return
+        try:
+            from database.models.security import Notification
+
+            link = self._build_link(target_entity, target_id)
+            notification = Notification(
+                user_id=user_id,
+                organization_id=self.org_id,
+                type="ai_auto_action",
+                title=f"AI Handled: {description[:80]}",
+                message=(
+                    f"{description}. "
+                    "This was auto-processed based on your approval history."
+                ),
+                link=link,
+                is_read=False,
+            )
+            self.db.add(notification)
+            self.db.flush()
+        except Exception as e:
+            logger.warning("Failed to create auto-action notification: %s", e)
+
+    @staticmethod
+    def _build_link(target_entity: Optional[str], target_id: Optional[int]) -> Optional[str]:
+        """Build a frontend link from entity type and ID."""
+        if not target_entity or not target_id:
+            return None
+        entity_paths = {
+            "loan": f"/pipeline/loans/{target_id}",
+            "lead": f"/clients/{target_id}",
+            "task": f"/tasks/{target_id}",
+            "contact": f"/clients/{target_id}",
+        }
+        return entity_paths.get(target_entity)
 
     @property
     def stats(self) -> dict:

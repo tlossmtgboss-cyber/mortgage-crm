@@ -12,6 +12,7 @@ Endpoints:
     POST /api/v1/autonomous/tasks/{task_id}/trigger  Manually trigger task (admin)
     GET  /api/v1/autonomous/tasks/{task_id}/executions  Execution history
     GET  /api/v1/autonomous/executions/{execution_id}/actions  Actions from execution
+    GET  /api/v1/autonomous/actions/pending           List pending approval actions
     POST /api/v1/autonomous/actions/{action_id}/approve  Approve a pending action
     POST /api/v1/autonomous/actions/{action_id}/reject   Reject a pending action
     GET  /api/v1/autonomous/confidence               Confidence graduation dashboard
@@ -708,6 +709,56 @@ def register_autonomous_task_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(status_code=500, detail="Failed to seed default tasks")
 
     # -------------------------------------------------------------------
+    # GET /api/v1/autonomous/actions/pending — List pending approval actions
+    # -------------------------------------------------------------------
+    @app.get("/api/v1/autonomous/actions/pending", tags=["Autonomous Tasks"])
+    async def list_pending_actions(
+        limit: int = Query(default=50, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        action_type: Optional[str] = Query(default=None),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """List all pending-approval agent actions for the current organization."""
+        try:
+            q = db.query(AgentAction).filter(
+                AgentAction.organization_id == current_user.organization_id,
+                AgentAction.status == "pending_approval",
+            )
+            if action_type:
+                q = q.filter(AgentAction.action_type == action_type)
+
+            total = q.count()
+            actions = (
+                q.order_by(AgentAction.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+                .all()
+            )
+
+            return {
+                "actions": [
+                    {
+                        "id": a.id,
+                        "action_type": a.action_type,
+                        "target_entity": a.target_entity,
+                        "target_id": a.target_id,
+                        "description": a.description,
+                        "payload": a.payload,
+                        "created_at": a.created_at.isoformat() if a.created_at else None,
+                    }
+                    for a in actions
+                ],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+
+        except Exception as e:
+            logger.exception(f"Failed to list pending actions: {e}")
+            raise HTTPException(status_code=500, detail="Failed to list pending actions")
+
+    # -------------------------------------------------------------------
     # POST /api/v1/autonomous/actions/{action_id}/approve
     # -------------------------------------------------------------------
     @app.post("/api/v1/autonomous/actions/{action_id}/approve", tags=["Autonomous Tasks"])
@@ -808,18 +859,81 @@ def register_autonomous_task_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(status_code=500, detail="Failed to reject action")
 
     # -------------------------------------------------------------------
-    # GET /api/v1/autonomous/confidence — Graduation dashboard
+    # GET /api/v1/autonomous/confidence — Graduation dashboard with trends
     # -------------------------------------------------------------------
     @app.get("/api/v1/autonomous/confidence", tags=["Autonomous Tasks"])
     async def confidence_dashboard(
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
-        """Get confidence graduation status for all action types."""
+        """Get confidence graduation status for all action types, including
+        per-action-type decision trend data (last 7 days vs previous 7 days)."""
         try:
             from services.autonomous.confidence_graduation import ConfidenceGraduationService
+
+            org_id = current_user.organization_id
             service = ConfidenceGraduationService(db)
-            return service.get_confidence_dashboard(current_user.organization_id)
+            dashboard = service.get_confidence_dashboard(org_id)
+
+            # Compute trend data: decisions in last 7 days vs previous 7 days
+            now = datetime.now(timezone.utc)
+            seven_days_ago = now - timedelta(days=7)
+            fourteen_days_ago = now - timedelta(days=14)
+
+            # Count recent-period decisions (approved or rejected actions)
+            recent_rows = (
+                db.query(
+                    AgentAction.action_type,
+                    func.count().label("cnt"),
+                )
+                .filter(
+                    AgentAction.organization_id == org_id,
+                    AgentAction.status.in_(["completed", "rejected"]),
+                    AgentAction.approved_at >= seven_days_ago,
+                )
+                .group_by(AgentAction.action_type)
+                .all()
+            )
+            recent_map = {row.action_type: row.cnt for row in recent_rows}
+
+            # Count previous-period decisions
+            previous_rows = (
+                db.query(
+                    AgentAction.action_type,
+                    func.count().label("cnt"),
+                )
+                .filter(
+                    AgentAction.organization_id == org_id,
+                    AgentAction.status.in_(["completed", "rejected"]),
+                    AgentAction.approved_at >= fourteen_days_ago,
+                    AgentAction.approved_at < seven_days_ago,
+                )
+                .group_by(AgentAction.action_type)
+                .all()
+            )
+            previous_map = {row.action_type: row.cnt for row in previous_rows}
+
+            # Enrich each action_type entry with trend data
+            for entry in dashboard.get("action_types", []):
+                at = entry["action_type"]
+                current_count = recent_map.get(at, 0)
+                previous_count = previous_map.get(at, 0)
+                if previous_count > 0:
+                    trend_direction = "up" if current_count > previous_count else (
+                        "down" if current_count < previous_count else "flat"
+                    )
+                elif current_count > 0:
+                    trend_direction = "up"
+                else:
+                    trend_direction = "flat"
+                entry["recent_decisions"] = {
+                    "last_7_days": current_count,
+                    "previous_7_days": previous_count,
+                    "trend": trend_direction,
+                }
+
+            return dashboard
+
         except ImportError:
             raise HTTPException(status_code=501, detail="Confidence graduation not available")
         except Exception as e:

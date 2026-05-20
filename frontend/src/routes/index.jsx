@@ -299,6 +299,7 @@ const MasterManagerCapacity = lazyRetry(() => import('../pages/MasterManager/Cap
 const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 const MemoryStaging = lazyRetry(() => import('../pages/MemoryStaging'));
+const MissionControl = lazyRetry(() => import('../pages/MissionControl'));
 
 // Settings pages
 const EmailIntegrationSettings = lazyRetry(() => import('../pages/EmailIntegrationSettings'));
@@ -692,6 +693,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/agent/:id" path="/agent/:id" element={withMainLayout(AgentProfile)} />,
     <Route key="/agent/:agentId/settings" path="/agent/:agentId/settings" element={withMainLayout(AgentGovernanceSettings)} />,
     <Route key="/agent-gym" path="/agent-gym" element={withMainLayout(AgentGym)} />,
+    <Route key="/mission-control" path="/mission-control" element={withMainLayout(MissionControl)} />,
 
     // Accounting
     <Route key="/accounting/accounts" path="/accounting/accounts" element={withMainLayout(ChartOfAccounts)} />,

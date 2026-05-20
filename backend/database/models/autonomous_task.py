@@ -220,12 +220,13 @@ class AgentAction(Base):
         Index("ix_agentact_exec_action", "execution_id", "action_type"),
         Index("ix_agentact_org_action", "organization_id", "action_type"),
         Index("ix_agentact_target", "target_entity", "target_id"),
+        Index("ix_agentact_org_status", "organization_id", "status"),
         {"extend_existing": True},
     )
 
     id = Column(Integer, primary_key=True, index=True)
     execution_id = Column(
-        Integer, ForeignKey("task_executions.id"), nullable=False, index=True
+        Integer, ForeignKey("task_executions.id"), nullable=True, index=True
     )
     organization_id = Column(
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
