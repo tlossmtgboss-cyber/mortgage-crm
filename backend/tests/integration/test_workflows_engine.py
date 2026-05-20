@@ -234,3 +234,75 @@ def test_post_closing_lead_data_defaults():
     assert lead.first_name == "John"
     assert lead.referral_source_score == 0
     assert lead.employees_managed == 0
+
+
+# ---------------------------------------------------------------------------
+# Lead workflow — more transitions
+# ---------------------------------------------------------------------------
+
+def test_lead_pre_approved_to_under_contract_allowed():
+    assert "Under Contract" in _lwe.VALID_TRANSITIONS["Pre-Approved"]
+
+
+def test_lead_long_term_nurture_can_go_to_prospect():
+    assert "Prospect" in _lwe.VALID_TRANSITIONS["Long-Term Nurture"]
+
+
+def test_lead_closed_can_only_go_to_amr():
+    assert _lwe.VALID_TRANSITIONS["Closed"] == ["AMR"]
+
+
+def test_lead_referral_source_terminal():
+    assert _lwe.VALID_TRANSITIONS["Referral Source"] == []
+
+
+def test_lead_withdrawn_can_reactivate_to_new():
+    assert "New" in _lwe.VALID_TRANSITIONS["Withdrawn"]
+
+
+def test_lead_status_change_schema_minimal():
+    sc = _lwe.LeadStatusChange(
+        lead_id=1, lead_name="X", old_status="New",
+        new_status="Prospect", loan_officer_id=2, loan_officer_name="LO",
+    )
+    assert sc.lead_id == 1
+    assert sc.old_status == "New"
+
+
+# ---------------------------------------------------------------------------
+# Doc intake — more constants & patterns
+# ---------------------------------------------------------------------------
+
+def test_doc_intake_classifies_1040_tax_return():
+    patterns = _die.DOC_TYPE_FILENAME_PATTERNS["TAX_RETURN_1040"]
+    assert any(re.search(p, "John_1040_2024.pdf", re.IGNORECASE) for p in patterns)
+
+
+def test_doc_intake_classifies_bank_statement():
+    patterns = _die.DOC_TYPE_FILENAME_PATTERNS["BANK_STATEMENT"]
+    assert any(re.search(p, "Chase_Bank_Statement.pdf", re.IGNORECASE) for p in patterns)
+
+
+def test_doc_intake_max_size_25mb():
+    assert _die.MAX_FILE_SIZE_BYTES == 25 * 1024 * 1024
+
+
+# ---------------------------------------------------------------------------
+# Rate lock — additional edge cases
+# ---------------------------------------------------------------------------
+
+def test_rate_lock_score_clamped_to_max_100():
+    eng = _rle.RateLockIntelligenceEngine()
+    # Massive bullish move + close in 5 days
+    loan = _make_loan(closing_in_days=5)
+    loan.borrower_risk_profile = "Safety First"
+    score = eng.calculate_lock_score(_make_market(mbs_change=50), loan, 5)
+    assert score == 100
+
+
+def test_rate_lock_score_clamped_to_min_0():
+    eng = _rle.RateLockIntelligenceEngine()
+    loan = _make_loan(closing_in_days=60)
+    loan.borrower_risk_profile = "Aggressive"
+    score = eng.calculate_lock_score(_make_market(mbs_change=-50, vol=80), loan, 60)
+    assert score == 0

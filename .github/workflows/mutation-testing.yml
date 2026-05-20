@@ -1,0 +1,111 @@
+name: Mutation Testing (manual)
+
+# Mutation testing is too slow to run on every push (~30-90 min full scope).
+# Trigger manually from the Actions tab before releases that touch:
+#   backend/auth, backend/middleware/security_headers.py,
+#   backend/middleware/admin_guard.py, backend/agents/orchestration,
+#   backend/services/loan_state_audit_service.py,
+#   backend/services/loan_reconciliation_service.py,
+#   backend/services/holiday_calendar.py,
+#   backend/services/important_dates_service.py
+#
+# Quality gate: >= 70 % killed mutations on covered paths.
+
+on:
+  workflow_dispatch:
+    inputs:
+      kill_threshold:
+        description: "Minimum killed-mutation rate (percent) to pass"
+        required: false
+        default: "70"
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install mutmut psycopg2-binary pytest pytest-asyncio
+
+      - name: Run mutmut
+        # mutmut returns non-zero when any mutant survives — that is expected;
+        # we evaluate killed-rate ourselves below.
+        run: |
+          set +e
+          mutmut run
+          echo "mutmut_exit=$?" >> $GITHUB_ENV
+          exit 0
+
+      - name: Compute kill rate and enforce gate
+        id: gate
+        run: |
+          python3 <<'PY'
+          import os, re, subprocess, sys
+
+          out = subprocess.run(["mutmut", "results"], capture_output=True, text=True).stdout
+          buckets = {}
+          for line in out.splitlines():
+              m = re.match(r"\s+\S+:\s*(.+?)\s*$", line)
+              if m:
+                  buckets[m.group(1)] = buckets.get(m.group(1), 0) + 1
+
+          killed     = buckets.get("killed", 0)
+          survived   = buckets.get("survived", 0)
+          timeout    = buckets.get("timeout", 0)
+          suspicious = buckets.get("suspicious", 0)
+          no_tests   = buckets.get("no tests", 0)
+          skipped    = buckets.get("skipped", 0)
+
+          denom = killed + survived + timeout + suspicious
+          rate = (killed + timeout) / denom * 100 if denom else 0.0
+
+          threshold = float(os.environ.get("INPUT_KILL_THRESHOLD", "70"))
+
+          print(f"killed     = {killed}")
+          print(f"survived   = {survived}")
+          print(f"timeout    = {timeout}")
+          print(f"suspicious = {suspicious}")
+          print(f"no tests   = {no_tests}  (excluded from denom)")
+          print(f"skipped    = {skipped}   (excluded from denom)")
+          print(f"-> kill-rate = {rate:.1f} %  (threshold {threshold} %)")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"## Mutation Testing Results\n\n")
+              f.write(f"| Bucket | Count |\n|---|---|\n")
+              f.write(f"| killed | {killed} |\n")
+              f.write(f"| survived | {survived} |\n")
+              f.write(f"| timeout | {timeout} |\n")
+              f.write(f"| suspicious | {suspicious} |\n")
+              f.write(f"| no tests | {no_tests} |\n")
+              f.write(f"| skipped | {skipped} |\n\n")
+              f.write(f"**Kill rate: {rate:.1f} %** (threshold {threshold} %)\n")
+
+          if rate < threshold:
+              print(f"::error::Kill rate {rate:.1f} % below threshold {threshold} %")
+              sys.exit(1)
+          PY
+        env:
+          INPUT_KILL_THRESHOLD: ${{ github.event.inputs.kill_threshold }}
+
+      - name: Upload mutmut cache & report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutmut-results
+          path: |
+            .mutmut-cache
+            mutants/
+          if-no-files-found: warn
+          retention-days: 14

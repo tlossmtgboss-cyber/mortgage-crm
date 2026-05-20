@@ -127,3 +127,44 @@ def test_stage_to_date_field_funded_anchor():
 def test_terminal_stages_are_six():
     assert len(_wc.TERMINAL_LOAN_STAGES) == 6
     assert "FUNDED" in _wc.TERMINAL_LOAN_STAGES
+
+
+# ---------------------------------------------------------------------------
+# Loan/Lead stage workflow routing
+# ---------------------------------------------------------------------------
+
+def test_loan_stage_disclosed_routes_to_under_contract():
+    assert _wc.LOAN_STAGE_WORKFLOW_MAP["DISCLOSED"] == "under_contract"
+
+
+def test_loan_stage_funded_routes_to_post_close():
+    assert _wc.LOAN_STAGE_WORKFLOW_MAP["FUNDED"] == "post_close"
+
+
+def test_loan_stage_clear_to_close_is_last_mile():
+    assert _wc.LOAN_STAGE_WORKFLOW_MAP["CLEAR_TO_CLOSE"] == "last_mile"
+
+
+def test_lead_status_new_routes_to_prospect():
+    assert _wc.LEAD_STATUS_WORKFLOW_MAP["New"] == "prospect"
+
+
+def test_lead_status_skip_includes_do_not_call():
+    assert "Do Not Call" in _wc.LEAD_SKIP_STAGES
+
+
+# ---------------------------------------------------------------------------
+# Stage order
+# ---------------------------------------------------------------------------
+
+def test_stage_order_funded_max():
+    assert _wc.STAGE_ORDER["FUNDED"] == 100
+
+
+def test_stage_order_cancelled_negative():
+    assert _wc.STAGE_ORDER["CANCELLED"] < 0
+
+
+def test_active_loan_stages_excludes_funded():
+    assert "FUNDED" not in _wc.ACTIVE_LOAN_STAGES
+    assert "PROCESSING" in _wc.ACTIVE_LOAN_STAGES
