@@ -160,6 +160,8 @@ def _pos_engine():
                 co_ssn_encrypted TEXT,
                 dob DATE,
                 co_dob DATE,
+                dob_encrypted TEXT,
+                co_dob_encrypted TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))

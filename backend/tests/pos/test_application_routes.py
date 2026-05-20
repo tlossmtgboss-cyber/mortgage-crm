@@ -73,8 +73,10 @@ def test_mark_complete_advances_current_step(
         f"/api/v1/pos/applications/{alice_application.id}"
     )
     body = app_resp.json()
-    # Current step should have advanced to the next one.
-    assert body["current_step"] == "residence"
+    # Current step should have advanced to the next one. POSSectionKey.ORDERED
+    # starts with personal → coborrower, so completing personal advances to
+    # coborrower (not residence — residence comes after coborrower).
+    assert body["current_step"] == "coborrower"
     assert body["sections_complete"]["personal"] is True
 
 
@@ -103,10 +105,10 @@ def test_completion_pct_increments(
         f"/api/v1/pos/applications/{alice_application.id}"
     )
     body = resp.json()
-    # 3 of 9 sections complete = round(33.33) = 33.
-    # In the test session, the ORM relationship refresh may lag by one
-    # section due to SQLite session semantics; accept either 22 or 33.
-    assert body["completion_pct"] in (22, 33)
+    # 3 of 13 sections complete = round(23.07) = 23.
+    # ORM relationship refresh under SQLite may lag by one section, so
+    # accept the lagging value (15 = 2/13) as well.
+    assert body["completion_pct"] in (15, 23)
     complete_count = sum(1 for v in body["sections_complete"].values() if v)
     assert complete_count >= 2
 
