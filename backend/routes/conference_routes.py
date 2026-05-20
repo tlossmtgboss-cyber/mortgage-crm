@@ -4,7 +4,7 @@ Implements multi-party conference calls for 10+ participants
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -17,6 +17,8 @@ import asyncio
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
@@ -133,7 +135,7 @@ def get_user_phone(db: Session, user_id: int) -> Optional[str]:
 @router.post("")
 async def create_conference(
     conference: ConferenceCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Create a new conference room"""
@@ -151,7 +153,7 @@ async def create_conference(
                 while participant_pin == host_pin:
                     participant_pin = generate_pin()
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO conference_rooms
             (room_name, friendly_name, max_participants, start_on_enter, end_on_exit,
              mute_on_entry, record_conference, pin_required, host_pin, participant_pin,
@@ -179,9 +181,9 @@ async def create_conference(
             conf_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in create_conference: {e}")
-            conf_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            conf_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -193,7 +195,7 @@ async def create_conference(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating conference: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -202,7 +204,7 @@ async def create_conference(
 async def list_conferences(
     status: Optional[str] = None,  # available, in_progress, ended
     include_inactive: bool = False,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """List conference rooms"""
@@ -233,7 +235,7 @@ async def list_conferences(
             GROUP BY cr.id, u.full_name
             ORDER BY cr.created_at DESC
         """
-        results = db.execute(text(query), params).fetchall()
+        results = await db.execute(text(query), params).fetchall()
 
         conferences = []
         for row in results:
@@ -265,12 +267,12 @@ async def list_conferences(
 @router.get("/{conference_id}")
 async def get_conference(
     conference_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Get conference details with participants"""
     try:
-        conf = db.execute(text("""
+        conf = await db.execute(text("""
             SELECT cr.*, u.full_name as created_by_name
             FROM conference_rooms cr
             LEFT JOIN users u ON u.id = cr.created_by
@@ -281,7 +283,7 @@ async def get_conference(
             raise HTTPException(status_code=404, detail="Conference not found")
 
         # Get participants
-        participants = db.execute(text("""
+        participants = await db.execute(text("""
             SELECT cp.id, cp.call_sid, cp.phone_number, cp.name, cp.role,
                    cp.status, cp.is_muted, cp.is_on_hold, cp.joined_at,
                    cp.user_id, u.full_name as user_name
@@ -337,12 +339,12 @@ async def get_conference(
 async def update_conference(
     conference_id: int,
     conference: ConferenceUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Update conference settings"""
     try:
-        existing = db.execute(text(
+        existing = await db.execute(text(
             "SELECT id FROM conference_rooms WHERE id = :id"
         ), {"id": conference_id}).fetchone()
 
@@ -375,15 +377,15 @@ async def update_conference(
 
         if updates:
             query = "UPDATE conference_rooms SET " + ", ".join(updates) + " WHERE id = :conf_id"
-            db.execute(text(query), params)
-            db.commit()
+            await db.execute(text(query), params)
+            await db.commit()
 
         return {"success": True, "message": "Conference updated"}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error updating conference: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -391,17 +393,17 @@ async def update_conference(
 @router.delete("/{conference_id}")
 async def delete_conference(
     conference_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Deactivate a conference room"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE conference_rooms SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
         """), {"id": conference_id})
 
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Conference not found")
@@ -411,7 +413,7 @@ async def delete_conference(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error deleting conference: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -423,12 +425,12 @@ async def delete_conference(
 @router.post("/{conference_id}/start")
 async def start_conference(
     conference_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Start a conference (mark as in progress)"""
     try:
-        conf = db.execute(text("""
+        conf = await db.execute(text("""
             SELECT id, room_name, status FROM conference_rooms WHERE id = :id
         """), {"id": conference_id}).fetchone()
 
@@ -438,12 +440,12 @@ async def start_conference(
         if conf.status == "in_progress":
             return {"success": True, "message": "Conference already in progress"}
 
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE conference_rooms
             SET status = 'in_progress', started_at = CURRENT_TIMESTAMP
             WHERE id = :id
         """), {"id": conference_id})
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -454,7 +456,7 @@ async def start_conference(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error starting conference: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -462,7 +464,7 @@ async def start_conference(
 @router.post("/{conference_id}/end")
 async def end_conference(
     conference_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """End a conference and disconnect all participants"""
@@ -471,7 +473,7 @@ async def end_conference(
         if not provider:
             raise HTTPException(status_code=500, detail="Telephony not configured")
 
-        conf = db.execute(text("""
+        conf = await db.execute(text("""
             SELECT id, room_name, current_conference_sid FROM conference_rooms WHERE id = :id
         """), {"id": conference_id}).fetchone()
 
@@ -482,7 +484,7 @@ async def end_conference(
         if conf.current_conference_sid:
             try:
                 # Get all connected participants and end their calls
-                active_participants = db.execute(text("""
+                active_participants = await db.execute(text("""
                     SELECT call_sid FROM conference_participants
                     WHERE conference_id = :id AND status IN ('ringing', 'connected') AND call_sid IS NOT NULL
                 """), {"id": conference_id}).fetchall()
@@ -495,27 +497,27 @@ async def end_conference(
                 logger.warning(f"Error ending conference: {telephony_error}")
 
         # Update all participants
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE conference_participants
             SET status = 'left', left_at = CURRENT_TIMESTAMP
             WHERE conference_id = :id AND status IN ('ringing', 'connected')
         """), {"id": conference_id})
 
         # Update conference
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE conference_rooms
             SET status = 'ended', ended_at = CURRENT_TIMESTAMP
             WHERE id = :id
         """), {"id": conference_id})
 
-        db.commit()
+        await db.commit()
 
         return {"success": True, "message": "Conference ended"}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error ending conference: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -528,7 +530,7 @@ async def end_conference(
 async def add_participant(
     conference_id: int,
     request: AddParticipantRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Dial out to add a participant to conference"""
@@ -537,7 +539,7 @@ async def add_participant(
         if not provider:
             raise HTTPException(status_code=500, detail="Telephony not configured")
 
-        conf = db.execute(text("""
+        conf = await db.execute(text("""
             SELECT id, room_name, max_participants, current_conference_sid, mute_on_entry
             FROM conference_rooms WHERE id = :id AND is_active = TRUE
         """), {"id": conference_id}).fetchone()
@@ -546,7 +548,7 @@ async def add_participant(
             raise HTTPException(status_code=404, detail="Conference not found")
 
         # Check participant limit
-        current_count = db.execute(text("""
+        current_count = await db.execute(text("""
             SELECT COUNT(*) as count FROM conference_participants
             WHERE conference_id = :id AND status IN ('ringing', 'connected')
         """), {"id": conference_id}).fetchone()
@@ -569,14 +571,14 @@ async def add_participant(
             phone = format_phone(phone)
 
             if not name:
-                user = db.execute(text("SELECT COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :id"), {"id": user_id}).fetchone()
+                user = await db.execute(text("SELECT COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :id"), {"id": user_id}).fetchone()
                 if user:
                     name = user.name
         else:
             raise HTTPException(status_code=400, detail="Must provide phone or user_id")
 
         # Create participant record
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO conference_participants
             (conference_id, user_id, phone_number, name, role, status, is_muted)
             VALUES
@@ -595,7 +597,7 @@ async def add_participant(
             participant_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in add_participant: {e}")
-            participant_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            participant_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Dial out to add participant
         base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
@@ -615,11 +617,11 @@ async def add_participant(
             call_sid = call_result.call_sid if hasattr(call_result, 'call_sid') else str(call_result)
 
             # Update with call SID
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants SET call_sid = :call_sid WHERE id = :id
             """), {"call_sid": call_sid, "id": participant_id})
 
-            db.commit()
+            await db.commit()
 
             return {
                 "success": True,
@@ -630,16 +632,16 @@ async def add_participant(
 
         except Exception as telephony_error:
             logger.error(f"Telephony error adding participant: {telephony_error}")
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants SET status = 'failed' WHERE id = :id
             """), {"id": participant_id})
-            db.commit()
+            await db.commit()
             raise HTTPException(status_code=500, detail=str(telephony_error))
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error adding participant: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -649,7 +651,7 @@ async def participant_action(
     conference_id: int,
     participant_id: int,
     action: ParticipantAction,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Perform action on a participant (mute, unmute, hold, remove)"""
@@ -659,7 +661,7 @@ async def participant_action(
             raise HTTPException(status_code=500, detail="Telephony not configured")
 
         # Get participant and conference
-        participant = db.execute(text("""
+        participant = await db.execute(text("""
             SELECT cp.id, cp.call_sid, cp.status, cr.current_conference_sid
             FROM conference_participants cp
             JOIN conference_rooms cr ON cr.id = cp.conference_id
@@ -681,34 +683,34 @@ async def participant_action(
             if action.action == "mute":
                 if hasattr(provider, 'mute_participant'):
                     provider.mute_participant(call_sid, muted=True)
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE conference_participants SET is_muted = TRUE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "unmute":
                 if hasattr(provider, 'mute_participant'):
                     provider.mute_participant(call_sid, muted=False)
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE conference_participants SET is_muted = FALSE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "hold":
                 if hasattr(provider, 'hold_participant'):
                     provider.hold_participant(call_sid, hold=True)
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE conference_participants SET is_on_hold = TRUE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "unhold":
                 if hasattr(provider, 'hold_participant'):
                     provider.hold_participant(call_sid, hold=False)
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE conference_participants SET is_on_hold = FALSE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "remove":
                 provider.end_call(call_sid)
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE conference_participants
                     SET status = 'left', left_at = CURRENT_TIMESTAMP
                     WHERE id = :id
@@ -717,7 +719,7 @@ async def participant_action(
             else:
                 raise HTTPException(status_code=400, detail=f"Unknown action: {action.action}")
 
-            db.commit()
+            await db.commit()
             return {"success": True, "message": f"Participant {action.action}d"}
 
         except Exception as telephony_error:
@@ -727,7 +729,7 @@ async def participant_action(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error on participant action: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -736,7 +738,7 @@ async def participant_action(
 async def mute_all_participants(
     conference_id: int,
     except_hosts: bool = True,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Mute all participants (optionally except hosts)"""
@@ -745,7 +747,7 @@ async def mute_all_participants(
         if not provider:
             raise HTTPException(status_code=500, detail="Telephony not configured")
 
-        conf = db.execute(text("""
+        conf = await db.execute(text("""
             SELECT current_conference_sid FROM conference_rooms WHERE id = :id
         """), {"id": conference_id}).fetchone()
 
@@ -758,26 +760,26 @@ async def mute_all_participants(
             SELECT id, call_sid FROM conference_participants
             WHERE conference_id = :id AND status = 'connected' """ + role_filter + """
         """
-        participants = db.execute(text(query), {"id": conference_id}).fetchall()
+        participants = await db.execute(text(query), {"id": conference_id}).fetchall()
 
         muted_count = 0
         for p in participants:
             try:
                 if hasattr(provider, 'mute_participant'):
                     provider.mute_participant(p.call_sid, muted=True)
-                db.execute(text("UPDATE conference_participants SET is_muted = TRUE WHERE id = :id"), {"id": p.id})
+                await db.execute(text("UPDATE conference_participants SET is_muted = TRUE WHERE id = :id"), {"id": p.id})
                 muted_count += 1
             except Exception as e:
                 logger.warning(f"Could not mute participant {p.id}: {e}")
 
-        db.commit()
+        await db.commit()
 
         return {"success": True, "message": f"Muted {muted_count} participants"}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error muting all: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -790,7 +792,7 @@ async def mute_all_participants(
 @router.get("/twiml/join")
 async def join_conference_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML for joining a conference.
@@ -807,7 +809,7 @@ async def join_conference_twiml(
         role = query_params.get("role", "participant")
 
         # Get conference settings
-        conf = db.execute(text("""
+        conf = await db.execute(text("""
             SELECT room_name, start_on_enter, end_on_exit, mute_on_entry, record_conference
             FROM conference_rooms WHERE id = :id
         """), {"id": conf_id}).fetchone()
@@ -823,7 +825,7 @@ async def join_conference_twiml(
         muted = conf.mute_on_entry and not is_host
 
         if participant_id:
-            part = db.execute(text("""
+            part = await db.execute(text("""
                 SELECT is_muted FROM conference_participants WHERE id = :id
             """), {"id": participant_id}).fetchone()
             if part:
@@ -862,7 +864,7 @@ async def join_conference_twiml(
 @router.get("/twiml/dial-in")
 async def dial_in_conference_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML for inbound callers to dial into a conference.
@@ -884,14 +886,14 @@ async def dial_in_conference_twiml(
 
         # If room name provided, look it up
         if room_name:
-            conf = db.execute(text("""
+            conf = await db.execute(text("""
                 SELECT id, room_name, pin_required, host_pin, participant_pin
                 FROM conference_rooms
                 WHERE room_name = :name AND is_active = TRUE
             """), {"name": room_name}).fetchone()
         else:
             # Use default or prompt for room
-            conf = db.execute(text("""
+            conf = await db.execute(text("""
                 SELECT id, room_name, pin_required, host_pin, participant_pin
                 FROM conference_rooms
                 WHERE is_active = TRUE AND status = 'in_progress'
@@ -970,7 +972,7 @@ async def dial_in_conference_twiml(
 @router.post("/webhook/participant-status")
 async def participant_status_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """Webhook for participant call status updates"""
@@ -986,14 +988,14 @@ async def participant_status_webhook(
         logger.info(f"Participant {participant_id} status: {call_status}")
 
         if call_status == "answered":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants
                 SET status = 'connected', joined_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """), {"id": participant_id})
 
         elif call_status == "completed":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants
                 SET status = 'left', left_at = CURRENT_TIMESTAMP,
                     duration_seconds = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - joined_at))
@@ -1001,11 +1003,11 @@ async def participant_status_webhook(
             """), {"id": participant_id})
 
         elif call_status in ["busy", "no-answer", "failed", "canceled"]:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants SET status = 'failed' WHERE id = :id
             """), {"id": participant_id})
 
-        db.commit()
+        await db.commit()
         return {"status": "ok"}
 
     except SQLAlchemyError as e:
@@ -1016,7 +1018,7 @@ async def participant_status_webhook(
 @router.post("/webhook/conference-status")
 async def conference_status_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """Webhook for conference status updates"""
@@ -1035,7 +1037,7 @@ async def conference_status_webhook(
         logger.info(f"Conference {conf_id} event: {status_event}")
 
         if status_event == "conference-start":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_rooms
                 SET status = 'in_progress', current_conference_sid = :sid,
                     started_at = CURRENT_TIMESTAMP
@@ -1043,7 +1045,7 @@ async def conference_status_webhook(
             """), {"id": conf_id, "sid": conference_sid})
 
         elif status_event == "conference-end":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_rooms
                 SET status = 'ended', ended_at = CURRENT_TIMESTAMP
                 WHERE id = :id
@@ -1051,32 +1053,32 @@ async def conference_status_webhook(
 
         elif status_event == "participant-join":
             # Update participant status
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants
                 SET status = 'connected', joined_at = CURRENT_TIMESTAMP
                 WHERE conference_id = :conf_id AND call_sid = :call_sid
             """), {"conf_id": conf_id, "call_sid": call_sid})
 
         elif status_event == "participant-leave":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants
                 SET status = 'left', left_at = CURRENT_TIMESTAMP
                 WHERE conference_id = :conf_id AND call_sid = :call_sid
             """), {"conf_id": conf_id, "call_sid": call_sid})
 
         elif status_event == "participant-mute":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants SET is_muted = :muted
                 WHERE conference_id = :conf_id AND call_sid = :call_sid
             """), {"conf_id": conf_id, "call_sid": call_sid, "muted": muted})
 
         elif status_event == "participant-hold":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE conference_participants SET is_on_hold = :hold
                 WHERE conference_id = :conf_id AND call_sid = :call_sid
             """), {"conf_id": conf_id, "call_sid": call_sid, "hold": hold})
 
-        db.commit()
+        await db.commit()
         return {"status": "ok"}
 
     except SQLAlchemyError as e:
@@ -1091,7 +1093,7 @@ async def conference_status_webhook(
 @router.post("/quick")
 async def create_quick_conference(
     participants: List[str],  # List of phone numbers or user IDs
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """
@@ -1104,7 +1106,7 @@ async def create_quick_conference(
         # Create conference room
         room_name = f"quick-conf-{uuid.uuid4().hex[:8]}"
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO conference_rooms
             (room_name, friendly_name, max_participants, start_on_enter,
              status, created_by, is_active)
@@ -1122,9 +1124,9 @@ async def create_quick_conference(
             conf_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in quick_conference: {e}")
-            conf_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            conf_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        db.commit()
+        await db.commit()
 
         # Add all participants
         added = []
@@ -1152,6 +1154,6 @@ async def create_quick_conference(
         }
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating quick conference: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

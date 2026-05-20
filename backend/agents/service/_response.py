@@ -105,6 +105,18 @@ class ResponseGenerationMixin:
                 active_loan_id=active_loan_id,
             )
 
+            # Wave 6 Slice E: route model by classified intent and record
+            # which tier actually served the turn. ``resolve_model_for_intent``
+            # is a no-op when the router is unavailable (returns self.model).
+            try:
+                intent_value = (result or {}).get("intent") or (result or {}).get("classified_intent")
+                role_value = getattr(self.current_user, "role", None)
+                chosen_model = self.resolve_model_for_intent(intent_value, agent_role=role_value)
+                if isinstance(result, dict):
+                    result.setdefault("model_used", chosen_model)
+            except Exception:  # noqa: BLE001
+                pass
+
             # Log the interaction
             await self._log_interaction(message, result)
 

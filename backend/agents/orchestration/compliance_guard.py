@@ -111,7 +111,13 @@ class ComplianceGuard:
     Pre-response regulatory scanner. See module docstring for tier definitions.
     """
 
-    def validate_response(self, text: str, agent_role: str, agent_id: Optional[str] = None) -> Dict:
+    def validate_response(
+        self,
+        text: str,
+        agent_role: str,
+        agent_id: Optional[str] = None,
+        state_abbr: Optional[str] = None,
+    ) -> Dict:
         """
         Scan `text` for compliance red flags.
 
@@ -192,6 +198,31 @@ class ComplianceGuard:
                 "snippet": m.group(0)[:200],
                 "agent_role": agent_role,
             })
+
+        # UPL (Unauthorized Practice of Law) — state-aware scan
+        if state_abbr:
+            try:
+                from services.compliance.upl_rules_engine import upl_rules_engine
+                detected = upl_rules_engine.detect_action_in_text(text)
+                for action in detected:
+                    check = upl_rules_engine.check(action, state_abbr)
+                    if not check.get("allowed", True):
+                        violations.append({
+                            "regulation": "UPL",
+                            "rule": f"{action}_blocked_in_{check.get('state', state_abbr)}",
+                            "severity": "hard_block",
+                            "snippet": action,
+                            "agent_role": agent_role,
+                            "state": check.get("state"),
+                            "blocking_restrictions": check.get(
+                                "blocking_restrictions", []
+                            ),
+                            "state_rules_version": check.get("state_rules_version"),
+                        })
+                        passed = False
+                        escalation_required = True
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("upl_rules_engine scan swallowed: %s", exc)
 
         result = {
             "passed": passed,

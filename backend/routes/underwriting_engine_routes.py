@@ -20,6 +20,9 @@ from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 from routes.auth_deps import require_auth
@@ -511,7 +514,7 @@ def get_data_validator():
 @router.post("/underwrite", response_model=FullUnderwritingResponse)
 async def run_automated_underwriting(
     request: FullUnderwritingRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Run full automated underwriting analysis.
@@ -575,7 +578,7 @@ async def run_automated_underwriting(
 @router.post("/income/calculate", response_model=IncomeCalculationResponse)
 async def calculate_qualifying_income(
     request: IncomeCalculationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Calculate qualifying income per agency guidelines.
@@ -636,7 +639,7 @@ async def calculate_qualifying_income(
 @router.post("/assets/analyze", response_model=AssetAnalysisResponse)
 async def analyze_assets(
     request: AssetAnalysisRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Analyze assets for loan qualification.
@@ -713,7 +716,7 @@ async def analyze_assets(
 @router.post("/credit/analyze", response_model=CreditAnalysisResponse)
 async def analyze_credit(
     request: CreditAnalysisRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Analyze credit for loan qualification.
@@ -794,7 +797,7 @@ async def analyze_credit(
 @router.post("/eligibility/check", response_model=EligibilityCheckResponse)
 async def check_loan_eligibility(
     request: EligibilityCheckRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Check loan eligibility across multiple programs.
@@ -870,7 +873,7 @@ async def check_loan_eligibility(
 @router.post("/conditions/generate", response_model=GenerateConditionsResponse)
 async def generate_conditions(
     request: GenerateConditionsRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Generate underwriting conditions for a loan.
@@ -929,7 +932,7 @@ async def generate_conditions(
 @router.post("/validate", response_model=ValidateLoanResponse)
 async def validate_loan_file(
     request: ValidateLoanRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Validate loan file data for completeness and consistency.

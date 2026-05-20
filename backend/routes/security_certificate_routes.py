@@ -30,8 +30,10 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -588,7 +590,7 @@ async def report_pin_failure(
 @router.get("/certificate-pins/status")
 async def get_certificate_pin_status(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return the last certificate pin verification result.
 
@@ -614,7 +616,7 @@ async def get_certificate_pin_status(
 @router.post("/certificate-pins/verify")
 async def trigger_certificate_pin_verify(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Manually trigger a certificate pin verification.
 
@@ -635,7 +637,7 @@ async def trigger_certificate_pin_verify(
 @router.get("/certificate-pins/expiry")
 async def get_certificate_pin_expiry(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Return certificate expiry dates for all pinned domains.
 

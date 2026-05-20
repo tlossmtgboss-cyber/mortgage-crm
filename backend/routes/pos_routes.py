@@ -38,6 +38,9 @@ from fastapi import (
     status,
 )
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 from middleware.purl_auth import (
@@ -101,7 +104,7 @@ async def upload_document(
     category: str = Form("other"),
     description: Optional[str] = Form(None),
     application: POSApplication = Depends(resolve_application_for_borrower_write),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     pos_service: POSService = Depends(get_pos_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> DocumentUploadResponse:
@@ -152,8 +155,8 @@ async def upload_document(
             detail=str(exc),
         ) from exc
 
-    db.commit()
-    db.refresh(doc)
+    await db.commit()
+    await db.refresh(doc)
 
     return DocumentUploadResponse(
         id=doc.id,

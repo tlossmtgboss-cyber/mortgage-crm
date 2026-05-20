@@ -13,10 +13,12 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Request, HTTPException, Depends, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
@@ -43,7 +45,7 @@ def verify_webhook_signature(payload: bytes, signature: str) -> bool:
 @router.post("/retr/import")
 async def import_from_retr(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     x_webhook_signature: Optional[str] = Header(None, alias="X-Webhook-Signature"),
 ):
     """
@@ -372,7 +374,7 @@ def _ensure_webhook_log_table(db: Session):
 async def inbound_webhook(
     event_type: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     x_api_key: Optional[str] = Header(None, alias="X-Api-Key"),
     x_webhook_signature: Optional[str] = Header(None, alias="X-Webhook-Signature"),
 ):
@@ -425,7 +427,7 @@ async def inbound_webhook(
     # Log the webhook delivery
     log_id = None
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO webhook_delivery_log (event_type, source_system, payload, processing_status)
             VALUES (:event_type, :source, CAST(:payload AS jsonb), 'processing')
         """), {
@@ -433,12 +435,12 @@ async def inbound_webhook(
             "source": payload.get("source_system", "unknown"),
             "payload": json.dumps(payload),
         })
-        db.flush()
-        result = db.execute(text("SELECT currval(pg_get_serial_sequence('webhook_delivery_log', 'id'))")).fetchone()
+        await db.flush()
+        result = await db.execute(text("SELECT currval(pg_get_serial_sequence('webhook_delivery_log', 'id'))")).fetchone()
         log_id = result[0] if result else None
     except Exception as e:
         logger.warning(f"Could not log webhook delivery: {e}")
-        db.rollback()
+        await db.rollback()
 
     # Dispatch to handler
     try:
@@ -456,15 +458,15 @@ async def inbound_webhook(
         # Update log
         if log_id:
             try:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE webhook_delivery_log
                     SET processing_status = 'completed', processed_at = NOW()
                     WHERE id = :id
                 """), {"id": log_id})
-                db.commit()
+                await db.commit()
             except Exception as e:
                 logger.error(f"Error updating webhook log to completed: {e}")
-                db.rollback()
+                await db.rollback()
 
         return {"success": True, "event_type": event_type, "result": result}
 
@@ -472,15 +474,15 @@ async def inbound_webhook(
         logger.error(f"Inbound webhook handler error for {event_type}: {e}", exc_info=True)
         if log_id:
             try:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE webhook_delivery_log
                     SET processing_status = 'failed', error_message = :err, processed_at = NOW()
                     WHERE id = :id
                 """), {"id": log_id, "err": str(e)[:500]})
-                db.commit()
+                await db.commit()
             except Exception as e:
                 logger.error(f"Error updating webhook log to failed: {e}")
-                db.rollback()
+                await db.rollback()
         # Return 200 to prevent provider retries — log error for investigation
         from fastapi.responses import JSONResponse
         return JSONResponse(

@@ -121,6 +121,40 @@ STATE_HOLIDAYS: Dict[str, List[Dict]] = {
 
 
 # ============================================================================
+# IRS TAX DEADLINES
+# ============================================================================
+
+# 2026 IRS tax deadlines. Quarterly estimated tax dates are the standard
+# CY 2026 due dates (Jan 15, Apr 15, Jun 15, Sep 15). Filing deadline
+# Apr 15. Extended return deadline Oct 15.
+IRS_TAX_DEADLINES: Dict[int, List[Tuple[date, str]]] = {
+    2026: [
+        (date(2026, 1, 15), "Q4 2025 Estimated Tax Payment"),
+        (date(2026, 4, 15), "Individual Tax Filing Deadline"),
+        (date(2026, 4, 15), "Q1 2026 Estimated Tax Payment"),
+        (date(2026, 6, 15), "Q2 2026 Estimated Tax Payment"),
+        (date(2026, 9, 15), "Q3 2026 Estimated Tax Payment"),
+        (date(2026, 10, 15), "Extended Individual Tax Filing Deadline"),
+    ],
+}
+
+
+def _tax_deadlines_for(year: int) -> List[Tuple[date, str]]:
+    """Tax deadlines for a year. Falls back to canonical dates for years
+    not specifically pre-computed."""
+    if year in IRS_TAX_DEADLINES:
+        return list(IRS_TAX_DEADLINES[year])
+    return [
+        (date(year, 1, 15), f"Q4 {year - 1} Estimated Tax Payment"),
+        (date(year, 4, 15), "Individual Tax Filing Deadline"),
+        (date(year, 4, 15), f"Q1 {year} Estimated Tax Payment"),
+        (date(year, 6, 15), f"Q2 {year} Estimated Tax Payment"),
+        (date(year, 9, 15), f"Q3 {year} Estimated Tax Payment"),
+        (date(year, 10, 15), "Extended Individual Tax Filing Deadline"),
+    ]
+
+
+# ============================================================================
 # HOLIDAY CALENDAR
 # ============================================================================
 
@@ -288,6 +322,28 @@ class HolidayCalendar:
         return total
 
     # ------------------------------------------------------------------
+    def is_tax_deadline(self, d: date) -> bool:
+        """True if ``d`` is an IRS tax deadline (filing, quarterly estimated)."""
+        if isinstance(d, datetime):
+            d = d.date()
+        deadlines = {td for td, _name in _tax_deadlines_for(d.year)}
+        return d in deadlines
+
+    def next_tax_deadline_after(
+        self, d: date
+    ) -> Optional[Tuple[date, str]]:
+        """
+        Return the soonest IRS tax deadline strictly after ``d``, or None
+        if no upcoming deadline is known in the next ~2 years of data.
+        """
+        if isinstance(d, datetime):
+            d = d.date()
+        for year in (d.year, d.year + 1, d.year + 2):
+            for td, name in _tax_deadlines_for(year):
+                if td > d:
+                    return (td, name)
+        return None  # pragma: no cover — defensive
+
     def list_holidays(
         self,
         year: int,
@@ -305,4 +361,5 @@ __all__ = [
     "HolidayCalendar",
     "FEDERAL_HOLIDAYS_2026",
     "STATE_HOLIDAYS",
+    "IRS_TAX_DEADLINES",
 ]

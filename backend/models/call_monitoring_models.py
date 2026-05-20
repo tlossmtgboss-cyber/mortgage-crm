@@ -118,6 +118,8 @@ class ArtifactType(str, Enum):
     FOLLOW_UP_CALL = "follow_up_call"  # Follow-up call to schedule
     CALENDAR_ACTION = "calendar_action"  # Calendar-related action item
     MEETING_SUMMARY = "meeting_summary"  # Summary of agreed meeting details
+    # D4 CI-007 — 1003 (URLA) intake extraction from call transcripts
+    INTAKE_1003 = "intake_1003"  # Populated 1003 field set extracted from a call
 
 
 class ApprovalStatus(str, Enum):

@@ -15,8 +15,9 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
-from db import get_db
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_db, get_async_db
 from routes.auth_deps import current_user_flexible_dep
 from middleware.webhook_verification import require_vapi_webhook
 from pydantic import BaseModel, Field
@@ -135,7 +136,7 @@ def _ensure_nl_ivr_table(db: Session):
 
 @router.get("/config")
 async def get_nl_ivr_config(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Get the NL IVR configuration for the current user's organization."""
@@ -145,7 +146,7 @@ async def get_nl_ivr_config(
 
     _ensure_nl_ivr_table(db)
 
-    row = db.execute(text("""
+    row = await db.execute(text("""
         SELECT id, organization_id, greeting, menu_options, fallback_action,
                max_retries, language, business_name, business_hours,
                after_hours_greeting, vapi_assistant_id, vapi_phone_number_id,
@@ -183,7 +184,7 @@ async def get_nl_ivr_config(
 @router.put("/config")
 async def update_nl_ivr_config(
     body: NLIVRConfigUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Create or update the NL IVR configuration for the current user's organization."""
@@ -193,7 +194,7 @@ async def update_nl_ivr_config(
 
     _ensure_nl_ivr_table(db)
 
-    existing = db.execute(text(
+    existing = await db.execute(text(
         "SELECT id FROM nl_ivr_configs WHERE organization_id = :org_id"
     ), {"org_id": org_id}).fetchone()
 
@@ -236,12 +237,12 @@ async def update_nl_ivr_config(
 
         if updates:
             update_sql = "UPDATE nl_ivr_configs SET " + ', '.join(updates) + " WHERE organization_id = :org_id"
-            db.execute(text(update_sql), params)
-            db.commit()
+            await db.execute(text(update_sql), params)
+            await db.commit()
     else:
         # INSERT new config
         defaults = _default_config()
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO nl_ivr_configs
                 (organization_id, greeting, menu_options, fallback_action,
                  max_retries, language, business_name, business_hours, after_hours_greeting)
@@ -259,7 +260,7 @@ async def update_nl_ivr_config(
             "business_hours": body.business_hours,
             "after_hours_greeting": body.after_hours_greeting,
         })
-        db.commit()
+        await db.commit()
 
     return {"success": True, "message": "NL IVR configuration saved"}
 
@@ -271,7 +272,7 @@ async def update_nl_ivr_config(
 @router.post("/create-assistant")
 async def create_vapi_ivr_assistant(
     body: CreateAssistantRequest = CreateAssistantRequest(),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Create or update the Vapi assistant configured as a Natural Language IVR."""
@@ -286,7 +287,7 @@ async def create_vapi_ivr_assistant(
     _ensure_nl_ivr_table(db)
 
     # Load org config (or defaults)
-    row = db.execute(text("""
+    row = await db.execute(text("""
         SELECT greeting, menu_options, fallback_action, max_retries,
                language, business_name, vapi_assistant_id
         FROM nl_ivr_configs
@@ -381,14 +382,14 @@ async def create_vapi_ivr_assistant(
 
     # Persist assistant ID
     if row:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE nl_ivr_configs
             SET vapi_assistant_id = :assistant_id, updated_at = NOW()
             WHERE organization_id = :org_id
         """), {"assistant_id": assistant_id, "org_id": org_id})
     else:
         defaults = _default_config()
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO nl_ivr_configs
                 (organization_id, greeting, menu_options, fallback_action,
                  max_retries, language, vapi_assistant_id)
@@ -403,7 +404,7 @@ async def create_vapi_ivr_assistant(
             "lang": defaults["language"],
             "assistant_id": assistant_id,
         })
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -414,7 +415,7 @@ async def create_vapi_ivr_assistant(
 
 @router.get("/assistant-status")
 async def get_assistant_status(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Check the current Vapi assistant status for this org."""
@@ -424,7 +425,7 @@ async def get_assistant_status(
 
     _ensure_nl_ivr_table(db)
 
-    row = db.execute(text("""
+    row = await db.execute(text("""
         SELECT vapi_assistant_id, vapi_phone_number_id, updated_at
         FROM nl_ivr_configs WHERE organization_id = :org_id
     """), {"org_id": org_id}).fetchone()
@@ -464,7 +465,7 @@ async def get_assistant_status(
 async def vapi_ivr_webhook(
     request: Request,
     raw_body: bytes = Depends(require_vapi_webhook),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Handle Vapi server-side function call events for the NL IVR assistant.
@@ -521,7 +522,7 @@ async def vapi_ivr_webhook(
 @router.post("/test-lookup")
 async def test_borrower_lookup(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Test the borrower phone lookup logic (authenticated, for debugging)."""

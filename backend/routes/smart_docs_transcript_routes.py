@@ -23,6 +23,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 from auth.dependencies import get_current_user
@@ -80,7 +83,7 @@ async def request_transcript(
     loan_id: int,
     body: TranscriptRequestBody,
     borrower_id: int = Query(..., description="Borrower/lead ID"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Request an IRS transcript for income verification.
@@ -128,7 +131,7 @@ async def request_transcript(
 @router.get("/transcript/{request_id}/status")
 async def get_transcript_status(
     request_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Check the status of a transcript request."""
@@ -152,7 +155,7 @@ async def get_transcript_status(
 async def import_transcript(
     request_id: int,
     body: TranscriptImportBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Import transcript data received from IRS/vendor or manual entry.
@@ -185,7 +188,7 @@ async def import_transcript(
 async def compare_transcript(
     loan_id: int,
     body: TranscriptCompareBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Compare IRS transcript against borrower-submitted documents.
@@ -245,7 +248,7 @@ async def generate_4506c_form(
     loan_id: int,
     borrower_id: int = Query(..., description="Borrower/lead ID"),
     tax_years: str = Query(..., description="Comma-separated tax years, e.g. '2024,2025'"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Generate a pre-filled IRS Form 4506-C as PDF.
@@ -292,7 +295,7 @@ async def generate_4506c_form(
 @router.get("/transcript/history/{loan_id}")
 async def get_comparison_history(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Get all transcript comparison results for a loan."""

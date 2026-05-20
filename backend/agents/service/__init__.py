@@ -253,6 +253,26 @@ class AIAgentService(
         # Model configuration
         self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
+        # Wave 6 Slice E: intent-driven multi-model routing + cross-agent
+        # shared context layer. Both imports are local to keep import
+        # ordering robust against pre-existing circular-import gotchas.
+        try:
+            from ..orchestration.model_router import model_router as _mr
+            self.model_router = _mr
+        except Exception:  # noqa: BLE001
+            self.model_router = None
+        try:
+            from ..orchestration.shared_context import shared_context as _sc
+            self.shared_context = _sc
+        except Exception:  # noqa: BLE001
+            self.shared_context = None
+        # Per-conversation key used by the shared context helpers; the
+        # caller can override via set_conversation_id().
+        self._conversation_id: str = str(getattr(current_user, "id", "anonymous"))
+        # Populated after intent classification so governance metrics can
+        # see which model actually served the turn.
+        self.last_model_used: Optional[str] = None
+
         # Tool functions will be registered when processing
         self._tool_functions: Dict[str, Callable] = {}
 
@@ -278,6 +298,50 @@ class AIAgentService(
                     logger.info(f"Optimized prompt service initialized from {prompts_dir}")
             except Exception as e:
                 logger.warning(f"Could not initialize optimized prompts: {e}")
+
+    # ----------------------------------------------------- shared context helpers
+
+    def set_conversation_id(self, conversation_id: str) -> None:
+        """Set the conversation scope used by ``get_context`` / ``set_context``."""
+        self._conversation_id = str(conversation_id)
+
+    async def get_context(self, key: str) -> Any:
+        """Read a value from the cross-agent shared context store."""
+        if self.shared_context is None:
+            return None
+        return await self.shared_context.get(self._conversation_id, key)
+
+    async def set_context(self, key: str, value: Any, ttl_seconds: int = 3600) -> None:
+        """Write a value to the cross-agent shared context store."""
+        if self.shared_context is None:
+            return
+        await self.shared_context.set(self._conversation_id, key, value, ttl_seconds=ttl_seconds)
+
+    # ------------------------------------------------------- model routing helper
+
+    def resolve_model_for_intent(
+        self,
+        intent: Optional[str],
+        complexity_hint: str = "auto",
+        agent_role: Optional[str] = None,
+    ) -> str:
+        """Pick the Anthropic model ID for this turn via the model router.
+
+        Falls back to ``self.model`` if the router is unavailable. Also
+        records the choice on ``self.last_model_used`` so response
+        metadata / governance metrics can surface it.
+        """
+        if self.model_router is None or not intent:
+            chosen = self.model
+        else:
+            try:
+                chosen = self.model_router.select_model(
+                    intent, complexity_hint=complexity_hint, agent_role=agent_role
+                )
+            except Exception:  # noqa: BLE001
+                chosen = self.model
+        self.last_model_used = chosen
+        return chosen
 
 
 def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str, Callable]:

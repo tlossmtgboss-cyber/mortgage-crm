@@ -17,11 +17,13 @@ from typing import Optional, List
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from pydantic import BaseModel, Field
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from routes.auth_deps import require_auth
 from services.confidence_engine_service import (
     ConfidenceEngineService,
@@ -84,7 +86,7 @@ class CompareScenarioRequest(BaseModel):
 @router.post("/sessions", response_model=StartSessionResponse)
 async def start_session(
     request: StartSessionRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Start a new Decision Lab session.
@@ -98,7 +100,7 @@ async def start_session(
     now = datetime.now(timezone.utc)
 
     # Log session start
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO confidence_interactions (
             session_id, borrower_profile_id, event_type, event_data, timestamp
         ) VALUES (
@@ -110,7 +112,7 @@ async def start_session(
         "borrower_profile_id": request.borrower_profile_id,
         "timestamp": now
     })
-    db.commit()
+    await db.commit()
 
     return StartSessionResponse(
         session_id=session_id,
@@ -121,22 +123,22 @@ async def start_session(
 @router.get("/sessions/{session_id}/progress")
 async def get_session_progress(
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get progress summary for a session."""
 
     # Count answered questions
-    answered = db.execute(text("""
+    answered = await db.execute(text("""
         SELECT COUNT(*) FROM confidence_responses WHERE session_id = :session_id
     """), {"session_id": session_id}).scalar()
 
     # Count total questions
-    total = db.execute(text("""
+    total = await db.execute(text("""
         SELECT COUNT(*) FROM confidence_questions WHERE is_active = true
     """)).scalar()
 
     # Get latest score
-    score = db.execute(text("""
+    score = await db.execute(text("""
         SELECT overall_score, readiness_level, calculated_at
         FROM confidence_scores
         WHERE session_id = :session_id
@@ -145,7 +147,7 @@ async def get_session_progress(
     """), {"session_id": session_id}).fetchone()
 
     # Count scenarios
-    scenarios = db.execute(text("""
+    scenarios = await db.execute(text("""
         SELECT COUNT(*) FROM loan_scenarios WHERE session_id = :session_id
     """), {"session_id": session_id}).scalar()
 
@@ -174,7 +176,7 @@ async def get_questions(
     session_id: str,
     category: Optional[str] = None,
     include_answered: bool = False,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get confidence questions for a session.
@@ -202,7 +204,7 @@ async def get_questions(
 @router.get("/questions/next")
 async def get_next_question(
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get the next unanswered question in the adaptive flow.
@@ -243,7 +245,7 @@ async def submit_response(
     request: SubmitResponseRequest,
     borrower_profile_id: Optional[str] = None,
     application_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Submit a response to a confidence question.
@@ -285,7 +287,7 @@ async def calculate_score(
     session_id: str,
     borrower_profile_id: Optional[str] = None,
     application_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Calculate the confidence score based on all responses.
@@ -329,11 +331,11 @@ async def calculate_score(
 @router.get("/score/{session_id}")
 async def get_score(
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get the most recent confidence score for a session."""
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT overall_score, category_scores, readiness_level,
                key_strengths, areas_for_improvement, recommended_actions,
                calculated_at
@@ -371,7 +373,7 @@ async def create_scenario(
     request: CreateScenarioRequest,
     borrower_profile_id: Optional[str] = None,
     application_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create a new loan scenario.
@@ -406,11 +408,11 @@ async def create_scenario(
 @router.get("/scenarios")
 async def list_scenarios(
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all scenarios for a session."""
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT id, name, scenario_type, loan_amount, purchase_price,
                down_payment, down_payment_percent, property_type,
                credit_score, ltv_ratio, is_baseline, is_favorite,
@@ -449,11 +451,11 @@ async def list_scenarios(
 @router.get("/scenarios/{scenario_id}")
 async def get_scenario(
     scenario_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific scenario with its loan options."""
 
-    scenario = db.execute(text("""
+    scenario = await db.execute(text("""
         SELECT id, session_id, name, scenario_type, loan_amount, purchase_price,
                down_payment, down_payment_percent, property_type, occupancy_type,
                property_state, credit_score, ltv_ratio, is_baseline, is_favorite,
@@ -466,7 +468,7 @@ async def get_scenario(
         raise HTTPException(status_code=404, detail="Scenario not found")
 
     # Get loan options
-    options = db.execute(text("""
+    options = await db.execute(text("""
         SELECT id, product_type, product_name, interest_rate, apr, term_months,
                monthly_payment, monthly_pi, monthly_taxes, monthly_insurance,
                monthly_pmi, closing_costs, total_cash_to_close, total_interest_paid,
@@ -526,7 +528,7 @@ async def get_scenario(
 @router.post("/scenarios/{scenario_id}/calculate")
 async def calculate_loan_options(
     scenario_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Calculate available loan options for a scenario.
@@ -550,7 +552,7 @@ async def calculate_loan_options(
 @router.post("/scenarios/compare")
 async def compare_scenarios(
     request: CompareScenarioRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Compare multiple scenarios side-by-side.
@@ -569,7 +571,7 @@ async def compare_scenarios(
 
     scenarios = []
     for sid in request.scenario_ids:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT s.id, s.name, s.loan_amount, s.down_payment, s.purchase_price, s.credit_score,
                    o.monthly_payment, o.total_interest_paid, o.total_cash_to_close,
                    o.product_name, o.interest_rate
@@ -632,7 +634,7 @@ async def compare_scenarios(
 @router.get("/education/overlay")
 async def get_education_overlay(
     context: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get education overlay for a specific context.
@@ -650,10 +652,10 @@ async def get_education_overlay(
 
 @router.get("/education/overlays")
 async def list_overlays(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all education overlays."""
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT id, title, content, trigger_type, trigger_value, category,
                formula, example, tip, key_takeaway, is_active, display_order,
                created_at, updated_at
@@ -686,10 +688,10 @@ async def list_overlays(
 @router.get("/education/overlay/{overlay_id}")
 async def get_overlay_by_id(
     overlay_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific education overlay by ID."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, title, content, trigger_type, trigger_value, category,
                formula, example, tip, key_takeaway, is_active, display_order
         FROM education_overlays
@@ -718,7 +720,7 @@ async def get_overlay_by_id(
 @router.post("/education/overlay")
 async def create_overlay(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new education overlay (admin only)."""
     from auth.dependencies import get_current_user_flexible
@@ -727,7 +729,7 @@ async def create_overlay(
     await get_current_user_flexible(token=token, request=request, db=db)
     data = await request.json()
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO education_overlays
         (title, content, trigger_type, trigger_value, category, formula,
          example, tip, key_takeaway, is_active, display_order, created_at)
@@ -748,7 +750,7 @@ async def create_overlay(
         "is_active": data.get("is_active", True),
         "display_order": data.get("display_order", 0)
     })
-    db.commit()
+    await db.commit()
 
     new_id = result.fetchone()[0]
     return {"message": "Overlay created", "id": new_id}
@@ -758,7 +760,7 @@ async def create_overlay(
 async def update_overlay(
     overlay_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update an existing education overlay (admin only)."""
     from auth.dependencies import get_current_user_flexible
@@ -768,14 +770,14 @@ async def update_overlay(
     data = await request.json()
 
     # Check if overlay exists
-    existing = db.execute(text(
+    existing = await db.execute(text(
         "SELECT id FROM education_overlays WHERE id = :id"
     ), {"id": overlay_id}).fetchone()
 
     if not existing:
         raise HTTPException(status_code=404, detail="Overlay not found")
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE education_overlays SET
             title = :title,
             content = :content,
@@ -804,7 +806,7 @@ async def update_overlay(
         "is_active": data.get("is_active", True),
         "display_order": data.get("display_order", 0)
     })
-    db.commit()
+    await db.commit()
 
     return {"message": "Overlay updated", "id": overlay_id}
 
@@ -813,7 +815,7 @@ async def update_overlay(
 async def delete_overlay(
     overlay_id: int,
     request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete an education overlay (admin only)."""
     from auth.dependencies import get_current_user_flexible
@@ -821,17 +823,17 @@ async def delete_overlay(
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
     # Check if overlay exists
-    existing = db.execute(text(
+    existing = await db.execute(text(
         "SELECT id FROM education_overlays WHERE id = :id"
     ), {"id": overlay_id}).fetchone()
 
     if not existing:
         raise HTTPException(status_code=404, detail="Overlay not found")
 
-    db.execute(text(
+    await db.execute(text(
         "DELETE FROM education_overlays WHERE id = :id"
     ), {"id": overlay_id})
-    db.commit()
+    await db.commit()
 
     return {"message": "Overlay deleted", "id": overlay_id}
 
@@ -839,7 +841,7 @@ async def delete_overlay(
 @router.get("/education/lessons")
 async def list_lessons(
     category: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List available education lessons."""
 
@@ -857,7 +859,7 @@ async def list_lessons(
         " " + category_filter +
         " ORDER BY display_order, id"
     )
-    results = db.execute(text(query), params).fetchall()
+    results = await db.execute(text(query), params).fetchall()
 
     lessons = []
     for r in results:
@@ -880,11 +882,11 @@ async def list_lessons(
 @router.get("/education/lessons/{lesson_id}")
 async def get_lesson(
     lesson_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific lesson with full content."""
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, code, category, title, summary, content,
                difficulty_level, estimated_minutes, prerequisites
         FROM education_lessons
@@ -895,7 +897,7 @@ async def get_lesson(
         raise HTTPException(status_code=404, detail="Lesson not found")
 
     # Get quiz questions
-    questions = db.execute(text("""
+    questions = await db.execute(text("""
         SELECT id, question_text, question_type, options, display_order
         FROM education_quiz_questions
         WHERE lesson_id = :lesson_id AND is_active = true
@@ -939,7 +941,7 @@ async def get_lesson(
 @router.post("/admin/seed-questions")
 async def seed_questions(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Seed initial confidence questions and education content (admin only)."""
     from auth.dependencies import get_current_user_flexible
@@ -952,8 +954,8 @@ async def seed_questions(
         seed_initial_data(db)
 
         # Get counts
-        question_count = db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
-        overlay_count = db.execute(text("SELECT COUNT(*) FROM education_overlays")).scalar()
+        question_count = await db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
+        overlay_count = await db.execute(text("SELECT COUNT(*) FROM education_overlays")).scalar()
 
         return {
             "success": True,
@@ -968,7 +970,7 @@ async def seed_questions(
 @router.post("/admin/run-migration")
 async def run_migration(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Run the Borrower Confidence Engine migration (admin only)."""
     from auth.dependencies import get_current_user_flexible
@@ -989,8 +991,8 @@ async def run_migration(
         logger.info("Seeding complete")
 
         # Verify counts
-        q_count = db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
-        o_count = db.execute(text("SELECT COUNT(*) FROM education_overlays")).scalar()
+        q_count = await db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
+        o_count = await db.execute(text("SELECT COUNT(*) FROM education_overlays")).scalar()
 
         return {
             "success": True,
@@ -1013,12 +1015,12 @@ async def track_interaction(
     page_context: Optional[str] = None,
     element_id: Optional[str] = None,
     borrower_profile_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Track a user interaction for analytics."""
     import json
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO confidence_interactions (
             session_id, borrower_profile_id, event_type,
             event_data, page_context, element_id, timestamp
@@ -1035,6 +1037,6 @@ async def track_interaction(
         "element_id": element_id,
         "timestamp": datetime.now(timezone.utc)
     })
-    db.commit()
+    await db.commit()
 
     return {"tracked": True}

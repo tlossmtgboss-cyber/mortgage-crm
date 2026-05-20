@@ -13,8 +13,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from database import get_db
 from auth.dependencies import get_current_user
@@ -223,7 +225,7 @@ def _get_cached_analysis(db: Session, loan_id: int) -> Optional[dict]:
 async def analyze_bank_statements(
     loan_id: int,
     borrower_id: int = Query(..., description="Borrower ID to analyze bank statements for"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -252,7 +254,7 @@ async def analyze_bank_statements(
     # Persist the analysis result on the loan for later retrieval
     try:
         analysis_data = result.to_dict() if hasattr(result, "to_dict") else result
-        db.execute(
+        await db.execute(
             sa_text("""
                 UPDATE loans
                 SET bank_analysis_result = CAST(:result AS jsonb),
@@ -265,10 +267,10 @@ async def analyze_bank_statements(
                 "loan_id": loan_id,
             },
         )
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.warning("Failed to persist bank analysis result for loan %s: %s", loan_id, e)
-        db.rollback()
+        await db.rollback()
 
     return {
         "loan_id": loan_id,
@@ -285,7 +287,7 @@ async def analyze_bank_statements(
 @router.get("/bank-analysis/results/{loan_id}")
 async def get_analysis_results(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -301,7 +303,7 @@ async def get_analysis_results(
         )
 
     # Fetch the timestamp
-    row = db.execute(
+    row = await db.execute(
         sa_text("SELECT bank_analysis_at FROM loans WHERE id = :loan_id"),
         {"loan_id": loan_id},
     ).first()
@@ -321,7 +323,7 @@ async def get_analysis_results(
 async def reanalyze_bank_statements(
     loan_id: int,
     borrower_id: int = Query(..., description="Borrower ID to re-analyze"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -354,7 +356,7 @@ async def reanalyze_bank_statements(
 
     # Persist updated result
     try:
-        db.execute(
+        await db.execute(
             sa_text("""
                 UPDATE loans
                 SET bank_analysis_result = CAST(:result AS jsonb),
@@ -367,10 +369,10 @@ async def reanalyze_bank_statements(
                 "loan_id": loan_id,
             },
         )
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.warning("Failed to persist re-analysis result for loan %s: %s", loan_id, e)
-        db.rollback()
+        await db.rollback()
 
     return {
         "loan_id": loan_id,
@@ -387,7 +389,7 @@ async def reanalyze_bank_statements(
 @router.get("/bank-analysis/large-deposits/{loan_id}")
 async def get_large_deposits(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -426,7 +428,7 @@ async def source_large_deposit(
     deposit_index: int,
     body: SourceDepositBody,
     loan_id: int = Query(..., description="Loan ID the deposit belongs to"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -445,7 +447,7 @@ async def source_large_deposit(
         with atomic_operation(db):
             # Lock the loan row before reading the cached analysis to prevent
             # concurrent sourcing operations from overwriting each other.
-            locked_row = db.execute(
+            locked_row = await db.execute(
                 sa_text("""
                     SELECT bank_analysis_result
                     FROM loans
@@ -486,7 +488,7 @@ async def source_large_deposit(
             # Persist updated analysis back to the loan
             cached["large_deposits"] = deposits
 
-            db.execute(
+            await db.execute(
                 sa_text("""
                     UPDATE loans
                     SET bank_analysis_result = CAST(:result AS jsonb)
@@ -524,7 +526,7 @@ async def source_large_deposit(
 @router.get("/bank-analysis/nsf-events/{loan_id}")
 async def get_nsf_events(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -574,7 +576,7 @@ async def get_nsf_events(
 @router.get("/bank-analysis/irs-payments/{loan_id}")
 async def get_irs_payments(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -618,7 +620,7 @@ async def get_irs_payments(
 @router.get("/bank-analysis/income-verification/{loan_id}")
 async def get_income_verification(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -643,7 +645,7 @@ async def get_income_verification(
     frequency = cached.get("deposit_frequency", None)
 
     # Look up stated income from the loan for comparison
-    loan_row = db.execute(
+    loan_row = await db.execute(
         sa_text("""
             SELECT borrower_income, borrower_monthly_income
             FROM loans
@@ -682,7 +684,7 @@ async def get_income_verification(
 @router.get("/bank-analysis/undisclosed-debts/{loan_id}")
 async def get_undisclosed_debts(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -725,7 +727,7 @@ async def get_undisclosed_debts(
 @router.get("/bank-analysis/risk-summary/{loan_id}")
 async def get_risk_summary(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -776,7 +778,7 @@ async def get_risk_summary(
 async def compare_stated_vs_deposit_income(
     loan_id: int,
     body: CompareIncomeBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -851,7 +853,7 @@ async def compare_stated_vs_deposit_income(
 async def get_analysis_tasks(
     loan_id: int,
     status: Optional[str] = Query(None, description="Filter by status: pending, in_progress, completed"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -936,7 +938,7 @@ async def get_analysis_tasks(
 @router.post("/bank-analysis/generate-report/{loan_id}")
 async def generate_bank_analysis_report(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -954,7 +956,7 @@ async def generate_bank_analysis_report(
         )
 
     # Fetch loan details for the report
-    loan_row = db.execute(
+    loan_row = await db.execute(
         sa_text("""
             SELECT loan_number, borrower_name, loan_type, amount
             FROM loans
@@ -998,7 +1000,7 @@ async def generate_bank_analysis_report(
 
 @router.get("/bank-analysis/stats")
 async def get_bank_analysis_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1041,7 +1043,7 @@ async def get_bank_analysis_stats(
         " WHERE l.bank_analysis_result IS NOT NULL "
         + org_filter
     )
-    summary = db.execute(
+    summary = await db.execute(
         sa_text(summary_query),
         params,
     ).first()

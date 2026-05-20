@@ -15,8 +15,9 @@ URL prefix: /api/v1/calendar-settings (applied by parent include_router)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, Field, validator
@@ -24,7 +25,7 @@ import logging
 import json
 import re
 
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def set_dependencies(get_current_user_func):
     _get_current_user_func = get_current_user_func
 
 
-async def _get_current_user(request: Request, db: Session = Depends(get_db)):
+async def _get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     if _get_current_user_func is None:
         raise RuntimeError("Calendar settings dependencies not set")
     auth_header = request.headers.get("Authorization", "")
@@ -189,14 +190,14 @@ class TeamSettings(BaseModel):
 @router.get("/availability")
 async def get_availability_settings(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get the current user's availability / business hours settings."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 sc.id,
                 sc.timezone,
@@ -269,7 +270,7 @@ async def get_availability_settings(
         })
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             logger.warning(f"Scheduler tables not yet created: {e}")
             return _success_response({
@@ -299,14 +300,14 @@ async def get_availability_settings(
 async def update_availability_settings(
     settings: AvailabilitySettings,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update availability / business hours settings."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id FROM scheduler_configs
             WHERE organization_id = :org_id AND (user_id = :user_id OR team_id = :org_id)
             ORDER BY user_id IS NOT NULL DESC
@@ -335,7 +336,7 @@ async def update_availability_settings(
             # Load existing working_hours first to avoid wiping unmodified parts
             existing_wh = {}
             if config_id:
-                wh_result = db.execute(text(
+                wh_result = await db.execute(text(
                     "SELECT working_hours FROM scheduler_configs WHERE id = :cid"
                 ), {"cid": config_id})
                 wh_row = wh_result.fetchone()
@@ -379,10 +380,10 @@ async def update_availability_settings(
                 update_fields.append("updated_at = CURRENT_TIMESTAMP")
                 params["config_id"] = config_id
                 query = "UPDATE scheduler_configs SET " + ", ".join(update_fields) + " WHERE id = :config_id"
-                db.execute(text(query), params)
+                await db.execute(text(query), params)
         else:
             wh_json = params.get("working_hours", json.dumps({}))
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO scheduler_configs (
                     organization_id, user_id, team_id, config_name,
                     timezone, working_hours, buffer_before_minutes, buffer_after_minutes,
@@ -404,7 +405,7 @@ async def update_availability_settings(
                 "ma": settings.max_advance_booking_days or 60,
             })
 
-        db.commit()
+        await db.commit()
 
         return _success_response(
             {"updated": True},
@@ -412,7 +413,7 @@ async def update_availability_settings(
         )
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             logger.warning(f"Scheduler tables not yet created, cannot save availability: {e}")
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
@@ -427,14 +428,14 @@ async def update_availability_settings(
 @router.get("/appointment-types")
 async def get_appointment_types(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List appointment types for the current user's org."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
 
     try:
-        rows = db.execute(text("""
+        rows = await db.execute(text("""
             SELECT
                 at.id, at.type_key, at.type_name, at.description,
                 at.default_duration_minutes, at.color, at.icon,
@@ -465,7 +466,7 @@ async def get_appointment_types(
         return _success_response({"appointment_types": types, "count": len(types)})
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             logger.warning(f"Scheduler tables not yet created: {e}")
             return _success_response({"appointment_types": [], "count": 0})
@@ -477,7 +478,7 @@ async def get_appointment_types(
 async def create_appointment_type(
     data: AppointmentTypeCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new appointment type."""
     user = await _get_current_user(request, db)
@@ -485,7 +486,7 @@ async def create_appointment_type(
 
     try:
         # Get config
-        config = db.execute(text("""
+        config = await db.execute(text("""
             SELECT id FROM scheduler_configs
             WHERE organization_id = :org_id AND user_id = :user_id
             LIMIT 1
@@ -493,7 +494,7 @@ async def create_appointment_type(
 
         if not config:
             # Auto-create default config for this user
-            config = db.execute(text("""
+            config = await db.execute(text("""
                 INSERT INTO scheduler_configs (
                     organization_id, user_id, config_name, timezone,
                     default_duration_minutes, buffer_before_minutes, buffer_after_minutes,
@@ -505,11 +506,11 @@ async def create_appointment_type(
                     true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 ) RETURNING id
             """), {"org_id": org_id, "user_id": user.id}).fetchone()
-            db.flush()
+            await db.flush()
 
         type_key = data.type_key or data.type_name.lower().replace(" ", "_").replace("-", "_")
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO appointment_types (
                 config_id, organization_id, type_key, type_name, description,
                 default_duration_minutes, color, icon, is_public, display_order,
@@ -532,12 +533,12 @@ async def create_appointment_type(
             "display_order": data.sort_order or 0,
         })
         new_id = result.fetchone().id
-        db.commit()
+        await db.commit()
 
         return _success_response({"id": new_id}, "Appointment type created")
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error creating appointment type: {e}")
@@ -549,7 +550,7 @@ async def update_appointment_type(
     type_id: int,
     data: AppointmentTypeUpdate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update an existing appointment type."""
     user = await _get_current_user(request, db)
@@ -593,16 +594,16 @@ async def update_appointment_type(
                   SELECT id FROM scheduler_configs WHERE user_id = :user_id
               )
         """
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Appointment type not found")
 
-        db.commit()
+        await db.commit()
         return _success_response({"updated": True}, "Appointment type updated")
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating appointment type: {e}")
@@ -613,14 +614,14 @@ async def update_appointment_type(
 async def delete_appointment_type(
     type_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Soft-delete (deactivate) an appointment type."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE appointment_types
             SET is_active = false, updated_at = CURRENT_TIMESTAMP
             WHERE id = :type_id
@@ -633,11 +634,11 @@ async def delete_appointment_type(
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Appointment type not found")
 
-        db.commit()
+        await db.commit()
         return _success_response({"deleted": True}, "Appointment type removed")
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error deleting appointment type: {e}")
@@ -648,7 +649,7 @@ async def delete_appointment_type(
 async def reorder_appointment_types(
     data: AppointmentTypeReorder,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Reorder appointment types by providing a sorted list of IDs."""
     user = await _get_current_user(request, db)
@@ -656,7 +657,7 @@ async def reorder_appointment_types(
 
     try:
         for idx, type_id in enumerate(data.type_ids):
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE appointment_types
                 SET display_order = :display_order, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :type_id
@@ -666,11 +667,11 @@ async def reorder_appointment_types(
                   )
             """), {"display_order": idx, "type_id": type_id, "org_id": org_id, "user_id": user.id})
 
-        db.commit()
+        await db.commit()
         return _success_response({"reordered": True}, "Appointment types reordered")
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error reordering appointment types: {e}")
@@ -686,14 +687,14 @@ async def reorder_appointment_types(
 @router.get("/notifications")
 async def get_notification_settings(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get calendar notification preferences for the current user."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT notification_settings
             FROM scheduler_configs
             WHERE organization_id = :org_id
@@ -727,7 +728,7 @@ async def get_notification_settings(
         return _success_response(merged)
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             logger.warning(f"Scheduler tables not yet created: {e}")
             return _success_response({
@@ -752,7 +753,7 @@ async def get_notification_settings(
 async def update_notification_settings(
     settings: NotificationSettings,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update calendar notification preferences."""
     user = await _get_current_user(request, db)
@@ -761,7 +762,7 @@ async def update_notification_settings(
     try:
         notif_json = json.dumps(settings.dict(exclude_unset=False))
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE scheduler_configs
             SET notification_settings = :notif, updated_at = CURRENT_TIMESTAMP
             WHERE id = (
@@ -775,7 +776,7 @@ async def update_notification_settings(
 
         if result.rowcount == 0:
             # Create config if none exists
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO scheduler_configs (
                     organization_id, user_id, team_id, config_name,
                     notification_settings, is_active, created_at, updated_at
@@ -785,11 +786,11 @@ async def update_notification_settings(
                 )
             """), {"org_id": org_id, "user_id": user.id, "notif": notif_json})
 
-        db.commit()
+        await db.commit()
         return _success_response({"updated": True}, "Notification settings saved")
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating notification settings: {e}")
@@ -803,14 +804,14 @@ async def update_notification_settings(
 @router.get("/booking-page")
 async def get_booking_page_settings(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get booking page branding and link settings."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT sc.landing_page_settings, sc.id as config_id
             FROM scheduler_configs sc
             WHERE sc.organization_id = :org_id
@@ -836,7 +837,7 @@ async def get_booking_page_settings(
             branding.update({k: v for k, v in lps.items() if k in branding_defaults})
 
         # Get booking links
-        links = db.execute(text("""
+        links = await db.execute(text("""
             SELECT id, slug, link_name, is_active, is_public
             FROM scheduler_booking_links
             WHERE organization_id = :org_id
@@ -861,7 +862,7 @@ async def get_booking_page_settings(
         })
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             logger.warning(f"Scheduler tables not yet created: {e}")
             return _success_response({
@@ -884,7 +885,7 @@ async def get_booking_page_settings(
 async def update_booking_page_settings(
     settings: BookingPageSettings,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update booking page branding."""
     user = await _get_current_user(request, db)
@@ -893,7 +894,7 @@ async def update_booking_page_settings(
     try:
         lps_json = json.dumps(settings.dict(exclude_unset=False))
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE scheduler_configs
             SET landing_page_settings = :lps, updated_at = CURRENT_TIMESTAMP
             WHERE id = (
@@ -906,7 +907,7 @@ async def update_booking_page_settings(
         """), {"lps": lps_json, "user_id": user.id, "org_id": org_id})
 
         if result.rowcount == 0:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO scheduler_configs (
                     organization_id, user_id, team_id, config_name,
                     landing_page_settings, is_active, created_at, updated_at
@@ -916,11 +917,11 @@ async def update_booking_page_settings(
                 )
             """), {"org_id": org_id, "user_id": user.id, "lps": lps_json})
 
-        db.commit()
+        await db.commit()
         return _success_response({"updated": True}, "Booking page settings saved")
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating booking page settings: {e}")
@@ -934,7 +935,7 @@ async def update_booking_page_settings(
 @router.get("/integrations")
 async def get_integration_status(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get calendar integration connection status (Google, Outlook)."""
     user = await _get_current_user(request, db)
@@ -944,7 +945,7 @@ async def get_integration_status(
 
     try:
         # Check Google Calendar
-        gcal = db.execute(text("""
+        gcal = await db.execute(text("""
             SELECT gc.google_email, gc.last_sync_at, gc.sync_enabled
             FROM google_calendar_connections gc
             WHERE gc.user_id = :user_id AND gc.is_active = true
@@ -963,7 +964,7 @@ async def get_integration_status(
 
     try:
         # Check Outlook / Microsoft Calendar
-        outlook = db.execute(text("""
+        outlook = await db.execute(text("""
             SELECT mc.email, mc.last_sync_at, mc.sync_enabled
             FROM microsoft_calendar_connections mc
             WHERE mc.user_id = :user_id AND mc.is_active = true
@@ -993,7 +994,7 @@ async def get_integration_status(
 @router.get("/team")
 async def get_team_settings(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get team calendar settings. Managers only."""
     user = await _get_current_user(request, db)
@@ -1004,7 +1005,7 @@ async def get_team_settings(
 
     try:
         # Get org-level scheduler config for assignment strategy
-        org_config = db.execute(text("""
+        org_config = await db.execute(text("""
             SELECT routing_strategy
             FROM scheduler_configs
             WHERE organization_id = :org_id AND team_id = :org_id
@@ -1014,7 +1015,7 @@ async def get_team_settings(
         assignment_strategy = org_config.routing_strategy if org_config else "round_robin"
 
         # Get team members (LOs) with their scheduler capacities
-        members = db.execute(text("""
+        members = await db.execute(text("""
             SELECT
                 u.id,
                 u.first_name,
@@ -1063,7 +1064,7 @@ async def get_team_settings(
         })
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             logger.warning(f"Scheduler tables not yet created: {e}")
             return _success_response({
@@ -1080,7 +1081,7 @@ async def get_team_settings(
 async def update_team_settings(
     settings: TeamSettings,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update team calendar settings. Managers only."""
     user = await _get_current_user(request, db)
@@ -1091,7 +1092,7 @@ async def update_team_settings(
 
     try:
         if settings.assignment_strategy:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE scheduler_configs
                 SET routing_strategy = :strategy, updated_at = CURRENT_TIMESTAMP
                 WHERE organization_id = :org_id AND team_id = :org_id
@@ -1099,7 +1100,7 @@ async def update_team_settings(
 
         if settings.members:
             for member in settings.members:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE scheduler_configs
                     SET max_meetings_per_day = COALESCE(:max_daily, max_meetings_per_day),
                         is_active = COALESCE(:accepting, is_active),
@@ -1112,11 +1113,11 @@ async def update_team_settings(
                     "accepting": member.is_accepting_appointments,
                 })
 
-        db.commit()
+        await db.commit()
         return _success_response({"updated": True}, "Team settings saved")
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         if _is_missing_table_error(e):
             raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating team settings: {e}")

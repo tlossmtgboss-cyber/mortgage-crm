@@ -16,11 +16,13 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from pydantic import BaseModel, Field
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +89,7 @@ class AssignRolesResponse(BaseModel):
 @router.get("/me/roles", response_model=UserRolesResponse)
 async def get_my_roles(
     current_user: UserProxy = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get current user's assigned roles and active role.
@@ -99,7 +101,7 @@ async def get_my_roles(
         user_id = current_user.id
 
         # Get assigned roles
-        assigned_result = db.execute(text("""
+        assigned_result = await db.execute(text("""
             SELECT
                 uar.role_id,
                 oer.name as role_name,
@@ -121,7 +123,7 @@ async def get_my_roles(
             ))
 
         # Get active role
-        active_result = db.execute(text("""
+        active_result = await db.execute(text("""
             SELECT
                 uac.active_role_id,
                 oer.name as role_name
@@ -163,7 +165,7 @@ async def get_my_roles(
 async def switch_active_role(
     request: SwitchRoleRequest,
     current_user: UserProxy = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Switch the current user's active role for UI view.
@@ -185,7 +187,7 @@ async def switch_active_role(
 
     if not is_admin and not is_admin_role:
         # Non-admins can only switch to roles they have assigned
-        check_result = db.execute(text("""
+        check_result = await db.execute(text("""
             SELECT 1 FROM user_assigned_roles
             WHERE user_id = :user_id AND role_id = :role_id
         """), {"user_id": user_id, "role_id": role_id})
@@ -197,7 +199,7 @@ async def switch_active_role(
             )
 
     # Verify the role exists
-    role_exists = db.execute(text("""
+    role_exists = await db.execute(text("""
         SELECT 1 FROM onboarding_roles WHERE id = :role_id
     """), {"role_id": role_id})
 
@@ -208,7 +210,7 @@ async def switch_active_role(
         )
 
     # Get role name for response
-    role_result = db.execute(text("""
+    role_result = await db.execute(text("""
         SELECT name FROM onboarding_roles WHERE id = :role_id
     """), {"role_id": role_id})
     role_row = role_result.fetchone()
@@ -218,7 +220,7 @@ async def switch_active_role(
     # First try PostgreSQL syntax, fall back to SQLite
     now = datetime.now(timezone.utc)
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_active_role (user_id, active_role_id, switched_at)
             VALUES (:user_id, :role_id, :now)
             ON CONFLICT (user_id)
@@ -227,11 +229,11 @@ async def switch_active_role(
     except Exception as e:
         logger.debug(f"PostgreSQL upsert failed in switch_active_role, trying SQLite fallback: {e}")
         # SQLite fallback using INSERT OR REPLACE
-        db.execute(text("""
+        await db.execute(text("""
             INSERT OR REPLACE INTO user_active_role (user_id, active_role_id, switched_at)
             VALUES (:user_id, :role_id, :now)
         """), {"user_id": user_id, "role_id": role_id, "now": now})
-    db.commit()
+    await db.commit()
 
     logger.info(f"User {user_id} switched active role to {role_id} ({role_name})")
 
@@ -253,7 +255,7 @@ async def switch_active_role(
 async def get_user_roles(
     user_id: int,
     current_user: UserProxy = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get a user's assigned roles (admin only).
@@ -263,7 +265,7 @@ async def get_user_roles(
     # Check if current user is admin
     if current_user.role not in ['admin', 'super_admin', 'site_admin']:
         # Also check if they have Site Administrator role via onboarding
-        admin_check = db.execute(text("""
+        admin_check = await db.execute(text("""
             SELECT 1 FROM user_assigned_roles uar
             JOIN onboarding_roles oer ON oer.id = uar.role_id
             WHERE uar.user_id = :user_id
@@ -277,7 +279,7 @@ async def get_user_roles(
             )
 
     # Verify target user exists
-    user_check = db.execute(text("""
+    user_check = await db.execute(text("""
         SELECT id FROM users WHERE id = :user_id
     """), {"user_id": user_id})
 
@@ -285,7 +287,7 @@ async def get_user_roles(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get assigned roles
-    assigned_result = db.execute(text("""
+    assigned_result = await db.execute(text("""
         SELECT
             uar.role_id,
             oer.name as role_name,
@@ -307,7 +309,7 @@ async def get_user_roles(
         ))
 
     # Get active role
-    active_result = db.execute(text("""
+    active_result = await db.execute(text("""
         SELECT
             uac.active_role_id,
             oer.name as role_name
@@ -340,7 +342,7 @@ async def assign_user_roles(
     user_id: int,
     request: AssignRolesRequest,
     current_user: UserProxy = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Assign roles to a user (admin only).
@@ -350,7 +352,7 @@ async def assign_user_roles(
     """
     # Check if current user is admin
     if current_user.role not in ['admin', 'super_admin', 'site_admin']:
-        admin_check = db.execute(text("""
+        admin_check = await db.execute(text("""
             SELECT 1 FROM user_assigned_roles uar
             JOIN onboarding_roles oer ON oer.id = uar.role_id
             WHERE uar.user_id = :user_id
@@ -364,7 +366,7 @@ async def assign_user_roles(
             )
 
     # Verify target user exists
-    user_check = db.execute(text("""
+    user_check = await db.execute(text("""
         SELECT id FROM users WHERE id = :user_id
     """), {"user_id": user_id})
 
@@ -383,7 +385,7 @@ async def assign_user_roles(
     params = {f"role_id_{i}": role_id for i, role_id in enumerate(request.role_ids)}
 
     query = "SELECT id, name FROM onboarding_roles WHERE id IN (" + placeholders + ")"
-    role_check = db.execute(text(query), params)
+    role_check = await db.execute(text(query), params)
 
     valid_roles = {row.id: row.name for row in role_check}
     invalid_ids = set(request.role_ids) - set(valid_roles.keys())
@@ -405,14 +407,14 @@ async def assign_user_roles(
         primary_role_id = request.role_ids[0]
 
     # Delete existing assignments
-    db.execute(text("""
+    await db.execute(text("""
         DELETE FROM user_assigned_roles WHERE user_id = :user_id
     """), {"user_id": user_id})
 
     # Insert new assignments
     now = datetime.now(timezone.utc)
     for role_id in request.role_ids:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_assigned_roles (user_id, role_id, assigned_at, assigned_by, is_primary)
             VALUES (:user_id, :role_id, :now, :assigned_by, :is_primary)
         """), {
@@ -425,7 +427,7 @@ async def assign_user_roles(
 
     # Set active role to primary if not already set
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO user_active_role (user_id, active_role_id, switched_at)
             VALUES (:user_id, :role_id, :now)
             ON CONFLICT (user_id) DO NOTHING
@@ -433,16 +435,16 @@ async def assign_user_roles(
     except Exception as e:
         logger.debug(f"PostgreSQL upsert failed in assign_user_roles, trying SQLite fallback: {e}")
         # SQLite fallback - check if exists first
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT 1 FROM user_active_role WHERE user_id = :user_id
         """), {"user_id": user_id}).fetchone()
         if not existing:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO user_active_role (user_id, active_role_id, switched_at)
                 VALUES (:user_id, :role_id, :now)
             """), {"user_id": user_id, "role_id": primary_role_id, "now": now})
 
-    db.commit()
+    await db.commit()
 
     # Revoke existing tokens so stale role claims cannot be reused
     from auth.tokens import token_blacklist
@@ -471,7 +473,7 @@ async def remove_user_role(
     user_id: int,
     role_id: int,
     current_user: UserProxy = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Remove a role from a user (admin only).
@@ -480,7 +482,7 @@ async def remove_user_role(
     """
     # Check if current user is admin
     if current_user.role not in ['admin', 'super_admin', 'site_admin']:
-        admin_check = db.execute(text("""
+        admin_check = await db.execute(text("""
             SELECT 1 FROM user_assigned_roles uar
             JOIN onboarding_roles oer ON oer.id = uar.role_id
             WHERE uar.user_id = :user_id
@@ -494,7 +496,7 @@ async def remove_user_role(
             )
 
     # Verify target user exists
-    user_check = db.execute(text("""
+    user_check = await db.execute(text("""
         SELECT id FROM users WHERE id = :user_id
     """), {"user_id": user_id})
 
@@ -502,7 +504,7 @@ async def remove_user_role(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Check current role count
-    count_result = db.execute(text("""
+    count_result = await db.execute(text("""
         SELECT COUNT(*) as cnt FROM user_assigned_roles WHERE user_id = :user_id
     """), {"user_id": user_id})
 
@@ -514,7 +516,7 @@ async def remove_user_role(
         )
 
     # Check if role is assigned to user
-    assignment_check = db.execute(text("""
+    assignment_check = await db.execute(text("""
         SELECT is_primary FROM user_assigned_roles
         WHERE user_id = :user_id AND role_id = :role_id
     """), {"user_id": user_id, "role_id": role_id})
@@ -529,14 +531,14 @@ async def remove_user_role(
     was_primary = assignment.is_primary
 
     # Delete the role assignment
-    db.execute(text("""
+    await db.execute(text("""
         DELETE FROM user_assigned_roles
         WHERE user_id = :user_id AND role_id = :role_id
     """), {"user_id": user_id, "role_id": role_id})
 
     # If removed role was primary, set new primary
     if was_primary:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE user_assigned_roles
             SET is_primary = TRUE
             WHERE user_id = :user_id
@@ -549,14 +551,14 @@ async def remove_user_role(
         """), {"user_id": user_id})
 
     # If removed role was active, switch to another
-    active_check = db.execute(text("""
+    active_check = await db.execute(text("""
         SELECT 1 FROM user_active_role
         WHERE user_id = :user_id AND active_role_id = :role_id
     """), {"user_id": user_id, "role_id": role_id})
 
     if active_check.fetchone():
         # Get a remaining role
-        new_active = db.execute(text("""
+        new_active = await db.execute(text("""
             SELECT role_id FROM user_assigned_roles
             WHERE user_id = :user_id
             ORDER BY is_primary DESC, assigned_at
@@ -566,13 +568,13 @@ async def remove_user_role(
         new_role = new_active.fetchone()
         if new_role:
             now = datetime.now(timezone.utc)
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_active_role
                 SET active_role_id = :new_role_id, switched_at = :now
                 WHERE user_id = :user_id
             """), {"user_id": user_id, "new_role_id": new_role.role_id, "now": now})
 
-    db.commit()
+    await db.commit()
 
     # Revoke existing tokens so stale role claims cannot be reused
     from auth.tokens import token_blacklist
@@ -593,14 +595,14 @@ async def remove_user_role(
 @router.get("/available-roles")
 async def get_available_roles(
     current_user: UserProxy = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get all available roles that can be assigned.
 
     Returns the list of roles from onboarding_roles table.
     """
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, name, description
         FROM onboarding_roles
         WHERE is_active = true OR is_active IS NULL

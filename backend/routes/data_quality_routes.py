@@ -17,7 +17,9 @@ Endpoints:
 """
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from datetime import datetime, timezone
 from typing import Optional
 import logging
@@ -48,7 +50,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
     async def detect_orphans(
         include_details: bool = False,
         limit: int = 100,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -84,7 +86,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + org_filter + """
                 LIMIT :limit
             """
-            tasks_invalid_owner = db.execute(text(sql), params).mappings().all()
+            tasks_invalid_owner = await db.execute(text(sql), params).mappings().all()
             orphans["tasks_invalid_assignee"] = {
                 "count": len(tasks_invalid_owner),
                 "description": "Tasks assigned to non-existent users",
@@ -107,7 +109,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + org_filter + """
                 LIMIT :limit
             """
-            tasks_invalid_lead = db.execute(text(sql), params).mappings().all()
+            tasks_invalid_lead = await db.execute(text(sql), params).mappings().all()
             orphans["tasks_invalid_lead"] = {
                 "count": len(tasks_invalid_lead),
                 "description": "Tasks referencing non-existent leads",
@@ -130,7 +132,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + org_filter + """
                 LIMIT :limit
             """
-            tasks_invalid_loan = db.execute(text(sql), params).mappings().all()
+            tasks_invalid_loan = await db.execute(text(sql), params).mappings().all()
             orphans["tasks_invalid_loan"] = {
                 "count": len(tasks_invalid_loan),
                 "description": "Tasks referencing non-existent loans",
@@ -153,7 +155,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + org_filter_a + """
                 LIMIT :limit
             """
-            activities_invalid_lead = db.execute(text(sql), params).mappings().all()
+            activities_invalid_lead = await db.execute(text(sql), params).mappings().all()
             orphans["activities_invalid_lead"] = {
                 "count": len(activities_invalid_lead),
                 "description": "Activities referencing non-existent leads",
@@ -176,7 +178,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + org_filter_a + """
                 LIMIT :limit
             """
-            activities_invalid_loan = db.execute(text(sql), params).mappings().all()
+            activities_invalid_loan = await db.execute(text(sql), params).mappings().all()
             orphans["activities_invalid_loan"] = {
                 "count": len(activities_invalid_loan),
                 "description": "Activities referencing non-existent loans",
@@ -199,7 +201,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + org_filter_a + """
                 LIMIT :limit
             """
-            activities_invalid_user = db.execute(text(sql), params).mappings().all()
+            activities_invalid_user = await db.execute(text(sql), params).mappings().all()
             orphans["activities_invalid_user"] = {
                 "count": len(activities_invalid_user),
                 "description": "Activities referencing non-existent users",
@@ -222,7 +224,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + org_filter_l + """
                 LIMIT :limit
             """
-            leads_invalid_owner = db.execute(text(sql), params).mappings().all()
+            leads_invalid_owner = await db.execute(text(sql), params).mappings().all()
             orphans["leads_invalid_owner"] = {
                 "count": len(leads_invalid_owner),
                 "description": "Leads assigned to non-existent users",
@@ -245,7 +247,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 """ + ("AND t.organization_id = :org_id" if org_id else "") + """
                 LIMIT :limit
             """
-            ai_tasks_invalid_lead = db.execute(text(sql), params).mappings().all()
+            ai_tasks_invalid_lead = await db.execute(text(sql), params).mappings().all()
             orphans["ai_tasks_invalid_lead"] = {
                 "count": len(ai_tasks_invalid_lead),
                 "description": "AI tasks referencing non-existent leads",
@@ -274,7 +276,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
     async def cleanup_orphans(
         dry_run: bool = True,
         categories: Optional[str] = None,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -324,7 +326,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN users u ON u.id = t.owner_id
                     WHERE t.owner_id IS NOT NULL AND u.id IS NULL
                     """ + org_filter
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -337,7 +339,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + org_filter + """
                         )
                     """
-                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
+                    await db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["tasks_invalid_assignee"] = {
                     "action": "nullify_owner_id",
@@ -355,7 +357,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN leads le ON le.id = t.lead_id
                     WHERE t.lead_id IS NOT NULL AND le.id IS NULL
                     """ + org_filter
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -368,7 +370,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + org_filter + """
                         )
                     """
-                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
+                    await db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["tasks_invalid_lead"] = {
                     "action": "nullify_lead_id",
@@ -386,7 +388,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN loans lo ON lo.id = t.loan_id
                     WHERE t.loan_id IS NOT NULL AND lo.id IS NULL
                     """ + org_filter
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -399,7 +401,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + org_filter + """
                         )
                     """
-                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
+                    await db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["tasks_invalid_loan"] = {
                     "action": "nullify_loan_id",
@@ -417,7 +419,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN leads le ON le.id = a.lead_id
                     WHERE a.lead_id IS NOT NULL AND le.id IS NULL
                     """ + org_filter_a
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -429,7 +431,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + org_filter_a + """
                         )
                     """
-                    db.execute(text(sql), params)
+                    await db.execute(text(sql), params)
 
                 results["activities_invalid_lead"] = {
                     "action": "delete_orphan_activities",
@@ -447,7 +449,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN loans lo ON lo.id = a.loan_id
                     WHERE a.loan_id IS NOT NULL AND lo.id IS NULL
                     """ + org_filter_a
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -459,7 +461,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + org_filter_a + """
                         )
                     """
-                    db.execute(text(sql), params)
+                    await db.execute(text(sql), params)
 
                 results["activities_invalid_loan"] = {
                     "action": "delete_orphan_activities",
@@ -477,7 +479,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN users u ON u.id = a.user_id
                     WHERE a.user_id IS NOT NULL AND u.id IS NULL
                     """ + org_filter_a
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -490,7 +492,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + org_filter_a + """
                         )
                     """
-                    db.execute(text(sql), params)
+                    await db.execute(text(sql), params)
 
                 results["activities_invalid_user"] = {
                     "action": "nullify_user_id",
@@ -508,7 +510,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN users u ON u.id = l.owner_id
                     WHERE l.owner_id IS NOT NULL AND u.id IS NULL
                     """ + org_filter_l
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -521,7 +523,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + org_filter_l + """
                         )
                     """
-                    db.execute(text(sql), {**params, "admin_id": current_user.id, "now": datetime.now(timezone.utc)})
+                    await db.execute(text(sql), {**params, "admin_id": current_user.id, "now": datetime.now(timezone.utc)})
 
                 results["leads_invalid_owner"] = {
                     "action": "reassign_to_admin",
@@ -541,7 +543,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     LEFT JOIN leads le ON le.id = t.lead_id
                     WHERE t.lead_id IS NOT NULL AND le.id IS NULL
                     """ + ai_org_filter
-                count_result = db.execute(text(sql), params).mappings().first()
+                count_result = await db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
@@ -554,7 +556,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                             """ + ai_org_filter + """
                         )
                     """
-                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
+                    await db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["ai_tasks_invalid_lead"] = {
                     "action": "nullify_lead_id",
@@ -566,10 +568,10 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         if not dry_run:
             try:
-                db.commit()
+                await db.commit()
                 logger.info(f"Data quality cleanup committed by user {current_user.id}")
             except Exception as e:
-                db.rollback()
+                await db.rollback()
                 logger.error(f"Data quality cleanup commit failed: {e}")
                 raise HTTPException(status_code=500, detail="Cleanup commit failed")
 
@@ -590,7 +592,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
     # ========================================================================
     @app.get("/api/v1/admin/data-quality/summary", tags=["Data Quality"])
     async def data_quality_summary(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -617,7 +619,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # Total leads
         try:
             sql = "SELECT COUNT(*) as cnt FROM leads WHERE 1=1 " + org_filter_l
-            total_leads_result = db.execute(text(sql), params).mappings().first()
+            total_leads_result = await db.execute(text(sql), params).mappings().first()
             total_leads = total_leads_result["cnt"] if total_leads_result else 0
             metrics["total_leads"] = total_leads
         except Exception as e:
@@ -632,7 +634,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 WHERE (email IS NULL OR email = '')
                   AND (phone IS NULL OR phone = '')
                   """ + org_filter_l
-            missing_contact = db.execute(text(sql), params).mappings().first()
+            missing_contact = await db.execute(text(sql), params).mappings().first()
             metrics["leads_missing_contact"] = missing_contact["cnt"] if missing_contact else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (leads_missing_contact): {e}")
@@ -644,7 +646,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 SELECT COUNT(*) as cnt FROM leads
                 WHERE (email IS NULL OR email = '')
                   """ + org_filter_l
-            missing_email = db.execute(text(sql), params).mappings().first()
+            missing_email = await db.execute(text(sql), params).mappings().first()
             metrics["leads_missing_email"] = missing_email["cnt"] if missing_email else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (leads_missing_email): {e}")
@@ -656,7 +658,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 SELECT COUNT(*) as cnt FROM leads
                 WHERE (phone IS NULL OR phone = '')
                   """ + org_filter_l
-            missing_phone = db.execute(text(sql), params).mappings().first()
+            missing_phone = await db.execute(text(sql), params).mappings().first()
             metrics["leads_missing_phone"] = missing_phone["cnt"] if missing_phone else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (leads_missing_phone): {e}")
@@ -668,7 +670,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 SELECT COUNT(*) as cnt FROM tasks
                 WHERE (title IS NULL OR title = '')
                   """ + org_filter_t
-            tasks_no_title = db.execute(text(sql), params).mappings().first()
+            tasks_no_title = await db.execute(text(sql), params).mappings().first()
             metrics["tasks_missing_title"] = tasks_no_title["cnt"] if tasks_no_title else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (tasks_missing_title): {e}")
@@ -677,7 +679,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # Total tasks
         try:
             sql = "SELECT COUNT(*) as cnt FROM tasks WHERE 1=1 " + org_filter_t
-            total_tasks = db.execute(text(sql), params).mappings().first()
+            total_tasks = await db.execute(text(sql), params).mappings().first()
             metrics["total_tasks"] = total_tasks["cnt"] if total_tasks else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (total_tasks): {e}")
@@ -692,7 +694,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                     GROUP BY name HAVING COUNT(*) > 1
                 ) dupes
             """
-            duplicate_names = db.execute(text(sql), params).mappings().first()
+            duplicate_names = await db.execute(text(sql), params).mappings().first()
             metrics["potential_duplicate_leads"] = duplicate_names["cnt"] if duplicate_names else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (potential_duplicate_leads): {e}")
@@ -734,7 +736,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
     async def leads_missing_contact(
         limit: int = 100,
         offset: int = 0,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -756,7 +758,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
             WHERE (l.email IS NULL OR l.email = '')
               AND (l.phone IS NULL OR l.phone = '')
               """ + org_filter
-        count_result = db.execute(text(sql), params).mappings().first()
+        count_result = await db.execute(text(sql), params).mappings().first()
         total = count_result["cnt"] if count_result else 0
 
         # Get records
@@ -769,7 +771,7 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
             ORDER BY l.created_at DESC
             LIMIT :limit OFFSET :offset
         """
-        leads = db.execute(text(sql), params).mappings().all()
+        leads = await db.execute(text(sql), params).mappings().all()
 
         return {
             "total": total,

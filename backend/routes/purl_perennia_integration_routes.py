@@ -17,10 +17,11 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from services.notification_service import NotificationService
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ router = APIRouter(prefix="/api/v1/purl-integration", tags=["PURL Integration"])
 # DEPENDENCY INJECTION
 # =============================================================================
 
-from db import get_db
+from db import get_db, get_async_db
 
 _get_current_user = None
 
@@ -43,7 +44,7 @@ def set_dependencies(get_db_func, get_current_user_func):
     logger.info("PURL Integration routes dependencies set")
 
 
-async def get_current_user(request, db: Session = Depends(get_db)):
+async def get_current_user(request, db: AsyncSession = Depends(get_async_db)):
     """Get current user."""
     if _get_current_user is None:
         raise RuntimeError("PURL Integration routes not initialized")
@@ -202,7 +203,7 @@ class WorkspaceNotification(BaseModel):
 async def initialize_workspace_documents(
     workspace_id: int,
     request: InitializeDocumentsRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Initialize document requirements for a workspace.
@@ -211,7 +212,7 @@ async def initialize_workspace_documents(
     Links to both PURL workspace and any associated loan.
     """
     # Get workspace
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT w.id, w.organization_id, w.meta_data
         FROM purl_workspaces w
         WHERE w.id = :workspace_id
@@ -242,7 +243,7 @@ async def initialize_workspace_documents(
 
     template_query += " ORDER BY created_at DESC LIMIT 1"
 
-    template = db.execute(text(template_query), params).fetchone()
+    template = await db.execute(text(template_query), params).fetchone()
 
     if not template:
         raise HTTPException(status_code=404, detail="No matching template pack found")
@@ -252,7 +253,7 @@ async def initialize_workspace_documents(
     config = template[2]
 
     # Get loan_id if available
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT id FROM purl_loans
         WHERE workspace_id = :workspace_id
         ORDER BY created_at DESC LIMIT 1
@@ -272,7 +273,7 @@ async def initialize_workspace_documents(
 
     try:
         for req in requirements:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO perennia_document_requests (
                     loan_id, lead_id, template_pack_id,
                     doc_type, doc_subtype, title, description,
@@ -306,7 +307,7 @@ async def initialize_workspace_documents(
             })
 
         # Store template association in workspace meta_data
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE purl_workspaces
             SET meta_data = COALESCE(meta_data, '{}'::jsonb) ||
                 jsonb_build_object(
@@ -324,7 +325,7 @@ async def initialize_workspace_documents(
         })
 
         # Log event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, actor_type,
                 metadata, created_at
@@ -342,7 +343,7 @@ async def initialize_workspace_documents(
             }
         })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -353,7 +354,7 @@ async def initialize_workspace_documents(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to initialize documents: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -361,7 +362,7 @@ async def initialize_workspace_documents(
 @router.get("/workspaces/{workspace_id}/document-status", response_model=WorkspaceDocumentStatus)
 async def get_workspace_document_status(
     workspace_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get comprehensive document status for a workspace.
@@ -369,7 +370,7 @@ async def get_workspace_document_status(
     Returns all document requests with their completion status.
     """
     # Get workspace and associated loan
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT w.id, w.meta_data,
                (SELECT id FROM purl_loans WHERE workspace_id = w.id ORDER BY created_at DESC LIMIT 1) as loan_id
         FROM purl_workspaces w
@@ -415,7 +416,7 @@ async def get_workspace_document_status(
         GROUP BY dr.id
         ORDER BY dr.priority DESC, dr.created_at
     """
-    requests = db.execute(text(requests_sql), params).fetchall()
+    requests = await db.execute(text(requests_sql), params).fetchall()
 
     request_summaries = []
     completed = 0
@@ -458,7 +459,7 @@ async def get_unified_activity_feed(
     workspace_id: int,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
     Get unified activity feed combining PURL and Perennia Docs events.
@@ -466,7 +467,7 @@ async def get_unified_activity_feed(
     Returns a merged, chronologically sorted list of activities.
     """
     # Get workspace info
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT w.id, w.organization_id, w.meta_data
         FROM purl_workspaces w
         WHERE w.id = :workspace_id
@@ -480,7 +481,7 @@ async def get_unified_activity_feed(
     lead_id = meta_data.get("lead_id")
 
     # Get associated loan
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT id FROM purl_loans WHERE workspace_id = :workspace_id
         ORDER BY created_at DESC LIMIT 1
     """), {"workspace_id": workspace_id}).fetchone()
@@ -491,7 +492,7 @@ async def get_unified_activity_feed(
     activities = []
 
     # Get PURL audit log events
-    purl_events = db.execute(text("""
+    purl_events = await db.execute(text("""
         SELECT
             'purl_' || id::text as id,
             'purl' as source,
@@ -534,7 +535,7 @@ async def get_unified_activity_feed(
             ORDER BY created_at DESC
             LIMIT :limit
         """
-        doc_events = db.execute(text(doc_events_sql), params).fetchall()
+        doc_events = await db.execute(text(doc_events_sql), params).fetchall()
 
         for event in doc_events:
             activities.append({
@@ -596,7 +597,7 @@ def _format_docs_event(event_type: str, metadata: Dict) -> str:
 @router.get("/workspaces/{workspace_id}/milestones")
 async def get_workspace_milestones(
     workspace_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
     Get loan milestones for a workspace.
@@ -604,7 +605,7 @@ async def get_workspace_milestones(
     Returns milestone definitions and current status.
     """
     # Get active loan for workspace
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT l.id, l.status
         FROM purl_loans l
         WHERE l.workspace_id = :workspace_id
@@ -623,7 +624,7 @@ async def get_workspace_milestones(
     loan_id = loan[0]
 
     # Get milestones with status
-    milestones = db.execute(text("""
+    milestones = await db.execute(text("""
         SELECT
             md.id, md.name, md.description, md.order_index,
             md.is_borrower_visible, md.icon_name,
@@ -671,7 +672,7 @@ async def update_workspace_milestone(
     milestone_id: int,
     update: MilestoneUpdate,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Update milestone status for a workspace loan.
@@ -679,7 +680,7 @@ async def update_workspace_milestone(
     Optionally triggers notifications to borrower.
     """
     # Get loan
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT l.id, w.organization_id
         FROM purl_loans l
         JOIN purl_workspaces w ON w.id = l.workspace_id
@@ -696,7 +697,7 @@ async def update_workspace_milestone(
 
     try:
         # Check if milestone record exists
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT id FROM purl_loan_milestones
             WHERE loan_id = :loan_id AND milestone_id = :milestone_id
         """), {"loan_id": loan_id, "milestone_id": milestone_id}).fetchone()
@@ -705,7 +706,7 @@ async def update_workspace_milestone(
 
         if existing:
             # Update existing
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE purl_loan_milestones
                 SET status = :status,
                     notes = COALESCE(:notes, notes),
@@ -728,7 +729,7 @@ async def update_workspace_milestone(
             })
         else:
             # Create new milestone record
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO purl_loan_milestones (
                     organization_id, loan_id, milestone_id,
                     status, notes, started_at, completed_at, created_at, updated_at
@@ -749,7 +750,7 @@ async def update_workspace_milestone(
             })
 
         # Log the update
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, actor_type,
                 resource_type, resource_id, metadata, created_at
@@ -765,7 +766,7 @@ async def update_workspace_milestone(
             "metadata": {"status": update.status, "notes": update.notes}
         })
 
-        db.commit()
+        await db.commit()
 
         # Send notification to borrower if auto_notify is enabled
         if update.auto_notify and update.status in ["in_progress", "completed"]:
@@ -782,7 +783,7 @@ async def update_workspace_milestone(
         }
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to update milestone: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -796,7 +797,7 @@ async def get_workspace_notifications(
     workspace_id: int,
     unread_only: bool = Query(False),
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
     Get notifications for a workspace.
@@ -824,7 +825,7 @@ async def get_workspace_notifications(
         ORDER BY m.created_at DESC
         LIMIT :limit
     """
-    messages = db.execute(text(messages_sql), {"workspace_id": workspace_id, "limit": limit}).fetchall()
+    messages = await db.execute(text(messages_sql), {"workspace_id": workspace_id, "limit": limit}).fetchall()
 
     notifications = []
     for msg in messages:
@@ -839,7 +840,7 @@ async def get_workspace_notifications(
         ))
 
     # Count unread
-    unread_count = db.execute(text("""
+    unread_count = await db.execute(text("""
         SELECT COUNT(*) FROM purl_messages
         WHERE workspace_id = :workspace_id
             AND sender_type != 'contact'
@@ -857,10 +858,10 @@ async def get_workspace_notifications(
 async def mark_notification_read(
     workspace_id: int,
     notification_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Mark a notification as read."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE purl_messages
         SET is_read_by_borrower = true, read_at = NOW()
         WHERE id = :id AND workspace_id = :workspace_id
@@ -870,17 +871,17 @@ async def mark_notification_read(
     if not result:
         raise HTTPException(status_code=404, detail="Notification not found")
 
-    db.commit()
+    await db.commit()
     return {"success": True}
 
 
 @router.patch("/workspaces/{workspace_id}/notifications/mark-all-read")
 async def mark_all_notifications_read(
     workspace_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Mark all notifications as read."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE purl_messages
         SET is_read_by_borrower = true, read_at = NOW()
         WHERE workspace_id = :workspace_id
@@ -888,7 +889,7 @@ async def mark_all_notifications_read(
             AND is_read_by_borrower = false
     """), {"workspace_id": workspace_id})
 
-    db.commit()
+    await db.commit()
     return {"success": True, "count": result.rowcount}
 
 
@@ -899,7 +900,7 @@ async def mark_all_notifications_read(
 @router.post("/workspaces/{workspace_id}/sync-status")
 async def sync_workspace_status(
     workspace_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Synchronize workspace status based on application, documents, and loan status.
@@ -909,7 +910,7 @@ async def sync_workspace_status(
     - Document collection progress
     - Loan milestones
     """
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT w.id, w.status, w.organization_id
         FROM purl_workspaces w
         WHERE w.id = :workspace_id
@@ -921,7 +922,7 @@ async def sync_workspace_status(
     current_status = workspace[1]
 
     # Check application status
-    application = db.execute(text("""
+    application = await db.execute(text("""
         SELECT status, completeness_pct, submitted_at
         FROM purl_applications
         WHERE workspace_id = :workspace_id
@@ -929,7 +930,7 @@ async def sync_workspace_status(
     """), {"workspace_id": workspace_id}).fetchone()
 
     # Check loan status
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT id, status
         FROM purl_loans
         WHERE workspace_id = :workspace_id
@@ -959,14 +960,14 @@ async def sync_workspace_status(
 
     # Update if changed
     if new_status != current_status:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE purl_workspaces
             SET status = :status, updated_at = NOW()
             WHERE id = :workspace_id
         """), {"workspace_id": workspace_id, "status": new_status})
 
         # Log the change
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, actor_type,
                 metadata, created_at
@@ -983,7 +984,7 @@ async def sync_workspace_status(
             }
         })
 
-        db.commit()
+        await db.commit()
 
     return {
         "workspace_id": workspace_id,

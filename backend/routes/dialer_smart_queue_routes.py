@@ -22,10 +22,11 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
@@ -329,7 +330,7 @@ def _save_queue(db: Session, queue_id: str, user_id: int, org_id: int,
 async def build_smart_queue(
     body: SmartQueueBuildRequest,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Build an intelligent call queue from leads based on filters and priority scoring."""
     org_id = getattr(current_user, "organization_id", None)
@@ -395,7 +396,7 @@ async def build_smart_queue(
         " ORDER BY l.ai_score DESC NULLS LAST, l.last_contact ASC NULLS FIRST"
         " LIMIT :limit"
     )
-    rows = db.execute(text(query), params).fetchall()
+    rows = await db.execute(text(query), params).fetchall()
 
     if not rows:
         return {
@@ -530,7 +531,7 @@ async def get_smart_queue_presets(
 async def build_pipeline_queue(
     body: PipelineQueueBuildRequest,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Build a call queue from the loan pipeline (borrowers, not leads)."""
     org_id = getattr(current_user, "organization_id", None)
@@ -585,7 +586,7 @@ async def build_pipeline_queue(
         " ORDER BY lo.lock_expiration_date ASC NULLS LAST, lo.closing_date ASC NULLS LAST"
         " LIMIT :limit"
     )
-    rows = db.execute(text(query), params).fetchall()
+    rows = await db.execute(text(query), params).fetchall()
 
     if not rows:
         return {
@@ -654,7 +655,7 @@ async def build_pipeline_queue(
 async def get_queue_metrics(
     days: int = Query(7, ge=1, le=90, description="Lookback period in days"),
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get smart queue performance metrics for the current user."""
     org_id = getattr(current_user, "organization_id", None)
@@ -663,7 +664,7 @@ async def get_queue_metrics(
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
-    stats = db.execute(text("""
+    stats = await db.execute(text("""
         SELECT
             COUNT(DISTINCT q.id) AS total_queues,
             COALESCE(SUM(q.total_items), 0) AS total_items,
@@ -676,7 +677,7 @@ async def get_queue_metrics(
     """), {"user_id": current_user.id, "org_id": org_id, "cutoff": cutoff}).fetchone()
 
     # Calculate connect rate from items that were completed
-    connect_stats = db.execute(text("""
+    connect_stats = await db.execute(text("""
         SELECT
             COUNT(*) AS total_called,
             COUNT(CASE WHEN i.disposition IN ('connected', 'answered', 'spoke_with', 'appointment_set')
@@ -694,7 +695,7 @@ async def get_queue_metrics(
     connect_rate = round((connected / total_called * 100), 1) if total_called > 0 else 0.0
 
     # Active queues
-    active = db.execute(text("""
+    active = await db.execute(text("""
         SELECT id, name, total_items, completed_items, skipped_items, current_position, created_at
         FROM dialer_smart_queues
         WHERE user_id = :user_id AND organization_id = :org_id AND status = 'active'
@@ -724,12 +725,12 @@ async def get_queue_metrics(
 async def get_smart_queue(
     queue_id: str,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get a smart queue with its current position and items."""
     org_id = getattr(current_user, "organization_id", None)
 
-    queue = db.execute(text("""
+    queue = await db.execute(text("""
         SELECT id, name, queue_type, filters, total_items, completed_items,
                skipped_items, current_position, status, created_at
         FROM dialer_smart_queues
@@ -745,7 +746,7 @@ async def get_smart_queue(
     ]
     q = dict(zip(q_cols, queue))
 
-    items = db.execute(text("""
+    items = await db.execute(text("""
         SELECT id, position, contact_phone, contact_name, lead_id, loan_id,
                priority_score, context, status, called_at, disposition
         FROM dialer_smart_queue_items
@@ -773,12 +774,12 @@ async def get_smart_queue(
 async def get_next_in_queue(
     queue_id: str,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get the next number to dial from the queue."""
     org_id = getattr(current_user, "organization_id", None)
 
-    queue = db.execute(text("""
+    queue = await db.execute(text("""
         SELECT id, current_position, total_items, status
         FROM dialer_smart_queues
         WHERE id = :queue_id AND user_id = :user_id AND organization_id = :org_id
@@ -790,7 +791,7 @@ async def get_next_in_queue(
         raise HTTPException(status_code=400, detail="Queue is not active")
 
     # Find next pending item from current position forward
-    next_item = db.execute(text("""
+    next_item = await db.execute(text("""
         SELECT id, position, contact_phone, contact_name, lead_id, loan_id,
                priority_score, context
         FROM dialer_smart_queue_items
@@ -801,26 +802,26 @@ async def get_next_in_queue(
 
     if not next_item:
         # Queue exhausted
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE dialer_smart_queues
             SET status = 'completed', completed_at = NOW(), updated_at = NOW()
             WHERE id = :queue_id
         """), {"queue_id": queue_id})
-        db.commit()
+        await db.commit()
         return {"status": "queue_complete", "next_item": None, "remaining": 0}
 
     # Update current position
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE dialer_smart_queues
         SET current_position = :pos, updated_at = NOW()
         WHERE id = :queue_id
     """), {"queue_id": queue_id, "pos": next_item[1]})
-    db.commit()
+    await db.commit()
 
     item_cols = ["id", "position", "contact_phone", "contact_name", "lead_id", "loan_id", "priority_score", "context"]
     item_dict = dict(zip(item_cols, next_item))
 
-    remaining = db.execute(text("""
+    remaining = await db.execute(text("""
         SELECT COUNT(*) FROM dialer_smart_queue_items
         WHERE queue_id = :queue_id AND status = 'pending'
     """), {"queue_id": queue_id}).scalar()
@@ -836,12 +837,12 @@ async def get_next_in_queue(
 async def skip_current_item(
     queue_id: str,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Skip the current queue item and advance to the next."""
     org_id = getattr(current_user, "organization_id", None)
 
-    queue = db.execute(text("""
+    queue = await db.execute(text("""
         SELECT id, current_position, status
         FROM dialer_smart_queues
         WHERE id = :queue_id AND user_id = :user_id AND organization_id = :org_id
@@ -853,21 +854,21 @@ async def skip_current_item(
         raise HTTPException(status_code=400, detail="Queue is not active")
 
     # Mark current item as skipped
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE dialer_smart_queue_items
         SET status = 'skipped'
         WHERE queue_id = :queue_id AND position = :pos AND status = 'pending'
     """), {"queue_id": queue_id, "pos": queue[1]})
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE dialer_smart_queues
         SET skipped_items = skipped_items + 1, updated_at = NOW()
         WHERE id = :queue_id
     """), {"queue_id": queue_id})
-    db.commit()
+    await db.commit()
 
     # Return the next pending item
-    next_item = db.execute(text("""
+    next_item = await db.execute(text("""
         SELECT id, position, contact_phone, contact_name, lead_id, loan_id,
                priority_score, context
         FROM dialer_smart_queue_items
@@ -877,22 +878,22 @@ async def skip_current_item(
     """), {"queue_id": queue_id, "pos": queue[1]}).fetchone()
 
     if not next_item:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE dialer_smart_queues
             SET status = 'completed', completed_at = NOW(), updated_at = NOW()
             WHERE id = :queue_id
         """), {"queue_id": queue_id})
-        db.commit()
+        await db.commit()
         return {"status": "queue_complete", "next_item": None, "remaining": 0}
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE dialer_smart_queues SET current_position = :pos, updated_at = NOW()
         WHERE id = :queue_id
     """), {"queue_id": queue_id, "pos": next_item[1]})
-    db.commit()
+    await db.commit()
 
     item_cols = ["id", "position", "contact_phone", "contact_name", "lead_id", "loan_id", "priority_score", "context"]
-    remaining = db.execute(text("""
+    remaining = await db.execute(text("""
         SELECT COUNT(*) FROM dialer_smart_queue_items
         WHERE queue_id = :queue_id AND status = 'pending'
     """), {"queue_id": queue_id}).scalar()
@@ -909,12 +910,12 @@ async def complete_current_item(
     queue_id: str,
     body: QueueItemCompleteRequest,
     current_user=Depends(current_user_flexible_dep),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Mark the current queue item as called/completed and advance."""
     org_id = getattr(current_user, "organization_id", None)
 
-    queue = db.execute(text("""
+    queue = await db.execute(text("""
         SELECT id, current_position, status
         FROM dialer_smart_queues
         WHERE id = :queue_id AND user_id = :user_id AND organization_id = :org_id
@@ -928,7 +929,7 @@ async def complete_current_item(
     now_ts = datetime.now(timezone.utc)
 
     # Mark current item as completed
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE dialer_smart_queue_items
         SET status = 'completed', called_at = :now, disposition = :disp, notes = :notes
         WHERE queue_id = :queue_id AND position = :pos AND status = 'pending'
@@ -940,28 +941,28 @@ async def complete_current_item(
         "notes": body.notes,
     })
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE dialer_smart_queues
         SET completed_items = completed_items + 1, updated_at = NOW()
         WHERE id = :queue_id
     """), {"queue_id": queue_id})
 
     # Also update lead.last_contact if this was a lead-based item
-    lead_row = db.execute(text("""
+    lead_row = await db.execute(text("""
         SELECT lead_id FROM dialer_smart_queue_items
         WHERE queue_id = :queue_id AND position = :pos
     """), {"queue_id": queue_id, "pos": queue[1]}).fetchone()
 
     if lead_row and lead_row[0]:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE leads SET last_contact = :now, updated_at = :now
             WHERE id = :lead_id
         """), {"now": now_ts, "lead_id": lead_row[0]})
 
-    db.commit()
+    await db.commit()
 
     # Advance to next
-    next_item = db.execute(text("""
+    next_item = await db.execute(text("""
         SELECT id, position, contact_phone, contact_name, lead_id, loan_id,
                priority_score, context
         FROM dialer_smart_queue_items
@@ -971,22 +972,22 @@ async def complete_current_item(
     """), {"queue_id": queue_id, "pos": queue[1]}).fetchone()
 
     if not next_item:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE dialer_smart_queues
             SET status = 'completed', completed_at = NOW(), updated_at = NOW()
             WHERE id = :queue_id
         """), {"queue_id": queue_id})
-        db.commit()
+        await db.commit()
         return {"status": "queue_complete", "next_item": None, "remaining": 0}
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE dialer_smart_queues SET current_position = :pos, updated_at = NOW()
         WHERE id = :queue_id
     """), {"queue_id": queue_id, "pos": next_item[1]})
-    db.commit()
+    await db.commit()
 
     item_cols = ["id", "position", "contact_phone", "contact_name", "lead_id", "loan_id", "priority_score", "context"]
-    remaining = db.execute(text("""
+    remaining = await db.execute(text("""
         SELECT COUNT(*) FROM dialer_smart_queue_items
         WHERE queue_id = :queue_id AND status = 'pending'
     """), {"queue_id": queue_id}).scalar()

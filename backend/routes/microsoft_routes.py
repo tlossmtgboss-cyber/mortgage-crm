@@ -10,19 +10,20 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from pydantic import BaseModel
 from typing import List
 
 from utils.responses import success_response, error_response
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/microsoft", tags=["microsoft"])
 
 # Dependency injection placeholders
-from db import get_db
+from db import get_db, get_async_db
 _get_current_user: Optional[Callable] = None
 
 
@@ -81,7 +82,7 @@ async def microsoft_callback(
     state: Optional[str] = Query(None, description="State parameter with user_id and integration type"),
     error: Optional[str] = Query(None, description="Error from Microsoft"),
     error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle OAuth callback from Microsoft.
@@ -166,7 +167,7 @@ async def microsoft_callback(
 
         # Try upsert first (table should exist)
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO user_integrations
                     (user_id, provider, access_token, refresh_token, expires_at, email, provider_user_id, scopes, extra_data, updated_at)
                 VALUES
@@ -193,19 +194,19 @@ async def microsoft_callback(
                 "scopes": token_data.get("scope"),
                 "extra_data": extra_data_json
             })
-            db.commit()
+            await db.commit()
         except Exception as insert_err:
-            db.rollback()
+            await db.rollback()
             logger.warning(f"Upsert failed, trying simple insert/update: {insert_err}")
 
             # Try simple approach - check if exists then insert or update
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT id FROM user_integrations WHERE user_id = :user_id AND provider = :provider
             """), {"user_id": user_id, "provider": provider})
             existing = result.fetchone()
 
             if existing:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE user_integrations SET
                         access_token = :access_token,
                         refresh_token = :refresh_token,
@@ -226,7 +227,7 @@ async def microsoft_callback(
                     "scopes": token_data.get("scope")
                 })
             else:
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO user_integrations
                         (user_id, provider, access_token, refresh_token, expires_at, email, provider_user_id, scopes)
                     VALUES
@@ -241,13 +242,13 @@ async def microsoft_callback(
                     "ms_user_id": ms_user_id,
                     "scopes": token_data.get("scope")
                 })
-            db.commit()
+            await db.commit()
 
         logger.info(f"Successfully stored Microsoft {provider} tokens for user {user_id}")
 
     except SQLAlchemyError as e:
         logger.error(f"Error storing Microsoft tokens: {e}")
-        db.rollback()
+        await db.rollback()
         return RedirectResponse(
             url=f"{frontend_url}/settings/integrations?error=microsoft_storage_failed"
         )
@@ -263,7 +264,7 @@ async def microsoft_callback(
 async def microsoft_status(
     provider: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Check Microsoft Outlook connection status (provider: outlook_calendar or outlook_email)"""
     from integrations.microsoft_outlook_service import microsoft_outlook_client
@@ -277,7 +278,7 @@ async def microsoft_status(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT access_token, refresh_token, expires_at, email, provider_user_id, scopes
             FROM user_integrations
             WHERE user_id = :user_id AND provider = :provider
@@ -318,7 +319,7 @@ async def microsoft_status(
 async def refresh_microsoft_token(
     provider: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Refresh Microsoft access token"""
     from integrations.microsoft_outlook_service import microsoft_outlook_client
@@ -333,7 +334,7 @@ async def refresh_microsoft_token(
 
     try:
         # Get current refresh token
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT refresh_token FROM user_integrations
             WHERE user_id = :user_id AND provider = :provider
         """), {"user_id": user_id, "provider": provider})
@@ -349,7 +350,7 @@ async def refresh_microsoft_token(
             raise HTTPException(status_code=500, detail="Failed to refresh token")
 
         # Update stored tokens
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE user_integrations
             SET access_token = :access_token,
                 refresh_token = :refresh_token,
@@ -363,7 +364,7 @@ async def refresh_microsoft_token(
             "refresh_token": token_data.get("refresh_token"),
             "expires_at": token_data.get("expires_at")
         })
-        db.commit()
+        await db.commit()
 
         return success_response("Token refreshed", {
             "refreshed": True,
@@ -381,7 +382,7 @@ async def refresh_microsoft_token(
 async def disconnect_microsoft(
     provider: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Disconnect Microsoft integration"""
     if provider not in ["outlook_calendar", "outlook_email"]:
@@ -393,11 +394,11 @@ async def disconnect_microsoft(
         raise HTTPException(status_code=401, detail="User not authenticated")
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM user_integrations
             WHERE user_id = :user_id AND provider = :provider
         """), {"user_id": user_id, "provider": provider})
-        db.commit()
+        await db.commit()
 
         return success_response(f"{provider} integration disconnected", {
             "disconnected": True
@@ -405,7 +406,7 @@ async def disconnect_microsoft(
 
     except SQLAlchemyError as e:
         logger.error(f"Error disconnecting Microsoft {provider}: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -415,7 +416,7 @@ async def disconnect_microsoft(
 async def list_calendar_events(
     days: int = Query(30, description="Number of days to fetch events for"),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List calendar events from Outlook"""
     from integrations.microsoft_outlook_service import microsoft_outlook_client
@@ -423,7 +424,7 @@ async def list_calendar_events(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token, refresh_token, expires_at
         FROM user_integrations
         WHERE user_id = :user_id AND provider = 'outlook_calendar'
@@ -440,7 +441,7 @@ async def list_calendar_events(
         token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_integrations
                 SET access_token = :access_token,
                     refresh_token = :refresh_token,
@@ -453,7 +454,7 @@ async def list_calendar_events(
                 "refresh_token": token_data.get("refresh_token"),
                 "expires_at": token_data.get("expires_at")
             })
-            db.commit()
+            await db.commit()
         else:
             raise HTTPException(status_code=401, detail="Token expired and refresh failed")
 
@@ -472,7 +473,7 @@ async def list_calendar_events(
 async def create_calendar_event(
     event: CreateEventRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new calendar event in Outlook"""
     from integrations.microsoft_outlook_service import microsoft_outlook_client
@@ -480,7 +481,7 @@ async def create_calendar_event(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'outlook_calendar'
     """), {"user_id": user_id})
@@ -514,7 +515,7 @@ async def list_email_messages(
     top: int = Query(25, description="Number of messages to fetch"),
     unread_only: bool = Query(False, description="Only fetch unread messages"),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List email messages from Outlook"""
     from integrations.microsoft_outlook_service import microsoft_outlook_client
@@ -522,7 +523,7 @@ async def list_email_messages(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token, refresh_token, expires_at
         FROM user_integrations
         WHERE user_id = :user_id AND provider = 'outlook_email'
@@ -539,7 +540,7 @@ async def list_email_messages(
         token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_integrations
                 SET access_token = :access_token,
                     refresh_token = :refresh_token,
@@ -552,7 +553,7 @@ async def list_email_messages(
                 "refresh_token": token_data.get("refresh_token"),
                 "expires_at": token_data.get("expires_at")
             })
-            db.commit()
+            await db.commit()
         else:
             raise HTTPException(status_code=401, detail="Token expired and refresh failed")
 
@@ -568,7 +569,7 @@ async def list_email_messages(
 async def send_email(
     email: SendEmailRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send an email via Outlook"""
     from integrations.microsoft_outlook_service import microsoft_outlook_client
@@ -576,7 +577,7 @@ async def send_email(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token FROM user_integrations
         WHERE user_id = :user_id AND provider = 'outlook_email'
     """), {"user_id": user_id})
@@ -603,7 +604,7 @@ async def send_email(
 @router.post("/email/sync")
 async def sync_outlook_emails(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Sync emails from Outlook for the Reconciliation Center"""
     from integrations.microsoft_outlook_service import microsoft_outlook_client
@@ -611,7 +612,7 @@ async def sync_outlook_emails(
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     # Get access token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT access_token, refresh_token, expires_at
         FROM user_integrations
         WHERE user_id = :user_id AND provider = 'outlook_email'
@@ -628,7 +629,7 @@ async def sync_outlook_emails(
         token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE user_integrations
                 SET access_token = :access_token,
                     refresh_token = :refresh_token,
@@ -641,7 +642,7 @@ async def sync_outlook_emails(
                 "refresh_token": token_data.get("refresh_token"),
                 "expires_at": token_data.get("expires_at")
             })
-            db.commit()
+            await db.commit()
         else:
             raise HTTPException(status_code=401, detail="Token expired and refresh failed")
 

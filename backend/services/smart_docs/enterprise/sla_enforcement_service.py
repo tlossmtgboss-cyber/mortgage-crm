@@ -318,6 +318,8 @@ class BusinessHoursCalculator:
         exclude_holidays: bool = True,
         org_holidays: Optional[List[date]] = None,
         state: Optional[str] = None,
+        consider_irs_deadlines: bool = False,
+        storm_window_dates: Optional[Iterable[date]] = None,
     ):
         self.start_hour = start_hour
         self.end_hour = end_hour
@@ -325,6 +327,16 @@ class BusinessHoursCalculator:
         self.exclude_weekends = exclude_weekends
         self.exclude_holidays = exclude_holidays
         self.state = state.upper() if state else None
+        # When True, Apr 14-16 of any year is treated as half-velocity
+        # (1.5x the normal SLA window — borrowers often unavailable around
+        # the IRS filing deadline).
+        self.consider_irs_deadlines = bool(consider_irs_deadlines)
+        # Optional set of date(...) entries representing local storm /
+        # natural-disaster windows during which SLA progression pauses
+        # entirely (treated as non-business days).
+        self.storm_window_dates: set[date] = (
+            {d for d in storm_window_dates} if storm_window_dates else set()
+        )
         # Use central HolidayCalendar for state-aware holiday detection;
         # fall back to the legacy federal-only set if import fails.
         self._calendar = None

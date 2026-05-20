@@ -14,8 +14,10 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from .salesforce_helpers import (
     get_db, get_current_user_id, decrypt_token, encrypt_token,
@@ -73,7 +75,7 @@ def _sanitize_sf_error(response_text: str) -> str:
 
 async def require_platform_admin(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> dict:
     """Require platform admin role for debug endpoints.
 
@@ -83,7 +85,7 @@ async def require_platform_admin(
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    user = db.execute(
+    user = await db.execute(
         text("SELECT role, organization_id FROM users WHERE id = :user_id"),
         {"user_id": user_id}
     ).fetchone()
@@ -99,7 +101,7 @@ async def require_platform_admin(
 @router.get("/debug/salesforce-objects")
 async def debug_salesforce_objects(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -154,7 +156,7 @@ async def debug_salesforce_objects(
 @router.get("/debug/salesforce-query")
 async def debug_salesforce_query(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -213,7 +215,7 @@ async def debug_salesforce_query(
 @router.get("/debug/db-stats")
 async def get_db_stats(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -233,11 +235,11 @@ async def get_db_stats(
 
         # Count total loans (tenant-scoped)
         total_loans_sql = "SELECT COUNT(*) FROM loans l WHERE 1=1 " + org_filter
-        total_loans = db.execute(text(total_loans_sql), params).scalar() or 0
+        total_loans = await db.execute(text(total_loans_sql), params).scalar() or 0
 
         # Count salesforce loans (tenant-scoped)
         sf_loans_sql = "SELECT COUNT(*) FROM loans l WHERE l.salesforce_id IS NOT NULL " + org_filter
-        sf_loans = db.execute(text(sf_loans_sql), params).scalar() or 0
+        sf_loans = await db.execute(text(sf_loans_sql), params).scalar() or 0
 
         # Count MUM clients (tenant-scoped via loan join)
         mum_clients_sql = (
@@ -245,7 +247,7 @@ async def get_db_stats(
             " JOIN loans l ON l.loan_number = m.loan_number"
             " WHERE 1=1 " + org_filter
         )
-        mum_clients = db.execute(text(mum_clients_sql), params).scalar() or 0
+        mum_clients = await db.execute(text(mum_clients_sql), params).scalar() or 0
 
         # Get sample of recent loans with their stage (tenant-scoped, PII masked)
         sample_loans_sql = (
@@ -255,7 +257,7 @@ async def get_db_stats(
             " ORDER BY l.created_at DESC"
             " LIMIT 10"
         )
-        sample_loans = db.execute(text(sample_loans_sql), params).fetchall()
+        sample_loans = await db.execute(text(sample_loans_sql), params).fetchall()
 
         # Count loans that should be in MUM (tenant-scoped)
         should_be_mum_sql = (
@@ -270,7 +272,7 @@ async def get_db_stats(
             "     WHERE m.loan_number = l.loan_number"
             " ) " + org_filter
         )
-        should_be_mum = db.execute(text(should_be_mum_sql), params).scalar() or 0
+        should_be_mum = await db.execute(text(should_be_mum_sql), params).scalar() or 0
 
         # Get details of loans that should be in MUM (tenant-scoped, PII masked)
         mum_candidates_sql = (
@@ -287,7 +289,7 @@ async def get_db_stats(
             " ) " + org_filter +
             " LIMIT 20"
         )
-        mum_candidates = db.execute(text(mum_candidates_sql), params).fetchall()
+        mum_candidates = await db.execute(text(mum_candidates_sql), params).fetchall()
 
         return {
             "total_loans": total_loans,
@@ -495,7 +497,7 @@ async def debug_import_closed_loans_from_sf(
 @router.post("/debug/import-to-mum")
 async def debug_import_to_mum(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -533,7 +535,7 @@ async def debug_import_to_mum(
             "     WHERE m.loan_number = l.loan_number"
             " ) " + org_filter
         )
-        funded_loans = db.execute(text(funded_loans_sql), params).fetchall()
+        funded_loans = await db.execute(text(funded_loans_sql), params).fetchall()
 
         logger.info(f"Debug: Found {len(funded_loans)} funded loans to import to MUM clients (admin user_id={user_id})")
 
@@ -550,7 +552,7 @@ async def debug_import_to_mum(
                 loan_amount = float(loan[5]) if loan[5] else 0
                 loan_rate = float(loan[6]) if loan[6] else 0
                 close_date = loan[7] or loan[8]  # funded_date or closing_date
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO mum_clients (
                         client_name, loan_number, original_close_date,
                         original_rate, loan_balance,
@@ -591,11 +593,11 @@ async def debug_import_to_mum(
                 logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
                 results['errors'].append(f"Error importing {loan[1]}: Import failed")
                 try:
-                    db.rollback()  # Reset transaction so next insert can proceed
+                    await db.rollback()  # Reset transaction so next insert can proceed
                 except Exception as e2:
                     logger.error(f"Error in debug_import_to_mum (rollback): {e2}")
 
-        db.commit()
+        await db.commit()
         return results
 
     except Exception as e:
@@ -606,7 +608,7 @@ async def debug_import_to_mum(
 @router.get("/debug/connection")
 async def debug_salesforce_connection(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -620,7 +622,7 @@ async def debug_salesforce_connection(
 
     try:
         # Check new integration_profiles table - scoped to admin's user
-        profile = db.execute(text("""
+        profile = await db.execute(text("""
             SELECT user_id, status, instance_url, sf_username,
                    CASE WHEN access_token_encrypted IS NOT NULL THEN 'has_token' ELSE 'no_token' END as token_status,
                    updated_at, connected_at
@@ -647,7 +649,7 @@ async def debug_salesforce_connection(
             result["integration_profiles"] = {"status": "not_found"}
 
         # Also check old user_integrations table - scoped to admin's user
-        integration = db.execute(text("""
+        integration = await db.execute(text("""
             SELECT user_id,
                    CASE WHEN access_token IS NOT NULL THEN 'has_token' ELSE 'no_token' END as token_status,
                    scopes,
@@ -699,7 +701,7 @@ async def debug_salesforce_connection(
 @router.get("/debug/token-refresh")
 async def debug_token_refresh(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -711,7 +713,7 @@ async def debug_token_refresh(
 
     try:
         # Get integration scoped to admin's user
-        integration = db.execute(text("""
+        integration = await db.execute(text("""
             SELECT access_token, refresh_token, scopes, user_id
             FROM user_integrations
             WHERE provider = 'salesforce' AND access_token IS NOT NULL
@@ -781,7 +783,7 @@ async def debug_token_refresh(
                     result["token_encrypted_before_storage"] = False
 
                 # Update in database
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE user_integrations
                     SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
                     WHERE user_id = :user_id AND provider = 'salesforce'
@@ -789,7 +791,7 @@ async def debug_token_refresh(
                     "access_token": token_to_store,
                     "user_id": integration_user_id
                 })
-                db.commit()
+                await db.commit()
                 result["status"] = "success"
                 result["message"] = "Token refreshed and saved"
             else:
@@ -815,7 +817,7 @@ async def debug_token_refresh(
 @router.get("/debug/test-query")
 async def debug_test_salesforce_query(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -828,7 +830,7 @@ async def debug_test_salesforce_query(
 
     try:
         # Get Salesforce integration scoped to admin's user
-        integration = db.execute(text("""
+        integration = await db.execute(text("""
             SELECT access_token, refresh_token, scopes, user_id
             FROM user_integrations
             WHERE provider = 'salesforce' AND access_token IS NOT NULL
@@ -882,7 +884,7 @@ async def debug_test_salesforce_query(
                         logger.warning(f"Could not encrypt refreshed token: {enc_err}")
 
                     # Update token in database
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE user_integrations
                         SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
                         WHERE user_id = :user_id AND provider = 'salesforce'
@@ -890,7 +892,7 @@ async def debug_test_salesforce_query(
                         "access_token": token_to_store,
                         "user_id": integration_user_id
                     })
-                    db.commit()
+                    await db.commit()
 
                     # Retry with new token
                     headers["Authorization"] = f"Bearer {access_token}"
@@ -937,7 +939,7 @@ async def debug_test_salesforce_query(
 @router.get("/debug/all-statuses")
 async def debug_all_statuses(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     admin: dict = Depends(require_platform_admin),
 ):
     """
@@ -957,7 +959,7 @@ async def debug_all_statuses(
         # First try the new integration_profiles table - scoped to admin's user
         try:
             from services.salesforce.oauth_service import decrypt_value
-            profile = db.execute(text("""
+            profile = await db.execute(text("""
                 SELECT access_token_encrypted, refresh_token_encrypted, instance_url, user_id
                 FROM integration_profiles
                 WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
@@ -976,7 +978,7 @@ async def debug_all_statuses(
 
         # Fallback to old user_integrations table - scoped to admin's user
         if not access_token:
-            integration = db.execute(text("""
+            integration = await db.execute(text("""
                 SELECT access_token, refresh_token, scopes, user_id
                 FROM user_integrations
                 WHERE provider = 'salesforce' AND access_token IS NOT NULL

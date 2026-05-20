@@ -37,6 +37,9 @@ from services.session_recovery import SessionRecoveryService
 from middleware.structured_logging import StructuredLogger, get_structured_logger
 from models.chat_state_machine_models import ChatSession, ChatMessage, ConversationPhase
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 logger = logging.getLogger(__name__)
@@ -255,7 +258,7 @@ async def create_session(
 async def get_session(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get session details and conversation history."""
     session_manager = ChatSessionManager(db)
@@ -292,7 +295,7 @@ async def send_message(
     message: ChatMessageCreate,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Send message with full production stack:
@@ -586,7 +589,7 @@ async def respond_to_cta(
     session_id: int,
     response: CTAResponse,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Handle CTA response from borrower."""
     session_manager = ChatSessionManager(db)
@@ -648,7 +651,7 @@ async def respond_to_cta(
 async def end_session(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """End a chat session."""
     session_manager = ChatSessionManager(db)
@@ -680,7 +683,7 @@ async def end_session(
 async def get_session_quality(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get quality analysis for a session."""
     session_manager = ChatSessionManager(db)

@@ -15,8 +15,9 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks, UploadFile, File, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ router = APIRouter(prefix="/api/v1/portal/documents", tags=["Portal Documents"])
 # DEPENDENCY INJECTION
 # =============================================================================
 
-from db import get_db
+from db import get_db, get_async_db
 
 _s3_client = None
 
@@ -154,7 +155,7 @@ class DocumentStatusUpdate(BaseModel):
 async def initiate_document_upload(
     request: InitiateUploadRequest,
     http_request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Initiate document upload by generating a presigned S3 URL.
@@ -179,7 +180,7 @@ async def initiate_document_upload(
         )
 
     # Validate workspace exists
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT id, organization_id, meta_data
         FROM purl_workspaces
         WHERE id = :workspace_id
@@ -193,7 +194,7 @@ async def initiate_document_upload(
     lead_id = meta_data.get("lead_id")
 
     # Get loan_id if available
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT id FROM purl_loans
         WHERE workspace_id = :workspace_id
         ORDER BY created_at DESC LIMIT 1
@@ -219,7 +220,7 @@ async def initiate_document_upload(
 
     try:
         # Create document record in pending_upload status
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO perennia_documents (
                 loan_id, lead_id, request_id,
                 file_name, file_size, mime_type,
@@ -248,7 +249,7 @@ async def initiate_document_upload(
         })
 
         document_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         # Generate presigned URL
         s3_client = get_s3_client()
@@ -271,7 +272,7 @@ async def initiate_document_upload(
             presigned_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{storage_key}?presigned=mock"
 
         # Log event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO perennia_document_events (
                 loan_id, lead_id, request_id, document_id,
                 event_type, event_data, actor_type, created_at
@@ -290,7 +291,7 @@ async def initiate_document_upload(
                 "mime_type": request.mime_type,
             }
         })
-        db.commit()
+        await db.commit()
 
         return InitiateUploadResponse(
             document_id=document_id,
@@ -300,7 +301,7 @@ async def initiate_document_upload(
         )
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to initiate upload: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -310,7 +311,7 @@ async def confirm_document_upload(
     request: ConfirmUploadRequest,
     background_tasks: BackgroundTasks,
     http_request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Confirm document upload completed and trigger processing.
@@ -329,7 +330,7 @@ async def confirm_document_upload(
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
     # Get document record
-    document = db.execute(text("""
+    document = await db.execute(text("""
         SELECT id, loan_id, lead_id, request_id, original_storage_key, file_name, file_size
         FROM perennia_documents
         WHERE id = :document_id AND status = 'pending_upload'
@@ -356,7 +357,7 @@ async def confirm_document_upload(
 
     try:
         # Update document status
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE perennia_documents
             SET status = 'uploaded',
                 virus_scan_status = 'pending',
@@ -366,7 +367,7 @@ async def confirm_document_upload(
         """), {"document_id": request.document_id})
 
         # Log event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO perennia_document_events (
                 loan_id, lead_id, request_id, document_id,
                 event_type, event_data, actor_type, created_at
@@ -385,7 +386,7 @@ async def confirm_document_upload(
             }
         })
 
-        db.commit()
+        await db.commit()
 
         # Queue background processing jobs
         # background_tasks.add_task(process_document_pipeline, request.document_id)
@@ -399,7 +400,7 @@ async def confirm_document_upload(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to confirm upload: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -413,7 +414,7 @@ async def get_document_preview(
     document_id: int = Path(..., description="Document ID"),
     workspace_id: int = Query(..., description="Workspace ID for authorization"),
     http_request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get a signed URL for document preview.
@@ -427,7 +428,7 @@ async def get_document_preview(
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
     # SEC DOC-008: Verify document belongs to the requested workspace
-    document = db.execute(text("""
+    document = await db.execute(text("""
         SELECT d.id, d.file_name, d.mime_type, d.original_storage_key,
                d.preview_storage_key, d.status, d.workspace_id
         FROM perennia_documents d
@@ -444,7 +445,7 @@ async def get_document_preview(
         raise HTTPException(status_code=403, detail="Access denied: document does not belong to this workspace")
 
     # Also verify the workspace exists and is active
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT id, status FROM purl_workspaces WHERE id = :workspace_id
     """), {"workspace_id": workspace_id}).fetchone()
     if not workspace:
@@ -520,7 +521,7 @@ async def get_document_download_url(
     document_id: int = Path(..., description="Document ID"),
     workspace_id: int = Query(..., description="Workspace ID for authorization"),
     http_request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a signed URL for document download."""
     # Validate portal session
@@ -530,7 +531,7 @@ async def get_document_download_url(
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
     # SEC DOC-008: Verify document belongs to the requested workspace
-    document = db.execute(text("""
+    document = await db.execute(text("""
         SELECT d.id, d.file_name, d.original_storage_key, d.workspace_id
         FROM perennia_documents d
         WHERE d.id = :document_id
@@ -546,7 +547,7 @@ async def get_document_download_url(
         raise HTTPException(status_code=403, detail="Access denied: document does not belong to this workspace")
 
     # Verify the workspace exists and get organization_id for tenant validation
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT id, organization_id FROM purl_workspaces WHERE id = :workspace_id
     """), {"workspace_id": workspace_id}).fetchone()
     if not workspace:
@@ -600,7 +601,7 @@ async def review_document(
     review: DocumentReviewRequest,
     background_tasks: BackgroundTasks,
     http_request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Review a document (approve, reject, or request more info).
@@ -620,7 +621,7 @@ async def review_document(
     except Exception as e:
         logger.error(f"Error authenticating user for document review: {e}")
         raise HTTPException(status_code=401, detail="Authentication required")
-    document = db.execute(text("""
+    document = await db.execute(text("""
         SELECT id, loan_id, lead_id, request_id, status
         FROM perennia_documents
         WHERE id = :document_id
@@ -640,7 +641,7 @@ async def review_document(
 
     try:
         # Update document status
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE perennia_documents
             SET status = :status,
                 rejection_reason = :rejection_reason,
@@ -654,7 +655,7 @@ async def review_document(
 
         # Log event
         event_type = f"document_{review.action}d"
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO perennia_document_events (
                 loan_id, lead_id, request_id, document_id,
                 event_type, event_data, actor_type, created_at
@@ -679,7 +680,7 @@ async def review_document(
         if document[3] and review.action == "approve":
             _update_request_completion(db, document[3])
 
-        db.commit()
+        await db.commit()
 
         # Notify borrower if requested
         if review.notify_borrower:
@@ -694,7 +695,7 @@ async def review_document(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to review document: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -730,7 +731,7 @@ async def list_workspace_documents(
     doc_type: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all documents for a workspace."""
     # Validate portal session
@@ -740,7 +741,7 @@ async def list_workspace_documents(
         raise HTTPException(status_code=401, detail="Invalid or expired session")
 
     # Get loan_id and lead_id for workspace
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT w.meta_data,
                (SELECT id FROM purl_loans WHERE workspace_id = w.id ORDER BY created_at DESC LIMIT 1) as loan_id
         FROM purl_workspaces w
@@ -786,10 +787,10 @@ async def list_workspace_documents(
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    documents = db.execute(text(docs_sql), params).fetchall()
+    documents = await db.execute(text(docs_sql), params).fetchall()
 
     total_sql = "SELECT COUNT(*) FROM perennia_documents WHERE " + where_clause
-    total = db.execute(text(total_sql), params).scalar()
+    total = await db.execute(text(total_sql), params).scalar()
 
     return {
         "documents": [

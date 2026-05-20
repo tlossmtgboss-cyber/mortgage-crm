@@ -4,7 +4,7 @@ Implements IVR menus with DTMF support for call routing
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
@@ -15,13 +15,15 @@ import os
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/ivr", tags=["ivr"])
 
 
-async def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+async def get_current_user_optional(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Optional authentication - returns user if authenticated, None otherwise.
     Lazy imports from main to avoid circular imports.
@@ -102,16 +104,16 @@ class IVROptionUpdate(BaseModel):
 @router.post("/menus")
 async def create_ivr_menu(
     menu: IVRMenuCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Create a new IVR menu"""
     try:
         # If setting as default, unset other defaults
         if menu.is_default:
-            db.execute(text("UPDATE ivr_menus SET is_default = FALSE WHERE is_default = TRUE"))
+            await db.execute(text("UPDATE ivr_menus SET is_default = FALSE WHERE is_default = TRUE"))
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO ivr_menus
             (name, description, is_default, greeting_text, greeting_audio_url,
              timeout_seconds, max_attempts, timeout_action, created_by, is_active)
@@ -135,9 +137,9 @@ async def create_ivr_menu(
             menu_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in create_ivr_menu: {e}")
-            menu_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            menu_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -146,7 +148,7 @@ async def create_ivr_menu(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating IVR menu: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -154,7 +156,7 @@ async def create_ivr_menu(
 @router.get("/menus")
 async def list_ivr_menus(
     include_inactive: bool = False,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """List all IVR menus"""
@@ -172,7 +174,7 @@ async def list_ivr_menus(
             " GROUP BY m.id"
             " ORDER BY m.is_default DESC, m.name ASC"
         )
-        results = db.execute(text(sql)).fetchall()
+        results = await db.execute(text(sql)).fetchall()
 
         menus = []
         for row in results:
@@ -221,12 +223,12 @@ async def list_ivr_menus(
 @router.get("/menus/{menu_id}")
 async def get_ivr_menu(
     menu_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Get IVR menu with all options"""
     try:
-        menu = db.execute(text("""
+        menu = await db.execute(text("""
             SELECT id, name, description, is_default, is_active,
                    greeting_text, greeting_audio_url, timeout_seconds,
                    max_attempts, timeout_action, created_at
@@ -237,7 +239,7 @@ async def get_ivr_menu(
             raise HTTPException(status_code=404, detail="Menu not found")
 
         # Get options
-        options = db.execute(text("""
+        options = await db.execute(text("""
             SELECT id, dtmf_digit, label, action_type, action_target,
                    announcement_text, is_active, display_order
             FROM ivr_menu_options
@@ -283,12 +285,12 @@ async def get_ivr_menu(
 async def update_ivr_menu(
     menu_id: int,
     menu: IVRMenuUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Update IVR menu"""
     try:
-        existing = db.execute(text(
+        existing = await db.execute(text(
             "SELECT id FROM ivr_menus WHERE id = :menu_id"
         ), {"menu_id": menu_id}).fetchone()
 
@@ -296,7 +298,7 @@ async def update_ivr_menu(
             raise HTTPException(status_code=404, detail="Menu not found")
 
         if menu.is_default:
-            db.execute(text(
+            await db.execute(text(
                 "UPDATE ivr_menus SET is_default = FALSE WHERE is_default = TRUE AND id != :menu_id"
             ), {"menu_id": menu_id})
 
@@ -335,15 +337,15 @@ async def update_ivr_menu(
 
         if updates:
             sql = "UPDATE ivr_menus SET " + ", ".join(updates) + " WHERE id = :menu_id"
-            db.execute(text(sql), params)
-            db.commit()
+            await db.execute(text(sql), params)
+            await db.commit()
 
         return {"success": True, "message": "Menu updated"}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error updating IVR menu: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -351,17 +353,17 @@ async def update_ivr_menu(
 @router.delete("/menus/{menu_id}")
 async def delete_ivr_menu(
     menu_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Delete (deactivate) IVR menu"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE ivr_menus SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
             WHERE id = :menu_id
         """), {"menu_id": menu_id})
 
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Menu not found")
@@ -371,7 +373,7 @@ async def delete_ivr_menu(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error deleting IVR menu: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -384,13 +386,13 @@ async def delete_ivr_menu(
 async def create_ivr_option(
     menu_id: int,
     option: IVROptionCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Add an option to an IVR menu"""
     try:
         # Verify menu exists
-        menu = db.execute(text(
+        menu = await db.execute(text(
             "SELECT id FROM ivr_menus WHERE id = :menu_id"
         ), {"menu_id": menu_id}).fetchone()
 
@@ -398,7 +400,7 @@ async def create_ivr_option(
             raise HTTPException(status_code=404, detail="Menu not found")
 
         # Check for duplicate digit
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT id FROM ivr_menu_options
             WHERE menu_id = :menu_id AND dtmf_digit = :digit
         """), {"menu_id": menu_id, "digit": option.dtmf_digit}).fetchone()
@@ -409,7 +411,7 @@ async def create_ivr_option(
                 detail=f"Option for digit '{option.dtmf_digit}' already exists"
             )
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO ivr_menu_options
             (menu_id, dtmf_digit, label, action_type, action_target,
              announcement_text, display_order, is_active)
@@ -431,9 +433,9 @@ async def create_ivr_option(
             option_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in add_menu_option: {e}")
-            option_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            option_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -444,7 +446,7 @@ async def create_ivr_option(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating IVR option: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -454,12 +456,12 @@ async def update_ivr_option(
     menu_id: int,
     option_id: int,
     option: IVROptionUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Update an IVR menu option"""
     try:
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT id FROM ivr_menu_options
             WHERE id = :option_id AND menu_id = :menu_id
         """), {"option_id": option_id, "menu_id": menu_id}).fetchone()
@@ -491,15 +493,15 @@ async def update_ivr_option(
 
         if updates:
             sql = "UPDATE ivr_menu_options SET " + ", ".join(updates) + " WHERE id = :option_id"
-            db.execute(text(sql), params)
-            db.commit()
+            await db.execute(text(sql), params)
+            await db.commit()
 
         return {"success": True, "message": "Option updated"}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error updating IVR option: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -508,17 +510,17 @@ async def update_ivr_option(
 async def delete_ivr_option(
     menu_id: int,
     option_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Delete an IVR menu option"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM ivr_menu_options
             WHERE id = :option_id AND menu_id = :menu_id
         """), {"option_id": option_id, "menu_id": menu_id})
 
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Option not found")
@@ -528,7 +530,7 @@ async def delete_ivr_option(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error deleting IVR option: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -541,7 +543,7 @@ async def delete_ivr_option(
 @router.get("/twiml/menu")
 async def ivr_menu_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Generate TwiML for IVR menu.
@@ -556,13 +558,13 @@ async def ivr_menu_twiml(
 
         # Get menu (default if no ID provided)
         if menu_id:
-            menu = db.execute(text("""
+            menu = await db.execute(text("""
                 SELECT id, name, greeting_text, greeting_audio_url,
                        timeout_seconds, max_attempts, timeout_action
                 FROM ivr_menus WHERE id = :id AND is_active = TRUE
             """), {"id": menu_id}).fetchone()
         else:
-            menu = db.execute(text("""
+            menu = await db.execute(text("""
                 SELECT id, name, greeting_text, greeting_audio_url,
                        timeout_seconds, max_attempts, timeout_action
                 FROM ivr_menus WHERE is_default = TRUE AND is_active = TRUE
@@ -576,7 +578,7 @@ async def ivr_menu_twiml(
             return Response(content=str(response), media_type="application/xml")
 
         # Get options
-        options = db.execute(text("""
+        options = await db.execute(text("""
             SELECT dtmf_digit, label, action_type, action_target, announcement_text
             FROM ivr_menu_options
             WHERE menu_id = :menu_id AND is_active = TRUE
@@ -631,7 +633,7 @@ async def ivr_menu_twiml(
 @router.post("/twiml/handle-input")
 async def ivr_handle_input_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle DTMF input from IVR menu.
@@ -666,7 +668,7 @@ async def ivr_handle_input_twiml(
             return Response(content=str(response), media_type="application/xml")
 
         # Look up the option for this digit
-        option = db.execute(text("""
+        option = await db.execute(text("""
             SELECT dtmf_digit, label, action_type, action_target, announcement_text
             FROM ivr_menu_options
             WHERE menu_id = :menu_id AND dtmf_digit = :digit AND is_active = TRUE
@@ -697,7 +699,7 @@ async def ivr_handle_input_twiml(
 @router.post("/twiml/timeout")
 async def ivr_timeout_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle IVR timeout after max attempts.
@@ -905,7 +907,7 @@ async def list_ivr_templates():
 @router.post("/templates/{template_id}/apply")
 async def apply_ivr_template(
     template_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_optional)
 ):
     """Apply a predefined template to create an IVR menu"""
@@ -919,7 +921,7 @@ async def apply_ivr_template(
             raise HTTPException(status_code=404, detail="Template not found")
 
         # Create menu
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO ivr_menus
             (name, description, greeting_text, timeout_action, is_active, created_by)
             VALUES
@@ -937,11 +939,11 @@ async def apply_ivr_template(
             menu_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in create_template_menu: {e}")
-            menu_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            menu_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Create options
         for idx, opt in enumerate(template["options"]):
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO ivr_menu_options
                 (menu_id, dtmf_digit, label, action_type, action_target, display_order, is_active)
                 VALUES
@@ -955,7 +957,7 @@ async def apply_ivr_template(
                 "order": idx
             })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -966,6 +968,6 @@ async def apply_ivr_template(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error applying template: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

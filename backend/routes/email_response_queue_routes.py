@@ -18,8 +18,10 @@ from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from utils.pii_mask import mask_email
 
 logger = logging.getLogger(__name__)
@@ -239,11 +241,11 @@ async def execute_email_response_action(
 @router.get("/email-response-queue/pending")
 async def get_pending_email_responses(
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get all pending email responses awaiting user review"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 erq.id, erq.email_id, erq.sender_email, erq.sender_name,
                 erq.subject, erq.body_preview, erq.received_at,
@@ -314,7 +316,7 @@ async def get_pending_email_responses(
 async def approve_email_response(
     approval: EmailResponseApproval,
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Approve an email response recommendation.
@@ -325,7 +327,7 @@ async def approve_email_response(
     """
     try:
         # Get the queue item
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT erq.*, ide.sender as event_sender
             FROM email_response_queue erq
             LEFT JOIN incoming_data_events ide ON ide.external_message_id = erq.email_id
@@ -347,7 +349,7 @@ async def approve_email_response(
         sender_domain = queue_item.sender_email.split("@")[1] if "@" in queue_item.sender_email else ""
 
         # Check if pattern exists
-        pattern_result = db.execute(text("""
+        pattern_result = await db.execute(text("""
             SELECT id, approval_count, rejection_count FROM email_response_patterns
             WHERE user_id = :user_id
               AND pattern_type = 'sender_domain'
@@ -362,7 +364,7 @@ async def approve_email_response(
 
         if existing_pattern:
             # Increment approval count
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE email_response_patterns
                 SET approval_count = approval_count + 1,
                     last_approved_at = NOW(),
@@ -376,7 +378,7 @@ async def approve_email_response(
             pattern_id = existing_pattern.id
         else:
             # Create new pattern
-            new_pattern = db.execute(text("""
+            new_pattern = await db.execute(text("""
                 INSERT INTO email_response_patterns
                 (user_id, pattern_type, pattern_value, response_type, approval_count,
                  is_active, last_approved_at, created_at)
@@ -392,7 +394,7 @@ async def approve_email_response(
             pattern_id = new_pattern.fetchone().id
 
         # Log the approval
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO email_response_log
             (user_id, email_id, sender_email, sender_domain, subject, email_intent,
              response_type, response_pattern_id, was_auto_executed,
@@ -414,7 +416,7 @@ async def approve_email_response(
         })
 
         # Update queue item status
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE email_response_queue
             SET status = 'approved',
                 reviewed_by = :user_id,
@@ -422,7 +424,7 @@ async def approve_email_response(
             WHERE id = :queue_id
         """), {"queue_id": approval.queue_id, "user_id": current_user.id})
 
-        db.commit()
+        await db.commit()
 
         # Execute the approved action (send email, update status, create task, etc.)
         execution_result = await execute_email_response_action(
@@ -432,7 +434,7 @@ async def approve_email_response(
             user_id=current_user.id,
             db=db
         )
-        db.commit()  # Commit execution changes
+        await db.commit()  # Commit execution changes
 
         return {
             "status": "success",
@@ -447,7 +449,7 @@ async def approve_email_response(
         raise
     except Exception as e:
         logger.error(f"Error approving email response: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -455,7 +457,7 @@ async def approve_email_response(
 async def reject_email_response(
     rejection: EmailResponseApproval,
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Reject an email response recommendation.
@@ -465,7 +467,7 @@ async def reject_email_response(
     """
     try:
         # Get the queue item
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT * FROM email_response_queue
             WHERE id = :queue_id AND user_id = :user_id
         """), {"queue_id": rejection.queue_id, "user_id": current_user.id})
@@ -481,7 +483,7 @@ async def reject_email_response(
 
         # If there's a matching pattern, increment rejection count
         if queue_item.matched_pattern_id:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE email_response_patterns
                 SET rejection_count = rejection_count + 1,
                     is_active = false  -- Disable auto-execution on rejection
@@ -489,7 +491,7 @@ async def reject_email_response(
             """), {"pattern_id": queue_item.matched_pattern_id})
 
         # Log the rejection
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO email_response_log
             (user_id, email_id, sender_email, sender_domain, subject, email_intent,
              response_type, response_pattern_id, was_auto_executed,
@@ -511,7 +513,7 @@ async def reject_email_response(
         })
 
         # Update queue item status
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE email_response_queue
             SET status = 'rejected',
                 reviewed_by = :user_id,
@@ -519,7 +521,7 @@ async def reject_email_response(
             WHERE id = :queue_id
         """), {"queue_id": rejection.queue_id, "user_id": current_user.id})
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -531,18 +533,18 @@ async def reject_email_response(
         raise
     except Exception as e:
         logger.error(f"Error rejecting email response: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/email-response-patterns")
 async def get_email_response_patterns(
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get all learned email response patterns for the user"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 id, pattern_type, pattern_value, response_type,
                 approval_count, rejection_count, confidence_score,
@@ -599,12 +601,12 @@ async def update_email_response_pattern(
     auto_execute_threshold: Optional[float] = None,
     requires_entity_match: Optional[bool] = None,
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update settings for a learned email response pattern"""
     try:
         # Verify ownership
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id FROM email_response_patterns
             WHERE id = :pattern_id AND user_id = :user_id
         """), {"pattern_id": pattern_id, "user_id": current_user.id})
@@ -629,8 +631,8 @@ async def update_email_response_pattern(
         if updates:
             updates.append("updated_at = NOW()")
             sql = "UPDATE email_response_patterns SET " + ", ".join(updates) + " WHERE id = :pattern_id"
-            db.execute(text(sql), params)
-            db.commit()
+            await db.execute(text(sql), params)
+            await db.commit()
 
         return {
             "status": "success",
@@ -640,7 +642,7 @@ async def update_email_response_pattern(
         raise
     except Exception as e:
         logger.error(f"Error updating email response pattern: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -648,11 +650,11 @@ async def update_email_response_pattern(
 async def delete_email_response_pattern(
     pattern_id: int,
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a learned email response pattern"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM email_response_patterns
             WHERE id = :pattern_id AND user_id = :user_id
             RETURNING id
@@ -661,7 +663,7 @@ async def delete_email_response_pattern(
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Pattern not found")
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -671,7 +673,7 @@ async def delete_email_response_pattern(
         raise
     except Exception as e:
         logger.error(f"Error deleting email response pattern: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -679,11 +681,11 @@ async def delete_email_response_pattern(
 async def get_email_response_stats(
     days: int = 30,
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get statistics about email response handling"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 COUNT(*) as total_emails,
                 COUNT(CASE WHEN user_action = 'approved' THEN 1 END) as approved,
@@ -698,7 +700,7 @@ async def get_email_response_stats(
         stats = result.fetchone()
 
         # Get pattern stats
-        patterns_result = db.execute(text("""
+        patterns_result = await db.execute(text("""
             SELECT
                 COUNT(*) as total_patterns,
                 COUNT(CASE WHEN is_active THEN 1 END) as active_patterns,
@@ -710,7 +712,7 @@ async def get_email_response_stats(
         pattern_stats = patterns_result.fetchone()
 
         # Get pending count
-        pending_result = db.execute(text("""
+        pending_result = await db.execute(text("""
             SELECT COUNT(*) as pending_count
             FROM email_response_queue
             WHERE user_id = :user_id AND status = 'pending'
@@ -744,7 +746,7 @@ async def get_email_response_stats(
 @router.post("/email-response-queue/test-item")
 async def create_test_email_response_item(
     current_user = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create a test email response queue item for testing the approval flow.
@@ -754,7 +756,7 @@ async def create_test_email_response_item(
         import uuid
         test_email_id = f"test-{uuid.uuid4().hex[:8]}"
 
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO email_response_queue
             (user_id, email_id, sender_email, sender_name, subject, body_preview,
              received_at, email_intent, intent_confidence,
@@ -779,7 +781,7 @@ async def create_test_email_response_item(
             "recommendation_reasoning": "Email indicates Clear to Close status. Recommend acknowledging and updating loan status.",
             "recommendation_confidence": 0.88,
         })
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -793,5 +795,5 @@ async def create_test_email_response_item(
         }
     except Exception as e:
         logger.error(f"Error creating test item: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

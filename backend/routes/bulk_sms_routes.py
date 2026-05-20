@@ -25,10 +25,11 @@ from zoneinfo import ZoneInfo
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db, get_db_with_tenant
+from db import get_db, get_db_with_tenant, get_async_db
 from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
@@ -625,7 +626,7 @@ async def _execute_campaign(campaign_id: str, org_id: int, user_id: int):
 @router.post("/campaigns/preview")
 async def preview_campaign(
     body: CampaignPreviewRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Preview a campaign: returns recipient count and sample leads with rendered messages."""
@@ -635,14 +636,14 @@ async def preview_campaign(
 
     # Get count
     count_sql, count_params = _build_filter_query(body.filters, org_id, count_only=True)
-    row = db.execute(text(count_sql), count_params).fetchone()
+    row = await db.execute(text(count_sql), count_params).fetchone()
     total_count = row.cnt if row else 0
 
     # Get sample recipients (first 10)
     sample_sql, sample_params = _build_filter_query(
         body.filters, org_id, preview_limit=10
     )
-    sample_rows = db.execute(text(sample_sql), sample_params).fetchall()
+    sample_rows = await db.execute(text(sample_sql), sample_params).fetchall()
 
     columns = ["id", "first_name", "last_name", "phone", "email",
                 "stage", "source", "loan_type", "state", "ai_score"]
@@ -671,7 +672,7 @@ async def preview_campaign(
 async def create_campaign(
     body: CampaignCreateRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Create a bulk SMS campaign.
@@ -687,7 +688,7 @@ async def create_campaign(
 
     # Get estimated recipient count
     count_sql, count_params = _build_filter_query(body.filters, org_id, count_only=True)
-    row = db.execute(text(count_sql), count_params).fetchone()
+    row = await db.execute(text(count_sql), count_params).fetchone()
     estimated = row.cnt if row else 0
 
     if estimated == 0:
@@ -728,7 +729,7 @@ async def create_campaign(
 @router.get("/campaigns/{campaign_id}")
 async def get_campaign_status(
     campaign_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Get the current status and stats of a campaign."""
@@ -736,7 +737,7 @@ async def get_campaign_status(
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization context required")
 
-    row = db.execute(
+    row = await db.execute(
         text("""
             SELECT
                 id, name, status, message_template,
@@ -777,7 +778,7 @@ async def get_campaign_status(
 async def list_campaigns(
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """List campaigns for the current organization with summary stats."""
@@ -785,7 +786,7 @@ async def list_campaigns(
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization context required")
 
-    rows = db.execute(
+    rows = await db.execute(
         text("""
             SELECT
                 id, name, status,
@@ -800,7 +801,7 @@ async def list_campaigns(
         {"org_id": org_id, "limit": limit, "offset": offset},
     ).fetchall()
 
-    total_row = db.execute(
+    total_row = await db.execute(
         text("SELECT COUNT(*) as cnt FROM bulk_sms_campaigns WHERE organization_id = :org_id"),
         {"org_id": org_id},
     ).fetchone()
@@ -833,7 +834,7 @@ async def list_campaigns(
 @router.post("/campaigns/{campaign_id}/cancel")
 async def cancel_campaign(
     campaign_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Cancel a running or scheduled campaign."""
@@ -841,7 +842,7 @@ async def cancel_campaign(
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization context required")
 
-    row = db.execute(
+    row = await db.execute(
         text("SELECT status FROM bulk_sms_campaigns WHERE id = :id AND organization_id = :org_id"),
         {"id": campaign_id, "org_id": org_id},
     ).fetchone()

@@ -20,8 +20,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request,
 from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/api/v1/auth/portal", tags=["Portal Authentication"])
 # DEPENDENCY INJECTION
 # =============================================================================
 
-from db import get_db
+from db import get_db, get_async_db
 
 _email_service = None
 
@@ -130,7 +131,7 @@ class RefreshSessionResponse(BaseModel):
 async def send_magic_link(
     request: SendMagicLinkRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Generate and send a magic link to the borrower's email.
@@ -139,7 +140,7 @@ async def send_magic_link(
     Links expire after MAGIC_LINK_EXPIRY_HOURS (default 72 hours).
     """
     # Get workspace and verify email belongs to a contact
-    workspace = db.execute(text("""
+    workspace = await db.execute(text("""
         SELECT w.id, w.slug, w.display_name, w.organization_id,
                c.id as contact_id, c.first_name, c.last_name
         FROM purl_workspaces w
@@ -169,7 +170,7 @@ async def send_magic_link(
 
     try:
         # Invalidate any existing tokens for this contact
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE purl_access_tokens
             SET revoked_at = NOW()
             WHERE workspace_id = :workspace_id
@@ -182,7 +183,7 @@ async def send_magic_link(
         })
 
         # Create new token
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_access_tokens (
                 organization_id, workspace_id, contact_id,
                 name, scope, token_value, token_prefix,
@@ -202,7 +203,7 @@ async def send_magic_link(
         })
 
         # Log the event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, actor_type,
                 metadata, created_at
@@ -219,7 +220,7 @@ async def send_magic_link(
             }
         })
 
-        db.commit()
+        await db.commit()
 
         # Build magic link URL
         redirect_path = request.redirect_path or ""
@@ -247,7 +248,7 @@ async def send_magic_link(
         )
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to generate magic link: {e}")
         raise HTTPException(status_code=500, detail="Failed to send magic link")
 
@@ -293,7 +294,7 @@ async def verify_magic_link(
     token: str = Query(..., min_length=32),
     redirect: Optional[str] = Query(None),
     response: Response = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Verify a magic link token and create a session.
@@ -304,7 +305,7 @@ async def verify_magic_link(
     3. Redirects to portal (or returns JSON if Accept: application/json)
     """
     # Look up token
-    token_record = db.execute(text("""
+    token_record = await db.execute(text("""
         SELECT t.id, t.workspace_id, t.contact_id, t.expires_at, t.revoked_at,
                w.slug, w.display_name, w.organization_id,
                c.first_name, c.last_name, c.email
@@ -333,7 +334,7 @@ async def verify_magic_link(
 
     try:
         # Mark magic link token as used
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE purl_access_tokens
             SET revoked_at = NOW(), use_count = use_count + 1
             WHERE id = :token_id
@@ -343,7 +344,7 @@ async def verify_magic_link(
         session_token = secrets.token_urlsafe(48)
         session_expires = datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
 
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_access_tokens (
                 organization_id, workspace_id, contact_id,
                 name, scope, token_value, token_prefix,
@@ -363,7 +364,7 @@ async def verify_magic_link(
         })
 
         # Log login
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO purl_audit_log (
                 organization_id, workspace_id, action, actor_type, actor_id,
                 metadata, created_at
@@ -378,7 +379,7 @@ async def verify_magic_link(
             "metadata": {"method": "magic_link"}
         })
 
-        db.commit()
+        await db.commit()
 
         # Build response
         result = VerifyTokenResponse(
@@ -411,7 +412,7 @@ async def verify_magic_link(
         return response
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to verify magic link: {e}")
         raise HTTPException(status_code=500, detail="Failed to verify link")
 
@@ -420,7 +421,7 @@ async def verify_magic_link(
 async def verify_magic_link_post(
     request: VerifyTokenRequest,
     response: Response,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """POST version of verify for API clients."""
     return await verify_magic_link(
@@ -438,7 +439,7 @@ async def verify_magic_link_post(
 @router.get("/session", response_model=SessionInfo)
 async def get_session_info(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get current session information.
@@ -451,7 +452,7 @@ async def get_session_info(
         return SessionInfo(valid=False)
 
     # Look up session
-    session = db.execute(text("""
+    session = await db.execute(text("""
         SELECT t.id, t.workspace_id, t.contact_id, t.expires_at, t.revoked_at,
                w.slug, c.first_name, c.last_name
         FROM purl_access_tokens t
@@ -467,12 +468,12 @@ async def get_session_info(
         return SessionInfo(valid=False)
 
     # Update last used
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE purl_access_tokens
         SET last_used_at = NOW(), use_count = use_count + 1
         WHERE id = :token_id
     """), {"token_id": session[0]})
-    db.commit()
+    await db.commit()
 
     return SessionInfo(
         valid=True,
@@ -489,7 +490,7 @@ async def get_session_info(
 async def refresh_session(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Refresh the current session, extending its expiry.
@@ -502,7 +503,7 @@ async def refresh_session(
         raise HTTPException(status_code=401, detail="No session found")
 
     # Look up and extend session
-    session = db.execute(text("""
+    session = await db.execute(text("""
         SELECT id, expires_at
         FROM purl_access_tokens
         WHERE token_value = :token
@@ -516,12 +517,12 @@ async def refresh_session(
 
     new_expires = datetime.now(timezone.utc) + timedelta(hours=SESSION_EXPIRY_HOURS)
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE purl_access_tokens
         SET expires_at = :new_expires, updated_at = NOW()
         WHERE id = :token_id
     """), {"token_id": session[0], "new_expires": new_expires})
-    db.commit()
+    await db.commit()
 
     # Update cookie
     response.set_cookie(
@@ -544,7 +545,7 @@ async def refresh_session(
 async def logout(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Logout and invalidate the current session.
@@ -553,7 +554,7 @@ async def logout(
 
     if session_token:
         # Revoke session token
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE purl_access_tokens
             SET revoked_at = NOW()
             WHERE token_value = :token
@@ -564,7 +565,7 @@ async def logout(
 
         if result:
             # Log logout
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO purl_audit_log (
                     organization_id, workspace_id, action, actor_type, actor_id,
                     created_at
@@ -578,7 +579,7 @@ async def logout(
                 "contact_id": result[1]
             })
 
-        db.commit()
+        await db.commit()
 
     # Clear cookie
     response.delete_cookie(

@@ -4,7 +4,7 @@ Implements call queuing with wait time estimation and position announcements
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
@@ -16,6 +16,8 @@ import asyncio
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
@@ -135,7 +137,7 @@ class QueueStats(BaseModel):
 @router.post("")
 async def create_queue(
     queue: QueueCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Create a new call queue"""
@@ -143,13 +145,13 @@ async def create_queue(
         # Get hold music URL if ID provided
         hold_music_url = queue.hold_music_url
         if queue.hold_music_id and not hold_music_url:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT audio_url FROM hold_music WHERE id = :id AND is_active = TRUE
             """), {"id": queue.hold_music_id}).fetchone()
             if result:
                 hold_music_url = result.audio_url
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO call_queues
             (name, friendly_name, description, max_wait_time_seconds, max_queue_size,
              announce_position, announce_wait_time, position_announcement_interval,
@@ -182,7 +184,7 @@ async def create_queue(
             queue_id = result.fetchone()[0]
         except Exception as e:
             logger.warning(f"Error fetching queue_id from RETURNING clause: {e}")
-            queue_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            queue_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Create telephony queue (if provider supports it)
         try:
@@ -191,13 +193,13 @@ async def create_queue(
                 queue_result = provider.create_queue(friendly_name=queue.name, max_size=queue.max_queue_size)
                 if queue_result:
                     queue_sid = queue_result.sid if hasattr(queue_result, 'sid') else str(queue_result)
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE call_queues SET telephony_queue_sid = :sid WHERE id = :id
                     """), {"sid": queue_sid, "id": queue_id})
         except Exception as telephony_error:
             logger.warning(f"Could not create telephony queue: {telephony_error}")
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -206,7 +208,7 @@ async def create_queue(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating queue: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -214,7 +216,7 @@ async def create_queue(
 @router.get("")
 async def list_queues(
     include_inactive: bool = False,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """List all call queues with current status"""
@@ -234,7 +236,7 @@ async def list_queues(
             GROUP BY q.id
             ORDER BY q.name
         """
-        results = db.execute(text(query)).fetchall()
+        results = await db.execute(text(query)).fetchall()
 
         queues = []
         for row in results:
@@ -265,12 +267,12 @@ async def list_queues(
 @router.get("/{queue_id}")
 async def get_queue(
     queue_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Get queue details with members and current entries"""
     try:
-        queue = db.execute(text("""
+        queue = await db.execute(text("""
             SELECT * FROM call_queues WHERE id = :queue_id
         """), {"queue_id": queue_id}).fetchone()
 
@@ -278,7 +280,7 @@ async def get_queue(
             raise HTTPException(status_code=404, detail="Queue not found")
 
         # Get members
-        members = db.execute(text("""
+        members = await db.execute(text("""
             SELECT qm.id, qm.user_id, qm.priority, qm.wrap_up_time, qm.is_active,
                    COALESCE(es.full_name, u.email) as user_name
             FROM queue_members qm
@@ -289,7 +291,7 @@ async def get_queue(
         """), {"queue_id": queue_id}).fetchall()
 
         # Get waiting entries
-        entries = db.execute(text("""
+        entries = await db.execute(text("""
             SELECT id, call_sid, caller_phone, caller_name, position,
                    entered_at, estimated_wait_seconds, status
             FROM queue_entries
@@ -353,12 +355,12 @@ async def get_queue(
 async def update_queue(
     queue_id: int,
     queue: QueueUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Update queue settings"""
     try:
-        existing = db.execute(text(
+        existing = await db.execute(text(
             "SELECT id FROM call_queues WHERE id = :queue_id"
         ), {"queue_id": queue_id}).fetchone()
 
@@ -395,15 +397,15 @@ async def update_queue(
 
         if updates:
             query = "UPDATE call_queues SET " + ", ".join(updates) + " WHERE id = :queue_id"
-            db.execute(text(query), params)
-            db.commit()
+            await db.execute(text(query), params)
+            await db.commit()
 
         return {"success": True, "message": "Queue updated"}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error updating queue: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -411,17 +413,17 @@ async def update_queue(
 @router.delete("/{queue_id}")
 async def delete_queue(
     queue_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Deactivate a queue"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE call_queues SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
             WHERE id = :queue_id
         """), {"queue_id": queue_id})
 
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Queue not found")
@@ -431,7 +433,7 @@ async def delete_queue(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error deleting queue: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -444,13 +446,13 @@ async def delete_queue(
 async def add_queue_member(
     queue_id: int,
     member: QueueMemberAdd,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Add a user to a queue"""
     try:
         # Verify queue exists
-        queue = db.execute(text(
+        queue = await db.execute(text(
             "SELECT id FROM call_queues WHERE id = :queue_id"
         ), {"queue_id": queue_id}).fetchone()
 
@@ -458,22 +460,22 @@ async def add_queue_member(
             raise HTTPException(status_code=404, detail="Queue not found")
 
         # Check if already a member
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT id FROM queue_members
             WHERE queue_id = :queue_id AND user_id = :user_id
         """), {"queue_id": queue_id, "user_id": member.user_id}).fetchone()
 
         if existing:
             # Reactivate if inactive
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE queue_members
                 SET is_active = TRUE, priority = :priority, wrap_up_time = :wrap_up
                 WHERE id = :id
             """), {"id": existing.id, "priority": member.priority, "wrap_up": member.wrap_up_time})
-            db.commit()
+            await db.commit()
             return {"success": True, "message": "Member reactivated", "member_id": existing.id}
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO queue_members (queue_id, user_id, priority, wrap_up_time, is_active)
             VALUES (:queue_id, :user_id, :priority, :wrap_up, TRUE)
             RETURNING id
@@ -488,16 +490,16 @@ async def add_queue_member(
             member_id = result.fetchone()[0]
         except Exception as e:
             logger.warning(f"Error fetching member_id from RETURNING clause: {e}")
-            member_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            member_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        db.commit()
+        await db.commit()
 
         return {"success": True, "message": "Member added", "member_id": member_id}
 
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error adding queue member: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -506,17 +508,17 @@ async def add_queue_member(
 async def remove_queue_member(
     queue_id: int,
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Remove a user from a queue"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE queue_members SET is_active = FALSE
             WHERE queue_id = :queue_id AND user_id = :user_id
         """), {"queue_id": queue_id, "user_id": user_id})
 
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Member not found")
@@ -526,7 +528,7 @@ async def remove_queue_member(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error removing queue member: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -594,12 +596,12 @@ def estimate_wait_time(db: Session, queue_id: int) -> int:
 
 @router.get("/stats")
 async def get_all_queue_stats(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get aggregate statistics across all active queues (CQ-002)"""
     try:
         # Per-queue stats
-        queues = db.execute(text("""
+        queues = await db.execute(text("""
             SELECT q.id, q.name, q.friendly_name,
                    COUNT(DISTINCT CASE WHEN qe.status = 'waiting' THEN qe.id END) as calls_waiting,
                    COUNT(DISTINCT CASE WHEN qm.is_active = TRUE THEN qm.id END) as agents_available
@@ -612,7 +614,7 @@ async def get_all_queue_stats(
         """)).fetchall()
 
         # Aggregate stats
-        agg = db.execute(text("""
+        agg = await db.execute(text("""
             SELECT
                 COUNT(DISTINCT q.id) as total_queues,
                 COUNT(DISTINCT CASE WHEN qe.status = 'waiting' THEN qe.id END) as total_waiting,
@@ -624,7 +626,7 @@ async def get_all_queue_stats(
         """)).fetchone()
 
         # Today's aggregate
-        today = db.execute(text("""
+        today = await db.execute(text("""
             SELECT
                 COUNT(*) as calls_today,
                 AVG(actual_wait_seconds) as avg_wait_today,
@@ -672,11 +674,11 @@ async def get_all_queue_stats(
 @router.get("/{queue_id}/stats")
 async def get_queue_stats(
     queue_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get real-time queue statistics"""
     try:
-        queue = db.execute(text("""
+        queue = await db.execute(text("""
             SELECT id, name, friendly_name FROM call_queues WHERE id = :id
         """), {"id": queue_id}).fetchone()
 
@@ -684,7 +686,7 @@ async def get_queue_stats(
             raise HTTPException(status_code=404, detail="Queue not found")
 
         # Current queue stats
-        entries = db.execute(text("""
+        entries = await db.execute(text("""
             SELECT
                 COUNT(*) as total_waiting,
                 MIN(entered_at) as oldest_entry,
@@ -694,7 +696,7 @@ async def get_queue_stats(
         """), {"id": queue_id}).fetchone()
 
         # Agent stats
-        agents = db.execute(text("""
+        agents = await db.execute(text("""
             SELECT
                 COUNT(*) as total_agents,
                 COUNT(CASE WHEN qm.is_active THEN 1 END) as available_agents
@@ -703,7 +705,7 @@ async def get_queue_stats(
         """), {"id": queue_id}).fetchone()
 
         # Today's stats
-        today_stats = db.execute(text("""
+        today_stats = await db.execute(text("""
             SELECT
                 COUNT(*) as calls_today,
                 AVG(actual_wait_seconds) as avg_wait_today,
@@ -756,7 +758,7 @@ async def get_queue_stats(
 @router.get("/twiml/enqueue")
 async def enqueue_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML endpoint to put caller in queue.
@@ -775,7 +777,7 @@ async def enqueue_twiml(
         logger.info(f"Enqueueing call {call_sid} to queue {queue_name}")
 
         # Get queue settings
-        queue = db.execute(text("""
+        queue = await db.execute(text("""
             SELECT id, name, friendly_name, max_queue_size, hold_music_url,
                    comfort_message, comfort_message_interval,
                    announce_position, announce_wait_time, position_announcement_interval,
@@ -792,7 +794,7 @@ async def enqueue_twiml(
             return Response(content=str(response), media_type="application/xml")
 
         # Check queue capacity
-        current_size = db.execute(text("""
+        current_size = await db.execute(text("""
             SELECT COUNT(*) as count FROM queue_entries
             WHERE queue_id = :id AND status = 'waiting'
         """), {"id": queue.id}).fetchone()
@@ -806,7 +808,7 @@ async def enqueue_twiml(
         estimated_wait = estimate_wait_time(db, queue.id)
 
         # Create queue entry
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO queue_entries
             (queue_id, call_sid, caller_phone, caller_name, position,
              estimated_wait_seconds, status)
@@ -821,7 +823,7 @@ async def enqueue_twiml(
             "position": position,
             "estimated_wait": estimated_wait
         })
-        db.commit()
+        await db.commit()
 
         # Build TwiML
         base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
@@ -868,7 +870,7 @@ async def enqueue_twiml(
 @router.post("/twiml/wait")
 async def queue_wait_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML for queue wait music and periodic announcements.
@@ -886,7 +888,7 @@ async def queue_wait_twiml(
         queue_time = int(form_data.get("QueueTime", "0"))
 
         # Get queue settings
-        queue = db.execute(text("""
+        queue = await db.execute(text("""
             SELECT hold_music_url, comfort_message, comfort_message_interval,
                    announce_position, announce_wait_time, position_announcement_interval
             FROM call_queues WHERE id = :id
@@ -975,7 +977,7 @@ async def handle_queue_overflow(queue, db: Session):
 @router.post("/webhook/dequeue")
 async def dequeue_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
@@ -997,7 +999,7 @@ async def dequeue_webhook(
 
         # Update queue entry
         status = "connected" if dequeue_result == "bridged" else "abandoned"
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE queue_entries
             SET status = :status,
                 actual_wait_seconds = :wait_time,
@@ -1010,7 +1012,7 @@ async def dequeue_webhook(
         })
 
         # Reposition remaining callers
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE queue_entries
             SET position = position - 1
             WHERE queue_id = :queue_id
@@ -1020,7 +1022,7 @@ async def dequeue_webhook(
               )
         """), {"queue_id": queue_id, "call_sid": call_sid})
 
-        db.commit()
+        await db.commit()
 
         return {"status": "ok"}
 
@@ -1036,7 +1038,7 @@ async def dequeue_webhook(
 @router.post("/{queue_id}/take-next")
 async def take_next_call(
     queue_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """
@@ -1049,7 +1051,7 @@ async def take_next_call(
             raise HTTPException(status_code=500, detail="Telephony not configured")
 
         # Get queue info
-        queue = db.execute(text("""
+        queue = await db.execute(text("""
             SELECT name, telephony_queue_sid FROM call_queues WHERE id = :id
         """), {"id": queue_id}).fetchone()
 
@@ -1057,7 +1059,7 @@ async def take_next_call(
             raise HTTPException(status_code=404, detail="Queue not found")
 
         # Get next waiting call
-        next_call = db.execute(text("""
+        next_call = await db.execute(text("""
             SELECT id, call_sid, caller_phone, caller_name
             FROM queue_entries
             WHERE queue_id = :queue_id AND status = 'waiting'
@@ -1069,7 +1071,7 @@ async def take_next_call(
             return {"success": False, "message": "No calls waiting"}
 
         # Get agent's phone
-        agent_phone = db.execute(text("""
+        agent_phone = await db.execute(text("""
             SELECT phone, work_phone, mobile_phone FROM users WHERE id = :user_id
         """), {"user_id": current_user.id}).fetchone()
 
@@ -1092,12 +1094,12 @@ async def take_next_call(
                 provider.update_call(next_call.call_sid, url=connect_url)
 
                 # Update entry
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE queue_entries
                     SET status = 'connecting', connected_to_user_id = :user_id
                     WHERE id = :id
                 """), {"id": next_call.id, "user_id": current_user.id})
-                db.commit()
+                await db.commit()
 
                 return {
                     "success": True,
@@ -1122,7 +1124,7 @@ async def take_next_call(
 @router.post("/twiml/connect-agent")
 async def connect_agent_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML to connect queued call to agent.
@@ -1156,7 +1158,7 @@ async def connect_agent_twiml(
 @router.post("/webhook/connect-status")
 async def connect_status_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
@@ -1175,20 +1177,20 @@ async def connect_status_webhook(
         logger.info(f"Connect status: entry_id={entry_id}, status={dial_status}")
 
         if dial_status in ["completed", "answered"]:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE queue_entries
                 SET status = 'connected', connected_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """), {"id": entry_id})
         else:
             # Agent didn't answer - put back in queue
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE queue_entries
                 SET status = 'waiting', connected_to_user_id = NULL
                 WHERE id = :id
             """), {"id": entry_id})
 
-        db.commit()
+        await db.commit()
         return {"status": "ok"}
 
     except SQLAlchemyError as e:

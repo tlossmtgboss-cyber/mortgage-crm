@@ -13,7 +13,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from integrations.retell_service import (
     RetellClient,
@@ -45,7 +46,7 @@ router = APIRouter(prefix="/api/v1/retell", tags=["Retell AI"])
 User = None
 _get_current_user = None
 
-from db import get_db
+from db import get_db, get_async_db
 
 
 def set_dependencies(user_model, current_user_func, db_func):
@@ -178,7 +179,7 @@ def get_client_for_user(db: Session, user_id: int) -> RetellClient:
 async def connect_retell(
     request: RetellConfigRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Connect/configure Retell AI account."""
     try:
@@ -188,7 +189,7 @@ async def connect_retell(
 
         # Ensure the table exists
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS user_retell_config (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL UNIQUE,
@@ -197,13 +198,13 @@ async def connect_retell(
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
-            db.commit()
+            await db.commit()
         except Exception as table_e:
             logger.warning(f"Table creation check: {table_e}")
-            db.rollback()
+            await db.rollback()
 
         # Save configuration
-        db.execute(
+        await db.execute(
             text("""
             INSERT INTO user_retell_config (user_id, retell_api_key, created_at, updated_at)
             VALUES (:user_id, :api_key, :now, :now)
@@ -217,7 +218,7 @@ async def connect_retell(
                 "now": datetime.now(timezone.utc),
             }
         )
-        db.commit()
+        await db.commit()
 
         return {"status": "connected", "message": "Retell AI connected successfully"}
 
@@ -229,14 +230,14 @@ async def connect_retell(
         raise HTTPException(status_code=400, detail=detail)
     except Exception as e:
         logger.error(f"Error connecting Retell: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to connect")
 
 
 @router.get("/status")
 async def get_retell_status(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get Retell AI connection status."""
     try:
@@ -266,7 +267,7 @@ async def get_retell_status(
 @router.get("/agents")
 async def list_agents(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all Retell AI agents."""
     client = get_client_for_user(db, current_user["id"])
@@ -282,7 +283,7 @@ async def list_agents(
 async def create_agent(
     request: CreateAgentRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new Retell AI agent."""
     client = get_client_for_user(db, current_user["id"])
@@ -328,7 +329,7 @@ async def create_agent(
             agent = await client.create_agent(config)
 
         # Store agent reference in local database
-        db.execute(
+        await db.execute(
             text("""
             INSERT INTO retell_agents (
                 user_id, retell_agent_id, agent_name, agent_type,
@@ -347,7 +348,7 @@ async def create_agent(
                 "created_at": datetime.now(timezone.utc),
             }
         )
-        db.commit()
+        await db.commit()
 
         return agent
 
@@ -359,7 +360,7 @@ async def create_agent(
 async def get_agent(
     agent_id: str,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get agent details."""
     client = get_client_for_user(db, current_user["id"])
@@ -375,7 +376,7 @@ async def update_agent(
     agent_id: str,
     request: UpdateAgentRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update an agent."""
     client = get_client_for_user(db, current_user["id"])
@@ -391,7 +392,7 @@ async def update_agent(
 async def delete_agent(
     agent_id: str,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete an agent."""
     client = get_client_for_user(db, current_user["id"])
@@ -400,11 +401,11 @@ async def delete_agent(
         await client.delete_agent(agent_id)
 
         # Remove from local database
-        db.execute(
+        await db.execute(
             text("DELETE FROM retell_agents WHERE retell_agent_id = :agent_id"),
             {"agent_id": agent_id}
         )
-        db.commit()
+        await db.commit()
 
         return {"status": "deleted"}
     except RetellAPIError as e:
@@ -416,7 +417,7 @@ async def delete_agent(
 @router.get("/voices")
 async def list_voices(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List available voices."""
     client = get_client_for_user(db, current_user["id"])
@@ -433,7 +434,7 @@ async def list_voices(
 @router.get("/phone-numbers")
 async def list_phone_numbers(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all phone numbers."""
     client = get_client_for_user(db, current_user["id"])
@@ -449,7 +450,7 @@ async def list_phone_numbers(
 async def create_phone_number(
     request: CreatePhoneNumberRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Purchase a new phone number."""
     client = get_client_for_user(db, current_user["id"])
@@ -461,7 +462,7 @@ async def create_phone_number(
         )
 
         # Store phone number reference
-        db.execute(
+        await db.execute(
             text("""
             INSERT INTO retell_phone_numbers (
                 user_id, phone_number, retell_agent_id, created_at
@@ -476,7 +477,7 @@ async def create_phone_number(
                 "created_at": datetime.now(timezone.utc),
             }
         )
-        db.commit()
+        await db.commit()
 
         return result
     except RetellAPIError as e:
@@ -487,7 +488,7 @@ async def create_phone_number(
 async def import_phone_number(
     request: ImportPhoneNumberRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Import an existing phone number from the telephony provider."""
     client = get_client_for_user(db, current_user["id"])
@@ -500,7 +501,7 @@ async def import_phone_number(
         )
 
         # Store phone number reference
-        db.execute(
+        await db.execute(
             text("""
             INSERT INTO retell_phone_numbers (
                 user_id, phone_number, retell_agent_id, imported, created_at
@@ -515,7 +516,7 @@ async def import_phone_number(
                 "created_at": datetime.now(timezone.utc),
             }
         )
-        db.commit()
+        await db.commit()
 
         return result
     except RetellAPIError as e:
@@ -527,7 +528,7 @@ async def update_phone_number(
     phone_number: str,
     request: UpdatePhoneNumberRequest,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update phone number configuration."""
     client = get_client_for_user(db, current_user["id"])
@@ -547,7 +548,7 @@ async def update_phone_number(
 async def delete_phone_number(
     phone_number: str,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete/release a phone number."""
     client = get_client_for_user(db, current_user["id"])
@@ -556,11 +557,11 @@ async def delete_phone_number(
         await client.delete_phone_number(phone_number)
 
         # Remove from local database
-        db.execute(
+        await db.execute(
             text("DELETE FROM retell_phone_numbers WHERE phone_number = :phone_number"),
             {"phone_number": phone_number}
         )
-        db.commit()
+        await db.commit()
 
         return {"status": "deleted"}
     except RetellAPIError as e:
@@ -574,7 +575,7 @@ async def create_call(
     request: CreateCallRequest,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Initiate an outbound call."""
     client = get_client_for_user(db, current_user["id"])
@@ -615,7 +616,7 @@ async def create_call(
         result = await client.create_call(config)
 
         # Store call record
-        db.execute(
+        await db.execute(
             text("""
             INSERT INTO retell_calls (
                 user_id, retell_call_id, retell_agent_id,
@@ -641,7 +642,7 @@ async def create_call(
                 "created_at": datetime.now(timezone.utc),
             }
         )
-        db.commit()
+        await db.commit()
 
         return result
 
@@ -654,7 +655,7 @@ async def list_calls(
     limit: int = 50,
     agent_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List recent calls."""
     client = get_client_for_user(db, current_user["id"])
@@ -677,7 +678,7 @@ async def list_calls(
 async def get_call(
     call_id: str,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get call details."""
     client = get_client_for_user(db, current_user["id"])
@@ -692,7 +693,7 @@ async def get_call(
 async def end_call(
     call_id: str,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """End an active call."""
     client = get_client_for_user(db, current_user["id"])
@@ -701,7 +702,7 @@ async def end_call(
         result = await client.end_call(call_id)
 
         # Update local record
-        db.execute(
+        await db.execute(
             text("""
             UPDATE retell_calls
             SET status = 'ended', ended_at = :now
@@ -709,7 +710,7 @@ async def end_call(
             """),
             {"call_id": call_id, "now": datetime.now(timezone.utc)}
         )
-        db.commit()
+        await db.commit()
 
         return result
     except RetellAPIError as e:
@@ -721,7 +722,7 @@ async def transfer_call(
     call_id: str,
     transfer_to: str,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Transfer an active call."""
     client = get_client_for_user(db, current_user["id"])
@@ -738,7 +739,7 @@ async def transfer_call(
 async def handle_call_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Handle Retell AI webhooks for call events.
@@ -775,7 +776,7 @@ async def handle_call_webhook(
 
         if event_type == "call_started":
             # Update call status
-            db.execute(
+            await db.execute(
                 text("""
                 UPDATE retell_calls
                 SET status = 'in_progress', started_at = :now
@@ -786,7 +787,7 @@ async def handle_call_webhook(
 
         elif event_type == "call_ended":
             # Update call with end data
-            db.execute(
+            await db.execute(
                 text("""
                 UPDATE retell_calls
                 SET status = 'completed',
@@ -808,7 +809,7 @@ async def handle_call_webhook(
             analysis = call_data.get("call_analysis", {})
             transcript = call_data.get("transcript", "")
 
-            db.execute(
+            await db.execute(
                 text("""
                 UPDATE retell_calls
                 SET transcript = :transcript,
@@ -836,7 +837,7 @@ async def handle_call_webhook(
                 db=db,
             )
 
-        db.commit()
+        await db.commit()
         return {"status": "processed"}
 
     except Exception as e:
@@ -944,7 +945,7 @@ async def get_call_analytics(
     days: int = 30,
     agent_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get call analytics."""
     filters = ["user_id = :user_id", "created_at >= CURRENT_DATE - :days"]
@@ -965,7 +966,7 @@ async def get_call_analytics(
             COUNT(CASE WHEN call_successful = TRUE THEN 1 END) as successful_calls
         FROM retell_calls
         WHERE """ + where_clause
-    stats = db.execute(
+    stats = await db.execute(
         text(stats_sql),
         params
     ).fetchone()
@@ -981,7 +982,7 @@ async def get_call_analytics(
         ORDER BY date DESC
         LIMIT 30
         """
-    daily = db.execute(
+    daily = await db.execute(
         text(daily_sql),
         params
     ).fetchall()

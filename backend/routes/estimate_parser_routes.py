@@ -12,10 +12,12 @@ from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from services.estimate_parser_service import (
     EstimateParserService,
     LoanEstimate,
@@ -352,14 +354,14 @@ async def compare_estimates(
 @router.post("/compare/convert")
 async def mark_comparison_converted(
     comparison_id: str = Query(..., description="Comparison ID to mark as converted"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Mark a comparison as converted (user clicked CTA).
     Used for conversion tracking and analytics.
     """
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE estimate_comparisons
             SET converted = true
             WHERE id = :id
@@ -367,7 +369,7 @@ async def mark_comparison_converted(
         """), {'id': comparison_id})
 
         if result.fetchone():
-            db.commit()
+            await db.commit()
             return {'success': True, 'comparison_id': comparison_id}
         else:
             raise HTTPException(status_code=404, detail='Comparison not found')
@@ -376,7 +378,7 @@ async def mark_comparison_converted(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Convert endpoint error: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail='Internal server error')
 
 
@@ -462,7 +464,7 @@ async def download_comparison_pdf(
 @router.get("/stats")
 async def get_parse_stats(
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get parsing statistics for monitoring.
@@ -473,7 +475,7 @@ async def get_parse_stats(
         cutoff_date = datetime.now() - timedelta(days=days)
 
         # Cache stats
-        cache_stats = db.execute(text("""
+        cache_stats = await db.execute(text("""
             SELECT
                 COUNT(*) as total_cached,
                 COUNT(CASE WHEN needs_review THEN 1 END) as needs_review,
@@ -484,7 +486,7 @@ async def get_parse_stats(
         """), {'cutoff': cutoff_date}).fetchone()
 
         # Failure stats
-        failure_stats = db.execute(text("""
+        failure_stats = await db.execute(text("""
             SELECT
                 error_stage,
                 COUNT(*) as count
@@ -495,7 +497,7 @@ async def get_parse_stats(
         """), {'cutoff': cutoff_date}).fetchall()
 
         # Comparison stats
-        comparison_stats = db.execute(text("""
+        comparison_stats = await db.execute(text("""
             SELECT
                 COUNT(*) as total_comparisons,
                 COUNT(CASE WHEN converted THEN 1 END) as conversions,
@@ -533,13 +535,13 @@ async def get_parse_stats(
 @router.get("/cache/{doc_hash}")
 async def get_cached_estimate(
     doc_hash: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Retrieve a cached estimate by document hash.
     """
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT parsed_json, confidence_score, needs_review, source_type, created_at
             FROM estimate_parse_cache
             WHERE doc_hash = :hash
@@ -883,14 +885,14 @@ Please answer as Sarah the Loan Officer. Be helpful and specific. If relevant, m
 async def get_parse_failures(
     limit: int = Query(50, ge=1, le=200),
     stage: Optional[str] = Query(None, description="Filter by error stage"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get recent parse failures for review.
     """
     try:
         if stage:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT id, request_id, doc_hash, error_stage, error_message, created_at
                 FROM estimate_parse_failures
                 WHERE error_stage = :stage
@@ -898,7 +900,7 @@ async def get_parse_failures(
                 LIMIT :limit
             """), {'stage': stage, 'limit': limit}).fetchall()
         else:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT id, request_id, doc_hash, error_stage, error_message, created_at
                 FROM estimate_parse_failures
                 ORDER BY created_at DESC

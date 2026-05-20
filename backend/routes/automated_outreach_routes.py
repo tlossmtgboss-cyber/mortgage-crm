@@ -5,7 +5,7 @@ Drip campaigns and trigger-based automatic messaging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -15,6 +15,8 @@ import json
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
@@ -183,7 +185,7 @@ def create_automated_outreach_tables(engine):
 @router.get("/campaigns")
 async def get_campaigns(
     status: Optional[CampaignStatus] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get all campaigns"""
     try:
@@ -196,18 +198,18 @@ async def get_campaigns(
 
         query += " ORDER BY created_at DESC"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         campaigns = [dict(row._mapping) for row in result.fetchall()]
 
         # Get step counts
         for campaign in campaigns:
-            step_result = db.execute(text("""
+            step_result = await db.execute(text("""
                 SELECT COUNT(*) as count FROM campaign_steps WHERE campaign_id = :id
             """), {"id": campaign["id"]})
             campaign["step_count"] = step_result.scalar() or 0
 
             # Get active leads count
-            lead_result = db.execute(text("""
+            lead_result = await db.execute(text("""
                 SELECT COUNT(*) as count FROM lead_campaign_assignments
                 WHERE campaign_id = :id AND status = 'active'
             """), {"id": campaign["id"]})
@@ -222,12 +224,12 @@ async def get_campaigns(
 @router.post("/campaigns")
 async def create_campaign(
     campaign: CampaignCreate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new drip campaign"""
     try:
         # Create campaign
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO outreach_campaigns (name, description, status, created_at)
             VALUES (:name, :description, 'draft', CURRENT_TIMESTAMP)
         """), {
@@ -239,7 +241,7 @@ async def create_campaign(
 
         # Create steps
         for step in campaign.steps:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO campaign_steps (
                     campaign_id, step_order, channel, delay_days, delay_hours,
                     subject, message, created_at
@@ -257,7 +259,7 @@ async def create_campaign(
                 "message": step.message
             })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -265,7 +267,7 @@ async def create_campaign(
             "message": f"Campaign '{campaign.name}' created with {len(campaign.steps)} steps"
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating campaign: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -273,12 +275,12 @@ async def create_campaign(
 @router.get("/campaigns/{campaign_id}")
 async def get_campaign_detail(
     campaign_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get campaign details with steps"""
     try:
         # Get campaign
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT * FROM outreach_campaigns WHERE id = :id
         """), {"id": campaign_id})
         campaign = result.fetchone()
@@ -289,7 +291,7 @@ async def get_campaign_detail(
         campaign_dict = dict(campaign._mapping)
 
         # Get steps
-        steps_result = db.execute(text("""
+        steps_result = await db.execute(text("""
             SELECT * FROM campaign_steps
             WHERE campaign_id = :id
             ORDER BY step_order
@@ -297,7 +299,7 @@ async def get_campaign_detail(
         campaign_dict["steps"] = [dict(row._mapping) for row in steps_result.fetchall()]
 
         # Get assigned leads
-        leads_result = db.execute(text("""
+        leads_result = await db.execute(text("""
             SELECT
                 lca.*,
                 l.first_name, l.last_name, l.email, l.phone
@@ -320,20 +322,20 @@ async def get_campaign_detail(
 async def update_campaign_status(
     campaign_id: int,
     status: CampaignStatus,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Activate, pause, or complete a campaign"""
     try:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE outreach_campaigns
             SET status = :status, updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
         """), {"id": campaign_id, "status": status.value})
-        db.commit()
+        await db.commit()
 
         return {"success": True, "message": f"Campaign status updated to {status.value}"}
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -341,12 +343,12 @@ async def update_campaign_status(
 async def assign_leads_to_campaign(
     campaign_id: int,
     request: AssignToCampaign,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Assign leads to a campaign"""
     try:
         # Get first step for scheduling
-        step_result = db.execute(text("""
+        step_result = await db.execute(text("""
             SELECT delay_days, delay_hours FROM campaign_steps
             WHERE campaign_id = :id ORDER BY step_order LIMIT 1
         """), {"id": campaign_id})
@@ -362,7 +364,7 @@ async def assign_leads_to_campaign(
         assigned_count = 0
         for lead_id in request.lead_ids:
             # Check if already assigned
-            existing = db.execute(text("""
+            existing = await db.execute(text("""
                 SELECT id FROM lead_campaign_assignments
                 WHERE lead_id = :lead_id AND campaign_id = :campaign_id AND status = 'active'
             """), {"lead_id": lead_id, "campaign_id": campaign_id})
@@ -370,7 +372,7 @@ async def assign_leads_to_campaign(
             if existing.fetchone():
                 continue
 
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO lead_campaign_assignments (
                     lead_id, campaign_id, current_step, status, started_at, next_send_at
                 ) VALUES (
@@ -383,7 +385,7 @@ async def assign_leads_to_campaign(
             })
             assigned_count += 1
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -393,7 +395,7 @@ async def assign_leads_to_campaign(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error assigning leads: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -406,7 +408,7 @@ async def assign_leads_to_campaign(
 async def get_triggers(
     is_active: Optional[bool] = None,
     trigger_type: Optional[TriggerType] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get all triggers"""
     try:
@@ -423,7 +425,7 @@ async def get_triggers(
 
         query += " ORDER BY created_at DESC"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         triggers = [dict(row._mapping) for row in result.fetchall()]
 
         return {"triggers": triggers}
@@ -435,13 +437,13 @@ async def get_triggers(
 @router.post("/triggers")
 async def create_trigger(
     trigger: TriggerCreate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new outreach trigger"""
     try:
         config_json = json.dumps(trigger.trigger_config) if trigger.trigger_config else None
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO outreach_triggers (
                 name, trigger_type, trigger_config, channel, subject, message,
                 is_active, created_at
@@ -459,7 +461,7 @@ async def create_trigger(
             "is_active": trigger.is_active
         })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -467,7 +469,7 @@ async def create_trigger(
             "message": f"Trigger '{trigger.name}' created"
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating trigger: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -476,13 +478,13 @@ async def create_trigger(
 async def update_trigger(
     trigger_id: int,
     trigger: TriggerCreate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a trigger"""
     try:
         config_json = json.dumps(trigger.trigger_config) if trigger.trigger_config else None
 
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE outreach_triggers SET
                 name = :name,
                 trigger_type = :trigger_type,
@@ -504,26 +506,26 @@ async def update_trigger(
             "is_active": trigger.is_active
         })
 
-        db.commit()
+        await db.commit()
 
         return {"success": True, "message": "Trigger updated"}
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/triggers/{trigger_id}")
 async def delete_trigger(
     trigger_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a trigger"""
     try:
-        db.execute(text("DELETE FROM outreach_triggers WHERE id = :id"), {"id": trigger_id})
-        db.commit()
+        await db.execute(text("DELETE FROM outreach_triggers WHERE id = :id"), {"id": trigger_id})
+        await db.commit()
         return {"success": True, "message": "Trigger deleted"}
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -719,14 +721,14 @@ Perennia AI Team"""
 
 @router.post("/triggers/setup-defaults")
 async def setup_default_triggers(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Set up default triggers"""
     try:
         created = 0
         for trigger_data in DEFAULT_TRIGGERS:
             # Check if exists
-            existing = db.execute(text("""
+            existing = await db.execute(text("""
                 SELECT id FROM outreach_triggers
                 WHERE name = :name
             """), {"name": trigger_data["name"]})
@@ -736,7 +738,7 @@ async def setup_default_triggers(
 
             config_json = json.dumps(trigger_data.get("trigger_config")) if trigger_data.get("trigger_config") else None
 
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO outreach_triggers (
                     name, trigger_type, trigger_config, channel, subject, message,
                     is_active, created_at
@@ -754,7 +756,7 @@ async def setup_default_triggers(
             })
             created += 1
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -762,7 +764,7 @@ async def setup_default_triggers(
             "message": f"Created {created} default triggers"
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error setting up defaults: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 

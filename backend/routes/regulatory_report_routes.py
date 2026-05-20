@@ -10,7 +10,9 @@ HMDA LAR export, state regulatory filing generation, and compliance report manag
 """
 from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import datetime, timezone, date
@@ -116,7 +118,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/compliance/hmda/generate", tags=["Regulatory Reports"])
     async def generate_hmda_lar(
         body: HMDAGenerateRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Generate HMDA Loan Application Register (LAR) export (CMP-008).
@@ -170,7 +172,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
               """ + date_filter + """
             ORDER BY l.status_changed_at
         """
-        loans = db.execute(text(query_sql), {
+        loans = await db.execute(text(query_sql), {
             "org_id": org_id, "year": body.year,
             **({"q_start_month": q_start_month, "q_end_month": q_end_month} if q_start_month else {}),
         }).fetchall()
@@ -260,7 +262,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
         lar_content = "\n".join(lar_lines)
 
         # Store generated report
-        report_id_row = db.execute(text("""
+        report_id_row = await db.execute(text("""
             INSERT INTO regulatory_reports
                 (organization_id, report_type, report_name, period_label,
                  record_count, content_format, content_data,
@@ -279,7 +281,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
             "user_id": current_user.id,
         })
         report_id = report_id_row.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {
             "report_id": report_id,
@@ -297,14 +299,14 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/admin/compliance/hmda/fields/{loan_id}", tags=["Regulatory Reports"])
     async def validate_hmda_fields(
         loan_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Validate HMDA-required fields for a single loan (CMP-008)."""
         _require_compliance(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        loan = db.execute(text("""
+        loan = await db.execute(text("""
             SELECT l.id, l.loan_number, l.loan_type, l.loan_purpose, l.loan_amount,
                    l.interest_rate, l.status, l.property_state, l.property_county,
                    l.borrower_credit_score, l.dti_ratio, l.ltv_ratio, l.denial_reason,
@@ -366,7 +368,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/compliance/state-filing/generate", tags=["Regulatory Reports"])
     async def generate_state_filing(
         body: StateFilingRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Generate state-specific regulatory filing (CMP-008)."""
@@ -378,7 +380,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
         state = body.state_code.upper()
 
         # Get loan activity for the period
-        activity = db.execute(text("""
+        activity = await db.execute(text("""
             SELECT
                 COUNT(*) as total_loans,
                 COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded,
@@ -397,7 +399,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
         }).fetchone()
 
         # Get LO license info for this state
-        los = db.execute(text("""
+        los = await db.execute(text("""
             SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.nmls_id, u.email
             FROM users u
             LEFT JOIN email_signatures es ON es.user_id = u.id
@@ -426,7 +428,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
         }
 
         # Store the report
-        report_id_row = db.execute(text("""
+        report_id_row = await db.execute(text("""
             INSERT INTO regulatory_reports
                 (organization_id, report_type, report_name, period_label,
                  record_count, content_format, content_data,
@@ -445,7 +447,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
             "user_id": current_user.id,
         })
         report_id = report_id_row.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {
             "report_id": report_id,
@@ -461,7 +463,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
     async def list_regulatory_reports(
         report_type: Optional[str] = Query(None),
         limit: int = Query(50, le=200),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List all generated regulatory reports for the organization (CMP-008)."""
@@ -482,7 +484,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
 
         query += " ORDER BY generated_at DESC LIMIT :limit"
 
-        rows = db.execute(text(query), params).fetchall()
+        rows = await db.execute(text(query), params).fetchall()
         reports = []
         for r in rows:
             warnings = json.loads(r[7]) if r[7] else []
@@ -502,14 +504,14 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
     async def download_regulatory_report(
         request: Request,
         report_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Download a generated regulatory report (CMP-008)."""
         _require_compliance(current_user)
         org_id = getattr(current_user, 'organization_id', None)
 
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT report_type, report_name, content_format, content_data,
                    validation_warnings, generated_at, record_count
             FROM regulatory_reports

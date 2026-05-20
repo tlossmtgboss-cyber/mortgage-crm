@@ -24,7 +24,9 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 # Import from database to avoid circular dependency
 from database import get_db
@@ -344,7 +346,7 @@ async def initiate_amd_outbound_call(
     request: AMDOutboundCallRequest,
     admin_key: str = None,
     user_email: str = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Initiate outbound call with AMD (Answering Machine Detection).
@@ -361,7 +363,7 @@ async def initiate_amd_outbound_call(
     user_id = None
     expected_admin_key = os.getenv("ADMIN_API_KEY")
     if expected_admin_key and admin_key and secrets.compare_digest(admin_key, expected_admin_key) and user_email:
-        user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
+        user_result = await db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
         if not user_result:
             raise HTTPException(status_code=404, detail=f"User {user_email} not found")
         user_id = user_result[0]
@@ -398,7 +400,7 @@ async def initiate_amd_outbound_call(
     # Get LO name if not provided
     lo_name = request.lo_name
     if not lo_name:
-        user_info = db.execute(text("SELECT COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :user_id"), {"user_id": user_id}).fetchone()
+        user_info = await db.execute(text("SELECT COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :user_id"), {"user_id": user_id}).fetchone()
         lo_name = user_info[0] if user_info else "your loan officer"
 
     # Generate tracking ID
@@ -410,7 +412,7 @@ async def initiate_amd_outbound_call(
     )
 
     # Store call tracking info (with provider for multi-provider support)
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO amd_outbound_calls (
             id, user_id, to_number, from_number, client_name, purpose, lo_name,
             agent_id, phone_number_id, voicemail_message, status
@@ -430,7 +432,7 @@ async def initiate_amd_outbound_call(
         "phone_number_id": request.phone_number_id,
         "voicemail_message": voicemail_message,
     })
-    db.commit()
+    await db.commit()
 
     logger.info(f"Call tracking record created: {tracking_id} (provider: {TELEPHONY_PROVIDER})")
 
@@ -456,12 +458,12 @@ async def initiate_amd_outbound_call(
             )
 
         # Update with call SID
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE amd_outbound_calls
             SET call_sid = :call_sid, status = 'amd_pending'
             WHERE id = :tracking_id
         """), {"call_sid": call_sid, "tracking_id": tracking_id})
-        db.commit()
+        await db.commit()
 
         logger.info(f"AMD call initiated: {tracking_id} -> {to_number} (SID: {call_sid})")
 
@@ -476,12 +478,12 @@ async def initiate_amd_outbound_call(
 
     except Exception as e:
         logger.error(f"Failed to initiate AMD call: {e}")
-        db.rollback()
+        await db.rollback()
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE amd_outbound_calls SET status = 'failed' WHERE id = :tracking_id
             """), {"tracking_id": tracking_id})
-            db.commit()
+            await db.commit()
         except Exception as db_error:
             logger.error(f"Failed to update call status: {db_error}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -551,7 +553,7 @@ async def _initiate_telnyx_amd_call(
 async def handle_amd_status(
     tracking_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle AMD callback from telephony provider.
@@ -582,7 +584,7 @@ async def handle_amd_status(
     logger.info(f"AMD Result for {tracking_id}: AnsweredBy={answered_by}, Duration={machine_detection_duration}ms")
 
     # Get call tracking record
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT user_id, call_sid, client_name, purpose, lo_name
         FROM amd_outbound_calls
         WHERE id = :tracking_id
@@ -605,7 +607,7 @@ async def handle_amd_status(
         answered_category = "unknown"
 
     # Update AMD results
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE amd_outbound_calls
         SET amd_status = :amd_status,
             answered_by = :answered_by,
@@ -618,7 +620,7 @@ async def handle_amd_status(
         "duration": int(machine_detection_duration) if machine_detection_duration else None,
         "tracking_id": tracking_id,
     })
-    db.commit()
+    await db.commit()
 
     # Get telephony provider
     provider = get_telephony_provider()
@@ -675,14 +677,14 @@ async def amd_waiting_twiml(tracking_id: str):
 @router.get("/connect-ai/{tracking_id}")
 async def connect_to_ai(
     tracking_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML to connect call to AI via WebSocket stream.
     Uses the existing voice-stream endpoint that powers Aria.
     """
     # Get call info
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT client_name, to_number, purpose, lo_name
         FROM amd_outbound_calls
         WHERE id = :tracking_id
@@ -694,12 +696,12 @@ async def connect_to_ai(
     client_name, to_number, purpose, lo_name = result
 
     # Update status
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE amd_outbound_calls
         SET status = 'connected', handling_method = 'ai_stream'
         WHERE id = :tracking_id
     """), {"tracking_id": tracking_id})
-    db.commit()
+    await db.commit()
 
     # Get domain for WebSocket
     domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN') or 'api.perenniaai.com'
@@ -736,14 +738,14 @@ async def connect_to_ai(
 @router.get("/voicemail/{tracking_id}")
 async def play_voicemail_message(
     tracking_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML to play voicemail message after machine detection.
     Uses ElevenLabs-generated audio if available, falls back to Polly TTS.
     """
     # Get call info
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT voicemail_message, voicemail_audio, client_name, lo_name, purpose
         FROM amd_outbound_calls
         WHERE id = :tracking_id
@@ -755,12 +757,12 @@ async def play_voicemail_message(
     voicemail_message, voicemail_audio, client_name, lo_name, purpose = result
 
     # Update status
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE amd_outbound_calls
         SET status = 'voicemail_left', handling_method = 'voicemail_tts'
         WHERE id = :tracking_id
     """), {"tracking_id": tracking_id})
-    db.commit()
+    await db.commit()
 
     # Check if ElevenLabs audio is available
     if voicemail_audio:
@@ -798,14 +800,14 @@ async def play_voicemail_message(
 @router.get("/audio/{tracking_id}")
 async def serve_voicemail_audio(
     tracking_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Serve the pre-generated ElevenLabs voicemail audio.
     """
     import base64
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT voicemail_audio FROM amd_outbound_calls WHERE id = :tracking_id
     """), {"tracking_id": tracking_id}).fetchone()
 
@@ -830,15 +832,15 @@ async def serve_voicemail_audio(
 @router.get("/hangup/{tracking_id}")
 async def hangup_call(
     tracking_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """TwiML to hangup the call (used for fax detection)"""
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE amd_outbound_calls
         SET status = 'hangup_fax', handling_method = 'fax_detected'
         WHERE id = :tracking_id
     """), {"tracking_id": tracking_id})
-    db.commit()
+    await db.commit()
 
     return Response(
         content='<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>',
@@ -854,7 +856,7 @@ async def hangup_call(
 async def handle_call_status(
     tracking_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Handle call status updates from telephony provider"""
     form_data = await request.form()
@@ -871,22 +873,22 @@ async def handle_call_status(
     logger.info(f"Call status for {tracking_id}: {call_status}, duration: {call_duration}s")
 
     if call_status == "completed":
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE amd_outbound_calls
             SET call_ended_at = NOW(),
                 voicemail_duration = CASE WHEN answered_by = 'machine' THEN :duration ELSE NULL END,
                 status = CASE WHEN status != 'failed' THEN 'completed' ELSE status END
             WHERE id = :tracking_id
         """), {"duration": int(call_duration), "tracking_id": tracking_id})
-        db.commit()
+        await db.commit()
 
     elif call_status in ["busy", "no-answer", "failed", "canceled"]:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE amd_outbound_calls
             SET call_ended_at = NOW(), status = :status
             WHERE id = :tracking_id
         """), {"status": call_status, "tracking_id": tracking_id})
-        db.commit()
+        await db.commit()
 
     return {"status": "ok"}
 
@@ -898,10 +900,10 @@ async def handle_call_status(
 @router.get("/call/{tracking_id}")
 async def get_call_status(
     tracking_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get the status of an AMD-enabled call"""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, call_sid, to_number, client_name, purpose,
                amd_status, answered_by, handling_method, status,
                created_at, amd_completed_at, call_ended_at

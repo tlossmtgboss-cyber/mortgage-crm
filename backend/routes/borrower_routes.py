@@ -18,12 +18,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from pydantic import BaseModel, EmailStr
 
 from database import get_db
 from services.notification_service import NotificationService
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/borrower", tags=["Borrower Portal"])
@@ -136,7 +138,7 @@ class ConciergeMessageRequest(BaseModel):
 async def create_application(
     request: CreateApplicationRequest,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new mortgage application."""
     borrower = get_borrower_from_token(req, db)
@@ -144,7 +146,7 @@ async def create_application(
     application_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO borrower_applications (
             id, borrower_profile_id, loan_purpose, property_type,
             status, current_step, progress_percentage,
@@ -163,7 +165,7 @@ async def create_application(
         "created_at": now,
         "updated_at": now,
     })
-    db.commit()
+    await db.commit()
 
     return {
         "id": application_id,
@@ -177,12 +179,12 @@ async def create_application(
 @router.get("/applications")
 async def list_applications(
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all applications for the current borrower."""
     borrower = get_borrower_from_token(req, db)
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT id, loan_purpose, property_type, status, current_step,
                progress_percentage, created_at, updated_at
         FROM borrower_applications
@@ -211,12 +213,12 @@ async def list_applications(
 async def get_application(
     application_id: str,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get a specific application with all data."""
     borrower = get_borrower_from_token(req, db)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, loan_purpose, property_type, status, current_step,
                progress_percentage, profile_data, income_data, asset_data,
                property_data, declarations, created_at, updated_at
@@ -249,13 +251,13 @@ async def update_application(
     application_id: str,
     request: UpdateApplicationRequest,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update application data (auto-save)."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify ownership
-    existing = db.execute(text("""
+    existing = await db.execute(text("""
         SELECT id, progress_percentage FROM borrower_applications
         WHERE id = :id AND borrower_profile_id = :borrower_id
     """), {"id": application_id, "borrower_id": borrower["id"]}).fetchone()
@@ -306,8 +308,8 @@ async def update_application(
         params["declarations"] = json.dumps(request.declarations)
 
     query = "UPDATE borrower_applications SET " + ", ".join(updates) + " WHERE id = :id"
-    db.execute(text(query), params)
-    db.commit()
+    await db.execute(text(query), params)
+    await db.commit()
 
     return {"success": True, "message": "Application updated"}
 
@@ -316,13 +318,13 @@ async def update_application(
 async def submit_application(
     application_id: str,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Submit application for review."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify ownership and get application data
-    app = db.execute(text("""
+    app = await db.execute(text("""
         SELECT id, status, profile_data, income_data, asset_data,
                property_data, declarations, lo_id
         FROM borrower_applications
@@ -338,7 +340,7 @@ async def submit_application(
     now = datetime.now(timezone.utc)
 
     # Update application status
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE borrower_applications
         SET status = 'submitted', current_step = 'submitted',
             progress_percentage = 100, submitted_at = :submitted_at,
@@ -346,7 +348,7 @@ async def submit_application(
         WHERE id = :id
     """), {"id": application_id, "submitted_at": now, "updated_at": now})
 
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -363,13 +365,13 @@ async def submit_application(
 async def list_documents(
     application_id: str,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List all documents for an application."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify application ownership
-    app = db.execute(text("""
+    app = await db.execute(text("""
         SELECT id FROM borrower_applications
         WHERE id = :id AND borrower_profile_id = :borrower_id
     """), {"id": application_id, "borrower_id": borrower["id"]}).fetchone()
@@ -377,7 +379,7 @@ async def list_documents(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    docs = db.execute(text("""
+    docs = await db.execute(text("""
         SELECT id, doc_type, doc_category, filename, file_size,
                status, uploaded_at, review_notes
         FROM borrower_documents
@@ -409,13 +411,13 @@ async def upload_document(
     file: UploadFile = File(...),
     doc_type: str = Form(...),
     doc_category: str = Form("other"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Upload a document for an application."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify application ownership
-    app = db.execute(text("""
+    app = await db.execute(text("""
         SELECT id FROM borrower_applications
         WHERE id = :id AND borrower_profile_id = :borrower_id
     """), {"id": application_id, "borrower_id": borrower["id"]}).fetchone()
@@ -440,7 +442,7 @@ async def upload_document(
     doc_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO borrower_documents (
             id, application_id, borrower_id, doc_type, doc_category,
             filename, original_filename, file_size, mime_type,
@@ -463,7 +465,7 @@ async def upload_document(
         "file_content": base64.b64encode(content).decode('utf-8'),
         "uploaded_at": now,
     })
-    db.commit()
+    await db.commit()
 
     return {
         "id": doc_id,
@@ -479,13 +481,13 @@ async def delete_document(
     application_id: str,
     document_id: str,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Delete a document from an application."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify ownership
-    doc = db.execute(text("""
+    doc = await db.execute(text("""
         SELECT d.id FROM borrower_documents d
         JOIN borrower_applications a ON a.id = d.application_id
         WHERE d.id = :doc_id AND d.application_id = :app_id
@@ -499,8 +501,8 @@ async def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    db.execute(text("DELETE FROM borrower_documents WHERE id = :id"), {"id": document_id})
-    db.commit()
+    await db.execute(text("DELETE FROM borrower_documents WHERE id = :id"), {"id": document_id})
+    await db.commit()
 
     return {"success": True, "message": "Document deleted"}
 
@@ -513,13 +515,13 @@ async def delete_document(
 async def list_coborrowers(
     application_id: str,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """List co-borrowers for an application."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify application ownership
-    app = db.execute(text("""
+    app = await db.execute(text("""
         SELECT id FROM borrower_applications
         WHERE id = :id AND borrower_profile_id = :borrower_id
     """), {"id": application_id, "borrower_id": borrower["id"]}).fetchone()
@@ -527,7 +529,7 @@ async def list_coborrowers(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    coborrowers = db.execute(text("""
+    coborrowers = await db.execute(text("""
         SELECT id, email, first_name, last_name, relationship,
                status, invited_at, completed_at
         FROM coborrower_invitations
@@ -557,13 +559,13 @@ async def invite_coborrower(
     application_id: str,
     request: CoBorrowerInviteRequest,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Invite a co-borrower to the application."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify application ownership
-    app = db.execute(text("""
+    app = await db.execute(text("""
         SELECT id FROM borrower_applications
         WHERE id = :id AND borrower_profile_id = :borrower_id
     """), {"id": application_id, "borrower_id": borrower["id"]}).fetchone()
@@ -578,7 +580,7 @@ async def invite_coborrower(
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=7)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO coborrower_invitations (
             id, application_id, email, first_name, last_name,
             relationship, invitation_token, status, invited_at, expires_at
@@ -597,7 +599,7 @@ async def invite_coborrower(
         "invited_at": now,
         "expires_at": expires_at,
     })
-    db.commit()
+    await db.commit()
 
     # Send invitation email to co-borrower
     email_sent = False
@@ -655,10 +657,10 @@ async def invite_coborrower(
 @router.get("/coborrower/accept")
 async def accept_coborrower_invitation(
     token: str = Query(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Accept a co-borrower invitation via token."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, application_id, email, first_name, last_name,
                status, expires_at
         FROM coborrower_invitations
@@ -675,12 +677,12 @@ async def accept_coborrower_invitation(
         raise HTTPException(status_code=400, detail="Invitation expired")
 
     # Update invitation status
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE coborrower_invitations
         SET status = 'accepted', accepted_at = :accepted_at
         WHERE id = :id
     """), {"id": result[0], "accepted_at": datetime.now(timezone.utc)})
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -699,7 +701,7 @@ async def accept_coborrower_invitation(
 async def concierge_chat(
     request: ConciergeMessageRequest,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Send a message to the AI concierge."""
     borrower = get_borrower_from_token(req, db)
@@ -707,7 +709,7 @@ async def concierge_chat(
     # Get application context if provided
     context = {}
     if request.application_id:
-        app = db.execute(text("""
+        app = await db.execute(text("""
             SELECT loan_purpose, property_type, current_step, profile_data
             FROM borrower_applications
             WHERE id = :id AND borrower_profile_id = :borrower_id
@@ -728,7 +730,7 @@ async def concierge_chat(
     message_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO concierge_messages (
             id, borrower_id, application_id, role, content, created_at
         ) VALUES
@@ -743,7 +745,7 @@ async def concierge_chat(
         "assistant_message": response_text,
         "created_at": now,
     })
-    db.commit()
+    await db.commit()
 
     return {
         "response": response_text,
@@ -776,7 +778,7 @@ async def get_concierge_history(
     application_id: Optional[str] = None,
     limit: int = Query(50, le=100),
     req: Request = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get conversation history with the concierge."""
     borrower = get_borrower_from_token(req, db)
@@ -794,7 +796,7 @@ async def get_concierge_history(
 
     query += " ORDER BY created_at DESC LIMIT :limit"
 
-    messages = db.execute(text(query), params).fetchall()
+    messages = await db.execute(text(query), params).fetchall()
 
     return {
         "messages": [
@@ -818,13 +820,13 @@ async def schedule_review_call(
     application_id: str,
     request: ScheduleCallRequest,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Schedule a review call with a loan officer."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify application ownership
-    app = db.execute(text("""
+    app = await db.execute(text("""
         SELECT id, lo_id FROM borrower_applications
         WHERE id = :id AND borrower_profile_id = :borrower_id
     """), {"id": application_id, "borrower_id": borrower["id"]}).fetchone()
@@ -836,7 +838,7 @@ async def schedule_review_call(
     call_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO scheduled_calls (
             id, application_id, borrower_id, lo_id,
             preferred_date, preferred_time, timezone,
@@ -857,7 +859,7 @@ async def schedule_review_call(
         "notes": request.notes,
         "created_at": now,
     })
-    db.commit()
+    await db.commit()
 
     return {
         "id": call_id,
@@ -872,13 +874,13 @@ async def schedule_review_call(
 async def get_scheduled_calls(
     application_id: str,
     req: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get scheduled calls for an application."""
     borrower = get_borrower_from_token(req, db)
 
     # Verify application ownership
-    app = db.execute(text("""
+    app = await db.execute(text("""
         SELECT id FROM borrower_applications
         WHERE id = :id AND borrower_profile_id = :borrower_id
     """), {"id": application_id, "borrower_id": borrower["id"]}).fetchone()
@@ -886,7 +888,7 @@ async def get_scheduled_calls(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    calls = db.execute(text("""
+    calls = await db.execute(text("""
         SELECT id, preferred_date, preferred_time, timezone,
                confirmed_datetime, status, notes, created_at
         FROM scheduled_calls

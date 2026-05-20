@@ -28,8 +28,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from database import get_db
 from middleware.webhook_verification import require_telnyx_webhook
@@ -322,7 +324,7 @@ def manual_consent_override(
 @router.post("/session/{session_id}/stop")
 async def stop_session(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     session = _get_session(db, session_id, current_user)
@@ -337,7 +339,7 @@ async def stop_session(
             activated = activated.replace(tzinfo=timezone.utc)
         duration = int((now - activated).total_seconds())
 
-    db.execute(
+    await db.execute(
         sa_text("""
             UPDATE call_sessions
             SET status = 'completed',
@@ -348,7 +350,7 @@ async def stop_session(
         """),
         {"sid": session_id, "now": now, "duration": duration},
     )
-    db.commit()
+    await db.commit()
 
     from services.call_intelligence.live_session_runner import stop_live_session
     await stop_live_session(session_id)
@@ -484,7 +486,7 @@ async def ci_websocket_stream(websocket: WebSocket, session_id: str):
 @router.post("/webhooks/telnyx")
 async def handle_telnyx_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     payload = json.loads(raw_body)
