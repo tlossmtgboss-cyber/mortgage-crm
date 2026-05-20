@@ -23,6 +23,9 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
@@ -105,7 +108,7 @@ def parse_sendgrid_payload(form: Dict[str, Any]) -> Dict[str, Any]:
     subject = form.get("subject", "(no subject)")
     body_text = form.get("text", "")
     body_html = form.get("html", "")
-    received_date = datetime.now(timezone.utc).isoformat()
+    received_date = datetime.now(ET).isoformat()
 
     attachment_count = int(form.get("attachments", 0))
     attachment_names: List[str] = []
@@ -561,7 +564,7 @@ def _create_email_activity(
                     loan_id, lead_id, created_at
                 ) VALUES (
                     :org_id, :user_id, 'EMAIL', :content,
-                    :loan_id, :lead_id, NOW()
+                    :loan_id, :lead_id, NOW() AT TIME ZONE 'America/New_York'
                 ) RETURNING id
             """),
             {
