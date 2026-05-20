@@ -106,6 +106,7 @@ def pipeline_monitor(
                         "create_task", _do_stuck_insert,
                         target_entity="loan", target_id=loan[0],
                         description=f"Stuck loan task for {loan[2]} ({loan[1]}) — {days}d in {stage}",
+                        payload=_params,
                         notify_user_id=loan[4],
                     ):
                         actions += 1
@@ -155,6 +156,7 @@ def pipeline_monitor(
                     "create_task", _do_lock_insert,
                     target_entity="loan", target_id=lock[0],
                     description=f"Rate lock expiry task for {lock[2]} ({lock[1]}) — {days_left}d left",
+                    payload={**_lock_params, "priority": "critical"},
                     notify_user_id=lock[3],
                 ):
                     actions += 1

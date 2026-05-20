@@ -777,12 +777,22 @@ def register_autonomous_task_routes(app, get_db, get_current_user, **kwargs):
             if action.status != "pending_approval":
                 raise HTTPException(status_code=400, detail=f"Action status is '{action.status}', not pending_approval")
 
-            # Approve the action
+            # Replay the held action (execute the business operation)
+            replayed = False
+            try:
+                from services.autonomous.action_dispatcher import ActionDispatcher
+                dispatcher = ActionDispatcher(db, action.organization_id)
+                replayed = dispatcher.replay(action)
+            except Exception as e:
+                logger.warning(f"Action replay failed for {action_id}: {e}")
+
+            # Mark as approved
             action.status = "completed"
             action.approved_by = current_user.id
             action.approved_at = datetime.now(timezone.utc)
 
             # Record decision in confidence graduation system
+            confidence_result = None
             try:
                 from services.autonomous.confidence_graduation import ConfidenceGraduationService
                 grad_service = ConfidenceGraduationService(db)
@@ -793,10 +803,10 @@ def register_autonomous_task_routes(app, get_db, get_current_user, **kwargs):
                 )
             except Exception as e:
                 logger.warning(f"Confidence update failed: {e}")
-                confidence_result = None
 
             db.commit()
             result = _action_to_dict(action)
+            result["replayed"] = replayed
             if confidence_result:
                 result["confidence"] = confidence_result
             return result
@@ -829,8 +839,8 @@ def register_autonomous_task_routes(app, get_db, get_current_user, **kwargs):
 
             # Reject the action
             action.status = "rejected"
-            action.approved_by = current_user.id
-            action.approved_at = datetime.now(timezone.utc)
+            action.rejected_by = current_user.id
+            action.rejected_at = datetime.now(timezone.utc)
 
             # Record rejection in confidence graduation system
             try:

@@ -294,6 +294,7 @@ async def regenerate_recommendation(
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         logger.exception("Failed to regenerate recommendation for task %s org=%s: %s", task_id, org_id, e)
         raise HTTPException(status_code=500, detail="Internal server error")
 

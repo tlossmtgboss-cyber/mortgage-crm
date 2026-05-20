@@ -192,6 +192,7 @@ def _create_task(
             target_entity="loan", target_id=loan_id,
             description=f"SLA escalation task: {title}",
             notify_user_id=notify_user_id,
+            payload=_params,
         )
     else:
         _do_insert()
@@ -244,6 +245,7 @@ def _send_notification(
             target_entity="loan", target_id=None,
             description=f"SLA {level} notification for {borrower_name} ({loan_number}) to user {user_id}",
             notify_user_id=notify_user_id,
+            payload=_params,
         )
     else:
         _do_insert()

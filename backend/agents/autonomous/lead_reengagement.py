@@ -82,6 +82,7 @@ def lead_reengagement(
                     "create_task", _do_hot_insert,
                     target_entity="lead", target_id=lead[0],
                     description=f"Re-engage hot lead {lead[1]} {lead[2]} (score {lead[6]}, {days}d cold)",
+                    payload=_hot_params,
                 ):
                     actions += 1
             else:
@@ -130,6 +131,7 @@ def lead_reengagement(
                     "create_task", _do_warm_insert,
                     target_entity="lead", target_id=lead[0],
                     description=f"Nurture task for warm lead {lead[1]} — 7d+ no contact",
+                    payload=_warm_params,
                 ):
                     actions += 1
             else:

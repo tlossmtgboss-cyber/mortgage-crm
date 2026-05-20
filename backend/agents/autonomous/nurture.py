@@ -148,6 +148,7 @@ def _insert_task(
             target_entity="lead" if lead_id else ("loan" if loan_id else None),
             target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
             description=title[:200],
+            payload=params,
         )
     else:
         _do()

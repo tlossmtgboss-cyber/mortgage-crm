@@ -115,6 +115,22 @@ def run_all_startup_migrations(engine: Any) -> None:
         if "already" not in str(e).lower() and "does not exist" not in str(e).lower():
             logger.warning(f"agent_actions schema fix: {e}")
 
+    # Add rejection audit trail columns to agent_actions
+    try:
+        from sqlalchemy import text as _text_rej
+        with engine.connect() as conn:
+            conn.execute(_text_rej("""
+                ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS rejected_by INTEGER REFERENCES users(id)
+            """))
+            conn.execute(_text_rej("""
+                ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ
+            """))
+            conn.commit()
+        logger.info("agent_actions: rejected_by/rejected_at columns ensured")
+    except Exception as e:
+        if "does not exist" not in str(e).lower():
+            logger.warning(f"agent_actions rejection columns: {e}")
+
     # Webhook idempotency table (separate from AI autonomy)
     try:
         from database.models.webhook_idempotency import create_tables_if_needed as _create_webhook_tables

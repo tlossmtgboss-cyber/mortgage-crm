@@ -60,28 +60,30 @@ def _insert_task(
     gateway=None,
 ) -> None:
     """Insert a task row with standard columns."""
+    params = {
+        "title": title[:255],
+        "desc": description[:4000],
+        "assigned_to_id": str(assigned_to_id) if assigned_to_id else None,
+        "lead_id": str(lead_id) if lead_id else None,
+        "loan_id": str(loan_id) if loan_id else None,
+        "priority": priority,
+        "status": status,
+        "org_id": organization_id,
+    }
     def _do():
         db.execute(text(f"""
             INSERT INTO tasks (title, description, assigned_to_id, lead_id, loan_id,
                                priority, status, due_date, created_at, organization_id)
             VALUES (:title, :desc, :assigned_to_id, :lead_id, :loan_id,
                     :priority, :status, {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "title": title[:255],
-            "desc": description[:4000],
-            "assigned_to_id": str(assigned_to_id) if assigned_to_id else None,
-            "lead_id": str(lead_id) if lead_id else None,
-            "loan_id": str(loan_id) if loan_id else None,
-            "priority": priority,
-            "status": status,
-            "org_id": organization_id,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_task", _do,
             target_entity="lead" if lead_id else ("loan" if loan_id else None),
             target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
             description=title[:200],
+            payload=params,
         )
     else:
         _do()
@@ -99,26 +101,28 @@ def _insert_activity(
     gateway=None,
 ) -> None:
     """Insert an activity log entry for audit trail."""
+    params = {
+        "type": activity_type,
+        "content": content[:4000],
+        "loan_id": loan_id,
+        "lead_id": lead_id,
+        "user_id": user_id,
+        "org_id": organization_id,
+    }
     def _do():
         db.execute(text("""
             INSERT INTO activities (type, content, loan_id, lead_id, user_id,
                                     created_at, organization_id)
             VALUES (:type, :content, :loan_id, :lead_id, :user_id,
                     CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "type": activity_type,
-            "content": content[:4000],
-            "loan_id": loan_id,
-            "lead_id": lead_id,
-            "user_id": user_id,
-            "org_id": organization_id,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_activity", _do,
             target_entity="lead" if lead_id else ("loan" if loan_id else None),
             target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
             description=content[:200],
+            payload=params,
         )
     else:
         _do()
@@ -136,25 +140,27 @@ def _insert_notification(
     gateway=None,
 ) -> None:
     """Insert an in-app notification."""
+    params = {
+        "uid": user_id,
+        "org_id": organization_id,
+        "type": notification_type,
+        "title": title[:255],
+        "message": message[:2000],
+        "link": link,
+    }
     def _do():
         db.execute(text("""
             INSERT INTO notifications (user_id, organization_id, type, title,
                                        message, link, is_read, created_at)
             VALUES (:uid, :org_id, :type, :title, :message, :link, false, NOW())
-        """), {
-            "uid": user_id,
-            "org_id": organization_id,
-            "type": notification_type,
-            "title": title[:255],
-            "message": message[:2000],
-            "link": link,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_notification", _do,
             target_entity="user",
             target_id=str(user_id),
             description=title[:200],
+            payload=params,
         )
     else:
         _do()

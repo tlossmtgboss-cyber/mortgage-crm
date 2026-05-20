@@ -289,6 +289,7 @@ def evening_recap(
                 "create_activity", _do_recap_activity,
                 target_entity=None, target_id=None,
                 description=f"Evening recap for LO {lo_name}"[:200],
+                payload={"content": _recap_content, "metadata": _recap_json, "org_id": organization_id},
             )
         else:
             _do_recap_activity()
@@ -453,7 +454,8 @@ def daily_task_generator(
             if gateway:
                 gateway.propose("create_task", _do_pipeline_task,
                     target_entity="loan", target_id=str(loan_id),
-                    description=title[:200])
+                    description=title[:200],
+                    payload={"title": _t, "desc": _d, "lo_id": _li, "loan_id": _lid, "priority": _p, "org_id": organization_id})
             else:
                 _do_pipeline_task()
             actions += 1
@@ -513,7 +515,8 @@ def daily_task_generator(
                 if gateway:
                     gateway.propose("create_task", _do_collect_docs,
                         target_entity="loan", target_id=str(loan_id),
-                        description=title[:200])
+                        description=title[:200],
+                        payload={"title": _ct, "desc": _cd, "lo_id": _cli, "loan_id": _clid, "priority": _cp, "org_id": organization_id})
                 else:
                     _do_collect_docs()
                 actions += 1
@@ -606,7 +609,8 @@ def daily_task_generator(
                 gateway.propose("create_task", _do_overdue_task,
                     target_entity="lead" if lead_id else ("loan" if loan_id else None),
                     target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
-                    description=params["title"][:200])
+                    description=params["title"][:200],
+                    payload=_params)
             else:
                 _do_overdue_task()
             actions += 1
@@ -741,7 +745,8 @@ def rate_alert(
                 """), {"title": t, "desc": d, "lo_id": li, "priority": p, "org_id": organization_id})
             if gateway:
                 gateway.propose("create_task", _do_rate_review,
-                    target_entity=None, target_id=None, description=_rt[:200])
+                    target_entity=None, target_id=None, description=_rt[:200],
+                    payload={"title": _rt, "desc": _rd, "lo_id": _rli, "priority": _rp, "org_id": organization_id})
             else:
                 _do_rate_review()
             actions += 1
@@ -816,7 +821,8 @@ def rate_alert(
                 """), {"title": t, "desc": d, "lo_id": li, "org_id": organization_id})
             if gateway:
                 gateway.propose("create_task", _do_lock_expiry,
-                    target_entity=None, target_id=None, description=_lt[:200])
+                    target_entity=None, target_id=None, description=_lt[:200],
+                    payload={"title": _lt, "desc": _ld, "lo_id": _lli, "org_id": organization_id})
             else:
                 _do_lock_expiry()
             actions += 1
@@ -849,7 +855,8 @@ def rate_alert(
         """), {"content": c, "metadata": m, "org_id": organization_id})
     if gateway:
         gateway.propose("create_activity", _do_rate_activity,
-            target_entity=None, target_id=None, description=_rate_content[:200])
+            target_entity=None, target_id=None, description=_rate_content[:200],
+            payload={"content": _rate_content, "metadata": _rate_metadata, "org_id": organization_id})
     else:
         _do_rate_activity()
 
@@ -1000,7 +1007,8 @@ def birthday_anniversary(
             """), {"title": t, "desc": d, "lo_id": li, "loan_id": lid, "priority": p, "org_id": organization_id})
         if gateway:
             gateway.propose("create_task", _do_anniv_task,
-                target_entity="loan", target_id=str(loan_id), description=title[:200])
+                target_entity="loan", target_id=str(loan_id), description=title[:200],
+                payload={"title": _at, "desc": _ad, "lo_id": _ali, "loan_id": _alid, "priority": _ap, "org_id": organization_id})
         else:
             _do_anniv_task()
 
@@ -1014,7 +1022,8 @@ def birthday_anniversary(
             """), {"loan_id": lid, "content": c, "org_id": organization_id})
         if gateway:
             gateway.propose("create_activity", _do_anniv_activity,
-                target_entity="loan", target_id=str(loan_id), description=_anniv_content[:200])
+                target_entity="loan", target_id=str(loan_id), description=_anniv_content[:200],
+                payload={"loan_id": _anniv_lid, "content": _anniv_content, "org_id": organization_id})
         else:
             _do_anniv_activity()
 
@@ -1081,7 +1090,8 @@ def birthday_anniversary(
                 """), {"title": t, "desc": d, "lo_id": li, "lead_id": lid, "org_id": organization_id})
             if gateway:
                 gateway.propose("create_task", _do_bday_task,
-                    target_entity="lead", target_id=str(lead_id), description=_bt[:200])
+                    target_entity="lead", target_id=str(lead_id), description=_bt[:200],
+                    payload={"title": _bt, "desc": _bd, "lo_id": _bli, "lead_id": _blid, "org_id": organization_id})
             else:
                 _do_bday_task()
 
@@ -1094,7 +1104,8 @@ def birthday_anniversary(
                 """), {"lead_id": lid, "content": c, "org_id": organization_id})
             if gateway:
                 gateway.propose("create_activity", _do_bday_activity,
-                    target_entity="lead", target_id=str(lead_id), description=_bday_content[:200])
+                    target_entity="lead", target_id=str(lead_id), description=_bday_content[:200],
+                    payload={"lead_id": _bday_lid, "content": _bday_content, "org_id": organization_id})
             else:
                 _do_bday_activity()
 
@@ -1355,7 +1366,8 @@ def daily_metrics_snapshot(
         """), {"content": c, "metadata": m, "org_id": organization_id})
     if gateway:
         gateway.propose("create_activity", _do_snapshot_activity,
-            target_entity=None, target_id=None, description=summary_text[:200])
+            target_entity=None, target_id=None, description=summary_text[:200],
+            payload={"content": _snap_content, "metadata": _snap_metadata, "org_id": organization_id})
     else:
         _do_snapshot_activity()
 

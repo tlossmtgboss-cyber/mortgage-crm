@@ -622,11 +622,31 @@ async def get_task(
 ):
     main = get_main_module()
     AITask = main.AITask
+    Task = main.Task
 
     task = db.query(AITask).filter(AITask.id == task_id, AITask.assigned_to_id == current_user.id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    if task:
+        return task
+
+    wf_task = db.query(Task).filter(Task.id == task_id, Task.owner_id == current_user.id).first()
+    if wf_task:
+        return {
+            "id": wf_task.id,
+            "title": wf_task.title,
+            "description": wf_task.description,
+            "type": wf_task.status,
+            "priority": wf_task.priority,
+            "due_date": wf_task.due_date.isoformat() if wf_task.due_date else None,
+            "created_at": wf_task.created_at.isoformat() if wf_task.created_at else None,
+            "updated_at": wf_task.updated_at.isoformat() if wf_task.updated_at else None,
+            "lead_id": wf_task.lead_id,
+            "loan_id": wf_task.loan_id,
+            "source": "workflow",
+            "related_contact_name": wf_task.related_contact_name,
+            "status": wf_task.status,
+        }
+
+    raise HTTPException(status_code=404, detail="Task not found")
 
 
 @router.patch("/tasks/{task_id}")
@@ -644,19 +664,39 @@ async def update_task(
     if not isinstance(task_update, main.TaskUpdate):
         task_update = TaskUpdate(**task_update)
 
+    Task = main.Task
+
     task = db.query(AITask).filter(AITask.id == task_id, AITask.assigned_to_id == current_user.id).first()
+    is_workflow = False
+
+    if not task:
+        task = db.query(Task).filter(Task.id == task_id, Task.owner_id == current_user.id).first()
+        is_workflow = True
+
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
-    for key, value in task_update.dict(exclude_unset=True).items():
-        if key not in _protected:
-            setattr(task, key, value)
+    if is_workflow:
+        update_data = task_update.dict(exclude_unset=True)
+        if update_data.get("type") == "Completed" or update_data.get("status") == "completed":
+            task.status = "completed"
+            task.completed_at = datetime.now(timezone.utc)
+        elif "status" in update_data:
+            task.status = update_data["status"]
+        if "priority" in update_data:
+            task.priority = update_data["priority"]
+        task.updated_at = datetime.now(timezone.utc)
+    else:
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
+        for key, value in task_update.dict(exclude_unset=True).items():
+            if key not in _protected:
+                setattr(task, key, value)
 
-    if task_update.type == TaskType.COMPLETED:
-        task.completed_at = datetime.now(timezone.utc)
+        if task_update.type == TaskType.COMPLETED:
+            task.completed_at = datetime.now(timezone.utc)
 
-    task.updated_at = datetime.now(timezone.utc)
+        task.updated_at = datetime.now(timezone.utc)
+
     db.commit()
     db.refresh(task)
 

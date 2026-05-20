@@ -250,6 +250,8 @@ class AgentAction(Base):
     requires_approval = Column(Boolean, default=False)
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
+    rejected_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    rejected_at = Column(DateTime(timezone=True), nullable=True)
 
     # Bookkeeping
     created_at = Column(

@@ -358,7 +358,8 @@ def wire_fraud_scanner(
                 "desc": d,
             })
         if gateway:
-            gateway.propose("create_compliance_alert", _do_wf_alert, target_entity="loan", target_id=str(loan_id), description=_wf_title[:200])
+            gateway.propose("create_compliance_alert", _do_wf_alert, target_entity="loan", target_id=str(loan_id), description=_wf_title[:200],
+                payload={"loan_id": loan_id, "lead_id": lead_id, "org_id": organization_id, "severity": severity, "title": _wf_title, "desc": _wf_desc})
         else:
             _do_wf_alert()
 
@@ -380,7 +381,8 @@ def wire_fraud_scanner(
                 "org_id": organization_id,
             })
         if gateway:
-            gateway.propose("create_activity", _do_wf_activity, target_entity="loan", target_id=str(loan_id), description=_wf_activity_content[:200])
+            gateway.propose("create_activity", _do_wf_activity, target_entity="loan", target_id=str(loan_id), description=_wf_activity_content[:200],
+                payload={"lead_id": lead_id, "loan_id": loan_id, "content": _wf_activity_content, "org_id": organization_id})
         else:
             _do_wf_activity()
 
@@ -730,7 +732,8 @@ def ecoa_audit(
                 "desc": d,
             })
         if gateway:
-            gateway.propose("create_compliance_alert", _do_ecoa_alert, target_entity=None, target_id=None, description=_ecoa_title[:200])
+            gateway.propose("create_compliance_alert", _do_ecoa_alert, target_entity=None, target_id=None, description=_ecoa_title[:200],
+                payload={"org_id": organization_id, "severity": _ecoa_sev, "title": _ecoa_title, "desc": _ecoa_desc})
         else:
             _do_ecoa_alert()
         actions += 1
@@ -785,7 +788,8 @@ def ecoa_audit(
                         "org_id": organization_id,
                     })
                 if gateway:
-                    gateway.propose("create_task", _do_ecoa_task, target_entity="user", target_id=_ecoa_task_owner, description=_ecoa_task_title[:200])
+                    gateway.propose("create_task", _do_ecoa_task, target_entity="user", target_id=_ecoa_task_owner, description=_ecoa_task_title[:200],
+                        payload={"title": _ecoa_task_title, "desc": _ecoa_task_desc, "owner_id": _ecoa_task_owner, "priority": _ecoa_task_pri, "org_id": organization_id})
                 else:
                     _do_ecoa_task()
 
@@ -944,7 +948,8 @@ def tcpa_compliance_scanner(
                     "desc": d,
                 })
             if gateway:
-                gateway.propose("create_compliance_alert", _do_tcpa_qh, target_entity=None, target_id=None, description=_tcpa_qh_title[:200])
+                gateway.propose("create_compliance_alert", _do_tcpa_qh, target_entity=None, target_id=None, description=_tcpa_qh_title[:200],
+                    payload={"org_id": organization_id, "title": _tcpa_qh_title, "desc": _tcpa_qh_desc})
             else:
                 _do_tcpa_qh()
             actions += 1
@@ -1053,7 +1058,8 @@ def tcpa_compliance_scanner(
                     "desc": d,
                 })
             if gateway:
-                gateway.propose("create_compliance_alert", _do_tcpa_dnc, target_entity="lead", target_id=str(_tcpa_dnc_lead), description=_tcpa_dnc_title[:200])
+                gateway.propose("create_compliance_alert", _do_tcpa_dnc, target_entity="lead", target_id=str(_tcpa_dnc_lead), description=_tcpa_dnc_title[:200],
+                    payload={"lead_id": _tcpa_dnc_lead, "org_id": organization_id, "title": _tcpa_dnc_title, "desc": _tcpa_dnc_desc})
             else:
                 _do_tcpa_dnc()
             actions += 1
@@ -1116,7 +1122,8 @@ def tcpa_compliance_scanner(
                     "desc": d,
                 })
             if gateway:
-                gateway.propose("create_compliance_alert", _do_tcpa_freq, target_entity="lead", target_id=str(_tcpa_freq_lead), description=_tcpa_freq_title[:200])
+                gateway.propose("create_compliance_alert", _do_tcpa_freq, target_entity="lead", target_id=str(_tcpa_freq_lead), description=_tcpa_freq_title[:200],
+                    payload={"lead_id": _tcpa_freq_lead, "org_id": organization_id, "title": _tcpa_freq_title, "desc": _tcpa_freq_desc})
             else:
                 _do_tcpa_freq()
             actions += 1
@@ -1182,7 +1189,8 @@ def tcpa_compliance_scanner(
                 "desc": d,
             })
         if gateway:
-            gateway.propose("create_compliance_alert", _do_tcpa_lo, target_entity="user", target_id=_tcpa_lo_id, description=_tcpa_lo_title[:200])
+            gateway.propose("create_compliance_alert", _do_tcpa_lo, target_entity="user", target_id=_tcpa_lo_id, description=_tcpa_lo_title[:200],
+                payload={"org_id": organization_id, "severity": _tcpa_lo_sev, "title": _tcpa_lo_title, "desc": _tcpa_lo_desc})
         else:
             _do_tcpa_lo()
         actions += 1
@@ -1408,7 +1416,8 @@ def hmda_data_collector(
                 "org_id": organization_id,
             })
         if gateway:
-            gateway.propose("create_task", _do_hmda_task, target_entity="user", target_id=_hmda_task_lo, description=_hmda_task_title[:200])
+            gateway.propose("create_task", _do_hmda_task, target_entity="user", target_id=_hmda_task_lo, description=_hmda_task_title[:200],
+                payload={"title": _hmda_task_title, "desc": _hmda_task_desc, "lo_id": _hmda_task_lo, "priority": _hmda_task_pri, "org_id": organization_id})
         else:
             _do_hmda_task()
         actions += 1
@@ -1456,7 +1465,8 @@ def hmda_data_collector(
                     "desc": d,
                 })
             if gateway:
-                gateway.propose("create_compliance_alert", _do_hmda_ready, target_entity=None, target_id=None, description=_hmda_ready_title[:200])
+                gateway.propose("create_compliance_alert", _do_hmda_ready, target_entity=None, target_id=None, description=_hmda_ready_title[:200],
+                    payload={"org_id": organization_id, "severity": _hmda_ready_sev, "title": _hmda_ready_title, "desc": _hmda_ready_desc})
             else:
                 _do_hmda_ready()
             actions += 1
@@ -1635,7 +1645,8 @@ def fair_lending_monitor(
                             "desc": d,
                         })
                     if gateway:
-                        gateway.propose("create_compliance_alert", _do_fl_denial, target_entity=None, target_id=None, description=_fl_denial_title[:200])
+                        gateway.propose("create_compliance_alert", _do_fl_denial, target_entity=None, target_id=None, description=_fl_denial_title[:200],
+                            payload={"org_id": organization_id, "severity": _fl_denial_sev, "title": _fl_denial_title, "desc": _fl_denial_desc})
                     else:
                         _do_fl_denial()
                     actions += 1
@@ -1743,7 +1754,8 @@ def fair_lending_monitor(
                             "desc": d,
                         })
                     if gateway:
-                        gateway.propose("create_compliance_alert", _do_fl_pricing, target_entity=None, target_id=None, description=_fl_pricing_title[:200])
+                        gateway.propose("create_compliance_alert", _do_fl_pricing, target_entity=None, target_id=None, description=_fl_pricing_title[:200],
+                            payload={"org_id": organization_id, "severity": _fl_pricing_sev, "title": _fl_pricing_title, "desc": _fl_pricing_desc})
                     else:
                         _do_fl_pricing()
                     actions += 1
@@ -1858,7 +1870,8 @@ def fair_lending_monitor(
                             "desc": d,
                         })
                     if gateway:
-                        gateway.propose("create_compliance_alert", _do_fl_timing, target_entity=None, target_id=None, description=_fl_timing_title[:200])
+                        gateway.propose("create_compliance_alert", _do_fl_timing, target_entity=None, target_id=None, description=_fl_timing_title[:200],
+                            payload={"org_id": organization_id, "severity": _fl_timing_sev, "title": _fl_timing_title, "desc": _fl_timing_desc})
                     else:
                         _do_fl_timing()
                     actions += 1
@@ -1966,7 +1979,8 @@ def fair_lending_monitor(
                                 "desc": d,
                             })
                         if gateway:
-                            gateway.propose("create_compliance_alert", _do_fl_steer, target_entity=None, target_id=None, description=_fl_steer_title[:200])
+                            gateway.propose("create_compliance_alert", _do_fl_steer, target_entity=None, target_id=None, description=_fl_steer_title[:200],
+                                payload={"org_id": organization_id, "title": _fl_steer_title, "desc": _fl_steer_desc})
                         else:
                             _do_fl_steer()
                         actions += 1
@@ -2014,7 +2028,8 @@ def fair_lending_monitor(
                 (NULL, NULL, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
         """), {"content": c, "org_id": organization_id})
     if gateway:
-        gateway.propose("create_activity", _do_fl_activity, target_entity=None, target_id=None, description=_fl_report[:200])
+        gateway.propose("create_activity", _do_fl_activity, target_entity=None, target_id=None, description=_fl_report[:200],
+            payload={"content": _fl_report, "org_id": organization_id})
     else:
         _do_fl_activity()
 

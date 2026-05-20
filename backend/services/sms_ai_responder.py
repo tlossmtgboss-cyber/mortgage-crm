@@ -337,25 +337,28 @@ Generate a new, improved SMS reply incorporating the feedback. No quotes, no exp
         },
     )
 
-    db.execute(
-        text("""
-            INSERT INTO sms_ai_audit_log (organization_id, task_id, action, details, created_at)
-            VALUES (:oid, :tid, :action, :details, :now)
-        """),
-        {
-            "oid": organization_id,
-            "tid": task_id,
-            "action": "recommendation_regenerated",
-            "details": json.dumps({
-                "model": MODEL_VERSION,
-                "confidence": confidence,
-                "category": category,
-                "feedback": feedback[:200] if feedback else None,
-                "previous_recommendation_length": len(previous_recommendation) if previous_recommendation else 0,
-            }),
-            "now": now,
-        },
-    )
+    try:
+        db.execute(
+            text("""
+                INSERT INTO sms_ai_audit_log (organization_id, task_id, action, details, created_at)
+                VALUES (:oid, :tid, :action, :details, :now)
+            """),
+            {
+                "oid": organization_id,
+                "tid": task_id,
+                "action": "recommendation_regenerated",
+                "details": json.dumps({
+                    "model": MODEL_VERSION,
+                    "confidence": confidence,
+                    "category": category,
+                    "feedback": feedback[:200] if feedback else None,
+                    "previous_recommendation_length": len(previous_recommendation) if previous_recommendation else 0,
+                }),
+                "now": now,
+            },
+        )
+    except Exception as e:
+        logger.warning("Audit log insert failed for task %d (non-fatal): %s", task_id, e)
 
     db.commit()
 

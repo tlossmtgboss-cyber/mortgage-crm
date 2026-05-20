@@ -69,27 +69,29 @@ def _insert_task(db: Session, *, title: str, description: str,
                  lead_id: str = None, due_date_expr: str = "CURRENT_DATE",
                  gateway=None):
     """Insert a task with standard fields."""
+    params = {
+        "title": title[:255],
+        "desc": description[:2000],
+        "assigned_to": assigned_to_id,
+        "loan_id": loan_id,
+        "lead_id": lead_id,
+        "priority": priority,
+        "org_id": organization_id,
+    }
     def _do():
         db.execute(text(f"""
             INSERT INTO tasks (title, description, assigned_to_id, loan_id, lead_id,
                                priority, status, due_date, created_at, organization_id)
             VALUES (:title, :desc, :assigned_to, :loan_id, :lead_id,
                     :priority, 'pending', {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "title": title[:255],
-            "desc": description[:2000],
-            "assigned_to": assigned_to_id,
-            "loan_id": loan_id,
-            "lead_id": lead_id,
-            "priority": priority,
-            "org_id": organization_id,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_task", _do,
             target_entity="lead" if lead_id else ("loan" if loan_id else None),
             target_id=lead_id or loan_id,
             description=title[:200],
+            payload=params,
         )
     else:
         _do()
@@ -98,22 +100,24 @@ def _insert_task(db: Session, *, title: str, description: str,
 def _insert_activity(db: Session, *, lead_id: str, activity_type: str,
                      content: str, organization_id: int, gateway=None):
     """Insert an activity log entry on a lead."""
+    params = {
+        "lead_id": lead_id,
+        "type": activity_type,
+        "content": content[:4000],
+        "org_id": organization_id,
+    }
     def _do():
         db.execute(text("""
             INSERT INTO activities (lead_id, type, content, created_at, organization_id)
             VALUES (:lead_id, :type, :content, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "lead_id": lead_id,
-            "type": activity_type,
-            "content": content[:4000],
-            "org_id": organization_id,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_activity", _do,
             target_entity="lead" if lead_id else None,
             target_id=lead_id,
             description=content[:200],
+            payload=params,
         )
     else:
         _do()

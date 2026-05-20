@@ -64,21 +64,23 @@ def _insert_activity(
     gateway=None,
 ) -> None:
     """Insert a System activity with optional structured JSON in user_metadata."""
+    params = {
+        "content": content[:4000],
+        "metadata": json.dumps(report_data) if report_data else None,
+        "org_id": organization_id,
+    }
     def _do():
         db.execute(text("""
             INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
             VALUES (NULL, 'System', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "content": content[:4000],
-            "metadata": json.dumps(report_data) if report_data else None,
-            "org_id": organization_id,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_activity", _do,
             target_entity=None,
             target_id=None,
             description=content[:200],
+            payload=params,
         )
     else:
         _do()
@@ -107,26 +109,28 @@ def _insert_task(
     if existing:
         return False
 
+    params = {
+        "title": title[:255],
+        "desc": description[:2000],
+        "priority": priority,
+        "due_days": due_days,
+        "owner_id": str(assigned_to_id) if assigned_to_id else None,
+        "org_id": organization_id,
+    }
     def _do():
         db.execute(text("""
             INSERT INTO tasks (title, description, priority, status, due_date,
                                owner_id, created_at, organization_id)
             VALUES (:title, :desc, :priority, 'pending',
                     CURRENT_DATE + :due_days, :owner_id, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "title": title[:255],
-            "desc": description[:2000],
-            "priority": priority,
-            "due_days": due_days,
-            "owner_id": str(assigned_to_id) if assigned_to_id else None,
-            "org_id": organization_id,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_task", _do,
             target_entity=None,
             target_id=None,
             description=title[:200],
+            payload=params,
         )
     else:
         _do()
@@ -144,25 +148,27 @@ def _insert_notification(
     gateway=None,
 ) -> None:
     """Insert an in-app notification for a user."""
+    params = {
+        "uid": user_id,
+        "org_id": organization_id,
+        "type": notification_type,
+        "title": title[:255],
+        "message": message[:2000],
+        "link": link,
+    }
     def _do():
         db.execute(text("""
             INSERT INTO notifications (user_id, organization_id, type, title,
                                        message, link, is_read, created_at)
             VALUES (:uid, :org_id, :type, :title, :message, :link, false, NOW())
-        """), {
-            "uid": user_id,
-            "org_id": organization_id,
-            "type": notification_type,
-            "title": title[:255],
-            "message": message[:2000],
-            "link": link,
-        })
+        """), params)
     if gateway:
         gateway.propose(
             "create_notification", _do,
             target_entity="user",
             target_id=str(user_id),
             description=title[:200],
+            payload=params,
         )
     else:
         _do()

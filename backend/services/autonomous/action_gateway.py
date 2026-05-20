@@ -94,6 +94,12 @@ class ActionGateway:
         (graduated), an in-app Notification is created so the user knows
         AI handled it.
         """
+        if isinstance(target_id, str):
+            try:
+                target_id = int(target_id)
+            except (ValueError, TypeError):
+                target_id = None
+
         if action_type in self.ALWAYS_EXECUTE:
             try:
                 execute_fn()
@@ -149,6 +155,11 @@ class ActionGateway:
         payload: Optional[dict],
     ):
         """Persist an AgentAction record for audit and confidence tracking."""
+        if isinstance(target_id, str):
+            try:
+                target_id = int(target_id)
+            except (ValueError, TypeError):
+                target_id = None
         try:
             from database.models.autonomous_task import AgentAction
 
@@ -178,6 +189,9 @@ class ActionGateway:
     ):
         """Create an in-app Notification so the user knows AI auto-handled something."""
         if not user_id:
+            return
+        # The action itself IS a notification — skip the meta-notification to avoid doubles
+        if action_type == "create_notification":
             return
         try:
             from database.models.security import Notification
