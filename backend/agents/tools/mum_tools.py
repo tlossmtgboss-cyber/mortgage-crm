@@ -5,7 +5,7 @@ identifying refinance candidates, and logging outreach activities.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date as _date
 from typing import Optional, List, Dict, Any
 
 from .base import (
@@ -17,83 +17,351 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 
+def _fetch_loan_type_map(db, loan_numbers: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Fetch loan_type/program/occupancy from loans + leads keyed by loan_number."""
+    if not loan_numbers:
+        return {}
+    from sqlalchemy import text
+    out: Dict[str, Dict[str, Any]] = {}
+    try:
+        rows = db.execute(text("""
+            SELECT loan_number, loan_type, program, occupancy_type
+            FROM loans WHERE loan_number = ANY(:lns)
+        """), {"lns": loan_numbers}).fetchall()
+        for r in rows:
+            out[r[0]] = {"loan_type": r[1], "program": r[2], "occupancy_type": r[3]}
+    except Exception:
+        pass
+    try:
+        rows = db.execute(text("""
+            SELECT loan_number, loan_type, occupancy_type, first_time_buyer
+            FROM leads WHERE loan_number = ANY(:lns) AND loan_number IS NOT NULL
+        """), {"lns": loan_numbers}).fetchall()
+        for r in rows:
+            entry = out.setdefault(r[0], {})
+            entry.setdefault("loan_type", r[1])
+            entry.setdefault("occupancy_type", r[2])
+            entry["first_time_buyer"] = bool(r[3]) if r[3] is not None else False
+    except Exception:
+        pass
+    return out
+
+
+def _days_since(d) -> Optional[int]:
+    if not d:
+        return None
+    today = datetime.now(timezone.utc).date()
+    if hasattr(d, "date"):
+        d = d.date()
+    return (today - d).days
+
+
+def _risk_level(rate: Optional[float], equity_pct: Optional[float], last_contact) -> str:
+    """Compute portfolio risk level matching the Portfolio.js client filter logic."""
+    score = 0
+    if rate is not None and rate >= 7.0:
+        score += 1
+    if equity_pct is not None and equity_pct < 0.10:
+        score += 1
+    if last_contact:
+        days = _days_since(last_contact)
+        if days is not None and days > 180:
+            score += 1
+    elif last_contact is None:
+        score += 1
+    if score >= 2:
+        return "high"
+    if score == 1:
+        return "medium"
+    return "low"
+
+
+def _client_to_full_dict(c, loan_meta_map: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """Serialize a MUMClient with every field Aria needs to read/filter."""
+    meta = loan_meta_map.get(c.loan_number or "", {})
+    rate = float(c.interest_rate) if c.interest_rate is not None else None
+    current_rate = float(c.current_rate) if c.current_rate is not None else None
+    original_rate = float(c.original_rate) if c.original_rate is not None else None
+    effective_rate = current_rate if current_rate is not None else rate
+
+    current_balance = float(c.current_loan_amount) if c.current_loan_amount is not None else None
+    if current_balance is None and c.loan_balance is not None:
+        current_balance = float(c.loan_balance)
+    property_value = float(c.current_property_value) if c.current_property_value is not None else None
+
+    equity_amount = float(c.estimated_equity) if c.estimated_equity is not None else None
+    if equity_amount is None and property_value is not None and current_balance is not None:
+        equity_amount = property_value - current_balance
+    equity_pct = None
+    if property_value and property_value > 0 and equity_amount is not None:
+        equity_pct = equity_amount / property_value
+
+    ltv = float(c.current_ltv) if c.current_ltv is not None else None
+    days_since_closing = _days_since(c.closing_date) if c.closing_date else c.days_since_funding
+
+    return {
+        "id": c.id,
+        "client_name": c.client_name,
+        "email": c.email,
+        "phone": c.phone,
+        "loan_number": c.loan_number,
+        "status": c.status,
+        # Loan
+        "loan_type": meta.get("loan_type"),
+        "program": meta.get("program"),
+        "occupancy_type": meta.get("occupancy_type"),
+        "first_time_buyer": meta.get("first_time_buyer", False),
+        "interest_rate": effective_rate,
+        "current_rate": current_rate,
+        "original_rate": original_rate,
+        "term": c.term,
+        "original_loan_amount": float(c.original_loan_amount) if c.original_loan_amount is not None else None,
+        "current_loan_amount": current_balance,
+        "loan_balance": current_balance,
+        # Dates
+        "closing_date": c.closing_date.isoformat() if c.closing_date else None,
+        "original_close_date": c.original_close_date.isoformat() if c.original_close_date else None,
+        "first_payment_date": c.first_payment_date.isoformat() if c.first_payment_date else None,
+        "maturity_date": c.maturity_date.isoformat() if c.maturity_date else None,
+        "days_since_closing": days_since_closing,
+        "days_since_funding": c.days_since_funding,
+        # Property + equity
+        "appraisal_value_at_closing": float(c.appraisal_value_at_closing) if c.appraisal_value_at_closing is not None else None,
+        "current_property_value": property_value,
+        "equity_amount": equity_amount,
+        "equity_percentage": equity_pct,
+        "ltv": ltv,
+        "property_state": c.property_state,
+        "property_zip": c.property_zip,
+        # Refi
+        "refinance_opportunity": bool(c.refinance_opportunity) if c.refinance_opportunity is not None else False,
+        "estimated_savings": float(c.estimated_savings) if c.estimated_savings is not None else None,
+        "refi_score": c.refi_score,
+        # Engagement + team
+        "engagement_score": c.engagement_score,
+        "last_contact": c.last_contact.isoformat() if c.last_contact else None,
+        "next_touchpoint": c.next_touchpoint.isoformat() if c.next_touchpoint else None,
+        "referrals_sent": c.referrals_sent,
+        "loan_officer": c.loan_officer,
+        "processor": c.processor,
+        "closer": c.closer,
+        # Derived
+        "risk_level": _risk_level(effective_rate, equity_pct, c.last_contact),
+    }
+
+
+def _apply_python_filters(
+    items: List[Dict[str, Any]],
+    *,
+    loan_type: Optional[str],
+    min_interest_rate: Optional[float],
+    max_interest_rate: Optional[float],
+    min_equity_percentage: Optional[float],
+    max_equity_percentage: Optional[float],
+    min_days_since_closing: Optional[int],
+    max_days_since_closing: Optional[int],
+    risk_level: Optional[str],
+    refinance_opportunity: Optional[bool],
+    state: Optional[str],
+    first_time_buyer: Optional[bool],
+    occupancy_type: Optional[str],
+) -> List[Dict[str, Any]]:
+    def keep(it: Dict[str, Any]) -> bool:
+        if loan_type and (it.get("loan_type") or "").lower() != loan_type.lower() \
+                and (it.get("program") or "").lower() != loan_type.lower():
+            return False
+        rate = it.get("interest_rate")
+        if min_interest_rate is not None and (rate is None or rate < min_interest_rate):
+            return False
+        if max_interest_rate is not None and (rate is None or rate > max_interest_rate):
+            return False
+        eq = it.get("equity_percentage")
+        if min_equity_percentage is not None and (eq is None or eq < min_equity_percentage):
+            return False
+        if max_equity_percentage is not None and (eq is None or eq > max_equity_percentage):
+            return False
+        dsc = it.get("days_since_closing")
+        if min_days_since_closing is not None and (dsc is None or dsc < min_days_since_closing):
+            return False
+        if max_days_since_closing is not None and (dsc is None or dsc > max_days_since_closing):
+            return False
+        if risk_level and (it.get("risk_level") or "").lower() != risk_level.lower():
+            return False
+        if refinance_opportunity is not None and bool(it.get("refinance_opportunity")) != bool(refinance_opportunity):
+            return False
+        if state and (it.get("property_state") or "").upper() != state.upper():
+            return False
+        if first_time_buyer is not None and bool(it.get("first_time_buyer")) != bool(first_time_buyer):
+            return False
+        if occupancy_type and (it.get("occupancy_type") or "").lower() != occupancy_type.lower():
+            return False
+        return True
+
+    return [it for it in items if keep(it)]
+
+
+_SORTABLE = {
+    "client_name", "interest_rate", "current_loan_amount", "loan_balance",
+    "equity_percentage", "equity_amount", "closing_date", "days_since_closing",
+    "last_contact", "engagement_score", "refi_score", "current_property_value",
+    "ltv",
+}
+
+
 # =============================================================================
 # Tool 1: Get MUM Clients
 # =============================================================================
 
 @mortgage_tool(
     name="get_mum_clients",
-    description="List MUM (Mortgage Under Management) clients for the current user with optional search filtering by name or email",
+    description=(
+        "List Mortgages Under Management (MUM) clients with rich filtering. "
+        "Returns every field shown on the MUM portfolio page including current interest rate, "
+        "loan type/program, current balance, property value, equity amount and percentage, LTV, "
+        "closing date, days since closing, refinance opportunity flag, risk level, last contact, "
+        "engagement score, occupancy type, and state. Supports filtering by loan_type, status, "
+        "interest rate range, equity range, days-since-closing range, risk_level, refinance_opportunity, "
+        "state, occupancy_type, and first_time_buyer."
+    ),
     agent_roles=["customer_intelligence", "post_closing_care", "refinance_advisor", "lead_nurturer"],
     risk_level="low",
     requires_confirmation=False,
     examples=[
         "Show my MUM clients",
-        "List post-closing clients",
-        "Get my managed clients",
+        "List post-closing clients with rates above 7%",
+        "MUM clients in Florida with high equity",
+        "Show MUM clients with refinance opportunities",
+        "List high-risk clients in my portfolio",
+        "Clients who closed more than 365 days ago",
     ],
 )
 def get_mum_clients(
     limit: int = 50,
     offset: int = 0,
     search: Optional[str] = None,
+    status: Optional[str] = None,
+    loan_type: Optional[str] = None,
+    min_interest_rate: Optional[float] = None,
+    max_interest_rate: Optional[float] = None,
+    min_equity_percentage: Optional[float] = None,
+    max_equity_percentage: Optional[float] = None,
+    min_days_since_closing: Optional[int] = None,
+    max_days_since_closing: Optional[int] = None,
+    risk_level: Optional[str] = None,
+    refinance_opportunity: Optional[bool] = None,
+    state: Optional[str] = None,
+    first_time_buyer: Optional[bool] = None,
+    occupancy_type: Optional[str] = None,
+    sort_by: str = "client_name",
+    sort_desc: bool = False,
     **kwargs,
 ) -> ToolResult:
-    """List MUM clients for the current user with optional search."""
+    """List MUM clients with comprehensive filtering and full field exposure."""
     try:
-        from database.models.referral import MUMClient
-
         db = kwargs.get("db")
         current_user = kwargs.get("current_user")
         if not db or not current_user:
             with get_db() as session:
-                return _get_mum_clients_impl(session, current_user, limit, offset, search)
-
-        return _get_mum_clients_impl(db, current_user, limit, offset, search)
+                return _get_mum_clients_impl(
+                    session, current_user, limit, offset, search, status, loan_type,
+                    min_interest_rate, max_interest_rate, min_equity_percentage,
+                    max_equity_percentage, min_days_since_closing, max_days_since_closing,
+                    risk_level, refinance_opportunity, state, first_time_buyer,
+                    occupancy_type, sort_by, sort_desc,
+                )
+        return _get_mum_clients_impl(
+            db, current_user, limit, offset, search, status, loan_type,
+            min_interest_rate, max_interest_rate, min_equity_percentage,
+            max_equity_percentage, min_days_since_closing, max_days_since_closing,
+            risk_level, refinance_opportunity, state, first_time_buyer,
+            occupancy_type, sort_by, sort_desc,
+        )
     except Exception as e:
+        logger.exception("get_mum_clients failed")
         return ToolResult.error(f"Failed to get MUM clients: {str(e)}")
 
 
-def _get_mum_clients_impl(db, current_user, limit, offset, search):
+def _get_mum_clients_impl(
+    db, current_user, limit, offset, search, status, loan_type,
+    min_interest_rate, max_interest_rate, min_equity_percentage,
+    max_equity_percentage, min_days_since_closing, max_days_since_closing,
+    risk_level, refinance_opportunity, state, first_time_buyer,
+    occupancy_type, sort_by, sort_desc,
+):
     from database.models.referral import MUMClient
     from sqlalchemy import or_
 
     query = db.query(MUMClient).filter(MUMClient.user_id == current_user.id)
 
     if search:
-        search_term = f"%{search}%"
+        st = f"%{search}%"
         query = query.filter(
             or_(
-                MUMClient.client_name.ilike(search_term),
-                MUMClient.email.ilike(search_term),
+                MUMClient.client_name.ilike(st),
+                MUMClient.email.ilike(st),
+                MUMClient.phone.ilike(st),
+                MUMClient.loan_number.ilike(st),
+                MUMClient.property_state.ilike(st),
+                MUMClient.property_zip.ilike(st),
             )
         )
+    if status:
+        query = query.filter(MUMClient.status == status)
+    if state:
+        query = query.filter(MUMClient.property_state.ilike(state))
+    if refinance_opportunity is not None:
+        query = query.filter(MUMClient.refinance_opportunity == bool(refinance_opportunity))
+    if min_interest_rate is not None:
+        query = query.filter(MUMClient.interest_rate >= min_interest_rate)
+    if max_interest_rate is not None:
+        query = query.filter(MUMClient.interest_rate <= max_interest_rate)
 
-    total = query.count()
-    clients = query.order_by(MUMClient.created_at.desc()).offset(offset).limit(limit).all()
+    clients = query.all()
+    loan_numbers = [c.loan_number for c in clients if c.loan_number]
+    meta_map = _fetch_loan_type_map(db, loan_numbers)
 
-    results = []
-    for c in clients:
-        results.append({
-            "id": c.id,
-            "client_name": c.client_name,
-            "email": c.email,
-            "phone": c.phone,
-            "loan_number": c.loan_number,
-            "closing_date": c.closing_date.isoformat() if c.closing_date else None,
-            "original_rate": float(c.original_rate) if c.original_rate else None,
-            "original_loan_amount": float(c.original_loan_amount) if c.original_loan_amount else None,
-            "status": c.status,
-            "engagement_score": c.engagement_score,
-            "last_contact": c.last_contact.isoformat() if c.last_contact else None,
-        })
+    full = [_client_to_full_dict(c, meta_map) for c in clients]
+    filtered = _apply_python_filters(
+        full,
+        loan_type=loan_type,
+        min_interest_rate=None,
+        max_interest_rate=None,
+        min_equity_percentage=min_equity_percentage,
+        max_equity_percentage=max_equity_percentage,
+        min_days_since_closing=min_days_since_closing,
+        max_days_since_closing=max_days_since_closing,
+        risk_level=risk_level,
+        refinance_opportunity=None,
+        state=None,
+        first_time_buyer=first_time_buyer,
+        occupancy_type=occupancy_type,
+    )
+
+    sort_key = sort_by if sort_by in _SORTABLE else "client_name"
+    def _sk(item):
+        v = item.get(sort_key)
+        return (v is None, v if v is not None else "")
+    filtered.sort(key=_sk, reverse=bool(sort_desc))
+
+    total = len(filtered)
+    page = filtered[offset:offset + limit]
 
     return ToolResult.success({
-        "clients": results,
+        "clients": page,
         "total": total,
         "limit": limit,
         "offset": offset,
-        "search": search,
+        "filters_applied": {
+            "search": search, "status": status, "loan_type": loan_type,
+            "min_interest_rate": min_interest_rate, "max_interest_rate": max_interest_rate,
+            "min_equity_percentage": min_equity_percentage,
+            "max_equity_percentage": max_equity_percentage,
+            "min_days_since_closing": min_days_since_closing,
+            "max_days_since_closing": max_days_since_closing,
+            "risk_level": risk_level, "refinance_opportunity": refinance_opportunity,
+            "state": state, "first_time_buyer": first_time_buyer,
+            "occupancy_type": occupancy_type, "sort_by": sort_key, "sort_desc": sort_desc,
+        },
     })
 
 
@@ -117,7 +385,7 @@ def search_mum_clients(
     query: str,
     **kwargs,
 ) -> ToolResult:
-    """Full-text search across MUM clients."""
+    """Full-text search across MUM clients, returning every portfolio field."""
     try:
         from database.models.referral import MUMClient
         from sqlalchemy import or_
@@ -145,21 +413,9 @@ def search_mum_clients(
             if not results:
                 return ToolResult.no_data(f"No MUM clients found matching '{query}'")
 
-            clients = []
-            for c in results:
-                clients.append({
-                    "id": c.id,
-                    "client_name": c.client_name,
-                    "email": c.email,
-                    "phone": c.phone,
-                    "loan_number": c.loan_number,
-                    "closing_date": c.closing_date.isoformat() if c.closing_date else None,
-                    "original_rate": float(c.original_rate) if c.original_rate else None,
-                    "original_loan_amount": float(c.original_loan_amount) if c.original_loan_amount else None,
-                    "property_state": c.property_state,
-                    "property_zip": c.property_zip,
-                    "status": c.status,
-                })
+            loan_numbers = [c.loan_number for c in results if c.loan_number]
+            meta_map = _fetch_loan_type_map(db, loan_numbers)
+            clients = [_client_to_full_dict(c, meta_map) for c in results]
 
             return ToolResult.success({
                 "query": query,
