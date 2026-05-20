@@ -335,6 +335,22 @@ async def process_inbound_email(
     )
     result["activity_id"] = activity_id
 
+    # --- Step 9: Create DRE records for Reconciliation page ---
+    try:
+        _create_reconciliation_records(
+            db=db,
+            user_id=user_id,
+            parsed=parsed,
+            classification=classification,
+            extracted_fields=extracted_fields,
+            matched_loan_id=matched_loan_id,
+            matched_lead_id=matched_lead_id,
+            match_result=match_result,
+        )
+    except Exception as e:
+        logger.error("Reconciliation record creation failed: %s", e)
+        result["errors"].append(f"Reconciliation record failed: {e}")
+
     db.commit()
     return result
 
@@ -560,6 +576,79 @@ def _create_email_activity(
     except Exception as e:
         logger.error("Activity creation failed: %s", e)
         return None
+
+
+# ---------------------------------------- DRE reconciliation records
+def _create_reconciliation_records(
+    db: Session,
+    user_id: int,
+    parsed: Dict[str, Any],
+    classification: Optional[Dict],
+    extracted_fields: Optional[Dict],
+    matched_loan_id: Optional[int],
+    matched_lead_id: Optional[int],
+    match_result: Optional[Dict],
+) -> None:
+    """Create IncomingDataEvent + ExtractedData so forwarded emails appear
+    on the Reconciliation Center page alongside Microsoft-synced emails."""
+    from database.models.data_reconciliation import IncomingDataEvent, ExtractedData
+
+    attachment_names = parsed.get("attachment_names", [])
+    event = IncomingDataEvent(
+        source="email_forward",
+        external_message_id=parsed.get("provider_message_id"),
+        raw_text=parsed.get("body_full") or parsed.get("body_preview"),
+        raw_html=parsed.get("body_html"),
+        subject=parsed.get("subject"),
+        sender=parsed.get("from_email"),
+        recipients=parsed.get("to_emails"),
+        attachments=attachment_names if attachment_names else None,
+        processed=True,
+        user_id=user_id,
+    )
+    db.add(event)
+    db.flush()
+
+    category = "unrelated"
+    subcategory = ""
+    ai_confidence = 0.0
+    if classification:
+        category = classification.get("category", "unrelated")
+        subcategory = classification.get("subcategory", "")
+        ai_confidence = classification.get("confidence", 0.0)
+
+    fields = {}
+    if extracted_fields:
+        fields = extracted_fields
+
+    match_entity_type = None
+    match_entity_id = None
+    match_confidence = None
+    if matched_loan_id:
+        match_entity_type = "loan"
+        match_entity_id = matched_loan_id
+        match_confidence = match_result.get("confidence", 0.9) if match_result else 0.9
+    elif matched_lead_id:
+        match_entity_type = "lead"
+        match_entity_id = matched_lead_id
+        match_confidence = match_result.get("confidence", 0.9) if match_result else 0.9
+
+    status = "pending_review"
+    if category == "unrelated":
+        status = "needs_review"
+
+    extracted = ExtractedData(
+        event_id=event.id,
+        category=category,
+        subcategory=subcategory,
+        fields=fields,
+        match_entity_type=match_entity_type,
+        match_entity_id=match_entity_id,
+        match_confidence=match_confidence,
+        ai_confidence=ai_confidence,
+        status=status,
+    )
+    db.add(extracted)
 
 
 # ---------------------------------------- forwarding address generation
