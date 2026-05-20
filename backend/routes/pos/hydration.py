@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -128,6 +129,41 @@ def hydrate_from_voice(
     org = db.query(Organization).filter(Organization.id == body.organization_id).first()
     if not org:
         raise HTTPException(status_code=400, detail="Invalid organization_id")
+
+    # ------------------------------------------------------------------
+    # SEC FIX: Voice-hydration is CRM_API_KEY-protected (no PURL token),
+    # so we cannot derive contact_id/organization_id from a PURL context.
+    # Instead, defend against forged body fields by validating that the
+    # (contact_id, organization_id) pair genuinely exists in purl_contacts
+    # AND that the contact actually belongs to the claimed organization.
+    # Mismatch = caller is trying to cross tenants or attach a borrower's
+    # voice data to another org's contact record. Reject + log.
+    # ------------------------------------------------------------------
+    pair_row = db.execute(
+        text(
+            "SELECT organization_id FROM purl_contacts WHERE id = :cid"
+        ),
+        {"cid": body.contact_id},
+    ).first()
+    if not pair_row:
+        logger.warning(
+            "Hydration rejected: contact_id %s not found in purl_contacts "
+            "(claimed organization_id=%s, urla_loan_id=%s)",
+            body.contact_id,
+            body.organization_id,
+            body.urla_loan_id,
+        )
+        raise HTTPException(status_code=403, detail="Contact/organization mismatch")
+    if int(pair_row[0]) != int(body.organization_id):
+        logger.warning(
+            "Hydration rejected: contact_id %s belongs to org %s but body "
+            "claimed org %s (urla_loan_id=%s) — possible cross-tenant injection",
+            body.contact_id,
+            pair_row[0],
+            body.organization_id,
+            body.urla_loan_id,
+        )
+        raise HTTPException(status_code=403, detail="Contact/organization mismatch")
 
     source_ip = request.client.host if request.client else "unknown"
     logger.info(
