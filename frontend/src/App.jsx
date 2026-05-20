@@ -376,9 +376,19 @@ function App() {
     const initialTimeout = setTimeout(fetchTaskCounts, 1000);
     // Refresh task counts every 5 minutes (reduced frequency)
     const interval = setInterval(fetchTaskCounts, 300000);
+
+    // Re-fetch after login since initial mount may have been unauthenticated
+    const onAuth = (event) => {
+      if (event.detail?.type === 'login') {
+        setTimeout(fetchTaskCounts, 2000);
+      }
+    };
+    window.addEventListener('authChange', onAuth);
+
     return () => {
       clearTimeout(initialTimeout);
       clearInterval(interval);
+      window.removeEventListener('authChange', onAuth);
     };
   }, []);
 
