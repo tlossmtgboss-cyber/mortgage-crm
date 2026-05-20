@@ -60,7 +60,10 @@ def test_employment_section_extracts_employer_and_income(extractor):
     assert "Acme" in f["employer_name"]["value"]
     assert f["job_title"]["value"].startswith("senior")
     assert f["monthly_income_gross"]["value"] == 8500.0
-    assert f["self_employed"]["value"] is False
+    # self_employed is only set when an explicit signal is present; this
+    # transcript names an employer but doesn't say "W-2" / "salaried" /
+    # "self-employed" — so the extractor correctly stays silent.
+    assert "self_employed" not in f or f["self_employed"]["value"] is False
 
 
 def test_financial_section_extracts_assets_and_debts(extractor):

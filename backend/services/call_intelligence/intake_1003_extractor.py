@@ -265,8 +265,10 @@ class Intake1003Extractor:
         t = transcript
 
         # --- Name: "my name is X Y" / "this is X Y"
+        # Lowercase the prefix-label section only, then re-search positions
+        # using a case-insensitive label with a case-sensitive name class.
         m = re.search(
-            r"\b(?:my name is|this is|I'?m|I am)\s+"
+            r"\b(?:[Mm]y name is|[Tt]his is|I'?m|I am)\s+"
             r"([A-Z][a-zA-Z'\-]+)\s+([A-Z][a-zA-Z'\-]+)",
             t,
         )
@@ -364,7 +366,7 @@ class Intake1003Extractor:
         m = re.search(
             r"\b(?:as (?:a|an)|I'?m (?:a|an)|work as (?:a|an)|"
             r"title is|position is)\s+([A-Za-z][A-Za-z \-/]{2,40}?)"
-            r"(?=\s+(?:at|for|with|in|\.|,|$))",
+            r"(?:\s+(?:at|for|with|in)\b|[.,;\n]|$)",
             t,
         )
         if m:
@@ -445,8 +447,9 @@ class Intake1003Extractor:
 
         # Retirement
         m = re.search(
-            r"\b(?:401k|401\(k\)|IRA|retirement|pension)\s*"
-            r"(?:of|is|are|balance|account|has|with)?\s*\$?\s?([\d,]+(?:\.\d+)?)\s?(k|thousand|m|million)?",
+            r"\b(?:401k|401\(k\)|IRA|retirement|pension)\b"
+            r"(?:\s+(?:of|is|are|balance|account|has|with|worth|totaling)){0,3}"
+            r"\s*\$?\s?([\d,]+(?:\.\d+)?)\s?(k|thousand|m|million)?",
             t,
             re.IGNORECASE,
         )
