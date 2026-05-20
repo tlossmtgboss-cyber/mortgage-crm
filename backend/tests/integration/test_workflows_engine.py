@@ -103,9 +103,17 @@ import unittest.mock as _mock
 
 _s3_stub = ModuleType("services.perennia_s3_service")
 _s3_stub.get_s3_service = lambda: _mock.MagicMock()
-_services_stub = ModuleType("services")
-_services_stub.__path__ = []
-sys.modules.setdefault("services", _services_stub)
+# Ensure real backend dir is on sys.path so 'services' resolves to the real
+# package — fall back to a stub only if the real package is unavailable.
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+if "services" not in sys.modules:
+    try:
+        import services as _real_services  # noqa: F401
+    except Exception:
+        _services_stub = ModuleType("services")
+        _services_stub.__path__ = [str(_BACKEND_DIR / "services")]
+        sys.modules["services"] = _services_stub
 sys.modules["services.perennia_s3_service"] = _s3_stub
 
 _die = _load("_pa_doc_intake", "workflows/document_intake_engine.py")
