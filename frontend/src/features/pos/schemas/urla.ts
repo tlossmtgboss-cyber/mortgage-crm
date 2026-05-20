@@ -29,9 +29,17 @@ const phone = z
 
 const email = z.string().email('Enter a valid email');
 
+// Money fields are kept as decimal strings end-to-end. JS `number` is an
+// IEEE 754 double — it silently drops trailing zeros ("250000.10" becomes
+// "250000.1") and accumulates float drift across arithmetic, which is fatal
+// for TRID tolerance checks downstream. The canonical wire format is a
+// decimal string with up to 2 fractional digits (e.g. "250000" or "250000.00").
+// The empty string is permitted because the autosave debounce fires while
+// the user is still typing and panels treat "" as "no value yet".
 const currency = z
-  .number({ error: 'Enter a number' })
-  .nonnegative('Cannot be negative');
+  .string()
+  .regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount (e.g. 250000 or 250000.00)')
+  .or(z.literal(''));
 
 // ---------- section schemas ----------
 
