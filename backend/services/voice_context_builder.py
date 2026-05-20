@@ -392,6 +392,21 @@ def _get_lo_name(db: Session, owner_id: int) -> Optional[str]:
     return None
 
 
+def _get_org_name(db: Session, organization_id: Optional[int]) -> Optional[str]:
+    """Resolve the LO's company/organization display name."""
+    if not organization_id:
+        return None
+    try:
+        row = db.execute(text(
+            "SELECT name FROM organizations WHERE id = :oid"
+        ), {"oid": organization_id}).fetchone()
+        if row and row[0]:
+            return row[0]
+    except Exception as e:
+        logger.debug("Org name lookup failed: %s", e)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Context text formatters
 # ---------------------------------------------------------------------------
@@ -742,13 +757,22 @@ def build_outbound_context(
             lo_name = _sanitize_tts_text(raw_lo_name, max_length=80) if raw_lo_name else None
         lo_display = lo_name or "your loan officer"
 
+        # LO's company — borrower-facing copy must use the LO's actual brokerage
+        raw_org_name = _get_org_name(db, lead.get("organization_id") or organization_id)
+        lo_company = _sanitize_tts_text(raw_org_name, max_length=80) if raw_org_name else None
+        company_phrase = lo_company or "their team"
+
         # Build personalized first message
         greeting_parts = [f"Hi {first_name}!"]
         greeting_parts.append("This is Aria calling on behalf of")
-        if lo_name:
+        if lo_name and lo_company:
+            greeting_parts.append(f"{lo_name} at {lo_company}.")
+        elif lo_name:
             greeting_parts.append(f"{lo_name}, your loan officer.")
+        elif lo_company:
+            greeting_parts.append(f"your loan officer at {lo_company}.")
         else:
-            greeting_parts.append("your loan officer at Perennia AI.")
+            greeting_parts.append("your loan officer.")
 
         if source:
             source_display = source.replace("_", " ").title()
@@ -773,9 +797,10 @@ def build_outbound_context(
         qualification = _format_qualification_status(lead)
 
         prompt_lines = [
-            f"You are Aria, an AI assistant for a mortgage loan officer at Perennia AI. "
-            f"You are making a speed-to-lead callback to {lead_name} who expressed "
-            f"interest in mortgage services.",
+            f"You are Aria, assistant to {lo_display} at {company_phrase}. "
+            f"You represent {lo_display} and {company_phrase} — never any other "
+            f"brand, platform, or vendor. You are making a speed-to-lead callback "
+            f"to {lead_name} who expressed interest in mortgage services.",
         ]
 
         if source:
@@ -824,10 +849,14 @@ def build_outbound_context(
 
         # Build context-aware voicemail message
         vm_parts = [f"Hi {first_name}, this is a message from"]
-        if lo_name:
-            vm_parts.append(f"{lo_name}'s team at Perennia AI.")
+        if lo_name and lo_company:
+            vm_parts.append(f"{lo_name}'s team at {lo_company}.")
+        elif lo_name:
+            vm_parts.append(f"{lo_name}'s team.")
+        elif lo_company:
+            vm_parts.append(f"your loan officer's team at {lo_company}.")
         else:
-            vm_parts.append("your loan officer's team at Perennia AI.")
+            vm_parts.append("your loan officer's team.")
 
         if source:
             vm_parts.append(

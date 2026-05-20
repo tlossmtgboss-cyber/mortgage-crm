@@ -183,6 +183,19 @@ class ProspectReEngagementService:
 
         lo_data = dict(lo._mapping)
 
+        # Resolve LO's company (organization name) so borrower-facing copy
+        # reads as the LO's actual brokerage (e.g. "CMG Home Loans"),
+        # never the platform name.
+        lo_company = ""
+        try:
+            org_row = self.db.execute(text("""
+                SELECT name FROM organizations WHERE id = :oid
+            """), {"oid": lead_data["organization_id"]}).fetchone()
+            if org_row and org_row[0]:
+                lo_company = org_row[0]
+        except Exception:
+            pass
+
         # TCPA hours check
         tcpa_ok, tcpa_reason = _check_tcpa_hours(normalized_phone)
         if not tcpa_ok:
@@ -262,6 +275,7 @@ class ProspectReEngagementService:
                 "lo_first_name": lo_data["first_name"],
                 "lo_last_name": lo_data.get("last_name", ""),
                 "lo_email": lo_data.get("email", ""),
+                "lo_company": lo_company,
                 "lead_first_name": lead_data["first_name"],
                 "lead_last_name": lead_data.get("last_name", ""),
                 "lead_email": lead_data.get("email", ""),
@@ -496,6 +510,18 @@ class ProspectReEngagementService:
         """
         lo_name = context.get("lo_first_name", "your loan officer")
         lead_name = context.get("lead_first_name", "there")
+        lo_company = context.get("lo_company") or ""
+        # Backfill org name for conversations created before lo_company was tracked
+        if not lo_company:
+            try:
+                org_row = self.db.execute(text("""
+                    SELECT name FROM organizations WHERE id = :oid
+                """), {"oid": conv_data.get("organization_id")}).fetchone()
+                if org_row and org_row[0]:
+                    lo_company = org_row[0]
+            except Exception:
+                pass
+        lo_company = lo_company or f"{lo_name}'s team"
         current_state = conv_data.get("state", "awaiting_reply")
 
         # Build conversation history for the prompt
@@ -511,7 +537,7 @@ class ProspectReEngagementService:
         # ("the LO will reach out") instead of actively scheduling.
         available_slots_text = self._get_available_slots_text(conv_data)
 
-        system_prompt = f"""You are {lo_name}'s scheduling assistant. Your single job is to BOOK a consultation call between {lead_name} and {lo_name}.
+        system_prompt = f"""You are Aria, the scheduling assistant for {lo_name} at {lo_company}. You represent {lo_name} and {lo_company} — never any other brand, platform, or vendor. Your single job is to BOOK a consultation call between {lead_name} and {lo_name}.
 
 You are texting with {lead_name}. Keep each SMS under 280 characters (2 segments). Be warm, professional, and decisive — never wishy-washy.
 

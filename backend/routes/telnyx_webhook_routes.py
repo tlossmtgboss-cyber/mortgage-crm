@@ -1128,6 +1128,21 @@ async def _aria_sms_ai_background_task(
             lo_name = context_data.get("lo_name", "your loan officer")
             appt_type = context_data.get("appointment_type", "consultation")
 
+            # Resolve LO's actual company so borrower-facing copy never
+            # mentions the platform vendor. Falls back to "{lo_name}'s team"
+            # so we never expose an internal brand name to the borrower.
+            lo_company = context_data.get("lo_company") or ""
+            if not lo_company:
+                try:
+                    _co_row = db.execute(sa_text(
+                        "SELECT name FROM organizations WHERE id = :oid"
+                    ), {"oid": org_id}).fetchone()
+                    if _co_row and _co_row[0]:
+                        lo_company = _co_row[0]
+                except Exception:
+                    pass
+            lo_company = lo_company or f"{lo_name}'s team"
+
             # Look up real LO availability for the next 7 days
             _avail_context = ""
             try:
@@ -1167,8 +1182,9 @@ async def _aria_sms_ai_background_task(
 
             if stage == "general":
                 _system = (
-                    f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
-                    f"a mortgage lending company. You are texting with {borrower_name}.\n\n"
+                    f"You are Aria, an assistant for {lo_name} at {lo_company}. "
+                    f"You represent {lo_name} and {lo_company} — never any other "
+                    f"brand or platform. You are texting with {borrower_name}.\n\n"
                     "RULES:\n"
                     "- Keep responses under 160 characters (1 SMS segment)\n"
                     "- Be warm and professional\n"
@@ -1182,8 +1198,9 @@ async def _aria_sms_ai_background_task(
                 )
             else:
                 _system = (
-                    f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
-                    f"a mortgage lending company. You are texting {borrower_name} "
+                    f"You are Aria, an assistant for {lo_name} at {lo_company}. "
+                    f"You represent {lo_name} and {lo_company} — never any other "
+                    f"brand or platform. You are texting {borrower_name} "
                     f"to schedule a {appt_type}.\n\n"
                     "RULES:\n"
                     "- Keep responses under 160 characters (1 SMS segment)\n"
@@ -1444,7 +1461,7 @@ async def _aria_sms_ai_background_task(
                                 f"Please add it to your calendar.</p>"
                                 f"<p>If you need to reschedule, just reply to the "
                                 f"text message thread or call us.</p>"
-                                f"<br><p>Best regards,<br>Aria -- Perennia AI</p>"
+                                f"<br><p>Best regards,<br>Aria, assistant to {lo_name}<br>{lo_company}</p>"
                             )
 
                             # Send to all collected emails
@@ -1456,7 +1473,7 @@ async def _aria_sms_ai_background_task(
                                         to=_addr,
                                         subject=f"Appointment Confirmed: {_ics_title}",
                                         html_body=_email_html,
-                                        from_name="Aria -- Perennia AI",
+                                        from_name=f"Aria at {lo_company}",
                                         attachments=[_ics_attachment],
                                         organization_id=str(org_id) if org_id else None,
                                     )
@@ -1488,7 +1505,7 @@ async def _aria_sms_ai_background_task(
                                     for _addr in _appt_emails:
                                         try:
                                             _msg = _MMP("mixed")
-                                            _msg["From"] = f"Aria -- Perennia AI <{_smtp_user}>"
+                                            _msg["From"] = f"Aria at {lo_company} <{_smtp_user}>"
                                             _msg["To"] = _addr
                                             _msg["Subject"] = f"Appointment Confirmed: {_ics_title}"
                                             _msg.attach(_MT(_email_html, "html"))
@@ -3029,6 +3046,22 @@ async def send_appointment_invite(
     appt_type = body.get("appointment_type", "consultation")
     duration = body.get("duration_minutes", 30)
 
+    # Resolve LO's company so the invite is signed from their brokerage,
+    # never the platform vendor.
+    org_id_body = body.get("organization_id")
+    lo_company = body.get("lo_company") or ""
+    if not lo_company and org_id_body:
+        try:
+            _co_row = db.execute(
+                sa_text("SELECT name FROM organizations WHERE id = :oid"),
+                {"oid": int(org_id_body)},
+            ).fetchone()
+            if _co_row and _co_row[0]:
+                lo_company = _co_row[0]
+        except Exception:
+            pass
+    lo_company = lo_company or f"{lo_name}'s team"
+
     if not emails or not appt_date or not appt_time:
         raise HTTPException(status_code=400, detail="emails, date, and time are required")
 
@@ -3085,7 +3118,7 @@ async def send_appointment_invite(
         f"Please add it to your calendar.</p>"
         f"<p>If you need to reschedule, just reply to the "
         f"text message thread or call us.</p>"
-        f"<br><p>Best regards,<br>Aria — Perennia AI</p>"
+        f"<br><p>Best regards,<br>Aria, assistant to {lo_name}<br>{lo_company}</p>"
     )
 
     results = []
@@ -3099,7 +3132,7 @@ async def send_appointment_invite(
                 to=addr,
                 subject=f"Appointment Confirmed: {ics_title}",
                 html_body=email_html,
-                from_name="Aria — Perennia AI",
+                from_name=f"Aria at {lo_company}",
                 attachments=[ics_attachment],
                 organization_id=body.get("organization_id"),
             )
@@ -3135,7 +3168,7 @@ async def send_appointment_invite(
             for addr in emails:
                 try:
                     msg = MIMEMultipart("mixed")
-                    msg["From"] = f"Aria — Perennia AI <{smtp_user}>"
+                    msg["From"] = f"Aria at {lo_company} <{smtp_user}>"
                     msg["To"] = addr
                     msg["Subject"] = f"Appointment Confirmed: {ics_title}"
 
