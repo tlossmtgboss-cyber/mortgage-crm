@@ -613,74 +613,82 @@ def list_timeline(
 
     # ── Activities (notes, calls, meetings, docs) ───────────────────────
     if lead_id:
-        activity_q = select(Activity).where(
-            Activity.lead_id == lead_id,
-            Activity.organization_id == org_id,
-        )
-        if category == "notes":
-            activity_q = activity_q.where(Activity.type == ActivityType.NOTE)
-        elif category == "calls":
-            activity_q = activity_q.where(Activity.type == ActivityType.CALL)
-        elif category == "texts":
-            activity_q = activity_q.where(Activity.type == ActivityType.SMS)
-        elif category == "emails":
-            activity_q = activity_q.where(Activity.type == ActivityType.EMAIL)
+        try:
+            activity_q = select(Activity).where(
+                Activity.lead_id == lead_id,
+                Activity.organization_id == org_id,
+            )
+            if category == "notes":
+                activity_q = activity_q.where(Activity.type == ActivityType.NOTE)
+            elif category == "calls":
+                activity_q = activity_q.where(Activity.type == ActivityType.CALL)
+            elif category == "texts":
+                activity_q = activity_q.where(Activity.type == ActivityType.SMS)
+            elif category == "emails":
+                activity_q = activity_q.where(Activity.type == ActivityType.EMAIL)
 
-        kind_map = {
-            ActivityType.NOTE: "note_added",
-            ActivityType.CALL: "call_outbound",
-            ActivityType.EMAIL: "message_sent_email",
-            ActivityType.SMS: "message_sent_sms",
-            ActivityType.MEETING: "appointment_booked",
-            ActivityType.DOCUMENT: "document_uploaded",
-        }
-        cat_map = {
-            ActivityType.NOTE: "notes",
-            ActivityType.CALL: "calls",
-            ActivityType.EMAIL: "emails",
-            ActivityType.SMS: "texts",
-            ActivityType.MEETING: "activity",
-            ActivityType.DOCUMENT: "documents",
-        }
-        for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
-            events.append(_make_timeline_event(
-                id=f"act-{a.id}",
-                client_file_id=str(client_file_id),
-                org_id=str(org_id),
-                kind=kind_map.get(a.type, "note_added"),
-                event_category=cat_map.get(a.type, "activity"),
-                occurred_at=a.created_at,
-                headline=a.type.value if a.type else "Activity",
-                body=a.content,
-                actor_user_id=str(a.user_id) if a.user_id else None,
-            ))
+            kind_map = {
+                ActivityType.NOTE: "note_added",
+                ActivityType.CALL: "call_outbound",
+                ActivityType.EMAIL: "message_sent_email",
+                ActivityType.SMS: "message_sent_sms",
+                ActivityType.MEETING: "appointment_booked",
+                ActivityType.DOCUMENT: "document_uploaded",
+            }
+            cat_map = {
+                ActivityType.NOTE: "notes",
+                ActivityType.CALL: "calls",
+                ActivityType.EMAIL: "emails",
+                ActivityType.SMS: "texts",
+                ActivityType.MEETING: "activity",
+                ActivityType.DOCUMENT: "documents",
+            }
+            for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
+                events.append(_make_timeline_event(
+                    id=f"act-{a.id}",
+                    client_file_id=str(client_file_id),
+                    org_id=str(org_id),
+                    kind=kind_map.get(a.type, "note_added"),
+                    event_category=cat_map.get(a.type, "activity"),
+                    occurred_at=a.created_at,
+                    headline=a.type.value if a.type else "Activity",
+                    body=a.content,
+                    actor_user_id=str(a.user_id) if a.user_id else None,
+                ))
+        except Exception as e:
+            logger.exception("Timeline: failed to load activities for lead %s: %s", lead_id, e)
+            db.rollback()
 
     # ── SMS messages (by lead_id + phone-based via conversation) ────────
     if category in ("all", "texts"):
         seen_sms_ids: set[int] = set()
 
         if lead_id:
-            sms_q = (
-                select(SMSMessage)
-                .where(SMSMessage.lead_id == lead_id, SMSMessage.organization_id == org_id)
-                .order_by(SMSMessage.created_at.desc())
-                .limit(limit)
-            )
-            for s in db.execute(sms_q).scalars():
-                seen_sms_ids.add(s.id)
-                inbound = s.direction == "inbound"
-                events.append(_make_timeline_event(
-                    id=f"sms-{s.id}",
-                    client_file_id=str(client_file_id),
-                    org_id=str(org_id),
-                    kind="message_received_sms" if inbound else "message_sent_sms",
-                    event_category="texts",
-                    occurred_at=s.created_at,
-                    headline="Text received" if inbound else "Text sent",
-                    body=s.message,
-                    actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
-                    related_message_id=s.provider_message_id,
-                ))
+            try:
+                sms_q = (
+                    select(SMSMessage)
+                    .where(SMSMessage.lead_id == lead_id, SMSMessage.organization_id == org_id)
+                    .order_by(SMSMessage.created_at.desc())
+                    .limit(limit)
+                )
+                for s in db.execute(sms_q).scalars():
+                    seen_sms_ids.add(s.id)
+                    inbound = s.direction == "inbound"
+                    events.append(_make_timeline_event(
+                        id=f"sms-{s.id}",
+                        client_file_id=str(client_file_id),
+                        org_id=str(org_id),
+                        kind="message_received_sms" if inbound else "message_sent_sms",
+                        event_category="texts",
+                        occurred_at=s.created_at,
+                        headline="Text received" if inbound else "Text sent",
+                        body=s.message,
+                        actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
+                        related_message_id=s.provider_message_id,
+                    ))
+            except Exception as e:
+                logger.exception("Timeline: failed to load SMS for lead %s: %s", lead_id, e)
+                db.rollback()
 
         if client_phone:
             try:
@@ -722,50 +730,59 @@ def list_timeline(
                             actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
                             related_message_id=s.provider_message_id,
                         ))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception("Timeline: failed to load phone-based SMS for client %s: %s", client_file_id, e)
+                db.rollback()
 
     # ── Emails (outbound via email_messages + inbound via emails) ──────
     if category in ("all", "emails") and lead_id:
-        for em in db.execute(
-            select(EmailMessage)
-            .where(EmailMessage.lead_id == lead_id, EmailMessage.organization_id == org_id)
-            .order_by(EmailMessage.created_at.desc())
-            .limit(limit)
-        ).scalars():
-            inbound = em.direction == "inbound"
-            events.append(_make_timeline_event(
-                id=f"em-{em.id}",
-                client_file_id=str(client_file_id),
-                org_id=str(org_id),
-                kind="message_received_email" if inbound else "message_sent_email",
-                event_category="emails",
-                occurred_at=em.created_at,
-                headline=em.subject or ("Email received" if inbound else "Email sent"),
-                body=(em.body or em.html_body or "")[:500],
-                actor_user_id=str(em.user_id) if em.user_id and not inbound else None,
-                related_message_id=em.microsoft_message_id,
-            ))
+        try:
+            for em in db.execute(
+                select(EmailMessage)
+                .where(EmailMessage.lead_id == lead_id, EmailMessage.organization_id == org_id)
+                .order_by(EmailMessage.created_at.desc())
+                .limit(limit)
+            ).scalars():
+                inbound = em.direction == "inbound"
+                events.append(_make_timeline_event(
+                    id=f"em-{em.id}",
+                    client_file_id=str(client_file_id),
+                    org_id=str(org_id),
+                    kind="message_received_email" if inbound else "message_sent_email",
+                    event_category="emails",
+                    occurred_at=em.created_at,
+                    headline=em.subject or ("Email received" if inbound else "Email sent"),
+                    body=(em.body or em.html_body or "")[:500],
+                    actor_user_id=str(em.user_id) if em.user_id and not inbound else None,
+                    related_message_id=em.microsoft_message_id,
+                ))
+        except Exception as e:
+            logger.exception("Timeline: failed to load email_messages for lead %s: %s", lead_id, e)
+            db.rollback()
 
-        for e in db.execute(
-            select(Email)
-            .where(Email.lead_id == lead_id, Email.organization_id == org_id)
-            .order_by(Email.received_date.desc())
-            .limit(limit)
-        ).scalars():
-            is_sent = (e.folder_name or "").lower() in ("sent", "sent items", "sentitems")
-            events.append(_make_timeline_event(
-                id=f"graph-{e.id}",
-                client_file_id=str(client_file_id),
-                org_id=str(org_id),
-                kind="message_sent_email" if is_sent else "message_received_email",
-                event_category="emails",
-                occurred_at=e.received_date or e.created_at,
-                headline=e.subject or ("Email sent" if is_sent else "Email received"),
-                body=(e.body_text or "")[:500],
-                actor_user_id=str(e.user_id) if e.user_id and is_sent else None,
-                metadata={"sender_email": e.sender_email, "sender_name": e.sender_name},
-            ))
+        try:
+            for e in db.execute(
+                select(Email)
+                .where(Email.lead_id == lead_id, Email.organization_id == org_id)
+                .order_by(Email.received_date.desc())
+                .limit(limit)
+            ).scalars():
+                is_sent = (e.folder_name or "").lower() in ("sent", "sent items", "sentitems")
+                events.append(_make_timeline_event(
+                    id=f"graph-{e.id}",
+                    client_file_id=str(client_file_id),
+                    org_id=str(org_id),
+                    kind="message_sent_email" if is_sent else "message_received_email",
+                    event_category="emails",
+                    occurred_at=e.received_date or e.created_at,
+                    headline=e.subject or ("Email sent" if is_sent else "Email received"),
+                    body=(e.body_text or "")[:500],
+                    actor_user_id=str(e.user_id) if e.user_id and is_sent else None,
+                    metadata={"sender_email": e.sender_email, "sender_name": e.sender_name},
+                ))
+        except Exception as e:
+            logger.exception("Timeline: failed to load Graph emails for lead %s: %s", lead_id, e)
+            db.rollback()
 
     # Deduplicate: prefer dedicated records (sms-*, em-*, graph-*) over Activity records (act-*)
     # when they describe the same event (same body text within the same second).

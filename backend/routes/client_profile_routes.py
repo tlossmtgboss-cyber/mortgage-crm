@@ -1802,74 +1802,91 @@ async def get_referral_partners(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user)
 ):
-    main = get_main_module()
-    ReferralPartner = main.ReferralPartner
-    Lead = main.Lead
+    try:
+        main = get_main_module()
+        ReferralPartner = main.ReferralPartner
+        Lead = main.Lead
 
-    # Filter referral partners by owner - each user sees only their own partners
-    query = db.query(ReferralPartner).filter(
-        ReferralPartner.owner_id == current_user.id
-    )
-
-    # Add search filter if provided
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            or_(
-                ReferralPartner.name.ilike(search_term),
-                ReferralPartner.email.ilike(search_term),
-                ReferralPartner.company.ilike(search_term)
-            )
+        # Filter referral partners by owner - each user sees only their own partners
+        query = db.query(ReferralPartner).filter(
+            ReferralPartner.owner_id == current_user.id
         )
 
-    partners = query.order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
+        # Add search filter if provided
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    ReferralPartner.name.ilike(search_term),
+                    ReferralPartner.email.ilike(search_term),
+                    ReferralPartner.company.ilike(search_term)
+                )
+            )
 
-    # Calculate actual referral counts from leads table
-    result = []
-    for partner in partners:
-        # Count leads that have this partner as their referral_partner_id
-        actual_referrals_in = db.query(Lead).filter(
-            Lead.referral_partner_id == partner.id
-        ).count()
+        partners = query.order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
 
-        # Count closed loans by checking leads from this partner that have funded loans
-        # Use loan_team_members table to find loans associated with this partner
-        closed_loans_result = db.execute(text("""
-            SELECT COUNT(DISTINCT ltm.loan_id)
-            FROM loan_team_members ltm
-            JOIN loans l ON l.id = ltm.loan_id
-            WHERE ltm.referral_partner_id = :partner_id
-            AND l.stage = 'Funded'
-        """), {"partner_id": partner.id}).scalar()
-        actual_closed_loans = closed_loans_result or 0
+        # Calculate actual referral counts from leads table
+        result = []
+        for partner in partners:
+            # Count leads that have this partner as their referral_partner_id
+            try:
+                actual_referrals_in = db.query(Lead).filter(
+                    Lead.referral_partner_id == partner.id
+                ).count()
+            except Exception as e:
+                logger.warning(f"Failed to count referrals for partner {partner.id}: {e}")
+                actual_referrals_in = partner.referrals_in or 0
 
-        # Calculate total volume from funded loans via loan_team_members
-        volume_result = db.execute(text("""
-            SELECT COALESCE(SUM(l.amount), 0)
-            FROM loan_team_members ltm
-            JOIN loans l ON l.id = ltm.loan_id
-            WHERE ltm.referral_partner_id = :partner_id
-            AND l.stage = 'Funded'
-        """), {"partner_id": partner.id}).scalar()
-        actual_volume = float(volume_result) if volume_result else 0.0
+            # Count closed loans and volume via loan_team_members (table may not exist)
+            actual_closed_loans = 0
+            actual_volume = 0.0
+            try:
+                closed_loans_result = db.execute(text("""
+                    SELECT COUNT(DISTINCT ltm.loan_id)
+                    FROM loan_team_members ltm
+                    JOIN loans l ON l.id = ltm.loan_id
+                    WHERE ltm.referral_partner_id = :partner_id
+                    AND l.stage = 'Funded'
+                """), {"partner_id": partner.id}).scalar()
+                actual_closed_loans = closed_loans_result or 0
 
-        result.append({
-            "id": partner.id,
-            "name": partner.name,
-            "company": partner.company,
-            "type": partner.type,
-            "phone": partner.phone,
-            "email": partner.email,
-            "referrals_in": actual_referrals_in,
-            "closed_loans": actual_closed_loans,
-            "volume": actual_volume,
-            "loyalty_tier": partner.loyalty_tier,
-            "partner_category": partner.partner_category or "individual",
-            "status": partner.status,
-            "created_at": partner.created_at
-        })
+                volume_result = db.execute(text("""
+                    SELECT COALESCE(SUM(l.amount), 0)
+                    FROM loan_team_members ltm
+                    JOIN loans l ON l.id = ltm.loan_id
+                    WHERE ltm.referral_partner_id = :partner_id
+                    AND l.stage = 'Funded'
+                """), {"partner_id": partner.id}).scalar()
+                actual_volume = float(volume_result) if volume_result else 0.0
+            except Exception as e:
+                logger.warning(f"Failed to query loan_team_members for partner {partner.id}: {e}")
+                # Fall back to stored values on the partner record
+                actual_closed_loans = partner.closed_loans or 0
+                actual_volume = float(partner.volume) if partner.volume else 0.0
+                # Rollback the failed statement so subsequent queries work
+                db.rollback()
 
-    return result
+            result.append({
+                "id": partner.id,
+                "name": partner.name,
+                "company": partner.company,
+                "type": partner.type,
+                "phone": partner.phone,
+                "email": partner.email,
+                "referrals_in": actual_referrals_in,
+                "closed_loans": actual_closed_loans,
+                "volume": actual_volume,
+                "loyalty_tier": partner.loyalty_tier,
+                "partner_category": partner.partner_category or "individual",
+                "status": partner.status,
+                "created_at": partner.created_at
+            })
+
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching referral partners: {e}")
+        db.rollback()
+        return []
 
 
 @router.get("/referral-partners/{partner_id}")
