@@ -2159,6 +2159,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Email Intelligence routes not loaded: {e}")
 
+    # Include Email Inbound Forwarding routes
+    try:
+        from routes.email_inbound_routes import register_email_inbound_routes
+        register_email_inbound_routes(app, get_db, get_current_user)
+        logger.info("✅ Email Inbound Forwarding routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Email Inbound Forwarding routes not loaded: {e}")
+
     # Include SMS Intelligence routes
     try:
         from routes.sms_intelligence_routes import router as sms_intelligence_router

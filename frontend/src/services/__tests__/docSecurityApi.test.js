@@ -91,6 +91,7 @@ function mockFetchError(detail, status = 400) {
 }
 
 const BASE = 'http://localhost:8000/api/v1/smart-docs';
+const INCOME_BASE = 'http://localhost:8000/api/smart-docs';
 
 // ---------------------------------------------------------------------------
 // Setup / teardown
@@ -541,7 +542,7 @@ describe('docIncomeApi', () => {
       const result = await calculateIncome('loan-inc-1', opts);
 
       const [url, reqOpts] = fetchMock.mock.calls[0];
-      expect(url).toBe(`${BASE}/income/calculate/loan-inc-1`);
+      expect(url).toBe(`${INCOME_BASE}/income/calculate/loan-inc-1`);
       expect(reqOpts.method).toBe('POST');
       expect(JSON.parse(reqOpts.body)).toEqual(opts);
       expect(result).toEqual({ income: 8500 });
@@ -559,40 +560,40 @@ describe('docIncomeApi', () => {
   });
 
   describe('getIncomeHistory', () => {
-    it('calls income/history/{loanId} endpoint', async () => {
-      const fetchMock = mockFetchSuccess({ history: [] });
+    it('calls income/calculations/{loanId} endpoint', async () => {
+      const fetchMock = mockFetchSuccess({ calculations: [] });
       vi.stubGlobal('fetch', fetchMock);
 
       await getIncomeHistory('loan-inc-3');
 
       const [url] = fetchMock.mock.calls[0];
-      expect(url).toBe(`${BASE}/income/history/loan-inc-3`);
+      expect(url).toBe(`${INCOME_BASE}/income/calculations/loan-inc-3`);
     });
   });
 
   describe('approveIncome', () => {
-    it('POSTs to income/approve/{loanId} with notes', async () => {
+    it('POSTs to income/calculation/{calculationId}/approve with notes', async () => {
       const fetchMock = mockFetchSuccess({ approved: true });
       vi.stubGlobal('fetch', fetchMock);
 
-      await approveIncome('loan-inc-4', 'Looks good');
+      await approveIncome('calc-4', 'Looks good');
 
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe(`${BASE}/income/approve/loan-inc-4`);
+      expect(url).toBe(`${INCOME_BASE}/income/calculation/calc-4/approve`);
       expect(opts.method).toBe('POST');
       expect(JSON.parse(opts.body)).toEqual({ notes: 'Looks good' });
     });
   });
 
   describe('rejectIncome', () => {
-    it('POSTs to income/reject/{loanId} with reason', async () => {
+    it('POSTs to income/calculation/{calculationId}/reject with reason', async () => {
       const fetchMock = mockFetchSuccess({ rejected: true });
       vi.stubGlobal('fetch', fetchMock);
 
-      await rejectIncome('loan-inc-5', 'Insufficient documentation');
+      await rejectIncome('calc-5', 'Insufficient documentation');
 
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe(`${BASE}/income/reject/loan-inc-5`);
+      expect(url).toBe(`${INCOME_BASE}/income/calculation/calc-5/reject`);
       expect(opts.method).toBe('POST');
       expect(JSON.parse(opts.body)).toEqual({ reason: 'Insufficient documentation' });
     });
@@ -601,6 +602,7 @@ describe('docIncomeApi', () => {
   describe('default export shape', () => {
     it('docIncomeAPI contains all functions', () => {
       expect(typeof docIncomeAPI.calculateIncome).toBe('function');
+      expect(typeof docIncomeAPI.getCalculation).toBe('function');
       expect(typeof docIncomeAPI.getIncomeHistory).toBe('function');
       expect(typeof docIncomeAPI.approveIncome).toBe('function');
       expect(typeof docIncomeAPI.rejectIncome).toBe('function');

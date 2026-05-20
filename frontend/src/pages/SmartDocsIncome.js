@@ -14,6 +14,7 @@ import {
   calculateIncome,
   getIncomeSources,
   getIncomeHistory,
+  getCalculation,
   approveIncome,
   rejectIncome,
   overrideSource,
@@ -188,6 +189,7 @@ function SmartDocsIncome() {
   // Loan search
   const [loanIdInput, setLoanIdInput] = useState('');
   const [loanId, setLoanId] = useState(null);
+  const [calculationId, setCalculationId] = useState(null);
   const [loanMeta, setLoanMeta] = useState(null); // { borrower_name, loan_number }
   const inputRef = useRef(null);
 
@@ -243,13 +245,25 @@ function SmartDocsIncome() {
   // ---------------------------------------------------------------------------
   // Load income sources for a loan
   // ---------------------------------------------------------------------------
-  const loadIncomeSources = useCallback(async (id) => {
+  const loadIncomeSources = useCallback(async (loanOrCalcId, isCalcId = false) => {
     setWorksheetLoading(true);
     setIncome(null);
     try {
-      const data = await getIncomeSources(id);
+      let calcId = isCalcId ? loanOrCalcId : null;
+      if (!calcId) {
+        const histData = await getIncomeHistory(loanOrCalcId);
+        const calcs = Array.isArray(histData) ? histData : histData?.calculations || [];
+        if (calcs.length > 0) {
+          calcId = calcs[0].id || calcs[0].calculation_id;
+        }
+      }
+      if (!calcId) {
+        setWorksheetLoading(false);
+        return;
+      }
+      setCalculationId(calcId);
+      const data = await getIncomeSources(calcId);
       setIncome(data);
-      // Extract loan metadata if available
       if (data?.borrower_name || data?.loan_number) {
         setLoanMeta({
           borrower_name: data.borrower_name || null,
@@ -315,6 +329,7 @@ function SmartDocsIncome() {
   function handleClear() {
     setLoanIdInput('');
     setLoanId(null);
+    setCalculationId(null);
     setLoanMeta(null);
     setIncome(null);
     setHistory([]);
@@ -335,6 +350,7 @@ function SmartDocsIncome() {
     try {
       const data = await calculateIncome(id);
       setLoanId(id);
+      setCalculationId(data?.id || data?.calculation_id || null);
       setIncome(data);
       if (data?.borrower_name || data?.loan_number) {
         setLoanMeta({
@@ -353,9 +369,9 @@ function SmartDocsIncome() {
   }
 
   async function handleApprove() {
-    if (!loanId) return;
+    if (!calculationId) return;
     try {
-      const updated = await approveIncome(loanId, 'Approved via Smart Docs');
+      const updated = await approveIncome(calculationId, 'Approved via Smart Docs');
       setIncome((prev) => ({ ...prev, ...updated, status: 'APPROVED' }));
       toast.success('Income approved');
       loadSummary();
@@ -380,7 +396,7 @@ function SmartDocsIncome() {
         requestRevision ? '(Revision requested)' : '',
       ].filter(Boolean).join(' ');
 
-      const updated = await rejectIncome(loanId, fullReason);
+      const updated = await rejectIncome(calculationId, fullReason);
       setIncome((prev) => ({ ...prev, ...updated, status: 'REJECTED' }));
       setRejectModal({ isOpen: false });
       toast.success('Income rejected');

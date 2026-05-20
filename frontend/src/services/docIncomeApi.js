@@ -7,7 +7,7 @@
 import { API_BASE_URL } from './api';
 import { getToken } from '../utils/tokenStore';
 
-const API_BASE = `${API_BASE_URL}/api/v1/smart-docs`;
+const API_BASE = `${API_BASE_URL}/api/smart-docs`;
 
 /**
  * Helper to handle API responses
@@ -63,18 +63,29 @@ export async function calculateIncome(loanId, options = {}) {
  * @param {string} loanId
  */
 export async function getIncomeHistory(loanId) {
-  const response = await fetch(`${API_BASE}/income/history/${loanId}`, {
+  const response = await fetch(`${API_BASE}/income/calculations/${loanId}`, {
     headers: getHeaders(),
   });
   return handleResponse(response);
 }
 
 /**
- * Get income sources for a loan
- * @param {string} loanId
+ * Get a single calculation's details
+ * @param {string} calculationId
  */
-export async function getIncomeSources(loanId) {
-  const response = await fetch(`${API_BASE}/income/sources/${loanId}`, {
+export async function getCalculation(calculationId) {
+  const response = await fetch(`${API_BASE}/income/calculation/${calculationId}`, {
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
+ * Get income sources for a calculation
+ * @param {string} calculationId
+ */
+export async function getIncomeSources(calculationId) {
+  const response = await fetch(`${API_BASE}/income/calculation/${calculationId}/sources`, {
     headers: getHeaders(),
   });
   return handleResponse(response);
@@ -86,7 +97,7 @@ export async function getIncomeSources(loanId) {
  * @param {Object} override - Override details
  */
 export async function overrideSource(sourceId, override) {
-  const response = await fetch(`${API_BASE}/income/sources/${sourceId}/override`, {
+  const response = await fetch(`${API_BASE}/income/source/${sourceId}/override`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(override),
@@ -99,24 +110,26 @@ export async function overrideSource(sourceId, override) {
 // =============================================================================
 
 /**
- * Submit income calculation for approval
- * @param {string} loanId
+ * Submit income calculation for review
+ * @param {string} calculationId
+ * @param {Object} [reviewData={}] - Review details
  */
-export async function submitForApproval(loanId) {
-  const response = await fetch(`${API_BASE}/income/submit/${loanId}`, {
+export async function submitForApproval(calculationId, reviewData = {}) {
+  const response = await fetch(`${API_BASE}/income/calculation/${calculationId}/review`, {
     method: 'POST',
     headers: getHeaders(),
+    body: JSON.stringify(reviewData),
   });
   return handleResponse(response);
 }
 
 /**
  * Approve income calculation
- * @param {string} loanId
+ * @param {string} calculationId
  * @param {string} [notes] - Optional approval notes
  */
-export async function approveIncome(loanId, notes) {
-  const response = await fetch(`${API_BASE}/income/approve/${loanId}`, {
+export async function approveIncome(calculationId, notes) {
+  const response = await fetch(`${API_BASE}/income/calculation/${calculationId}/approve`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ notes }),
@@ -126,11 +139,11 @@ export async function approveIncome(loanId, notes) {
 
 /**
  * Reject income calculation
- * @param {string} loanId
+ * @param {string} calculationId
  * @param {string} reason - Rejection reason
  */
-export async function rejectIncome(loanId, reason) {
-  const response = await fetch(`${API_BASE}/income/reject/${loanId}`, {
+export async function rejectIncome(calculationId, reason) {
+  const response = await fetch(`${API_BASE}/income/calculation/${calculationId}/reject`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ reason }),
@@ -144,6 +157,7 @@ export async function rejectIncome(loanId, reason) {
 
 export const docIncomeAPI = {
   calculateIncome,
+  getCalculation,
   getIncomeHistory,
   getIncomeSources,
   overrideSource,

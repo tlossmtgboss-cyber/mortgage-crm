@@ -77,6 +77,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/pos/",  # POS borrower portal — all routes use PURL token auth (stateless JWT in localStorage, inherently CSRF-safe)
         "/webhooks/imessage",  # BlueBubbles iMessage webhook — uses path-token auth (IMESSAGE_WEBHOOK_URL_SECRET)
         "/api/v1/microsoft/webhooks",  # Microsoft Graph change notifications — verified by clientState HMAC
+        "/api/v1/email/inbound/sendgrid",  # SendGrid Inbound Parse webhook — no auth context, verified by webhook key
         "/api/v1/microsoft/oauth",  # MS365 OAuth callback — code exchange from Azure AD redirect
         "/api/v1/teams/calls/inbound",  # Teams call webhook — verified by HMAC (TEAMS_WEBHOOK_SECRET)
         "/api/v1/microsoft/bootstrap",  # MS365 bootstrap — admin API key auth
