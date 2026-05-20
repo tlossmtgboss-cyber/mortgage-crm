@@ -97,23 +97,89 @@ def _get_aria_graph():
 
 
 def _verify_ws_token(token: str):
-    """Verify a JWT token for WebSocket auth (no Depends available in WS)."""
+    """Verify a JWT token for WebSocket auth and hydrate the user from the DB.
+
+    Access tokens issued by `auth_routes` only carry `sub` (email) and
+    `user_id` — the user's name is not in the JWT. Without a DB lookup
+    Aria's greeting falls back to "Hey there" and she has to ask who is
+    speaking. Hydrate identity here so the WS session knows the user.
+    """
     try:
         from auth.tokens import verify_access_token
         payload = verify_access_token(token)
         if not payload:
             return None
 
-        class _User:
-            def __init__(self, p):
-                self.id = p.get("sub") or p.get("user_id")
-                self.user_id = self.id
-                self.org_id = p.get("tenant_id") or p.get("org_id") or p.get("organization_id", "")
-                self.full_name = p.get("name", "")
-                self.role = p.get("role", "user")
-                self.organization_id = self.org_id
+        sub = payload.get("sub")
+        user_id_claim = payload.get("user_id") or payload.get("sub")
+        tenant_claim = (
+            payload.get("tenant_id")
+            or payload.get("org_id")
+            or payload.get("organization_id", "")
+        )
+        name_claim = payload.get("name") or payload.get("full_name") or ""
+        role_claim = payload.get("role", "user")
+        email_claim = payload.get("email") or (sub if isinstance(sub, str) and "@" in sub else None)
 
-        return _User(payload)
+        # Hydrate from DB so Aria has a real name + org + role.
+        full_name = name_claim
+        first_name = payload.get("first_name") or ""
+        email = email_claim or ""
+        org_id = tenant_claim
+        role = role_claim
+        db_user_id = None
+
+        try:
+            from db import SessionLocal
+            from database.models.core import User
+
+            with SessionLocal() as db:
+                user_row = None
+                if isinstance(user_id_claim, int) or (isinstance(user_id_claim, str) and user_id_claim.isdigit()):
+                    user_row = db.query(User).filter(User.id == int(user_id_claim)).first()
+                if user_row is None and email_claim:
+                    user_row = db.query(User).filter(User.email == email_claim).first()
+                if user_row is None and isinstance(sub, str) and "@" in sub:
+                    user_row = db.query(User).filter(User.email == sub).first()
+
+                if user_row is not None:
+                    db_user_id = user_row.id
+                    first_name = getattr(user_row, "first_name", None) or first_name
+                    last_name = getattr(user_row, "last_name", None) or ""
+                    resolved_full = (f"{first_name} {last_name}".strip()
+                                     if (first_name or last_name) else "")
+                    if resolved_full:
+                        full_name = resolved_full
+                    email = getattr(user_row, "email", "") or email
+                    org_id = getattr(user_row, "organization_id", None) or org_id
+                    role = (getattr(user_row, "permission_role", None)
+                            or getattr(user_row, "role", None)
+                            or role)
+        except Exception as e:
+            logger.warning(f"WS user hydration failed, falling back to JWT claims: {e}")
+
+        # Final fallback: derive a friendly name from email local-part so
+        # greetings never default to "there" for an authenticated user.
+        if not full_name and email:
+            local = email.split("@", 1)[0]
+            if local:
+                full_name = local.replace(".", " ").replace("_", " ").title()
+                if not first_name:
+                    first_name = full_name.split(" ", 1)[0]
+
+        class _User:
+            pass
+
+        u = _User()
+        u.id = db_user_id if db_user_id is not None else (user_id_claim or sub)
+        u.user_id = u.id
+        u.org_id = org_id or ""
+        u.organization_id = u.org_id
+        u.full_name = full_name or ""
+        u.first_name = first_name or (full_name.split(" ", 1)[0] if full_name else "")
+        u.email = email or ""
+        u.role = role or "user"
+        return u
     except Exception as e:
         logger.warning(f"WS token verification failed: {e}")
         return None
