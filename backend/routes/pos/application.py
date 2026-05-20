@@ -5,6 +5,7 @@ authenticated contact_id — no borrower can read or modify another's draft.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
@@ -240,6 +241,11 @@ async def submit_application(
     service: ApplicationService = Depends(get_application_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> ApplicationSubmitResponse:
+    # service.submit is genuinely async (awaits event_bus.publish), so it must
+    # stay on the loop. Wrap only the synchronous commit/refresh in the
+    # threadpool so the sync ORM I/O doesn't block other borrowers.
+    loop = asyncio.get_running_loop()
+
     try:
         submitted = await service.submit(
             db,
@@ -251,8 +257,12 @@ async def submit_application(
     except ApplicationStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    db.commit()
-    db.refresh(submitted)
+    def _commit_and_refresh() -> POSApplication:
+        db.commit()
+        db.refresh(submitted)
+        return submitted
+
+    submitted = await loop.run_in_executor(None, _commit_and_refresh)
 
     confirmation = _build_confirmation_number(submitted)
     next_steps = _next_steps_for_borrower(submitted)

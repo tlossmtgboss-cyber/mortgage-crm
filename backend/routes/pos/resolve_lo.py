@@ -83,7 +83,7 @@ def _normalize_phone(raw: str) -> str:
 # ---------------------------------------------------------------------------
 
 @router.get("/resolve-lo", response_model=ResolveLOResponse)
-async def resolve_loan_officer(
+def resolve_loan_officer(
     phone: str = Query(..., min_length=5, description="Caller phone number (E.164 preferred)"),
     db: Session = Depends(_get_db()),
     _current_user=Depends(_get_auth()),

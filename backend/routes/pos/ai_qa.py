@@ -6,10 +6,14 @@ the same PURL-token helper as every other POS route.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from middleware.purl_auth import (
@@ -72,16 +76,23 @@ async def ask_aria(
     service: AIQAService = Depends(get_ai_qa_service),
 ) -> AskResponse:
     """Single-turn Q&A. Persists both the borrower turn and Aria's response."""
-    import logging as _logging
-    _logger = _logging.getLogger(__name__)
+    _logger = logger
 
     from ._helpers import resolve_application_direct
 
-    application = resolve_application_direct(
-        body.application_id,
-        purl_ctx=purl_ctx,
-        db=db,
-    )
+    # The pure sync ORM lookup must not block the event loop. Push it to the
+    # threadpool — Session is thread-confined, but as long as a single thread
+    # owns each call site we're safe.
+    loop = asyncio.get_running_loop()
+
+    def _resolve_sync() -> POSApplication:
+        return resolve_application_direct(
+            body.application_id,
+            purl_ctx=purl_ctx,
+            db=db,
+        )
+
+    application = await loop.run_in_executor(None, _resolve_sync)
 
     if application.status != "draft":
         raise HTTPException(
@@ -89,6 +100,9 @@ async def ask_aria(
             detail="Application is no longer accepting Aria queries (already submitted).",
         )
 
+    # service.ask interleaves sync ORM with an awaited LLM call internally,
+    # so it must stay on the loop. The route's own commit/rollback is the only
+    # piece we can safely lift into the threadpool here.
     try:
         result = await service.ask(
             db,
@@ -98,9 +112,9 @@ async def ask_aria(
             current_step=body.current_step,
             ctx=ctx,
         )
-        db.commit()
+        await loop.run_in_executor(None, db.commit)
     except Exception as exc:
-        db.rollback()
+        await loop.run_in_executor(None, db.rollback)
         _logger.exception("Aria ask failed: %s", exc)
         from datetime import datetime as _dt, timezone as _tz
         return AskResponse(
@@ -185,8 +199,13 @@ def get_aria_context(
                 lo_user_id = lo.id
                 lo_phone = getattr(lo, "phone", None)
                 lo_email = getattr(lo, "email", None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "Failed to load LO context for app %s: %s",
+            application.id, e, exc_info=True,
+        )
+        # Intentionally fall through with null LO fields — a missing LO
+        # lookup shouldn't 500 the borrower's greeting request.
 
     return {
         "borrower_name": borrower_name,
