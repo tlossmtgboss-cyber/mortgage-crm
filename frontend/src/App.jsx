@@ -354,9 +354,9 @@ function App() {
           updates.smsUnread = smsData.unread_count || 0;
         }
 
-        // Compute combined total for sidebar badge
+        // Compute combined total for sidebar badge (outstanding tasks + SMS + reconciliation)
         const prevMerged = { ...taskCounts, ...updates };
-        updates.totalTasks = (prevMerged.urgentTasks || 0) + (prevMerged.reconciliation || 0) + (prevMerged.smsUnread || 0);
+        updates.totalTasks = (prevMerged.tasks || 0) + (prevMerged.smsUnread || 0) + (prevMerged.reconciliation || 0);
 
         setTaskCounts(prev => ({ ...prev, ...updates }));
       } catch (error) {
