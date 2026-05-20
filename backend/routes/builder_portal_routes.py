@@ -301,6 +301,66 @@ async def register_builder(body: RegisterRequest, request: Request, db: Session 
     )
 
 
+class ResumeRequest(BaseModel):
+    lo_slug: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=3, max_length=255)
+
+
+@router.post("/api/v1/builder-portal/resume", response_model=RegisterResponse)
+async def resume_builder(body: ResumeRequest, request: Request, db: Session = Depends(get_db)):
+    """Recover the submission token for an in-progress draft.
+
+    The static Builder Portal stores the submission token in localStorage.
+    If the builder loses that storage (cleared site data, switched browser,
+    skipped past the register page on a deep link), every subsequent API
+    call 401s and the review page shows
+    "No submission token — please re-register."
+
+    This endpoint lets the frontend silently re-acquire the token using the
+    email + LO slug the builder already typed, without making the user
+    re-fill the entire registration form. It only returns a token for an
+    existing DRAFT application — submitted/approved/rejected packets are
+    not resumable. Returns 404 (not 401/403) regardless of whether the
+    email exists, to avoid leaking which builders have registered.
+    """
+    _check_register_rate_limit(request)
+
+    from database.models.core import User
+    from database.models.builder_application import BuilderApplication
+
+    lo = db.query(User).filter(
+        User.slug == body.lo_slug,
+        User.is_active == True,
+    ).first()
+    if not lo:
+        raise HTTPException(status_code=404, detail="No resumable application found")
+
+    email_lower = body.email.strip().lower()
+    existing = db.query(BuilderApplication).filter(
+        BuilderApplication.contact_email.ilike(email_lower),
+        BuilderApplication.lo_user_id == lo.id,
+        BuilderApplication.status == "DRAFT",
+    ).order_by(BuilderApplication.created_at.desc()).first()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="No resumable application found")
+
+    if existing.created_at and (datetime.now(timezone.utc) - existing.created_at) > timedelta(days=30):
+        raise HTTPException(status_code=404, detail="No resumable application found")
+
+    logger.info(
+        "Builder portal resume: app=%d lo=%d email=%s",
+        existing.id, lo.id, email_lower,
+    )
+
+    return RegisterResponse(
+        application_id=existing.id,
+        submission_token=existing.submission_token,
+        lo_name=f"{lo.first_name or ''} {lo.last_name or ''}".strip() or lo.email,
+        lo_company=getattr(lo, 'company', None),
+    )
+
+
 @router.post("/api/v1/builder-portal/documents/upload", response_model=InitiateUploadResponse)
 async def initiate_builder_upload(
     body: InitiateUploadRequest,
