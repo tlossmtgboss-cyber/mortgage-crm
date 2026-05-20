@@ -13,6 +13,8 @@ interface AIRecommendationPanelProps {
     ai_recommendation: string | null
     ai_confidence: number
     ai_reasoning: string | null
+    ai_acknowledgement?: string | null
+    coaching_note?: string | null
     lead_name?: string
     lead_email?: string
     lead_stage?: string
@@ -82,8 +84,9 @@ function AIRecommendationPanel({
 }: AIRecommendationPanelProps) {
   const [mode, setMode] = useState<Mode>(task.ai_recommendation ? 'view' : 'write')
   const [draft, setDraft] = useState('')
-  const [regenOpen, setRegenOpen] = useState(false)
-  const [regenFeedback, setRegenFeedback] = useState('')
+  const [coachOpen, setCoachOpen] = useState(false)
+  const [coachText, setCoachText] = useState('')
+  const [coaching, setCoaching] = useState(false)
   const [feedbackGiven, setFeedbackGiven] = useState<string | null>(null)
 
   const hasRec = !!task.ai_recommendation
@@ -110,10 +113,21 @@ function AIRecommendationPanel({
     }
   }
 
-  const handleRegenerate = async () => {
-    setRegenOpen(false)
-    await onRegenerate(regenFeedback || undefined)
-    setRegenFeedback('')
+  const handleRegenerate = async (coachingOverride?: string) => {
+    const feedback = (coachingOverride !== undefined ? coachingOverride : coachText).trim()
+    setCoaching(true)
+    try {
+      await onRegenerate(feedback || undefined)
+      setCoachText('')
+      setCoachOpen(false)
+    } finally {
+      setCoaching(false)
+    }
+  }
+
+  const loadCurrentIntoCoach = () => {
+    const current = task.ai_recommendation || ''
+    setCoachText(prev => (prev.trim() ? prev : current))
   }
 
   const handleFeedback = (rating: string) => {
@@ -188,6 +202,20 @@ function AIRecommendationPanel({
                   </span>
                   <AIConfidenceBadge confidence={task.ai_confidence} size="sm" showBar />
                 </div>
+                {task.ai_acknowledgement && (
+                  <div style={{ background: '#F0F7F3', border: '1px solid #CFE5D7', borderLeft: `3px solid ${TEAL}`, borderRadius: 8, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: '#1a1a1a', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: TEAL, textTransform: 'uppercase', marginBottom: 4 }}>
+                      AI acknowledgement
+                    </div>
+                    <div>{task.ai_acknowledgement}</div>
+                    {task.coaching_note && (
+                      <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed #CFE5D7', fontSize: 12, color: '#555', fontStyle: 'italic' }}>
+                        <b style={{ color: '#1a1a1a', fontStyle: 'normal', marginRight: 4 }}>Your coaching:</b>
+                        &ldquo;{task.coaching_note}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ background: 'linear-gradient(135deg, #f0fafa 0%, #f7fdfd 100%)', borderRadius: 8, padding: '14px 16px', fontSize: 14, color: '#1a1a1a', lineHeight: 1.55, border: '1px solid #d4eded', marginBottom: 10 }}>
                   "{task.ai_recommendation}"
                 </div>
@@ -201,22 +229,55 @@ function AIRecommendationPanel({
                   <button onClick={enterEdit} style={btn(false)}>Edit &amp; Send</button>
                   <button onClick={enterWrite} style={btn(false)}>Write Own</button>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={onDismiss} style={textBtn}>Dismiss</button>
-                  <button onClick={() => setRegenOpen(!regenOpen)} style={{ ...textBtn, color: TEAL, fontSize: 12 }}>
-                    Not quite right? Regenerate
+                  <button onClick={() => handleRegenerate('')} style={{ ...textBtn, color: TEAL, fontSize: 12 }} disabled={coaching}>
+                    Regenerate
+                  </button>
+                  <button onClick={() => setCoachOpen(!coachOpen)} style={{ ...textBtn, color: TEAL, fontSize: 12, fontWeight: 600 }}>
+                    {coachOpen ? 'Close coaching' : 'Coach the AI'}
                   </button>
                 </div>
-                {regenOpen && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-                    <input
-                      value={regenFeedback}
-                      onChange={e => setRegenFeedback(e.target.value)}
-                      placeholder="What should change?"
-                      style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc', fontSize: 13, outline: 'none' }}
-                      onKeyDown={e => e.key === 'Enter' && handleRegenerate()}
+                {coachOpen && (
+                  <div style={{ marginTop: 10, padding: '12px 14px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a', marginBottom: 2 }}>Coach the AI</div>
+                    <div style={{ fontSize: 12, color: '#888', lineHeight: 1.4, marginBottom: 8 }}>
+                      Tell the AI what to change, or rewrite the response below. The AI will rewrite and acknowledge what changed.
+                    </div>
+                    <textarea
+                      value={coachText}
+                      onChange={e => setCoachText(e.target.value)}
+                      rows={4}
+                      placeholder={'e.g. "Be more concise, and don\'t promise turnaround times."\nOr paste your preferred rewrite for the AI to learn from.'}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ccc', fontSize: 13, lineHeight: 1.5, resize: 'vertical', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      onFocus={e => (e.target.style.borderColor = TEAL)}
+                      onBlur={e => (e.target.style.borderColor = '#ccc')}
+                      autoFocus
                     />
-                    <button onClick={handleRegenerate} style={{ ...btn(true), padding: '6px 12px', fontSize: 12 }}>Regenerate</button>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => handleRegenerate()}
+                        disabled={!coachText.trim() || coaching}
+                        style={btn(true, !coachText.trim() || coaching)}
+                      >
+                        {coaching ? 'Coaching AI...' : 'Send Coaching to AI'}
+                      </button>
+                      <button
+                        onClick={() => { setCoachOpen(false); setCoachText('') }}
+                        style={btn(false)}
+                        disabled={coaching}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={loadCurrentIntoCoach}
+                        style={{ ...textBtn, marginLeft: 'auto', color: TEAL, fontSize: 12 }}
+                        disabled={coaching}
+                        title="Load the current AI response so you can rewrite it"
+                      >
+                        Load current response
+                      </button>
+                    </div>
                   </div>
                 )}
               </>
