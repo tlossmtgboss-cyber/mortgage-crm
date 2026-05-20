@@ -715,14 +715,16 @@ Respond with this exact JSON structure:
     "confidence": 0.0-1.0
 }}"""
 
-            response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=300,
-                messages=[{"role": "user", "content": prompt}]
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="calls",
+                system_prompt="You are an SMS message classifier for mortgage lending. Analyze messages and return structured JSON.",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens_override=300,
             )
 
             import json
-            result_text = response.content[0].text.strip()
+            result_text = llm_result.text
             # Extract JSON from response
             if '{' in result_text:
                 json_start = result_text.index('{')

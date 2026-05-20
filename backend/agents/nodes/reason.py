@@ -11,8 +11,8 @@ import time
 from typing import Any
 from anthropic import Anthropic
 
-from ..anthropic_client import get_anthropic_client  # noqa: F401
-from services.llm_gateway import get_llm_gateway
+from ..anthropic_client import get_anthropic_client
+from services.llm_gateway import llm_gateway
 from ..state import (
     AgentState,
     QueryIntent,
@@ -154,22 +154,19 @@ Data Quality: {data_quality}
 {formatted_data}
 """
 
-        # Call LLM via unified gateway (handles caching, circuit breaker, model selection)
+        # Call Claude for reasoning via unified gateway
         intent_str = query_intent.value if hasattr(query_intent, 'value') else str(query_intent)
-        _gw = get_llm_gateway()
-
-        llm_start = time.time()
-        _result = await _gw.complete(
+        llm_result = await llm_gateway.complete(
             intent=intent_str,
             system_prompt=REASONING_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": context}],
             max_tokens_override=2000,
             temperature_override=0.1,
         )
-        llm_time = (time.time() - llm_start) * 1000
-        logger.info(f"[REASON] ⏱️ LLM call took {llm_time:.0f}ms (model={_result.model}, context: {len(context)} chars)")
+        logger.info(f"[REASON] LLM call took {llm_result.latency_ms:.0f}ms (context: {len(context)} chars, cache_hit={llm_result.cache_hit})")
 
-        response_text = _result.text
+        # Parse the response
+        response_text = llm_result.text
 
         # Handle potential JSON wrapped in markdown code blocks
         if response_text.startswith("```"):

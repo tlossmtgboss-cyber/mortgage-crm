@@ -252,17 +252,16 @@ class CommunicationDraftAgent:
             "Generate a draft reply as JSON."
         )
 
-        client = self._get_client()
-
-        response = client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=1024,
-            system=system_prompt,
+        from services.llm_gateway import llm_gateway
+        llm_result = llm_gateway.complete_sync(
+            intent="email",
+            system_prompt=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
+            max_tokens_override=1024,
         )
 
         # Parse the response
-        raw_text = response.content[0].text.strip()
+        raw_text = llm_result.text
 
         # Strip markdown code fences if present
         if raw_text.startswith("```"):

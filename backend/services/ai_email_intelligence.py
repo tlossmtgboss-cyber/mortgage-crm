@@ -453,36 +453,25 @@ async def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = M
     if _circuit_is_open():
         raise RuntimeError("Circuit breaker OPEN — Claude API calls suspended after consecutive failures")
 
-    try:
-        import anthropic
-    except ImportError:
-        raise RuntimeError("anthropic SDK not installed")
-
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY not configured")
-
     # AGENT-006: enforce token budget before sending
     system_prompt, user_prompt = _enforce_token_budget(system_prompt, user_prompt)
 
-    async def _do_call() -> str:
-        client = anthropic.AsyncAnthropic(api_key=api_key)
-        response = await client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=max_tokens,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        return response.content[0].text.strip()
-
     try:
-        # PERF-004: 30-second timeout for email composition
-        result = await asyncio.wait_for(_do_call(), timeout=30.0)
+        from services.llm_gateway import llm_gateway
+        llm_result = await llm_gateway.complete(
+            intent="email",
+            system_prompt=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens_override=max_tokens,
+            timeout=30.0,
+        )
+        if llm_result.model == "circuit_breaker":
+            raise RuntimeError("Circuit breaker OPEN — Claude API calls suspended")
         _circuit_record_success()
-        return result
-    except asyncio.TimeoutError:
+        return llm_result.text
+    except RuntimeError:
         _circuit_record_failure()
-        raise RuntimeError("Claude API timeout after 30s for email composition")
+        raise
     except Exception:
         _circuit_record_failure()
         raise

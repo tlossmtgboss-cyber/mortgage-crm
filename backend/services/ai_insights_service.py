@@ -36,9 +36,16 @@ class AIInsightsService:
         self.db = db
         self.organization_id = organization_id
         self.profitability_service = ProfitabilityService(db, organization_id)
-        self.client = anthropic.Anthropic(
-            api_key=os.getenv("ANTHROPIC_API_KEY")
+
+    def _llm_call(self, system_prompt: str, user_prompt: str, max_tokens: int = 1500) -> str:
+        from services.llm_gateway import llm_gateway
+        result = llm_gateway.complete_sync(
+            intent="profit",
+            system_prompt=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens_override=max_tokens,
         )
+        return result.text
 
     @llm_cache.cached(ttl=LLMCacheService.TTL_MEDIUM, prefix="insights:query")
     def query_natural_language(self, question: str, month: Optional[date] = None) -> Dict[str, Any]:
@@ -78,16 +85,11 @@ PROFITABILITY DATA:
 
 Provide a clear, data-driven answer with specific metrics and actionable recommendations where appropriate."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
+        answer = self._llm_call(system_prompt, user_prompt, max_tokens=1500)
 
         return {
             "question": question,
-            "answer": response.content[0].text,
+            "answer": answer,
             "data_context": {
                 "month": month.strftime("%Y-%m"),
                 "total_employees": context["summary"]["total_employees"],
@@ -130,16 +132,10 @@ Return your response as a JSON array with objects containing: title, action, imp
 
 Return a JSON array of recommendation objects."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
+        response_text = self._llm_call(system_prompt, user_prompt, max_tokens=2000)
 
         # Parse JSON from response
         try:
-            response_text = response.content[0].text
             # Extract JSON if wrapped in markdown
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0]
@@ -202,17 +198,12 @@ Overall Company Metrics for {month.strftime('%B %Y')}:
 
 Provide a detailed hiring analysis with ROI projections."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
+        analysis = self._llm_call(system_prompt, user_prompt, max_tokens=1500)
 
         return {
             "role": role_name,
             "proposed_salary": salary,
-            "analysis": response.content[0].text,
+            "analysis": analysis,
             "current_role_metrics": role_data,
             "generated_at": datetime.now(timezone.utc).isoformat()
         }
@@ -250,16 +241,11 @@ GAPS & GAINS ANALYSIS:
 
 Create a professional executive digest email."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
+        content = self._llm_call(system_prompt, user_prompt, max_tokens=2000)
 
         return {
             "subject": f"Perennia AI Profitability Insights - Week of {month.strftime('%b %d')}",
-            "content": response.content[0].text,
+            "content": content,
             "summary": context["summary"],
             "generated_at": datetime.now(timezone.utc).isoformat()
         }
@@ -291,15 +277,9 @@ Return as a JSON array. Only include genuine anomalies - don't force findings if
 
 Return a JSON array of anomaly objects, or empty array if no anomalies detected."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
+        response_text = self._llm_call(system_prompt, user_prompt, max_tokens=1500)
 
         try:
-            response_text = response.content[0].text
             if "```json" in response_text:
                 response_text = response_text.split("```json")[1].split("```")[0]
             elif "```" in response_text:
@@ -344,16 +324,11 @@ CURRENT DATA:
 
 Provide a detailed comparison and recommendation."""
 
-        response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2000,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
+        analysis = self._llm_call(system_prompt, user_prompt, max_tokens=2000)
 
         return {
             "scenarios_analyzed": len(scenarios),
-            "analysis": response.content[0].text,
+            "analysis": analysis,
             "generated_at": datetime.now(timezone.utc).isoformat()
         }
 

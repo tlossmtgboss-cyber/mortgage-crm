@@ -263,14 +263,15 @@ that information is not available in the portal."""
     ) -> Tuple[RealtorIntent, float, Dict]:
         """AI-based intent classification using Claude."""
         try:
-            response = await self.anthropic.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=200,
-                system=self.INTENT_CLASSIFICATION_PROMPT,
-                messages=[{"role": "user", "content": message}]
+            from services.llm_gateway import llm_gateway
+            llm_result = await llm_gateway.complete(
+                intent="leads",
+                system_prompt=self.INTENT_CLASSIFICATION_PROMPT,
+                messages=[{"role": "user", "content": message}],
+                max_tokens_override=200,
             )
 
-            result = json.loads(response.content[0].text)
+            result = json.loads(llm_result.text)
             intent = RealtorIntent(result.get("intent", "unknown"))
             confidence = result.get("confidence", 0.5)
             entities = result.get("entities", {})
@@ -627,26 +628,27 @@ SCHEDULE [loan_id] - Schedule meeting"""
                 messages.extend(conversation_history[-5:])  # Last 5 messages
             messages.append({"role": "user", "content": question})
 
-            response = await self.anthropic.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=500,
-                system=system_prompt,
-                messages=messages
+            from services.llm_gateway import llm_gateway
+            llm_result = await llm_gateway.complete(
+                intent="customer",
+                system_prompt=system_prompt,
+                messages=messages,
+                max_tokens_override=500,
             )
 
-            answer = response.content[0].text
+            answer = llm_result.text
 
             # Log the interaction
             self._log_ai_interaction(
                 realtor_id, loan_id, question, answer,
-                response.usage.input_tokens,
-                response.usage.output_tokens
+                llm_result.input_tokens,
+                llm_result.output_tokens
             )
 
             return {
                 "success": True,
                 "answer": answer,
-                "tokens_used": response.usage.input_tokens + response.usage.output_tokens
+                "tokens_used": llm_result.input_tokens + llm_result.output_tokens
             }
 
         except Exception as e:

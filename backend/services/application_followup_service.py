@@ -161,14 +161,15 @@ Return a JSON array of questions in this format:
 
 Keep questions brief (under 100 characters). Be warm and helpful in tone."""
 
-            response = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}]
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="onboarding",
+                system_prompt="You generate follow-up questions for mortgage applications. Return valid JSON arrays.",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens_override=500,
             )
 
-            # Parse the response
-            content = response.content[0].text
+            content = llm_result.text
 
             # Extract JSON from response
             import re

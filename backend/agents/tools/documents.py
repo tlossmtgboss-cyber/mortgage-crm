@@ -82,23 +82,23 @@ def get_missing_documents(
     params = {"loan_id": loan_id}
     category_filter = ""
     if category:
-        category_filter = "AND d.category = :category"
+        category_filter = "AND d.doc_category = :category"
         params["category"] = category
 
     existing = execute_query(f"""
         SELECT
-            d.document_type, d.category, d.status, d.version,
-            d.uploaded_at, d.reviewed_at, d.expiration_date,
-            d.reviewer_notes, d.rejection_reason
-        FROM loan_documents d
+            d.doc_type, d.doc_category, d.status,
+            d.uploaded_at, d.updated_at,
+            d.notes
+        FROM documents d
         WHERE d.loan_id = :loan_id {category_filter}
-        ORDER BY d.category, d.document_type
+        ORDER BY d.doc_category, d.doc_type
     """, params)
 
     existing_map = {}
     for doc in existing:
-        key = doc["document_type"].lower()
-        if key not in existing_map or doc["version"] > existing_map[key]["version"]:
+        key = doc["doc_type"].lower() if doc["doc_type"] else ""
+        if key not in existing_map:
             existing_map[key] = doc
 
     # Determine requirements based on loan type
@@ -131,8 +131,8 @@ def get_missing_documents(
             rejected.append({
                 "document": doc_name,
                 "category": req["category"],
-                "reason": existing_doc.get("rejection_reason", "Not specified"),
-                "rejected_at": format_date(existing_doc.get("reviewed_at")),
+                "reason": existing_doc.get("notes", "Not specified"),
+                "rejected_at": format_date(existing_doc.get("updated_at")),
             })
         elif existing_doc["status"] in ("pending_review", "incomplete"):
             incomplete.append({
@@ -140,19 +140,9 @@ def get_missing_documents(
                 "category": req["category"],
                 "status": existing_doc["status"],
                 "uploaded_at": format_date(existing_doc["uploaded_at"]),
-                "notes": existing_doc.get("reviewer_notes"),
+                "notes": existing_doc.get("notes"),
             })
         else:
-            # Check expiration
-            if existing_doc.get("expiration_date"):
-                days_to_expire = days_between(date.today(), existing_doc["expiration_date"])
-                if days_to_expire <= 30:
-                    expiring.append({
-                        "document": doc_name,
-                        "category": req["category"],
-                        "expires": format_date(existing_doc["expiration_date"]),
-                        "days_remaining": days_to_expire,
-                    })
             received.append({
                 "document": doc_name,
                 "category": req["category"],
@@ -731,13 +721,13 @@ def get_document_timeline(
     events = execute_query("""
         SELECT
             'upload' as event_type,
-            d.document_type,
+            d.doc_type as document_type,
             d.uploaded_at as event_date,
             d.status,
             COALESCE(es.full_name, u.email) as actor_name,
-            NULL as notes
-        FROM loan_documents d
-        LEFT JOIN users u ON u.id = d.uploaded_by
+            d.notes
+        FROM documents d
+        LEFT JOIN users u ON u.id = d.uploaded_by_user_id
         LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE d.loan_id = :loan_id
             AND d.uploaded_at >= CURRENT_DATE - :days_back
@@ -832,7 +822,7 @@ def check_document_expiration(
     - Appraisal: 120 days (180 for certain loans)
     """
     params = {"days_ahead": days_ahead}
-    filters = ["d.expiration_date IS NOT NULL"]
+    filters = ["d.period_end_date IS NOT NULL"]
 
     if loan_id:
         filters.append("d.loan_id = :loan_id")
@@ -845,18 +835,19 @@ def check_document_expiration(
         SELECT
             d.loan_id,
             l.borrower_first_name || ' ' || l.borrower_last_name as borrower_name,
-            d.document_type,
-            d.category,
-            d.expiration_date,
+            d.doc_type as document_type,
+            d.doc_category as category,
+            d.period_end_date as expiration_date,
             d.uploaded_at,
-            l.expected_close_date,
-            l.status as loan_status
-        FROM loan_documents d
+            l.target_close_date as expected_close_date,
+            l.stage as loan_status
+        FROM documents d
         JOIN loans l ON l.id = d.loan_id
         WHERE {' AND '.join(filters)}
-            AND d.expiration_date <= CURRENT_DATE + :days_ahead
-            AND l.stage NOT IN ('Funded')
-        ORDER BY d.expiration_date ASC
+            AND d.period_end_date IS NOT NULL
+            AND d.period_end_date <= CURRENT_DATE + :days_ahead
+            AND l.stage NOT IN ('FUNDED')
+        ORDER BY d.period_end_date ASC
     """, params)
 
     expired = []

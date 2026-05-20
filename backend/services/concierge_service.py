@@ -197,15 +197,16 @@ class ConciergeService:
                 "content": user_message
             })
 
-            # Call Claude
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=1024,
-                system=system,
-                messages=messages
+            # Call Claude via unified gateway
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="onboarding",
+                system_prompt=system,
+                messages=messages,
+                max_tokens_override=1024,
             )
 
-            ai_text = response.content[0].text
+            ai_text = llm_result.text
             conversation, data = self._parse_ai_response(ai_text)
 
             # Determine next stage

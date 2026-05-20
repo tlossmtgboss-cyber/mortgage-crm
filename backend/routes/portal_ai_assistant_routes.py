@@ -242,16 +242,17 @@ async def generate_ai_response(
                 })
             messages.append({"role": "user", "content": message})
 
-            # Call Claude
-            response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=500,
-                system=generate_system_prompt(context),
-                messages=messages
+            # Call via unified gateway
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="customer",
+                system_prompt=generate_system_prompt(context),
+                messages=messages,
+                max_tokens_override=500,
             )
 
             return {
-                "message": response.content[0].text,
+                "message": llm_result.text,
                 "suggestions": _generate_suggestions(context, message),
                 "actions": _generate_actions(context, message),
                 "sources": []

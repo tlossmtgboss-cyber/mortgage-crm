@@ -159,14 +159,14 @@ def mock_execute_query(query: str, params: Dict = None) -> List[Dict]:
         return [MOCK_CONTACT]
     elif "from loan_status_history" in query_lower or "from loan_stage_history" in query_lower:
         return [{"loans_moved": 5, "volume_moved": Decimal("2250000"), "stage": "processing", "avg_days": 3.5}]
-    elif "from loan_documents" in query_lower:
+    elif "from documents" in query_lower:
         return [
-            {"document_type": "application", "received_date": date.today(), "expiration_date": None, "status": "received"},
-            {"document_type": "credit_report", "received_date": date.today(), "expiration_date": date.today() + timedelta(days=90), "status": "received"},
+            {"doc_type": "application", "uploaded_at": date.today(), "status": "active", "doc_category": "compliance", "notes": None, "updated_at": date.today()},
+            {"doc_type": "credit_report", "uploaded_at": date.today(), "status": "active", "doc_category": "compliance", "notes": None, "updated_at": date.today()},
         ]
-    elif "from loan_disclosures" in query_lower:
+    elif "from disclosure_events" in query_lower:
         return [
-            {"disclosure_type": "initial_le", "issued_date": datetime.now() - timedelta(days=12), "received_date": datetime.now() - timedelta(days=11), "version": 1, "apr": Decimal("6.85"), "total_closing_costs": Decimal("12500")},
+            {"disclosure_type": "initial_le", "prepared_at": datetime.now() - timedelta(days=12), "received_at": datetime.now() - timedelta(days=11), "delivery_method": "email", "change_reason": None, "change_description": None},
         ]
     elif "from communication_history" in query_lower:
         return [

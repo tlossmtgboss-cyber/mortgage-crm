@@ -157,39 +157,31 @@ def get_recommended_indexes() -> List[IndexRecommendation]:
         ),
 
         # =====================================================================
-        # LOAN_DOCUMENTS TABLE
+        # DOCUMENTS TABLE
         # =====================================================================
         IndexRecommendation(
-            table="loan_documents",
+            table="documents",
             columns=["loan_id"],
             reason="Document lookups by loan",
             priority="HIGH",
             used_by_tools=["get_missing_documents", "get_document_timeline", "audit_loan_file"],
-            create_statement="CREATE INDEX idx_docs_loan ON loan_documents(loan_id);"
+            create_statement="CREATE INDEX IF NOT EXISTS idx_docs_loan ON documents(loan_id);"
         ),
         IndexRecommendation(
-            table="loan_documents",
-            columns=["loan_id", "document_type"],
+            table="documents",
+            columns=["loan_id", "doc_type"],
             reason="Specific document checks",
             priority="HIGH",
             used_by_tools=["track_document_request", "check_document_expiration"],
-            create_statement="CREATE INDEX idx_docs_loan_type ON loan_documents(loan_id, document_type);"
+            create_statement="CREATE INDEX IF NOT EXISTS idx_docs_loan_type ON documents(loan_id, doc_type);"
         ),
         IndexRecommendation(
-            table="loan_documents",
-            columns=["expiration_date"],
-            reason="Expiring document alerts",
-            priority="MEDIUM",
-            used_by_tools=["check_document_expiration"],
-            create_statement="CREATE INDEX idx_docs_expiration ON loan_documents(expiration_date) WHERE expiration_date IS NOT NULL;"
-        ),
-        IndexRecommendation(
-            table="loan_documents",
+            table="documents",
             columns=["status"],
             reason="Document status filtering",
             priority="MEDIUM",
             used_by_tools=["get_missing_documents", "get_document_timeline"],
-            create_statement="CREATE INDEX idx_docs_status ON loan_documents(status);"
+            create_statement="CREATE INDEX IF NOT EXISTS idx_docs_status ON documents(status);"
         ),
 
         # =====================================================================
@@ -317,15 +309,15 @@ def get_recommended_indexes() -> List[IndexRecommendation]:
         ),
 
         # =====================================================================
-        # LOAN_DISCLOSURES TABLE
+        # DISCLOSURE_EVENTS TABLE
         # =====================================================================
         IndexRecommendation(
-            table="loan_disclosures",
+            table="disclosure_events",
             columns=["loan_id"],
             reason="Disclosure lookups",
             priority="HIGH",
             used_by_tools=["check_trid_compliance", "get_disclosure_timeline"],
-            create_statement="CREATE INDEX idx_disclosures_loan ON loan_disclosures(loan_id);"
+            create_statement="CREATE INDEX IF NOT EXISTS idx_disclosures_loan ON disclosure_events(loan_id);"
         ),
 
         # =====================================================================

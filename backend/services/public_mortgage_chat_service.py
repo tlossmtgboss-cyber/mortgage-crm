@@ -727,14 +727,15 @@ class PublicMortgageChatService:
                     "content": msg["content"]
                 })
 
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=200,
-            system=system_content,
-            messages=api_messages
+        from services.llm_gateway import llm_gateway
+        llm_result = llm_gateway.complete_sync(
+            intent="customer",
+            system_prompt=system_content,
+            messages=api_messages,
+            max_tokens_override=200,
         )
 
-        return response.content[0].text
+        return llm_result.text
 
     def _fallback_response(self, user_message: str) -> str:
         """Fallback response if AI is unavailable - follows Trust-First approach with SHORT responses"""

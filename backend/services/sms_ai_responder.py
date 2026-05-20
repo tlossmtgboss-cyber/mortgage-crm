@@ -11,6 +11,24 @@ logger = logging.getLogger(__name__)
 MODEL_VERSION = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-20250514")
 
 SYSTEM_PROMPT = (
+    "You are Aria, an AI assistant for a mortgage loan officer named {lo_name}. "
+    "You handle SMS conversations with borrowers on the LO's behalf.\n\n"
+    "CONVERSATION RULES:\n"
+    "- Keep each reply under 320 characters (SMS-friendly).\n"
+    "- Be warm, professional, and action-oriented.\n"
+    "- Never quote specific rates, fees, or lock terms.\n"
+    "- Never make commitments the LO hasn't approved.\n\n"
+    "INTAKE FLOW — follow this when texting an unknown or new contact:\n"
+    "1. Greet warmly, acknowledge their message, and ask for their FULL NAME.\n"
+    "2. Once you have a name, ask for their EMAIL ADDRESS so you can send next steps.\n"
+    "3. Once you have name + email, ask when they'd be available for a quick call with {lo_name}.\n"
+    "4. Once you have name + email + preferred time, confirm everything and say {lo_name} will reach out.\n\n"
+    "If the conversation history already contains their name/email, skip those steps.\n"
+    "If they ask a question, answer it briefly and then continue collecting missing info.\n"
+    "Always be conversational — you're texting, not writing an email."
+)
+
+SYSTEM_PROMPT_SIMPLE = (
     "You are Aria, an AI assistant for a mortgage loan officer. "
     "Generate a professional, warm SMS response to this borrower message. "
     "Keep it under 160 characters when possible, max 320. "
@@ -59,15 +77,15 @@ def classify_message(inbound_message: str) -> Tuple[str, str]:
 
     if best_score == 0 and len(msg_lower) > 20:
         try:
-            from anthropic import Anthropic
-            client = Anthropic()
-            response = client.messages.create(
-                model=MODEL_VERSION,
-                max_tokens=100,
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="calls",
+                system_prompt="You are a message classifier. Respond with valid JSON only.",
                 messages=[{"role": "user", "content": f"Classify this SMS from a mortgage borrower into exactly one category: scheduling, question, follow_up, rate_inquiry, document_request, greeting, complaint, general. Also classify priority: urgent, high, normal, low. Reply with JSON only: {{\"category\": \"...\", \"priority\": \"...\"}}\n\nMessage: {inbound_message}"}],
-                system="You are a message classifier. Respond with valid JSON only.",
+                max_tokens_override=100,
+                temperature_override=0.0,
             )
-            parsed = json.loads(response.content[0].text)
+            parsed = json.loads(llm_result.text)
             best_category = parsed.get("category", "general")
             priority = parsed.get("priority", "normal")
         except Exception as e:
@@ -151,6 +169,28 @@ def generate_recommendation(db: Session, task_id: int, organization_id: int) -> 
             f"(match their tone, phrasing, and level of warmth):\n{examples}"
         )
 
+    # Determine if this is an active conversation (recent messages)
+    is_active_conversation = "Conversation History:" in context_prompt
+    is_unknown_contact = "Lead:" not in context_prompt
+
+    # Look up LO name for the system prompt
+    lo_name = "your loan officer"
+    try:
+        lo_row = db.execute(
+            text("SELECT first_name, last_name FROM users WHERE organization_id = :oid ORDER BY role = 'admin' DESC LIMIT 1"),
+            {"oid": organization_id},
+        ).mappings().first()
+        if lo_row:
+            lo_name = f"{lo_row['first_name'] or ''} {lo_row['last_name'] or ''}".strip() or "your loan officer"
+    except Exception:
+        pass
+
+    # Use conversational prompt for unknown contacts or active conversations
+    if is_unknown_contact or is_active_conversation:
+        system_prompt = SYSTEM_PROMPT.replace("{lo_name}", lo_name)
+    else:
+        system_prompt = SYSTEM_PROMPT_SIMPLE
+
     prompt = f"""Inbound SMS from borrower: "{inbound_message}"
 
 Category: {category}
@@ -158,18 +198,21 @@ Priority: {priority}
 
 {context_prompt}{pattern_section}
 
-Generate a single SMS reply matching the loan officer's communication style shown above. No quotes, no explanation, just the message text."""
+Generate a single SMS reply. No quotes, no explanation, just the message text."""
 
     try:
-        from anthropic import Anthropic
-        client = Anthropic()
-        response = client.messages.create(
-            model=MODEL_VERSION,
-            max_tokens=500,
+        from services.llm_gateway import llm_gateway
+        llm_result = llm_gateway.complete_sync(
+            intent="calls",
+            system_prompt=system_prompt,
             messages=[{"role": "user", "content": prompt}],
-            system=SYSTEM_PROMPT,
+            max_tokens_override=500,
         )
-        recommendation = response.content[0].text.strip().strip('"').strip("'")
+        recommendation = llm_result.text.strip('"').strip("'")
+
+        # For active conversations with unknown contacts, boost confidence
+        if is_active_conversation and is_unknown_contact:
+            confidence = max(confidence, 75)
     except Exception as e:
         logger.exception("Claude API failed for task %d: %s", task_id, e)
         recommendation = "Thanks for reaching out! Your loan officer will get back to you shortly."
@@ -325,15 +368,14 @@ Priority: {priority}
 Generate a new, improved SMS reply matching the loan officer's communication style. No quotes, no explanation, just the message text."""
 
     try:
-        from anthropic import Anthropic
-        client = Anthropic()
-        response = client.messages.create(
-            model=MODEL_VERSION,
-            max_tokens=500,
+        from services.llm_gateway import llm_gateway
+        llm_result = llm_gateway.complete_sync(
+            intent="calls",
+            system_prompt=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
-            system=SYSTEM_PROMPT,
+            max_tokens_override=500,
         )
-        recommendation = response.content[0].text.strip().strip('"').strip("'")
+        recommendation = llm_result.text.strip('"').strip("'")
     except Exception as e:
         logger.exception("Claude API failed for regeneration of task %d: %s", task_id, e)
         recommendation = "Thanks for reaching out! Your loan officer will get back to you shortly."

@@ -7,11 +7,13 @@ analysis, insights, recommendations, and action results.
 
 import json
 import logging
+import os
 import time
 from typing import Any
 from anthropic import Anthropic
 
-from ..anthropic_client import get_anthropic_client  # noqa: F401
+from ..anthropic_client import get_anthropic_client
+from services.llm_gateway import llm_gateway
 from ..state import (
     AgentState,
     QueryIntent,
@@ -20,7 +22,6 @@ from ..state import (
     update_state
 )
 from .execute import format_action_confirmation_request
-from services.llm_gateway import get_llm_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -190,21 +191,17 @@ async def generate_response(
 
         context = "\n".join(context_parts)
 
-        # Generate response via unified LLM gateway
+        # Generate response via unified gateway
         intent_str = query_intent.value if hasattr(query_intent, 'value') else str(query_intent)
-        _gw = get_llm_gateway()
-
-        llm_start = time.time()
-        _result = await _gw.complete(
+        llm_result = await llm_gateway.complete(
             intent=intent_str,
             system_prompt=f"{RESPONSE_SYSTEM_PROMPT}\n\n{intent_guidance}",
             messages=[{"role": "user", "content": context}],
             max_tokens_override=1000,
         )
-        llm_time = (time.time() - llm_start) * 1000
-        logger.info(f"[RESPOND] LLM call took {llm_time:.0f}ms (model={_result.model}, context: {len(context)} chars)")
+        logger.info(f"[RESPOND] LLM call took {llm_result.latency_ms:.0f}ms (context: {len(context)} chars, cache_hit={llm_result.cache_hit})")
 
-        response_text = _result.text
+        response_text = llm_result.text
 
         # Append action confirmation if there are pending actions
         if actions_pending:

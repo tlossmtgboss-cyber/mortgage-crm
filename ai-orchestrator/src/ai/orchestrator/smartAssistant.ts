@@ -31,7 +31,7 @@ async function apiCall(endpoint: string, token?: string): Promise<any> {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), 10000);
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -44,13 +44,20 @@ async function apiCall(endpoint: string, token?: string): Promise<any> {
       console.error(`[CONTEXT] API error ${response.status} for ${endpoint}`);
       return null;
     }
-    return response.json();
-  } catch (err: any) {
+
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.error(`[CONTEXT] Non-JSON response for ${endpoint}: ${text.slice(0, 100)}`);
+      return null;
+    }
+  } catch (error: any) {
     clearTimeout(timeout);
-    if (err.name === "AbortError") {
-      console.error(`[CONTEXT] Timeout (10s) for ${endpoint}`);
+    if (error.name === "AbortError") {
+      console.error(`[CONTEXT] Timeout after 10s for ${endpoint}`);
     } else {
-      console.error(`[CONTEXT] Fetch error for ${endpoint}:`, err.message);
+      console.error(`[CONTEXT] Fetch failed for ${endpoint}: ${error.message}`);
     }
     return null;
   }

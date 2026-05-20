@@ -460,39 +460,27 @@ Respond with JSON:
 
 Focus on keywords that would be valuable for mortgage professionals to rank for."""
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": "claude-haiku-4-5-20251001",
-                        "max_tokens": 1000,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                )
+            from services.llm_gateway import llm_gateway
+            llm_result = await llm_gateway.complete(
+                intent="content_marketing",
+                system_prompt="You are an SEO keyword research assistant for the mortgage industry. Return structured JSON.",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens_override=1000,
+            )
 
-                if response.status_code == 200:
-                    import json
-                    result = response.json()
-                    text = result["content"][0]["text"]
+            import json
+            text = llm_result.text
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
 
-                    # Parse JSON from response
-                    if "```json" in text:
-                        text = text.split("```json")[1].split("```")[0]
+            data = json.loads(text.strip())
+            suggestions = data.get("suggestions", [])
 
-                    data = json.loads(text.strip())
-                    suggestions = data.get("suggestions", [])
+            for s in suggestions:
+                s["source"] = "ai_generated"
+                s["category"] = self._categorize_keyword(s.get("keyword", ""))
 
-                    # Add source marker
-                    for s in suggestions:
-                        s["source"] = "ai_generated"
-                        s["category"] = self._categorize_keyword(s.get("keyword", ""))
-
-                    return suggestions
+            return suggestions
 
         except Exception as e:
             logger.error(f"Error generating keyword suggestions: {e}")

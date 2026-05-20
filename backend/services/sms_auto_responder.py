@@ -75,10 +75,27 @@ def handle_inbound_sms(
     except Exception as e:
         logger.exception("AI recommendation failed for task=%s: %s", task_id, e)
 
+    # Check if this phone has an active conversation (recent messages within 30 min)
+    is_active_conversation = False
+    try:
+        recent = db.execute(
+            text("""
+                SELECT COUNT(*) AS cnt FROM sms_panel_messages
+                WHERE phone = :phone AND organization_id = :oid
+                  AND created_at > NOW() - INTERVAL '30 minutes'
+            """),
+            {"phone": phone_number, "oid": organization_id or 0},
+        ).scalar()
+        is_active_conversation = (recent or 0) > 0
+    except Exception as e:
+        logger.warning("Active conversation check failed: %s", e)
+
     auto_responded = False
     if organization_id and recommendation and recommendation.get("recommendation"):
         try:
-            if should_auto_respond(db, organization_id, category, user_id=assigned_user_id):
+            # Auto-respond if: confidence engine says yes OR this is an active conversation
+            should_auto = should_auto_respond(db, organization_id, category, user_id=assigned_user_id)
+            if should_auto or is_active_conversation:
                 send_result = _send_response(
                     to_phone=phone_number,
                     message=recommendation["recommendation"],
@@ -126,6 +143,13 @@ def handle_inbound_sms(
                     )
         except Exception as e:
             logger.exception("Auto-respond failed for task=%s: %s", task_id, e)
+
+    # Try to extract name/email from conversation and create a lead
+    if organization_id and not lead_id and auto_responded:
+        try:
+            _try_create_lead_from_conversation(db, phone_number, organization_id, assigned_user_id)
+        except Exception as e:
+            logger.warning("Lead extraction failed for phone=%s: %s", phone_number, e)
 
     db.commit()
 
@@ -362,3 +386,95 @@ def _store_panel_message(
         db.flush()
     except Exception as e:
         logger.warning("Failed to store panel message for phone=%s: %s", phone, e)
+
+
+def _try_create_lead_from_conversation(
+    db: Session,
+    phone_number: str,
+    organization_id: int,
+    assigned_user_id: Optional[int] = None,
+) -> None:
+    """Extract name/email from SMS conversation and create a lead if enough info is gathered."""
+    import re
+
+    # Already have a lead for this phone? Skip.
+    existing = db.execute(
+        text("SELECT id FROM leads WHERE phone = :phone AND organization_id = :oid LIMIT 1"),
+        {"phone": phone_number, "oid": organization_id},
+    ).fetchone()
+    if existing:
+        return
+
+    # Pull recent inbound messages from this phone
+    messages = db.execute(
+        text("""
+            SELECT direction, body FROM sms_panel_messages
+            WHERE phone = :phone AND organization_id = :oid
+            ORDER BY created_at ASC LIMIT 20
+        """),
+        {"phone": phone_number, "oid": organization_id},
+    ).mappings().all()
+
+    if not messages:
+        return
+
+    inbound_text = " ".join(m["body"] for m in messages if m["direction"] == "inbound" and m["body"])
+
+    # Extract email
+    email_match = re.search(r'[\w.+-]+@[\w-]+\.[\w.]+', inbound_text)
+    email = email_match.group(0) if email_match else None
+
+    # Extract name — use LLM for accuracy
+    name = None
+    try:
+        from services.llm_gateway import llm_gateway
+        extract_result = llm_gateway.complete_sync(
+            intent="calls",
+            system_prompt="Extract the person's full name from this SMS conversation. Reply with ONLY the name, nothing else. If no name is found, reply with NONE.",
+            messages=[{"role": "user", "content": inbound_text[:500]}],
+            max_tokens_override=50,
+            temperature_override=0.0,
+        )
+        extracted = extract_result.text.strip()
+        if extracted and extracted.upper() != "NONE" and len(extracted) < 60:
+            name = extracted
+    except Exception as e:
+        logger.warning("Name extraction LLM call failed: %s", e)
+
+    if not name:
+        return
+
+    # Split name
+    parts = name.split(None, 1)
+    first_name = parts[0] if parts else name
+    last_name = parts[1] if len(parts) > 1 else ""
+
+    now = datetime.now(timezone.utc)
+    try:
+        db.execute(
+            text("""
+                INSERT INTO leads (
+                    organization_id, first_name, last_name, email, phone,
+                    source, stage, assigned_user_id, created_at, updated_at
+                ) VALUES (
+                    :oid, :first, :last, :email, :phone,
+                    'SMS Conversation', 'New', :uid, :now, :now
+                )
+            """),
+            {
+                "oid": organization_id,
+                "first": first_name,
+                "last": last_name,
+                "email": email,
+                "phone": phone_number,
+                "uid": assigned_user_id,
+                "now": now,
+            },
+        )
+        db.flush()
+        logger.info(
+            "[SMS Lead] Created lead from conversation: %s %s (%s) phone=%s org=%s",
+            first_name, last_name, email or "no email", phone_number, organization_id,
+        )
+    except Exception as e:
+        logger.warning("Failed to create lead from SMS conversation: %s", e)

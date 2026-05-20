@@ -191,7 +191,7 @@ def database_cleanup(
     Smart data maintenance with detailed per-category metrics:
     - Archive read notifications older than 90 days
     - Clean completed+archived tasks older than 180 days
-    - Purge old autonomous_agent_runs older than 60 days
+    - Purge old agent_run_log entries older than 60 days
     - Clean old System activities older than 120 days (preserve non-system)
     - Detect orphan tasks (lead_id/loan_id pointing to deleted records)
     - Create alert task if orphan count exceeds threshold
@@ -234,7 +234,7 @@ def database_cleanup(
 
     # ── 3. Purge old agent execution logs (60+ days) ──────────────────────
     result = db.execute(text("""
-        DELETE FROM autonomous_agent_runs
+        DELETE FROM agent_run_log
         WHERE organization_id = :org_id
           AND started_at < CURRENT_TIMESTAMP - INTERVAL '60 days'
     """), {"org_id": organization_id})
@@ -434,10 +434,10 @@ def api_health_checker(
 
     # ── 3. Load previous health scores from last run for trend detection ───
     previous_run = db.execute(text("""
-        SELECT summary FROM autonomous_agent_runs
+        SELECT output_snapshot FROM agent_run_log
         WHERE organization_id = :org_id
-          AND agent_name = 'api_health_checker'
-          AND success = true
+          AND agent_id = 'api_health_checker'
+          AND status = 'completed'
         ORDER BY completed_at DESC
         LIMIT 1 OFFSET 1
     """), {"org_id": organization_id}).fetchone()
@@ -819,18 +819,18 @@ def log_aggregation(
     # ── 1. Current window stats (last 4 hours) ────────────────────────────
     stats = db.execute(text("""
         SELECT
-            agent_name,
+            agent_id,
             COUNT(*) as runs,
-            COUNT(CASE WHEN success THEN 1 END) as successes,
-            COALESCE(SUM(actions_taken), 0) as total_actions,
-            COALESCE(SUM(notifications_sent), 0) as total_notifs,
+            COUNT(CASE WHEN status = 'completed' THEN 1 END) as successes,
+            0 as total_actions,
+            0 as total_notifs,
             AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration_s,
             MAX(EXTRACT(EPOCH FROM (completed_at - started_at))) as max_duration_s,
-            string_agg(DISTINCT CASE WHEN NOT success THEN LEFT(error, 120) END, ' | ') as error_samples
-        FROM autonomous_agent_runs
+            string_agg(DISTINCT CASE WHEN status = 'failed' THEN LEFT(error_message, 120) END, ' | ') as error_samples
+        FROM agent_run_log
         WHERE organization_id = :org_id
           AND started_at >= CURRENT_TIMESTAMP - INTERVAL '4 hours'
-        GROUP BY agent_name
+        GROUP BY agent_id
         ORDER BY runs DESC
     """), {"org_id": organization_id}).fetchall()
 
@@ -845,15 +845,15 @@ def log_aggregation(
     # ── 2. Load previous window stats for trend comparison ─────────────────
     prev_stats = db.execute(text("""
         SELECT
-            agent_name,
+            agent_id,
             COUNT(*) as runs,
-            COUNT(CASE WHEN success THEN 1 END) as successes,
+            COUNT(CASE WHEN status = 'completed' THEN 1 END) as successes,
             AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration_s
-        FROM autonomous_agent_runs
+        FROM agent_run_log
         WHERE organization_id = :org_id
           AND started_at >= CURRENT_TIMESTAMP - INTERVAL '8 hours'
           AND started_at < CURRENT_TIMESTAMP - INTERVAL '4 hours'
-        GROUP BY agent_name
+        GROUP BY agent_id
     """), {"org_id": organization_id}).fetchall()
 
     prev_by_name: Dict[str, Dict[str, float]] = {}

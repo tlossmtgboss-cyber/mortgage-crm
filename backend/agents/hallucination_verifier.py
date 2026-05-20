@@ -175,17 +175,16 @@ class HallucinationVerifier:
     async def _extract_claims_llm(self, response_text: str) -> List[ExtractedClaim]:
         """Use LLM to extract claims from response."""
         try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                messages=[{
-                    "role": "user",
-                    "content": CLAIM_EXTRACTION_PROMPT + response_text
-                }]
+            from services.llm_gateway import llm_gateway
+            llm_result = await llm_gateway.complete(
+                intent="compliance",
+                system_prompt="You extract factual claims from AI responses for hallucination verification. Return structured JSON.",
+                messages=[{"role": "user", "content": CLAIM_EXTRACTION_PROMPT + response_text}],
+                max_tokens_override=2000,
+                temperature_override=0.0,
             )
 
-            # Parse JSON response
-            content = response.content[0].text
+            content = llm_result.text
 
             # Extract JSON from response (handle markdown code blocks)
             json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
@@ -326,13 +325,16 @@ class HallucinationVerifier:
                 source_data=source_str
             )
 
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
+            from services.llm_gateway import llm_gateway
+            llm_result = await llm_gateway.complete(
+                intent="compliance",
+                system_prompt="You verify factual claims against source data for hallucination detection. Return structured JSON.",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens_override=2000,
+                temperature_override=0.0,
             )
 
-            content = response.content[0].text
+            content = llm_result.text
 
             # Extract JSON from response
             json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)

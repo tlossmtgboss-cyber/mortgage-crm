@@ -529,14 +529,14 @@ Return ONLY valid JSON:
         delimited_message = f"<sms_reply>{safe_message}</sms_reply>"
 
         try:
-            response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=200,
-                timeout=10.0,
-                system=system_prompt,
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="schedule",
+                system_prompt=system_prompt,
                 messages=[{"role": "user", "content": delimited_message}],
+                max_tokens_override=200,
             )
-            text = response.content[0].text.strip()
+            text = llm_result.text
             # Extract JSON from response
             if text.startswith("{"):
                 result = json.loads(text)

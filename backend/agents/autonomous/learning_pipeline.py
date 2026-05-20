@@ -239,7 +239,7 @@ def confidence_stats_logger(
     """
     Query ActionTypeConfidence for each org, compute summary stats
     (graduated vs non-graduated, average confidence, total actions),
-    and log to the autonomous_agent_runs table as a diagnostic run.
+    and log to the agent_run_log table as a diagnostic run.
     The run is logged automatically by the loop infrastructure via
     _log_execution, so we just return the stats as the summary.
     """

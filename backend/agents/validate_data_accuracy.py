@@ -548,7 +548,7 @@ def validate_missing_documents() -> List[ValidationResult]:
     # Ground truth: Document counts for this loan
     gt_docs = execute_single("""
         SELECT COUNT(*) as count
-        FROM loan_documents
+        FROM documents
         WHERE loan_id = :loan_id
     """, {"loan_id": loan_id})
     gt_doc_count = gt_docs["count"] if gt_docs else 0

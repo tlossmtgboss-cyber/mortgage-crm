@@ -1004,31 +1004,17 @@ async def classify_intent_llm(
             logger.info(f"[INTENT] Cache HIT: '{cached.get('intent')}' in {elapsed:.1f}ms")
             return (cached.get("intent", "general"), cached.get("confidence", 0.85))
 
-    if anthropic_client is None:
-        from .anthropic_client import get_anthropic_client
-        anthropic_client = get_anthropic_client()
-
     try:
-        # Use prompt caching: static classification instructions as cached system prompt,
-        # only the user query varies per call
-        response = anthropic_client.messages.create(
-            model=os.getenv("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5-20251001"),  # Fastest model for classification
-            max_tokens=10,  # Intent is a single word — 10 tokens is plenty
-            system=[
-                {
-                    "type": "text",
-                    "text": INTENT_CLASSIFIER_PROMPT.split("Query:")[0].strip(),
-                    "cache_control": {"type": "ephemeral"}
-                }
-            ],
-            messages=[{
-                "role": "user",
-                "content": f"Query: {query}\n\nCategory:"
-            }],
-            timeout=5.0,  # Intent classification should complete in <1s
+        from services.llm_gateway import llm_gateway
+        llm_result = await llm_gateway.complete(
+            intent="simple",
+            system_prompt=INTENT_CLASSIFIER_PROMPT.split("Query:")[0].strip(),
+            messages=[{"role": "user", "content": f"Query: {query}\n\nCategory:"}],
+            max_tokens_override=10,
+            temperature_override=0.0,
         )
 
-        intent = response.content[0].text.strip().lower()
+        intent = llm_result.text.strip().lower()
         elapsed = (time.time() - start) * 1000
 
         logger.info(f"[INTENT] LLM classification: '{intent}' in {elapsed:.0f}ms")

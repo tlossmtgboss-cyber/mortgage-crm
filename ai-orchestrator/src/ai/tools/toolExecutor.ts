@@ -31,7 +31,7 @@ async function apiCall(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -43,17 +43,22 @@ async function apiCall(
     clearTimeout(timeout);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API error ${response.status}: ${errorText}`);
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`API error ${response.status}: ${errorText.slice(0, 200)}`);
     }
 
-    return response.json();
-  } catch (err: any) {
-    clearTimeout(timeout);
-    if (err.name === "AbortError") {
-      throw new Error(`API timeout (15s) for ${method} ${endpoint}`);
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { raw: text };
     }
-    throw err;
+  } catch (error: any) {
+    clearTimeout(timeout);
+    if (error.name === "AbortError") {
+      throw new Error(`API timeout after 15s for ${method} ${endpoint}`);
+    }
+    throw error;
   }
 }
 

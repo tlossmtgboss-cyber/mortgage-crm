@@ -252,12 +252,10 @@ class LiveCallWhisperService:
         recent_transcript = self._get_recent_transcript(call_id, segments=10)
 
         try:
-            response = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=300,
-                system="""You are a real-time sales coach for mortgage loan officers.
-                Provide brief, actionable suggestions that can be used immediately during a call.
-                Keep responses under 50 words. Be direct and practical.""",
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="coaching",
+                system_prompt="You are a real-time sales coach for mortgage loan officers. Provide brief, actionable suggestions that can be used immediately during a call. Keep responses under 50 words. Be direct and practical.",
                 messages=[
                     {
                         "role": "user",
@@ -276,8 +274,10 @@ Request: {prompt}
 
 Provide a brief, actionable suggestion:"""
                     }
-                ]
+                ],
+                max_tokens_override=300,
             )
+            response_text = llm_result.text
 
             import uuid
             whisper = Whisper(
@@ -285,7 +285,7 @@ Provide a brief, actionable suggestion:"""
                 type=WhisperType.TALKING_POINT,
                 priority=WhisperPriority.MEDIUM,
                 title="AI Suggestion",
-                content=response.content[0].text,
+                content=response_text,
                 context=prompt,
             )
 

@@ -4,7 +4,7 @@ Connects AI agents to the Smart Document Collection system.
 
 These tools query the smart_documents, smart_document_requests,
 doc_policy_events, and document_followup_campaigns tables — the new
-Smart Docs infrastructure — rather than the legacy loan_documents and
+Smart Docs infrastructure — rather than the base documents and
 document_requests tables used by the original document tools.
 """
 

@@ -166,23 +166,24 @@ class CallSummaryService:
         # Build prompt based on summary type
         prompt = self._build_summary_prompt(transcript, summary_type, context, recording)
 
-        # Call Claude
+        # Call Claude via unified gateway
         try:
-            response = self.client.messages.create(
-                model=SUMMARY_MODEL,
-                max_tokens=2048,
+            from services.llm_gateway import llm_gateway
+            llm_result = llm_gateway.complete_sync(
+                intent="calls",
+                system_prompt=self._get_system_prompt(summary_type),
                 messages=[{"role": "user", "content": prompt}],
-                system=self._get_system_prompt(summary_type)
+                max_tokens_override=2048,
             )
 
             # Parse response
             summary = self._parse_summary_response(
-                response.content[0].text,
+                llm_result.text,
                 recording_id,
                 recording,
                 summary_type
             )
-            summary.tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            summary.tokens_used = llm_result.input_tokens + llm_result.output_tokens
 
             # Save summary to database
             self._save_summary(summary)

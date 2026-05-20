@@ -167,23 +167,29 @@ def _get_active_organizations(db: Session) -> List[Dict[str, Any]]:
 def _log_execution(db: Session, result: AgentExecutionResult):
     """Log autonomous agent execution to the database."""
     try:
-        db.execute(text("""
-            INSERT INTO autonomous_agent_runs
-                (agent_name, organization_id, started_at, completed_at,
-                 success, actions_taken, notifications_sent, error, summary)
-            VALUES
-                (:agent_name, :org_id, :started_at, :completed_at,
-                 :success, :actions_taken, :notifications_sent, :error, :summary)
-        """), {
-            "agent_name": result.agent_name,
-            "org_id": result.organization_id,
-            "started_at": result.started_at,
-            "completed_at": result.completed_at,
-            "success": result.success,
+        import json as _json
+        output = {
             "actions_taken": result.actions_taken,
             "notifications_sent": result.notifications_sent,
-            "error": result.error,
             "summary": result.summary[:2000] if result.summary else None,
+        }
+        db.execute(text("""
+            INSERT INTO agent_run_log
+                (agent_id, organization_id, trigger_event,
+                 status, error_message, output_snapshot,
+                 started_at, completed_at)
+            VALUES
+                (:agent_id, :org_id, 'autonomous_scheduler',
+                 :status, :error_message, :output_snapshot,
+                 :started_at, :completed_at)
+        """), {
+            "agent_id": result.agent_name,
+            "org_id": result.organization_id,
+            "status": "completed" if result.success else "failed",
+            "error_message": result.error,
+            "output_snapshot": _json.dumps(output),
+            "started_at": result.started_at,
+            "completed_at": result.completed_at,
         })
         db.commit()
     except Exception as e:

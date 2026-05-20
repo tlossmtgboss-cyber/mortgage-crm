@@ -18,6 +18,7 @@ from typing import Any, List
 from anthropic import Anthropic
 
 from ..anthropic_client import get_anthropic_client
+from services.llm_gateway import llm_gateway
 from ..state import (
     AgentState,
     QueryIntent,
@@ -26,7 +27,6 @@ from ..state import (
     update_state
 )
 from ..intent_router import HAIKU_INTENTS, is_haiku_intent
-from ..sanitizer import sanitize_for_llm, strip_boundary_markers
 
 logger = logging.getLogger(__name__)
 
@@ -411,14 +411,7 @@ async def reason_and_respond(
         if data_quality == "not_needed" and intent_str_check == "greeting":
             logger.info("[REASON_AND_RESPOND] Greeting detected - generating natural response via LLM")
 
-            # Initialize client for greeting response
-            if anthropic_client is None:
-                anthropic_client = get_anthropic_client()
-
-            # Sanitize user input before using in greeting prompt
-            user_message = strip_boundary_markers(user_message)
-
-            # Use Haiku for fast, natural greeting response
+            # Use gateway for fast, natural greeting response
             greeting_prompt = f"""The user just said: [USER_INPUT_START]\n{user_message}\n[USER_INPUT_END]
 
 Respond naturally and warmly to their greeting. Match their energy - if they say "good morning", say good morning back. If they say "hey", be casual. If they say "hello", be friendly.
@@ -427,20 +420,13 @@ Keep it brief (1-2 sentences max). You're Perennia AI, a helpful mortgage assist
 
 DO NOT use a canned/scripted response. Be natural and human."""
 
-            greeting_response_obj = anthropic_client.messages.create(
-                model=_model_haiku(),
-                max_tokens=100,  # Greetings are 1-2 sentences, 100 tokens is generous
-                system=[
-                    {
-                        "type": "text",
-                        "text": "You are Perennia AI, a friendly mortgage assistant. Respond naturally to greetings in 1-2 sentences, then invite the user to ask about their pipeline, leads, or tasks.",
-                        "cache_control": {"type": "ephemeral"}
-                    }
-                ],
+            greeting_result = await llm_gateway.complete(
+                intent="greeting",
+                system_prompt="You are Perennia AI, a friendly mortgage assistant. Respond naturally to greetings in 1-2 sentences, then invite the user to ask about their pipeline, leads, or tasks.",
                 messages=[{"role": "user", "content": greeting_prompt}],
-                timeout=8.0,  # Haiku greeting should complete in <2s
+                max_tokens_override=100,
             )
-            greeting_response = greeting_response_obj.content[0].text.strip()
+            greeting_response = greeting_result.text
 
             return update_state(state, {
                 "analysis": "Greeting - natural response generated",
@@ -454,7 +440,6 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         # Format gathered data
         formatted_data = format_gathered_data_for_llm(gathered_data)
-        formatted_data = sanitize_for_llm(formatted_data)
 
         # Get intent-specific guidance
         intent_guidance = INTENT_GUIDANCE.get(query_intent, "")
@@ -479,34 +464,11 @@ DO NOT use a canned/scripted response. Be natural and human."""
         # Inject user memories into system prompt for personalization
         memory_context = state.get("memory_context", "")
         if memory_context:
-            memory_context = _mask_pii_value("memory", memory_context)
-            memory_context = sanitize_for_llm(memory_context)
             system_prompt += "\n\n## User Context & Preferences\nThe following are remembered facts and preferences about this user. Use them to personalize your response where relevant:\n" + memory_context
 
-        # Inject few-shot learning examples from feedback-driven training
-        try:
-            intent_str = query_intent.value if query_intent else None
-            agent_role = state.get("agent_role")
-            if intent_str:
-                from services.conversation_ai_learning_service import ConversationAILearningService
-                db = state.get("db")
-                if db:
-                    learning_svc = ConversationAILearningService(db)
-                    examples = learning_svc.get_few_shot_examples(intent_str, agent_role=agent_role, limit=2)
-                    if examples:
-                        examples_text = "\n".join(
-                            f"Q: {ex['query']}\nA: {ex['response']}" for ex in examples
-                        )
-                        system_prompt += f"\n\n## Quality Examples\nHere are examples of high-quality responses for this type of query. Follow this style:\n{examples_text}"
-        except Exception:
-            pass
-
-        # Sanitize user message: strip boundary markers, mask PII, neutralize injection
-        safe_message = strip_boundary_markers(user_message)
-        safe_message = _mask_pii_value("message", safe_message)
-
+        # Build user context (wrap user input with markers to prevent prompt injection)
         context_parts = [
-            f"USER QUESTION: [USER_INPUT_START]\n{safe_message}\n[USER_INPUT_END]",
+            f"USER QUESTION: [USER_INPUT_START]\n{user_message}\n[USER_INPUT_END]",
             f"QUERY INTENT: {query_intent.value}",
             f"DATA QUALITY: {data_quality}",
         ]
@@ -515,8 +477,6 @@ DO NOT use a canned/scripted response. Be natural and human."""
         # This allows the AI to answer "send them an email" or "what stage is this at?"
         active_entity_data = state.get("active_entity_data")
         if active_entity_data:
-            active_entity_data = _mask_gathered_data(active_entity_data)
-            active_entity_data = sanitize_for_llm(active_entity_data)
             context_parts.append("")
             context_parts.append("=== ACTIVE CRM CONTEXT (the lead/loan the user is currently viewing) ===")
             for key, value in active_entity_data.items():
@@ -558,10 +518,6 @@ DO NOT use a canned/scripted response. Be natural and human."""
             context_parts.append("Some data retrieval encountered issues but partial data is available.")
 
         context = "\n".join(context_parts)
-
-        # Initialize client if needed
-        if anthropic_client is None:
-            anthropic_client = get_anthropic_client()
 
         # Select model based on intent complexity
         # Get intent string from state (could be QueryIntent enum or string)
@@ -621,76 +577,50 @@ DO NOT use a canned/scripted response. Be natural and human."""
             f"max_tokens={max_tokens}"
         )
 
-        # Single LLM call for both reasoning AND response generation
-        # Use prompt caching on the system prompt to reduce cost on repeated calls
-        # Graceful degradation: retry once with Haiku on failure, then fall back to raw data
-        llm_start = time.time()
-        response = None
-        _llm_error = None
-        for _attempt in range(2):
-            try:
-                response = anthropic_client.messages.create(
-                    model=model,
-                    max_tokens=max_tokens,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system_prompt,
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ],
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": f"Analyze this data and provide a helpful response:\n\n{context}"
-                        }
-                    ],
-                    timeout=15.0,  # Sonnet ~7-8s, Haiku ~1-2s; 15s is generous
-                )
-                break
-            except Exception as llm_err:
-                _llm_error = llm_err
-                if _attempt == 0 and model != _model_haiku():
-                    # Retry with faster model
-                    model = _model_haiku()
-                    max_tokens = min(max_tokens, 400)
-                    logger.warning(f"[REASON_AND_RESPOND] LLM failed, retrying with {model}: {llm_err}")
-                    continue
-                break
+        # Determine the effective intent for the gateway
+        gateway_intent = intent_str_override if intent_str_override else intent_str
 
-        llm_time = (time.time() - llm_start) * 1000
+        # Single LLM call via unified gateway (handles caching, retry, circuit breaking)
+        llm_result = await llm_gateway.complete(
+            intent=gateway_intent,
+            system_prompt=system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Analyze this data and provide a helpful response:\n\n{context}"
+                }
+            ],
+            model_override=model,
+            max_tokens_override=max_tokens,
+        )
 
         # Graceful degradation: if LLM is completely unavailable, return raw data summary
-        if response is None:
-            logger.error(f"[REASON_AND_RESPOND] LLM unavailable after retries: {_llm_error}")
+        if llm_result.model == "circuit_breaker" or (llm_result.input_tokens == 0 and llm_result.output_tokens == 0):
+            logger.error(f"[REASON_AND_RESPOND] LLM unavailable via gateway")
             fallback_text = "I'm having trouble generating a detailed response right now. Here's the raw data:\n\n"
             fallback_text += formatted_data[:2000]
             return update_state(state, {
-                "analysis": f"LLM unavailable: {_llm_error}",
+                "analysis": "LLM unavailable via gateway",
                 "insights": ["AI service temporarily unavailable"],
                 "recommendations": ["Try again in a moment"],
                 "confidence_score": 0.1,
                 "response": fallback_text,
                 "response_type": "text",
-                "model_used": model,
+                "model_used": llm_result.model,
                 "follow_up_suggestions": ["Try again", "Show me my pipeline"],
             })
 
-        logger.info(f"[REASON_AND_RESPOND] LLM call took {llm_time:.0f}ms (model={model}, context: {len(context)} chars)")
+        logger.info(f"[REASON_AND_RESPOND] LLM call took {llm_result.latency_ms:.0f}ms (model={llm_result.model}, cache_hit={llm_result.cache_hit}, context: {len(context)} chars)")
 
-        response_text = response.content[0].text.strip()
+        response_text = llm_result.text
+        model = llm_result.model
 
-        # Scrub any PII the LLM may have echoed back
-        response_text = _SSN_PATTERN.sub("[REDACTED-SSN]", response_text)
-        response_text = _FULL_PHONE_PATTERN.sub(r"***-***-\1", response_text)
-
-        # Extract token usage from response for budget tracking
-        if hasattr(response, 'usage'):
-            state = update_state(state, {
-                "tokens_input": getattr(response.usage, 'input_tokens', 0),
-                "tokens_output": getattr(response.usage, 'output_tokens', 0),
-                "model_used": model,
-            })
+        # Update token usage for budget tracking
+        state = update_state(state, {
+            "tokens_input": llm_result.input_tokens,
+            "tokens_output": llm_result.output_tokens,
+            "model_used": model,
+        })
 
         # Extract insights from the response (first few sentences for logging)
         first_paragraph = response_text.split("\n\n")[0] if "\n\n" in response_text else response_text[:300]
@@ -767,26 +697,3 @@ DO NOT use a canned/scripted response. Be natural and human."""
             "response_type": "text",
             "follow_up_suggestions": ["Show me my pipeline", "What are my priorities today?"]
         })
-
-
-def format_structured_response(state: AgentState) -> dict:
-    """Format the response as a structured object for rich UI rendering."""
-    return {
-        "text": state.get("response", ""),
-        "intent": state.get("query_intent", QueryIntent.GENERAL_QUERY).value,
-        "confidence": state.get("confidence_score", 0.5),
-        "insights": state.get("insights", []),
-        "recommendations": state.get("recommendations", []),
-        "actions_completed": [
-            {
-                "type": a.action_type,
-                "success": a.success,
-                "message": a.message
-            }
-            for a in state.get("actions_executed", [])
-        ],
-        "actions_pending": state.get("actions_pending", []),
-        "follow_ups": state.get("follow_up_suggestions", []),
-        "data_quality": state.get("data_quality", "unknown"),
-        "processing_trace": state.get("node_trace", [])
-    }

@@ -382,3 +382,14 @@ async def manually_verify_response(
     except Exception as e:
         logger.error(f"Error verifying response: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
+# LLM Gateway Metrics
+# =============================================================================
+
+@router.get("/llm-gateway/metrics")
+async def get_llm_gateway_metrics():
+    """Return real-time LLM gateway metrics (call count, tokens, latency, circuit state)."""
+    from services.llm_gateway import llm_gateway
+    return llm_gateway.get_metrics()

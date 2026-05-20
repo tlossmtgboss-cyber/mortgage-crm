@@ -397,7 +397,7 @@ class MockDatabase:
             return [self.factory.customer()]
 
         # Document queries
-        if "from loan_documents" in query_lower:
+        if "from documents" in query_lower:
             return [
                 self.factory.document("application"),
                 self.factory.document("credit_report"),
@@ -424,7 +424,7 @@ class MockDatabase:
             ]
 
         # Disclosure queries
-        if "from loan_disclosures" in query_lower:
+        if "from disclosure_events" in query_lower:
             return [self.factory.disclosure("initial_le")]
 
         # Compliance queries
