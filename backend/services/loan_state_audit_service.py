@@ -15,6 +15,8 @@ Design rules:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import uuid
 from typing import Any, Dict, Optional, Union
@@ -22,6 +24,96 @@ from typing import Any, Dict, Optional, Union
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+# Fields included in the canonical-JSON payload that gets hashed. The hash
+# columns themselves are deliberately excluded — they are derived values.
+_HASH_FIELDS = (
+    "id",
+    "loan_id",
+    "lead_id",
+    "organization_id",
+    "from_stage",
+    "to_stage",
+    "from_pipeline",
+    "to_pipeline",
+    "trigger_source",
+    "actor_user_id",
+    "audit_metadata",
+    "created_at",
+)
+
+
+def _canonical_payload(row) -> str:
+    """Stable JSON serialization of an audit row for hashing."""
+    out: Dict[str, Any] = {}
+    for field in _HASH_FIELDS:
+        value = getattr(row, field, None)
+        if value is None:
+            out[field] = None
+        elif isinstance(value, (str, int, float, bool)):
+            out[field] = value
+        elif isinstance(value, uuid.UUID):
+            out[field] = str(value)
+        elif isinstance(value, dict):
+            out[field] = value
+        else:
+            # datetime, Decimal, etc. — stringify deterministically.
+            out[field] = str(value)
+    return json.dumps(out, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _compute_entry_hash(prev_hash: Optional[str], row) -> str:
+    payload = (prev_hash or "") + "|" + _canonical_payload(row)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _last_hash_for_loan(db: Session, loan_id: int) -> Optional[str]:
+    """Return the most-recent ``entry_hash`` for ``loan_id`` if any."""
+    from database.models.loan_state_audit import LoanStateChangeAudit
+    last = (
+        db.query(LoanStateChangeAudit)
+        .filter(LoanStateChangeAudit.loan_id == int(loan_id))
+        .order_by(LoanStateChangeAudit.created_at.desc())
+        .first()
+    )
+    if last is None:
+        return None
+    return getattr(last, "entry_hash", None)
+
+
+def verify_chain(db: Session, loan_id: int) -> bool:
+    """Walk the hash chain for ``loan_id`` and confirm every entry is intact.
+
+    Returns ``True`` if every row's ``entry_hash`` matches the recomputed
+    hash of ``(prev_hash || canonical_json(row))`` AND each row's
+    ``prev_hash`` equals the previous row's ``entry_hash``. Returns
+    ``False`` on the first mismatch.
+    """
+    from database.models.loan_state_audit import LoanStateChangeAudit
+
+    rows = (
+        db.query(LoanStateChangeAudit)
+        .filter(LoanStateChangeAudit.loan_id == int(loan_id))
+        .order_by(LoanStateChangeAudit.created_at.asc())
+        .all()
+    )
+
+    expected_prev: Optional[str] = None
+    for row in rows:
+        stored_prev = getattr(row, "prev_hash", None)
+        stored_entry = getattr(row, "entry_hash", None)
+        if stored_entry is None:
+            # Pre-chain row — skip but keep walking so partial backfill is OK.
+            expected_prev = stored_entry
+            continue
+        if expected_prev is not None and stored_prev != expected_prev:
+            return False
+        recomputed = _compute_entry_hash(stored_prev, row)
+        if recomputed != stored_entry:
+            return False
+        expected_prev = stored_entry
+    return True
 
 
 # Stable namespace for deriving deterministic UUIDs from legacy integer IDs.
@@ -145,6 +237,30 @@ def record_state_change(
             actor_user_id=_coerce_uuid(actor_user_id, kind="user"),
             audit_metadata=dict(metadata) if metadata else None,
         )
+
+        # Compute hash chain BEFORE the insert so a verifier walking the
+        # rows after-the-fact can recompute every entry deterministically.
+        # ``id`` and ``created_at`` may be server-defaulted — pre-populate
+        # them so they participate in the canonical payload.
+        if getattr(row, "id", None) is None:
+            row.id = uuid.uuid4()
+        if getattr(row, "created_at", None) is None:
+            from datetime import datetime, timezone
+            row.created_at = datetime.now(timezone.utc)
+
+        try:
+            prev_hash = _last_hash_for_loan(own_db, int(loan_id))
+        except Exception as _exc:  # noqa: BLE001
+            # If the column doesn't exist yet (older deploy), skip chaining.
+            prev_hash = None
+
+        try:
+            row.prev_hash = prev_hash
+            row.entry_hash = _compute_entry_hash(prev_hash, row)
+        except Exception as _exc:  # noqa: BLE001
+            # Never block an audit write on hash-chain math.
+            logger.exception("loan_state_audit: hash chain computation failed")
+
         own_db.add(row)
         own_db.commit()
         own_db.refresh(row)

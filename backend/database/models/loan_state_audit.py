@@ -93,6 +93,14 @@ class LoanStateChangeAudit(Base):
         index=True,
     )
 
+    # --- Tamper-evident SHA-256 hash chain ------------------------------
+    # ``prev_hash`` is the ``entry_hash`` of the previous row in this
+    # logical audit chain (NULL for the very first row). ``entry_hash`` is
+    # SHA-256 of (prev_hash || canonical_json(this_row_minus_hash_fields))
+    # so any tampering breaks every downstream entry.
+    prev_hash = Column(String(64), nullable=True)
+    entry_hash = Column(String(64), nullable=True)
+
     __table_args__ = (
         Index(
             "ix_loan_state_audit_org_loan_created",
