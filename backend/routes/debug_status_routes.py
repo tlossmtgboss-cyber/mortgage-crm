@@ -7,7 +7,9 @@ SMS testing, cache stats, DataDog monitoring, CDN status, and admin tools.
 """
 from fastapi import Depends, HTTPException, Body
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from datetime import datetime, timezone
 import logging
 import re
@@ -47,7 +49,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         }
 
     @app.get("/api/v1/debug/purl-tables-status", dependencies=[Depends(require_auth)])
-    async def debug_purl_tables_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    async def debug_purl_tables_status(db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user)):
         """Debug endpoint to check if PURL tables exist in database"""
         from sqlalchemy import inspect
         inspector = inspect(db.bind)
@@ -84,12 +86,12 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     @app.get("/api/v1/debug/user-delete-diagnosis", dependencies=[Depends(require_auth)])
     async def debug_user_delete_diagnosis(
         user_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """Debug endpoint to diagnose user deletion blockers (no actual deletion)"""
         # Check if user exists
-        user = db.execute(text("SELECT id, email, full_name FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
+        user = await db.execute(text("SELECT id, email, full_name FROM users WHERE id = :uid"), {"uid": user_id}).fetchone()
         if not user:
             return {"error": "User not found", "user_id": user_id}
 
@@ -102,7 +104,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'users' AND tc.table_schema = 'public'
             ORDER BY tc.table_name
         """
-        fks = db.execute(text(fk_query)).fetchall()
+        fks = await db.execute(text(fk_query)).fetchall()
 
         # Check which tables reference this user
         blocking_tables = []
@@ -111,7 +113,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 continue
             try:
                 count_sql = "SELECT COUNT(*) FROM " + _safe_identifier(table_name) + " WHERE " + _safe_identifier(column_name) + " = :uid"
-                count = db.execute(
+                count = await db.execute(
                     text(count_sql),
                     {"uid": user_id}
                 ).scalar()
@@ -139,9 +141,9 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         }
 
     @app.get("/api/v1/debug/list-test-users", dependencies=[Depends(require_auth)])
-    async def debug_list_test_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    async def debug_list_test_users(db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user)):
         """List users available for testing (non-admin only)"""
-        users = db.execute(text("""
+        users = await db.execute(text("""
             SELECT id, email, full_name, is_active, role
             FROM users
             WHERE email NOT LIKE '%admin%'
@@ -158,7 +160,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         token: str,
         workspace_slug: str,
         current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_async_db)
     ):
         """Debug endpoint to test PURL token verification"""
         import hashlib
@@ -171,7 +173,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         token_hash = hashlib.sha256(token.encode()).hexdigest()
 
         # Check workspace
-        workspace = db.execute(text("""
+        workspace = await db.execute(text("""
             SELECT id, slug, organization_id, status
             FROM purl_workspaces
             WHERE slug = :slug
@@ -189,7 +191,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         # Check tokens for workspace
         tokens_info = []
         if workspace:
-            tokens = db.execute(text("""
+            tokens = await db.execute(text("""
                 SELECT id, token_hash, token_prefix, scope, status, expires_at, created_at
                 FROM purl_access_tokens
                 WHERE workspace_id = :workspace_id
@@ -208,7 +210,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 })
 
         # Direct hash lookup
-        token_by_hash = db.execute(text("""
+        token_by_hash = await db.execute(text("""
             SELECT id, workspace_id, scope, status
             FROM purl_access_tokens
             WHERE token_hash = :hash
@@ -237,7 +239,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     @app.post("/api/v1/debug/purl-create-test-workspace", dependencies=[Depends(require_auth)])
     async def debug_create_test_workspace(
         test_name: str = "debug-test",
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """Debug endpoint to create a test PURL workspace with token"""
@@ -250,7 +252,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             slug = f"{test_name.lower().replace(' ', '-')}-{random_suffix}"
 
             # Create workspace
-            workspace = db.execute(text("""
+            workspace = await db.execute(text("""
                 INSERT INTO purl_workspaces (
                     organization_id, slug, display_name, status, created_at, updated_at
                 ) VALUES (
@@ -258,7 +260,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 )
                 RETURNING id, slug
             """), {"slug": slug, "display_name": test_name}).fetchone()
-            db.commit()
+            await db.commit()
 
             workspace_id = workspace[0]
             workspace_slug = workspace[1]
@@ -274,7 +276,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             from datetime import timezone, timedelta
             expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
-            token = db.execute(text("""
+            token = await db.execute(text("""
                 INSERT INTO purl_access_tokens (
                     organization_id, workspace_id, token_hash, token_prefix,
                     scope, status, expires_at, created_at
@@ -289,7 +291,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 "token_prefix": token_prefix,
                 "expires_at": expires_at
             }).fetchone()
-            db.commit()
+            await db.commit()
 
             return {
                 "success": True,
@@ -302,7 +304,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 "test_curl": f'curl -H "Authorization: Bearer {full_token}" "https://app.perenniaai.com/api/purl/workspace/{workspace_slug}"'
             }
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             import traceback
             return {
                 "success": False,
@@ -428,7 +430,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
 
     @app.get("/api/v1/debug/appointments-status", tags=["Debug"], dependencies=[Depends(require_auth)])
-    async def debug_appointments_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    async def debug_appointments_status(db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user)):
         """Debug endpoint to check recent appointments and reminder status"""
         result = {
             "scheduler_appointments": [],
@@ -440,7 +442,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         try:
             # Check smart scheduler appointments
             try:
-                smart_appts = db.execute(text("""
+                smart_appts = await db.execute(text("""
                     SELECT
                         sa.id, sa.title, sa.scheduled_start, sa.status,
                         sa.attendee_name, sa.attendee_email, sa.attendee_phone,
@@ -471,7 +473,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             # Check legacy appointments (may not exist in all deployments)
             try:
                 # First check if appointments table exists
-                table_check = db.execute(text("""
+                table_check = await db.execute(text("""
                     SELECT EXISTS (
                         SELECT FROM information_schema.tables
                         WHERE table_name = 'appointments'
@@ -479,7 +481,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 """)).scalar()
 
                 if table_check:
-                    legacy_appts = db.execute(text("""
+                    legacy_appts = await db.execute(text("""
                         SELECT
                             a.id, a.appointment_type, a.scheduled_at, a.status,
                             a.reminder_sent, a.meeting_link,
@@ -513,7 +515,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             # Check chat widget appointments (scheduled_appointments table)
             result["chat_widget_appointments"] = []
             try:
-                table_check = db.execute(text("""
+                table_check = await db.execute(text("""
                     SELECT EXISTS (
                         SELECT FROM information_schema.tables
                         WHERE table_name = 'scheduled_appointments'
@@ -521,7 +523,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 """)).scalar()
 
                 if table_check:
-                    chat_appts = db.execute(text("""
+                    chat_appts = await db.execute(text("""
                         SELECT
                             sa.id, sa.appointment_id, sa.appointment_type, sa.start_time, sa.status,
                             sa.contact_name, sa.contact_email, sa.contact_phone,
@@ -552,7 +554,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
             # Check sent reminders
             try:
-                reminders = db.execute(text("""
+                reminders = await db.execute(text("""
                     SELECT appointment_id, channel, hours_before, status, sent_at
                     FROM scheduler_reminders
                     ORDER BY created_at DESC
@@ -573,7 +575,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             # Check chat widget reminders
             result["chat_widget_reminders"] = []
             try:
-                table_check = db.execute(text("""
+                table_check = await db.execute(text("""
                     SELECT EXISTS (
                         SELECT FROM information_schema.tables
                         WHERE table_name = 'chat_appointment_reminders'
@@ -581,7 +583,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 """)).scalar()
 
                 if table_check:
-                    chat_reminders = db.execute(text("""
+                    chat_reminders = await db.execute(text("""
                         SELECT appointment_id, channel, hours_before, status, sent_at
                         FROM chat_appointment_reminders
                         ORDER BY created_at DESC
@@ -620,7 +622,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         current_user: User = Depends(get_current_user),
         attendee_name: str = "Test Reminder",
         hours_from_now: int = 24,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_async_db)
     ):
         """Create a test appointment for notification testing"""
         from datetime import datetime, timedelta
@@ -630,12 +632,12 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
         try:
             # Get first user to assign
-            user = db.execute(text("SELECT id, full_name FROM users LIMIT 1")).fetchone()
+            user = await db.execute(text("SELECT id, full_name FROM users LIMIT 1")).fetchone()
             user_id = user[0] if user else None
             user_name = user[1] if user else "Test LO"
 
             # Insert appointment (use uppercase enum values)
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO scheduler_appointments
                 (title, scheduled_start, scheduled_end, duration_minutes, status,
                  attendee_name, attendee_email, attendee_phone, assigned_user_id,
@@ -656,7 +658,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             })
 
             appointment_id = result.fetchone()[0]
-            db.commit()
+            await db.commit()
 
             return {
                 "success": True,
@@ -674,7 +676,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             }
 
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             return {"error": "Internal server error"}
 
 
@@ -945,7 +947,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
     @app.post("/api/v1/debug/add-missing-roles", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def add_missing_employee_roles(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """
@@ -978,7 +980,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
             for role in MISSING_ROLES:
                 # Check if role exists
-                existing = db.execute(
+                existing = await db.execute(
                     sql_text("SELECT id FROM onboarding_roles WHERE name = :name"),
                     {"name": role["name"]}
                 ).fetchone()
@@ -986,7 +988,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 if existing:
                     skipped.append(role["name"])
                 else:
-                    db.execute(
+                    await db.execute(
                         sql_text("""
                             INSERT INTO onboarding_roles (name, description, is_active, created_at, updated_at)
                             VALUES (:name, :description, true, :now, :now)
@@ -999,10 +1001,10 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                     )
                     added.append(role["name"])
 
-            db.commit()
+            await db.commit()
 
             # Get all roles for display
-            all_roles = db.execute(
+            all_roles = await db.execute(
                 sql_text("SELECT id, name, is_active FROM onboarding_roles WHERE is_active = true ORDER BY name")
             ).fetchall()
 
@@ -1015,7 +1017,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             }
 
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             return {"success": False, "error": "Internal server error"}
 
 

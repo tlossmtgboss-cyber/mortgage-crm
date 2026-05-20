@@ -15,10 +15,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, text
+from sqlalchemy import desc, func, text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ def _require_admin(current_user) -> None:
 @router.post("/corrections")
 async def record_correction(
     body: CorrectionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Record a user correction to an AI-generated output.
@@ -140,8 +141,8 @@ async def record_correction(
         is_active=True,
     )
     db.add(example)
-    db.commit()
-    db.refresh(example)
+    await db.commit()
+    await db.refresh(example)
 
     logger.info(
         "Correction recorded: example_id=%s agent=%s user=%s",
@@ -163,7 +164,7 @@ async def record_correction(
 @router.post("/approvals")
 async def record_approval(
     body: ApprovalRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Record an implicit approval — the AI output was used without modification."""
@@ -184,8 +185,8 @@ async def record_approval(
         is_active=True,
     )
     db.add(example)
-    db.commit()
-    db.refresh(example)
+    await db.commit()
+    await db.refresh(example)
 
     logger.info(
         "Approval recorded: example_id=%s agent=%s signal=%s",
@@ -207,7 +208,7 @@ async def record_approval(
 @router.post("/overrides")
 async def record_override(
     body: OverrideRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Record when a user overrides a condition or parameter the AI chose."""
@@ -244,9 +245,9 @@ async def record_override(
     )
     db.add(example)
 
-    db.commit()
-    db.refresh(pattern)
-    db.refresh(example)
+    await db.commit()
+    await db.refresh(pattern)
+    await db.refresh(example)
 
     logger.info(
         "Override recorded: pattern_id=%s agent=%s condition=%s",
@@ -474,7 +475,7 @@ async def get_agent_context_history(
 
 @router.post("/consolidation/trigger")
 async def trigger_consolidation(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """Manually trigger a consolidation job that merges redundant learning
@@ -498,7 +499,7 @@ async def trigger_consolidation(
         "  AND created_at < (NOW() - INTERVAL '90 days') "
         "  AND (organization_id = :org_id OR organization_id IS NULL)"
     )
-    result_stale = db.execute(stale_cutoff, {"now": now, "org_id": org_id})
+    result_stale = await db.execute(stale_cutoff, {"now": now, "org_id": org_id})
     pruned_examples = result_stale.rowcount
 
     # 2. Merge duplicate patterns (same key, bump occurrence_count)
@@ -517,10 +518,10 @@ async def trigger_consolidation(
         "    HAVING COUNT(*) > 1"
         "  )"
     )
-    result_dup = db.execute(dup_patterns, {"now": now, "org_id": org_id})
+    result_dup = await db.execute(dup_patterns, {"now": now, "org_id": org_id})
     merged_patterns = result_dup.rowcount
 
-    db.commit()
+    await db.commit()
 
     logger.info(
         "Consolidation completed: pruned_examples=%d merged_patterns=%d user=%s",

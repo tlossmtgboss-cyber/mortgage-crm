@@ -19,11 +19,13 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey, select
 from pydantic import BaseModel
 from database import get_db, Base, engine
 
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from services.calendly_service import (
     get_calendly_service,
     CalendlyService,
@@ -49,7 +51,7 @@ _security = HTTPBearer(auto_error=False)
 
 async def _get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get authenticated user. Rejects unauthenticated requests."""
     if not credentials:
@@ -297,7 +299,7 @@ async def get_valid_access_token(
 @router.get("/connect")
 async def initiate_calendly_connect(
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> CalendlyConnectResponse:
     """
     Initiate Calendly OAuth flow.
@@ -326,7 +328,7 @@ async def calendly_oauth_callback(
     state: str = Query(..., description="State parameter"),
     error: Optional[str] = Query(None, description="OAuth error"),
     error_description: Optional[str] = Query(None, description="Error description"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle Calendly OAuth callback.
@@ -388,7 +390,7 @@ async def calendly_oauth_callback(
     integration.is_connected = True
     integration.connected_at = datetime.now(timezone.utc)
 
-    db.commit()
+    await db.commit()
 
     logger.info(f"Calendly connected for user {user_id}")
 
@@ -402,7 +404,7 @@ async def calendly_oauth_callback(
 @router.post("/disconnect")
 async def disconnect_calendly(
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Disconnect Calendly integration"""
     user_id = current_user.id
@@ -434,7 +436,7 @@ async def disconnect_calendly(
     integration.is_connected = False
     integration.connected_at = None
 
-    db.commit()
+    await db.commit()
 
     logger.info(f"Calendly disconnected for user {user_id}")
 
@@ -448,7 +450,7 @@ async def disconnect_calendly(
 @router.get("/status", response_model=CalendlyIntegrationResponse)
 async def get_calendly_status(
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get Calendly integration status for a user"""
     user_id = current_user.id
@@ -482,7 +484,7 @@ async def get_calendly_status(
 async def update_calendly_settings(
     settings: CalendlySettingsUpdate,
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update Calendly integration settings"""
     user_id = current_user.id
@@ -514,8 +516,8 @@ async def update_calendly_settings(
     if settings.auto_create_contacts is not None:
         integration.auto_create_contacts = settings.auto_create_contacts
 
-    db.commit()
-    db.refresh(integration)
+    await db.commit()
+    await db.refresh(integration)
 
     return CalendlyIntegrationResponse(
         id=integration.id,
@@ -538,7 +540,7 @@ async def update_calendly_settings(
 @router.get("/event-types", response_model=List[EventTypeResponse])
 async def get_event_types(
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get available Calendly event types for selection"""
     user_id = current_user.id
@@ -584,7 +586,7 @@ async def get_event_types(
 async def get_availability(
     request: AvailabilityRequest,
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get available time slots from Calendly"""
     user_id = current_user.id
@@ -743,7 +745,7 @@ async def cancel_booking(
 async def handle_calendly_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle incoming Calendly webhook events.
@@ -1053,7 +1055,7 @@ async def process_booking_canceled(db: Session, payload: Dict[str, Any]):
 async def subscribe_to_webhooks(
     webhook_url: str = Query(..., description="URL to receive webhooks"),
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Subscribe to Calendly webhook events"""
     user_id = current_user.id
@@ -1083,7 +1085,7 @@ async def subscribe_to_webhooks(
 
     # Store webhook URI
     integration.webhook_subscription_uri = result["webhook"]["uri"]
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -1094,7 +1096,7 @@ async def subscribe_to_webhooks(
 @router.delete("/webhook/unsubscribe")
 async def unsubscribe_from_webhooks(
     current_user=Depends(_get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Unsubscribe from Calendly webhook events"""
     user_id = current_user.id
@@ -1117,6 +1119,6 @@ async def unsubscribe_from_webhooks(
 
     if result.get("success"):
         integration.webhook_subscription_uri = None
-        db.commit()
+        await db.commit()
 
     return result

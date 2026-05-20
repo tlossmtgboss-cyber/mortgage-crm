@@ -25,8 +25,10 @@ from typing import Optional, List
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, case, cast, String, and_, or_, text, literal_column
+from sqlalchemy import func, case, cast, String, and_, or_, text, literal_column, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -498,7 +500,7 @@ def register_mobile_api_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/mobile/quick-lead", tags=["Mobile"], status_code=201)
     async def mobile_quick_lead(
         payload: QuickLeadCreate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -525,13 +527,13 @@ def register_mobile_api_routes(app, get_db, get_current_user, **kwargs):
         )
 
         db.add(lead)
-        db.flush()
+        await db.flush()
 
         from services.client_file_service import ensure_client_file
         ensure_client_file(db, lead)
 
-        db.commit()
-        db.refresh(lead)
+        await db.commit()
+        await db.refresh(lead)
 
         # Fire SLA tracking for the new lead (best-effort)
         try:

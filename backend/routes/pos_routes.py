@@ -176,9 +176,9 @@ async def upload_document(
     response_model=DocumentListResponse,
     summary="List documents attached to the application",
 )
-def list_documents(
+async def list_documents(
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     pos_service: POSService = Depends(get_pos_service),
 ) -> DocumentListResponse:
     """Return all documents uploaded to this application."""
@@ -215,10 +215,10 @@ def list_documents(
     status_code=status.HTTP_201_CREATED,
     summary="Invite a co-borrower to complete their portion of the application",
 )
-def invite_coborrower(
+async def invite_coborrower(
     body: CoborrowerInviteRequest,
     application: POSApplication = Depends(resolve_application_for_borrower_write),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     pos_service: POSService = Depends(get_pos_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> CoborrowerInviteResponse:
@@ -245,8 +245,8 @@ def invite_coborrower(
             detail=str(exc),
         ) from exc
 
-    db.commit()
-    db.refresh(invitation)
+    await db.commit()
+    await db.refresh(invitation)
 
     # Build the invitation link.
     app_domain = os.getenv("APP_DOMAIN", "app.perenniaai.com")
@@ -277,9 +277,9 @@ def invite_coborrower(
     response_model=ApplicationStatusResponse,
     summary="Get detailed application status with per-section breakdown",
 )
-def get_application_status(
+async def get_application_status(
     application: POSApplication = Depends(resolve_application_for_borrower),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     pos_service: POSService = Depends(get_pos_service),
 ) -> ApplicationStatusResponse:
     """Return the application's overall status, section-by-section completion,

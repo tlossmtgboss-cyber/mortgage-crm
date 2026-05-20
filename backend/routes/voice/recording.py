@@ -22,6 +22,9 @@ from typing import List, Dict, Any
 
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 from ai_receptionist_dashboard_models import AIReceptionistActivity
@@ -156,7 +159,7 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
 
 
 @router.post("/transcript-complete")
-async def handle_transcript_complete(request: Request, db: Session = Depends(get_db)):
+async def handle_transcript_complete(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Webhook from legacy Voice Intelligence when transcription is complete (DEPRECATED).
 
@@ -217,7 +220,7 @@ async def handle_transcript_complete(request: Request, db: Session = Depends(get
 
 @router.get("/transcripts")
 async def list_transcripts(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     sentiment: str = None,
     escalation: bool = None,
     keyword: str = None,
@@ -267,7 +270,7 @@ async def list_transcripts(
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
 
         transcripts = []
         for row in result.fetchall():
@@ -301,7 +304,7 @@ async def list_transcripts(
 @router.get("/transcripts/{transcript_sid}")
 async def get_transcript_detail(
     transcript_sid: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get detailed transcript by SID.
@@ -311,7 +314,7 @@ async def get_transcript_detail(
     try:
         from sqlalchemy import text
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 id, transcript_sid, call_sid, recording_sid, activity_id,
                 status, duration_seconds, language_code, full_text,
@@ -355,7 +358,7 @@ async def get_transcript_detail(
 @router.get("/transcripts/customer/{customer_id}")
 async def get_customer_transcripts(
     customer_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get all transcripts for a customer/lead.
@@ -366,7 +369,7 @@ async def get_customer_transcripts(
         from sqlalchemy import text
 
         # Look for transcripts linked via activity or directly
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 ct.id, ct.transcript_sid, ct.status, ct.duration_seconds,
                 ct.sentiment, ct.summary, ct.created_at
@@ -403,7 +406,7 @@ async def get_customer_transcripts(
 
 
 @router.post("/voicemail-transcription")
-async def handle_voicemail_transcription(request: Request, db: Session = Depends(get_db)):
+async def handle_voicemail_transcription(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Webhook for voicemail transcription"""
     try:
         _, _, Task, _, _ = get_models()
@@ -428,7 +431,7 @@ async def handle_voicemail_transcription(request: Request, db: Session = Depends
             }
         )
         db.add(task)
-        db.commit()
+        await db.commit()
 
         return {"status": "ok"}
 

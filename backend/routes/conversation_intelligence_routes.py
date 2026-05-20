@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 
 # Database
@@ -32,6 +32,8 @@ from services.conversation_intelligence import (
 
 # Agent
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from agents.qualification_agent import (
     QualificationAgent,
     create_qualification_agent,
@@ -124,7 +126,7 @@ class CreateLeadRequest(BaseModel):
 async def process_message(
     request: ProcessMessageRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """
@@ -144,7 +146,7 @@ async def process_message(
         # Get organization for white-label (if provided)
         organization = None
         if request.organization_id:
-            org_result = db.execute(text("""
+            org_result = await db.execute(text("""
                 SELECT id, name, settings FROM organizations WHERE id = :org_id
             """), {"org_id": request.organization_id}).fetchone()
             if org_result:
@@ -526,7 +528,7 @@ async def process_email_webhook(
     request: Request,
     email_data: Dict[str, Any],
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Webhook endpoint for incoming emails.
@@ -593,7 +595,7 @@ async def process_sms_webhook(
     request: Request,
     sms_data: Dict[str, Any],
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Webhook endpoint for incoming SMS messages.

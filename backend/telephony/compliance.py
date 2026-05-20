@@ -461,6 +461,21 @@ class ComplianceChecker:
             )
             return True, dnc_entry.reason
 
+        # D4 CC-004 — also consult the federal DNC mirror (FTC registry)
+        try:
+            from services.dnc_federal_sync import FederalDNCSyncService
+            if FederalDNCSyncService(db=self.db).is_dnc(digits):
+                self._log_decision(
+                    decision_type="dnc_check",
+                    phone_number=digits,
+                    decision="blocked",
+                    reason="On federal DNC registry (FTC)",
+                    details={"dnc_source": "federal_registry"},
+                )
+                return True, "Federal DNC registry"
+        except Exception as exc:  # pragma: no cover — best-effort overlay
+            logger.debug("Federal DNC consult skipped: %s", exc)
+
         self._log_decision(
             decision_type="dnc_check",
             phone_number=digits,

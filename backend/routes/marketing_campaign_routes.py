@@ -13,10 +13,11 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -505,7 +506,7 @@ async def generate_content(
 async def initiate_review_sequence(
     loan_id: int,
     body: ReviewInitiateRequest = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -524,7 +525,7 @@ async def initiate_review_sequence(
 
     # Look up the loan to confirm it belongs to this org and is funded
     from sqlalchemy import text
-    loan_row = db.execute(text("""
+    loan_row = await db.execute(text("""
         SELECT l.id, l.stage, l.borrower_name, l.borrower_email,
                l.funded_date, l.organization_id
         FROM loans l
@@ -559,8 +560,8 @@ async def initiate_review_sequence(
         total_recipients=1,
     )
     db.add(campaign)
-    db.commit()
-    db.refresh(campaign)
+    await db.commit()
+    await db.refresh(campaign)
 
     logger.info(
         "Review sequence initiated: campaign_id=%s loan_id=%s platform=%s delay=%dd",

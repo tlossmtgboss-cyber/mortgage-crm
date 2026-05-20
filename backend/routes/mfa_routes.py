@@ -19,6 +19,9 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 
@@ -144,7 +147,7 @@ async def _get_user_from_mfa_setup_or_full_token(
 @router.post("/setup", response_model=MFASetupResponse)
 async def setup_mfa(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_user_from_mfa_setup_or_full_token),
 ):
     """
@@ -166,7 +169,7 @@ async def setup_mfa(
 
     # Store the secret temporarily (not yet enabled)
     current_user.mfa_secret = result["secret"]
-    db.commit()
+    await db.commit()
 
     return MFASetupResponse(
         secret=result["secret"],
@@ -179,7 +182,7 @@ async def setup_mfa(
 async def verify_and_enable_mfa(
     request: MFAVerifySetupRequest,
     http_request: Request = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_user_from_mfa_setup_or_full_token),
 ):
     """
@@ -217,7 +220,7 @@ async def verify_and_enable_mfa(
     current_user.mfa_enabled = True
     current_user.mfa_enabled_at = datetime.now(timezone.utc)
     current_user.mfa_backup_codes = hashed_codes
-    db.commit()
+    await db.commit()
 
     logger.info(f"MFA enabled for user {current_user.email}")
 
@@ -233,7 +236,7 @@ async def verify_and_enable_mfa(
 async def verify_and_enable_mfa_compat(
     request: MFAVerifySetupRequest,
     http_request: Request = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_user_from_mfa_setup_or_full_token),
 ):
     """Backward-compatible alias for /verify-setup."""
@@ -243,7 +246,7 @@ async def verify_and_enable_mfa_compat(
 @router.delete("", status_code=status.HTTP_200_OK)
 async def disable_mfa_delete(
     request: MFADisableRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """
@@ -259,7 +262,7 @@ async def disable_mfa_delete(
 @router.post("/disable")
 async def disable_mfa_post(
     request: MFADisableRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """
@@ -345,7 +348,7 @@ async def _disable_mfa_impl(request: MFADisableRequest, db: Session, current_use
 @router.post("/backup-codes", response_model=MFABackupCodesResponse)
 async def regenerate_backup_codes(
     request: MFAVerifySetupRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """
@@ -379,7 +382,7 @@ async def regenerate_backup_codes(
     plain_codes, hashed_codes = generate_backup_codes()
 
     current_user.mfa_backup_codes = hashed_codes
-    db.commit()
+    await db.commit()
 
     logger.info(f"Backup codes regenerated for user {current_user.email}")
 

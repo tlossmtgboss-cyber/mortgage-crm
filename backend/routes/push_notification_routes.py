@@ -14,8 +14,10 @@ from typing import Dict, List, Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -313,7 +315,7 @@ def setup_push_routes(app, get_current_user):
     async def send_test_notification(
         request: TestNotificationRequest = None,
         current_user=Depends(get_current_user),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """Send a test notification to the current user's registered devices.
 

@@ -145,9 +145,9 @@ class RetryDisclosureRequest(BaseModel):
 # -----------------------------------------------------------------
 
 @router.post("/session/start", response_model=StartSessionResponse)
-def start_session(
+async def start_session(
     request: StartSessionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     loan_officer_id = request.loan_officer_id or str(current_user.id)
@@ -160,7 +160,7 @@ def start_session(
     is_browser = request.is_browser_mode or not request.call_control_id
     session_id = str(uuid4())
 
-    db.execute(
+    await db.execute(
         sa_text("""
             INSERT INTO call_sessions (
                 id, call_control_id, loan_officer_id, contact_id,
@@ -176,7 +176,7 @@ def start_session(
         {"sid": session_id, "ccid": request.call_control_id, "lo_id": loan_officer_id,
          "cid": request.contact_id, "state": borrower_state, "org_id": org_id, "now": _now()},
     )
-    db.commit()
+    await db.commit()
 
     telnyx_api_key = os.getenv("TELNYX_API_KEY", "")
     org_config = _get_org_config(db, loan_officer_id)
@@ -210,9 +210,9 @@ def start_session(
 # -----------------------------------------------------------------
 
 @router.post("/session/confirm-browser-disclosure")
-def confirm_browser_disclosure(
+async def confirm_browser_disclosure(
     request: BrowserDisclosureConfirm,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     session = _get_session(db, request.session_id, current_user)
@@ -223,7 +223,7 @@ def confirm_browser_disclosure(
     if current_status not in ('pending_consent', 'playing_disclosure'):
         raise HTTPException(400, f"Session not in disclosure state (status={current_status})")
 
-    db.execute(
+    await db.execute(
         sa_text("""
             UPDATE call_sessions
             SET recording_consent_status = 'disclosed',
@@ -234,7 +234,7 @@ def confirm_browser_disclosure(
         """),
         {"sid": request.session_id, "now": _now()},
     )
-    db.commit()
+    await db.commit()
 
     return {"status": "ok", "session_id": request.session_id, "active": True}
 
@@ -244,9 +244,9 @@ def confirm_browser_disclosure(
 # -----------------------------------------------------------------
 
 @router.post("/session/retry-disclosure")
-def retry_disclosure(
+async def retry_disclosure(
     request: RetryDisclosureRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     session = _get_session(db, request.session_id, current_user)
@@ -282,9 +282,9 @@ def retry_disclosure(
 # -----------------------------------------------------------------
 
 @router.post("/session/manual-consent-override")
-def manual_consent_override(
+async def manual_consent_override(
     request: ManualOverrideRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     session = _get_session(db, request.session_id, current_user)
@@ -299,7 +299,7 @@ def manual_consent_override(
         raise HTTPException(400, "LO must confirm verbal disclosure was given")
 
     now = _now()
-    db.execute(
+    await db.execute(
         sa_text("""
             UPDATE call_sessions
             SET recording_consent_status = 'disclosed',
@@ -311,7 +311,7 @@ def manual_consent_override(
         """),
         {"sid": request.session_id, "now": now, "lo_id": str(current_user.id)},
     )
-    db.commit()
+    await db.commit()
 
     _activate_stt(db, request.session_id, getattr(session, 'call_control_id', None))
     return {"status": "ok", "session_id": request.session_id, "consent_status": "disclosed"}
@@ -375,9 +375,9 @@ async def stop_session(
 # -----------------------------------------------------------------
 
 @router.post("/session/{session_id}/convert-to-application")
-def convert_to_application(
+async def convert_to_application(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     raise HTTPException(501, "Application conversion not yet available")
@@ -388,19 +388,19 @@ def convert_to_application(
 # -----------------------------------------------------------------
 
 @router.post("/artifacts/{artifact_id}/share")
-def share_artifact(
+async def share_artifact(
     artifact_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     org_id = getattr(current_user, 'organization_id', None)
     if org_id:
-        artifact = db.execute(
+        artifact = await db.execute(
             sa_text("SELECT * FROM call_artifacts WHERE id = :id AND organization_id = :org_id"),
             {"id": artifact_id, "org_id": org_id},
         ).fetchone()
     else:
-        artifact = db.execute(
+        artifact = await db.execute(
             sa_text("SELECT * FROM call_artifacts WHERE id = :id"),
             {"id": artifact_id},
         ).fetchone()
@@ -409,7 +409,7 @@ def share_artifact(
         raise HTTPException(404, "Artifact not found")
 
     share_token = str(uuid4())[:12]
-    db.execute(
+    await db.execute(
         sa_text("""
             UPDATE call_artifacts
             SET share_token = :token,
@@ -419,7 +419,7 @@ def share_artifact(
         """),
         {"id": artifact_id, "token": share_token, "now": _now()},
     )
-    db.commit()
+    await db.commit()
 
     frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
     share_url = f"{frontend_url}/shared/artifact/{share_token}"

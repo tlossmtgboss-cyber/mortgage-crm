@@ -20,6 +20,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.module_service import ModuleService
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
@@ -75,7 +77,7 @@ class NavigationAccessResponse(BaseModel):
 
 # Database and user dependencies - injected from main app
 # These are stored as the actual dependency functions from main.py
-from db import get_db
+from db import get_db, get_async_db
 _get_current_user = None
 
 
@@ -87,7 +89,7 @@ def set_dependencies(get_db_func, get_current_user_func):
 
 from auth.dependencies import get_current_user  # dedup: was local wrapper
 @router.get("/available", response_model=List[ModuleResponse])
-async def get_available_modules(db: Session = Depends(get_db)):
+async def get_available_modules(db: AsyncSession = Depends(get_async_db)):
     """Get all available subscription modules with pricing."""
     modules = ModuleService.get_all_modules(db)
     return modules
@@ -95,7 +97,7 @@ async def get_available_modules(db: Session = Depends(get_db)):
 
 @router.get("/my-modules")
 async def get_my_modules(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get current user's organization modules with enabled status."""
@@ -165,7 +167,7 @@ async def get_my_modules(
 @router.get("/check/{module_key}")
 async def check_module_access(
     module_key: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Check if current user's organization has access to a specific module."""
@@ -187,7 +189,7 @@ async def check_module_access(
 @router.get("/check-feature/{feature_key}")
 async def check_feature_access(
     feature_key: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Check if current user's organization has access to a specific feature."""
@@ -206,7 +208,7 @@ async def check_feature_access(
 @router.get("/check-route")
 async def check_route_access(
     route: str = Query(..., description="Route path to check"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Check if a route is accessible based on organization's modules."""
@@ -221,7 +223,7 @@ async def check_route_access(
 
 @router.get("/navigation")
 async def get_navigation_access(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get navigation items with lock status based on modules."""
@@ -234,7 +236,7 @@ async def get_navigation_access(
 
 @router.get("/pricing")
 async def get_pricing_summary(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get pricing summary for current organization's modules."""
@@ -248,7 +250,7 @@ async def get_pricing_summary(
 @router.post("/enable")
 async def enable_module(
     request: EnableModuleRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Enable a module for the current organization."""
@@ -280,7 +282,7 @@ async def enable_module(
 @router.post("/disable")
 async def disable_module(
     module_key: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Disable a module for the current organization."""
@@ -305,7 +307,7 @@ async def disable_module(
 @router.get("/admin/organization/{organization_id}")
 async def admin_get_org_modules(
     organization_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Admin: Get modules for a specific organization."""
@@ -328,7 +330,7 @@ async def admin_get_org_modules(
 async def admin_enable_module(
     organization_id: int,
     request: EnableModuleRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Admin: Enable a module for a specific organization."""
@@ -355,7 +357,7 @@ async def admin_enable_module(
 
 # Public endpoint for module info (no auth required)
 @router.get("/public/list")
-async def get_public_modules(db: Session = Depends(get_db)):
+async def get_public_modules(db: AsyncSession = Depends(get_async_db)):
     """Get public module list for marketing/signup pages."""
     modules = ModuleService.get_all_modules(db)
 

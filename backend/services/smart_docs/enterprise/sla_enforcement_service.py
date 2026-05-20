@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import and_, case, func, or_, text
 from sqlalchemy.orm import Session
@@ -364,7 +364,27 @@ class BusinessHoursCalculator:
                     return False
             elif d in self._holidays:
                 return False
+        # Storm window pauses SLA progression entirely.
+        if d in self.storm_window_dates:
+            return False
         return True
+
+    def velocity_multiplier(self, d: date) -> float:
+        """
+        Return the SLA velocity multiplier for ``d``. ``1.0`` means a normal
+        business day; ``> 1.0`` means SLA windows expand (slower). Used by
+        callers that compute deadlines from an elapsed-hours budget.
+
+        Currently only the IRS tax-stress window (Apr 14-16) triggers a
+        non-unit multiplier (1.5x window when ``consider_irs_deadlines``).
+        """
+        if self.consider_irs_deadlines and d.month == 4 and d.day in (14, 15, 16):
+            return 1.5
+        return 1.0
+
+    def is_tax_stress_day(self, d: date) -> bool:
+        """True if ``d`` falls in the IRS-deadline stress window (Apr 14-16)."""
+        return d.month == 4 and d.day in (14, 15, 16)
 
     def _clamp_to_business(self, dt: datetime) -> datetime:
         """Clamp a datetime to within business hours on the same day."""

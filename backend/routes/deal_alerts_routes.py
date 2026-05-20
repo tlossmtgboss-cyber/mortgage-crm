@@ -15,6 +15,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 from services.proactive_deal_alerts_service import (
     ProactiveDealAlertsService,
     get_deal_alerts_service,
@@ -96,7 +99,7 @@ class ResolveRequest(BaseModel):
 async def scan_pipeline(
     user_id: Optional[str] = Query(default=None),
     branch_id: Optional[str] = Query(default=None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Scan the pipeline and generate new alerts.
@@ -122,7 +125,7 @@ async def scan_pipeline(
 @router.get("/summary", response_model=AlertSummaryResponse)
 async def get_alert_summary(
     user_id: Optional[str] = Query(default=None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get summary of current alerts.
@@ -156,7 +159,7 @@ async def get_alerts(
     alert_type: Optional[str] = Query(default=None, description="Filter by type"),
     loan_id: Optional[str] = Query(default=None, description="Filter by loan"),
     limit: int = Query(default=50, ge=1, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get list of alerts with optional filters.
@@ -205,7 +208,7 @@ async def get_alerts(
 @router.get("/priority-actions")
 async def get_priority_actions(
     limit: int = Query(default=5, ge=1, le=20),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get top priority actions that need immediate attention.
@@ -234,7 +237,7 @@ async def get_alert_types():
 
 
 @router.get("/health")
-async def alerts_health(db: Session = Depends(get_db)):
+async def alerts_health(db: AsyncSession = Depends(get_async_db)):
     """Health check for the deal alerts service."""
     service = get_deal_alerts_service(db_session=db)
     summary = service.get_summary()
@@ -249,7 +252,7 @@ async def alerts_health(db: Session = Depends(get_db)):
 
 
 @router.get("/loan/{loan_id}")
-async def get_alerts_for_loan(loan_id: str, db: Session = Depends(get_db)):
+async def get_alerts_for_loan(loan_id: str, db: AsyncSession = Depends(get_async_db)):
     """
     Get all alerts for a specific loan.
     """
@@ -269,7 +272,7 @@ async def get_alerts_for_loan(loan_id: str, db: Session = Depends(get_db)):
 
 # Dynamic routes with {alert_id} path parameter MUST be after all static routes
 @router.get("/{alert_id}", response_model=AlertResponse)
-async def get_alert(alert_id: str, db: Session = Depends(get_db)):
+async def get_alert(alert_id: str, db: AsyncSession = Depends(get_async_db)):
     """
     Get a specific alert by ID.
     """
@@ -304,7 +307,7 @@ async def get_alert(alert_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{alert_id}/acknowledge")
-async def acknowledge_alert(alert_id: str, db: Session = Depends(get_db)):
+async def acknowledge_alert(alert_id: str, db: AsyncSession = Depends(get_async_db)):
     """
     Acknowledge an alert.
 
@@ -330,7 +333,7 @@ async def acknowledge_alert(alert_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{alert_id}/resolve")
-async def resolve_alert(alert_id: str, request: ResolveRequest, db: Session = Depends(get_db)):
+async def resolve_alert(alert_id: str, request: ResolveRequest, db: AsyncSession = Depends(get_async_db)):
     """
     Resolve an alert.
 
@@ -356,7 +359,7 @@ async def resolve_alert(alert_id: str, request: ResolveRequest, db: Session = De
 
 
 @router.post("/{alert_id}/snooze")
-async def snooze_alert(alert_id: str, request: SnoozeRequest, db: Session = Depends(get_db)):
+async def snooze_alert(alert_id: str, request: SnoozeRequest, db: AsyncSession = Depends(get_async_db)):
     """
     Snooze an alert for a specified duration.
 
@@ -382,7 +385,7 @@ async def snooze_alert(alert_id: str, request: SnoozeRequest, db: Session = Depe
 
 
 @router.post("/bulk-acknowledge")
-async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: Session = Depends(get_db)):
+async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: AsyncSession = Depends(get_async_db)):
     """
     Acknowledge multiple alerts at once.
     """
@@ -406,14 +409,14 @@ async def bulk_acknowledge(request: BulkAcknowledgeRequest, db: Session = Depend
 
 @router.get("/admin/test-funded")
 async def test_funded_loans(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Test funded loans query for production predictor."""
     try:
         from sqlalchemy import text
 
         # Check funded loans with dates
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 l.id,
                 l.loan_number,
@@ -446,14 +449,14 @@ async def test_funded_loans(
 @router.get("/admin/test-predictor-query")
 async def test_predictor_query(
     entity_id: str = "57",
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Test the exact production predictor query."""
     try:
         from sqlalchemy import text
 
         # Same query as production predictor service
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 DATE_TRUNC('month', l.funded_date) as month,
                 COUNT(*) as units,
@@ -489,7 +492,7 @@ async def test_predictor_query(
 
 @router.get("/admin/test-query")
 async def test_loan_query(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Test the exact query used by _get_sample_loans() to debug why it fails."""
     try:
@@ -498,7 +501,7 @@ async def test_loan_query(
         today = date.today()
 
         # Run the exact query from _get_sample_loans() - fixed columns
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 l.id,
                 COALESCE(l.loan_number, 'LOAN-' || l.id) as loan_number,
@@ -543,7 +546,7 @@ async def test_loan_query(
 @router.get("/admin/run-migration")
 async def run_deal_alerts_migration(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Run the deal alerts database migration.
@@ -563,7 +566,7 @@ async def run_deal_alerts_migration(
 
         if is_postgres:
             # Create deal_alerts table
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS deal_alerts (
                     id VARCHAR(50) PRIMARY KEY,
                     type VARCHAR(50) NOT NULL,
@@ -592,16 +595,16 @@ async def run_deal_alerts_migration(
             """))
 
             # Create indexes
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_status ON deal_alerts(status)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_priority ON deal_alerts(priority)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_loan_id ON deal_alerts(loan_id)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_type ON deal_alerts(type)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_org ON deal_alerts(organization_id)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_user ON deal_alerts(user_id)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_created ON deal_alerts(created_at DESC)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_status ON deal_alerts(status)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_priority ON deal_alerts(priority)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_loan_id ON deal_alerts(loan_id)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_type ON deal_alerts(type)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_org ON deal_alerts(organization_id)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_user ON deal_alerts(user_id)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_deal_alerts_created ON deal_alerts(created_at DESC)"))
 
             # Create whisper_sessions table
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS whisper_sessions (
                     id VARCHAR(50) PRIMARY KEY,
                     call_id VARCHAR(100),
@@ -620,7 +623,7 @@ async def run_deal_alerts_migration(
             """))
 
             # Create whisper_messages table
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS whisper_messages (
                     id SERIAL PRIMARY KEY,
                     session_id VARCHAR(50) REFERENCES whisper_sessions(id),
@@ -634,12 +637,12 @@ async def run_deal_alerts_migration(
                 )
             """))
 
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_sessions_user ON whisper_sessions(user_id)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_sessions_status ON whisper_sessions(status)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_messages_session ON whisper_messages(session_id)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_sessions_user ON whisper_sessions(user_id)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_sessions_status ON whisper_sessions(status)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_whisper_messages_session ON whisper_messages(session_id)"))
 
             # Create production_forecasts table
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS production_forecasts (
                     id SERIAL PRIMARY KEY,
                     entity_type VARCHAR(20) NOT NULL,
@@ -657,11 +660,11 @@ async def run_deal_alerts_migration(
                 )
             """))
 
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_prod_forecasts_entity ON production_forecasts(entity_type, entity_id)"))
-            db.execute(text("CREATE INDEX IF NOT EXISTS idx_prod_forecasts_date ON production_forecasts(forecast_date)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_prod_forecasts_entity ON production_forecasts(entity_type, entity_id)"))
+            await db.execute(text("CREATE INDEX IF NOT EXISTS idx_prod_forecasts_date ON production_forecasts(forecast_date)"))
         else:
             # SQLite version
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS deal_alerts (
                     id TEXT PRIMARY KEY,
                     type TEXT NOT NULL,
@@ -689,7 +692,7 @@ async def run_deal_alerts_migration(
                 )
             """))
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -699,13 +702,13 @@ async def run_deal_alerts_migration(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Migration failed: {e}")
         raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.post("/seed-sample-alerts")
-async def seed_sample_alerts(db: Session = Depends(get_db)):
+async def seed_sample_alerts(db: AsyncSession = Depends(get_async_db)):
     """
     Seed sample deal alerts for testing and demo purposes.
     Creates a variety of alerts with different priorities and types.

@@ -19,6 +19,8 @@ Endpoints:
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field
@@ -44,7 +46,7 @@ from routes.scheduler.error_responses import (
     validation_error, not_found_error, forbidden_error,
     unauthorized_error, internal_error, service_unavailable_error,
 )
-from db import get_db
+from db import get_db, get_async_db
 from middleware.feature_gate import require_feature_tier
 from services.waitlist_service import WaitlistService
 
@@ -219,7 +221,7 @@ def _get_waitlist_service(db: Session) -> WaitlistService:
 async def join_waitlist_authenticated(
     body: WaitlistJoinRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Join waitlist as an authenticated user."""
     user = await get_current_user(request, db)
@@ -240,7 +242,7 @@ async def join_waitlist_authenticated(
             "notes": _sanitize(body.notes),
         })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -259,7 +261,7 @@ async def get_waitlist(
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get waitlist for the organization (admin view)."""
     user = await get_current_user(request, db)
@@ -288,7 +290,7 @@ async def get_waitlist(
 async def get_waitlist_position(
     entry_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Check waitlist position for an entry."""
     user = await get_current_user(request, db)
@@ -307,7 +309,7 @@ async def get_waitlist_position(
 async def leave_waitlist(
     entry_id: int,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Leave the waitlist."""
     user = await get_current_user(request, db)
@@ -317,7 +319,7 @@ async def leave_waitlist(
 
     try:
         service.leave_waitlist(entry_id, org_id=org_id)
-        db.commit()
+        await db.commit()
         return {"success": True, "message": "Removed from waitlist"}
     except ValueError as e:
         validation_error(str(e))
@@ -329,7 +331,7 @@ async def offer_slot_to_entry(
     entry_id: int,
     body: OfferSlotRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Manually offer a slot to a waitlist entry (admin only)."""
     user = await get_current_user(request, db)
@@ -349,7 +351,7 @@ async def offer_slot_to_entry(
         entry = service.offer_slot(entry_id, slot_time, org_id=org_id)
         _audit_log(db, org_id, user.id, "waitlist_offer", "waitlist_entry",
                    entity_id=entry_id, changes={"slot_time": body.slot_time}, request=request)
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -366,7 +368,7 @@ async def reorder_waitlist_entry(
     entry_id: int,
     body: ReorderRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Reorder a waitlist entry (admin only, for drag-to-reorder)."""
     user = await get_current_user(request, db)
@@ -379,7 +381,7 @@ async def reorder_waitlist_entry(
 
     try:
         entry = service.reorder_entry(entry_id, body.new_position, org_id)
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -394,7 +396,7 @@ async def reorder_waitlist_entry(
 @require_feature_tier("scheduler_waitlist")
 async def expire_stale_offers(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Manually trigger expiration of stale offers (admin only)."""
     user = await get_current_user(request, db)
@@ -405,7 +407,7 @@ async def expire_stale_offers(
 
     service = _get_waitlist_service(db)
     count = service.expire_offers(org_id=org_id)
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -422,7 +424,7 @@ async def expire_stale_offers(
 async def public_join_waitlist(
     body: PublicWaitlistJoinRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Public endpoint for joining a waitlist (no authentication required).
 
@@ -453,7 +455,7 @@ async def public_join_waitlist(
             "notes": _sanitize(body.notes),
         })
 
-        db.commit()
+        await db.commit()
 
         # Generate a signed token so the caller can accept/check position
         # without exposing the raw entry_id to IDOR attacks.

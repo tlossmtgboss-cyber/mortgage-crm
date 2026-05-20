@@ -14,7 +14,9 @@ Features:
 
 from fastapi import Depends, HTTPException, Query, BackgroundTasks, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_, and_, func
+from sqlalchemy import desc, or_, and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from pydantic import BaseModel, Field, validator, HttpUrl
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, timezone
@@ -382,7 +384,7 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
     async def create_api_key(
         http_request: Request,
         request: ApiKeyCreateRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """
@@ -420,8 +422,8 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
                 is_active=True
             )
             db.add(db_key)
-            db.commit()
-            db.refresh(db_key)
+            await db.commit()
+            await db.refresh(db_key)
 
             logger.info(f"API key created: {request.name} for user {current_user.id}")
 
@@ -670,7 +672,7 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
     )
     async def create_webhook_subscription(
         request: WebhookSubscriptionCreateRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """
@@ -696,8 +698,8 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
                 is_active=True
             )
             db.add(subscription)
-            db.commit()
-            db.refresh(subscription)
+            await db.commit()
+            await db.refresh(subscription)
 
             logger.info(f"Webhook subscription created: {request.name} for org {current_user.organization_id}")
 

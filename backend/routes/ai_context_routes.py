@@ -7,12 +7,13 @@ clients, tasks, emails, calendar events, and pipeline information.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 from typing import Optional
 import logging
 
-from db import get_db
+from db import get_db, get_async_db
 
 router = APIRouter(prefix="/api/v1/ai/context", tags=["AI Context"])
 logger = logging.getLogger(__name__)
@@ -344,7 +345,7 @@ async def get_client_context_for_ai(
 
 @router.get("/summary")
 async def get_ai_context_summary(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return overall CRM summary for AI context"""
@@ -362,7 +363,7 @@ async def get_ai_context_summary(
             WHERE owner_id = :user_id """ + org_filter + """
             GROUP BY stage
         """
-    lead_counts = db.execute(text(sql), base_params).fetchall()
+    lead_counts = await db.execute(text(sql), base_params).fetchall()
 
     # Count active loans by stage
     sql = """
@@ -371,7 +372,7 @@ async def get_ai_context_summary(
             WHERE loan_officer_id = :user_id """ + org_filter + """
             GROUP BY stage
         """
-    loan_counts = db.execute(text(sql), base_params).fetchall()
+    loan_counts = await db.execute(text(sql), base_params).fetchall()
 
     # Get pending tasks count (ai_tasks table may not exist)
     try:
@@ -379,7 +380,7 @@ async def get_ai_context_summary(
                 SELECT COUNT(*) FROM ai_tasks
                 WHERE user_id = :user_id """ + org_filter + """ AND status != 'completed'
             """
-        pending_tasks = db.execute(text(sql), base_params).scalar()
+        pending_tasks = await db.execute(text(sql), base_params).scalar()
     except Exception as e:
         logger.error(f"Error fetching pending tasks in get_ai_context_summary: {e}")
         pending_tasks = 0
@@ -392,7 +393,7 @@ async def get_ai_context_summary(
                     SUM(COALESCE(loan_balance, 0)) as total_balance
                 FROM mum_clients
                 WHERE user_id = :user_id """ + org_filter
-        mum_stats = db.execute(text(sql), base_params).fetchone()
+        mum_stats = await db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching MUM stats in get_ai_context_summary: {e}")
         mum_stats = (0, 0)
@@ -482,7 +483,7 @@ async def get_task_context_for_ai(
 
 @router.get("/user/profile")
 async def get_user_profile_context_for_ai(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return current user's profile and performance context for AI"""
@@ -503,10 +504,10 @@ async def get_user_profile_context_for_ai(
                     COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
                 FROM tasks
                 WHERE owner_id = :user_id """ + org_filter
-        task_stats = db.execute(text(sql), base_params).fetchone()
+        task_stats = await db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching task stats in get_user_profile_context_for_ai: {e}")
-        db.rollback()
+        await db.rollback()
         task_stats = (0, 0, 0, 0)
 
     # Get lead stats
@@ -517,10 +518,10 @@ async def get_user_profile_context_for_ai(
                     COUNT(*) FILTER (WHERE created_at > CURRENT_DATE - INTERVAL '30 days') as new_this_month
                 FROM leads
                 WHERE owner_id = :user_id """ + org_filter
-        lead_stats = db.execute(text(sql), base_params).fetchone()
+        lead_stats = await db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching lead stats in get_user_profile_context_for_ai: {e}")
-        db.rollback()
+        await db.rollback()
         lead_stats = (0, 0)
 
     # Get loan stats
@@ -532,10 +533,10 @@ async def get_user_profile_context_for_ai(
                     COUNT(*) FILTER (WHERE stage::text LIKE '%FUNDED%' OR stage::text LIKE '%Funded%') as funded_count
                 FROM loans
                 WHERE loan_officer_id = :user_id """ + org_filter
-        loan_stats = db.execute(text(sql), base_params).fetchone()
+        loan_stats = await db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching loan stats in get_user_profile_context_for_ai: {e}")
-        db.rollback()
+        await db.rollback()
         loan_stats = (0, 0, 0)
 
     # Get recent activities count
@@ -544,10 +545,10 @@ async def get_user_profile_context_for_ai(
                 SELECT COUNT(*) FROM activities
                 WHERE user_id = :user_id """ + org_filter + """ AND created_at > CURRENT_DATE - INTERVAL '7 days'
             """
-        recent_activities = db.execute(text(sql), base_params).scalar()
+        recent_activities = await db.execute(text(sql), base_params).scalar()
     except Exception as e:
         logger.error(f"Error fetching recent activities in get_user_profile_context_for_ai: {e}")
-        db.rollback()
+        await db.rollback()
         recent_activities = 0
 
     return {
@@ -836,7 +837,7 @@ async def get_account_profile_context_for_ai(
 
 @router.get("/pipeline")
 async def get_pipeline_context_for_ai(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return detailed pipeline health context for AI"""
@@ -859,7 +860,7 @@ async def get_pipeline_context_for_ai(
             GROUP BY stage
             ORDER BY count DESC
         """
-    lead_pipeline = db.execute(text(sql), base_params).fetchall()
+    lead_pipeline = await db.execute(text(sql), base_params).fetchall()
 
     # Loan pipeline by stage
     sql = """
@@ -873,7 +874,7 @@ async def get_pipeline_context_for_ai(
             GROUP BY stage
             ORDER BY count DESC
         """
-    loan_pipeline = db.execute(text(sql), base_params).fetchall()
+    loan_pipeline = await db.execute(text(sql), base_params).fetchall()
 
     # At-risk loans (high days in stage)
     sql = """
@@ -883,7 +884,7 @@ async def get_pipeline_context_for_ai(
             ORDER BY days_in_stage DESC
             LIMIT 5
         """
-    at_risk_loans = db.execute(text(sql), base_params).fetchall()
+    at_risk_loans = await db.execute(text(sql), base_params).fetchall()
 
     # Hot leads (high AI score)
     sql = """
@@ -893,7 +894,7 @@ async def get_pipeline_context_for_ai(
             ORDER BY ai_score DESC
             LIMIT 5
         """
-    hot_leads = db.execute(text(sql), base_params).fetchall()
+    hot_leads = await db.execute(text(sql), base_params).fetchall()
 
     # Closing this week
     sql = """
@@ -903,7 +904,7 @@ async def get_pipeline_context_for_ai(
             AND closing_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
             ORDER BY closing_date ASC
         """
-    closing_soon = db.execute(text(sql), base_params).fetchall()
+    closing_soon = await db.execute(text(sql), base_params).fetchall()
 
     return {
         "lead_pipeline": [
@@ -964,7 +965,7 @@ async def get_pipeline_context_for_ai(
 @router.get("/activity-feed")
 async def get_activity_feed_context_for_ai(
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return recent activity feed for AI context"""
@@ -985,7 +986,7 @@ async def get_activity_feed_context_for_ai(
             ORDER BY a.created_at DESC
             LIMIT :limit
         """
-    activities = db.execute(text(sql), activity_params).fetchall()
+    activities = await db.execute(text(sql), activity_params).fetchall()
 
     return {
         "activities": [
@@ -1081,7 +1082,7 @@ async def get_mum_client_context_for_ai(
 @router.get("/tasks")
 async def get_all_tasks_context_for_ai(
     status: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return all tasks context for AI queries"""
@@ -1108,7 +1109,7 @@ async def get_all_tasks_context_for_ai(
 
     query += " ORDER BY t.due_date ASC NULLS LAST, t.priority DESC LIMIT 50"
 
-    tasks = db.execute(text(query), params).fetchall()
+    tasks = await db.execute(text(query), params).fetchall()
 
     # Get task stats
     stats_params = {"user_id": current_user.id}
@@ -1124,7 +1125,7 @@ async def get_all_tasks_context_for_ai(
                 COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
             FROM tasks
             WHERE owner_id = :user_id """ + stats_org_filter
-    task_stats = db.execute(text(sql), stats_params).fetchone()
+    task_stats = await db.execute(text(sql), stats_params).fetchone()
 
     return {
         "tasks": [

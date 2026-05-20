@@ -14,7 +14,9 @@ from fastapi import Depends, HTTPException, Request, UploadFile, File, Form, Que
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from datetime import datetime, timezone
 from typing import List, Optional
 import logging
@@ -60,7 +62,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/users/complete-onboarding")
     async def complete_user_onboarding(
         data: OnboardingData,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """Complete first-time user onboarding and save profile data"""
@@ -99,8 +101,8 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             # Mark onboarding as completed
             current_user.onboarding_completed = True
 
-            db.commit()
-            db.refresh(current_user)
+            await db.commit()
+            await db.refresh(current_user)
 
             logger.info(f"Onboarding completed for user {current_user.email}")
 
@@ -118,7 +120,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             }
 
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Error completing onboarding: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -514,13 +516,13 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/email-drafts/setup-table")
     async def setup_email_drafts_table(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """Setup email_drafts table (non-admin accessible migration)"""
         try:
             # Create email_drafts table if not exists
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS email_drafts (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER REFERENCES users(id),
@@ -546,23 +548,23 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
 
             # Create indexes
             try:
-                db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_user ON email_drafts(user_id)"))
-                db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_lead ON email_drafts(lead_id)"))
-                db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_status ON email_drafts(status)"))
+                await db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_user ON email_drafts(user_id)"))
+                await db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_lead ON email_drafts(lead_id)"))
+                await db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_status ON email_drafts(status)"))
             except Exception as e:
                 logger.error(f"Error creating email_drafts indexes: {e}")
 
-            db.commit()
+            await db.commit()
             return {"success": True, "message": "Email drafts table created"}
         except Exception as e:
             logger.error(f"Error setting up email_drafts table: {e}")
-            db.rollback()
+            await db.rollback()
             return {"success": False, "error": "Internal server error"}
 
     @app.post("/api/v1/email-drafts")
     async def create_email_draft(
         draft: EmailDraftCreate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """Create a new email draft"""
@@ -585,8 +587,8 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
                 status="draft"
             )
             db.add(new_draft)
-            db.commit()
-            db.refresh(new_draft)
+            await db.commit()
+            await db.refresh(new_draft)
 
             return {
                 "success": True,
@@ -595,7 +597,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             }
         except Exception as e:
             logger.error(f"Error creating email draft: {e}")
-            db.rollback()
+            await db.rollback()
             raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.get("/api/v1/email-drafts")

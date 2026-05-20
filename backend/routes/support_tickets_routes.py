@@ -6,7 +6,7 @@ Master admin can view all tickets, regular users see only their own.
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, text, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, text, JSON, select
 from pydantic import BaseModel
 from typing import Optional, List, Callable
 from datetime import datetime, timezone, timedelta
@@ -14,6 +14,8 @@ import logging
 
 from database import Base, get_db as db_get_db, engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +218,7 @@ async def get_tickets(
 @router.post("/tickets")
 async def create_ticket(
     ticket: TicketCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Create a new support ticket"""
@@ -232,7 +234,7 @@ async def create_ticket(
 
         if organization_id:
             # Use raw SQL to avoid circular import with main.py
-            result = db.execute(text("SELECT name FROM organizations WHERE id = :org_id"), {"org_id": organization_id}).fetchone()
+            result = await db.execute(text("SELECT name FROM organizations WHERE id = :org_id"), {"org_id": organization_id}).fetchone()
             if result:
                 organization_name = result[0]
 
@@ -259,8 +261,8 @@ async def create_ticket(
         )
 
         db.add(new_ticket)
-        db.commit()
-        db.refresh(new_ticket)
+        await db.commit()
+        await db.refresh(new_ticket)
 
         return {
             "success": True,
@@ -273,7 +275,7 @@ async def create_ticket(
             }
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating ticket: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -548,7 +550,7 @@ async def get_ticket_metrics(
 @router.get("/analytics")
 async def get_ticket_analytics(
     months: int = 6,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user)
 ):
     """Get monthly ticket analytics for charts (admin only)"""
@@ -558,7 +560,7 @@ async def get_ticket_analytics(
             raise HTTPException(status_code=403, detail="Only administrators can view analytics")
 
         # Get monthly submission data
-        monthly_submissions = db.execute(text("""
+        monthly_submissions = await db.execute(text("""
             SELECT
                 DATE_TRUNC('month', created_at) as month,
                 COUNT(*) as submissions,
@@ -570,7 +572,7 @@ async def get_ticket_analytics(
         """.replace(':months', str(months)))).fetchall()
 
         # Get monthly average turn time
-        monthly_turn_time = db.execute(text("""
+        monthly_turn_time = await db.execute(text("""
             SELECT
                 DATE_TRUNC('month', created_at) as month,
                 AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) as avg_hours

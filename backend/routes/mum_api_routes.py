@@ -17,10 +17,11 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 from agents.utils.financial_calcs import (
     calculate_remaining_balance,
     estimate_current_property_value,
@@ -75,7 +76,7 @@ router = APIRouter(prefix="/api/v1/mum", tags=["MUM (Mortgages Under Management)
 async def setup_mum_database(
     migration_key: str = "",
     current_user = Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create MUM tables and seed 100 clients (ONE-TIME SETUP)"""
     _verify_admin_key(migration_key)
@@ -105,7 +106,7 @@ async def setup_mum_database(
 
     except Exception as e:
         logger.error(f"MUM setup error: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Setup failed")
 
 

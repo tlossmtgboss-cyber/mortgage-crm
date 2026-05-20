@@ -45,9 +45,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from auth.dependencies import get_current_user
-from db import get_db
+from db import get_db, get_async_db
 from database.models.content_governance import (
     ApprovalDecision,
     ContentApproval,
@@ -353,7 +355,7 @@ def _append_approval(
 async def create_template(
     payload: ContentTemplateCreate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentTemplateResponse:
     """Create a new marketing content template.
@@ -382,8 +384,8 @@ async def create_template(
         updated_at=now,
     )
     db.add(tmpl)
-    db.commit()
-    db.refresh(tmpl)
+    await db.commit()
+    await db.refresh(tmpl)
 
     logger.info(
         "content_template.created template_id=%s org_id=%s user_id=%s",
@@ -469,7 +471,7 @@ async def list_templates(
 async def get_template(
     template_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentTemplateResponse:
     """Fetch a single template by ID, including last review decision."""
@@ -490,7 +492,7 @@ async def update_template(
     template_id: str,
     payload: ContentTemplateUpdate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentTemplateResponse:
     """Edit a template's content or metadata.
@@ -526,8 +528,8 @@ async def update_template(
         setattr(tmpl, field, value)
 
     tmpl.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(tmpl)
+    await db.commit()
+    await db.refresh(tmpl)
 
     logger.info(
         "content_template.updated template_id=%s user_id=%s fields=%s",
@@ -546,7 +548,7 @@ async def update_template(
 async def submit_for_review(
     template_id: str,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentTemplateResponse:
     """Move a template from ``draft`` (or ``revision_requested``) to ``pending_review``.
@@ -579,8 +581,8 @@ async def submit_for_review(
 
     tmpl.status = ContentStatus.PENDING_REVIEW
     tmpl.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(tmpl)
+    await db.commit()
+    await db.refresh(tmpl)
 
     logger.info(
         "content_template.submitted_for_review template_id=%s user_id=%s",
@@ -599,7 +601,7 @@ async def approve_template(
     template_id: str,
     payload: ReviewDecisionRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentTemplateResponse:
     """Approve a template that is in ``pending_review``.
@@ -628,8 +630,8 @@ async def approve_template(
     _append_approval(db, template_id, current_user.id, ApprovalDecision.APPROVED, payload.review_notes)
     tmpl.status = ContentStatus.APPROVED
     tmpl.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(tmpl)
+    await db.commit()
+    await db.refresh(tmpl)
 
     logger.info(
         "content_template.approved template_id=%s reviewer_id=%s",
@@ -648,7 +650,7 @@ async def reject_template(
     template_id: str,
     payload: ReviewDecisionRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentTemplateResponse:
     """Reject a template that is in ``pending_review``.
@@ -679,8 +681,8 @@ async def reject_template(
     _append_approval(db, template_id, current_user.id, ApprovalDecision.REJECTED, payload.review_notes)
     tmpl.status = ContentStatus.REJECTED
     tmpl.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(tmpl)
+    await db.commit()
+    await db.refresh(tmpl)
 
     logger.info(
         "content_template.rejected template_id=%s reviewer_id=%s",
@@ -699,7 +701,7 @@ async def request_revision(
     template_id: str,
     payload: ReviewDecisionRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentTemplateResponse:
     """Request revisions to a ``pending_review`` template.
@@ -733,8 +735,8 @@ async def request_revision(
     _append_approval(db, template_id, current_user.id, ApprovalDecision.REVISION_REQUESTED, payload.review_notes)
     tmpl.status = ContentStatus.REVISION_REQUESTED
     tmpl.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(tmpl)
+    await db.commit()
+    await db.refresh(tmpl)
 
     logger.info(
         "content_template.revision_requested template_id=%s reviewer_id=%s",
@@ -897,7 +899,7 @@ async def use_template(
     template_id: str,
     payload: UseTemplateRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ) -> ContentUsageLogResponse:
     """Record that an approved template has been used for a distribution event.
@@ -938,8 +940,8 @@ async def use_template(
         reference_id=payload.reference_id,
     )
     db.add(log)
-    db.commit()
-    db.refresh(log)
+    await db.commit()
+    await db.refresh(log)
 
     user_name = _user_display_name(current_user)
 

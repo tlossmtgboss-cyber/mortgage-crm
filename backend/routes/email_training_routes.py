@@ -7,7 +7,7 @@ corrections to improve the qualification agent.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, Column, Integer, String, Text, DateTime, Boolean, JSON
+from sqlalchemy import desc, func, Column, Integer, String, Text, DateTime, Boolean, JSON, select
 from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel
 from typing import Optional, List
@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 from database import get_db, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 class EmailTrainingLog(Base):
     """Stores email conversations for training review"""
@@ -136,9 +138,9 @@ class EmailTrainingStats(BaseModel):
 # =============================================================================
 
 @router.post("/log", response_model=dict)
-def log_email_for_training(
+async def log_email_for_training(
     data: EmailTrainingCreate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Log an email exchange for training review.
@@ -158,8 +160,8 @@ def log_email_for_training(
         )
 
         db.add(log)
-        db.commit()
-        db.refresh(log)
+        await db.commit()
+        await db.refresh(log)
 
         logger.info(f"Email logged for training: id={log.id}, conv={data.conversation_id}")
 
@@ -169,7 +171,7 @@ def log_email_for_training(
         }
     except SQLAlchemyError as e:
         logger.error(f"Error logging email for training: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

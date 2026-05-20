@@ -14,10 +14,11 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ WORKFLOW_ROLES = [
 
 @router.get("/roles")
 async def get_available_roles(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Get all available roles for workflow assignment."""
@@ -137,7 +138,7 @@ async def assign_role_to_loan(
     loan_id: int,
     role_id: int,
     user_id: int = Body(..., embed=True),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Assign a user to a role for a specific loan."""
@@ -169,7 +170,7 @@ async def assign_role_to_loan(
 async def remove_role_from_loan(
     loan_id: int,
     role_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Remove a role assignment from a loan."""
@@ -230,7 +231,7 @@ async def assign_role_to_lead(
     lead_id: int,
     role_id: int,
     user_id: int = Body(..., embed=True),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Assign a user to a role for a specific lead."""
@@ -262,7 +263,7 @@ async def assign_role_to_lead(
 async def remove_role_from_lead(
     lead_id: int,
     role_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Remove a role assignment from a lead."""
@@ -289,7 +290,7 @@ async def remove_role_from_lead(
 async def copy_role_assignments_to_loan(
     loan_id: int,
     lead_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Copy role assignments from a lead to a loan (when lead converts)."""
@@ -557,7 +558,7 @@ async def set_default_role_assignment(
 async def remove_default_role_assignment(
     role_id: int,
     user_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Remove a user from a role. If user_id is provided, removes that specific
@@ -569,24 +570,24 @@ async def remove_default_role_assignment(
             raise HTTPException(status_code=403, detail="Organization context required")
 
         if user_id:
-            db.execute(text("""
+            await db.execute(text("""
                 DELETE FROM default_role_assignments
                 WHERE organization_id = :org_id AND role_id = :role_id AND user_id = :user_id
             """), {"org_id": org_id, "role_id": role_id, "user_id": user_id})
         else:
-            db.execute(text("""
+            await db.execute(text("""
                 DELETE FROM default_role_assignments
                 WHERE organization_id = :org_id AND role_id = :role_id
             """), {"org_id": org_id, "role_id": role_id})
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
             "message": "Role assignment removed"
         }
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error removing default role assignment: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -597,7 +598,7 @@ async def remove_default_role_assignment(
 
 @router.post("/settings/seed-workflow-roles")
 async def seed_workflow_roles(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Seed workflow roles into the database."""
@@ -605,7 +606,7 @@ async def seed_workflow_roles(
 
     try:
         # Ensure the roles table exists
-        db.execute(text("""
+        await db.execute(text("""
             CREATE TABLE IF NOT EXISTS roles (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(100) NOT NULL UNIQUE,
@@ -618,7 +619,7 @@ async def seed_workflow_roles(
         """))
 
         # Ensure the default_role_assignments table exists
-        db.execute(text("""
+        await db.execute(text("""
             CREATE TABLE IF NOT EXISTS default_role_assignments (
                 id SERIAL PRIMARY KEY,
                 organization_id INTEGER NOT NULL DEFAULT 1,
@@ -631,7 +632,7 @@ async def seed_workflow_roles(
             )
         """))
 
-        db.commit()
+        await db.commit()
 
         added_count = 0
         updated_count = 0
@@ -639,7 +640,7 @@ async def seed_workflow_roles(
 
         for role in WORKFLOW_ROLES:
             # Check if role already exists
-            existing = db.execute(
+            existing = await db.execute(
                 text("SELECT id, code FROM roles WHERE name = :name"),
                 {"name": role["name"]}
             ).fetchone()
@@ -647,7 +648,7 @@ async def seed_workflow_roles(
             if existing:
                 # Update code if needed
                 if existing[1] != role["code"]:
-                    db.execute(
+                    await db.execute(
                         text("""
                             UPDATE roles SET code = :code, description = :description,
                             updated_at = CURRENT_TIMESTAMP WHERE name = :name
@@ -663,7 +664,7 @@ async def seed_workflow_roles(
                     skipped_count += 1
             else:
                 # Insert new role
-                db.execute(
+                await db.execute(
                     text("""
                         INSERT INTO roles (name, code, description, is_active, created_at, updated_at)
                         VALUES (:name, :code, :description, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -676,10 +677,10 @@ async def seed_workflow_roles(
                 )
                 added_count += 1
 
-        db.commit()
+        await db.commit()
 
         # Get total count
-        total = db.execute(text("SELECT COUNT(*) FROM roles WHERE is_active = true")).scalar()
+        total = await db.execute(text("SELECT COUNT(*) FROM roles WHERE is_active = true")).scalar()
 
         return {
             "success": True,
@@ -690,6 +691,6 @@ async def seed_workflow_roles(
             "total_roles": total
         }
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error seeding workflow roles: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -18,11 +18,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any, Dict, Optional
 import logging
 
-from db import get_db
+from db import get_db, get_async_db
 from routes.scheduler._helpers import (
     get_current_user, get_models, get_enhanced_models, _get_org_id,
 )
@@ -489,7 +490,7 @@ def _count_registered_modules() -> int:
 @router.get("/health", response_model=HealthResponse)
 async def scheduler_health(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Comprehensive Smart Calendar health check.

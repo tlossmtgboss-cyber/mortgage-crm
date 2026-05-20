@@ -19,6 +19,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 
@@ -393,7 +396,7 @@ async def loan_status(
 async def execute_tool(
     req: ToolExecuteRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Generic tool execution — runs any @mortgage_tool by name."""
     _verify_internal_key(request)
@@ -475,7 +478,7 @@ async def lo_info(
 async def create_lead_endpoint(
     req: LeadCreateRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new lead from voice agent."""
     _verify_internal_key(request)
@@ -499,13 +502,13 @@ async def create_lead_endpoint(
     if req.user_id:
         lead.owner_id = req.user_id
     db.add(lead)
-    db.flush()
+    await db.flush()
 
     from services.client_file_service import ensure_client_file
     ensure_client_file(db, lead)
 
-    db.commit()
-    db.refresh(lead)
+    await db.commit()
+    await db.refresh(lead)
 
     return {
         "lead_id": lead.id,

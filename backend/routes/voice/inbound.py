@@ -17,7 +17,9 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from database import get_db
 from middleware.webhook_verification import require_telnyx_webhook as _require_telnyx_webhook
@@ -311,7 +313,7 @@ async def make_outbound_call(
     to_number: str,
     caller_name: str = "Valued Customer",
     purpose: str = "follow_up",
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Initiate an outbound call to a phone number.
@@ -353,7 +355,7 @@ async def make_outbound_call(
                 }
             )
             db.add(dashboard_activity)
-            db.commit()
+            await db.commit()
 
             return {
                 "success": True,
@@ -381,7 +383,7 @@ async def make_outbound_call(
 # ============================================================================
 
 @router.post("/screening")
-async def handle_screening(request: Request, db: Session = Depends(get_db)):
+async def handle_screening(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Unknown caller screening - Step 1: Ask for name
 
@@ -423,7 +425,7 @@ async def handle_screening(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/screening-name")
-async def handle_screening_name(request: Request, db: Session = Depends(get_db)):
+async def handle_screening_name(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Unknown caller screening - Step 2: Got name, ask for reason
 
@@ -468,7 +470,7 @@ async def handle_screening_name(request: Request, db: Session = Depends(get_db))
 
 
 @router.post("/screening-complete")
-async def handle_screening_complete(request: Request, db: Session = Depends(get_db)):
+async def handle_screening_complete(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Unknown caller screening - Step 3: Connect to AI receptionist
 
@@ -491,7 +493,7 @@ async def handle_screening_complete(request: Request, db: Session = Depends(get_
         # Update screening log with outcome
         try:
             from sqlalchemy import text
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_screening_log
                 SET
                     connected_to_ai = true,
@@ -507,7 +509,7 @@ async def handle_screening_complete(request: Request, db: Session = Depends(get_
                     "skipped_reason": skipped_reason
                 })
             })
-            db.commit()
+            await db.commit()
         except Exception as log_error:
             logger.warning(f"Could not update screening log: {log_error}")
 
@@ -524,7 +526,7 @@ async def handle_screening_complete(request: Request, db: Session = Depends(get_
 
 
 @router.post("/screening-transcription")
-async def handle_screening_transcription(request: Request, db: Session = Depends(get_db)):
+async def handle_screening_transcription(request: Request, db: AsyncSession = Depends(get_async_db)):
     """
     Handle transcription callback from screening recordings.
 
@@ -546,19 +548,19 @@ async def handle_screening_transcription(request: Request, db: Session = Depends
                 # Determine if this is name or reason based on recording length/content
                 # Names are typically shorter, update the appropriate field
                 if len(transcription_text) < 50:  # Likely a name
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE call_screening_log
                         SET caller_stated_name = COALESCE(caller_stated_name, :name)
                         WHERE call_sid = :call_sid
                     """), {"call_sid": call_sid, "name": transcription_text})
                 else:  # Likely a reason
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE call_screening_log
                         SET caller_stated_reason = COALESCE(caller_stated_reason, :reason)
                         WHERE call_sid = :call_sid
                     """), {"call_sid": call_sid, "reason": transcription_text})
 
-                db.commit()
+                await db.commit()
                 logger.info(f"Updated screening transcription for {call_sid}")
 
             except Exception as db_error:

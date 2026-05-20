@@ -11,8 +11,10 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from database import get_db
 
@@ -153,12 +155,12 @@ def update_config(
 # ============================================================================
 
 @router.get("/conversations")
-def list_conversations(
+async def list_conversations(
     state: Optional[str] = Query(None),
     lo_id: Optional[int] = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """List AI re-engagement conversations with optional filters."""
@@ -195,10 +197,10 @@ def list_conversations(
         ORDER BY c.created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    conversations = db.execute(text(conversations_sql), params).fetchall()
+    conversations = await db.execute(text(conversations_sql), params).fetchall()
 
     total_sql = "SELECT COUNT(*) FROM ai_prospect_conversations c WHERE " + where_sql
-    total = db.execute(text(total_sql), params).scalar() or 0
+    total = await db.execute(text(total_sql), params).scalar() or 0
 
     data = []
     for row in conversations:
@@ -214,9 +216,9 @@ def list_conversations(
 
 
 @router.get("/conversations/{conversation_id}")
-def get_conversation(
+async def get_conversation(
     conversation_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Get a single conversation with full message history."""
@@ -224,7 +226,7 @@ def get_conversation(
     if not org_id:
         raise HTTPException(status_code=400, detail="No organization context")
 
-    conv = db.execute(text("""
+    conv = await db.execute(text("""
         SELECT
             c.*,
             l.first_name as lead_first_name, l.last_name as lead_last_name,
@@ -253,9 +255,9 @@ def get_conversation(
 # ============================================================================
 
 @router.get("/stats")
-def get_stats(
+async def get_stats(
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Get re-engagement stats dashboard."""
@@ -263,7 +265,7 @@ def get_stats(
     if not org_id:
         raise HTTPException(status_code=400, detail="No organization context")
 
-    stats = db.execute(text("""
+    stats = await db.execute(text("""
         SELECT
             COUNT(*) as total,
             COUNT(CASE WHEN state = 'initial_outreach_sent' THEN 1 END) as outreach_sent,
@@ -400,9 +402,9 @@ def initiate_for_lead(
 
 
 @router.post("/conversations/{conversation_id}/cancel")
-def cancel_conversation(
+async def cancel_conversation(
     conversation_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_get_current_user()),
 ):
     """Cancel an active AI re-engagement conversation."""
@@ -410,7 +412,7 @@ def cancel_conversation(
     if not org_id:
         raise HTTPException(status_code=400, detail="No organization context")
 
-    conv = db.execute(text("""
+    conv = await db.execute(text("""
         SELECT id, state FROM ai_prospect_conversations
         WHERE id = :id AND organization_id = :org_id
     """), {"id": conversation_id, "org_id": org_id}).fetchone()
@@ -422,12 +424,12 @@ def cancel_conversation(
     if conv_data["state"] in ("appointment_booked", "declined", "opt_out", "expired", "cancelled"):
         raise HTTPException(status_code=400, detail=f"Conversation already in terminal state: {conv_data['state']}")
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE ai_prospect_conversations
         SET state = 'cancelled', state_changed_at = NOW(), completed_at = NOW(),
             outcome = 'cancelled', outcome_notes = 'Manually cancelled by admin'
         WHERE id = :id
     """), {"id": conversation_id})
-    db.commit()
+    await db.commit()
 
     return {"status": "success", "message": "Conversation cancelled"}

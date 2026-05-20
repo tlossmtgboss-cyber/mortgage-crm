@@ -15,7 +15,9 @@ Routes:
 """
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from datetime import datetime, timezone
 import asyncio
 import logging
@@ -377,7 +379,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
 
     @app.get("/api/v1/leads/{lead_id}")
-    async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    async def get_lead(lead_id: int, db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user_flexible)):
         lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead or lead.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Lead not found")
@@ -548,7 +550,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
 
     @app.patch("/api/v1/leads/{lead_id}")
-    async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    async def update_lead(lead_id: int, lead_update: LeadUpdate, db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user_flexible)):
         is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
         if not is_platform_admin:
             has_update_permission = (
@@ -655,8 +657,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             )
             db.add(stage_history)
 
-        db.commit()
-        db.refresh(lead)
+        await db.commit()
+        await db.refresh(lead)
 
         # Invalidate dashboard cache so numbers update immediately
         try:
@@ -684,7 +686,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     organization_id=getattr(lead, 'organization_id', None),
                 )
                 if cascade_result["loans_updated"] or cascade_result["mum_clients_updated"]:
-                    db.commit()
+                    await db.commit()
                     logger.info(f"Cascade for lead {lead.id}: {len(cascade_result['loans_updated'])} loans, {len(cascade_result['mum_clients_updated'])} MUM clients updated")
             except Exception as cascade_err:
                 logger.error(f"Cascade error for lead {lead.id}: {cascade_err}")
@@ -803,7 +805,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         return result
 
     @app.delete("/api/v1/leads/{lead_id}", status_code=204)
-    async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+    async def delete_lead(lead_id: int, db: AsyncSession = Depends(get_async_db), current_user: User = Depends(get_current_user_flexible)):
         is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
         if not is_platform_admin:
             has_delete_permission = (
@@ -822,20 +824,20 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         try:
             # Soft-delete: set deleted_at timestamp instead of removing data
             lead.deleted_at = datetime.now(timezone.utc)
-            db.commit()
+            await db.commit()
 
             logger.info(f"Lead soft-deleted: {lead_name} (ID: {lead_id})")
             return None
 
         except Exception as e:
             logger.error(f"Error soft-deleting lead {lead_id}: {str(e)}")
-            db.rollback()
+            await db.rollback()
             raise HTTPException(status_code=500, detail="Failed to delete lead")
 
 
     @app.post("/api/v1/leads/claim-orphans")
     async def claim_orphan_leads(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """
@@ -851,7 +853,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             raise HTTPException(status_code=403, detail="Organization context required")
 
         try:
-            result = db.execute(
+            result = await db.execute(
                 text("""
                     UPDATE leads SET owner_id = :user_id
                     WHERE id IN (
@@ -865,7 +867,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             )
             leads_claimed = result.rowcount
 
-            result = db.execute(
+            result = await db.execute(
                 text("""
                     UPDATE loans SET loan_officer_id = :user_id
                     WHERE id IN (
@@ -880,9 +882,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             )
             loans_claimed = result.rowcount
 
-            db.commit()
+            await db.commit()
 
-            result = db.execute(
+            result = await db.execute(
                 text("""
                     SELECT
                         (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id AND organization_id = :org_id) as leads,
@@ -908,7 +910,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             }
 
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error(f"Error claiming orphan leads: {str(e)}")
             raise HTTPException(status_code=500, detail="Failed to claim orphan leads")
 

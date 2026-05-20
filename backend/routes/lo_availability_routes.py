@@ -14,10 +14,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, text
+from sqlalchemy import and_, text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
@@ -374,7 +375,7 @@ def update_status_from_call(db: Session, user_id: int, event_type: str):
 @router.put("/status")
 async def update_own_status(
     body: StatusUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """LO manually sets their own status (available, dnd, away, etc.)."""
@@ -397,7 +398,7 @@ async def update_own_status(
     if body.max_concurrent_transfers is not None:
         avail.max_concurrent_transfers = body.max_concurrent_transfers
 
-    db.commit()
+    await db.commit()
     _cache_invalidate(current_user.id)
 
     logger.info(
@@ -773,7 +774,7 @@ async def call_event_webhook(
 
 @router.post("/heartbeat")
 async def heartbeat(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_dep),
 ):
     """
@@ -803,7 +804,7 @@ async def heartbeat(
         )
 
     avail.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.commit()
     _cache_invalidate(current_user.id)
 
     return {

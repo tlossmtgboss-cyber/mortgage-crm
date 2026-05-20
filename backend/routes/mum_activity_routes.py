@@ -12,6 +12,9 @@ Lines ~20814-21293 from inline_legacy_routes.py.
 """
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import logging
@@ -187,7 +190,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
     @app.post("/api/v1/mum-clients/batch-promote")
     async def batch_promote_funded_loans(
         dry_run: bool = False,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         """
@@ -198,7 +201,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         from services.mum_promotion_service import maybe_promote_loan_to_mum
 
         # Find all funded loans without a matching MUM client
-        eligible = db.execute(text("""
+        eligible = await db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name, l.stage,
                    l.funded_date, l.closing_date
             FROM loans l
@@ -248,7 +251,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         # Repair existing MUM clients: fix user_id and organization_id from their linked loan
         repaired = 0
         try:
-            repair_rows = db.execute(text("""
+            repair_rows = await db.execute(text("""
                 SELECT mc.id, l.loan_officer_id, l.organization_id
                 FROM mum_clients mc
                 JOIN loans l ON l.loan_number = mc.loan_number
@@ -259,13 +262,13 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
                 mc_id, lo_id, org_id = r[0], r[1], r[2]
                 updates = {"org_id": org_id, "mc_id": mc_id}
                 if lo_id:
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE mum_clients
                         SET user_id = :lo_id, organization_id = :org_id
                         WHERE id = :mc_id
                     """), {**updates, "lo_id": lo_id})
                 else:
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE mum_clients
                         SET organization_id = :org_id
                         WHERE id = :mc_id
@@ -276,7 +279,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         except Exception as e:
             logger.warning(f"MUM client repair step failed: {e}")
 
-        db.commit()
+        await db.commit()
 
         return {
             "dry_run": False,
@@ -508,7 +511,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         lead_id: Optional[int] = None,
         loan_id: Optional[int] = None,
         mum_client_id: Optional[int] = None,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user: User = Depends(get_current_user)
     ):
         from sqlalchemy import text
@@ -525,7 +528,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             params["mum_id"] = mum_client_id
 
         where = " AND ".join(filters)
-        rows = db.execute(text(
+        rows = await db.execute(text(
             f"SELECT id, type, content, lead_id, loan_id, mum_client_id, "
             f"sentiment, created_at FROM activities WHERE {where} "
             f"ORDER BY created_at DESC LIMIT :lim OFFSET :off"

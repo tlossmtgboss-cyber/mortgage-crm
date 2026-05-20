@@ -22,6 +22,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request, status, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -519,7 +522,7 @@ def register_los_webhook_routes(app, get_db, **kwargs):
     async def receive_encompass_webhook(
         request: Request,
         background_tasks: BackgroundTasks,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """Receive and process Encompass webhook events.
 

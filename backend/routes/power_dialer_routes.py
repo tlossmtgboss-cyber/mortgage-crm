@@ -17,10 +17,11 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from sqlalchemy import or_, text
+from sqlalchemy import or_, text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 from telephony.provider import get_telephony_provider
 from telephony.dialer_engine import DialerEngine, click_to_dial
 from telephony.compliance import ComplianceChecker
@@ -254,7 +255,7 @@ async def update_dialer_settings(
 async def verify_caller_id(
     data: VerifyCallerIdRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Start caller ID verification process"""
     import main
@@ -273,7 +274,7 @@ async def verify_caller_id(
             verification_status="pending"
         )
         db.add(verified)
-        db.commit()
+        await db.commit()
 
     return result
 
@@ -281,7 +282,7 @@ async def verify_caller_id(
 @router.get("/dialer/verified-caller-ids")
 async def list_verified_caller_ids(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all verified caller IDs"""
     import main
@@ -300,7 +301,7 @@ async def list_verified_caller_ids(
 async def api_click_to_dial(
     data: ClickToDialRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Single click-to-dial call"""
     import main
@@ -343,7 +344,7 @@ async def api_click_to_dial(
 async def create_dialer_session(
     data: DialerSessionCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new power dialer session"""
     import main
@@ -387,7 +388,7 @@ async def get_active_session(
 async def get_session_status(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get status of a specific session"""
     import main
@@ -407,7 +408,7 @@ async def get_session_status(
 async def get_next_dialer_task(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get the next task in the session queue"""
     import main
@@ -428,7 +429,7 @@ async def initiate_session_call(
     session_id: int,
     task_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Initiate call for a specific task in the session"""
     import main
@@ -454,7 +455,7 @@ async def set_task_disposition(
     task_id: int,
     data: DispositionRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Set disposition for a completed call"""
     import main
@@ -482,7 +483,7 @@ async def skip_session_task(
     task_id: int,
     request: Request,
     reason: str = "manual_skip",
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Skip a task in the session"""
     import main
@@ -502,7 +503,7 @@ async def skip_session_task(
 async def pause_session(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Pause the dialer session"""
     import main
@@ -522,7 +523,7 @@ async def pause_session(
 async def resume_session(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Resume a paused session"""
     import main
@@ -542,7 +543,7 @@ async def resume_session(
 async def stop_session(
     session_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Stop the dialer session"""
     import main
@@ -566,7 +567,7 @@ async def stop_session(
 async def check_compliance(
     phone_number: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Check compliance status for a phone number"""
     import main
@@ -583,7 +584,7 @@ async def add_to_dnc(
     phone_number: str,
     request: Request,
     reason: str = "customer_request",
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Add a phone number to the Do Not Call list"""
     import main
@@ -603,7 +604,7 @@ async def add_to_dnc(
 async def remove_from_dnc(
     phone_number: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Remove a phone number from the Do Not Call list"""
     import main
@@ -753,7 +754,7 @@ async def get_dialer_call_tasks(
 @router.get("/dialer/callable-contacts")
 async def get_callable_contacts(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get all contacts (leads and loans) that have phone numbers for dialing.
@@ -766,7 +767,7 @@ async def get_callable_contacts(
         contacts = []
 
         # Get leads with phone numbers
-        leads_query = db.execute(text("""
+        leads_query = await db.execute(text("""
             SELECT id, name, phone, email, CAST(status AS TEXT) as status, created_at
             FROM leads
             WHERE phone IS NOT NULL AND phone != ''
@@ -789,7 +790,7 @@ async def get_callable_contacts(
                 })
 
         # Get loans with borrower phone numbers
-        loans_query = db.execute(text("""
+        loans_query = await db.execute(text("""
             SELECT id, borrower_name, borrower_phone, borrower_email,
                    CAST(stage AS TEXT) as stage, created_at
             FROM loans

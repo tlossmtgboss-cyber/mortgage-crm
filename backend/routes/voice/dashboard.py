@@ -22,6 +22,9 @@ from typing import Optional
 from fastapi import APIRouter, Request, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 import openai
 
@@ -91,7 +94,7 @@ async def voicemail_twiml():
 @router.post("/make-call")
 async def make_outbound_call(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Make an outbound AI call"""
     try:
@@ -130,7 +133,7 @@ async def make_outbound_call(
                 }
             )
             db.add(activity)
-            db.commit()
+            await db.commit()
 
             return {
                 "success": True,
@@ -604,7 +607,7 @@ async def attach_operators(request: Request):
 @router.post("/drop-voicemail")
 async def drop_voicemail(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Drop a ringless voicemail using Slybroadcast (or fallback to Vapi)"""
     try:
@@ -661,8 +664,8 @@ async def drop_voicemail(
             status='pending'
         )
         db.add(voicemail_drop)
-        db.commit()
-        db.refresh(voicemail_drop)
+        await db.commit()
+        await db.refresh(voicemail_drop)
 
         session_id = None
 
@@ -686,13 +689,13 @@ async def drop_voicemail(
                     error_msg = zapier_response.text
                     voicemail_drop.status = 'failed'
                     voicemail_drop.error_message = f"Zapier error: {error_msg}"
-                    db.commit()
+                    await db.commit()
                     raise HTTPException(status_code=500, detail=f"Zapier webhook error: {error_msg}")
 
                 session_id = f"zapier_{voicemail_drop.id}"
                 voicemail_drop.vapi_call_id = session_id
                 voicemail_drop.status = 'sent_to_zapier'
-                db.commit()
+                await db.commit()
 
         elif provider == "slybroadcast":
             logger.info("Using Slybroadcast for ringless voicemail")
@@ -759,17 +762,17 @@ async def drop_voicemail(
                     session_id = str(sly_data.get("session_id"))
                     voicemail_drop.vapi_call_id = session_id
                     voicemail_drop.status = 'sent'
-                    db.commit()
+                    await db.commit()
                 elif "ERROR" in sly_data:
                     error_msg = sly_data.get("ERROR", "Unknown error")
                     voicemail_drop.status = 'failed'
                     voicemail_drop.error_message = error_msg
-                    db.commit()
+                    await db.commit()
                     raise HTTPException(status_code=500, detail=f"Slybroadcast error: {error_msg}")
                 else:
                     voicemail_drop.status = 'failed'
                     voicemail_drop.error_message = str(sly_data)
-                    db.commit()
+                    await db.commit()
                     raise HTTPException(status_code=500, detail=f"Unexpected Slybroadcast response: {sly_data}")
 
         else:
@@ -806,7 +809,7 @@ async def drop_voicemail(
                 vapi_data = vapi_response.json()
                 session_id = vapi_data.get("id")
                 voicemail_drop.vapi_call_id = session_id
-                db.commit()
+                await db.commit()
 
         # Log activity
         activity = Activity(
@@ -828,7 +831,7 @@ async def drop_voicemail(
             loan_id=loan_id
         )
         db.add(activity)
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,

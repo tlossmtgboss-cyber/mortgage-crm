@@ -14,10 +14,12 @@ import io
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Query, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import text, or_, and_
+from sqlalchemy import text, or_, and_, select
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from models.call_monitoring_models import (
     UnderwritingGuideline,
     GuidelineSection,
@@ -70,7 +72,7 @@ async def upload_guideline(
     effective_date: Optional[str] = Form(None),
     expiration_date: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # Comma-separated
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Upload a guideline document (PDF, TXT, DOCX).
@@ -138,8 +140,8 @@ async def upload_guideline(
     )
 
     db.add(guideline)
-    db.commit()
-    db.refresh(guideline)
+    await db.commit()
+    await db.refresh(guideline)
 
     # Process in background (extract text, generate summary)
     background_tasks.add_task(
@@ -157,7 +159,7 @@ async def upload_guideline(
 @router.post("/text", response_model=GuidelineResponse)
 async def add_guideline_text(
     request: GuidelineTextInput,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Add guideline content directly as text.
@@ -179,15 +181,15 @@ async def add_guideline_text(
     )
 
     db.add(guideline)
-    db.commit()
-    db.refresh(guideline)
+    await db.commit()
+    await db.refresh(guideline)
 
     # Extract key points from the text
     try:
         from services.call_monitoring.guidelines_service import extract_key_points
         key_points = await extract_key_points(request.content)
         guideline.key_points = key_points
-        db.commit()
+        await db.commit()
     except SQLAlchemyError as e:
         logger.warning(f"Could not extract key points: {e}")
 
@@ -366,7 +368,7 @@ async def reprocess_guideline(
 @router.post("/search", response_model=List[GuidelineSearchResult])
 async def search_guidelines(
     request: GuidelineSearchRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Search guidelines by keyword/phrase.
@@ -392,7 +394,7 @@ async def quick_search(
     q: str = Query(..., min_length=2),
     loan_program: Optional[str] = Query(None),
     limit: int = Query(5, le=20),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Quick search for guidelines (used by autocomplete)."""
     from services.call_monitoring.guidelines_service import search_guidelines as do_search

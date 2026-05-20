@@ -18,8 +18,10 @@ from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from database import get_db
 from auth.dependencies import get_current_user
@@ -656,7 +658,7 @@ def _bg_send_batch_item(
 async def send_needs_list(
     body: SendNeedsListRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -757,7 +759,7 @@ async def send_needs_list(
 async def send_reminder(
     body: SendReminderRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -854,7 +856,7 @@ async def send_reminder(
 async def send_batch(
     body: SendBatchRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -967,7 +969,7 @@ async def send_batch(
 async def resend_portal_link(
     body: ResendPortalLinkRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1058,7 +1060,7 @@ async def resend_portal_link(
 async def get_delivery_history(
     loan_id: int,
     limit: int = Query(default=50, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1068,7 +1070,7 @@ async def get_delivery_history(
     """
     _verify_loan_tenant(db, loan_id, current_user)
 
-    rows = db.execute(
+    rows = await db.execute(
         sa_text("""
             SELECT id, event_type, payload, created_at
             FROM doc_policy_events

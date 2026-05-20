@@ -44,7 +44,7 @@ def safe_isoformat(dt):
 # AUTHENTICATION DEPENDENCY
 # =============================================================================
 
-def get_borrower_from_token(request: Request, db: Session = Depends(get_db)) -> dict:
+async def get_borrower_from_token(request: Request, db: AsyncSession = Depends(get_async_db)) -> dict:
     """Extract and verify borrower from JWT token."""
     import jwt
     import os
@@ -67,7 +67,7 @@ def get_borrower_from_token(request: Request, db: Session = Depends(get_db)) -> 
         borrower_id = payload.get("sub")
 
         # Fetch borrower from database
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, email, first_name, last_name, profile_photo,
                    communication_consent, marketing_consent
             FROM borrower_profiles

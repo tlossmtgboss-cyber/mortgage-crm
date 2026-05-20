@@ -7,7 +7,7 @@ import html as html_mod
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, select
 from pydantic import BaseModel, Field, EmailStr, validator, root_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -17,6 +17,8 @@ import subprocess
 
 from database import get_db, Base
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from utils.error_handling import (
     ValidationException,
     PermissionException,
@@ -32,7 +34,7 @@ _security = HTTPBearer(auto_error=False)
 
 async def _require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -400,7 +402,7 @@ def check_dns_status(domain: str) -> Dict[str, Any]:
 # =============================================================================
 
 @router.get("")
-async def get_email_settings(db: Session = Depends(get_db)):
+async def get_email_settings(db: AsyncSession = Depends(get_async_db)):
     """Get current email integration settings"""
     try:
         settings = get_or_create_settings(db)
@@ -451,7 +453,7 @@ async def get_email_settings(db: Session = Depends(get_db)):
 @router.put("")
 async def update_email_settings(
     updates: EmailIntegrationSettingsUpdate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update email integration settings with validation"""
     try:
@@ -470,8 +472,8 @@ async def update_email_settings(
                 settings.from_name = f"{settings.assistant_name} from {settings.company_name}"
 
         settings.updated_at = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(settings)
+        await db.commit()
+        await db.refresh(settings)
 
         warnings = validate_settings_warnings(settings)
 
@@ -517,12 +519,12 @@ async def update_email_settings(
         raise
     except Exception as e:
         logger.error(f"Error updating email settings: {e}")
-        db.rollback()
+        await db.rollback()
         raise DatabaseException("Failed to update email settings", original_error=str(e))
 
 
 @router.get("/status")
-async def get_email_status(db: Session = Depends(get_db)):
+async def get_email_status(db: AsyncSession = Depends(get_async_db)):
     """Get email setup status including DNS configuration"""
     try:
         settings = get_or_create_settings(db)
@@ -564,7 +566,7 @@ async def get_email_status(db: Session = Depends(get_db)):
 @router.post("/test")
 async def send_test_email(
     request: TestEmailRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a test email to verify configuration"""
     try:
@@ -634,7 +636,7 @@ async def send_test_email(
 
 
 @router.get("/dns-instructions")
-async def get_dns_instructions(db: Session = Depends(get_db)):
+async def get_dns_instructions(db: AsyncSession = Depends(get_async_db)):
     """Get DNS setup instructions for the configured domain"""
     try:
         settings = get_or_create_settings(db)
@@ -690,7 +692,7 @@ async def get_dns_instructions(db: Session = Depends(get_db)):
 
 
 @router.post("/verify-dns")
-async def verify_dns(db: Session = Depends(get_db)):
+async def verify_dns(db: AsyncSession = Depends(get_async_db)):
     """Verify DNS configuration and update status"""
     try:
         settings = get_or_create_settings(db)
@@ -730,7 +732,7 @@ async def verify_dns(db: Session = Depends(get_db)):
 
 
 @router.get("/preview-signature")
-async def preview_email_signature(db: Session = Depends(get_db)):
+async def preview_email_signature(db: AsyncSession = Depends(get_async_db)):
     """Preview how the email signature will appear"""
     try:
         settings = get_or_create_settings(db)

@@ -5,7 +5,7 @@ Configure the pre-approval letter content and branding
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, select
 from sqlalchemy.dialects.postgresql import JSONB
 from pydantic import BaseModel
 from typing import Optional, List
@@ -24,6 +24,8 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +141,7 @@ def serialize_conditions(conditions: List[str]) -> str:
 @router.get("/pre-approval-letter")
 async def get_pre_approval_letter_settings(
     user=Depends(_get_current_user()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get current pre-approval letter settings"""
     org_id = getattr(user, "organization_id", None) if user else None
@@ -168,7 +170,7 @@ async def get_pre_approval_letter_settings(
 async def update_pre_approval_letter_settings(
     updates: PreApprovalLetterSettingsUpdate,
     user=Depends(_get_current_user()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Update pre-approval letter settings"""
     org_id = getattr(user, "organization_id", None) if user else None
@@ -186,8 +188,8 @@ async def update_pre_approval_letter_settings(
                 setattr(settings, field, value)
 
     settings.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(settings)
+    await db.commit()
+    await db.refresh(settings)
 
     logger.info(f"Pre-approval letter settings updated: {list(update_data.keys())}")
 
@@ -677,7 +679,7 @@ class TestEmailRequest(BaseModel):
 async def send_test_pre_approval_letter(
     request: TestEmailRequest,
     user=Depends(_get_current_user()),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Send a test pre-approval letter PDF attachment to the specified email"""
     from email_service import EmailService

@@ -27,11 +27,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, validator
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user
-from db import get_db
+from db import get_db, get_async_db
 from database.models.credit_monitoring import (
     AlertType,
     ContactType,
@@ -369,7 +370,7 @@ def _verify_webhook_signature(body: bytes, signature_header: Optional[str]) -> b
 @router.post("/subscribe", response_model=SubscriptionResponse, status_code=201)
 async def subscribe_contact(
     payload: SubscribeRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Enrol a lead, client, or past borrower in credit bureau monitoring.
@@ -405,12 +406,12 @@ async def subscribe_contact(
             lo_id=lo_id,
             baseline_credit_score=payload.baseline_credit_score,
         )
-        db.commit()
+        await db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to enrol contact in credit monitoring")
         raise HTTPException(status_code=500, detail="Failed to create monitoring subscription.")
 
@@ -421,7 +422,7 @@ async def subscribe_contact(
 async def cancel_monitoring(
     subscription_id: int,
     reason: Optional[str] = Query(None, max_length=500),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Cancel (soft-delete) a credit monitoring subscription.
@@ -440,12 +441,12 @@ async def cancel_monitoring(
             organization_id=org_id,
             reason=reason,
         )
-        db.commit()
+        await db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to cancel subscription id=%s", subscription_id)
         raise HTTPException(status_code=500, detail="Failed to cancel subscription.")
 
@@ -574,7 +575,7 @@ async def list_mortgage_inquiry_alerts(
     unactioned_only: bool = Query(True, description="Default True: show only unactioned recapture ops."),
     lo_id: Optional[int] = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return mortgage inquiry alerts — the primary recapture opportunity feed.
@@ -621,7 +622,7 @@ async def list_mortgage_inquiry_alerts(
 async def action_alert(
     alert_id: int,
     payload: ActionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Record that the LO has taken action on a credit alert.
@@ -643,12 +644,12 @@ async def action_alert(
             action_notes=payload.action_notes,
             converted_to_loan_id=payload.converted_to_loan_id,
         )
-        db.commit()
+        await db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to action alert id=%s", alert_id)
         raise HTTPException(status_code=500, detail="Failed to record action.")
 
@@ -667,7 +668,7 @@ async def action_alert(
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(
     lo_id: Optional[int] = Query(None, description="Scope to a specific LO. Admins only."),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user),
 ):
     """Credit monitoring dashboard stats.

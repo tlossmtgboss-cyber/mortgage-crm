@@ -18,8 +18,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from database import get_db
 from auth.dependencies import get_current_user
@@ -501,7 +503,7 @@ async def get_calculation_sources(
 async def approve_calculation(
     calculation_id: int,
     body: ApproveCalculationBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -559,9 +561,9 @@ async def approve_calculation(
     calc.updated_at = now
 
     try:
-        db.flush()
+        await db.flush()
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to approve calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to approve calculation")
 
@@ -583,10 +585,10 @@ async def approve_calculation(
     )
 
     try:
-        db.commit()
-        db.refresh(calc)
+        await db.commit()
+        await db.refresh(calc)
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to commit approval for calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to approve calculation")
 
@@ -609,7 +611,7 @@ async def approve_calculation(
 async def review_calculation(
     calculation_id: int,
     body: ReviewCalculationBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -655,9 +657,9 @@ async def review_calculation(
     calc.updated_at = now
 
     try:
-        db.flush()
+        await db.flush()
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to review calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to review calculation")
 
@@ -677,10 +679,10 @@ async def review_calculation(
     )
 
     try:
-        db.commit()
-        db.refresh(calc)
+        await db.commit()
+        await db.refresh(calc)
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to commit review for calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to review calculation")
 
@@ -702,7 +704,7 @@ async def review_calculation(
 async def reject_calculation(
     calculation_id: int,
     body: RejectCalculationBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -733,9 +735,9 @@ async def reject_calculation(
     calc.updated_at = now
 
     try:
-        db.flush()
+        await db.flush()
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to reject calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to reject calculation")
 
@@ -756,10 +758,10 @@ async def reject_calculation(
     )
 
     try:
-        db.commit()
-        db.refresh(calc)
+        await db.commit()
+        await db.refresh(calc)
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to commit rejection for calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to reject calculation")
 
@@ -821,7 +823,7 @@ async def get_income_tasks(
 async def complete_task(
     task_id: int,
     body: CompleteTaskBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -840,10 +842,10 @@ async def complete_task(
     task.updated_at = now
 
     try:
-        db.commit()
-        db.refresh(task)
+        await db.commit()
+        await db.refresh(task)
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to complete task %s", task_id)
         raise HTTPException(status_code=500, detail="Failed to complete task")
 
@@ -864,7 +866,7 @@ async def complete_task(
 async def defer_task(
     task_id: int,
     body: DeferTaskBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -888,10 +890,10 @@ async def defer_task(
             raise HTTPException(status_code=400, detail="Invalid defer_until date format. Use ISO-8601.")
 
     try:
-        db.commit()
-        db.refresh(task)
+        await db.commit()
+        await db.refresh(task)
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to defer task %s", task_id)
         raise HTTPException(status_code=500, detail="Failed to defer task")
 
@@ -1067,7 +1069,7 @@ async def override_income_source(
 
 @router.get("/income/stats")
 async def get_income_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1102,7 +1104,7 @@ async def get_income_stats(
         " FROM income_calculations ic"
         " WHERE 1=1 " + org_filter
     )
-    summary = db.execute(
+    summary = await db.execute(
         sa_text(summary_query),
         params,
     ).first()
@@ -1117,7 +1119,7 @@ async def get_income_stats(
         " FROM income_calculations ic"
         " WHERE ic.dti_back_end IS NOT NULL " + org_filter
     )
-    dti_dist = db.execute(
+    dti_dist = await db.execute(
         sa_text(dti_query),
         params,
     ).first()

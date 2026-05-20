@@ -19,9 +19,11 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from auth.dependencies import get_current_user
-from db import get_db
+from db import get_db, get_async_db
 from services.email_tracking_service import (
     generate_tracking_id,
     inject_tracking,
@@ -472,7 +474,7 @@ def _log_activity(
 @router.post("/send", response_model=EmailSendResponse)
 async def send_email(
     request: EmailSendRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Send an email from the LO's Outlook address via Microsoft Graph.
@@ -898,7 +900,7 @@ FIELD_PROMPTS = {
 @router.post("/ai-generate-text", response_model=AIGenerateTextResponse)
 async def ai_generate_text(
     request: AIGenerateTextRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Generate text content for a CRM field using AI."""

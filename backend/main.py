@@ -306,6 +306,39 @@ except Exception as _e:  # pragma: no cover
     )
 
 
+# ---------------------------------------------------------------------------
+# D4 CC-004 — Federal DNC registry daily auto-sync (02:00 UTC)
+# ---------------------------------------------------------------------------
+def run_daily_federal_dnc_sync():
+    """Best-effort daily mirror of the FTC federal DNC list. Never raises."""
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+    try:
+        from services.dnc_federal_sync import run_federal_dnc_sync
+        result = run_federal_dnc_sync()
+        _log.info("run_daily_federal_dnc_sync complete: %s", result)
+        return result
+    except Exception as exc:
+        _log.error("run_daily_federal_dnc_sync failed: %s", exc)
+        return {"success": False, "error": str(exc)}
+
+
+try:
+    from apscheduler.triggers.cron import CronTrigger as _CronTrigger
+    scheduler.add_job(
+        run_daily_federal_dnc_sync,
+        trigger=_CronTrigger(hour=2, minute=0),
+        id="run_daily_federal_dnc_sync",
+        name="D4 CC-004: Federal DNC daily sync (02:00 UTC)",
+        replace_existing=True,
+    )
+except Exception as _e:  # pragma: no cover
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "Failed to register daily federal DNC sync cron: %s", _e
+    )
+
+
 # Use RLS-aware get_db from database.py
 get_db = _get_db_from_database
 

@@ -10,7 +10,9 @@ Provides endpoints for IT helpdesk ticket management including:
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from typing import Optional, List
 from datetime import datetime, timezone
 import logging
@@ -125,7 +127,7 @@ Format your response as JSON:
 async def submit_it_ticket(
     ticket_data: dict,
     current_user=Depends(get_current_user_dep()),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Submit a new IT helpdesk ticket for AI diagnosis"""
     try:
@@ -155,7 +157,7 @@ async def submit_it_ticket(
             status="analyzing"
         )
         db.add(ticket)
-        db.flush()
+        await db.flush()
 
         # Use AI to diagnose the issue
         diagnosis_result = await diagnose_it_issue(ticket, description, logs_attached)
@@ -166,7 +168,7 @@ async def submit_it_ticket(
         ticket.proposed_fix = diagnosis_result.get("proposed_fix", {})
         ticket.status = "awaiting_approval" if diagnosis_result.get("proposed_fix") else "analyzed"
 
-        db.commit()
+        await db.commit()
 
         logger.info(f"IT ticket {ticket.id} created and analyzed for user {current_user.id}")
 
@@ -183,7 +185,7 @@ async def submit_it_ticket(
         raise
     except Exception as e:
         logger.error(f"Error submitting IT ticket: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

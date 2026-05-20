@@ -18,10 +18,11 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import text, or_
+from sqlalchemy import text, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def _get_current_user():
     return get_current_user
 
 
-async def _current_user_dep(request: Request, db: Session = Depends(get_db)):
+async def _current_user_dep(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Proper FastAPI dependency that resolves to the actual user object."""
     from auth.dependencies import get_current_user
     return await get_current_user(request, db)
@@ -711,7 +712,7 @@ async def get_user_permissions_endpoint(
 @router.get("/permissions/templates")
 async def get_permission_templates(
     current_user = Depends(_current_user_dep),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get all available permission templates
@@ -725,7 +726,7 @@ async def get_permission_templates(
                 raise HTTPException(status_code=403, detail="Access denied")
 
         # Get templates
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, name, description, category, permissions, is_system_default
             FROM permission_templates
             ORDER BY is_system_default DESC, name
@@ -795,7 +796,7 @@ async def get_user_permission_template(
 @router.get("/permissions/available")
 async def get_available_permissions(
     current_user = Depends(_current_user_dep),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get all available permissions with descriptions and categories

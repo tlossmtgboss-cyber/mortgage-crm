@@ -32,6 +32,9 @@ Performance Monitoring:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 from pydantic import BaseModel
 from typing import Optional, List, Literal
 from datetime import datetime
@@ -144,7 +147,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         scope_type: str = Query("organization"),
         scope_id: Optional[int] = Query(None),
         format: Literal["json", "pdf", "excel"] = Query("json"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -209,7 +212,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         stage: Optional[str] = Query(None, description="Filter by stage"),
         date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
         date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -279,7 +282,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         format: Literal["csv", "xlsx"] = Query("csv"),
         date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
         date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -348,7 +351,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         request: Request,
         format: Literal["csv", "xlsx"] = Query("csv"),
         period_days: int = Query(30, ge=1, le=365),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -407,7 +410,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     async def export_report_pdf(
         body: ExportRequest,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -451,7 +454,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     async def export_report_excel(
         body: ExportRequest,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -496,7 +499,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     async def export_report_csv(
         body: ExportRequest,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -584,7 +587,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     async def schedule_report(
         body: ScheduleReportRequest,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -599,7 +602,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         user_id = current_user.id
 
         # Store schedule in database
-        schedule_id = db.execute(sa_text("""
+        schedule_id = await db.execute(sa_text("""
             INSERT INTO scheduled_reports
             (organization_id, created_by_id, report_type, export_format, frequency,
              recipients, title, day_of_week, day_of_month, hour_utc, is_active, created_at)
@@ -619,7 +622,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
             "day_of_month": body.day_of_month,
             "hour": body.hour,
         }).scalar()
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -630,7 +633,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/reports/schedules")
     async def list_scheduled_reports(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List all scheduled reports for the organization."""
@@ -640,7 +643,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         if not org_id:
             raise HTTPException(status_code=403, detail="Organization context required")
 
-        schedules = db.execute(sa_text("""
+        schedules = await db.execute(sa_text("""
             SELECT id, report_type, export_format, frequency, recipients,
                    title, day_of_week, day_of_month, hour_utc, is_active,
                    last_sent_at, created_at
@@ -674,7 +677,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     async def cancel_scheduled_report(
         schedule_id: int,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Cancel a scheduled report."""
@@ -684,11 +687,11 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         if not org_id:
             raise HTTPException(status_code=403, detail="Organization context required")
 
-        result = db.execute(sa_text("""
+        result = await db.execute(sa_text("""
             UPDATE scheduled_reports SET is_active = false
             WHERE id = :id AND organization_id = :org_id
         """), {"id": schedule_id, "org_id": org_id})
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(404, "Schedule not found")
@@ -703,7 +706,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     async def run_scheduled_report_now(
         schedule_id: int,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -731,7 +734,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/reports/schedule/due")
     async def list_due_reports(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -775,7 +778,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/reports/schedule/stats")
     async def get_schedule_execution_stats(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -841,7 +844,7 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
 
     @app.get("/api/v1/monitoring/deadlocks")
     async def check_deadlocks(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """

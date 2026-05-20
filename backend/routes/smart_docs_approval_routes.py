@@ -12,6 +12,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 from auth.dependencies import get_current_user
@@ -71,7 +74,7 @@ def _require_approval_role(current_user) -> None:
 async def manual_review_document(
     document_id: int,
     body: ManualReviewBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user),
 ):
     """Submit a manual review decision for a document."""
@@ -92,7 +95,7 @@ async def manual_review_document(
 @router.post("/document/{document_id}/reprocess")
 async def reprocess_document(
     document_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user),
 ):
     """

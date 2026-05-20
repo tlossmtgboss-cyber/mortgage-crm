@@ -45,10 +45,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from auth.dependencies import get_current_user
 from database.models.tcpa_consent import TCPAConsent
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +337,7 @@ def _consent_channel_permits(consent_channel: str, requested_channel: str) -> bo
 )
 async def record_consent(
     payload: ConsentGrantRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """Record a new TCPA consent grant."""
@@ -410,10 +412,10 @@ async def record_consent(
         except Exception as audit_err:
             logger.debug("Consent audit log skipped on grant: %s", audit_err)
 
-        db.commit()
-        db.refresh(record)
+        await db.commit()
+        await db.refresh(record)
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to record TCPA consent for phone %s", payload.phone_number)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

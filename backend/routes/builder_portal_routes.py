@@ -27,9 +27,11 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import Optional, List, Dict, Any
 
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +108,7 @@ def _require_builder_token(request: Request, db: Session) -> "BuilderApplication
     return app
 
 
-async def _get_current_user(request: Request, db: Session = Depends(get_db)):
+async def _get_current_user(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Delegate to canonical auth (lazy import avoids circular deps)."""
     from main import get_current_user as _gcu
     auth_header = request.headers.get("Authorization", "")
@@ -305,7 +307,7 @@ async def register_builder(body: RegisterRequest, request: Request, db: Session 
 async def initiate_builder_upload(
     body: InitiateUploadRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get a presigned S3 URL for the builder to upload a document."""
     app = _require_builder_token(request, db)
@@ -334,8 +336,8 @@ async def initiate_builder_upload(
         status="PENDING_UPLOAD",
     )
     db.add(doc)
-    db.commit()
-    db.refresh(doc)
+    await db.commit()
+    await db.refresh(doc)
 
     s3 = _get_s3()
     if not s3:
@@ -420,7 +422,7 @@ async def delete_builder_document(
 async def submit_builder_application(
     body: SubmitRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Final submission of the builder application.
@@ -443,7 +445,7 @@ async def submit_builder_application(
     app.status = "SUBMITTED"
     app.submitted_at = datetime.now(timezone.utc)
     app.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.commit()
 
     try:
         from database.models.core import Notification
@@ -456,7 +458,7 @@ async def submit_builder_application(
             link=f"/referral-partners/{app.partner_id}",
         )
         db.add(notif)
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.warning(f"Failed to create builder submission notification: {e}")
 

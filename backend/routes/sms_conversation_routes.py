@@ -22,7 +22,9 @@ from fastapi import (
 )
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from pydantic import BaseModel, validator
 
 from database import get_db
@@ -40,7 +42,7 @@ _security = HTTPBearer(auto_error=False)
 async def _require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
     request: Request = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Authenticate the request and return the current user."""
     if not credentials:
@@ -526,7 +528,7 @@ async def get_conversation(
 @router.post("/send")
 async def send_sms(
     req: SendSMSRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_require_auth),
 ):
     """
@@ -644,7 +646,7 @@ async def send_sms(
         media_json = json.dumps(req.mediaUrls)
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO sms_panel_messages
                 (id, phone, contact_id, organization_id, direction, body,
                  sender_name, sender_user_id, status,
@@ -675,9 +677,9 @@ async def send_sms(
             "telnyx_id": result.get("message_id"),
             "now": now,
         })
-        db.commit()
+        await db.commit()
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to store outbound message: {e}")
 
     # Push to WebSocket clients (tenant-scoped)
@@ -716,7 +718,7 @@ async def send_sms(
 async def upload_media(
     file: UploadFile = File(...),
     contactId: str = Form(""),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_require_auth),
 ):
     """
@@ -861,7 +863,7 @@ async def notify_status_update(
 
 @router.get("/unread-count")
 async def get_unread_sms_count(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(_require_auth),
 ):
     """
@@ -871,7 +873,7 @@ async def get_unread_sms_count(
     """
     _check_tables(db)
     try:
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT COUNT(*) FROM (
                 SELECT phone_digits,
                        MAX(created_at) FILTER (WHERE direction = 'inbound') AS last_inbound,
@@ -893,7 +895,7 @@ async def get_unread_sms_count(
     except Exception as e:
         logger.warning(f"Unread SMS count query failed: {e}")
         try:
-            db.rollback()
+            await db.rollback()
         except Exception as _exc:  # noqa: BLE001
             pass
         return {"unread_count": 0}

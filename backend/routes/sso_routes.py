@@ -28,6 +28,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 from database import get_db
 
@@ -355,7 +358,7 @@ class SSODiscoverResponse(BaseModel):
 async def sso_discover(
     domain: Optional[str] = None,
     email: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Check if an email domain has SSO configured.
@@ -552,7 +555,7 @@ async def saml_login(
 @router.post("/api/v1/auth/sso/saml/acs")
 async def saml_acs(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     SAML Assertion Consumer Service (ACS).
@@ -666,7 +669,7 @@ async def saml_acs(
     auth_funcs = _get_auth_functions()
     tokens = _create_sso_tokens(user, auth_funcs)
 
-    db.commit()
+    await db.commit()
 
     # Redirect to frontend with tokens in URL fragment (not query string)
     # Fragments are never sent to servers in Referer headers or logged by proxies
@@ -685,7 +688,7 @@ async def saml_acs(
 async def saml_slo(
     email: Optional[str] = None,
     org_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Initiate SAML Single Logout (SLO).
@@ -797,7 +800,7 @@ async def oidc_callback(
     state: Optional[str] = None,
     error: Optional[str] = None,
     error_description: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     OIDC authorization code callback.
@@ -908,7 +911,7 @@ async def oidc_callback(
     auth_funcs = _get_auth_functions()
     tokens = _create_sso_tokens(user, auth_funcs)
 
-    db.commit()
+    await db.commit()
 
     # Redirect to frontend with tokens in URL fragment (not query string)
     # Fragments are never sent to servers in Referer headers or logged by proxies

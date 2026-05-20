@@ -13,11 +13,13 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import Column, Integer, String, Text, DateTime, func, text
+from sqlalchemy import Column, Integer, String, Text, DateTime, func, text, select
 from sqlalchemy.orm import Session
 
 from database import get_db, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/beta", tags=["Beta Program"])
@@ -39,7 +41,7 @@ def _get_auth_dependency():
     return _get_current_user
 
 
-async def require_admin_user(request, db: Session = Depends(get_db)):
+async def require_admin_user(request, db: AsyncSession = Depends(get_async_db)):
     """
     Dependency that requires admin authentication.
     Use this for admin-only endpoints.

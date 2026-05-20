@@ -11,10 +11,12 @@ These routes use runtime imports from main.py to avoid circular imports.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-from db import get_db
+from db import get_db, get_async_db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -123,14 +125,14 @@ async def get_process_template_roles(
 @router.post("/process-templates/", response_model=ProcessTemplateResponse, status_code=201)
 async def create_process_template(
     template: ProcessTemplateCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Create a new process template task"""
     db_template = ProcessTemplate(**template.model_dump(), user_id=current_user.id)
     db.add(db_template)
-    db.commit()
-    db.refresh(db_template)
+    await db.commit()
+    await db.refresh(db_template)
 
     logger.info(f"Process template created: {db_template.role_name} - {db_template.task_title}")
     return db_template
@@ -401,7 +403,7 @@ async def get_conversion_funnel(
 
 @router.get("/analytics/pipeline")
 async def get_pipeline_analytics(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -425,7 +427,7 @@ async def get_pipeline_analytics(
             FROM loans
             WHERE loan_officer_id = :user_id
         """)
-        result = db.execute(query, {"user_id": current_user.id})
+        result = await db.execute(query, {"user_id": current_user.id})
         loans_data = result.fetchall()
 
         # Build stage breakdown manually
