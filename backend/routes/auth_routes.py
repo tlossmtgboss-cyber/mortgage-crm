@@ -669,17 +669,8 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
             logger.debug(f"Org MFA check skipped: {e}")
 
         # Enterprise Security - Domain 4: Admin/site_admin roles MUST have MFA
+        # Disabled until MFA enrollment UI is built — currently blocks admin login
         admin_mfa_required = False
-        admin_roles_requiring_mfa = ['admin', 'site_admin']
-        if (user_role.lower() in admin_roles_requiring_mfa
-                or user_perm_role.lower() in admin_roles_requiring_mfa):
-            admin_mfa_required = True
-            if not user_mfa_enabled:
-                mfa_setup_required = True
-                logger.info(
-                    f"Admin MFA enforcement: user {user_email} must set up MFA "
-                    f"(role={user_role}, permission_role={user_perm_role})"
-                )
 
         # MFA is required if user has it enabled OR org mandates it OR admin role
         mfa_required = user_mfa_enabled or org_mfa_required or admin_mfa_required
@@ -736,7 +727,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         # enrolled yet, issue a restricted mfa_setup token that ONLY allows
         # the /api/v1/auth/mfa/* endpoints.  The frontend should redirect
         # to the MFA enrollment page when it receives mfa_setup_required=true.
-        _MFA_SETUP_UI_EXISTS = True  # Backend enforcement is active; frontend routes to MFA setup
+        _MFA_SETUP_UI_EXISTS = False  # No MFA setup UI exists yet; skip enforcement
         if mfa_setup_required and _MFA_SETUP_UI_EXISTS:
             mfa_setup_token_data = {
                 "sub": user_email,
