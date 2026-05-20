@@ -91,16 +91,27 @@ def _insert_activity(
     content: str,
     report_type: str,
     report_data: Optional[Dict[str, Any]] = None,
+    gateway=None,
 ) -> None:
     """Insert a System activity with optional structured JSON in user_metadata."""
-    db.execute(text("""
-        INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
-        VALUES (NULL, 'System', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "content": content[:4000],
-        "metadata": json.dumps(report_data) if report_data else None,
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
+            VALUES (NULL, 'System', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "content": content[:4000],
+            "metadata": json.dumps(report_data) if report_data else None,
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_activity", _do,
+            target_entity=None,
+            target_id=None,
+            description=content[:200],
+        )
+    else:
+        _do()
 
 
 def _insert_task(
@@ -111,6 +122,7 @@ def _insert_task(
     priority: str = "medium",
     assigned_to_id: Optional[int] = None,
     due_days: int = 3,
+    gateway=None,
 ) -> None:
     """Insert a task with deduplication (no duplicate within 48h)."""
     existing = db.execute(text("""
@@ -122,19 +134,29 @@ def _insert_task(
     """), {"org_id": organization_id, "title": title}).fetchone()
 
     if not existing:
-        db.execute(text("""
-            INSERT INTO tasks (title, description, priority, status, due_date,
-                               owner_id, created_at, organization_id)
-            VALUES (:title, :desc, :priority, 'pending',
-                    CURRENT_DATE + :due_days, :owner_id, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "title": title[:255],
-            "desc": description[:2000],
-            "priority": priority,
-            "due_days": due_days,
-            "owner_id": str(assigned_to_id) if assigned_to_id else None,
-            "org_id": organization_id,
-        })
+        def _do():
+            db.execute(text("""
+                INSERT INTO tasks (title, description, priority, status, due_date,
+                                   owner_id, created_at, organization_id)
+                VALUES (:title, :desc, :priority, 'pending',
+                        CURRENT_DATE + :due_days, :owner_id, CURRENT_TIMESTAMP, :org_id)
+            """), {
+                "title": title[:255],
+                "desc": description[:2000],
+                "priority": priority,
+                "due_days": due_days,
+                "owner_id": str(assigned_to_id) if assigned_to_id else None,
+                "org_id": organization_id,
+            })
+        if gateway:
+            gateway.propose(
+                "create_task", _do,
+                target_entity=None,
+                target_id=None,
+                description=title[:200],
+            )
+        else:
+            _do()
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +170,7 @@ def _insert_task(
 )
 def weekly_production_report(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Comprehensive weekly production report with per-LO breakdown,
     week-over-week trends, pull-through rates, and top performer recognition."""
@@ -350,7 +373,7 @@ def weekly_production_report(
         f"Top: {top_performer_name or 'N/A'}"
     )
 
-    _insert_activity(db, organization_id, f"[Weekly Report] {summary}", "weekly_production", report)
+    _insert_activity(db, organization_id, f"[Weekly Report] {summary}", "weekly_production", report, gateway=gateway)
     actions += 1
 
     # Create congratulations task for top performer
@@ -365,6 +388,7 @@ def weekly_production_report(
             ),
             priority="low",
             due_days=1,
+            gateway=gateway,
         )
         actions += 1
         notifications += 1
@@ -389,6 +413,7 @@ def weekly_production_report(
 )
 def monthly_pipeline_review(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Full pipeline review: stage distribution, month-over-month trends,
     health score, bottleneck detection, funding projections, aging analysis,
@@ -565,6 +590,7 @@ def monthly_pipeline_review(
             description=action_items[-1],
             priority="high",
             due_days=3,
+            gateway=gateway,
         )
         actions += 1
 
@@ -584,6 +610,7 @@ def monthly_pipeline_review(
                 ),
                 priority="high",
                 due_days=2,
+                gateway=gateway,
             )
             actions += 1
 
@@ -641,7 +668,7 @@ def monthly_pipeline_review(
         f"Bottleneck: {bottleneck_stage or 'none'}. {len(action_items)} action items."
     )
 
-    _insert_activity(db, organization_id, f"[Monthly Review] {summary}", "monthly_pipeline_review", report)
+    _insert_activity(db, organization_id, f"[Monthly Review] {summary}", "monthly_pipeline_review", report, gateway=gateway)
     actions += 1
 
     try:
@@ -664,6 +691,7 @@ def monthly_pipeline_review(
 )
 def conversion_funnel_analyzer(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Full funnel analysis: stage-to-stage conversion, drop-off detection,
     per-source and per-LO comparison, velocity tracking, and 7d vs 30d trends."""
@@ -923,6 +951,7 @@ def conversion_funnel_analyzer(
                     ),
                     priority="high",
                     due_days=3,
+                    gateway=gateway,
                 )
                 actions += 1
 
@@ -956,7 +985,7 @@ def conversion_funnel_analyzer(
         f"Velocity: {velocity_data['avg_days_app_to_funded'] or 'N/A'}d app-to-fund."
     )
 
-    _insert_activity(db, organization_id, f"[Funnel] {summary}", "conversion_funnel", report)
+    _insert_activity(db, organization_id, f"[Funnel] {summary}", "conversion_funnel", report, gateway=gateway)
     actions += 1
 
     try:
@@ -979,6 +1008,7 @@ def conversion_funnel_analyzer(
 )
 def marketing_roi_calculator(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Marketing ROI analysis: cost-per-acquisition, time-to-conversion by source,
     revenue per source, contact rates, trend detection (rising/dying sources),
@@ -1113,6 +1143,7 @@ def marketing_roi_calculator(
             ),
             priority="medium",
             due_days=5,
+            gateway=gateway,
         )
         actions += 1
 
@@ -1127,6 +1158,7 @@ def marketing_roi_calculator(
             ),
             priority="medium",
             due_days=5,
+            gateway=gateway,
         )
         actions += 1
 
@@ -1141,6 +1173,7 @@ def marketing_roi_calculator(
             ),
             priority="medium",
             due_days=5,
+            gateway=gateway,
         )
         actions += 1
 
@@ -1188,7 +1221,7 @@ def marketing_roi_calculator(
         f"Top: {top_sources_summary}"
     )
 
-    _insert_activity(db, organization_id, f"[Marketing ROI] {summary}", "marketing_roi", report)
+    _insert_activity(db, organization_id, f"[Marketing ROI] {summary}", "marketing_roi", report, gateway=gateway)
     actions += 1
 
     try:
@@ -1211,6 +1244,7 @@ def marketing_roi_calculator(
 )
 def team_leaderboard(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Multi-dimensional leaderboard: composite scoring, streak tracking,
     per-LO strengths, coaching/recognition task generation."""
@@ -1423,6 +1457,7 @@ def team_leaderboard(
                 priority="low",
                 assigned_to_id=entry["lo_id"],
                 due_days=1,
+                gateway=gateway,
             )
             actions += 1
             notifications += 1
@@ -1452,6 +1487,7 @@ def team_leaderboard(
                 ),
                 priority="medium",
                 due_days=3,
+                gateway=gateway,
             )
             actions += 1
 
@@ -1498,7 +1534,7 @@ def team_leaderboard(
         f"{streak_note}"
     ).strip()
 
-    _insert_activity(db, organization_id, f"[Leaderboard] {summary}", "team_leaderboard", report)
+    _insert_activity(db, organization_id, f"[Leaderboard] {summary}", "team_leaderboard", report, gateway=gateway)
     actions += 1
 
     try:

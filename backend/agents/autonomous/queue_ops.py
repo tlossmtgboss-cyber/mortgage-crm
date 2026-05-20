@@ -66,36 +66,57 @@ def _dedup_task(db: Session, *, loan_id: str = None, lead_id: str = None,
 def _insert_task(db: Session, *, title: str, description: str,
                  assigned_to_id: str, organization_id: int,
                  priority: str = "high", loan_id: str = None,
-                 lead_id: str = None, due_date_expr: str = "CURRENT_DATE"):
+                 lead_id: str = None, due_date_expr: str = "CURRENT_DATE",
+                 gateway=None):
     """Insert a task with standard fields."""
-    db.execute(text(f"""
-        INSERT INTO tasks (title, description, assigned_to_id, loan_id, lead_id,
-                           priority, status, due_date, created_at, organization_id)
-        VALUES (:title, :desc, :assigned_to, :loan_id, :lead_id,
-                :priority, 'pending', {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "title": title[:255],
-        "desc": description[:2000],
-        "assigned_to": assigned_to_id,
-        "loan_id": loan_id,
-        "lead_id": lead_id,
-        "priority": priority,
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text(f"""
+            INSERT INTO tasks (title, description, assigned_to_id, loan_id, lead_id,
+                               priority, status, due_date, created_at, organization_id)
+            VALUES (:title, :desc, :assigned_to, :loan_id, :lead_id,
+                    :priority, 'pending', {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "title": title[:255],
+            "desc": description[:2000],
+            "assigned_to": assigned_to_id,
+            "loan_id": loan_id,
+            "lead_id": lead_id,
+            "priority": priority,
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_task", _do,
+            target_entity="lead" if lead_id else ("loan" if loan_id else None),
+            target_id=lead_id or loan_id,
+            description=title[:200],
+        )
+    else:
+        _do()
 
 
 def _insert_activity(db: Session, *, lead_id: str, activity_type: str,
-                     content: str, organization_id: int):
+                     content: str, organization_id: int, gateway=None):
     """Insert an activity log entry on a lead."""
-    db.execute(text("""
-        INSERT INTO activities (lead_id, type, content, created_at, organization_id)
-        VALUES (:lead_id, :type, :content, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "lead_id": lead_id,
-        "type": activity_type,
-        "content": content[:4000],
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO activities (lead_id, type, content, created_at, organization_id)
+            VALUES (:lead_id, :type, :content, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "lead_id": lead_id,
+            "type": activity_type,
+            "content": content[:4000],
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_activity", _do,
+            target_entity="lead" if lead_id else None,
+            target_id=lead_id,
+            description=content[:200],
+        )
+    else:
+        _do()
 
 
 def _safe_float(val, default: float = 0.0) -> float:
@@ -153,6 +174,7 @@ def _find_manager(db: Session, organization_id: int) -> str:
 )
 def call_queue_optimizer(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Score every contactable lead with a composite call priority (0-100),
     rank per-LO queues, flag overloaded LOs, and create redistribution tasks."""
@@ -307,6 +329,7 @@ def call_queue_optimizer(
                         assigned_to_id=manager_id,
                         organization_id=organization_id,
                         priority="high",
+                        gateway=gateway,
                     )
                     notifications += 1
 
@@ -341,6 +364,7 @@ def call_queue_optimizer(
 )
 def lock_desk_monitor(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Full lock desk management: expiration alerts, cost estimates, decision
     framework (extend vs expedite vs renegotiate), and daily volume summary."""
@@ -443,6 +467,7 @@ def lock_desk_monitor(
                 loan_id=loan_id,
                 organization_id=organization_id,
                 priority=priority,
+                gateway=gateway,
             )
             actions += 1
 
@@ -479,6 +504,7 @@ def lock_desk_monitor(
                 loan_id=loan_id,
                 organization_id=organization_id,
                 priority="critical",
+                gateway=gateway,
             )
             actions += 1
             notifications += 1
@@ -502,6 +528,7 @@ def lock_desk_monitor(
                 assigned_to_id=manager_id,
                 organization_id=organization_id,
                 priority="medium" if critical_1d == 0 else "high",
+                gateway=gateway,
             )
             actions += 1
 
@@ -538,6 +565,7 @@ def lock_desk_monitor(
 )
 def task_overdue_escalator(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Intelligent task escalation with tiered thresholds, business impact
     calculation, per-LO grouping, OOO awareness, and coaching triggers."""
@@ -683,6 +711,7 @@ def task_overdue_escalator(
                 assigned_to_id=lo_id,
                 organization_id=organization_id,
                 priority="high",
+                gateway=gateway,
             )
             actions += 1
 
@@ -710,6 +739,7 @@ def task_overdue_escalator(
                     assigned_to_id=manager_id,
                     organization_id=organization_id,
                     priority="high",
+                    gateway=gateway,
                 )
                 actions += 1
                 notifications += 1
@@ -736,6 +766,7 @@ def task_overdue_escalator(
                     assigned_to_id=admin_id,
                     organization_id=organization_id,
                     priority="critical",
+                    gateway=gateway,
                 )
                 actions += 1
                 notifications += 1
@@ -755,6 +786,7 @@ def task_overdue_escalator(
                     assigned_to_id=manager_id,
                     organization_id=organization_id,
                     priority="medium",
+                    gateway=gateway,
                 )
                 actions += 1
 
@@ -789,6 +821,7 @@ def task_overdue_escalator(
 )
 def email_response_monitor(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Detect unanswered inbound emails, tier by source and pipeline status,
     track per-LO response times, and create manager alerts for slow responders."""
@@ -919,6 +952,7 @@ def email_response_monitor(
                 lead_id=lead_id,
                 organization_id=organization_id,
                 priority=priority,
+                gateway=gateway,
             )
             actions += 1
 
@@ -996,6 +1030,7 @@ def email_response_monitor(
 )
 def new_lead_qualifier(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Score new leads with a multi-factor algorithm, set appropriate stage,
     auto-assign unowned leads via weighted round-robin, and create speed-to-lead
@@ -1229,6 +1264,7 @@ def new_lead_qualifier(
             activity_type="System",
             content=f"AI Lead Qualification: {breakdown_text}",
             organization_id=organization_id,
+            gateway=gateway,
         )
         actions += 1
         scored_count += 1
@@ -1253,6 +1289,7 @@ def new_lead_qualifier(
                 lead_id=lead_id,
                 organization_id=organization_id,
                 priority="critical",
+                gateway=gateway,
             )
             notifications += 1
 

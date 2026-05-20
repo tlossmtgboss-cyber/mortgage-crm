@@ -26,6 +26,7 @@ def compliance_watchdog(
     db: Session,
     organization_id: int,
     org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Check for upcoming compliance deadlines and create alerts."""
 
@@ -54,21 +55,31 @@ def compliance_watchdog(
 
         if not existing:
             severity = "critical" if days >= 3 else "high"
-            db.execute(text("""
-                INSERT INTO compliance_alerts
-                    (loan_id, organization_id, alert_type, severity, title, description,
-                     status, deadline_date, created_at)
-                VALUES
-                    (:loan_id, :org_id, 'LE_TIMING', :severity,
-                     :title, :desc, 'open', :deadline, CURRENT_TIMESTAMP)
-            """), {
+            _le_params = {
                 "loan_id": str(loan[0]),
                 "org_id": organization_id,
                 "severity": severity,
                 "title": f"LE not sent — {days} days since application",
                 "desc": f"{loan[2]} ({loan[1]}): Loan Estimate must be sent within 3 business days of application. Application date: {loan[4]}",
                 "deadline": loan[4],
-            })
+            }
+            def _do_le_insert(_p=_le_params):
+                db.execute(text("""
+                    INSERT INTO compliance_alerts
+                        (loan_id, organization_id, alert_type, severity, title, description,
+                         status, deadline_date, created_at)
+                    VALUES
+                        (:loan_id, :org_id, 'LE_TIMING', :severity,
+                         :title, :desc, 'open', :deadline, CURRENT_TIMESTAMP)
+                """), _p)
+            if gateway:
+                gateway.propose(
+                    "create_compliance_alert", _do_le_insert,
+                    target_entity="loan", target_id=loan[0],
+                    description=f"LE timing alert for {loan[2]} ({loan[1]}) — {days}d since application",
+                )
+            else:
+                _do_le_insert()
             actions += 1
 
     # 2. CD timing check — must be 3 days before closing
@@ -94,21 +105,31 @@ def compliance_watchdog(
 
         if not existing:
             severity = "critical" if days_to_close <= 3 else "high"
-            db.execute(text("""
-                INSERT INTO compliance_alerts
-                    (loan_id, organization_id, alert_type, severity, title, description,
-                     status, deadline_date, created_at)
-                VALUES
-                    (:loan_id, :org_id, 'CD_TIMING', :severity,
-                     :title, :desc, 'open', :deadline, CURRENT_TIMESTAMP)
-            """), {
+            _cd_params = {
                 "loan_id": str(loan[0]),
                 "org_id": organization_id,
                 "severity": severity,
                 "title": f"CD must be sent — closing in {days_to_close} days",
                 "desc": f"{loan[2]} ({loan[1]}): Closing Disclosure must be delivered 3+ business days before closing ({loan[4]})",
                 "deadline": loan[4],
-            })
+            }
+            def _do_cd_insert(_p=_cd_params):
+                db.execute(text("""
+                    INSERT INTO compliance_alerts
+                        (loan_id, organization_id, alert_type, severity, title, description,
+                         status, deadline_date, created_at)
+                    VALUES
+                        (:loan_id, :org_id, 'CD_TIMING', :severity,
+                         :title, :desc, 'open', :deadline, CURRENT_TIMESTAMP)
+                """), _p)
+            if gateway:
+                gateway.propose(
+                    "create_compliance_alert", _do_cd_insert,
+                    target_entity="loan", target_id=loan[0],
+                    description=f"CD timing alert for {loan[2]} ({loan[1]}) — closing in {days_to_close}d",
+                )
+            else:
+                _do_cd_insert()
             actions += 1
 
     # 3. Document expiration (credit docs, appraisal)
@@ -137,21 +158,31 @@ def compliance_watchdog(
             """), {"loan_id": str(loan[0]), "alert_type": doc_type}).fetchone()
 
             if not existing:
-                db.execute(text("""
-                    INSERT INTO compliance_alerts
-                        (loan_id, organization_id, alert_type, severity, title, description,
-                         status, deadline_date, created_at)
-                    VALUES
-                        (:loan_id, :org_id, :alert_type, 'medium',
-                         :title, :desc, 'open', :deadline, CURRENT_TIMESTAMP)
-                """), {
+                _doc_params = {
                     "loan_id": str(loan[0]),
                     "org_id": organization_id,
                     "alert_type": doc_type,
                     "title": f"{doc_type.replace('_', ' ').title()} — expires {expire_date}",
                     "desc": f"{loan[2]} ({loan[1]}): Document expires {expire_date}. Order renewal.",
                     "deadline": expire_date,
-                })
+                }
+                def _do_doc_insert(_p=_doc_params):
+                    db.execute(text("""
+                        INSERT INTO compliance_alerts
+                            (loan_id, organization_id, alert_type, severity, title, description,
+                             status, deadline_date, created_at)
+                        VALUES
+                            (:loan_id, :org_id, :alert_type, 'medium',
+                             :title, :desc, 'open', :deadline, CURRENT_TIMESTAMP)
+                    """), _p)
+                if gateway:
+                    gateway.propose(
+                        "create_compliance_alert", _do_doc_insert,
+                        target_entity="loan", target_id=loan[0],
+                        description=f"Doc expiry alert for {loan[2]} ({loan[1]}) — {doc_type} expires {expire_date}",
+                    )
+                else:
+                    _do_doc_insert()
                 actions += 1
 
     try:

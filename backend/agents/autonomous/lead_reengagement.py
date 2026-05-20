@@ -29,6 +29,7 @@ def lead_reengagement(
     db: Session,
     organization_id: int,
     org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Find cold leads and trigger re-engagement sequences."""
 
@@ -62,19 +63,30 @@ def lead_reengagement(
 
         if not existing:
             days = int(lead[8] or 0)
-            db.execute(text("""
-                INSERT INTO tasks (title, description, assigned_to_id, lead_id,
-                                   priority, status, due_date, created_at, organization_id)
-                VALUES (:title, :desc, :lo_id, :lead_id,
-                        'high', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-            """), {
+            _hot_params = {
                 "title": f"Re-engage {lead[1]} {lead[2]} (Score {lead[6]}, {days}d cold)",
                 "desc": f"High-score lead going cold. {lead[7] or 'Mortgage'} inquiry, no contact in {days} days. Call or text today.",
                 "lo_id": str(lead[5]),
                 "lead_id": str(lead[0]),
                 "org_id": organization_id,
-            })
-            actions += 1
+            }
+            def _do_hot_insert(_p=_hot_params):
+                db.execute(text("""
+                    INSERT INTO tasks (title, description, assigned_to_id, lead_id,
+                                       priority, status, due_date, created_at, organization_id)
+                    VALUES (:title, :desc, :lo_id, :lead_id,
+                            'high', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                """), _p)
+            if gateway:
+                if gateway.propose(
+                    "create_task", _do_hot_insert,
+                    target_entity="lead", target_id=lead[0],
+                    description=f"Re-engage hot lead {lead[1]} {lead[2]} (score {lead[6]}, {days}d cold)",
+                ):
+                    actions += 1
+            else:
+                _do_hot_insert()
+                actions += 1
 
     # 2. Medium-score leads really cold (7+ days, score 30-59)
     warm_leads = db.execute(text("""
@@ -99,19 +111,30 @@ def lead_reengagement(
         """), {"lead_id": str(lead[0])}).fetchone()
 
         if not existing:
-            db.execute(text("""
-                INSERT INTO tasks (title, description, assigned_to_id, lead_id,
-                                   priority, status, due_date, created_at, organization_id)
-                VALUES (:title, :desc, :lo_id, :lead_id,
-                        'medium', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-            """), {
+            _warm_params = {
                 "title": f"Nurture email for {lead[1]} — 7d+ no contact",
                 "desc": "Lead is cooling. Send a market update or rate info email to maintain engagement.",
                 "lo_id": str(lead[2]),
                 "lead_id": str(lead[0]),
                 "org_id": organization_id,
-            })
-            actions += 1
+            }
+            def _do_warm_insert(_p=_warm_params):
+                db.execute(text("""
+                    INSERT INTO tasks (title, description, assigned_to_id, lead_id,
+                                       priority, status, due_date, created_at, organization_id)
+                    VALUES (:title, :desc, :lo_id, :lead_id,
+                            'medium', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                """), _p)
+            if gateway:
+                if gateway.propose(
+                    "create_task", _do_warm_insert,
+                    target_entity="lead", target_id=lead[0],
+                    description=f"Nurture task for warm lead {lead[1]} — 7d+ no contact",
+                ):
+                    actions += 1
+            else:
+                _do_warm_insert()
+                actions += 1
 
     try:
         db.commit()

@@ -167,21 +167,33 @@ def _create_task(
     title: str,
     description: str,
     priority: str,
-) -> None:
-    """Insert a task record for the SLA escalation."""
-    db.execute(text("""
-        INSERT INTO tasks (title, description, assigned_to_id, loan_id,
-                           priority, status, due_date, created_at, organization_id)
-        VALUES (:title, :desc, :assigned, :loan_id,
-                :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-    """), {
+    gateway=None,
+) -> bool:
+    """Insert a task record for the SLA escalation. Returns True if executed."""
+    _params = {
         "title": title,
         "desc": description,
         "assigned": str(assigned_to_id),
         "loan_id": str(loan_id),
         "priority": priority,
         "org_id": organization_id,
-    })
+    }
+    def _do_insert():
+        db.execute(text("""
+            INSERT INTO tasks (title, description, assigned_to_id, loan_id,
+                               priority, status, due_date, created_at, organization_id)
+            VALUES (:title, :desc, :assigned, :loan_id,
+                    :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+        """), _params)
+    if gateway:
+        return gateway.propose(
+            "create_task", _do_insert,
+            target_entity="loan", target_id=loan_id,
+            description=f"SLA escalation task: {title}",
+        )
+    else:
+        _do_insert()
+        return True
 
 
 def _send_notification(
@@ -194,8 +206,9 @@ def _send_notification(
     stage: str,
     days: int,
     sla: int,
-) -> None:
-    """Insert an in-app notification for a single recipient."""
+    gateway=None,
+) -> bool:
+    """Insert an in-app notification for a single recipient. Returns True if executed."""
     level_labels = {
         "watch": "SLA Watch",
         "at_risk": "SLA At Risk",
@@ -205,12 +218,7 @@ def _send_notification(
     label = level_labels.get(level, f"SLA {level}")
     pct = int((days / sla) * 100) if sla else 0
 
-    db.execute(text("""
-        INSERT INTO notifications
-            (user_id, organization_id, type, title, message, link, is_read, created_at)
-        VALUES
-            (:uid, :org_id, 'sla_warning', :title, :message, :link, false, NOW())
-    """), {
+    _params = {
         "uid": user_id,
         "org_id": organization_id,
         "title": f"{label}: {borrower_name}",
@@ -219,7 +227,23 @@ def _send_notification(
             f"for {days}d — {pct}% of the {sla}d SLA target."
         ),
         "link": f"/pipeline/loans/{loan_number}",
-    })
+    }
+    def _do_insert():
+        db.execute(text("""
+            INSERT INTO notifications
+                (user_id, organization_id, type, title, message, link, is_read, created_at)
+            VALUES
+                (:uid, :org_id, 'sla_warning', :title, :message, :link, false, NOW())
+        """), _params)
+    if gateway:
+        return gateway.propose(
+            "create_notification", _do_insert,
+            target_entity="loan", target_id=None,
+            description=f"SLA {level} notification for {borrower_name} ({loan_number}) to user {user_id}",
+        )
+    else:
+        _do_insert()
+        return True
 
 
 # --------------------------------------------------------------------------- #
@@ -236,6 +260,7 @@ def sla_enforcer(
     db: Session,
     organization_id: int,
     org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Monitor every active loan against stage SLA targets and escalate
     progressively at 50%, 75%, and 100% thresholds.  A special 'critical'
@@ -345,21 +370,21 @@ def sla_enforcer(
             )
 
         # Assign the task to the first (most relevant) recipient
-        _create_task(
+        if _create_task(
             db, organization_id, loan_id, recipients[0],
-            title, description, priority,
-        )
-        actions += 1
+            title, description, priority, gateway=gateway,
+        ):
+            actions += 1
 
         # Send in-app notifications to all recipients
         for uid in recipients:
             try:
-                _send_notification(
+                if _send_notification(
                     db, organization_id, uid, level,
                     loan_number, borrower_name, stage,
-                    days_int, sla,
-                )
-                notifications_sent += 1
+                    days_int, sla, gateway=gateway,
+                ):
+                    notifications_sent += 1
             except Exception as e:
                 logger.error(
                     "SLA enforcer: notification insert failed for user %s loan %s: %s",

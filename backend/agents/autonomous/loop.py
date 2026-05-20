@@ -193,6 +193,7 @@ def run_agent_for_org(
     """Execute an autonomous agent for a single organization.
 
     Creates a fresh DB session with tenant context set for RLS isolation.
+    Passes an ActionGateway for confidence-gated execution and audit trail.
     """
     from database import SessionLocal
 
@@ -208,7 +209,6 @@ def run_agent_for_org(
         result.error = "Skipped: too many agents running concurrently"
         result.completed_at = datetime.now(timezone.utc)
         logger.warning(f"Agent {agent_def.name} skipped for org {org['id']}: semaphore timeout (max {_MAX_CONCURRENT_AGENTS} concurrent)")
-        # Persist skipped runs so they appear in the audit table
         try:
             skip_db = SessionLocal()
             _log_execution(skip_db, result)
@@ -218,18 +218,33 @@ def run_agent_for_org(
         return result
 
     db = SessionLocal()
+    gateway = None
     try:
         # Set RLS tenant context
         db.execute(text("SET app.current_tenant = :org_id"), {"org_id": str(org["id"])})
 
-        # Execute the agent handler
-        handler_result = agent_def.handler(db=db, organization_id=org["id"], org_timezone=org.get("timezone", "America/New_York"))
+        # Create ActionGateway for confidence-gated execution
+        try:
+            from services.autonomous.action_gateway import ActionGateway
+            gateway = ActionGateway(db=db, org_id=org["id"])
+        except Exception as e:
+            logger.debug("ActionGateway not available for %s: %s", agent_def.name, e)
+
+        # Execute the agent handler (pass gateway if handler accepts it)
+        handler_result = agent_def.handler(
+            db=db,
+            organization_id=org["id"],
+            org_timezone=org.get("timezone", "America/New_York"),
+            gateway=gateway,
+        )
 
         if isinstance(handler_result, dict):
             result.actions_taken = handler_result.get("actions_taken", 0)
             result.notifications_sent = handler_result.get("notifications_sent", 0)
             result.summary = handler_result.get("summary", "")
             result.details = handler_result
+            if gateway and gateway.stats["proposed"] > 0:
+                handler_result["autonomy"] = gateway.stats
 
         result.success = True
         result.completed_at = datetime.now(timezone.utc)

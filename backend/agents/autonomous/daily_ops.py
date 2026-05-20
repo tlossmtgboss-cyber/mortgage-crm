@@ -70,6 +70,7 @@ def _safe_int(val, default: int = 0) -> int:
 )
 def evening_recap(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Comprehensive end-of-day recap per LO:
@@ -272,14 +273,25 @@ def evening_recap(
             "tomorrow_appts": tomorrow_appts,
         })
 
-        db.execute(text("""
-            INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
-            VALUES (NULL, 'Note', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "content": recap_content,
-            "metadata": recap_json,
-            "org_id": organization_id,
-        })
+        _recap_content = recap_content
+        _recap_json = recap_json
+        def _do_recap_activity(c=_recap_content, m=_recap_json):
+            db.execute(text("""
+                INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
+                VALUES (NULL, 'Note', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
+            """), {
+                "content": c,
+                "metadata": m,
+                "org_id": organization_id,
+            })
+        if gateway:
+            gateway.propose(
+                "create_activity", _do_recap_activity,
+                target_entity=None, target_id=None,
+                description=f"Evening recap for LO {lo_name}"[:200],
+            )
+        else:
+            _do_recap_activity()
 
         lo_details.append({
             "lo_id": lo_id,
@@ -317,6 +329,7 @@ def evening_recap(
 )
 def daily_task_generator(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Generate pipeline-aware, stage-specific tasks:
@@ -426,19 +439,23 @@ def daily_task_generator(
         priority = "high" if days >= 7 or amount >= 500000 else "medium"
 
         if not _task_exists_today(lo_id, f"%{loan_num}%", loan_id):
-            db.execute(text("""
-                INSERT INTO tasks (title, description, owner_id, loan_id,
-                                   priority, status, due_date, created_at, organization_id)
-                VALUES (:title, :desc, :lo_id, :loan_id,
-                        :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-            """), {
-                "title": title[:255],
-                "desc": f"${amount:,.0f} loan — {days} days in {stage}. Action: {action}",
-                "lo_id": str(lo_id),
-                "loan_id": str(loan_id),
-                "priority": priority,
-                "org_id": organization_id,
-            })
+            _t, _d, _li, _lid, _p = title[:255], f"${amount:,.0f} loan — {days} days in {stage}. Action: {action}", str(lo_id), str(loan_id), priority
+            def _do_pipeline_task(t=_t, d=_d, li=_li, lid=_lid, p=_p):
+                db.execute(text("""
+                    INSERT INTO tasks (title, description, owner_id, loan_id,
+                                       priority, status, due_date, created_at, organization_id)
+                    VALUES (:title, :desc, :lo_id, :loan_id,
+                            :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                """), {
+                    "title": t, "desc": d, "lo_id": li,
+                    "loan_id": lid, "priority": p, "org_id": organization_id,
+                })
+            if gateway:
+                gateway.propose("create_task", _do_pipeline_task,
+                    target_entity="loan", target_id=str(loan_id),
+                    description=title[:200])
+            else:
+                _do_pipeline_task()
             actions += 1
 
     # ── 2. APPLICATION-stage loans potentially missing documents ──────────
@@ -482,19 +499,23 @@ def daily_task_generator(
             priority = "high" if days >= 5 else "medium"
 
             if not _task_exists_today(lo_id, f"%Collect docs%{loan_num}%", loan_id):
-                db.execute(text("""
-                    INSERT INTO tasks (title, description, owner_id, loan_id,
-                                       priority, status, due_date, created_at, organization_id)
-                    VALUES (:title, :desc, :lo_id, :loan_id,
-                            :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-                """), {
-                    "title": title[:255],
-                    "desc": desc,
-                    "lo_id": str(lo_id),
-                    "loan_id": str(loan_id),
-                    "priority": priority,
-                    "org_id": organization_id,
-                })
+                _ct, _cd, _cli, _clid, _cp = title[:255], desc, str(lo_id), str(loan_id), priority
+                def _do_collect_docs(t=_ct, d=_cd, li=_cli, lid=_clid, p=_cp):
+                    db.execute(text("""
+                        INSERT INTO tasks (title, description, owner_id, loan_id,
+                                           priority, status, due_date, created_at, organization_id)
+                        VALUES (:title, :desc, :lo_id, :loan_id,
+                                :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                    """), {
+                        "title": t, "desc": d, "lo_id": li,
+                        "loan_id": lid, "priority": p, "org_id": organization_id,
+                    })
+                if gateway:
+                    gateway.propose("create_task", _do_collect_docs,
+                        target_entity="loan", target_id=str(loan_id),
+                        description=title[:200])
+                else:
+                    _do_collect_docs()
                 actions += 1
 
     # ── 3. Follow-up tasks for completed appointments with no next action ─
@@ -572,12 +593,22 @@ def daily_task_generator(
             if loan_id:
                 params["loan_id"] = str(loan_id)
 
-            db.execute(text(f"""
+            _sql = f"""
                 INSERT INTO tasks (title, description, owner_id{lead_col}{loan_col},
                                    priority, status, due_date, created_at, organization_id)
                 VALUES (:title, :desc, :lo_id{lead_val}{loan_val},
                         'medium', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-            """), params)
+            """
+            _params = dict(params)
+            def _do_overdue_task(s=_sql, p=_params):
+                db.execute(text(s), p)
+            if gateway:
+                gateway.propose("create_task", _do_overdue_task,
+                    target_entity="lead" if lead_id else ("loan" if loan_id else None),
+                    target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
+                    description=params["title"][:200])
+            else:
+                _do_overdue_task()
             actions += 1
 
     try:
@@ -606,6 +637,7 @@ def daily_task_generator(
 )
 def rate_alert(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Rate-sensitive pipeline analysis:
@@ -696,18 +728,22 @@ def rate_alert(
         """), {"lo_id": str(lo_id), "org_id": organization_id}).fetchone()
 
         if not existing:
-            db.execute(text("""
-                INSERT INTO tasks (title, description, owner_id,
-                                   priority, status, due_date, created_at, organization_id)
-                VALUES (:title, :desc, :lo_id,
-                        :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-            """), {
-                "title": f"Rate review: {total_floating} floating loan(s), ${total_volume:,.0f}"[:255],
-                "desc": "\n".join(desc_lines),
-                "lo_id": str(lo_id),
-                "priority": priority,
-                "org_id": organization_id,
-            })
+            _rt = f"Rate review: {total_floating} floating loan(s), ${total_volume:,.0f}"[:255]
+            _rd = "\n".join(desc_lines)
+            _rli = str(lo_id)
+            _rp = priority
+            def _do_rate_review(t=_rt, d=_rd, li=_rli, p=_rp):
+                db.execute(text("""
+                    INSERT INTO tasks (title, description, owner_id,
+                                       priority, status, due_date, created_at, organization_id)
+                    VALUES (:title, :desc, :lo_id,
+                            :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                """), {"title": t, "desc": d, "lo_id": li, "priority": p, "org_id": organization_id})
+            if gateway:
+                gateway.propose("create_task", _do_rate_review,
+                    target_entity=None, target_id=None, description=_rt[:200])
+            else:
+                _do_rate_review()
             actions += 1
 
     # ── 2. Locks expiring within 7 days ───────────────────────────────────
@@ -768,17 +804,21 @@ def rate_alert(
         """), {"lo_id": str(lo_id), "org_id": organization_id}).fetchone()
 
         if not existing:
-            db.execute(text("""
-                INSERT INTO tasks (title, description, owner_id,
-                                   priority, status, due_date, created_at, organization_id)
-                VALUES (:title, :desc, :lo_id,
-                        'high', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-            """), {
-                "title": f"Lock expiring: {len(loans)} loan(s) within 7 days"[:255],
-                "desc": "\n".join(desc_lines),
-                "lo_id": str(lo_id),
-                "org_id": organization_id,
-            })
+            _lt = f"Lock expiring: {len(loans)} loan(s) within 7 days"[:255]
+            _ld = "\n".join(desc_lines)
+            _lli = str(lo_id)
+            def _do_lock_expiry(t=_lt, d=_ld, li=_lli):
+                db.execute(text("""
+                    INSERT INTO tasks (title, description, owner_id,
+                                       priority, status, due_date, created_at, organization_id)
+                    VALUES (:title, :desc, :lo_id,
+                            'high', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                """), {"title": t, "desc": d, "lo_id": li, "org_id": organization_id})
+            if gateway:
+                gateway.propose("create_task", _do_lock_expiry,
+                    target_entity=None, target_id=None, description=_lt[:200])
+            else:
+                _do_lock_expiry()
             actions += 1
 
     # ── 3. Log rate environment activity ──────────────────────────────────
@@ -797,17 +837,21 @@ def rate_alert(
         },
     })
 
-    db.execute(text("""
-        INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
-        VALUES (NULL, 'Note', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "content": (
-            f"Rate alert: {floating_count} floating loans, {expiring_count} locks expiring <7d. "
-            f"Created {actions} tasks."
-        ),
-        "metadata": rate_context,
-        "org_id": organization_id,
-    })
+    _rate_content = (
+        f"Rate alert: {floating_count} floating loans, {expiring_count} locks expiring <7d. "
+        f"Created {actions} tasks."
+    )
+    _rate_metadata = rate_context
+    def _do_rate_activity(c=_rate_content, m=_rate_metadata):
+        db.execute(text("""
+            INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
+            VALUES (NULL, 'Note', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
+        """), {"content": c, "metadata": m, "org_id": organization_id})
+    if gateway:
+        gateway.propose("create_activity", _do_rate_activity,
+            target_entity=None, target_id=None, description=_rate_content[:200])
+    else:
+        _do_rate_activity()
 
     try:
         db.commit()
@@ -836,6 +880,7 @@ def rate_alert(
 )
 def birthday_anniversary(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Outreach for funded borrowers:
@@ -945,29 +990,33 @@ def birthday_anniversary(
 
         priority = "medium" if years <= 2 else "low"
 
-        db.execute(text("""
-            INSERT INTO tasks (title, description, owner_id, loan_id,
-                               priority, status, due_date, created_at, organization_id)
-            VALUES (:title, :desc, :lo_id, :loan_id,
-                    :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "title": title[:255],
-            "desc": desc,
-            "lo_id": str(lo_id),
-            "loan_id": str(loan_id),
-            "priority": priority,
-            "org_id": organization_id,
-        })
+        _at, _ad, _ali, _alid, _ap = title[:255], desc, str(lo_id), str(loan_id), priority
+        def _do_anniv_task(t=_at, d=_ad, li=_ali, lid=_alid, p=_ap):
+            db.execute(text("""
+                INSERT INTO tasks (title, description, owner_id, loan_id,
+                                   priority, status, due_date, created_at, organization_id)
+                VALUES (:title, :desc, :lo_id, :loan_id,
+                        :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+            """), {"title": t, "desc": d, "lo_id": li, "loan_id": lid, "priority": p, "org_id": organization_id})
+        if gateway:
+            gateway.propose("create_task", _do_anniv_task,
+                target_entity="loan", target_id=str(loan_id), description=title[:200])
+        else:
+            _do_anniv_task()
 
         # ── Activity log entry ────────────────────────────────────────────
-        db.execute(text("""
-            INSERT INTO activities (loan_id, type, content, created_at, organization_id)
-            VALUES (:loan_id, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "loan_id": str(loan_id),
-            "content": f"{ordinal} home anniversary for {borrower} ({loan_num}). Task created for LO.",
-            "org_id": organization_id,
-        })
+        _anniv_content = f"{ordinal} home anniversary for {borrower} ({loan_num}). Task created for LO."
+        _anniv_lid = str(loan_id)
+        def _do_anniv_activity(c=_anniv_content, lid=_anniv_lid):
+            db.execute(text("""
+                INSERT INTO activities (loan_id, type, content, created_at, organization_id)
+                VALUES (:loan_id, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
+            """), {"loan_id": lid, "content": c, "org_id": organization_id})
+        if gateway:
+            gateway.propose("create_activity", _do_anniv_activity,
+                target_entity="loan", target_id=str(loan_id), description=_anniv_content[:200])
+        else:
+            _do_anniv_activity()
 
         anniversary_tasks += 1
         actions += 1
@@ -1014,32 +1063,40 @@ def birthday_anniversary(
             if lead_email:
                 contact += f" Email: {lead_email}."
 
-            db.execute(text("""
-                INSERT INTO tasks (title, description, owner_id, lead_id,
-                                   priority, status, due_date, created_at, organization_id)
-                VALUES (:title, :desc, :lo_id, :lead_id,
-                        'low', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-            """), {
-                "title": f"Happy birthday: {lead_name}"[:255],
-                "desc": (
-                    f"Today is {lead_name}'s birthday! Send a personal message.\n\n"
-                    f"Contact:{contact}\n\n"
-                    "Talking points: Wish them well, ask about any real estate plans for "
-                    "the year ahead, mention any rate improvements since you last spoke."
-                ),
-                "lo_id": str(lo_id),
-                "lead_id": str(lead_id),
-                "org_id": organization_id,
-            })
+            _bt = f"Happy birthday: {lead_name}"[:255]
+            _bd = (
+                f"Today is {lead_name}'s birthday! Send a personal message.\n\n"
+                f"Contact:{contact}\n\n"
+                "Talking points: Wish them well, ask about any real estate plans for "
+                "the year ahead, mention any rate improvements since you last spoke."
+            )
+            _bli = str(lo_id)
+            _blid = str(lead_id)
+            def _do_bday_task(t=_bt, d=_bd, li=_bli, lid=_blid):
+                db.execute(text("""
+                    INSERT INTO tasks (title, description, owner_id, lead_id,
+                                       priority, status, due_date, created_at, organization_id)
+                    VALUES (:title, :desc, :lo_id, :lead_id,
+                            'low', 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                """), {"title": t, "desc": d, "lo_id": li, "lead_id": lid, "org_id": organization_id})
+            if gateway:
+                gateway.propose("create_task", _do_bday_task,
+                    target_entity="lead", target_id=str(lead_id), description=_bt[:200])
+            else:
+                _do_bday_task()
 
-            db.execute(text("""
-                INSERT INTO activities (lead_id, type, content, created_at, organization_id)
-                VALUES (:lead_id, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
-            """), {
-                "lead_id": str(lead_id),
-                "content": f"Birthday outreach task created for {lead_name}.",
-                "org_id": organization_id,
-            })
+            _bday_content = f"Birthday outreach task created for {lead_name}."
+            _bday_lid = str(lead_id)
+            def _do_bday_activity(c=_bday_content, lid=_bday_lid):
+                db.execute(text("""
+                    INSERT INTO activities (lead_id, type, content, created_at, organization_id)
+                    VALUES (:lead_id, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
+                """), {"lead_id": lid, "content": c, "org_id": organization_id})
+            if gateway:
+                gateway.propose("create_activity", _do_bday_activity,
+                    target_entity="lead", target_id=str(lead_id), description=_bday_content[:200])
+            else:
+                _do_bday_activity()
 
             birthday_tasks += 1
             actions += 1
@@ -1092,6 +1149,7 @@ def _ordinal(n: int) -> str:
 )
 def daily_metrics_snapshot(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Comprehensive daily metrics snapshot stored as structured JSON:
@@ -1288,14 +1346,18 @@ def daily_metrics_snapshot(
             f"${delta.get('active_volume', 0):+,.0f} volume."
         )
 
-    db.execute(text("""
-        INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
-        VALUES (NULL, 'Note', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "content": summary_text,
-        "metadata": json.dumps(snapshot_data),
-        "org_id": organization_id,
-    })
+    _snap_content = summary_text
+    _snap_metadata = json.dumps(snapshot_data)
+    def _do_snapshot_activity(c=_snap_content, m=_snap_metadata):
+        db.execute(text("""
+            INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
+            VALUES (NULL, 'Note', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
+        """), {"content": c, "metadata": m, "org_id": organization_id})
+    if gateway:
+        gateway.propose("create_activity", _do_snapshot_activity,
+            target_entity=None, target_id=None, description=summary_text[:200])
+    else:
+        _do_snapshot_activity()
 
     try:
         db.commit()

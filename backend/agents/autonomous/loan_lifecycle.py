@@ -57,23 +57,34 @@ def _insert_task(
     status: str = "pending",
     due_date_expr: str = "CURRENT_DATE",
     organization_id: int,
+    gateway=None,
 ) -> None:
     """Insert a task row with standard columns."""
-    db.execute(text(f"""
-        INSERT INTO tasks (title, description, assigned_to_id, lead_id, loan_id,
-                           priority, status, due_date, created_at, organization_id)
-        VALUES (:title, :desc, :assigned_to_id, :lead_id, :loan_id,
-                :priority, :status, {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "title": title[:255],
-        "desc": description[:4000],
-        "assigned_to_id": str(assigned_to_id) if assigned_to_id else None,
-        "lead_id": str(lead_id) if lead_id else None,
-        "loan_id": str(loan_id) if loan_id else None,
-        "priority": priority,
-        "status": status,
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text(f"""
+            INSERT INTO tasks (title, description, assigned_to_id, lead_id, loan_id,
+                               priority, status, due_date, created_at, organization_id)
+            VALUES (:title, :desc, :assigned_to_id, :lead_id, :loan_id,
+                    :priority, :status, {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "title": title[:255],
+            "desc": description[:4000],
+            "assigned_to_id": str(assigned_to_id) if assigned_to_id else None,
+            "lead_id": str(lead_id) if lead_id else None,
+            "loan_id": str(loan_id) if loan_id else None,
+            "priority": priority,
+            "status": status,
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_task", _do,
+            target_entity="lead" if lead_id else ("loan" if loan_id else None),
+            target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
+            description=title[:200],
+        )
+    else:
+        _do()
 
 
 def _insert_activity(
@@ -85,21 +96,32 @@ def _insert_activity(
     lead_id: Optional[int] = None,
     user_id: Optional[int] = None,
     organization_id: int,
+    gateway=None,
 ) -> None:
     """Insert an activity log entry for audit trail."""
-    db.execute(text("""
-        INSERT INTO activities (type, content, loan_id, lead_id, user_id,
-                                created_at, organization_id)
-        VALUES (:type, :content, :loan_id, :lead_id, :user_id,
-                CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "type": activity_type,
-        "content": content[:4000],
-        "loan_id": loan_id,
-        "lead_id": lead_id,
-        "user_id": user_id,
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO activities (type, content, loan_id, lead_id, user_id,
+                                    created_at, organization_id)
+            VALUES (:type, :content, :loan_id, :lead_id, :user_id,
+                    CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "type": activity_type,
+            "content": content[:4000],
+            "loan_id": loan_id,
+            "lead_id": lead_id,
+            "user_id": user_id,
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_activity", _do,
+            target_entity="lead" if lead_id else ("loan" if loan_id else None),
+            target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
+            description=content[:200],
+        )
+    else:
+        _do()
 
 
 def _insert_notification(
@@ -111,20 +133,31 @@ def _insert_notification(
     message: str,
     link: Optional[str] = None,
     organization_id: int,
+    gateway=None,
 ) -> None:
     """Insert an in-app notification."""
-    db.execute(text("""
-        INSERT INTO notifications (user_id, organization_id, type, title,
-                                   message, link, is_read, created_at)
-        VALUES (:uid, :org_id, :type, :title, :message, :link, false, NOW())
-    """), {
-        "uid": user_id,
-        "org_id": organization_id,
-        "type": notification_type,
-        "title": title[:255],
-        "message": message[:2000],
-        "link": link,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO notifications (user_id, organization_id, type, title,
+                                       message, link, is_read, created_at)
+            VALUES (:uid, :org_id, :type, :title, :message, :link, false, NOW())
+        """), {
+            "uid": user_id,
+            "org_id": organization_id,
+            "type": notification_type,
+            "title": title[:255],
+            "message": message[:2000],
+            "link": link,
+        })
+    if gateway:
+        gateway.propose(
+            "create_notification", _do,
+            target_entity="user",
+            target_id=str(user_id),
+            description=title[:200],
+        )
+    else:
+        _do()
 
 
 def _has_recent_task(
@@ -212,6 +245,7 @@ _CONDITION_CONTEXT = {
 )
 def condition_chase(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Create tiered follow-up tasks for loans with outstanding conditions.
 
@@ -327,6 +361,7 @@ def condition_chase(
             priority=tier,
             due_date_expr="CURRENT_DATE" if tier == "critical" else "CURRENT_DATE + 1",
             organization_id=organization_id,
+            gateway=gateway,
         )
         actions += 1
 
@@ -349,6 +384,7 @@ def condition_chase(
                 priority=tier,
                 due_date_expr="CURRENT_DATE",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
 
@@ -364,6 +400,7 @@ def condition_chase(
             loan_id=loan_id,
             user_id=lo_id,
             organization_id=organization_id,
+            gateway=gateway,
         )
 
         # ----- Notification for critical tier -----
@@ -380,6 +417,7 @@ def condition_chase(
                 ),
                 link=f"/pipeline/loans/{loan_number}",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             notifications += 1
 
@@ -443,6 +481,7 @@ _CLOSING_CHECKLIST: List[Tuple[int, str, str, str]] = [
 )
 def closing_countdown(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Create granular closing checklist tasks based on days-to-close.
 
@@ -533,6 +572,7 @@ def closing_countdown(
                 priority=priority,
                 due_date_expr=f"CURRENT_DATE + {max(0, days_to_close - 1)}",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             items_created += 1
             actions += 1
@@ -556,6 +596,7 @@ def closing_countdown(
                     priority="critical",
                     due_date_expr="CURRENT_DATE",
                     organization_id=organization_id,
+                    gateway=gateway,
                 )
                 actions += 1
 
@@ -573,6 +614,7 @@ def closing_countdown(
                         ),
                         link=f"/pipeline/loans/{loan_number}",
                         organization_id=organization_id,
+                        gateway=gateway,
                     )
                     notifications += 1
 
@@ -602,6 +644,7 @@ def closing_countdown(
                 priority="high",
                 due_date_expr="CURRENT_DATE",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
 
@@ -671,6 +714,7 @@ _TOTAL_WEIGHT = sum(w for _, w, _ in _COMPLETION_FIELDS)
 )
 def application_followup(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Find applications stuck in APPLICATION stage and create targeted follow-ups.
 
@@ -803,6 +847,7 @@ def application_followup(
             priority=priority,
             due_date_expr="CURRENT_DATE",
             organization_id=organization_id,
+            gateway=gateway,
         )
         actions += 1
         by_segment[segment] = by_segment.get(segment, 0) + 1
@@ -841,6 +886,7 @@ def application_followup(
                     priority="high",
                     due_date_expr="CURRENT_DATE",
                     organization_id=organization_id,
+                    gateway=gateway,
                 )
                 actions += 1
 
@@ -855,6 +901,7 @@ def application_followup(
                     ),
                     link=f"/pipeline/loans/{loan_number}",
                     organization_id=organization_id,
+                    gateway=gateway,
                 )
                 notifications += 1
 
@@ -927,6 +974,7 @@ _OUTREACH_SEQUENCE: List[Tuple[int, str, str, str]] = [
 )
 def post_close_survey(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Execute multi-step post-close outreach sequence for funded loans.
 
@@ -1011,6 +1059,7 @@ def post_close_survey(
                 priority=priority,
                 due_date_expr="CURRENT_DATE + 1",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
             steps_created[step_key] = steps_created.get(step_key, 0) + 1
@@ -1037,6 +1086,7 @@ def post_close_survey(
                     priority="low",
                     due_date_expr="CURRENT_DATE + 2",
                     organization_id=organization_id,
+                    gateway=gateway,
                 )
                 actions += 1
 
@@ -1135,6 +1185,7 @@ def _get_expiry_tier(days_remaining: int) -> Tuple[str, str]:
 )
 def credit_refresh(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Monitor credit and appraisal document expiration dates.
 
@@ -1230,6 +1281,7 @@ def credit_refresh(
                         priority=priority,
                         due_date_expr=f"CURRENT_DATE + {max(0, credit_days - 2)}",
                         organization_id=organization_id,
+                        gateway=gateway,
                     )
                     actions += 1
                     by_tier[priority] = by_tier.get(priority, 0) + 1
@@ -1258,6 +1310,7 @@ def credit_refresh(
                             ),
                             link=f"/pipeline/loans/{loan_number}",
                             organization_id=organization_id,
+                            gateway=gateway,
                         )
                         notifications += 1
 
@@ -1298,6 +1351,7 @@ def credit_refresh(
                         priority=priority,
                         due_date_expr=f"CURRENT_DATE + {max(0, appraisal_days - 3)}",
                         organization_id=organization_id,
+                        gateway=gateway,
                     )
                     actions += 1
                     by_tier[priority] = by_tier.get(priority, 0) + 1
@@ -1323,6 +1377,7 @@ def credit_refresh(
                             ),
                             link=f"/pipeline/loans/{loan_number}",
                             organization_id=organization_id,
+                            gateway=gateway,
                         )
                         notifications += 1
 
@@ -1366,6 +1421,7 @@ def credit_refresh(
             priority="high" if any(it["days_left"] <= 7 for it in items) else "medium",
             due_date_expr="CURRENT_DATE + 1",
             organization_id=organization_id,
+            gateway=gateway,
         )
         batch_tasks += 1
         actions += 1

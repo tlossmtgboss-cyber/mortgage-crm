@@ -48,6 +48,7 @@ def pipeline_monitor(
     db: Session,
     organization_id: int,
     org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Monitor pipeline health and create tasks for anomalies."""
 
@@ -85,20 +86,31 @@ def pipeline_monitor(
             }).fetchone()
 
             if not existing:
-                db.execute(text("""
-                    INSERT INTO tasks (title, description, assigned_to_id, loan_id,
-                                       priority, status, due_date, created_at, organization_id)
-                    VALUES (:title, :desc, :lo_id, :loan_id,
-                            :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
-                """), {
+                _params = {
                     "title": f"Loan stuck in {stage} for {days} days",
                     "desc": f"{loan[2]} ({loan[1]}) has been in {stage} for {days} days (SLA: {threshold}d). Review and advance.",
                     "lo_id": str(loan[4]),
                     "loan_id": str(loan[0]),
                     "priority": "high" if days >= threshold * 2 else "medium",
                     "org_id": organization_id,
-                })
-                actions += 1
+                }
+                def _do_stuck_insert(_p=_params):
+                    db.execute(text("""
+                        INSERT INTO tasks (title, description, assigned_to_id, loan_id,
+                                           priority, status, due_date, created_at, organization_id)
+                        VALUES (:title, :desc, :lo_id, :loan_id,
+                                :priority, 'pending', CURRENT_DATE, CURRENT_TIMESTAMP, :org_id)
+                    """), _p)
+                if gateway:
+                    if gateway.propose(
+                        "create_task", _do_stuck_insert,
+                        target_entity="loan", target_id=loan[0],
+                        description=f"Stuck loan task for {loan[2]} ({loan[1]}) — {days}d in {stage}",
+                    ):
+                        actions += 1
+                else:
+                    _do_stuck_insert()
+                    actions += 1
 
     # 2. Rate lock expiration warnings (48 hours)
     expiring = db.execute(text("""
@@ -122,20 +134,31 @@ def pipeline_monitor(
         """), {"loan_id": str(lock[0])}).fetchone()
 
         if not existing:
-            db.execute(text("""
-                INSERT INTO tasks (title, description, assigned_to_id, loan_id,
-                                   priority, status, due_date, created_at, organization_id)
-                VALUES (:title, :desc, :lo_id, :loan_id,
-                        'critical', 'pending', :due, CURRENT_TIMESTAMP, :org_id)
-            """), {
+            _lock_params = {
                 "title": f"Rate lock expires in {days_left} day{'s' if days_left != 1 else ''}",
                 "desc": f"{lock[2]} ({lock[1]}) — lock expires {lock[4]}. Extend or push to close.",
                 "lo_id": str(lock[3]),
                 "loan_id": str(lock[0]),
                 "due": lock[4],
                 "org_id": organization_id,
-            })
-            actions += 1
+            }
+            def _do_lock_insert(_p=_lock_params):
+                db.execute(text("""
+                    INSERT INTO tasks (title, description, assigned_to_id, loan_id,
+                                       priority, status, due_date, created_at, organization_id)
+                    VALUES (:title, :desc, :lo_id, :loan_id,
+                            'critical', 'pending', :due, CURRENT_TIMESTAMP, :org_id)
+                """), _p)
+            if gateway:
+                if gateway.propose(
+                    "create_task", _do_lock_insert,
+                    target_entity="loan", target_id=lock[0],
+                    description=f"Rate lock expiry task for {lock[2]} ({lock[1]}) — {days_left}d left",
+                ):
+                    actions += 1
+            else:
+                _do_lock_insert()
+                actions += 1
 
     try:
         db.commit()

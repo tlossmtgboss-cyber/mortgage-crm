@@ -61,16 +61,27 @@ def _insert_activity(
     organization_id: int,
     content: str,
     report_data: Optional[Dict[str, Any]] = None,
+    gateway=None,
 ) -> None:
     """Insert a System activity with optional structured JSON in user_metadata."""
-    db.execute(text("""
-        INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
-        VALUES (NULL, 'System', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "content": content[:4000],
-        "metadata": json.dumps(report_data) if report_data else None,
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO activities (lead_id, type, content, user_metadata, created_at, organization_id)
+            VALUES (NULL, 'System', :content, :metadata, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "content": content[:4000],
+            "metadata": json.dumps(report_data) if report_data else None,
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_activity", _do,
+            target_entity=None,
+            target_id=None,
+            description=content[:200],
+        )
+    else:
+        _do()
 
 
 def _insert_task(
@@ -82,6 +93,7 @@ def _insert_task(
     assigned_to_id: Optional[int] = None,
     due_days: int = 3,
     dedup_hours: int = 48,
+    gateway=None,
 ) -> bool:
     """Insert a task with deduplication. Returns True if task was created."""
     existing = db.execute(text("""
@@ -95,19 +107,29 @@ def _insert_task(
     if existing:
         return False
 
-    db.execute(text("""
-        INSERT INTO tasks (title, description, priority, status, due_date,
-                           owner_id, created_at, organization_id)
-        VALUES (:title, :desc, :priority, 'pending',
-                CURRENT_DATE + :due_days, :owner_id, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "title": title[:255],
-        "desc": description[:2000],
-        "priority": priority,
-        "due_days": due_days,
-        "owner_id": str(assigned_to_id) if assigned_to_id else None,
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO tasks (title, description, priority, status, due_date,
+                               owner_id, created_at, organization_id)
+            VALUES (:title, :desc, :priority, 'pending',
+                    CURRENT_DATE + :due_days, :owner_id, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "title": title[:255],
+            "desc": description[:2000],
+            "priority": priority,
+            "due_days": due_days,
+            "owner_id": str(assigned_to_id) if assigned_to_id else None,
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_task", _do,
+            target_entity=None,
+            target_id=None,
+            description=title[:200],
+        )
+    else:
+        _do()
     return True
 
 
@@ -119,20 +141,31 @@ def _insert_notification(
     title: str,
     message: str,
     link: Optional[str] = None,
+    gateway=None,
 ) -> None:
     """Insert an in-app notification for a user."""
-    db.execute(text("""
-        INSERT INTO notifications (user_id, organization_id, type, title,
-                                   message, link, is_read, created_at)
-        VALUES (:uid, :org_id, :type, :title, :message, :link, false, NOW())
-    """), {
-        "uid": user_id,
-        "org_id": organization_id,
-        "type": notification_type,
-        "title": title[:255],
-        "message": message[:2000],
-        "link": link,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO notifications (user_id, organization_id, type, title,
+                                       message, link, is_read, created_at)
+            VALUES (:uid, :org_id, :type, :title, :message, :link, false, NOW())
+        """), {
+            "uid": user_id,
+            "org_id": organization_id,
+            "type": notification_type,
+            "title": title[:255],
+            "message": message[:2000],
+            "link": link,
+        })
+    if gateway:
+        gateway.propose(
+            "create_notification", _do,
+            target_entity="user",
+            target_id=str(user_id),
+            description=title[:200],
+        )
+    else:
+        _do()
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +179,7 @@ def _insert_notification(
 )
 def database_cleanup(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Smart data maintenance with detailed per-category metrics:
@@ -246,6 +280,7 @@ def database_cleanup(
             priority="high",
             due_days=3,
             dedup_hours=24,
+            gateway=gateway,
         )
         if created:
             actions += 1
@@ -263,6 +298,7 @@ def database_cleanup(
             f"Orphan tasks: {total_orphans}."
         ),
         report_data={"agent": "database_cleanup", "metrics": metrics},
+        gateway=gateway,
     )
 
     try:
@@ -296,6 +332,7 @@ def database_cleanup(
 )
 def api_health_checker(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Integration health monitoring with per-provider scoring:
@@ -422,6 +459,7 @@ def api_health_checker(
             priority="high",
             due_days=1,
             dedup_hours=6,  # Don't spam; re-alert after 6 hours if still bad
+            gateway=gateway,
         )
         if created:
             actions += 1
@@ -437,6 +475,7 @@ def api_health_checker(
                     f"Please reconnect from Settings > Integrations."
                 ),
                 link="/settings/integrations",
+                gateway=gateway,
             )
             notifications_sent += 1
 
@@ -462,6 +501,7 @@ def api_health_checker(
             f"overall {overall_health}% healthy. {provider_summary}"
         ),
         report_data={"agent": "api_health_checker", "metrics": metrics},
+        gateway=gateway,
     )
 
     try:
@@ -494,6 +534,7 @@ def api_health_checker(
 )
 def token_refresh(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Proactive token management:
@@ -657,6 +698,7 @@ def token_refresh(
                 priority="high",
                 due_days=1,
                 dedup_hours=6,
+                gateway=gateway,
             )
 
     # ── 3. Detect stale error tokens (error state 24+ hours) ──────────────
@@ -688,6 +730,7 @@ def token_refresh(
             priority="high",
             due_days=1,
             dedup_hours=24,
+            gateway=gateway,
         )
         if created:
             actions += 1
@@ -713,6 +756,7 @@ def token_refresh(
                 "per_provider": per_provider,
                 "stale_providers": stale_providers,
             },
+            gateway=gateway,
         )
 
     try:
@@ -752,6 +796,7 @@ def token_refresh(
 )
 def log_aggregation(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Agent fleet performance analytics:
@@ -916,6 +961,7 @@ def log_aggregation(
             priority="high",
             due_days=1,
             dedup_hours=8,
+            gateway=gateway,
         )
         if created:
             actions += 1
@@ -945,6 +991,7 @@ def log_aggregation(
             f"Degrading: {deg_str or 'none'}. Top: {top_str or 'n/a'}."
         ),
         report_data={"agent": "log_aggregation", "metrics": metrics},
+        gateway=gateway,
     )
 
     try:
@@ -991,6 +1038,7 @@ _COST_ALERT_THRESHOLD = float(os.environ.get("AI_DAILY_COST_ALERT", "10.0"))
 )
 def cost_optimization(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     AI spend tracking and optimization:
@@ -1020,6 +1068,7 @@ def cost_optimization(
             _insert_activity(db, organization_id,
                 content="Cost optimization: agent_invocations table not yet deployed. Skipping.",
                 report_data={"agent": "cost_optimization", "status": "table_missing"},
+                gateway=gateway,
             )
             try:
                 db.commit()
@@ -1062,6 +1111,7 @@ def cost_optimization(
             _insert_activity(db, organization_id,
                 content="Cost optimization: No AI invocations today.",
                 report_data={"agent": "cost_optimization", "status": "no_invocations"},
+                gateway=gateway,
             )
             try:
                 db.commit()
@@ -1216,6 +1266,7 @@ def cost_optimization(
                 priority="medium",
                 due_days=1,
                 dedup_hours=24,
+                gateway=gateway,
             )
             if created:
                 actions += 1
@@ -1233,6 +1284,7 @@ def cost_optimization(
                 priority="medium",
                 due_days=2,
                 dedup_hours=24,
+                gateway=gateway,
             )
             if created:
                 actions += 1
@@ -1277,6 +1329,7 @@ def cost_optimization(
                 f"{len(suggestions)} optimization suggestions."
             ),
             report_data={"agent": "cost_optimization", "metrics": metrics},
+            gateway=gateway,
         )
 
         try:

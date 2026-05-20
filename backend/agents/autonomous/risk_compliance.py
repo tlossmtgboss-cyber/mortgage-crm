@@ -143,6 +143,7 @@ def _domains_similar(candidate: str, verified: str) -> bool:
 )
 def wire_fraud_scanner(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Detect emails with wire instruction changes, domain spoofing, and
     urgency-language patterns that indicate potential wire fraud.
@@ -338,37 +339,50 @@ def wire_fraud_scanner(
             f"confirmed verbally with a known contact."
         )
 
-        db.execute(text("""
-            INSERT INTO compliance_alerts
-                (loan_id, lead_id, organization_id, alert_type, severity, title,
-                 description, status, created_at)
-            VALUES
-                (:loan_id, :lead_id, :org_id, 'WIRE_FRAUD_SUSPECT', :severity,
-                 :title, :desc, 'open', CURRENT_TIMESTAMP)
-        """), {
-            "loan_id": loan_id,
-            "lead_id": lead_id,
-            "org_id": organization_id,
-            "severity": severity,
-            "title": f"Wire fraud alert: {indicator_str} -- {contact_name}"[:200],
-            "desc": description[:2000],
-        })
+        _wf_title = f"Wire fraud alert: {indicator_str} -- {contact_name}"[:200]
+        _wf_desc = description[:2000]
+        def _do_wf_alert(t=_wf_title, d=_wf_desc, lid=loan_id, leid=lead_id, sev=severity):
+            db.execute(text("""
+                INSERT INTO compliance_alerts
+                    (loan_id, lead_id, organization_id, alert_type, severity, title,
+                     description, status, created_at)
+                VALUES
+                    (:loan_id, :lead_id, :org_id, 'WIRE_FRAUD_SUSPECT', :severity,
+                     :title, :desc, 'open', CURRENT_TIMESTAMP)
+            """), {
+                "loan_id": lid,
+                "lead_id": leid,
+                "org_id": organization_id,
+                "severity": sev,
+                "title": t,
+                "desc": d,
+            })
+        if gateway:
+            gateway.propose("create_compliance_alert", _do_wf_alert, target_entity="loan", target_id=str(loan_id), description=_wf_title[:200])
+        else:
+            _do_wf_alert()
 
         # Audit trail: log activity on the lead/loan record
-        db.execute(text("""
-            INSERT INTO activities
-                (lead_id, loan_id, type, content, created_at, organization_id)
-            VALUES
-                (:lead_id, :loan_id, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "lead_id": lead_id,
-            "loan_id": loan_id,
-            "content": (
-                f"[WIRE FRAUD SCANNER] Alert created -- indicators: {indicator_str}. "
-                f"Do NOT wire funds without verbal verification at a verified number."
-            )[:2000],
-            "org_id": organization_id,
-        })
+        _wf_activity_content = (
+            f"[WIRE FRAUD SCANNER] Alert created -- indicators: {indicator_str}. "
+            f"Do NOT wire funds without verbal verification at a verified number."
+        )[:2000]
+        def _do_wf_activity(c=_wf_activity_content, lid=loan_id, leid=lead_id):
+            db.execute(text("""
+                INSERT INTO activities
+                    (lead_id, loan_id, type, content, created_at, organization_id)
+                VALUES
+                    (:lead_id, :loan_id, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
+            """), {
+                "lead_id": leid,
+                "loan_id": lid,
+                "content": c,
+                "org_id": organization_id,
+            })
+        if gateway:
+            gateway.propose("create_activity", _do_wf_activity, target_entity="loan", target_id=str(loan_id), description=_wf_activity_content[:200])
+        else:
+            _do_wf_activity()
 
         fraud_indicators_found.append({
             "activity_id": activity_id,
@@ -510,6 +524,7 @@ _DIRECT_QUESTION_RE = re.compile(
 )
 def ecoa_audit(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Scan AI conversations, call transcripts, and note activities for
     ECOA-prohibited topics (Regulation B, 12 CFR 1002).
@@ -697,19 +712,27 @@ def ecoa_audit(
             f"for prompt guardrail review."
         )
 
-        db.execute(text("""
-            INSERT INTO compliance_alerts
-                (loan_id, organization_id, alert_type, severity, title,
-                 description, status, created_at)
-            VALUES
-                (NULL, :org_id, 'ECOA_VIOLATION', :severity,
-                 :title, :desc, 'open', CURRENT_TIMESTAMP)
-        """), {
-            "org_id": organization_id,
-            "severity": v["severity"],
-            "title": f"ECOA: {category_label} -- {v['source_label']}"[:200],
-            "desc": description[:2000],
-        })
+        _ecoa_title = f"ECOA: {category_label} -- {v['source_label']}"[:200]
+        _ecoa_desc = description[:2000]
+        _ecoa_sev = v["severity"]
+        def _do_ecoa_alert(t=_ecoa_title, d=_ecoa_desc, sev=_ecoa_sev):
+            db.execute(text("""
+                INSERT INTO compliance_alerts
+                    (loan_id, organization_id, alert_type, severity, title,
+                     description, status, created_at)
+                VALUES
+                    (NULL, :org_id, 'ECOA_VIOLATION', :severity,
+                     :title, :desc, 'open', CURRENT_TIMESTAMP)
+            """), {
+                "org_id": organization_id,
+                "severity": sev,
+                "title": t,
+                "desc": d,
+            })
+        if gateway:
+            gateway.propose("create_compliance_alert", _do_ecoa_alert, target_entity=None, target_id=None, description=_ecoa_title[:200])
+        else:
+            _do_ecoa_alert()
         actions += 1
 
         # Create remediation task for the LO if user_id is known
@@ -736,26 +759,35 @@ def ecoa_audit(
                     "This is a repeat finding -- management escalation may follow."
                     if prior_offenses > 0 else ""
                 )
-                db.execute(text("""
-                    INSERT INTO tasks
-                        (title, description, owner_id, priority, status,
-                         due_date, created_at, organization_id)
-                    VALUES
-                        (:title, :desc, :owner_id, :priority, 'pending',
-                         CURRENT_DATE + 3, CURRENT_TIMESTAMP, :org_id)
-                """), {
-                    "title": f"ECOA remediation: {v['category'].replace('_', ' ')} training required"[:200],
-                    "desc": (
-                        f"An ECOA compliance scan detected a potential "
-                        f"{category_label.lower()} violation in a "
-                        f"{v['source_label'].lower()}.\n\n"
-                        f"Required action: Complete training module -- {training_resource}.\n"
-                        f"{escalation_note}"
-                    )[:2000],
-                    "owner_id": str(v["user_id"]),
-                    "priority": priority,
-                    "org_id": organization_id,
-                })
+                _ecoa_task_title = f"ECOA remediation: {v['category'].replace('_', ' ')} training required"[:200]
+                _ecoa_task_desc = (
+                    f"An ECOA compliance scan detected a potential "
+                    f"{category_label.lower()} violation in a "
+                    f"{v['source_label'].lower()}.\n\n"
+                    f"Required action: Complete training module -- {training_resource}.\n"
+                    f"{escalation_note}"
+                )[:2000]
+                _ecoa_task_owner = str(v["user_id"])
+                _ecoa_task_pri = priority
+                def _do_ecoa_task(t=_ecoa_task_title, d=_ecoa_task_desc, oid=_ecoa_task_owner, p=_ecoa_task_pri):
+                    db.execute(text("""
+                        INSERT INTO tasks
+                            (title, description, owner_id, priority, status,
+                             due_date, created_at, organization_id)
+                        VALUES
+                            (:title, :desc, :owner_id, :priority, 'pending',
+                             CURRENT_DATE + 3, CURRENT_TIMESTAMP, :org_id)
+                    """), {
+                        "title": t,
+                        "desc": d,
+                        "owner_id": oid,
+                        "priority": p,
+                        "org_id": organization_id,
+                    })
+                if gateway:
+                    gateway.propose("create_task", _do_ecoa_task, target_entity="user", target_id=_ecoa_task_owner, description=_ecoa_task_title[:200])
+                else:
+                    _do_ecoa_task()
 
     try:
         db.commit()
@@ -788,6 +820,7 @@ def ecoa_audit(
 )
 def tcpa_compliance_scanner(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Check calls/SMS against borrower timezone quiet hours, DNC lists,
     frequency caps, and consent requirements. Produce per-LO compliance scores.
@@ -887,26 +920,33 @@ def tcpa_compliance_scanner(
         }).fetchone()
 
         if not existing:
-            db.execute(text("""
-                INSERT INTO compliance_alerts
-                    (loan_id, organization_id, alert_type, severity, title,
-                     description, status, created_at)
-                VALUES
-                    (NULL, :org_id, 'TCPA_QUIET_HOURS', 'high',
-                     :title, :desc, 'open', CURRENT_TIMESTAMP)
-            """), {
-                "org_id": organization_id,
-                "title": (
-                    f"TCPA quiet hours: {v['type']} at {v['local_hour']}:00 local "
-                    f"({v['state']})"
-                )[:200],
-                "desc": (
-                    f"activity_id={v['activity_id']} | {v['type']} to {v['contact_name']} "
-                    f"at {v['local_hour']}:00 local time ({v['timezone']}). "
-                    f"TCPA requires contacts only between 8am-9pm in the recipient's "
-                    f"timezone. Penalty: $500-$1,500 per violation."
-                )[:2000],
-            })
+            _tcpa_qh_title = (
+                f"TCPA quiet hours: {v['type']} at {v['local_hour']}:00 local "
+                f"({v['state']})"
+            )[:200]
+            _tcpa_qh_desc = (
+                f"activity_id={v['activity_id']} | {v['type']} to {v['contact_name']} "
+                f"at {v['local_hour']}:00 local time ({v['timezone']}). "
+                f"TCPA requires contacts only between 8am-9pm in the recipient's "
+                f"timezone. Penalty: $500-$1,500 per violation."
+            )[:2000]
+            def _do_tcpa_qh(t=_tcpa_qh_title, d=_tcpa_qh_desc):
+                db.execute(text("""
+                    INSERT INTO compliance_alerts
+                        (loan_id, organization_id, alert_type, severity, title,
+                         description, status, created_at)
+                    VALUES
+                        (NULL, :org_id, 'TCPA_QUIET_HOURS', 'high',
+                         :title, :desc, 'open', CURRENT_TIMESTAMP)
+                """), {
+                    "org_id": organization_id,
+                    "title": t,
+                    "desc": d,
+                })
+            if gateway:
+                gateway.propose("create_compliance_alert", _do_tcpa_qh, target_entity=None, target_id=None, description=_tcpa_qh_title[:200])
+            else:
+                _do_tcpa_qh()
             actions += 1
 
     # ---- 2. Opt-out / DNC compliance -------------------------------------
@@ -991,23 +1031,31 @@ def tcpa_compliance_scanner(
         }).fetchone()
 
         if not existing:
-            db.execute(text("""
-                INSERT INTO compliance_alerts
-                    (loan_id, lead_id, organization_id, alert_type, severity, title,
-                     description, status, created_at)
-                VALUES
-                    (NULL, :lead_id, :org_id, 'TCPA_OPT_OUT', 'critical',
-                     :title, :desc, 'open', CURRENT_TIMESTAMP)
-            """), {
-                "lead_id": v["lead_id"],
-                "org_id": organization_id,
-                "title": f"TCPA: Contact to DNC/{v['source']} -- {v['lead_name']}"[:200],
-                "desc": (
-                    f"activity_id={v['activity_id']} | Contact to {v['lead_name']} who "
-                    f"has opted out via {v['source']}. TCPA requires immediate "
-                    f"compliance with opt-out requests. Penalties: $500-$1,500 per violation."
-                )[:2000],
-            })
+            _tcpa_dnc_title = f"TCPA: Contact to DNC/{v['source']} -- {v['lead_name']}"[:200]
+            _tcpa_dnc_desc = (
+                f"activity_id={v['activity_id']} | Contact to {v['lead_name']} who "
+                f"has opted out via {v['source']}. TCPA requires immediate "
+                f"compliance with opt-out requests. Penalties: $500-$1,500 per violation."
+            )[:2000]
+            _tcpa_dnc_lead = v["lead_id"]
+            def _do_tcpa_dnc(t=_tcpa_dnc_title, d=_tcpa_dnc_desc, lid=_tcpa_dnc_lead):
+                db.execute(text("""
+                    INSERT INTO compliance_alerts
+                        (loan_id, lead_id, organization_id, alert_type, severity, title,
+                         description, status, created_at)
+                    VALUES
+                        (NULL, :lead_id, :org_id, 'TCPA_OPT_OUT', 'critical',
+                         :title, :desc, 'open', CURRENT_TIMESTAMP)
+                """), {
+                    "lead_id": lid,
+                    "org_id": organization_id,
+                    "title": t,
+                    "desc": d,
+                })
+            if gateway:
+                gateway.propose("create_compliance_alert", _do_tcpa_dnc, target_entity="lead", target_id=str(_tcpa_dnc_lead), description=_tcpa_dnc_title[:200])
+            else:
+                _do_tcpa_dnc()
             actions += 1
 
     # ---- 3. Frequency violations (>3 calls/day to same lead) -------------
@@ -1046,23 +1094,31 @@ def tcpa_compliance_scanner(
         }).fetchone()
 
         if not existing:
-            db.execute(text("""
-                INSERT INTO compliance_alerts
-                    (loan_id, lead_id, organization_id, alert_type, severity, title,
-                     description, status, created_at)
-                VALUES
-                    (NULL, :lead_id, :org_id, 'TCPA_FREQUENCY', 'high',
-                     :title, :desc, 'open', CURRENT_TIMESTAMP)
-            """), {
-                "lead_id": lead_id,
-                "org_id": organization_id,
-                "title": f"TCPA frequency: {count} contacts to {lead_name} in 24h"[:200],
-                "desc": (
-                    f"phone={phone} | {count} outbound contacts to {lead_name} in 24 hours "
-                    f"(limit: 3). Excessive contact frequency increases TCPA exposure "
-                    f"and may constitute harassment."
-                )[:2000],
-            })
+            _tcpa_freq_title = f"TCPA frequency: {count} contacts to {lead_name} in 24h"[:200]
+            _tcpa_freq_desc = (
+                f"phone={phone} | {count} outbound contacts to {lead_name} in 24 hours "
+                f"(limit: 3). Excessive contact frequency increases TCPA exposure "
+                f"and may constitute harassment."
+            )[:2000]
+            _tcpa_freq_lead = lead_id
+            def _do_tcpa_freq(t=_tcpa_freq_title, d=_tcpa_freq_desc, lid=_tcpa_freq_lead):
+                db.execute(text("""
+                    INSERT INTO compliance_alerts
+                        (loan_id, lead_id, organization_id, alert_type, severity, title,
+                         description, status, created_at)
+                    VALUES
+                        (NULL, :lead_id, :org_id, 'TCPA_FREQUENCY', 'high',
+                         :title, :desc, 'open', CURRENT_TIMESTAMP)
+                """), {
+                    "lead_id": lid,
+                    "org_id": organization_id,
+                    "title": t,
+                    "desc": d,
+                })
+            if gateway:
+                gateway.propose("create_compliance_alert", _do_tcpa_freq, target_entity="lead", target_id=str(_tcpa_freq_lead), description=_tcpa_freq_title[:200])
+            else:
+                _do_tcpa_freq()
             actions += 1
 
     # ---- 4. Per-LO compliance score and report ---------------------------
@@ -1100,26 +1156,35 @@ def tcpa_compliance_scanner(
 
         severity = "critical" if score < 80 else ("high" if score < 90 else "medium")
 
-        db.execute(text("""
-            INSERT INTO compliance_alerts
-                (loan_id, organization_id, alert_type, severity, title,
-                 description, status, created_at)
-            VALUES
-                (NULL, :org_id, 'TCPA_LO_REPORT', :severity,
-                 :title, :desc, 'open', CURRENT_TIMESTAMP)
-        """), {
-            "org_id": organization_id,
-            "severity": severity,
-            "title": f"TCPA compliance score: {lo_name} -- {score}%"[:200],
-            "desc": (
-                f"LO: {lo_name} (user_id={lo_id}) | Compliance score: {score}% | "
-                f"Total contacts: {total} | Violations: {violation_count} "
-                f"({violation_breakdown})\n\n"
-                f"Action required: Review all flagged contacts. Retrain on TCPA "
-                f"requirements (quiet hours, DNC lists, frequency caps). "
-                f"Scores below 90% require management review."
-            )[:2000],
-        })
+        _tcpa_lo_title = f"TCPA compliance score: {lo_name} -- {score}%"[:200]
+        _tcpa_lo_desc = (
+            f"LO: {lo_name} (user_id={lo_id}) | Compliance score: {score}% | "
+            f"Total contacts: {total} | Violations: {violation_count} "
+            f"({violation_breakdown})\n\n"
+            f"Action required: Review all flagged contacts. Retrain on TCPA "
+            f"requirements (quiet hours, DNC lists, frequency caps). "
+            f"Scores below 90% require management review."
+        )[:2000]
+        _tcpa_lo_sev = severity
+        _tcpa_lo_id = str(lo_id)
+        def _do_tcpa_lo(t=_tcpa_lo_title, d=_tcpa_lo_desc, sev=_tcpa_lo_sev, uid=_tcpa_lo_id):
+            db.execute(text("""
+                INSERT INTO compliance_alerts
+                    (loan_id, organization_id, alert_type, severity, title,
+                     description, status, created_at)
+                VALUES
+                    (NULL, :org_id, 'TCPA_LO_REPORT', :severity,
+                     :title, :desc, 'open', CURRENT_TIMESTAMP)
+            """), {
+                "org_id": organization_id,
+                "severity": sev,
+                "title": t,
+                "desc": d,
+            })
+        if gateway:
+            gateway.propose("create_compliance_alert", _do_tcpa_lo, target_entity="user", target_id=_tcpa_lo_id, description=_tcpa_lo_title[:200])
+        else:
+            _do_tcpa_lo()
         actions += 1
         notifications_sent += 1
 
@@ -1184,6 +1249,7 @@ _HMDA_OPTIONAL_FIELDS: List[Tuple[str, str, int]] = [
 )
 def hmda_data_collector(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Check all HMDA-required fields on active loans, calculate completeness
     percentages, prioritize by stage proximity to closing, group by LO, and
@@ -1315,27 +1381,36 @@ def hmda_data_collector(
             else ("medium" if max_priority >= 4 else "low")
         )
 
-        db.execute(text("""
-            INSERT INTO tasks
-                (title, description, owner_id, priority, status,
-                 due_date, created_at, organization_id)
-            VALUES
-                (:title, :desc, :lo_id, :priority, 'pending',
-                 CURRENT_DATE + 5, CURRENT_TIMESTAMP, :org_id)
-        """), {
-            "title": f"HMDA data batch: {len(incomplete_loans)} loan(s) need data -- {lo_name}"[:200],
-            "desc": (
-                f"HMDA data completeness audit found {len(incomplete_loans)} loan(s) "
-                f"with missing required fields:\n\n"
-                + "\n".join(loan_lines)
-                + more_note
-                + "\n\nHMDA (Home Mortgage Disclosure Act) requires these fields for "
-                f"regulatory reporting. Loans are prioritized by proximity to closing."
-            )[:2000],
-            "lo_id": str(lo_id),
-            "priority": task_priority,
-            "org_id": organization_id,
-        })
+        _hmda_task_title = f"HMDA data batch: {len(incomplete_loans)} loan(s) need data -- {lo_name}"[:200]
+        _hmda_task_desc = (
+            f"HMDA data completeness audit found {len(incomplete_loans)} loan(s) "
+            f"with missing required fields:\n\n"
+            + "\n".join(loan_lines)
+            + more_note
+            + "\n\nHMDA (Home Mortgage Disclosure Act) requires these fields for "
+            f"regulatory reporting. Loans are prioritized by proximity to closing."
+        )[:2000]
+        _hmda_task_lo = str(lo_id)
+        _hmda_task_pri = task_priority
+        def _do_hmda_task(t=_hmda_task_title, d=_hmda_task_desc, lid=_hmda_task_lo, p=_hmda_task_pri):
+            db.execute(text("""
+                INSERT INTO tasks
+                    (title, description, owner_id, priority, status,
+                     due_date, created_at, organization_id)
+                VALUES
+                    (:title, :desc, :lo_id, :priority, 'pending',
+                     CURRENT_DATE + 5, CURRENT_TIMESTAMP, :org_id)
+            """), {
+                "title": t,
+                "desc": d,
+                "lo_id": lid,
+                "priority": p,
+                "org_id": organization_id,
+            })
+        if gateway:
+            gateway.propose("create_task", _do_hmda_task, target_entity="user", target_id=_hmda_task_lo, description=_hmda_task_title[:200])
+        else:
+            _do_hmda_task()
         actions += 1
 
     # -- Org-wide HMDA readiness alert -------------------------------------
@@ -1356,26 +1431,34 @@ def hmda_data_collector(
         """), {"org_id": organization_id}).fetchone()
 
         if not existing_readiness:
-            db.execute(text("""
-                INSERT INTO compliance_alerts
-                    (loan_id, organization_id, alert_type, severity, title,
-                     description, status, created_at)
-                VALUES
-                    (NULL, :org_id, 'HMDA_READINESS', :severity,
-                     :title, :desc, 'open', CURRENT_TIMESTAMP)
-            """), {
-                "org_id": organization_id,
-                "severity": severity,
-                "title": f"HMDA readiness: {org_readiness}% org-wide"[:200],
-                "desc": (
-                    f"Organization HMDA data readiness: {org_readiness}%. "
-                    f"{loans_complete}/{len(active_loans)} loans fully complete. "
-                    f"{len(active_loans) - loans_complete} loan(s) need attention across "
-                    f"{len(lo_incomplete_loans)} LO(s).\n\n"
-                    f"HMDA examinations review data completeness. Target: 100% on all "
-                    f"required fields before closing."
-                )[:2000],
-            })
+            _hmda_ready_title = f"HMDA readiness: {org_readiness}% org-wide"[:200]
+            _hmda_ready_desc = (
+                f"Organization HMDA data readiness: {org_readiness}%. "
+                f"{loans_complete}/{len(active_loans)} loans fully complete. "
+                f"{len(active_loans) - loans_complete} loan(s) need attention across "
+                f"{len(lo_incomplete_loans)} LO(s).\n\n"
+                f"HMDA examinations review data completeness. Target: 100% on all "
+                f"required fields before closing."
+            )[:2000]
+            _hmda_ready_sev = severity
+            def _do_hmda_ready(t=_hmda_ready_title, d=_hmda_ready_desc, sev=_hmda_ready_sev):
+                db.execute(text("""
+                    INSERT INTO compliance_alerts
+                        (loan_id, organization_id, alert_type, severity, title,
+                         description, status, created_at)
+                    VALUES
+                        (NULL, :org_id, 'HMDA_READINESS', :severity,
+                         :title, :desc, 'open', CURRENT_TIMESTAMP)
+                """), {
+                    "org_id": organization_id,
+                    "severity": sev,
+                    "title": t,
+                    "desc": d,
+                })
+            if gateway:
+                gateway.propose("create_compliance_alert", _do_hmda_ready, target_entity=None, target_id=None, description=_hmda_ready_title[:200])
+            else:
+                _do_hmda_ready()
             actions += 1
 
     try:
@@ -1427,6 +1510,7 @@ def _std_dev(values: List[float]) -> float:
 )
 def fair_lending_monitor(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Analyze approval/denial rates, pricing distribution, turnaround time
     variance, and steering indicators across loan officers with statistical
@@ -1517,35 +1601,43 @@ def fair_lending_monitor(
                 }).fetchone()
 
                 if not existing:
-                    db.execute(text("""
-                        INSERT INTO compliance_alerts
-                            (loan_id, organization_id, alert_type, severity, title,
-                             description, status, created_at)
-                        VALUES
-                            (NULL, :org_id, 'FAIR_LENDING_DENIAL', :severity,
-                             :title, :desc, 'open', CURRENT_TIMESTAMP)
-                    """), {
-                        "org_id": organization_id,
-                        "severity": "high" if z > 2.5 else "medium",
-                        "title": (
-                            f"Fair lending: {lo_name} -- {rate}% denial rate "
-                            f"on {loan_type}"
-                        )[:200],
-                        "desc": (
-                            f"LO: {lo_name} | Loan type: {loan_type} | "
-                            f"Denial rate: {rate}% ({denied}/{total}) vs org avg "
-                            f"{mean_rate:.1f}% | Z-score: {z:.2f} (statistically "
-                            f"significant at 95%)\n\n"
-                            f"Remediation steps:\n"
-                            f"1. Review all denied applications for this LO on "
-                            f"{loan_type} loans in the past 90 days\n"
-                            f"2. Verify denial reasons are consistently documented "
-                            f"and compliant with Adverse Action requirements\n"
-                            f"3. Compare underwriting criteria applied vs peer LOs\n"
-                            f"4. If pattern persists, conduct second-look review of "
-                            f"denied files"
-                        )[:2000],
-                    })
+                    _fl_denial_sev = "high" if z > 2.5 else "medium"
+                    _fl_denial_title = (
+                        f"Fair lending: {lo_name} -- {rate}% denial rate "
+                        f"on {loan_type}"
+                    )[:200]
+                    _fl_denial_desc = (
+                        f"LO: {lo_name} | Loan type: {loan_type} | "
+                        f"Denial rate: {rate}% ({denied}/{total}) vs org avg "
+                        f"{mean_rate:.1f}% | Z-score: {z:.2f} (statistically "
+                        f"significant at 95%)\n\n"
+                        f"Remediation steps:\n"
+                        f"1. Review all denied applications for this LO on "
+                        f"{loan_type} loans in the past 90 days\n"
+                        f"2. Verify denial reasons are consistently documented "
+                        f"and compliant with Adverse Action requirements\n"
+                        f"3. Compare underwriting criteria applied vs peer LOs\n"
+                        f"4. If pattern persists, conduct second-look review of "
+                        f"denied files"
+                    )[:2000]
+                    def _do_fl_denial(t=_fl_denial_title, d=_fl_denial_desc, sev=_fl_denial_sev):
+                        db.execute(text("""
+                            INSERT INTO compliance_alerts
+                                (loan_id, organization_id, alert_type, severity, title,
+                                 description, status, created_at)
+                            VALUES
+                                (NULL, :org_id, 'FAIR_LENDING_DENIAL', :severity,
+                                 :title, :desc, 'open', CURRENT_TIMESTAMP)
+                        """), {
+                            "org_id": organization_id,
+                            "severity": sev,
+                            "title": t,
+                            "desc": d,
+                        })
+                    if gateway:
+                        gateway.propose("create_compliance_alert", _do_fl_denial, target_entity=None, target_id=None, description=_fl_denial_title[:200])
+                    else:
+                        _do_fl_denial()
                     actions += 1
 
     # ---- 2. Pricing (rate) distribution analysis -------------------------
@@ -1617,35 +1709,43 @@ def fair_lending_monitor(
                 if not existing:
                     min_rate = float(row[5] or 0)
                     max_rate = float(row[6] or 0)
-                    db.execute(text("""
-                        INSERT INTO compliance_alerts
-                            (loan_id, organization_id, alert_type, severity, title,
-                             description, status, created_at)
-                        VALUES
-                            (NULL, :org_id, 'FAIR_LENDING_PRICING', :severity,
-                             :title, :desc, 'open', CURRENT_TIMESTAMP)
-                    """), {
-                        "org_id": organization_id,
-                        "severity": "high" if z > 2.5 else "medium",
-                        "title": (
-                            f"Fair lending: Pricing outlier -- {lo_name} "
-                            f"on {loan_type}"
-                        )[:200],
-                        "desc": (
-                            f"LO: {lo_name} | Loan type: {loan_type} | "
-                            f"Avg rate: {avg_rate:.3f}% vs org avg {mean_rate:.3f}% | "
-                            f"Z-score: {z:.2f}\n"
-                            f"Rate range: {min_rate:.3f}% - {max_rate:.3f}% across "
-                            f"{loan_count} loans.\n\n"
-                            f"Remediation steps:\n"
-                            f"1. Audit rate sheets and pricing exceptions used\n"
-                            f"2. Verify pricing exceptions have documented business "
-                            f"justification\n"
-                            f"3. Compare discount point and fee structures with peers\n"
-                            f"4. Review for patterns in which borrowers receive "
-                            f"above-average pricing"
-                        )[:2000],
-                    })
+                    _fl_pricing_sev = "high" if z > 2.5 else "medium"
+                    _fl_pricing_title = (
+                        f"Fair lending: Pricing outlier -- {lo_name} "
+                        f"on {loan_type}"
+                    )[:200]
+                    _fl_pricing_desc = (
+                        f"LO: {lo_name} | Loan type: {loan_type} | "
+                        f"Avg rate: {avg_rate:.3f}% vs org avg {mean_rate:.3f}% | "
+                        f"Z-score: {z:.2f}\n"
+                        f"Rate range: {min_rate:.3f}% - {max_rate:.3f}% across "
+                        f"{loan_count} loans.\n\n"
+                        f"Remediation steps:\n"
+                        f"1. Audit rate sheets and pricing exceptions used\n"
+                        f"2. Verify pricing exceptions have documented business "
+                        f"justification\n"
+                        f"3. Compare discount point and fee structures with peers\n"
+                        f"4. Review for patterns in which borrowers receive "
+                        f"above-average pricing"
+                    )[:2000]
+                    def _do_fl_pricing(t=_fl_pricing_title, d=_fl_pricing_desc, sev=_fl_pricing_sev):
+                        db.execute(text("""
+                            INSERT INTO compliance_alerts
+                                (loan_id, organization_id, alert_type, severity, title,
+                                 description, status, created_at)
+                            VALUES
+                                (NULL, :org_id, 'FAIR_LENDING_PRICING', :severity,
+                                 :title, :desc, 'open', CURRENT_TIMESTAMP)
+                        """), {
+                            "org_id": organization_id,
+                            "severity": sev,
+                            "title": t,
+                            "desc": d,
+                        })
+                    if gateway:
+                        gateway.propose("create_compliance_alert", _do_fl_pricing, target_entity=None, target_id=None, description=_fl_pricing_title[:200])
+                    else:
+                        _do_fl_pricing()
                     actions += 1
 
     # ---- 3. Turnaround time variance (application to funded) -------------
@@ -1723,36 +1823,44 @@ def fair_lending_monitor(
                 if not existing:
                     min_days = float(row[5] or 0)
                     max_days = float(row[6] or 0)
-                    db.execute(text("""
-                        INSERT INTO compliance_alerts
-                            (loan_id, organization_id, alert_type, severity, title,
-                             description, status, created_at)
-                        VALUES
-                            (NULL, :org_id, 'FAIR_LENDING_TIMING', :severity,
-                             :title, :desc, 'open', CURRENT_TIMESTAMP)
-                    """), {
-                        "org_id": organization_id,
-                        "severity": "high" if z > 2.5 else "medium",
-                        "title": (
-                            f"Fair lending: Slow processing -- {lo_name} "
-                            f"on {loan_type}"
-                        )[:200],
-                        "desc": (
-                            f"LO: {lo_name} | Loan type: {loan_type} | "
-                            f"Avg {days:.0f} days to fund vs org avg "
-                            f"{mean_days:.0f} days | Z-score: {z:.2f}\n"
-                            f"Range: {min_days:.0f}-{max_days:.0f} days across "
-                            f"{funded_count} funded loans.\n\n"
-                            f"Remediation steps:\n"
-                            f"1. Review processing bottlenecks for this LO's "
-                            f"{loan_type} pipeline\n"
-                            f"2. Compare stage-to-stage cycle times with peer LOs\n"
-                            f"3. Investigate whether certain borrower profiles "
-                            f"consistently experience delays\n"
-                            f"4. Disparate turnaround times may indicate disparate "
-                            f"treatment if correlated with protected characteristics"
-                        )[:2000],
-                    })
+                    _fl_timing_sev = "high" if z > 2.5 else "medium"
+                    _fl_timing_title = (
+                        f"Fair lending: Slow processing -- {lo_name} "
+                        f"on {loan_type}"
+                    )[:200]
+                    _fl_timing_desc = (
+                        f"LO: {lo_name} | Loan type: {loan_type} | "
+                        f"Avg {days:.0f} days to fund vs org avg "
+                        f"{mean_days:.0f} days | Z-score: {z:.2f}\n"
+                        f"Range: {min_days:.0f}-{max_days:.0f} days across "
+                        f"{funded_count} funded loans.\n\n"
+                        f"Remediation steps:\n"
+                        f"1. Review processing bottlenecks for this LO's "
+                        f"{loan_type} pipeline\n"
+                        f"2. Compare stage-to-stage cycle times with peer LOs\n"
+                        f"3. Investigate whether certain borrower profiles "
+                        f"consistently experience delays\n"
+                        f"4. Disparate turnaround times may indicate disparate "
+                        f"treatment if correlated with protected characteristics"
+                    )[:2000]
+                    def _do_fl_timing(t=_fl_timing_title, d=_fl_timing_desc, sev=_fl_timing_sev):
+                        db.execute(text("""
+                            INSERT INTO compliance_alerts
+                                (loan_id, organization_id, alert_type, severity, title,
+                                 description, status, created_at)
+                            VALUES
+                                (NULL, :org_id, 'FAIR_LENDING_TIMING', :severity,
+                                 :title, :desc, 'open', CURRENT_TIMESTAMP)
+                        """), {
+                            "org_id": organization_id,
+                            "severity": sev,
+                            "title": t,
+                            "desc": d,
+                        })
+                    if gateway:
+                        gateway.propose("create_compliance_alert", _do_fl_timing, target_entity=None, target_id=None, description=_fl_timing_title[:200])
+                    else:
+                        _do_fl_timing()
                     actions += 1
 
     # ---- 4. Steering analysis: LO loan-type distribution -----------------
@@ -1824,36 +1932,43 @@ def fair_lending_monitor(
                     }).fetchone()
 
                     if not existing:
-                        db.execute(text("""
-                            INSERT INTO compliance_alerts
-                                (loan_id, organization_id, alert_type, severity, title,
-                                 description, status, created_at)
-                            VALUES
-                                (NULL, :org_id, 'FAIR_LENDING_STEERING', 'medium',
-                                 :title, :desc, 'open', CURRENT_TIMESTAMP)
-                        """), {
-                            "org_id": organization_id,
-                            "title": (
-                                f"Fair lending: Potential steering -- {lo_name} "
-                                f"-> {loan_type}"
-                            )[:200],
-                            "desc": (
-                                f"LO: {lo_name} | {lo_pct:.1f}% of loans are "
-                                f"{loan_type} vs org avg {org_pct:.1f}% "
-                                f"({count}/{lo_total} loans).\n\n"
-                                f"Steering occurs when borrowers who qualify for "
-                                f"conventional financing are directed toward "
-                                f"government-backed programs (or vice versa).\n\n"
-                                f"Remediation steps:\n"
-                                f"1. Audit loan program selection documentation for "
-                                f"this LO's {loan_type} borrowers\n"
-                                f"2. Verify all borrowers received written comparison "
-                                f"of eligible products\n"
-                                f"3. Review qualification criteria -- were conventional "
-                                f"options presented where applicable?\n"
-                                f"4. Compare borrower profiles between this LO and peers"
-                            )[:2000],
-                        })
+                        _fl_steer_title = (
+                            f"Fair lending: Potential steering -- {lo_name} "
+                            f"-> {loan_type}"
+                        )[:200]
+                        _fl_steer_desc = (
+                            f"LO: {lo_name} | {lo_pct:.1f}% of loans are "
+                            f"{loan_type} vs org avg {org_pct:.1f}% "
+                            f"({count}/{lo_total} loans).\n\n"
+                            f"Steering occurs when borrowers who qualify for "
+                            f"conventional financing are directed toward "
+                            f"government-backed programs (or vice versa).\n\n"
+                            f"Remediation steps:\n"
+                            f"1. Audit loan program selection documentation for "
+                            f"this LO's {loan_type} borrowers\n"
+                            f"2. Verify all borrowers received written comparison "
+                            f"of eligible products\n"
+                            f"3. Review qualification criteria -- were conventional "
+                            f"options presented where applicable?\n"
+                            f"4. Compare borrower profiles between this LO and peers"
+                        )[:2000]
+                        def _do_fl_steer(t=_fl_steer_title, d=_fl_steer_desc):
+                            db.execute(text("""
+                                INSERT INTO compliance_alerts
+                                    (loan_id, organization_id, alert_type, severity, title,
+                                     description, status, created_at)
+                                VALUES
+                                    (NULL, :org_id, 'FAIR_LENDING_STEERING', 'medium',
+                                     :title, :desc, 'open', CURRENT_TIMESTAMP)
+                            """), {
+                                "org_id": organization_id,
+                                "title": t,
+                                "desc": d,
+                            })
+                        if gateway:
+                            gateway.propose("create_compliance_alert", _do_fl_steer, target_entity=None, target_id=None, description=_fl_steer_title[:200])
+                        else:
+                            _do_fl_steer()
                         actions += 1
 
     # ---- 5. Generate summary activity log entry --------------------------
@@ -1890,12 +2005,18 @@ def fair_lending_monitor(
     else:
         report_content += "No statistically significant disparities detected."
 
-    db.execute(text("""
-        INSERT INTO activities
-            (lead_id, loan_id, type, content, created_at, organization_id)
-        VALUES
-            (NULL, NULL, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
-    """), {"content": report_content[:2000], "org_id": organization_id})
+    _fl_report = report_content[:2000]
+    def _do_fl_activity(c=_fl_report):
+        db.execute(text("""
+            INSERT INTO activities
+                (lead_id, loan_id, type, content, created_at, organization_id)
+            VALUES
+                (NULL, NULL, 'Note', :content, CURRENT_TIMESTAMP, :org_id)
+        """), {"content": c, "org_id": organization_id})
+    if gateway:
+        gateway.propose("create_activity", _do_fl_activity, target_entity=None, target_id=None, description=_fl_report[:200])
+    else:
+        _do_fl_activity()
 
     try:
         db.commit()

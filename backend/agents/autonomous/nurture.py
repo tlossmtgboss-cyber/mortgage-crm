@@ -113,6 +113,7 @@ def _insert_task(
     loan_id: Optional[int] = None,
     lead_id: Optional[int] = None,
     related_type: Optional[str] = None,
+    gateway=None,
 ) -> None:
     """Insert a task with all required fields."""
     cols = ["title", "description", "owner_id", "priority", "status", "due_date", "created_at", "organization_id"]
@@ -139,7 +140,17 @@ def _insert_task(
         params["related_type"] = related_type
 
     sql = f"INSERT INTO tasks ({', '.join(cols)}) VALUES ({', '.join(vals)})"
-    db.execute(text(sql), params)
+    def _do():
+        db.execute(text(sql), params)
+    if gateway:
+        gateway.propose(
+            "create_task", _do,
+            target_entity="lead" if lead_id else ("loan" if loan_id else None),
+            target_id=str(lead_id or loan_id) if (lead_id or loan_id) else None,
+            description=title[:200],
+        )
+    else:
+        _do()
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +164,7 @@ def _insert_task(
 )
 def refi_opportunity_scanner(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Comprehensive refi opportunity detection:
@@ -336,6 +348,7 @@ def refi_opportunity_scanner(
             due_date_expr="CURRENT_DATE + 3",
             loan_id=loan_id,
             related_type="refi_opportunity",
+            gateway=gateway,
         )
         actions += 1
         total_monthly_savings += monthly_savings
@@ -375,6 +388,7 @@ def refi_opportunity_scanner(
 )
 def sphere_of_influence_nurture(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Segmented past-borrower relationship maintenance:
@@ -610,6 +624,7 @@ def sphere_of_influence_nurture(
             due_date_expr="CURRENT_DATE + 7",
             loan_id=loan_id,
             related_type="sphere_nurture",
+            gateway=gateway,
         )
         actions += 1
         by_segment[segment] = by_segment.get(segment, 0) + 1
@@ -645,6 +660,7 @@ def sphere_of_influence_nurture(
 )
 def review_solicitor(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Multi-step review solicitation sequence:
@@ -838,6 +854,7 @@ def review_solicitor(
             due_date_expr="CURRENT_DATE + 2",
             loan_id=loan_id,
             related_type="review_request",
+            gateway=gateway,
         )
         actions += 1
         step_counts[step_key] = step_counts.get(step_key, 0) + 1
@@ -900,6 +917,7 @@ def review_solicitor(
 )
 def social_proof_collector(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Score and surface compelling closing stories for social content:
@@ -1071,6 +1089,7 @@ def social_proof_collector(
             due_date_expr="CURRENT_DATE + 3",
             loan_id=loan_id,
             related_type="social_permission",
+            gateway=gateway,
         )
         actions += 1
 
@@ -1110,6 +1129,7 @@ def social_proof_collector(
             due_date_expr="CURRENT_DATE + 7",
             loan_id=loan_id,
             related_type="social_content",
+            gateway=gateway,
         )
         actions += 1
 
@@ -1188,6 +1208,7 @@ def social_proof_collector(
 )
 def document_expiration_tracker(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """
     Comprehensive document expiration management:
@@ -1354,6 +1375,7 @@ def document_expiration_tracker(
                     due_date_expr=due_expr,
                     loan_id=loan_id,
                     related_type="doc_expiration",
+                    gateway=gateway,
                 )
                 actions += 1
                 total_dollar_exposure += amount

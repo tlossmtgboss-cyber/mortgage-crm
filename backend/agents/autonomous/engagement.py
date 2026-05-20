@@ -53,23 +53,34 @@ def _insert_task(
     status: str = "pending",
     due_date_expr: str = "CURRENT_DATE",
     organization_id: int,
+    gateway=None,
 ) -> None:
     """Insert a task row with standard columns."""
-    db.execute(text(f"""
-        INSERT INTO tasks (title, description, assigned_to_id, lead_id, loan_id,
-                           priority, status, due_date, created_at, organization_id)
-        VALUES (:title, :desc, :assigned_to_id, :lead_id, :loan_id,
-                :priority, :status, {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "title": title[:500],
-        "desc": description[:4000],
-        "assigned_to_id": assigned_to_id,
-        "lead_id": lead_id,
-        "loan_id": loan_id,
-        "priority": priority,
-        "status": status,
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text(f"""
+            INSERT INTO tasks (title, description, assigned_to_id, lead_id, loan_id,
+                               priority, status, due_date, created_at, organization_id)
+            VALUES (:title, :desc, :assigned_to_id, :lead_id, :loan_id,
+                    :priority, :status, {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "title": title[:500],
+            "desc": description[:4000],
+            "assigned_to_id": assigned_to_id,
+            "lead_id": lead_id,
+            "loan_id": loan_id,
+            "priority": priority,
+            "status": status,
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_task", _do,
+            target_entity="lead" if lead_id else ("loan" if loan_id else None),
+            target_id=lead_id or loan_id,
+            description=title[:200],
+        )
+    else:
+        _do()
 
 
 def _insert_activity(
@@ -79,17 +90,28 @@ def _insert_activity(
     activity_type: str,
     content: str,
     organization_id: int,
+    gateway=None,
 ) -> None:
     """Insert an activity log entry."""
-    db.execute(text("""
-        INSERT INTO activities (lead_id, type, content, created_at, organization_id)
-        VALUES (:lead_id, :type, :content, CURRENT_TIMESTAMP, :org_id)
-    """), {
-        "lead_id": lead_id,
-        "type": activity_type,
-        "content": content[:4000],
-        "org_id": organization_id,
-    })
+    def _do():
+        db.execute(text("""
+            INSERT INTO activities (lead_id, type, content, created_at, organization_id)
+            VALUES (:lead_id, :type, :content, CURRENT_TIMESTAMP, :org_id)
+        """), {
+            "lead_id": lead_id,
+            "type": activity_type,
+            "content": content[:4000],
+            "org_id": organization_id,
+        })
+    if gateway:
+        gateway.propose(
+            "create_activity", _do,
+            target_entity="lead" if lead_id else None,
+            target_id=lead_id,
+            description=content[:200],
+        )
+    else:
+        _do()
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +171,7 @@ def _pick_round_robin_lo(db: Session, organization_id: int) -> Optional[Tuple[in
 )
 def speed_to_lead(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Find leads created in last 5 min with no outreach and create channel-specific tasks.
 
@@ -236,6 +259,7 @@ def speed_to_lead(
                 f"Source: {source}{assigned_note}"
             ),
             organization_id=organization_id,
+            gateway=gateway,
         )
 
         # Outside business hours: log activity but defer contact tasks
@@ -259,6 +283,7 @@ def speed_to_lead(
                 priority=priority,
                 due_date_expr="CURRENT_DATE + 1",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
             continue
@@ -280,6 +305,7 @@ def speed_to_lead(
                 lead_id=lead_id,
                 priority=priority,
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
 
@@ -297,6 +323,7 @@ def speed_to_lead(
                 lead_id=lead_id,
                 priority="high" if urgency == "hot" else "medium",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
 
@@ -313,6 +340,7 @@ def speed_to_lead(
                 lead_id=lead_id,
                 priority="high" if urgency == "hot" else "medium",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
 
@@ -329,6 +357,7 @@ def speed_to_lead(
                 lead_id=lead_id,
                 priority="high",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
 
@@ -384,6 +413,7 @@ _DEFAULT_DOCS = ["Loan file", "Most recent credit report", "Rate lock confirmati
 )
 def appointment_prep(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Create detailed prep tasks for appointments starting in the next 2 hours.
 
@@ -515,6 +545,7 @@ def appointment_prep(
             lead_id=str(lead_id) if lead_id else None,
             priority="high",
             organization_id=organization_id,
+            gateway=gateway,
         )
         actions += 1
 
@@ -537,6 +568,7 @@ def appointment_prep(
                 lead_id=str(lead_id),
                 priority="medium",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
 
@@ -606,6 +638,7 @@ _MILESTONE_CONFIG: Dict[str, Dict[str, Any]] = {
 )
 def borrower_status_updater(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Find loans that hit milestones in the last hour and create notification tasks.
 
@@ -706,6 +739,7 @@ def borrower_status_updater(
             lead_id=lead_id,
             priority="high" if stage in ("FUNDED", "CTC", "CLEAR_TO_CLOSE") else "medium",
             organization_id=organization_id,
+            gateway=gateway,
         )
         actions += 1
         notifications += 1
@@ -728,6 +762,7 @@ def borrower_status_updater(
                 lead_id=lead_id,
                 priority="medium",
                 organization_id=organization_id,
+                gateway=gateway,
             )
             actions += 1
             notifications += 1
@@ -740,6 +775,7 @@ def borrower_status_updater(
                 activity_type="Milestone",
                 content=f"Loan #{loan_number} reached {stage}. {timeline_note}",
                 organization_id=organization_id,
+                gateway=gateway,
             )
 
     try:
@@ -784,6 +820,7 @@ def _co_marketing_suggestion(referral_count: int) -> str:
 )
 def referral_thank_you(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Create enriched thank-you tasks for referral-sourced leads received today.
 
@@ -881,6 +918,7 @@ def referral_thank_you(
             lead_id=lead_id,
             priority=priority,
             organization_id=organization_id,
+            gateway=gateway,
         )
         actions += 1
 
@@ -894,6 +932,7 @@ def referral_thank_you(
                 f"Lifetime: {funded_count} funded / {volume_str} volume / {conversion_rate}% conversion."
             ),
             organization_id=organization_id,
+            gateway=gateway,
         )
 
     try:
@@ -981,6 +1020,7 @@ def _pick_template(phase_key: str, lead_name: str, loan_purpose: str) -> str:
 )
 def drip_campaign_engine(
     db: Session, organization_id: int, org_timezone: str = "America/New_York",
+    gateway=None,
 ) -> Dict[str, Any]:
     """Segment nurture leads into drip phases and create targeted outreach tasks.
 
@@ -1098,6 +1138,7 @@ def drip_campaign_engine(
             lead_id=lead_id,
             priority=phase_config["priority"],
             organization_id=organization_id,
+            gateway=gateway,
         )
         actions += 1
 
