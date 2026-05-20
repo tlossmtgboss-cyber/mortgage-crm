@@ -50,13 +50,13 @@ const CATEGORY_COLORS = {
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
   return `${days}d ago`;
 }
 
@@ -847,42 +847,52 @@ function Tasks() {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
+  const urgencyLabel = (u) => {
+    if (!u) return null;
+    const map = { critical: 'urgent', urgent: 'urgent', high: 'high', medium: 'medium', normal: 'low', low: 'low' };
+    return map[u] || 'medium';
+  };
+
   // =============================================
-  // Render
+  // Render helpers
   // =============================================
   if (loading) return <TasksSkeleton />;
 
   const filteredItems = getFilteredItems();
 
   const renderInboxItem = (item) => {
-    const isSelected = selectedItem && selectedItem.id === item.id;
+    const isActive = selectedItem && selectedItem.id === item.id;
     const isChecked = selectedTaskIds.has(item.id);
 
     if (item.taskType === 'sms') {
       return (
-        <div key={item.id} className={`inbox-item ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
-          <div className="type-dot sms" />
-          <div className="inbox-item-content">
-            <div className="inbox-item-top">
-              <span className="inbox-item-title">{item.title}</span>
-              <span className="inbox-item-time">{timeAgo(item.inbound_received_at || item.created_at)}</span>
+        <div key={item.id} className={`tasks-inbox-item${isActive ? ' active' : ''}`} onClick={() => setSelectedItem(item)}>
+          <div className="tasks-type-dot sms" />
+          <div className="tasks-inbox-item-content">
+            <div className="tasks-inbox-item-top">
+              <span className="tasks-inbox-item-title">{item.title}</span>
+              <span className="tasks-inbox-item-time">{timeAgo(item.inbound_received_at || item.created_at)}</span>
             </div>
-            <div className="inbox-item-sub">{item.borrower}{item.phone_number ? ` · ${item.phone_number}` : ''}</div>
+            <div className="tasks-inbox-item-sub">{item.borrower}{item.phone_number ? ` · ${item.phone_number}` : ''}</div>
             {item.inbound_message && (
-              <div className="inbox-item-preview">"{item.inbound_message.length > 80 ? item.inbound_message.slice(0, 80) + '...' : item.inbound_message}"</div>
+              <div className="tasks-inbox-item-preview">
+                "{item.inbound_message.length > 80 ? item.inbound_message.slice(0, 80) + '...' : item.inbound_message}"
+              </div>
             )}
-            <div className="inbox-item-tags">
-              <span className="type-chip sms">SMS</span>
+            <div className="tasks-inbox-item-tags">
+              <span className="tasks-type-chip sms">SMS</span>
               {item.category && (
-                <span className="category-badge" style={{
+                <span className="tasks-type-chip" style={{
                   backgroundColor: (CATEGORY_COLORS[item.category] || CATEGORY_COLORS.general).bg,
                   color: (CATEGORY_COLORS[item.category] || CATEGORY_COLORS.general).text,
                 }}>{(item.category || '').replace(/_/g, ' ')}</span>
               )}
               {item.ai_confidence > 0 && (
                 <>
-                  <div className="conf-bar"><div className={`conf-bar-fill ${item.ai_confidence >= 85 ? 'high' : item.ai_confidence >= 65 ? 'med' : 'low'}`} style={{ width: `${item.ai_confidence}%` }} /></div>
-                  <span className="conf-pct">{item.ai_confidence}%</span>
+                  <div className="tasks-conf-bar">
+                    <div className={`tasks-conf-bar-fill ${item.ai_confidence >= 85 ? 'high' : item.ai_confidence >= 65 ? 'med' : 'low'}`} style={{ width: `${item.ai_confidence}%` }} />
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#8A6D30' }}>{item.ai_confidence}%</span>
                 </>
               )}
             </div>
@@ -893,18 +903,18 @@ function Tasks() {
 
     if (item.taskType === 'reconciliation') {
       return (
-        <div key={item.id} className={`inbox-item ${isSelected ? 'selected' : ''}`} onClick={() => { setSelectedItem(item); setSelectedEmail(item); }}>
-          <div className="type-dot recon" />
-          <div className="inbox-item-content">
-            <div className="inbox-item-top">
-              <span className="inbox-item-title">{item.title}</span>
-              <span className="inbox-item-time">{formatEmailDate(item.sent_date || item.received_at)}</span>
+        <div key={item.id} className={`tasks-inbox-item${isActive ? ' active' : ''}`} onClick={() => { setSelectedItem(item); setSelectedEmail(item); }}>
+          <div className="tasks-type-dot recon" />
+          <div className="tasks-inbox-item-content">
+            <div className="tasks-inbox-item-top">
+              <span className="tasks-inbox-item-title">{item.title}</span>
+              <span className="tasks-inbox-item-time">{formatEmailDate(item.sent_date || item.received_at)}</span>
             </div>
-            <div className="inbox-item-sub">From: {item.borrower}</div>
-            <div className="inbox-item-tags">
-              <span className="type-chip recon">Reconciliation</span>
-              {item.matched_loan_id && <span className="match-tag">Loan #{item.matched_loan_id}</span>}
-              {item.matched_lead_id && <span className="match-tag lead">Lead #{item.matched_lead_id}</span>}
+            <div className="tasks-inbox-item-sub">From: {item.borrower}</div>
+            <div className="tasks-inbox-item-tags">
+              <span className="tasks-type-chip recon">Reconciliation</span>
+              {item.matched_loan_id && <span className="tasks-badge green">Loan #{item.matched_loan_id}</span>}
+              {item.matched_lead_id && <span className="tasks-badge green">Lead #{item.matched_lead_id}</span>}
             </div>
           </div>
         </div>
@@ -913,25 +923,28 @@ function Tasks() {
 
     // Workflow / manual task
     return (
-      <div key={item.id} className={`inbox-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''}`} onClick={() => setSelectedItem(item)}>
-        <div className="type-dot task" />
-        <div className="inbox-item-content">
-          <div className="inbox-item-top">
-            <input type="checkbox" className="task-checkbox" checked={isChecked} onChange={(e) => toggleTaskSelection(item.id, e)} onClick={(e) => e.stopPropagation()} />
-            <span className="source-icon">{item.sourceIcon}</span>
-            <span className="inbox-item-title">{item.title}</span>
-            <span className="inbox-item-time">{timeAgo(item.date_created || item.due_date)}</span>
+      <div key={item.id} className={`tasks-inbox-item${isActive ? ' active' : ''}${isChecked ? ' checked' : ''}`} onClick={() => setSelectedItem(item)}>
+        <input
+          type="checkbox"
+          className="tasks-inbox-item-checkbox"
+          checked={isChecked}
+          onChange={(e) => toggleTaskSelection(item.id, e)}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <div className="tasks-type-dot workflow" />
+        <div className="tasks-inbox-item-content">
+          <div className="tasks-inbox-item-top">
+            <span className="tasks-inbox-item-title">{item.title}</span>
+            <span className="tasks-inbox-item-time">{timeAgo(item.date_created || item.due_date)}</span>
           </div>
-          <div className="inbox-item-sub">{item.borrower || item.source}</div>
-          <div className="inbox-item-tags">
-            <span className="type-chip task">{item.source || 'Workflow'}</span>
+          <div className="tasks-inbox-item-sub">{item.borrower || item.source}</div>
+          <div className="tasks-inbox-item-tags">
+            <span className="tasks-type-chip workflow">{item.source || 'Workflow'}</span>
             {item.urgency && (
-              <span className="urgency-dot" style={{ backgroundColor: getUrgencyColor(item.urgency) }} title={item.urgency} />
+              <span className={`tasks-badge ${urgencyLabel(item.urgency)}`}>{(item.urgency || '').toUpperCase()}</span>
             )}
-            {item.ai_confidence && (
-              <span className={`ai-confidence-meter ${item.ai_confidence >= 90 ? 'high' : item.ai_confidence >= 70 ? 'medium' : 'low'}`}>
-                🤖 {item.ai_confidence}%
-              </span>
+            {item.ai_confidence > 0 && (
+              <span style={{ fontSize: '11px', color: '#8A6D30' }}>AI {item.ai_confidence}%</span>
             )}
           </div>
         </div>
@@ -939,80 +952,146 @@ function Tasks() {
     );
   };
 
-  // Detail panel for SMS tasks
+  // SMS detail panel (cream themed)
   const renderSmsDetail = () => {
-    if (smsDetailLoading) return <div className="detail-loading"><div className="spinner" /><p>Loading...</p></div>;
-    if (!smsTaskDetail) return <div className="empty-detail"><p>Select a task to view details</p></div>;
+    if (smsDetailLoading) {
+      return (
+        <div className="tasks-detail">
+          <div className="tasks-empty">
+            <div className="tasks-empty-icon">...</div>
+            <div className="tasks-empty-title">Loading SMS details</div>
+          </div>
+        </div>
+      );
+    }
+    if (!smsTaskDetail) {
+      return (
+        <div className="tasks-detail">
+          <div className="tasks-empty">
+            <div className="tasks-empty-title">Select a task to view details</div>
+          </div>
+        </div>
+      );
+    }
+
+    const contactName = smsTaskDetail.contact_name
+      || [smsTaskDetail.lead_first_name, smsTaskDetail.lead_last_name].filter(Boolean).join(' ')
+      || 'Unknown Contact';
 
     return (
-      <div className="sms-detail-panel">
-        <div className="detail-header">
+      <div className="tasks-detail">
+        <div className="tasks-detail-header">
           <div>
-            <h2>{smsTaskDetail.contact_name || [smsTaskDetail.lead_first_name, smsTaskDetail.lead_last_name].filter(Boolean).join(' ') || 'Unknown Contact'}</h2>
-            <span className="detail-phone">{smsTaskDetail.phone_number || ''}</span>
+            <span className="tasks-type-chip sms">SMS</span>
+            {smsTaskDetail.priority && (
+              <span className={`tasks-badge ${urgencyLabel(smsTaskDetail.priority)}`}>{(smsTaskDetail.priority || '').toUpperCase()}</span>
+            )}
+            <div className="tasks-detail-title">{contactName}</div>
           </div>
-          <button className="close-detail" onClick={() => setSelectedItem(null)}>×</button>
-        </div>
-        <div className="detail-section">
-          <h4>Inbound Message</h4>
-          <div className="inbound-message-box">
-            <p>{smsTaskDetail.inbound_message}</p>
-            <span className="message-time">{timeAgo(smsTaskDetail.inbound_received_at || smsTaskDetail.created_at)}</span>
-          </div>
-        </div>
-        <div className="detail-meta">
-          {smsTaskDetail.category && (
-            <span className="category-badge" style={{
-              backgroundColor: (CATEGORY_COLORS[smsTaskDetail.category] || CATEGORY_COLORS.general).bg,
-              color: (CATEGORY_COLORS[smsTaskDetail.category] || CATEGORY_COLORS.general).text,
-            }}>{(smsTaskDetail.category || 'general').replace(/_/g, ' ')}</span>
+          {smsTaskDetail.ai_confidence > 0 && (
+            <span style={{ fontSize: '13px', color: '#8A6D30' }}>AI Confidence: {smsTaskDetail.ai_confidence}%</span>
           )}
-          <span className="priority-badge" style={{ color: PRIORITY_COLORS[smsTaskDetail.priority] || PRIORITY_COLORS.normal }}>
-            {smsTaskDetail.priority || 'normal'} priority
-          </span>
         </div>
-        {smsTaskDetail.ai_recommendation && (
-          <div className="detail-section">
-            <h4>AI Recommended Response</h4>
-            <div className="ai-response-box">
-              <p>{smsTaskDetail.ai_recommendation}</p>
-              <div className="ai-confidence-row">
-                <span>Confidence: {smsTaskDetail.ai_confidence || 0}%</span>
-                <div className="confidence-bar-bg large">
-                  <div className="confidence-bar-fill" style={{ width: `${smsTaskDetail.ai_confidence || 0}%` }} />
-                </div>
-                <button className="regen-btn" onClick={handleSmsRegenerate} title="Regenerate">↻</button>
+
+        <div className="tasks-detail-grid">
+          <div className="tasks-detail-field">
+            <label>Contact</label>
+            <div className="val">{contactName}</div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Phone</label>
+            <div className="val">{smsTaskDetail.phone_number || '--'}</div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Category</label>
+            <div className="val">{(smsTaskDetail.category || 'general').replace(/_/g, ' ')}</div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Confidence</label>
+            <div className="val">
+              <div className="tasks-conf-bar" style={{ width: 120, display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}>
+                <div className={`tasks-conf-bar-fill ${(smsTaskDetail.ai_confidence || 0) >= 85 ? 'high' : (smsTaskDetail.ai_confidence || 0) >= 65 ? 'med' : 'low'}`} style={{ width: `${smsTaskDetail.ai_confidence || 0}%` }} />
               </div>
+              {smsTaskDetail.ai_confidence || 0}%
+            </div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Received</label>
+            <div className="val">{timeAgo(smsTaskDetail.inbound_received_at || smsTaskDetail.created_at)}</div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Status</label>
+            <div className="val">{smsTaskDetail.status || 'pending'}</div>
+          </div>
+        </div>
+
+        {/* Inbound message */}
+        <div className="tasks-detail-section">
+          <h4>Inbound Message</h4>
+          <div className="tasks-sms-message inbound">
+            <p>{smsTaskDetail.inbound_message}</p>
+            <span style={{ fontSize: '11px', opacity: 0.7, display: 'block', marginTop: 4 }}>
+              {timeAgo(smsTaskDetail.inbound_received_at || smsTaskDetail.created_at)}
+            </span>
+          </div>
+        </div>
+
+        {/* AI recommendation */}
+        {smsTaskDetail.ai_recommendation && (
+          <div className="tasks-detail-section">
+            <h4>AI Recommended Response</h4>
+            <div className="tasks-sms-message ai-response">
+              <p>{smsTaskDetail.ai_recommendation}</p>
             </div>
           </div>
         )}
+
+        {/* Actions for pending */}
         {smsTaskDetail.status === 'pending' && !smsResponseMode && (
-          <div className="action-buttons">
-            <button className="action-btn send-ai" onClick={() => handleSmsSendResponse(smsTaskDetail.ai_recommendation, 'ai')} disabled={!smsTaskDetail.ai_recommendation || smsSending}>
-              {smsSending ? 'Sending...' : 'Send AI Response'}
-            </button>
-            <button className="action-btn edit-send" onClick={() => { setSmsResponseMode('edit'); setSmsEditText(smsTaskDetail.ai_recommendation || ''); }}>Edit & Send</button>
-            <button className="action-btn write-own" onClick={() => { setSmsResponseMode('write'); setSmsEditText(''); }}>Write Own</button>
-            <button className="action-btn dismiss" onClick={handleSmsDismiss}>Dismiss</button>
+          <div className="tasks-actions">
+            <button
+              className="tasks-btn primary"
+              onClick={() => handleSmsSendResponse(smsTaskDetail.ai_recommendation, 'ai')}
+              disabled={!smsTaskDetail.ai_recommendation || smsSending}
+            >{smsSending ? 'Sending...' : 'Send Response'}</button>
+            <button className="tasks-btn accent" onClick={() => { setSmsResponseMode('edit'); setSmsEditText(smsTaskDetail.ai_recommendation || ''); }}>Edit</button>
+            <button className="tasks-btn outline" onClick={() => { setSmsResponseMode('write'); setSmsEditText(''); }}>Write Own</button>
+            <button className="tasks-btn danger" onClick={handleSmsDismiss}>Dismiss</button>
+            <button className="tasks-btn outline" onClick={handleSmsRegenerate}>Regenerate</button>
           </div>
         )}
+
+        {/* Edit/Write textarea */}
         {smsResponseMode && (
-          <div className="compose-area">
-            <textarea value={smsEditText} onChange={(e) => setSmsEditText(e.target.value)} placeholder={smsResponseMode === 'edit' ? 'Edit the AI response...' : 'Write your response...'} rows={4} autoFocus />
-            <div className="compose-actions">
-              <button className="action-btn send-ai" onClick={() => handleSmsSendResponse(smsEditText, smsResponseMode === 'edit' ? 'ai_edited' : 'manual')} disabled={!smsEditText.trim() || smsSending}>
-                {smsSending ? 'Sending...' : 'Send'}
-              </button>
-              <button className="action-btn dismiss" onClick={() => { setSmsResponseMode(null); setSmsEditText(''); }}>Cancel</button>
+          <div className="tasks-detail-section">
+            <textarea
+              className="tasks-sms-textarea"
+              value={smsEditText}
+              onChange={(e) => setSmsEditText(e.target.value)}
+              placeholder={smsResponseMode === 'edit' ? 'Edit the AI response...' : 'Write your response...'}
+              rows={4}
+              autoFocus
+            />
+            <div className="tasks-actions" style={{ marginTop: 8 }}>
+              <button
+                className="tasks-btn primary"
+                onClick={() => handleSmsSendResponse(smsEditText, smsResponseMode === 'edit' ? 'ai_edited' : 'manual')}
+                disabled={!smsEditText.trim() || smsSending}
+              >{smsSending ? 'Sending...' : 'Send'}</button>
+              <button className="tasks-btn outline" onClick={() => { setSmsResponseMode(null); setSmsEditText(''); }}>Cancel</button>
             </div>
           </div>
         )}
+
+        {/* Already sent */}
         {smsTaskDetail.status !== 'pending' && (
-          <div className="detail-section">
+          <div className="tasks-detail-section">
             <h4>Response Sent</h4>
-            <div className="sent-response-box">
+            <div className="tasks-sms-message ai-response">
               <p>{smsTaskDetail.response_text || 'No response recorded'}</p>
-              <span className="response-source">via {(smsTaskDetail.response_source || 'unknown').replace(/_/g, ' ')}</span>
+              <span style={{ fontSize: '11px', opacity: 0.7, display: 'block', marginTop: 4 }}>
+                via {(smsTaskDetail.response_source || 'unknown').replace(/_/g, ' ')}
+              </span>
             </div>
           </div>
         )}
@@ -1020,59 +1099,64 @@ function Tasks() {
     );
   };
 
-  // Phone tab layout
+  // Phone tab layout (cream themed)
   const renderPhoneLayout = () => (
-    <div className="email-layout">
-      <div className="task-inbox">
-        <div className="inbox-header">
-          <div className="inbox-header-left">
-            <h3>Call Tasks</h3>
-            <span className="task-count">{phoneTasksList.length}</span>
-          </div>
-          <div className="inbox-header-right">
-            <button className="select-all-btn" onClick={selectAllPhoneTasks}>
-              {selectedPhoneTaskIds.length === phoneTasksList.length ? '☑ Deselect All' : '☐ Select All'}
+    <div className="tasks-inbox">
+      <div className="tasks-inbox-list">
+        <div className="tasks-inbox-search" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button className="tasks-btn outline" onClick={selectAllPhoneTasks} style={{ fontSize: 12, padding: '4px 10px' }}>
+            {selectedPhoneTaskIds.length === phoneTasksList.length ? 'Deselect All' : 'Select All'}
+          </button>
+          {!powerDialActive ? (
+            <button className="tasks-btn primary" onClick={startPowerDial} disabled={phoneTasksList.length === 0} style={{ fontSize: 12, padding: '4px 10px' }}>
+              Power Dial {selectedPhoneTaskIds.length > 0 ? `(${selectedPhoneTaskIds.length})` : 'All'}
             </button>
-            {!powerDialActive ? (
-              <button className="power-dial-btn" onClick={startPowerDial} disabled={phoneTasksList.length === 0}>
-                Power Dial {selectedPhoneTaskIds.length > 0 ? `(${selectedPhoneTaskIds.length})` : 'All'}
-              </button>
-            ) : (
-              <button className="power-dial-btn stop" onClick={stopPowerDial}>Stop Dialing</button>
-            )}
-          </div>
+          ) : (
+            <button className="tasks-btn danger" onClick={stopPowerDial} style={{ fontSize: 12, padding: '4px 10px' }}>Stop Dialing</button>
+          )}
+          <span style={{ fontSize: 12, color: '#8A6D30', marginLeft: 'auto' }}>{phoneTasksList.length} call tasks</span>
         </div>
         {powerDialActive && (
-          <div className="power-dial-progress">
-            <div className="progress-info">
+          <div style={{ padding: '8px 16px', background: '#FAF3E5', borderBottom: '1px solid #E8DCC8', fontSize: 13 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span>Power Dialing: {powerDialIndex + 1} of {powerDialQueue.length}</span>
-              <span className="progress-contact">{powerDialQueue[powerDialIndex]?.contact_name}</span>
+              <span style={{ color: '#8A6D30' }}>{powerDialQueue[powerDialIndex]?.contact_name}</span>
             </div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${((powerDialIndex + 1) / powerDialQueue.length) * 100}%` }} />
+            <div style={{ height: 4, background: '#E8DCC8', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${((powerDialIndex + 1) / powerDialQueue.length) * 100}%`, background: '#B8924A', borderRadius: 2, transition: 'width 0.3s' }} />
             </div>
           </div>
         )}
-        <div className="inbox-list">
+        <div className="tasks-inbox-items">
           {phoneTasksList.map((task) => (
-            <div key={task.id} className={`inbox-item ${selectedPhoneTask?.id === task.id ? 'selected' : ''}`} onClick={() => setSelectedPhoneTask(task)}>
-              <div className="inbox-item-header">
-                <input type="checkbox" className="task-checkbox" checked={selectedPhoneTaskIds.includes(task.id)} onChange={() => togglePhoneTaskSelection(task.id)} onClick={(e) => e.stopPropagation()} />
-                <span className="source-icon">{task.task_type === 'workflow' ? '⚡' : '📞'}</span>
-                <span className="task-title-compact">{task.title}</span>
-              </div>
-              <div className="inbox-item-meta">
-                <span className="task-client-compact">{task.contact_name}</span>
-                <span className="urgency-dot" style={{ backgroundColor: task.priority === 'high' ? '#f59e0b' : '#6b7280' }} />
-              </div>
-              <div className="task-preview">
-                <span className="phone-tag">{task.contact_phone}</span>
-                {task.entity_type && <span className={`match-tag ${task.entity_type}`}>{task.entity_type === 'lead' ? 'Lead' : 'Loan'}</span>}
+            <div key={task.id} className={`tasks-inbox-item${selectedPhoneTask?.id === task.id ? ' active' : ''}`} onClick={() => setSelectedPhoneTask(task)}>
+              <input
+                type="checkbox"
+                className="tasks-inbox-item-checkbox"
+                checked={selectedPhoneTaskIds.includes(task.id)}
+                onChange={() => togglePhoneTaskSelection(task.id)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="tasks-type-dot phone" />
+              <div className="tasks-inbox-item-content">
+                <div className="tasks-inbox-item-top">
+                  <span className="tasks-inbox-item-title">{task.title}</span>
+                  <span className="tasks-inbox-item-time">{timeAgo(task.due_date)}</span>
+                </div>
+                <div className="tasks-inbox-item-sub">{task.contact_name}</div>
+                <div className="tasks-inbox-item-tags">
+                  <span className="tasks-type-chip phone">Phone</span>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>{task.contact_phone}</span>
+                  {task.entity_type && <span className={`tasks-badge green`}>{task.entity_type === 'lead' ? 'Lead' : 'Loan'}</span>}
+                </div>
               </div>
             </div>
           ))}
           {phoneTasksList.length === 0 && (
-            <div className="empty-inbox"><p>No call tasks available</p><p style={{ fontSize: '12px', color: '#888' }}>Phone tasks from workflows will appear here</p></div>
+            <div className="tasks-empty">
+              <div className="tasks-empty-title">No call tasks available</div>
+              <div className="tasks-empty-text">Phone tasks from workflows will appear here</div>
+            </div>
           )}
         </div>
       </div>
@@ -1094,131 +1178,163 @@ function Tasks() {
     </div>
   );
 
+  // Reconciliation detail (cream themed wrapper)
+  const renderReconDetail = () => (
+    <div className="tasks-detail">
+      <ReconciliationDetailPanel
+        email={selectedEmail || selectedItem}
+        onProcess={(email) => handleOpenDisposition(email)}
+        onViewLoan={(loanId) => navigate(`/loans/${loanId}`)}
+        onViewLead={(leadId) => navigate(`/leads/${leadId}`)}
+        onClose={() => { setSelectedItem(null); setSelectedEmail(null); }}
+      />
+    </div>
+  );
+
+  // Workflow / manual task detail (cream themed wrapper)
+  const renderWorkflowDetail = () => (
+    <div className="tasks-detail">
+      <TaskDetailPanel
+        task={selectedItem}
+        onComplete={handleComplete}
+        onDelete={handleDelete}
+        onSnooze={handleSnooze}
+        onDelegate={handleDelegate}
+        onSend={handleSend}
+        onApproveAi={handleApproveAiTask}
+        onChangeStatus={handleChangeStatus}
+        completing={completingTask}
+        updatingStatus={updatingStatus}
+        teamMembers={teamMembers}
+        statusOptions={LEAD_STAGES}
+      />
+    </div>
+  );
+
+  // Empty detail
+  const renderEmptyDetail = () => (
+    <div className="tasks-detail">
+      <div className="tasks-empty">
+        <div className="tasks-empty-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#C4B088" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M9 12h6M12 9v6" />
+          </svg>
+        </div>
+        <div className="tasks-empty-title">
+          {activeFilter === 'completed' ? 'No completed tasks yet' : 'All caught up!'}
+        </div>
+        <div className="tasks-empty-text">
+          {activeFilter === 'completed' ? 'Completed tasks will appear here' : 'Select a task from the list or check back later'}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Filter tab data
+  const filterTabs = [
+    { key: 'all', label: 'All', count: allItems.length },
+    { key: 'workflow', label: 'Workflow', count: workflowCount },
+    { key: 'sms', label: 'SMS', count: smsCount },
+    { key: 'reconciliation', label: 'Reconciliation', count: reconCount },
+    { key: 'phone', label: 'Phone', count: phoneTasksList.length },
+    { key: 'completed', label: 'Completed', count: completedCount },
+  ];
+
+  // =============================================
+  // Main JSX return
+  // =============================================
   return (
     <div className="tasks-page" ref={containerRef}>
-      <div className="tasks-container">
-        <div className="tasks-header">
-          <div className="header-content">
-            <h1>Tasks</h1>
-            <p>All workflow tasks, SMS responses, and reconciliation in one place</p>
+      {/* Header */}
+      <div className="tasks-header">
+        <h1 className="tasks-title">Tasks</h1>
+        <p className="tasks-subtitle">Manage workflow tasks, SMS responses, and reconciliation items</p>
+      </div>
 
-            <div className="unified-filter-tabs">
-              <button className={`filter-tab ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => setActiveFilter('all')}>
-                All <span className="filter-count">{allItems.length}</span>
-              </button>
-              <button className={`filter-tab ${activeFilter === 'workflow' ? 'active' : ''}`} onClick={() => setActiveFilter('workflow')}>
-                Workflow <span className="filter-count">{workflowCount}</span>
-              </button>
-              <button className={`filter-tab ${activeFilter === 'sms' ? 'active' : ''}`} onClick={() => setActiveFilter('sms')}>
-                SMS <span className="filter-count">{smsCount}</span>
-              </button>
-              <button className={`filter-tab ${activeFilter === 'reconciliation' ? 'active' : ''}`} onClick={() => setActiveFilter('reconciliation')}>
-                Reconciliation <span className="filter-count">{reconCount}</span>
-              </button>
-              <button className={`filter-tab ${activeFilter === 'phone' ? 'active' : ''}`} onClick={() => setActiveFilter('phone')}>
-                Phone <span className="filter-count">{phoneTasksList.length}</span>
-              </button>
-              <button className={`filter-tab ${activeFilter === 'completed' ? 'active' : ''}`} onClick={() => setActiveFilter('completed')}>
-                Completed <span className="filter-count">{completedCount}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Phone Tab */}
-        {activeFilter === 'phone' && (
-          <div className="tasks-content">{renderPhoneLayout()}</div>
-        )}
-
-        {/* All other tabs — Unified Inbox */}
-        {activeFilter !== 'phone' && (
-          <div className="tasks-content">
-            <div className="email-layout">
-              {/* Left: Item List */}
-              <div className="task-inbox">
-                <div className="inbox-header">
-                  <div className="inbox-header-left">
-                    {activeFilter !== 'completed' && filteredItems.length > 0 && (
-                      <input
-                        type="checkbox"
-                        className="task-checkbox select-all-checkbox"
-                        checked={filteredItems.length > 0 && filteredItems.every(t => selectedTaskIds.has(t.id))}
-                        onChange={() => handleSelectAll(filteredItems)}
-                        title="Select all"
-                      />
-                    )}
-                    <h3>Tasks</h3>
-                    <span className="task-count">{filteredItems.length}</span>
-                  </div>
-                  {selectedTaskIds.size > 0 && (
-                    <button className="btn-bulk-delete" onClick={handleBulkDelete} disabled={bulkDeleting}>
-                      {bulkDeleting ? 'Deleting...' : `Delete (${selectedTaskIds.size})`}
-                    </button>
-                  )}
-                </div>
-                <div className="inbox-search">
-                  <input
-                    type="text"
-                    placeholder="Search tasks..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="search-input"
-                  />
-                </div>
-                <div className="inbox-list">
-                  {filteredItems.map(renderInboxItem)}
-                  {filteredItems.length === 0 && (
-                    <div className="empty-inbox">
-                      <p>{activeFilter === 'completed' ? 'No completed tasks yet' : 'All caught up!'}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right: Detail Panel */}
-              {selectedItem?.taskType === 'sms' ? (
-                <div className="task-detail-wrapper">{renderSmsDetail()}</div>
-              ) : selectedItem?.taskType === 'reconciliation' ? (
-                <ReconciliationDetailPanel
-                  email={selectedEmail || selectedItem}
-                  onProcess={(email) => handleOpenDisposition(email)}
-                  onViewLoan={(loanId) => navigate(`/loans/${loanId}`)}
-                  onViewLead={(leadId) => navigate(`/leads/${leadId}`)}
-                  onClose={() => { setSelectedItem(null); setSelectedEmail(null); }}
-                />
-              ) : (
-                <TaskDetailPanel
-                  task={selectedItem}
-                  onComplete={handleComplete}
-                  onDelete={handleDelete}
-                  onSnooze={handleSnooze}
-                  onDelegate={handleDelegate}
-                  onSend={handleSend}
-                  onApproveAi={handleApproveAiTask}
-                  onChangeStatus={handleChangeStatus}
-                  completing={completingTask}
-                  updatingStatus={updatingStatus}
-                  teamMembers={teamMembers}
-                  statusOptions={LEAD_STAGES}
-                />
-              )}
-            </div>
-          </div>
+      {/* Filter tabs */}
+      <div className="tasks-filter-bar">
+        {filterTabs.map(tab => (
+          <button
+            key={tab.key}
+            className={`tasks-filter-tab${activeFilter === tab.key ? ' active' : ''}`}
+            onClick={() => setActiveFilter(tab.key)}
+          >
+            {tab.label}
+            <span className="tasks-filter-count">{tab.count}</span>
+          </button>
+        ))}
+        {selectedTaskIds.size > 0 && (
+          <button className="tasks-btn danger" onClick={handleBulkDelete} disabled={bulkDeleting} style={{ marginLeft: 'auto', fontSize: 12, padding: '4px 12px' }}>
+            {bulkDeleting ? 'Deleting...' : `Delete (${selectedTaskIds.size})`}
+          </button>
         )}
       </div>
 
+      {/* Phone tab uses its own layout */}
+      {activeFilter === 'phone' && renderPhoneLayout()}
+
+      {/* All other tabs: unified inbox */}
+      {activeFilter !== 'phone' && (
+        <div className="tasks-inbox">
+          {/* Left column: item list */}
+          <div className="tasks-inbox-list">
+            <div className="tasks-inbox-search">
+              {activeFilter !== 'completed' && filteredItems.length > 0 && (
+                <input
+                  type="checkbox"
+                  checked={filteredItems.length > 0 && filteredItems.every(t => selectedTaskIds.has(t.id))}
+                  onChange={() => handleSelectAll(filteredItems)}
+                  title="Select all"
+                  style={{ marginRight: 8 }}
+                />
+              )}
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="tasks-inbox-items">
+              {filteredItems.map(renderInboxItem)}
+              {filteredItems.length === 0 && (
+                <div className="tasks-empty">
+                  <div className="tasks-empty-title">
+                    {activeFilter === 'completed' ? 'No completed tasks yet' : 'All caught up!'}
+                  </div>
+                  <div className="tasks-empty-text">
+                    {activeFilter === 'completed' ? 'Tasks you complete will show here' : 'No tasks match your current filters'}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right column: detail panel */}
+          {selectedItem?.taskType === 'sms'
+            ? renderSmsDetail()
+            : selectedItem?.taskType === 'reconciliation'
+              ? renderReconDetail()
+              : selectedItem
+                ? renderWorkflowDetail()
+                : renderEmptyDetail()
+          }
+        </div>
+      )}
+
       {/* Communication Detail Modal */}
       {commModal && (
-        <div className="comm-modal-overlay" onClick={() => setCommModal(null)}>
-          <div className="comm-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="btn-close-comm-modal" onClick={() => setCommModal(null)}>×</button>
-            <div className="comm-modal-header">
-              <span className="comm-modal-icon">
+        <div className="tasks-disposition-overlay" onClick={() => setCommModal(null)}>
+          <div className="tasks-disposition-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="tasks-btn outline" onClick={() => setCommModal(null)} style={{ position: 'absolute', top: 12, right: 12 }}>X</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <span>
                 {commModal.type === 'Email' && '📧'}
                 {commModal.type === 'Phone' && '📞'}
                 {commModal.type === 'Text' && '💬'}
               </span>
-              <h2>{commModal.subject}</h2>
+              <h2 style={{ margin: 0, fontSize: 18 }}>{commModal.subject}</h2>
             </div>
           </div>
         </div>
@@ -1226,35 +1342,51 @@ function Tasks() {
 
       {/* Disposition Dialog Modal */}
       {showDispositionDialog && dispositionEmail && (
-        <div className="modal-overlay" onClick={() => setShowDispositionDialog(false)}>
-          <div className="modal-content disposition-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Process Email</h2>
-            <p className="disposition-email-subject"><strong>Subject:</strong> {dispositionEmail.subject || dispositionEmail.title || '(No Subject)'}</p>
-            <p className="disposition-email-from"><strong>From:</strong> {dispositionEmail.from_name || dispositionEmail.from_email || dispositionEmail.borrower}</p>
+        <div className="tasks-disposition-overlay" onClick={() => setShowDispositionDialog(false)}>
+          <div className="tasks-disposition-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 18, color: '#3D2E1C' }}>Process Email</h2>
+            <p style={{ margin: '0 0 4px', fontSize: 13, color: '#5A4A32' }}>
+              <strong>Subject:</strong> {dispositionEmail.subject || dispositionEmail.title || '(No Subject)'}
+            </p>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#5A4A32' }}>
+              <strong>From:</strong> {dispositionEmail.from_name || dispositionEmail.from_email || dispositionEmail.borrower}
+            </p>
 
-            <div className="disposition-options-grid">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, marginBottom: 16 }}>
               {dispositionOptions.map((option) => (
-                <button key={option.value} className={`disposition-option ${selectedDisposition === option.value ? 'selected' : ''}`} onClick={() => setSelectedDisposition(option.value)}>
-                  <span className="disposition-icon">{option.icon}</span>
-                  <span className="disposition-label">{option.label}</span>
+                <button
+                  key={option.value}
+                  className={`tasks-disposition-option${selectedDisposition === option.value ? ' selected' : ''}`}
+                  onClick={() => setSelectedDisposition(option.value)}
+                >
+                  <span>{option.icon}</span>
+                  <span>{option.label}</span>
                 </button>
               ))}
             </div>
 
-            <label className="create-task-checkbox">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 8, color: '#5A4A32' }}>
               <input type="checkbox" checked={createTask} onChange={(e) => setCreateTask(e.target.checked)} />
-              <span>Create a follow-up task</span>
+              Create a follow-up task
             </label>
 
             {createTask && (
-              <input type="text" className="task-title-input" placeholder="Task title..." value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+              <input
+                type="text"
+                placeholder="Task title..."
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid #E8DCC8', borderRadius: 6, fontSize: 13, marginBottom: 12, background: '#FFF' }}
+              />
             )}
 
-            <div className="modal-buttons">
-              <button className="btn-modal-primary" onClick={handleProcessDisposition} disabled={!selectedDisposition || processingEmailId === dispositionEmail.id}>
-                {processingEmailId === dispositionEmail.id ? 'Processing...' : 'Process Email'}
-              </button>
-              <button className="btn-modal-cancel" onClick={() => setShowDispositionDialog(false)}>Cancel</button>
+            <div className="tasks-actions">
+              <button
+                className="tasks-btn primary"
+                onClick={handleProcessDisposition}
+                disabled={!selectedDisposition || processingEmailId === dispositionEmail.id}
+              >{processingEmailId === dispositionEmail.id ? 'Processing...' : 'Process Email'}</button>
+              <button className="tasks-btn outline" onClick={() => setShowDispositionDialog(false)}>Cancel</button>
             </div>
           </div>
         </div>
