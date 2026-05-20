@@ -66,7 +66,6 @@ class NewUpdatesCheckResponse(BaseModel):
 # API Endpoints
 @router.get("/sidebar", response_model=SidebarResponse)
 async def get_sidebar_updates(
-    user_id: int = Query(..., description="Current user ID"),
     limit_per_source: int = Query(5, description="Max updates per source"),
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user_lazy)
@@ -76,6 +75,7 @@ async def get_sidebar_updates(
     Returns updates from all 5 sources with read/unread status
     """
     try:
+        user_id = current_user.id
         sources = ['fannie_mae', 'freddie_mac', 'fha', 'va', 'usda']
         sidebar_data = {
             'has_unread': False,
@@ -120,7 +120,6 @@ async def get_sidebar_updates(
 
 @router.get("/check-new", response_model=NewUpdatesCheckResponse)
 async def check_for_new_updates(
-    user_id: int = Query(..., description="Current user ID"),
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user_lazy)
 ):
@@ -129,6 +128,7 @@ async def check_for_new_updates(
     Returns count of unread updates
     """
     try:
+        user_id = current_user.id
         # Get all new updates
         new_updates = db.query(GuidelineUpdate).filter(
             GuidelineUpdate.is_new == True
@@ -158,7 +158,6 @@ async def check_for_new_updates(
 @router.post("/mark-viewed/{update_id}")
 async def mark_update_viewed(
     update_id: int,
-    user_id: int = Query(..., description="Current user ID"),
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user_lazy)
 ):
@@ -166,6 +165,7 @@ async def mark_update_viewed(
     Mark a specific update as viewed by the user
     """
     try:
+        user_id = current_user.id
         # Check if already viewed
         existing = db.query(UserUpdateView).filter(
             UserUpdateView.user_id == user_id,
@@ -192,7 +192,6 @@ async def mark_update_viewed(
 
 @router.post("/mark-all-viewed")
 async def mark_all_viewed(
-    user_id: int = Query(..., description="Current user ID"),
     source: Optional[str] = Query(None, description="Optional: mark only this source"),
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user_lazy)
@@ -201,6 +200,7 @@ async def mark_all_viewed(
     Mark all updates (or all from a specific source) as viewed
     """
     try:
+        user_id = current_user.id
         query = db.query(GuidelineUpdate)
         if source:
             query = query.filter(GuidelineUpdate.source == source)

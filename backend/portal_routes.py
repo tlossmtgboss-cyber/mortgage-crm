@@ -22,7 +22,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from database import get_db
-from middleware.purl_auth import require_purl_token, PURLAuthContext
+from middleware.purl_auth import require_purl_token, require_purl_write_scope, PURLAuthContext
 from utils.auth import require_admin
 
 # Lazy import to avoid circular dependencies
@@ -126,6 +126,7 @@ class NotificationQueueRequest(BaseModel):
 def get_portal_status(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get comprehensive portal status for a loan."""
     service = PortalLifecycleService(db)
@@ -136,6 +137,7 @@ def get_portal_status(
 def get_lifecycle_stage(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get current lifecycle stage with details."""
     service = PortalLifecycleService(db)
@@ -146,15 +148,15 @@ def get_lifecycle_stage(
 def transition_lifecycle_stage(
     loan_id: int = Path(..., description="Loan ID"),
     request: StageTransitionRequest = Body(...),
-    user_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Transition loan to a new lifecycle stage."""
     service = PortalLifecycleService(db)
     return service.transition_stage(
         loan_id=loan_id,
         new_stage=request.new_stage,
-        transitioned_by=user_id,
+        transitioned_by=str(current_user.id),
         reason=request.reason,
         force=request.force,
     )
@@ -164,6 +166,7 @@ def transition_lifecycle_stage(
 def get_lifecycle_history(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get lifecycle stage transition history."""
     service = PortalLifecycleService(db)
@@ -174,6 +177,7 @@ def get_lifecycle_history(
 def get_valid_transitions(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get valid stage transitions from current stage."""
     service = PortalLifecycleService(db)
@@ -188,8 +192,8 @@ def get_valid_transitions(
 def record_heartbeat(
     loan_id: int = Path(..., description="Loan ID"),
     request: HeartbeatRequest = Body(...),
-    user_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Record an activity for the loan heartbeat feature."""
     service = PortalLifecycleService(db)
@@ -198,7 +202,7 @@ def record_heartbeat(
         activity_type=request.activity_type,
         description=request.description,
         metadata=request.metadata,
-        actor=user_id,
+        actor=str(current_user.id),
         is_visible_to_borrower=request.is_visible_to_borrower,
     )
 
@@ -209,6 +213,7 @@ def get_recent_activity(
     limit: int = Query(20, ge=1, le=100),
     borrower_visible_only: bool = Query(False),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get recent activity for loan heartbeat display."""
     try:
@@ -235,6 +240,7 @@ def add_risk_flag(
     loan_id: int = Path(..., description="Loan ID"),
     request: RiskFlagRequest = Body(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Add a risk flag to a loan."""
     service = PortalLifecycleService(db)

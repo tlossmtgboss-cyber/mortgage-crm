@@ -101,16 +101,23 @@ def run_all_startup_migrations(engine: Any) -> None:
     try:
         from sqlalchemy import text as _text
         with engine.connect() as conn:
-            conn.execute(_text("""
-                ALTER TABLE agent_actions
-                ALTER COLUMN execution_id DROP NOT NULL
-            """))
-            conn.execute(_text("""
-                CREATE INDEX IF NOT EXISTS ix_agentact_org_status
-                ON agent_actions (organization_id, status)
-            """))
-            conn.commit()
-        logger.info("agent_actions: execution_id nullable fix + org_status index applied")
+            # Check table exists before ALTER
+            exists = conn.execute(_text(
+                "SELECT 1 FROM information_schema.tables WHERE table_name = 'agent_actions' LIMIT 1"
+            )).fetchone()
+            if exists:
+                conn.execute(_text("""
+                    ALTER TABLE agent_actions
+                    ALTER COLUMN execution_id DROP NOT NULL
+                """))
+                conn.execute(_text("""
+                    CREATE INDEX IF NOT EXISTS ix_agentact_org_status
+                    ON agent_actions (organization_id, status)
+                """))
+                conn.commit()
+                logger.info("agent_actions: execution_id nullable fix + org_status index applied")
+            else:
+                logger.info("agent_actions table not found — skipping ALTER")
     except Exception as e:
         if "already" not in str(e).lower() and "does not exist" not in str(e).lower():
             logger.warning(f"agent_actions schema fix: {e}")
@@ -119,14 +126,18 @@ def run_all_startup_migrations(engine: Any) -> None:
     try:
         from sqlalchemy import text as _text_rej
         with engine.connect() as conn:
-            conn.execute(_text_rej("""
-                ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS rejected_by INTEGER REFERENCES users(id)
-            """))
-            conn.execute(_text_rej("""
-                ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ
-            """))
-            conn.commit()
-        logger.info("agent_actions: rejected_by/rejected_at columns ensured")
+            exists = conn.execute(_text_rej(
+                "SELECT 1 FROM information_schema.tables WHERE table_name = 'agent_actions' LIMIT 1"
+            )).fetchone()
+            if exists:
+                conn.execute(_text_rej("""
+                    ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS rejected_by INTEGER
+                """))
+                conn.execute(_text_rej("""
+                    ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMPTZ
+                """))
+                conn.commit()
+                logger.info("agent_actions: rejected_by/rejected_at columns ensured")
     except Exception as e:
         if "does not exist" not in str(e).lower():
             logger.warning(f"agent_actions rejection columns: {e}")
@@ -480,6 +491,59 @@ def run_all_startup_migrations(engine: Any) -> None:
             _run_trgm_idx(engine)
     except Exception as e:
         logger.warning(f"Trigram indexes migration: {e}")
+
+    # --- Compliance Alerts table (ComplianceAlert model) ---
+    try:
+        from sqlalchemy import text as _text_ca
+        with engine.connect() as conn:
+            conn.execute(_text_ca("""
+                CREATE TABLE IF NOT EXISTS compliance_alerts (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+                    loan_id INTEGER REFERENCES loans(id) ON DELETE CASCADE,
+                    lead_id INTEGER REFERENCES leads(id) ON DELETE CASCADE,
+                    alert_type VARCHAR NOT NULL,
+                    severity VARCHAR NOT NULL,
+                    title VARCHAR NOT NULL,
+                    description TEXT,
+                    deadline_date DATE,
+                    days_remaining INTEGER,
+                    status VARCHAR DEFAULT 'open',
+                    resolved_at TIMESTAMP,
+                    resolved_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    resolution_notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(_text_ca("CREATE INDEX IF NOT EXISTS ix_compliance_alerts_loan_id ON compliance_alerts (loan_id)"))
+            conn.execute(_text_ca("CREATE INDEX IF NOT EXISTS ix_compliance_alerts_org_id ON compliance_alerts (organization_id)"))
+            conn.execute(_text_ca("CREATE INDEX IF NOT EXISTS ix_compliance_alerts_status ON compliance_alerts (status)"))
+            conn.execute(_text_ca("CREATE INDEX IF NOT EXISTS ix_compliance_alerts_loan_status ON compliance_alerts (loan_id, status)"))
+            conn.execute(_text_ca("CREATE INDEX IF NOT EXISTS ix_compliance_alerts_org_severity ON compliance_alerts (organization_id, severity)"))
+            conn.execute(_text_ca("CREATE INDEX IF NOT EXISTS ix_compliance_alerts_org_type ON compliance_alerts (organization_id, alert_type)"))
+            conn.execute(_text_ca("CREATE INDEX IF NOT EXISTS ix_compliance_alerts_deadline ON compliance_alerts (deadline_date)"))
+            conn.commit()
+        logger.info("compliance_alerts table ensured")
+    except Exception as e:
+        logger.warning(f"compliance_alerts table migration: {e}")
+
+    # --- EncompassConfig missing columns (last_failed_at, consecutive_auth_failures) ---
+    try:
+        from sqlalchemy import text as _text_ec
+        with engine.connect() as conn:
+            conn.execute(_text_ec("""
+                ALTER TABLE IF EXISTS encompass_configs
+                ADD COLUMN IF NOT EXISTS last_failed_at TIMESTAMPTZ
+            """))
+            conn.execute(_text_ec("""
+                ALTER TABLE IF EXISTS encompass_configs
+                ADD COLUMN IF NOT EXISTS consecutive_auth_failures INTEGER DEFAULT 0
+            """))
+            conn.commit()
+        logger.info("encompass_configs: last_failed_at/consecutive_auth_failures columns ensured")
+    except Exception as e:
+        if "does not exist" not in str(e).lower():
+            logger.warning(f"encompass_configs missing columns migration: {e}")
 
     logger.info("All startup migrations complete")
 
@@ -1149,6 +1213,21 @@ def _run_critical_schema_migrations():
             db.commit()
         except Exception:
             db.rollback()
+
+        # --- SMS AI confidence: additional model columns not in original migration ---
+        sms_conf_extra_alters = [
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS accepted_count INTEGER DEFAULT 0",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS edited_count INTEGER DEFAULT 0",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS rejected_count INTEGER DEFAULT 0",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS auto_respond_enabled BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()",
+        ]
+        for alter in sms_conf_extra_alters:
+            try:
+                db.execute(sa_text(alter))
+                db.commit()
+            except Exception:
+                db.rollback()
 
         # --- SMS response patterns: align model columns with table schema ---
         sms_patterns_alters = [

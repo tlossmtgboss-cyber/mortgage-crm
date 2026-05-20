@@ -137,7 +137,7 @@ class BaseAgent(ABC):
     def __init__(self, spec: AgentSpec, client: anthropic.Anthropic | None = None):
         self.spec = spec
         self.client = client or anthropic.Anthropic(
-            api_key=os.environ["ANTHROPIC_API_KEY"]
+            api_key=os.environ.get("ANTHROPIC_API_KEY", "")
         )
 
     # ------------------------------------------------------------------ API

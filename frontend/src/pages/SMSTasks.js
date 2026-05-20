@@ -137,7 +137,7 @@ function SMSTasks() {
       const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks/settings`, { headers });
       if (!res.ok) return;
       const data = await res.json();
-      setSettings(data);
+      setSettings(data.settings || data);
     } catch (err) {
       console.error('Error fetching settings:', err);
     }

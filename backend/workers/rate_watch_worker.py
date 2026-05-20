@@ -107,8 +107,10 @@ def _validate_primary(name: str) -> None:
 
 
 async def _build_worker_and_evaluator():
-    db_url = os.environ["DATABASE_URL"]
-    redis_url = os.environ["REDIS_URL"]
+    db_url = os.environ.get("DATABASE_URL")
+    redis_url = os.environ.get("REDIS_URL")
+    if not db_url or not redis_url:
+        raise RuntimeError("DATABASE_URL and REDIS_URL must be set for rate_watch_worker")
 
     db_pool = await asyncpg.create_pool(db_url, min_size=1, max_size=5)
     redis = Redis.from_url(redis_url, decode_responses=True)
