@@ -310,11 +310,12 @@ function App() {
 
       try {
         // Fetch all counts in parallel
-        const [tasksResponse, reconciliationResponse, smartDocsResponse, smsUnreadResponse] = await Promise.all([
+        const [tasksResponse, reconciliationResponse, smartDocsResponse, smsUnreadResponse, smsPendingResponse] = await Promise.all([
           fetch(`${API_BASE_URL}/api/v1/tasks`, { headers }).catch(() => null),
           fetch(`${API_BASE_URL}/api/v1/reconciliation/pending`, { headers }).catch(() => null),
           fetch(`${API_BASE_URL}/api/v1/smart-docs/applicants/pending-review`, { headers }).catch(() => null),
-          fetch(`${API_BASE_URL}/api/v1/sms/unread-count`, { headers }).catch(() => null)
+          fetch(`${API_BASE_URL}/api/v1/sms/unread-count`, { headers }).catch(() => null),
+          fetch(`${API_BASE_URL}/api/v1/sms-tasks?limit=200&status=pending`, { headers }).catch(() => null)
         ]);
 
         let updates = {};
@@ -354,9 +355,16 @@ function App() {
           updates.smsUnread = smsData.unread_count || 0;
         }
 
-        // Compute combined total for sidebar badge (outstanding tasks + SMS + reconciliation)
+        // Process pending SMS tasks count
+        let smsPendingCount = 0;
+        if (smsPendingResponse && smsPendingResponse.ok) {
+          const smsTasksData = await smsPendingResponse.json();
+          smsPendingCount = smsTasksData.total || (smsTasksData.tasks || []).length;
+        }
+
+        // Compute combined total for sidebar badge (AI tasks + pending SMS tasks + reconciliation)
         const prevMerged = { ...taskCounts, ...updates };
-        updates.totalTasks = (prevMerged.tasks || 0) + (prevMerged.smsUnread || 0) + (prevMerged.reconciliation || 0);
+        updates.totalTasks = (prevMerged.tasks || 0) + smsPendingCount + (prevMerged.reconciliation || 0);
 
         setTaskCounts(prev => ({ ...prev, ...updates }));
       } catch (error) {
