@@ -52,6 +52,8 @@ class SMSTask(Base):
     ai_model_version = Column(String, nullable=True)
     ai_reasoning = Column(Text, nullable=True)
     ai_generated_at = Column(DateTime(timezone=True), nullable=True)
+    ai_acknowledgement = Column(Text, nullable=True)
+    coaching_note = Column(Text, nullable=True)
 
     response_text = Column(Text, nullable=True)
     response_source = Column(String, nullable=True)

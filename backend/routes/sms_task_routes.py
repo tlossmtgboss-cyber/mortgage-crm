@@ -57,8 +57,8 @@ class RegenerateRequest(BaseModel):
 
     @validator("feedback")
     def validate_feedback(cls, v):
-        if len(v) > 500:
-            raise ValueError("feedback must be 500 characters or fewer")
+        if len(v) > 2000:
+            raise ValueError("feedback must be 2000 characters or fewer")
         return v
 
 

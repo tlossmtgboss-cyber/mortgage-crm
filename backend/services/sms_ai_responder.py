@@ -355,9 +355,14 @@ def regenerate_recommendation(db: Session, task_id: int, organization_id: int, f
 
     feedback_section = ""
     if previous_recommendation:
-        feedback_section = f"\n\nPrevious AI recommendation (rejected): \"{previous_recommendation}\""
+        feedback_section = f"\n\nPrevious AI recommendation (the loan officer was not satisfied): \"{previous_recommendation}\""
     if feedback:
-        feedback_section += f"\nUser feedback: {feedback}"
+        feedback_section += (
+            f"\n\nThe loan officer is coaching you. Read their guidance carefully and apply it. "
+            f"If they provided a rewrite, mirror its tone, structure, and intent. "
+            f"If they provided instructions, follow them precisely.\n"
+            f"Coaching from loan officer:\n\"{feedback}\""
+        )
 
     prompt = f"""Inbound SMS from borrower: "{inbound_message}"
 
@@ -366,20 +371,45 @@ Priority: {priority}
 
 {context_prompt}{pattern_section}{feedback_section}
 
-Generate a new, improved SMS reply matching the loan officer's communication style. No quotes, no explanation, just the message text."""
+Produce a new SMS reply that incorporates the loan officer's coaching. Then briefly acknowledge what you changed compared to the previous recommendation (1 short sentence, written as if speaking to the loan officer).
 
+Reply with ONLY valid JSON in this exact shape, no other text:
+{{
+  "recommendation": "the new SMS reply text (no surrounding quotes)",
+  "acknowledgement": "one short sentence describing what you changed based on the coaching"
+}}"""
+
+    acknowledgement = ""
     try:
         from services.llm_gateway import llm_gateway
         llm_result = llm_gateway.complete_sync(
             intent="calls",
             system_prompt=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens_override=500,
+            max_tokens_override=600,
+            temperature_override=0.4,
         )
-        recommendation = llm_result.text.strip('"').strip("'")
+        raw = llm_result.text.strip()
+        recommendation = raw.strip('"').strip("'")
+        try:
+            start = raw.find("{")
+            end = raw.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                parsed = json.loads(raw[start:end + 1])
+                rec_val = parsed.get("recommendation")
+                ack_val = parsed.get("acknowledgement")
+                if isinstance(rec_val, str) and rec_val.strip():
+                    recommendation = rec_val.strip().strip('"').strip("'")
+                if isinstance(ack_val, str) and ack_val.strip():
+                    acknowledgement = ack_val.strip()
+        except Exception as parse_err:
+            logger.warning("Could not parse JSON from regenerate output for task %d: %s", task_id, parse_err)
+        if not acknowledgement:
+            acknowledgement = "Updated the response based on your coaching."
     except Exception as e:
         logger.exception("Claude API failed for regeneration of task %d: %s", task_id, e)
         recommendation = "Thanks for reaching out! Your loan officer will get back to you shortly."
+        acknowledgement = "Couldn't apply coaching — fell back to a safe default."
         confidence = 10
 
     now = datetime.now(timezone.utc)
@@ -400,6 +430,8 @@ Generate a new, improved SMS reply matching the loan officer's communication sty
             SET ai_recommendation = :rec,
                 ai_confidence = :conf,
                 ai_reasoning = :reasoning,
+                ai_acknowledgement = :ack,
+                coaching_note = :coaching,
                 ai_model_version = :model,
                 ai_generated_at = :gen_at,
                 updated_at = :now
@@ -409,6 +441,8 @@ Generate a new, improved SMS reply matching the loan officer's communication sty
             "rec": recommendation,
             "conf": confidence,
             "reasoning": reasoning,
+            "ack": acknowledgement or None,
+            "coaching": feedback or None,
             "model": MODEL_VERSION,
             "gen_at": now,
             "now": now,
@@ -431,7 +465,8 @@ Generate a new, improved SMS reply matching the loan officer's communication sty
                     "model": MODEL_VERSION,
                     "confidence": confidence,
                     "category": category,
-                    "feedback": feedback[:200] if feedback else None,
+                    "feedback": feedback[:500] if feedback else None,
+                    "acknowledgement": acknowledgement[:300] if acknowledgement else None,
                     "previous_recommendation_length": len(previous_recommendation) if previous_recommendation else 0,
                 }),
                 "now": now,
@@ -446,6 +481,8 @@ Generate a new, improved SMS reply matching the loan officer's communication sty
         "recommendation": recommendation,
         "confidence": confidence,
         "reasoning": reasoning,
+        "acknowledgement": acknowledgement,
+        "coaching_note": feedback or None,
         "category": category,
     }
 

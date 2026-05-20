@@ -1958,6 +1958,17 @@ def init_db():
                 """))
                 conn.commit()
                 logger.info("✅ SMS auto-responder tables created (sms_tasks, sms_response_patterns, sms_ai_confidence, sms_ai_audit_log)")
+
+                with _engine.connect() as conn2:
+                    for sql in (
+                        "ALTER TABLE sms_tasks ADD COLUMN IF NOT EXISTS ai_acknowledgement TEXT",
+                        "ALTER TABLE sms_tasks ADD COLUMN IF NOT EXISTS coaching_note TEXT",
+                    ):
+                        try:
+                            conn2.execute(text(sql))
+                        except Exception as patch_err:
+                            logger.warning(f"⚠️ sms_tasks coaching column patch failed: {patch_err}")
+                    conn2.commit()
         except Exception as e:
             logger.warning(f"⚠️ SMS auto-responder tables note: {e}")
 

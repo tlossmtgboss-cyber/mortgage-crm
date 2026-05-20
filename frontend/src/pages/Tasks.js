@@ -261,6 +261,9 @@ function Tasks() {
   const [smsResponseMode, setSmsResponseMode] = useState(null);
   const [smsEditText, setSmsEditText] = useState('');
   const [smsSending, setSmsSending] = useState(false);
+  const [smsCoachOpen, setSmsCoachOpen] = useState(false);
+  const [smsCoachText, setSmsCoachText] = useState('');
+  const [smsCoaching, setSmsCoaching] = useState(false);
 
   // Reconciliation detail state
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -364,6 +367,8 @@ function Tasks() {
       setSmsResponseMode(null);
       setSmsEditText('');
     }
+    setSmsCoachOpen(false);
+    setSmsCoachText('');
   }, [selectedItem?.id, selectedItem?.taskType]);
 
   const fetchSmsDetail = async (taskId) => {
@@ -802,18 +807,35 @@ function Tasks() {
     }
   };
 
-  const handleSmsRegenerate = async () => {
+  const handleSmsRegenerate = async (coachingOverride) => {
     if (!selectedItem?.id) return;
+    const feedback = (coachingOverride !== undefined ? coachingOverride : smsCoachText).trim();
+    const isCoaching = !!feedback;
+    if (isCoaching) setSmsCoaching(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks/${selectedItem.id}/regenerate`, {
         method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ feedback: 'Please suggest a different response' }),
+        body: JSON.stringify({ feedback: feedback || 'Please suggest a different response' }),
       });
       if (!res.ok) throw new Error('Failed to regenerate');
-      toast.success('Regenerating AI response...');
-      fetchSmsDetail(selectedItem.id);
+      const data = await res.json();
+      toast.success(isCoaching ? 'AI updated with your coaching' : 'Regenerating AI response...');
+      setSmsTaskDetail((prev) => prev ? {
+        ...prev,
+        ai_recommendation: data.recommendation ?? prev.ai_recommendation,
+        ai_confidence: data.confidence ?? prev.ai_confidence,
+        ai_reasoning: data.reasoning ?? prev.ai_reasoning,
+        ai_acknowledgement: data.acknowledgement ?? prev.ai_acknowledgement,
+        coaching_note: data.coaching_note ?? prev.coaching_note,
+      } : prev);
+      if (isCoaching) {
+        setSmsCoachText('');
+        setSmsCoachOpen(false);
+      }
     } catch (err) {
-      toast.error('Failed to regenerate response');
+      toast.error(isCoaching ? 'Failed to send coaching to AI' : 'Failed to regenerate response');
+    } finally {
+      setSmsCoaching(false);
     }
   };
 
@@ -1054,9 +1076,77 @@ function Tasks() {
         {smsTaskDetail.ai_recommendation && (
           <div className="tasks-detail-section">
             <h4>AI Recommended Response</h4>
+            {smsTaskDetail.ai_acknowledgement && (
+              <div className="tasks-ai-ack" role="status">
+                <span className="tasks-ai-ack-label">AI acknowledgement</span>
+                <p>{smsTaskDetail.ai_acknowledgement}</p>
+                {smsTaskDetail.coaching_note && (
+                  <div className="tasks-ai-ack-coaching">
+                    <span>Your coaching:</span> &ldquo;{smsTaskDetail.coaching_note}&rdquo;
+                  </div>
+                )}
+              </div>
+            )}
             <div className="tasks-sms-message ai-response">
               <p>{smsTaskDetail.ai_recommendation}</p>
             </div>
+          </div>
+        )}
+
+        {/* Coach AI container */}
+        {smsTaskDetail.status === 'pending' && !smsResponseMode && smsTaskDetail.ai_recommendation && (
+          <div className="tasks-detail-section tasks-coach-section">
+            {!smsCoachOpen ? (
+              <button
+                className="tasks-btn outline tasks-coach-toggle"
+                onClick={() => {
+                  setSmsCoachText('');
+                  setSmsCoachOpen(true);
+                }}
+              >Coach the AI</button>
+            ) : (
+              <div className="tasks-coach-box">
+                <div className="tasks-coach-header">
+                  <h4>Coach the AI</h4>
+                  <span className="tasks-coach-hint">
+                    Tell the AI what to change, or rewrite the response below. The AI will rewrite and acknowledge what changed.
+                  </span>
+                </div>
+                <textarea
+                  className="tasks-sms-textarea"
+                  value={smsCoachText}
+                  onChange={(e) => setSmsCoachText(e.target.value)}
+                  placeholder={'e.g. "Be more concise, and don\'t promise turnaround times."\nOr paste your preferred rewrite for the AI to learn from.'}
+                  rows={4}
+                  autoFocus
+                />
+                <div className="tasks-actions" style={{ marginTop: 8 }}>
+                  <button
+                    className="tasks-btn primary"
+                    onClick={() => handleSmsRegenerate()}
+                    disabled={!smsCoachText.trim() || smsCoaching}
+                  >{smsCoaching ? 'Coaching AI...' : 'Send Coaching to AI'}</button>
+                  <button
+                    className="tasks-btn outline"
+                    onClick={() => {
+                      setSmsCoachOpen(false);
+                      setSmsCoachText('');
+                    }}
+                    disabled={smsCoaching}
+                  >Cancel</button>
+                  <button
+                    className="tasks-btn outline"
+                    style={{ marginLeft: 'auto' }}
+                    onClick={() => {
+                      const current = smsTaskDetail.ai_recommendation || '';
+                      setSmsCoachText((prev) => prev.trim() ? prev : current);
+                    }}
+                    disabled={smsCoaching}
+                    title="Load the current AI response into the textarea so you can rewrite it"
+                  >Load current response</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1071,7 +1161,7 @@ function Tasks() {
             <button className="tasks-btn accent" onClick={() => { setSmsResponseMode('edit'); setSmsEditText(smsTaskDetail.ai_recommendation || ''); }}>Edit</button>
             <button className="tasks-btn outline" onClick={() => { setSmsResponseMode('write'); setSmsEditText(''); }}>Write Own</button>
             <button className="tasks-btn danger" onClick={handleSmsDismiss}>Dismiss</button>
-            <button className="tasks-btn outline" onClick={handleSmsRegenerate}>Regenerate</button>
+            <button className="tasks-btn outline" onClick={() => handleSmsRegenerate('')}>Regenerate</button>
           </div>
         )}
 

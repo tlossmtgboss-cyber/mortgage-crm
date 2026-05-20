@@ -658,6 +658,86 @@
 }
 
 /* --------------------------------------------------------------------------
+   Coach AI container
+   -------------------------------------------------------------------------- */
+.tasks-ai-ack {
+  background: #F0F7F3;
+  border: 1px solid #CFE5D7;
+  border-left: 3px solid var(--primary, #1F3D2E);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--text-primary, #1A1F1B);
+  line-height: 1.5;
+}
+
+.tasks-ai-ack-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--primary, #1F3D2E);
+  margin-bottom: 4px;
+}
+
+.tasks-ai-ack p {
+  margin: 0;
+}
+
+.tasks-ai-ack-coaching {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #CFE5D7;
+  font-size: 12px;
+  color: var(--text-secondary, #4F554E);
+  font-style: italic;
+}
+
+.tasks-ai-ack-coaching span {
+  font-weight: 600;
+  font-style: normal;
+  margin-right: 4px;
+  color: var(--text-primary, #1A1F1B);
+}
+
+.tasks-coach-section {
+  margin-top: 4px;
+}
+
+.tasks-coach-toggle {
+  font-size: 12px;
+}
+
+.tasks-coach-box {
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border, #ECE6D8);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.tasks-coach-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.tasks-coach-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary, #1A1F1B);
+}
+
+.tasks-coach-hint {
+  font-size: 12px;
+  color: var(--text-muted, #8B8A7E);
+  line-height: 1.4;
+}
+
+/* --------------------------------------------------------------------------
    Reconciliation Detail Additions
    -------------------------------------------------------------------------- */
 .tasks-recon-email-body {
