@@ -25,7 +25,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from database import get_db
 from models.call_monitoring_models import (
@@ -37,6 +37,8 @@ from models.call_monitoring_models import (
 )
 from services.call_monitoring import CallMonitoringOrchestrator
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +262,7 @@ class CreateClientRequest(BaseModel):
 @router.get("/lookup-caller", response_model=CallerLookupResponse)
 async def lookup_caller(
     phone: str = Query(..., description="Phone number to look up"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -305,7 +307,7 @@ async def lookup_caller(
         lead_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
         if org_id:
             lead_params["org_id"] = org_id
-        lead = db.execute(lead_query, lead_params).fetchone()
+        lead = await db.execute(lead_query, lead_params).fetchone()
 
         if lead:
             return CallerLookupResponse(
@@ -341,7 +343,7 @@ async def lookup_caller(
         contact_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
         if org_id:
             contact_params["org_id"] = org_id
-        contact = db.execute(contact_query, contact_params).fetchone()
+        contact = await db.execute(contact_query, contact_params).fetchone()
 
         if contact:
             return CallerLookupResponse(
@@ -376,7 +378,7 @@ async def lookup_caller(
         loan_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
         if org_id:
             loan_params["org_id"] = org_id
-        loan = db.execute(loan_query, loan_params).fetchone()
+        loan = await db.execute(loan_query, loan_params).fetchone()
 
         if loan:
             return CallerLookupResponse(
@@ -410,7 +412,7 @@ async def lookup_caller(
 @router.post("/create-client", response_model=Dict[str, Any])
 async def create_client_from_call(
     request: CreateClientRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -446,7 +448,7 @@ async def create_client_from_call(
             RETURNING id, first_name, last_name, email, phone, source, status, created_at
         """)
 
-        result = db.execute(insert_query, {
+        result = await db.execute(insert_query, {
             "name": f"{first_name} {last_name}".strip() or "Unknown",
             "first_name": first_name,
             "last_name": last_name,
@@ -456,7 +458,7 @@ async def create_client_from_call(
             "assigned_to": user_id,
         }).fetchone()
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -478,7 +480,7 @@ async def create_client_from_call(
         }
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to create client: {e}")
         raise HTTPException(status_code=500, detail="Failed to create client")
 
@@ -487,7 +489,7 @@ async def create_client_from_call(
 async def search_clients(
     name: Optional[str] = Query(None, description="Client name to search for"),
     email: Optional[str] = Query(None, description="Email to search for"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -524,7 +526,7 @@ async def search_clients(
                 }
                 if org_id:
                     lead_params["org_id"] = org_id
-                results = db.execute(text(lead_name_sql), lead_params).fetchall()
+                results = await db.execute(text(lead_name_sql), lead_params).fetchall()
             else:
                 # Single name search (first or last)
                 lead_single_sql = """
@@ -541,7 +543,7 @@ async def search_clients(
                 }
                 if org_id:
                     lead_params["org_id"] = org_id
-                results = db.execute(text(lead_single_sql), lead_params).fetchall()
+                results = await db.execute(text(lead_single_sql), lead_params).fetchall()
 
             for r in results:
                 clients.append({
@@ -575,7 +577,7 @@ async def search_clients(
                 }
                 if org_id:
                     contact_params["org_id"] = org_id
-                results = db.execute(text(contact_name_sql), contact_params).fetchall()
+                results = await db.execute(text(contact_name_sql), contact_params).fetchall()
             else:
                 contact_single_sql = """
                     SELECT id, first_name, last_name, email, phone, created_at
@@ -591,7 +593,7 @@ async def search_clients(
                 }
                 if org_id:
                     contact_params["org_id"] = org_id
-                results = db.execute(text(contact_single_sql), contact_params).fetchall()
+                results = await db.execute(text(contact_single_sql), contact_params).fetchall()
 
             for r in results:
                 clients.append({
@@ -619,7 +621,7 @@ async def search_clients(
             email_params = {"email": email}
             if org_id:
                 email_params["org_id"] = org_id
-            result = db.execute(email_query, email_params).fetchone()
+            result = await db.execute(email_query, email_params).fetchone()
             if result:
                 clients.insert(0, {
                     "id": str(result.id),
@@ -650,7 +652,7 @@ async def search_clients(
 async def create_session(
     request: CreateSessionRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -698,7 +700,7 @@ async def create_session(
 @router.get("/sessions/{session_id}", response_model=Dict[str, Any])
 async def get_session(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Get call session details."""
@@ -722,7 +724,7 @@ async def get_session(
 async def update_session(
     session_id: str,
     request: UpdateSessionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Update call session details."""
@@ -750,7 +752,7 @@ async def update_session(
         raise
     except Exception as e:
         logger.error(f"Error updating session {session_id}: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -759,7 +761,7 @@ async def end_session(
     session_id: str,
     request: EndSessionRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -805,7 +807,7 @@ async def end_session(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error ending session {session_id}: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -818,7 +820,7 @@ async def list_sessions(
     capture_mode: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """List call sessions with optional filters."""
@@ -860,7 +862,7 @@ async def list_sessions(
             params["capture_mode"] = capture_mode
 
         # Get total count
-        total = db.execute(text(count_query), params).scalar()
+        total = await db.execute(text(count_query), params).scalar()
 
         # Get paginated results
         offset = (page - 1) * page_size
@@ -868,7 +870,7 @@ async def list_sessions(
         params["limit"] = page_size
         params["offset"] = offset
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         sessions = [dict(row._mapping) for row in result]
 
         # Convert UUIDs to strings
@@ -899,7 +901,7 @@ async def list_sessions(
 async def add_transcript_chunk(
     session_id: str,
     request: TranscriptChunkRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -936,7 +938,7 @@ async def add_transcript_chunk(
 @router.get("/sessions/{session_id}/transcript", response_model=Dict[str, Any])
 async def get_transcript(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Get the full transcript for a session."""
@@ -973,7 +975,7 @@ async def run_agents(
     session_id: str,
     request: RunAgentsRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1022,7 +1024,7 @@ async def get_artifacts(
     session_id: str,
     artifact_type: Optional[str] = None,
     approval_status: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Get artifacts for a session with optional filters."""
@@ -1040,7 +1042,7 @@ async def get_artifacts(
 
         query += " ORDER BY created_at DESC"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         artifacts = [dict(row._mapping) for row in result]
 
         # Convert types
@@ -1075,7 +1077,7 @@ async def get_artifacts(
 async def approve_artifacts(
     session_id: str,
     request: ApproveArtifactsRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Approve selected artifacts."""
@@ -1104,7 +1106,7 @@ async def approve_artifacts(
 async def reject_artifacts(
     session_id: str,
     request: RejectArtifactsRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Reject selected artifacts."""
@@ -1134,7 +1136,7 @@ async def execute_artifacts(
     session_id: str,
     request: ExecuteArtifactsRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1185,7 +1187,7 @@ async def execute_artifacts(
 @router.get("/sessions/{session_id}/review", response_model=Dict[str, Any])
 async def get_review_data(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1214,7 +1216,7 @@ async def submit_review(
     session_id: str,
     request: ApproveArtifactsRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1266,7 +1268,7 @@ async def submit_review(
 
     except Exception as e:
         logger.error(f"Error submitting review: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1278,7 +1280,7 @@ async def submit_review(
 async def add_participant(
     session_id: str,
     request: AddParticipantRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Add a participant to a call session."""
@@ -1310,12 +1312,12 @@ async def add_participant(
 @router.get("/sessions/{session_id}/participants", response_model=Dict[str, Any])
 async def get_participants(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Get all participants for a session."""
     try:
-        result = db.execute(
+        result = await db.execute(
             text("SELECT * FROM call_participants WHERE session_id = :session_id ORDER BY joined_at"),
             {"session_id": session_id}
         )
@@ -1346,12 +1348,12 @@ async def get_participants(
 @router.get("/sessions/{session_id}/agent-runs", response_model=Dict[str, Any])
 async def get_agent_runs(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """Get all agent runs for a session."""
     try:
-        result = db.execute(
+        result = await db.execute(
             text("SELECT * FROM agent_runs WHERE session_id = :session_id ORDER BY started_at DESC"),
             {"session_id": session_id}
         )
@@ -1384,7 +1386,7 @@ async def get_client_calls(
     client_id: str,
     loan_id: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1415,7 +1417,7 @@ async def get_client_calls(
         query += " ORDER BY cs.created_at DESC LIMIT :limit"
         params["limit"] = limit
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         sessions = [dict(row._mapping) for row in result]
 
         # Convert types
@@ -1446,7 +1448,7 @@ async def get_loan_calls(
     loan_id: str,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1477,7 +1479,7 @@ async def get_loan_calls(
 
         # Get total count
         # SECURITY: the org_id clause is a code-defined boolean branch, not user-derived input
-        count_result = db.execute(
+        count_result = await db.execute(
             text(f"SELECT COUNT(*) FROM call_logs cl WHERE cl.loan_id = :loan_id"
                  + (" AND cl.organization_id = :org_id" if org_id else "")),
             params,
@@ -1488,7 +1490,7 @@ async def get_loan_calls(
         params["limit"] = limit
         params["offset"] = offset
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         calls = [dict(row._mapping) for row in result]
 
         # Convert types for JSON serialization
@@ -1599,7 +1601,7 @@ async def list_ci_recordings(
     loan_id: Optional[str] = Query(None),
     lead_id: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1649,7 +1651,7 @@ async def list_ci_recordings(
 
         query += " ORDER BY r.started_at DESC LIMIT :limit"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         recordings = []
 
         for row in result:
@@ -1699,7 +1701,7 @@ class ConvertToApplicationRequest(BaseModel):
 @router.get("/sessions/{session_id}/live-transcript", response_model=Dict[str, Any])
 async def get_live_transcript(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1718,7 +1720,7 @@ async def get_live_transcript(
         transcript_data = orchestrator.get_transcript(session_id)
 
         # Get any AI suggestions generated for this call
-        suggestions_result = db.execute(text("""
+        suggestions_result = await db.execute(text("""
             SELECT content, structured_data, created_at
             FROM call_artifacts
             WHERE session_id = :session_id
@@ -1760,7 +1762,7 @@ async def get_live_transcript(
 async def convert_to_application(
     session_id: str,
     request: ConvertToApplicationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1781,7 +1783,7 @@ async def convert_to_application(
 
         if request.create_type == "lead":
             # Create a lead
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO leads (
                     name, first_name, last_name, email, phone,
                     source, status, loan_purpose, loan_amount,
@@ -1806,10 +1808,10 @@ async def convert_to_application(
             })
 
             lead_id = result.fetchone()[0]
-            db.commit()
+            await db.commit()
 
             # Update session with conversion info
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_sessions
                 SET lead_id = :lead_id,
                     metadata = jsonb_set(
@@ -1819,7 +1821,7 @@ async def convert_to_application(
                     )
                 WHERE id = :session_id
             """), {"lead_id": lead_id, "session_id": session_id})
-            db.commit()
+            await db.commit()
 
             return {
                 "status": "success",
@@ -1830,7 +1832,7 @@ async def convert_to_application(
 
         elif request.create_type == "loan":
             # Create a loan
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO loans (
                     borrower_first_name, borrower_last_name,
                     borrower_email, borrower_phone,
@@ -1857,10 +1859,10 @@ async def convert_to_application(
             })
 
             loan_id = result.fetchone()[0]
-            db.commit()
+            await db.commit()
 
             # Update session with conversion info
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_sessions
                 SET loan_id = :loan_id,
                     metadata = jsonb_set(
@@ -1870,7 +1872,7 @@ async def convert_to_application(
                     )
                 WHERE id = :session_id
             """), {"loan_id": loan_id, "session_id": session_id})
-            db.commit()
+            await db.commit()
 
             return {
                 "status": "success",
@@ -1888,14 +1890,14 @@ async def convert_to_application(
         raise
     except Exception as e:
         logger.error(f"Error converting call to application: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics", response_model=Dict[str, Any])
 async def get_call_metrics(
     days: int = Query(default=30, description="Number of days for metrics"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -1926,7 +1928,7 @@ async def get_call_metrics(
         if org_id:
             metrics_sql += " AND organization_id = :org_id"
             metrics_params["org_id"] = org_id
-        result = db.execute(text(metrics_sql), metrics_params)
+        result = await db.execute(text(metrics_sql), metrics_params)
 
         row = result.fetchone()
         metrics = dict(row._mapping) if row else {}
@@ -2220,7 +2222,7 @@ class CompleteUWReviewRequest(BaseModel):
 async def get_stacked_notes(
     client_id: str,
     limit: int = Query(default=100, ge=1, le=500, description="Maximum notes to return"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -2243,7 +2245,7 @@ async def get_stacked_notes(
         session_params = {"client_id": client_id}
         if org_id:
             session_params["org_id"] = org_id
-        sessions_result = db.execute(text(sessions_sql), session_params)
+        sessions_result = await db.execute(text(sessions_sql), session_params)
         sessions = [dict(row._mapping) for row in sessions_result]
 
         if not sessions:
@@ -2282,7 +2284,7 @@ async def get_stacked_notes(
             LIMIT :limit
         """)
 
-        notes_result = db.execute(notes_query, {
+        notes_result = await db.execute(notes_query, {
             "session_ids": session_ids,
             "limit": limit
         })
@@ -2334,7 +2336,7 @@ async def get_stacked_notes(
 async def complete_uw_review(
     session_id: str,
     request: CompleteUWReviewRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -2353,7 +2355,7 @@ async def complete_uw_review(
         user_id = current_user["id"]
 
         # Mark all UW review items as completed for this session
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE call_artifacts
             SET execution_status = 'completed',
                 structured_data = jsonb_set(
@@ -2367,7 +2369,7 @@ async def complete_uw_review(
         """), {"session_id": session_id})
 
         # Create UW completion artifact
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO call_artifacts (
                 session_id, artifact_type, content, structured_data,
                 execution_status, created_at
@@ -2393,7 +2395,7 @@ async def complete_uw_review(
 
             if loan_id:
                 # Find PA user for this loan
-                pa_result = db.execute(text("""
+                pa_result = await db.execute(text("""
                     SELECT u.id
                     FROM users u
                     JOIN loans l ON (l.processor_id = u.id OR u.role = 'production_assistant')
@@ -2408,7 +2410,7 @@ async def complete_uw_review(
             # Create the task
             task_title = request.pa_task_title or f"Review UW Notes - Call {session_id[:8]}"
 
-            task_result = db.execute(text("""
+            task_result = await db.execute(text("""
                 INSERT INTO tasks (
                     title, description, status, priority,
                     task_type, source, source_id,
@@ -2431,7 +2433,7 @@ async def complete_uw_review(
             task_row = task_result.fetchone()
             pa_task_id = task_row[0] if task_row else None
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -2446,7 +2448,7 @@ async def complete_uw_review(
         raise
     except Exception as e:
         logger.error(f"Error completing UW review for session {session_id}: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -2454,7 +2456,7 @@ async def complete_uw_review(
 async def create_review_task(
     session_id: str,
     request: CreateReviewTaskRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -2485,7 +2487,7 @@ async def create_review_task(
 
             if target_role:
                 # Try to find user with that role for this loan
-                user_result = db.execute(text("""
+                user_result = await db.execute(text("""
                     SELECT u.id
                     FROM users u
                     LEFT JOIN loans l ON (
@@ -2504,7 +2506,7 @@ async def create_review_task(
         priority = priority_map.get(request.priority, "medium")
 
         # Create the task
-        task_result = db.execute(text("""
+        task_result = await db.execute(text("""
             INSERT INTO tasks (
                 title, description, status, priority,
                 task_type, source, source_id,
@@ -2530,7 +2532,7 @@ async def create_review_task(
         task_row = task_result.fetchone()
         task_id = task_row[0] if task_row else None
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -2545,7 +2547,7 @@ async def create_review_task(
         raise
     except Exception as e:
         logger.error(f"Error creating review task for session {session_id}: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -2680,7 +2682,7 @@ def _parse_transcript_segments_from_text(transcript: Optional[str]) -> Optional[
 )
 async def get_recording_playback(
     call_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -2730,7 +2732,7 @@ async def get_recording_playback(
     session_sql += " LIMIT 1"
 
     try:
-        row = db.execute(text(session_sql), session_params).fetchone()
+        row = await db.execute(text(session_sql), session_params).fetchone()
     except Exception as e:
         logger.debug(f"call_sessions query failed (table may not exist): {e}")
         row = None
@@ -2747,7 +2749,7 @@ async def get_recording_playback(
         segments: Optional[List[TranscriptSegmentResponse]] = None
         if transcription_id:
             try:
-                seg_rows = db.execute(text("""
+                seg_rows = await db.execute(text("""
                     SELECT speaker, speaker_label, text,
                            start_time_ms, end_time_ms, confidence
                     FROM ci_transcription_segments
@@ -2779,7 +2781,7 @@ async def get_recording_playback(
         # Also try to pull agent_events transcript chunks as fallback segments
         if not segments:
             try:
-                event_rows = db.execute(text("""
+                event_rows = await db.execute(text("""
                     SELECT payload, transcript_timestamp_ms
                     FROM agent_events
                     WHERE session_id = :sid
@@ -2806,7 +2808,7 @@ async def get_recording_playback(
         # Fetch summary from scribe artifacts
         summary = None
         try:
-            summary_row = db.execute(text("""
+            summary_row = await db.execute(text("""
                 SELECT content FROM call_artifacts
                 WHERE session_id = :sid
                   AND artifact_type IN ('summary', 'scribe_recap')
@@ -2836,7 +2838,7 @@ async def get_recording_playback(
     # -----------------------------------------------------------------
     # 2. Try vapi_calls
     # -----------------------------------------------------------------
-    vapi_row = db.execute(text("""
+    vapi_row = await db.execute(text("""
         SELECT vapi_call_id, recording_url, stereo_recording_url,
                transcript, summary, duration, lead_id, created_at
         FROM vapi_calls
@@ -2867,7 +2869,7 @@ async def get_recording_playback(
     # -----------------------------------------------------------------
     # 3. Fallback: call_logs (dialer)
     # -----------------------------------------------------------------
-    dialer_row = db.execute(text("""
+    dialer_row = await db.execute(text("""
         SELECT COALESCE(call_sid, CAST(id AS TEXT)),
                recording_url, stereo_recording_url,
                transcript_text, duration_seconds, lead_id, created_at

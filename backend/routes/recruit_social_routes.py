@@ -5,7 +5,7 @@ API endpoints for LinkedIn, Facebook, and Instagram integrations.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -17,6 +17,8 @@ from services.recruit_social_service import recruit_social_service, SocialProfil
 import logging
 import os
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +96,11 @@ async def get_linkedin_oauth_url(
 async def facebook_oauth_callback(
     request: OAuthCallbackRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Exchange Facebook authorization code for access token."""
     # Validate OAuth state to prevent CSRF
-    stored_state = db.execute(text("""
+    stored_state = await db.execute(text("""
         SELECT state FROM social_oauth_states
         WHERE user_id = :user_id AND platform = 'facebook' AND state = :state
           AND created_at > NOW() - INTERVAL '10 minutes'
@@ -107,7 +109,7 @@ async def facebook_oauth_callback(
         logger.warning(f"OAuth state mismatch for user {current_user.id} on Facebook callback")
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
     # Clean up used state
-    db.execute(text("DELETE FROM social_oauth_states WHERE user_id = :user_id AND platform = 'facebook'"),
+    await db.execute(text("DELETE FROM social_oauth_states WHERE user_id = :user_id AND platform = 'facebook'"),
                {"user_id": current_user.id})
 
     try:
@@ -121,7 +123,7 @@ async def facebook_oauth_callback(
 
         # Store token in database
         org_id = current_user.organization_id
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO social_tokens (platform, access_token, expires_at, organization_id, created_at)
             VALUES ('facebook', :token, :expires, :org_id, NOW())
             ON CONFLICT (platform, organization_id) DO UPDATE SET
@@ -133,7 +135,7 @@ async def facebook_oauth_callback(
             "expires": datetime.now().isoformat() if not token_data.get("expires_in") else None,
             "org_id": org_id,
         })
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -149,11 +151,11 @@ async def facebook_oauth_callback(
 async def linkedin_oauth_callback(
     request: OAuthCallbackRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Exchange LinkedIn authorization code for access token."""
     # Validate OAuth state to prevent CSRF
-    stored_state = db.execute(text("""
+    stored_state = await db.execute(text("""
         SELECT state FROM social_oauth_states
         WHERE user_id = :user_id AND platform = 'linkedin' AND state = :state
           AND created_at > NOW() - INTERVAL '10 minutes'
@@ -162,7 +164,7 @@ async def linkedin_oauth_callback(
         logger.warning(f"OAuth state mismatch for user {current_user.id} on LinkedIn callback")
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
     # Clean up used state
-    db.execute(text("DELETE FROM social_oauth_states WHERE user_id = :user_id AND platform = 'linkedin'"),
+    await db.execute(text("DELETE FROM social_oauth_states WHERE user_id = :user_id AND platform = 'linkedin'"),
                {"user_id": current_user.id})
 
     try:
@@ -176,7 +178,7 @@ async def linkedin_oauth_callback(
 
         # Store token in database
         org_id = current_user.organization_id
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO social_tokens (platform, access_token, expires_at, organization_id, created_at)
             VALUES ('linkedin', :token, :expires, :org_id, NOW())
             ON CONFLICT (platform, organization_id) DO UPDATE SET
@@ -188,7 +190,7 @@ async def linkedin_oauth_callback(
             "expires": datetime.now().isoformat() if not token_data.get("expires_in") else None,
             "org_id": org_id,
         })
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -208,7 +210,7 @@ async def linkedin_oauth_callback(
 async def create_social_post(
     post: SocialPostCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a post across social media platforms."""
     try:
@@ -262,7 +264,7 @@ async def create_social_post(
                         result["platforms"]["instagram"] = {"error": "Account not configured or image required"}
 
         # Log the post to database
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO recruit_social_posts (content, platforms, image_url, scheduled_at, status, organization_id, created_by, created_at)
             VALUES (:content, :platforms, :image_url, :scheduled_at, :status, :org_id, :created_by, NOW())
         """), {
@@ -274,7 +276,7 @@ async def create_social_post(
             "org_id": current_user.organization_id,
             "created_by": current_user.id
         })
-        db.commit()
+        await db.commit()
 
         return result
     except SQLAlchemyError as e:
@@ -287,7 +289,7 @@ async def get_social_posts(
     limit: int = Query(20, le=100),
     status: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get recruiting social media posts."""
     try:
@@ -306,7 +308,7 @@ async def get_social_posts(
 
         query += " ORDER BY created_at DESC LIMIT :limit"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         posts = [dict(row._mapping) for row in result]
 
         return {"posts": posts, "count": len(posts)}
@@ -319,11 +321,11 @@ async def get_social_posts(
 async def get_post_analytics(
     post_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get engagement analytics for a social post."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, platforms, engagement_data, external_post_ids
             FROM recruit_social_posts
             WHERE id = :post_id AND organization_id = :org_id
@@ -359,12 +361,12 @@ async def get_post_analytics(
 async def enrich_from_linkedin(
     request: LinkedInProfileEnrich,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Enrich candidate data from LinkedIn profile."""
     try:
         # Verify candidate belongs to user's org
-        org_check = db.execute(text(
+        org_check = await db.execute(text(
             "SELECT id FROM mm_candidates WHERE id = :cid AND organization_id = :org_id"
         ), {"cid": request.candidate_id, "org_id": current_user.organization_id})
         if not org_check.fetchone():
@@ -376,7 +378,7 @@ async def enrich_from_linkedin(
 
         if enrichment:
             # Store enrichment data (already verified org ownership above)
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE mm_candidates
                 SET linkedin_url = :linkedin_url,
                     linkedin_data = :linkedin_data,
@@ -388,7 +390,7 @@ async def enrich_from_linkedin(
                 "linkedin_data": str(enrichment),
                 "org_id": current_user.organization_id
             })
-            db.commit()
+            await db.commit()
 
         return {
             "candidate_id": request.candidate_id,
@@ -403,12 +405,12 @@ async def enrich_from_linkedin(
 async def get_candidate_linkedin_posts(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get recent LinkedIn posts for a candidate."""
     try:
         # Get candidate's LinkedIn info (tenant-scoped)
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, name, linkedin_url, linkedin_data
             FROM mm_candidates
             WHERE id = :candidate_id AND organization_id = :org_id
@@ -430,7 +432,7 @@ async def get_candidate_linkedin_posts(
 
         # Note: Getting posts from LinkedIn requires their API or scraping
         # which has legal implications. This returns cached/stored data.
-        cached_posts = db.execute(text("""
+        cached_posts = await db.execute(text("""
             SELECT id, post_content, post_url, likes, comments, shares,
                    posted_at, cached_at
             FROM candidate_linkedin_posts
@@ -462,11 +464,11 @@ async def get_candidate_linkedin_posts(
 @router.get("/connections")
 async def get_social_connections(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get status of social media connections."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT platform,
                    access_token IS NOT NULL as connected,
                    expires_at,
@@ -549,7 +551,7 @@ async def get_linkedin_profile(current_user: User = Depends(get_current_user)):
 async def get_public_social_feed(
     slug: str = Query(..., description="Portal workspace slug to scope feed to correct organization"),
     limit: int = Query(10, le=50),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get recent social posts for public display on recruit portal.
@@ -557,7 +559,7 @@ async def get_public_social_feed(
     """
     try:
         # Resolve slug → organization_id via workspace/candidate join
-        workspace = db.execute(text("""
+        workspace = await db.execute(text("""
             SELECT c.organization_id
             FROM recruit_portal_workspaces w
             JOIN mm_candidates c ON c.id = w.candidate_id
@@ -566,7 +568,7 @@ async def get_public_social_feed(
         if not workspace:
             raise HTTPException(status_code=404, detail="Portal not found")
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, content, platforms, image_url, posted_at,
                    engagement_data, created_at
             FROM recruit_social_posts

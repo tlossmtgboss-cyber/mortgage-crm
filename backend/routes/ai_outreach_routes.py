@@ -5,7 +5,7 @@ Send AI-powered email and SMS conversations to leads/contacts
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text, desc
+from sqlalchemy import text, desc, select
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -15,6 +15,8 @@ import os
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +164,7 @@ async def get_contacts_for_outreach(
     search: Optional[str] = None,
     limit: int = Query(default=50, le=100),
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get contacts/leads available for outreach"""
     try:
@@ -198,7 +200,7 @@ async def get_contacts_for_outreach(
                 ORDER BY created_at DESC
                 LIMIT :limit
             """
-            result = db.execute(text(lead_query), params)
+            result = await db.execute(text(lead_query), params)
             for row in result.fetchall():
                 contacts.append({
                     "type": "lead",
@@ -228,7 +230,7 @@ async def get_contacts_for_outreach(
                 ORDER BY created_at DESC
                 LIMIT :limit
             """
-            result = db.execute(text(loan_query), params)
+            result = await db.execute(text(loan_query), params)
             for row in result.fetchall():
                 # Avoid duplicates by email
                 if not any(c.get('email') == row[3] for c in contacts if row[3]):
@@ -259,7 +261,7 @@ async def get_contacts_for_outreach(
                 ORDER BY first_name
                 LIMIT 20
             """
-            result = db.execute(text(user_query), params)
+            result = await db.execute(text(user_query), params)
             for row in result.fetchall():
                 if not any(c.get('email') == row[3] for c in contacts if row[3]):
                     contacts.append({
@@ -291,7 +293,7 @@ async def get_contacts_for_outreach(
 @router.post("/start")
 async def start_ai_outreach(
     request: StartOutreachRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Start an AI-powered outreach conversation"""
     try:
@@ -302,7 +304,7 @@ async def start_ai_outreach(
 
         if request.contact_id:
             # Fetch contact details
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT first_name, last_name, email, phone
                 FROM leads WHERE id = :id
             """), {"id": request.contact_id})
@@ -622,7 +624,7 @@ async def get_ai_conversations(
     status: Optional[str] = None,
     limit: int = Query(default=50, le=100),
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get active AI conversations"""
     try:
@@ -653,7 +655,7 @@ async def get_ai_conversations(
 
         query += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
 
-        result = db.execute(text(query), params)
+        result = await db.execute(text(query), params)
         conversations = [dict(row._mapping) for row in result.fetchall()]
 
         return {
@@ -671,7 +673,7 @@ async def get_ai_conversations(
 @router.get("/conversations/{conversation_id}")
 async def get_conversation_detail(
     conversation_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get conversation detail with full message history"""
     try:
@@ -717,11 +719,11 @@ async def get_conversation_detail(
 @router.get("/stats")
 async def get_outreach_stats(
     days: int = 30,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get outreach statistics"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 channel,
                 COUNT(*) as total_sent,

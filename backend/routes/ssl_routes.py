@@ -20,8 +20,10 @@ from enum import Enum
 
 from database import get_db
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from routes.auth_deps import require_auth
 
 router = APIRouter(prefix="/api/admin/ssl", tags=["SSL Certificates"], dependencies=[Depends(require_auth)])
@@ -110,7 +112,7 @@ async def update_ssl_status(domain: str, ssl_status: str, db: Session):
 async def request_certificate(
     domain: str,
     request: CertificateRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Request a new SSL certificate for a domain.
@@ -205,7 +207,7 @@ async def request_certificate(
 async def complete_certificate(
     domain: str,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Complete the certificate challenge and issue the certificate.
@@ -255,7 +257,7 @@ async def complete_certificate(
 @router.get("/{domain}/status", response_model=CertificateStatusResponse)
 async def get_certificate_status(
     domain: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get the current SSL certificate status for a domain.
@@ -313,7 +315,7 @@ async def check_live_ssl(domain: str):
 @router.post("/{domain}/renew", response_model=CertificateStatusResponse)
 async def renew_certificate(
     domain: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Manually trigger certificate renewal for a domain.
@@ -368,7 +370,7 @@ async def renew_certificate(
 async def renew_all_expiring(
     threshold_days: int = 30,
     background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Trigger renewal for all certificates expiring within threshold.
@@ -398,7 +400,7 @@ async def renew_all_expiring(
 @router.get("/{domain}/download")
 async def download_certificate(
     domain: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get the certificate and private key paths for a domain.
@@ -433,7 +435,7 @@ async def download_certificate(
 @router.get("/expiring")
 async def list_expiring_certificates(
     threshold_days: int = 30,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     List all certificates expiring within threshold.

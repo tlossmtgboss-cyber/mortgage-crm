@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from utils.responses import success_response, error_response
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from models.video_os_models import (
     VideoProjectCreate, VideoProjectUpdate, VideoProjectResponse,
     BrandTemplateCreate, BrandTemplateUpdate, BrandTemplateResponse,
@@ -37,7 +39,7 @@ _get_db: Optional[Callable] = None
 _get_current_user: Optional[Callable] = None
 
 
-from db import get_db
+from db import get_db, get_async_db
 
 
 def set_dependencies(get_db_func: Callable, get_current_user_func: Callable):
@@ -72,7 +74,7 @@ def get_hosting_service():
 async def create_project(
     request: VideoProjectCreate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new video project from a thought/content."""
     try:
@@ -110,7 +112,7 @@ async def list_projects(
     limit: int = Query(50, le=100),
     offset: int = 0,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List video projects."""
     try:
@@ -140,7 +142,7 @@ async def get_project(
     project_id: int,
     include_scenes: bool = True,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a video project by ID."""
     try:
@@ -166,7 +168,7 @@ async def update_project(
     project_id: int,
     request: VideoProjectUpdate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a video project."""
     try:
@@ -186,7 +188,7 @@ async def update_project(
 async def delete_project(
     project_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Archive a video project."""
     try:
@@ -207,7 +209,7 @@ async def generate_script(
     project_id: int,
     request: GenerateScriptRequest = None,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Generate a video script from thought using LLM."""
     try:
@@ -227,7 +229,7 @@ async def generate_script(
 async def generate_blog(
     project_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Generate a blog post from the video script."""
     try:
@@ -244,7 +246,7 @@ async def generate_storyboard(
     project_id: int,
     request: GenerateStoryboardRequest = None,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Generate storyboard scenes from the script."""
     try:
@@ -268,7 +270,7 @@ async def generate_storyboard(
 async def list_scenes(
     project_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all storyboard scenes for a project."""
     try:
@@ -285,7 +287,7 @@ async def create_scene(
     project_id: int,
     request: StoryboardSceneCreate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Add a new scene to the storyboard."""
     try:
@@ -302,7 +304,7 @@ async def update_scene(
     scene_id: int,
     request: StoryboardSceneUpdate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a storyboard scene."""
     try:
@@ -322,7 +324,7 @@ async def update_scene(
 async def delete_scene(
     scene_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a storyboard scene."""
     try:
@@ -338,7 +340,7 @@ async def delete_scene(
 async def reorder_scenes(
     scene_order: List[int],
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Reorder storyboard scenes."""
     try:
@@ -359,7 +361,7 @@ async def start_render(
     request: StartRenderRequest,
     background_tasks: BackgroundTasks,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Queue a new render job for a project."""
     try:
@@ -391,7 +393,7 @@ async def list_render_jobs(
     limit: int = Query(50, le=100),
     offset: int = 0,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List render jobs."""
     try:
@@ -420,7 +422,7 @@ async def get_render_job(
     job_id: str,
     include_artifacts: bool = True,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get render job status and details."""
     try:
@@ -445,7 +447,7 @@ async def get_render_job(
 async def cancel_render_job(
     job_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Cancel a pending or in-progress render job."""
     try:
@@ -465,7 +467,7 @@ async def cancel_render_job(
 async def retry_render_job(
     job_id: str,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Retry a failed render job."""
     try:
@@ -494,7 +496,7 @@ async def list_videos(
     limit: int = Query(50, le=100),
     offset: int = 0,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List videos in the library."""
     try:
@@ -525,7 +527,7 @@ async def list_videos(
 async def publish_video(
     request: PublishVideoRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Publish a rendered video to the library."""
     try:
@@ -581,7 +583,7 @@ async def get_video(
     video_id: int,
     include_analytics: bool = False,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get video details."""
     try:
@@ -607,7 +609,7 @@ async def update_video(
     video_id: int,
     request: VideoLibraryUpdate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update video metadata."""
     try:
@@ -631,7 +633,7 @@ async def update_video(
 async def delete_video(
     video_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a video from the library."""
     try:
@@ -647,7 +649,7 @@ async def delete_video(
 async def get_share_info(
     video_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get sharing information for a video."""
     try:
@@ -678,7 +680,7 @@ async def get_share_info(
 async def regenerate_share_token(
     video_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Regenerate the share token for a video (invalidates old links)."""
     try:
@@ -698,7 +700,7 @@ async def regenerate_share_token(
 async def get_analytics_overview(
     days: int = Query(30, ge=1, le=365),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get organization-wide video analytics overview."""
     try:
@@ -720,7 +722,7 @@ async def get_video_analytics(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get detailed analytics for a specific video."""
     try:
@@ -746,7 +748,7 @@ async def get_video_heatmap(
     video_id: int,
     segments: int = Query(100, ge=10, le=1000),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get watch heatmap for a video."""
     try:
@@ -768,7 +770,7 @@ async def get_viewer_engagement(
     lead_id: Optional[int] = None,
     limit: int = Query(50, le=100),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get viewer engagement data."""
     try:
@@ -794,7 +796,7 @@ async def get_viewer_engagement(
 async def list_cta_overlays(
     cta_type: Optional[str] = None,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List CTA overlay templates."""
     try:
@@ -814,7 +816,7 @@ async def list_cta_overlays(
 async def create_cta_overlay(
     request: CTAOverlayCreate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new CTA overlay template."""
     try:
@@ -836,7 +838,7 @@ async def create_cta_overlay(
 async def get_cta_overlay(
     cta_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a CTA overlay by ID."""
     try:
@@ -859,7 +861,7 @@ async def get_cta_overlay(
 @router.get("/brand-templates", response_model=dict)
 async def list_brand_templates(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List brand templates."""
     try:
@@ -878,7 +880,7 @@ async def list_brand_templates(
 async def create_brand_template(
     request: BrandTemplateCreate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new brand template."""
     try:
@@ -898,7 +900,7 @@ async def create_brand_template(
 async def get_brand_template(
     template_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a brand template by ID."""
     try:
@@ -919,7 +921,7 @@ async def update_brand_template(
     template_id: int,
     request: BrandTemplateUpdate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a brand template."""
     try:
@@ -942,7 +944,7 @@ async def update_brand_template(
 @router.get("/voice-profiles", response_model=dict)
 async def list_voice_profiles(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List voice profiles."""
     try:
@@ -961,7 +963,7 @@ async def list_voice_profiles(
 async def create_voice_profile(
     request: VoiceProfileCreate,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new voice profile."""
     try:
@@ -982,7 +984,7 @@ async def create_voice_profile(
 async def get_voice_profile(
     profile_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a voice profile by ID."""
     try:
@@ -1008,7 +1010,7 @@ async def get_embed_player(
     autoplay: bool = False,
     muted: bool = False,
     request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get embeddable video player HTML."""
     try:
@@ -1038,7 +1040,7 @@ async def get_embed_player(
 async def get_watch_page(
     share_token: str,
     request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get public video watch page."""
     try:
@@ -1070,7 +1072,7 @@ async def get_watch_page(
 async def track_analytics_beacon(
     events: List[AnalyticsEventCreate],
     request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Track analytics events from the video player (public endpoint)."""
     try:
@@ -1102,7 +1104,7 @@ async def create_viewer_session(
     video_id: int,
     viewer_id: Optional[str] = None,
     request: Request = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new viewer session (public endpoint)."""
     try:
@@ -1128,7 +1130,7 @@ async def identify_viewer(
     viewer_name: Optional[str] = None,
     viewer_email: Optional[str] = None,
     viewer_company: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Identify a viewer mid-session (e.g., after form submission)."""
     try:
@@ -1149,7 +1151,7 @@ async def identify_viewer(
 @router.post("/sessions/{session_id}/end", response_model=dict)
 async def end_viewer_session(
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """End a viewer session."""
     try:

@@ -15,7 +15,7 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 import aiohttp
 
 from models.voice_workflow_models import (
@@ -26,6 +26,7 @@ from models.voice_workflow_models import (
 )
 from services.voice_workflow_service import get_workflow_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/api/v1/voice-workflow", tags=["Voice Workflow"])
 _get_db = None
 
 
-from db import get_db
+from db import get_db, get_async_db
 
 
 def set_dependencies(get_db_func):
@@ -51,7 +52,7 @@ def set_dependencies(get_db_func):
 
 async def get_current_user_id(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> int:
     """Get user ID from Authorization header (supports JWT and session tokens).
 
@@ -72,14 +73,14 @@ async def get_current_user_id(
     if payload:
         email = payload.get("sub")
         if email:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT id FROM users WHERE email = :email
             """), {"email": email}).fetchone()
             if result:
                 return result[0]
 
     # Fall back to session token
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT user_id FROM sessions
         WHERE token = :token AND expires_at > NOW()
     """), {"token": token}).fetchone()
@@ -438,7 +439,7 @@ async def voice_workflow_websocket(
 async def create_workflow_session(
     request: WorkflowSessionCreate,
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new voice workflow session."""
     try:
@@ -464,10 +465,10 @@ async def create_workflow_session(
 @router.get("/sessions/{user_id}")
 async def get_user_sessions(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get workflow sessions for a user."""
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT id, workflow_type, current_state, started_at, completed_at, is_active
         FROM voice_workflow_sessions
         WHERE user_id = :user_id
@@ -493,7 +494,7 @@ async def get_user_sessions(
 @router.get("/session/{workflow_id}")
 async def get_session_details(
     workflow_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get details of a specific workflow session."""
     try:
@@ -535,7 +536,7 @@ async def get_session_details(
 async def process_workflow_input(
     workflow_id: str,
     request: dict,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Process text input for a workflow session (for testing)."""
     workflow_service = get_workflow_service(db)
@@ -572,7 +573,7 @@ async def process_workflow_input(
 @router.delete("/session/{workflow_id}")
 async def cancel_workflow_session(
     workflow_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Cancel a workflow session."""
     workflow_service = get_workflow_service(db)

@@ -5,7 +5,7 @@ Handles the onboarding flow for new administrators signing up via subscription i
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin-onboarding", tags=["Admin Onboarding"])
 
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 # Stripe integration
 try:
@@ -262,7 +264,7 @@ def hash_password(password: str) -> str:
 # =============================================================================
 
 @router.get("/validate-invite/{token}")
-async def validate_invite(token: str, db: Session = Depends(get_db)):
+async def validate_invite(token: str, db: AsyncSession = Depends(get_async_db)):
     """Validate a subscription invitation token"""
     try:
         invite_data = get_invite_data(db, token)
@@ -325,7 +327,7 @@ async def validate_invite(token: str, db: Session = Depends(get_db)):
 @router.post("/start")
 async def start_onboarding(
     request: StartOnboardingRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Start the onboarding process - create account and tenant"""
     try:
@@ -346,7 +348,7 @@ async def start_onboarding(
         tenant_id = str(uuid.uuid4())
         plan_key = invite_data.get('plan', 'professional')
 
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO tenant_accounts (
                 id, name, status, plan_id, plan_name, seats_purchased,
                 created_at, updated_at
@@ -369,7 +371,7 @@ async def start_onboarding(
         contact_name = invite_data.get('contact_name', '')
         name_parts = contact_name.split(' ', 1) if contact_name else ['', '']
 
-        user_result = db.execute(text("""
+        user_result = await db.execute(text("""
             INSERT INTO users (
                 email, hashed_password, full_name, first_name, last_name,
                 role, permission_role, is_active, tenant_account_id,
@@ -394,7 +396,7 @@ async def start_onboarding(
         # Assign Site Administrator role (multi-role support)
         try:
             # Look up Site Administrator role from onboarding_roles
-            site_admin_role = db.execute(text("""
+            site_admin_role = await db.execute(text("""
                 SELECT id FROM onboarding_roles WHERE name = 'Site Administrator' LIMIT 1
             """)).fetchone()
 
@@ -402,13 +404,13 @@ async def start_onboarding(
                 role_id = site_admin_role[0]
 
                 # Assign Site Administrator role as primary
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO user_assigned_roles (user_id, role_id, is_primary, assigned_at, assigned_by)
                     VALUES (:user_id, :role_id, TRUE, NOW(), :user_id)
                 """), {'user_id': user_id, 'role_id': role_id})
 
                 # Set Site Administrator as active role
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO user_active_role (user_id, active_role_id, switched_at)
                     VALUES (:user_id, :role_id, NOW())
                 """), {'user_id': user_id, 'role_id': role_id})
@@ -419,13 +421,13 @@ async def start_onboarding(
             # Continue signup even if role assignment fails
 
         # Update tenant with owner
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tenant_accounts SET owner_user_id = :user_id WHERE id = :tenant_id
         """), {'user_id': user_id, 'tenant_id': tenant_id})
 
         # Mark invitation as accepted
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE subscriber_invitations
                 SET status = 'accepted',
                     accepted_at = NOW(),
@@ -440,7 +442,7 @@ async def start_onboarding(
         # Create onboarding session
         session_id = str(uuid.uuid4())
 
-        db.commit()
+        await db.commit()
 
         # Generate auth token
         try:
@@ -475,7 +477,7 @@ async def start_onboarding(
     except ValidationException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error starting onboarding: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -484,7 +486,7 @@ async def start_onboarding(
 async def save_company_profile(
     request: Request,
     profile: CompanyProfileRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Save company profile during onboarding"""
     try:
@@ -507,7 +509,7 @@ async def save_company_profile(
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant
-        user = db.execute(text("""
+        user = await db.execute(text("""
             SELECT id, tenant_account_id FROM users WHERE email = :email
         """), {'email': email}).fetchone()
 
@@ -522,7 +524,7 @@ async def save_company_profile(
             'logo_url': profile.logo_url
         })
 
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tenant_accounts SET
                 name = :name,
                 settings = COALESCE(settings, '{}'::jsonb) || jsonb_build_object('company', CAST(:company_settings AS jsonb)),
@@ -536,14 +538,14 @@ async def save_company_profile(
 
         # Also seed organization_branding so voice/email/docs resolve the company name
         # Uses org_id from the organizations table linked to this tenant
-        org_row = db.execute(text("""
+        org_row = await db.execute(text("""
             SELECT id FROM organizations
             WHERE tenant_account_id = CAST(:tenant_id AS uuid)
             LIMIT 1
         """), {'tenant_id': str(user.tenant_account_id)}).fetchone()
 
         if org_row:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO organization_branding (organization_id, company_name)
                 VALUES (:org_id, :company_name)
                 ON CONFLICT (organization_id)
@@ -554,7 +556,7 @@ async def save_company_profile(
             from services.company_name_resolver import invalidate_cache
             invalidate_cache(org_row[0])
 
-        db.commit()
+        await db.commit()
 
         return success_response(
             data={'saved': True},
@@ -564,7 +566,7 @@ async def save_company_profile(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error saving company profile: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -573,7 +575,7 @@ async def save_company_profile(
 async def save_user_profile(
     request: Request,
     profile: UserProfileRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Save admin user profile during onboarding"""
     try:
@@ -594,7 +596,7 @@ async def save_user_profile(
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Update user profile
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE users SET
                 first_name = :first_name,
                 last_name = :last_name,
@@ -617,7 +619,7 @@ async def save_user_profile(
             'email': email
         })
 
-        db.commit()
+        await db.commit()
 
         return success_response(
             data={'saved': True},
@@ -627,7 +629,7 @@ async def save_user_profile(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error saving user profile: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -636,7 +638,7 @@ async def save_user_profile(
 async def queue_team_invites(
     request: Request,
     invites: InviteTeamRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Queue team member invites (sent after payment)"""
     try:
@@ -663,7 +665,7 @@ async def queue_team_invites(
             )
 
         # Get user and tenant
-        user = db.execute(text("""
+        user = await db.execute(text("""
             SELECT u.id, u.tenant_account_id, t.seats_purchased
             FROM users u
             JOIN tenant_accounts t ON t.id = u.tenant_account_id
@@ -689,7 +691,7 @@ async def queue_team_invites(
             for inv in invites.invites
         ]
 
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tenant_accounts SET
                 settings = jsonb_set(
                     COALESCE(settings, '{}'::jsonb),
@@ -703,7 +705,7 @@ async def queue_team_invites(
             'tenant_id': str(user.tenant_account_id)
         })
 
-        db.commit()
+        await db.commit()
 
         return success_response(
             data={'queued': len(pending_invites)},
@@ -715,7 +717,7 @@ async def queue_team_invites(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error queueing team invites: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -724,7 +726,7 @@ async def queue_team_invites(
 async def create_subscription(
     request: Request,
     payment: PaymentRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Process payment and create Stripe subscription"""
     try:
@@ -745,7 +747,7 @@ async def create_subscription(
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant
-        user = db.execute(text("""
+        user = await db.execute(text("""
             SELECT u.id, u.tenant_account_id, u.full_name, t.plan_id, t.seats_purchased
             FROM users u
             JOIN tenant_accounts t ON t.id = u.tenant_account_id
@@ -764,7 +766,7 @@ async def create_subscription(
             logger.info(f"Free access promo code applied for user {email}")
 
             # Upgrade to business plan
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE tenant_accounts SET
                     status = 'active',
                     plan_id = 'business',
@@ -779,7 +781,7 @@ async def create_subscription(
             })
 
             # Log the promo code usage
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO admin_audit_log (action_type, actor_admin_id, actor_name, target_type, target_id, new_values, reason)
                 VALUES ('promo_code_applied', :user_id, :user_name, 'tenant', :tenant_id, :details, 'Free Business Plan Access')
             """), {
@@ -789,7 +791,7 @@ async def create_subscription(
                 'details': json.dumps({'promo_code': FREE_ACCESS_PROMO_CODE, 'plan': 'business', 'price': 0})
             })
 
-            db.commit()
+            await db.commit()
 
             return success_response(
                 data={
@@ -806,7 +808,7 @@ async def create_subscription(
             # Demo mode - skip actual Stripe
             logger.warning("Stripe not configured - running in demo mode")
 
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE tenant_accounts SET
                     status = 'active',
                     stripe_customer_id = :customer_id,
@@ -819,7 +821,7 @@ async def create_subscription(
                 'tenant_id': str(user.tenant_account_id)
             })
 
-            db.commit()
+            await db.commit()
 
             return success_response(
                 data={
@@ -873,7 +875,7 @@ async def create_subscription(
         subscription = stripe.Subscription.create(**subscription_params)
 
         # Update tenant with Stripe IDs
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tenant_accounts SET
                 status = 'active',
                 stripe_customer_id = :customer_id,
@@ -887,7 +889,7 @@ async def create_subscription(
         })
 
         # Create subscription record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO account_subscriptions (
                 id, account_id, provider, provider_subscription_id,
                 status, plan_id, plan_name, price_amount, quantity,
@@ -912,7 +914,7 @@ async def create_subscription(
             'period_end': subscription.current_period_end
         })
 
-        db.commit()
+        await db.commit()
 
         return success_response(
             data={
@@ -928,7 +930,7 @@ async def create_subscription(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error creating subscription: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -936,7 +938,7 @@ async def create_subscription(
 @router.post("/complete")
 async def complete_onboarding(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Complete onboarding and send queued team invites"""
     try:
@@ -957,7 +959,7 @@ async def complete_onboarding(
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant with pending invites
-        user = db.execute(text("""
+        user = await db.execute(text("""
             SELECT u.id, u.full_name, u.tenant_account_id, t.name as company_name, t.settings
             FROM users u
             JOIN tenant_accounts t ON t.id = u.tenant_account_id
@@ -968,7 +970,7 @@ async def complete_onboarding(
             raise HTTPException(status_code=404, detail="User not found")
 
         # Mark onboarding complete
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE users SET onboarding_completed = true
             WHERE id = :user_id
         """), {'user_id': user.id})
@@ -981,7 +983,7 @@ async def complete_onboarding(
         # Ensure user_invitations table exists (may not have been migrated)
         if pending_invites:
             try:
-                db.execute(text("""
+                await db.execute(text("""
                     CREATE TABLE IF NOT EXISTS user_invitations (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                         email VARCHAR(255) NOT NULL,
@@ -996,9 +998,9 @@ async def complete_onboarding(
                         created_at TIMESTAMP DEFAULT NOW()
                     )
                 """))
-                db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_email ON user_invitations(email)"))
-                db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_token ON user_invitations(token)"))
-                db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_org ON user_invitations(organization_id)"))
+                await db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_email ON user_invitations(email)"))
+                await db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_token ON user_invitations(token)"))
+                await db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_org ON user_invitations(organization_id)"))
             except Exception as e:
                 logger.warning(f"user_invitations table check: {e}")
 
@@ -1008,7 +1010,7 @@ async def complete_onboarding(
                 invite_token = str(uuid.uuid4())
 
                 # Store in user_invitations table
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO user_invitations (
                         id, email, first_name, last_name, permission_role,
                         invited_by, organization_id, token, expires_at,
@@ -1042,14 +1044,14 @@ async def complete_onboarding(
                 logger.warning(f"Failed to send invite to {invite.get('email')}: {e}")
 
         # Clear pending invites from settings
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE tenant_accounts SET
                 settings = settings - 'pending_invites',
                 updated_at = NOW()
             WHERE id = :tenant_id
         """), {'tenant_id': str(user.tenant_account_id)})
 
-        db.commit()
+        await db.commit()
 
         return success_response(
             data={
@@ -1063,7 +1065,7 @@ async def complete_onboarding(
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error completing onboarding: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -1071,7 +1073,7 @@ async def complete_onboarding(
 @router.post("/validate-promo")
 async def validate_promo_code(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Validate a promo code without revealing valid codes to the client"""
     try:
@@ -1161,12 +1163,12 @@ def get_plan_features(plan_key: str) -> List[str]:
 @router.get("/available-roles")
 async def get_available_roles(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get available roles for team member invites"""
     try:
         # Get roles from onboarding_roles table
-        roles = db.execute(text("""
+        roles = await db.execute(text("""
             SELECT id, name, description
             FROM onboarding_roles
             WHERE is_active = true
@@ -1232,7 +1234,7 @@ async def get_available_roles(
 @router.get("/list-invitations")
 async def list_invitations(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List subscriber invitations. Requires ADMIN_API_KEY."""
     admin_key = request.headers.get('X-Admin-Key', '')
@@ -1240,7 +1242,7 @@ async def list_invitations(
     if not admin_key or not expected_key or not secrets.compare_digest(admin_key, expected_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    invites = db.execute(text("""
+    invites = await db.execute(text("""
         SELECT id, token, email, company_name, status, created_at
         FROM subscriber_invitations
         ORDER BY created_at DESC LIMIT 20
@@ -1257,7 +1259,7 @@ async def list_invitations(
 @router.post("/reset-invitation")
 async def reset_invitation(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Reset a subscriber invitation to pending with fresh expiry. Requires ADMIN_API_KEY."""
     admin_key = request.headers.get('X-Admin-Key', '')
@@ -1269,7 +1271,7 @@ async def reset_invitation(
         body = await request.json()
         invite_id = body.get('invitation_id', '')
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE subscriber_invitations
             SET status = 'pending',
                 accepted_at = NULL,
@@ -1282,13 +1284,13 @@ async def reset_invitation(
         if not result:
             return success_response(data={'reset': False}, message="Invitation not found")
 
-        db.commit()
+        await db.commit()
         return success_response(
             data={'reset': True, 'token': result[1], 'email': result[2], 'company': result[3]},
             message=f"Invitation reset for {result[3]}"
         )
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Failed to reset invitation %s", invite_id)
         raise HTTPException(status_code=500, detail="Failed to reset invitation")
 
@@ -1296,7 +1298,7 @@ async def reset_invitation(
 @router.delete("/cleanup-test-account")
 async def cleanup_test_account(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a test company account and reset its invitation.
     Requires ADMIN_API_KEY header for auth."""
@@ -1310,7 +1312,7 @@ async def cleanup_test_account(
         search_name = body.get('company_name', 'test')
 
         # Find the account
-        account = db.execute(text("""
+        account = await db.execute(text("""
             SELECT id, name, owner_user_id FROM tenant_accounts
             WHERE name ILIKE :search AND is_deleted = false
             ORDER BY created_at DESC LIMIT 1
@@ -1323,13 +1325,13 @@ async def cleanup_test_account(
         account_name = account[1]
 
         # Get user IDs for this tenant
-        user_rows = db.execute(text(
+        user_rows = await db.execute(text(
             "SELECT id FROM users WHERE tenant_account_id = :tid"
         ), {'tid': account_id}).fetchall()
         user_ids = [str(r[0]) for r in user_rows]
 
         # Clear owner FK
-        db.execute(text("UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :id"), {'id': account_id})
+        await db.execute(text("UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :id"), {'id': account_id})
 
         # Delete dependent records with savepoints
         if user_ids:
@@ -1343,7 +1345,7 @@ async def cleanup_test_account(
                 try:
                     sp = db.begin_nested()
                     delete_sql = "DELETE FROM " + table_name + " WHERE " + col + " = ANY(:ids)"
-                    db.execute(text(delete_sql), {'ids': user_ids})
+                    await db.execute(text(delete_sql), {'ids': user_ids})
                     sp.commit()
                 except Exception as e:
                     logger.error(f"Error in cleanup_test_account (delete {table_name}.{col}): {e}")
@@ -1352,7 +1354,7 @@ async def cleanup_test_account(
             # Delete users
             try:
                 sp = db.begin_nested()
-                db.execute(text("DELETE FROM users WHERE tenant_account_id = :tid"), {'tid': account_id})
+                await db.execute(text("DELETE FROM users WHERE tenant_account_id = :tid"), {'tid': account_id})
                 sp.commit()
             except Exception as e:
                 logger.error(f"Error in cleanup_test_account (delete users): {e}")
@@ -1361,7 +1363,7 @@ async def cleanup_test_account(
         # Mark account as canceled
         try:
             sp = db.begin_nested()
-            db.execute(text(
+            await db.execute(text(
                 "UPDATE tenant_accounts SET status = 'canceled', is_deleted = true WHERE id = :id"
             ), {'id': account_id})
             sp.commit()
@@ -1370,12 +1372,12 @@ async def cleanup_test_account(
             sp.rollback()
 
         # Reset subscriber invitation for reuse
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE subscriber_invitations SET status = 'pending', accepted_at = NULL, accepted_by_user_id = NULL
             WHERE company_name ILIKE :search AND status = 'accepted'
         """), {'search': f'%{search_name}%'})
 
-        db.commit()
+        await db.commit()
 
         return success_response(
             data={'deleted': True, 'account_name': account_name, 'users_cleaned': len(user_ids)},
@@ -1385,6 +1387,6 @@ async def cleanup_test_account(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.exception("Cleanup error for test account")
         raise HTTPException(status_code=500, detail="Failed to clean up test account")

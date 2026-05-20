@@ -13,7 +13,7 @@ This system provides enterprise-grade SMS intelligence:
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import text, desc, and_, or_, func
+from sqlalchemy import text, desc, and_, or_, func, select
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime, timezone, timedelta, time as dt_time
@@ -25,6 +25,8 @@ import os
 
 from database import get_db, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -920,7 +922,7 @@ async def get_sms_queue(
     requires_response: Optional[bool] = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get SMS messages in the queue with filters"""
@@ -966,14 +968,14 @@ async def get_sms_queue(
 
         # Count total
         count_query = f"SELECT COUNT(*) FROM ({query}) sq"
-        total = db.execute(text(count_query), params).scalar()
+        total = await db.execute(text(count_query), params).scalar()
 
         # Add ordering and pagination
         query += " ORDER BY s.is_priority DESC, s.sent_at DESC LIMIT :limit OFFSET :offset"
         params["limit"] = limit
         params["offset"] = offset
 
-        results = db.execute(text(query), params).fetchall()
+        results = await db.execute(text(query), params).fetchall()
 
         items = []
         for row in results:
@@ -1030,12 +1032,12 @@ async def get_sms_queue(
 @router.get("/queue/{sms_id}")
 async def get_sms_detail(
     sms_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get detailed view of a single SMS"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 s.*,
                 l.borrower_name as loan_borrower_name,
@@ -1091,13 +1093,13 @@ async def get_sms_detail(
 @router.delete("/queue/{sms_id}")
 async def delete_sms_from_queue(
     sms_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Delete an SMS from the queue"""
     try:
         # Check if SMS exists AND belongs to current user
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id FROM sms_intelligence_queue WHERE id = :sms_id AND user_id = :user_id
         """), {"sms_id": sms_id, "user_id": current_user.id}).fetchone()
 
@@ -1105,10 +1107,10 @@ async def delete_sms_from_queue(
             raise HTTPException(status_code=404, detail="SMS not found")
 
         # Delete the SMS (ownership already verified above)
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM sms_intelligence_queue WHERE id = :sms_id AND user_id = :user_id
         """), {"sms_id": sms_id, "user_id": current_user.id})
-        db.commit()
+        await db.commit()
 
         return {"status": "success", "message": f"SMS {sms_id} deleted"}
 
@@ -1122,13 +1124,13 @@ async def delete_sms_from_queue(
 @router.post("/queue/{sms_id}/analyze")
 async def analyze_sms(
     sms_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Run AI analysis on an SMS message"""
     try:
         # Get the SMS - verify ownership
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT message_body, direction, from_phone
             FROM sms_intelligence_queue
             WHERE id = :sms_id AND user_id = :user_id
@@ -1144,7 +1146,7 @@ async def analyze_sms(
         analysis = await analyze_sms_with_ai(message_body, {"direction": direction})
 
         # Update the record - verify ownership
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE sms_intelligence_queue
             SET ai_analysis = :analysis,
                 analyzed_at = CURRENT_TIMESTAMP,
@@ -1163,7 +1165,7 @@ async def analyze_sms(
             "is_opt_out": analysis.is_opt_out,
             "is_priority": analysis.urgency_level >= 4
         })
-        db.commit()
+        await db.commit()
 
         return {"success": True, "analysis": analysis.dict()}
 
@@ -1171,7 +1173,7 @@ async def analyze_sms(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error analyzing SMS: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1179,13 +1181,13 @@ async def analyze_sms(
 async def update_sms_disposition(
     sms_id: int,
     update: SMSDispositionUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Update SMS disposition and matching"""
     try:
         # Issue 2 FIX: verify ownership via user_id
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE sms_intelligence_queue
             SET disposition = :disposition,
                 processing_notes = COALESCE(:notes, processing_notes),
@@ -1207,13 +1209,13 @@ async def update_sms_disposition(
             "lead_id": update.matched_lead_id,
             "borrower_id": update.matched_borrower_id
         })
-        db.commit()
+        await db.commit()
 
         return {"success": True, "sms_id": sms_id, "disposition": update.disposition}
 
     except SQLAlchemyError as e:
         logger.error(f"Error updating SMS disposition: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1223,7 +1225,7 @@ async def get_sms_conversation(
     loan_id: Optional[int] = Query(None),
     lead_id: Optional[int] = Query(None),
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get conversation history for a phone number"""
@@ -1251,7 +1253,7 @@ async def get_sms_conversation(
         query += " ORDER BY message_date DESC LIMIT :limit"
         params["limit"] = limit
 
-        results = db.execute(text(query), params).fetchall()
+        results = await db.execute(text(query), params).fetchall()
 
         conversations = []
         for row in results:
@@ -1279,7 +1281,7 @@ async def get_sms_conversation(
 async def get_sms_templates(
     category: Optional[str] = Query(None),
     is_active: bool = Query(True),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get SMS templates"""
@@ -1294,7 +1296,7 @@ async def get_sms_templates(
 
         query += " ORDER BY times_used DESC, name"
 
-        results = db.execute(text(query), params).fetchall()
+        results = await db.execute(text(query), params).fetchall()
 
         templates = []
         for row in results:
@@ -1319,12 +1321,12 @@ async def get_sms_templates(
 @router.post("/templates")
 async def create_sms_template(
     template: SMSTemplateCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Create a new SMS template"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO sms_templates (name, category, template_body, variables_used, user_id, created_by)
             VALUES (:name, :category, :body, :variables, :user_id, :user_id)
             RETURNING id
@@ -1336,20 +1338,20 @@ async def create_sms_template(
             "user_id": current_user.id,
         })
         template_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {"success": True, "template_id": template_id}
 
     except SQLAlchemyError as e:
         logger.error(f"Error creating SMS template: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/opt-out/check/{phone_number}")
 async def check_opt_out(
     phone_number: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Check if a phone number has opted out"""
@@ -1357,7 +1359,7 @@ async def check_opt_out(
         normalized = normalize_phone(phone_number)
 
         # Issue 1 FIX: filter by user_id
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT phone_number, opted_out_at
             FROM sms_opt_outs
             WHERE phone_number = :phone AND user_id = :user_id
@@ -1386,13 +1388,13 @@ async def check_opt_out(
 async def get_opt_outs(
     limit: int = Query(100, le=500),
     offset: int = Query(0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get list of opted-out phone numbers"""
     try:
         # Issue 1 FIX: filter by user_id
-        results = db.execute(text("""
+        results = await db.execute(text("""
             SELECT phone_number, opted_out_at, opt_out_message, borrower_id, loan_id, lead_id
             FROM sms_opt_outs
             WHERE user_id = :user_id
@@ -1411,7 +1413,7 @@ async def get_opt_outs(
                 "lead_id": row[5]
             })
 
-        total = db.execute(text(
+        total = await db.execute(text(
             "SELECT COUNT(*) FROM sms_opt_outs WHERE user_id = :user_id"
         ), {"user_id": current_user.id}).scalar()
 
@@ -1431,7 +1433,7 @@ async def get_opt_outs(
 async def add_opt_out(
     phone_number: str,
     message: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Manually add a phone number to opt-out list"""
@@ -1440,25 +1442,25 @@ async def add_opt_out(
 
         # Issue 4 FIX: Include user_id in INSERT so ON CONFLICT (phone_number, user_id) can match.
         # Previously user_id was NULL, causing ON CONFLICT to never match (NULL != NULL in PG).
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO sms_opt_outs (phone_number, opt_out_message, user_id)
             VALUES (:phone, :message, :user_id)
             ON CONFLICT (phone_number, user_id) DO UPDATE SET opted_out_at = CURRENT_TIMESTAMP
         """), {"phone": normalized, "message": message, "user_id": current_user.id})
-        db.commit()
+        await db.commit()
 
         return {"success": True, "phone_number": normalized, "is_opted_out": True}
 
     except SQLAlchemyError as e:
         logger.error(f"Error adding opt-out: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/opt-out/{phone_number}")
 async def remove_opt_out(
     phone_number: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Remove a phone number from opt-out list (re-subscribe)"""
@@ -1466,16 +1468,16 @@ async def remove_opt_out(
         normalized = normalize_phone(phone_number)
 
         # Issue 2 FIX: verify ownership via user_id
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM sms_opt_outs WHERE phone_number = :phone AND user_id = :user_id
         """), {"phone": normalized, "user_id": current_user.id})
-        db.commit()
+        await db.commit()
 
         return {"success": True, "phone_number": normalized, "is_opted_out": False}
 
     except SQLAlchemyError as e:
         logger.error(f"Error removing opt-out: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1485,7 +1487,7 @@ async def get_document_mentions(
     lead_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get document mentions from SMS messages"""
@@ -1517,7 +1519,7 @@ async def get_document_mentions(
         query += " ORDER BY dm.mentioned_at DESC LIMIT :limit"
         params["limit"] = limit
 
-        results = db.execute(text(query), params).fetchall()
+        results = await db.execute(text(query), params).fetchall()
 
         mentions = []
         for row in results:
@@ -1547,13 +1549,13 @@ async def get_document_mentions(
 
 @router.get("/sla/pending")
 async def get_pending_sla(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get SMS messages with pending SLA (awaiting response)"""
     try:
         # Issue 1 FIX: filter by user_id
-        results = db.execute(text("""
+        results = await db.execute(text("""
             SELECT
                 st.*,
                 sq.message_body,
@@ -1592,7 +1594,7 @@ async def get_pending_sla(
 @router.get("/stats")
 async def get_sms_stats(
     days: int = Query(7, ge=1, le=90),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Get SMS intelligence statistics"""
@@ -1601,7 +1603,7 @@ async def get_sms_stats(
 
         # Issue 1 FIX: filter by user_id on all stats queries
         # Total counts
-        total_result = db.execute(text("""
+        total_result = await db.execute(text("""
             SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE direction = 'inbound') as inbound,
@@ -1616,7 +1618,7 @@ async def get_sms_stats(
         """), {"cutoff": cutoff, "user_id": current_user.id}).fetchone()
 
         # Disposition breakdown
-        disposition_result = db.execute(text("""
+        disposition_result = await db.execute(text("""
             SELECT disposition, COUNT(*) as count
             FROM sms_intelligence_queue
             WHERE created_at >= :cutoff AND user_id = :user_id
@@ -1625,7 +1627,7 @@ async def get_sms_stats(
         """), {"cutoff": cutoff, "user_id": current_user.id}).fetchall()
 
         # SLA stats
-        sla_result = db.execute(text("""
+        sla_result = await db.execute(text("""
             SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE status = 'met') as met,
@@ -1670,7 +1672,7 @@ async def telephony_sms_webhook(
     request: Request,
     request_data: Dict[str, Any],
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Webhook endpoint for incoming SMS with Telnyx signature validation"""
     # SECURITY: Fail-closed webhook validation — reject unless signature is positively verified
@@ -1715,7 +1717,7 @@ async def telephony_sms_webhook(
                 logger.warning(f"MMS media S3 persistence failed: {media_err}")
 
         # Insert into queue (with S3 keys for persisted media)
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO sms_intelligence_queue (
                 sms_provider, provider_message_id, from_phone, to_phone,
                 direction, message_body, has_media, media_count,
@@ -1742,7 +1744,7 @@ async def telephony_sms_webhook(
         })
 
         new_id = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if new_id:
             # Schedule background analysis - don't pass db, task creates its own
@@ -1752,7 +1754,7 @@ async def telephony_sms_webhook(
 
     except SQLAlchemyError as e:
         logger.error(f"Error processing SMS webhook: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1934,7 +1936,7 @@ async def process_incoming_sms(sms_id: int):
 async def send_sms(
     request: SMSSendRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """
@@ -1957,7 +1959,7 @@ async def send_sms(
         normalized_phone = normalize_phone(request.to_phone)
 
         # Check opt-out status (scoped to current user)
-        opt_out_check = db.execute(text("""
+        opt_out_check = await db.execute(text("""
             SELECT phone_number FROM sms_opt_outs
             WHERE phone_number = :phone AND organization_id = :org_id AND active = true
             LIMIT 1
@@ -1984,7 +1986,7 @@ async def send_sms(
         template_name = None
 
         if request.template_id:
-            template = db.execute(text("""
+            template = await db.execute(text("""
                 SELECT name, template_body, variables_used
                 FROM sms_templates
                 WHERE id = :template_id AND is_active = true AND user_id = :user_id
@@ -1995,7 +1997,7 @@ async def send_sms(
                 message = template[1]
 
                 # Update template usage
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE sms_templates
                     SET times_used = times_used + 1, last_used_at = CURRENT_TIMESTAMP
                     WHERE id = :template_id AND user_id = :user_id
@@ -2005,7 +2007,7 @@ async def send_sms(
         recipient_name = None
         if request.loan_id:
             # Issue 5 FIX: Add organization_id filter for tenant isolation
-            loan = db.execute(text("""
+            loan = await db.execute(text("""
                 SELECT borrower_name, loan_number FROM loans
                 WHERE id = :loan_id AND organization_id = :org_id
             """), {"loan_id": request.loan_id, "org_id": current_user.organization_id}).fetchone()
@@ -2016,7 +2018,7 @@ async def send_sms(
 
         if request.lead_id:
             # Issue 5 FIX: Add organization_id filter for tenant isolation
-            lead = db.execute(text("""
+            lead = await db.execute(text("""
                 SELECT name FROM leads
                 WHERE id = :lead_id AND organization_id = :org_id
             """), {"lead_id": request.lead_id, "org_id": current_user.organization_id}).fetchone()
@@ -2042,7 +2044,7 @@ async def send_sms(
         panel_msg_id = message_sid or str(_uuid.uuid4())
         sender_name = f"{getattr(current_user, 'first_name', '') or ''} {getattr(current_user, 'last_name', '') or ''}".strip() or "System"
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO sms_panel_messages
                     (id, phone, contact_id, organization_id, direction, body,
                      sender_name, sender_user_id, status,
@@ -2062,15 +2064,15 @@ async def send_sms(
                 "sender_user_id": current_user.id,
                 "telnyx_id": message_sid,
             })
-            db.commit()
+            await db.commit()
         except Exception as panel_err:
             logger.warning(f"Failed to write sms_panel_messages (non-blocking): {panel_err}")
-            db.rollback()
+            await db.rollback()
 
         # Log to intelligence queue (best-effort — don't lose the send record)
         sms_queue_id = None
         try:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO sms_intelligence_queue (
                     sms_provider, provider_message_id, from_phone, to_phone,
                     direction, message_body, sent_at, status,
@@ -2096,11 +2098,11 @@ async def send_sms(
             sms_queue_id = result.fetchone()[0]
         except Exception as q_err:
             logger.warning(f"Failed to write sms_intelligence_queue (non-blocking): {q_err}")
-            db.rollback()
+            await db.rollback()
 
         # Log to conversation (best-effort)
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO sms_conversation_log (
                     borrower_id, loan_id, lead_id, sms_queue_id,
                     phone_number, direction, message_body, message_date,
@@ -2120,10 +2122,10 @@ async def send_sms(
                 "summary": f"Outbound SMS" + (f" using template '{template_name}'" if template_name else ""),
                 "user_id": current_user.id,
             })
-            db.commit()
+            await db.commit()
         except Exception as conv_err:
             logger.warning(f"Failed to write sms_conversation_log (non-blocking): {conv_err}")
-            db.rollback()
+            await db.rollback()
 
         return {
             "success": True,
@@ -2138,7 +2140,7 @@ async def send_sms(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error sending SMS: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -2149,13 +2151,13 @@ async def send_sms_to_loan_borrower(
     loan_id: int,
     message: str,
     template_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Send SMS to a loan's borrower using their phone number"""
     try:
         # Issue 5 FIX: Add organization_id filter to prevent cross-tenant access
-        loan = db.execute(text("""
+        loan = await db.execute(text("""
             SELECT borrower_name, borrower_phone, loan_number
             FROM loans
             WHERE id = :loan_id AND organization_id = :org_id
@@ -2193,13 +2195,13 @@ async def send_sms_to_lead(
     lead_id: int,
     message: str,
     template_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """Send SMS to a lead using their phone number"""
     try:
         # Issue 5 FIX: Add organization_id filter to prevent cross-tenant access
-        lead = db.execute(text("""
+        lead = await db.execute(text("""
             SELECT name, phone
             FROM leads
             WHERE id = :lead_id AND organization_id = :org_id
@@ -2237,7 +2239,7 @@ async def send_bulk_sms(
     recipients: List[Dict[str, Any]],
     message: str,
     template_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(_get_current_user()),
 ):
     """
@@ -2260,7 +2262,7 @@ async def send_bulk_sms(
         template_body = message
         template_name = None
         if template_id:
-            template = db.execute(text("""
+            template = await db.execute(text("""
                 SELECT name, template_body FROM sms_templates
                 WHERE id = :template_id AND is_active = true AND user_id = :user_id
             """), {"template_id": template_id, "user_id": current_user.id}).fetchone()
@@ -2269,7 +2271,7 @@ async def send_bulk_sms(
                 template_body = template[1]
 
         # Get all opted-out phones (scoped to current user)
-        opt_outs = db.execute(text("""
+        opt_outs = await db.execute(text("""
             SELECT phone_number FROM sms_opt_outs WHERE user_id = :user_id
         """), {"user_id": current_user.id}).fetchall()
         opted_out_phones = {normalize_phone(row[0]) for row in opt_outs}
@@ -2328,7 +2330,7 @@ async def send_bulk_sms(
                     })
 
                     # Log to queue
-                    db.execute(text("""
+                    await db.execute(text("""
                         INSERT INTO sms_intelligence_queue (
                             sms_provider, provider_message_id, from_phone, to_phone,
                             direction, message_body, sent_at, status, disposition, user_id
@@ -2358,7 +2360,7 @@ async def send_bulk_sms(
                     "reason": str(send_error)
                 })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -2370,5 +2372,5 @@ async def send_bulk_sms(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error sending bulk SMS: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")

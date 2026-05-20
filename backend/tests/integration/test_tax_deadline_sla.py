@@ -73,6 +73,15 @@ def test_next_tax_deadline_after_returns_soonest():
 # Load the SLA calculator module without dragging in DB models. We import
 # the BusinessHoursCalculator class directly.
 def _load_sla_calc():
+    """
+    Build a lightweight clone of BusinessHoursCalculator by extracting its
+    class from the SLA service module via path import. The full service
+    module pulls in DB models & third-party SDKs (pytz, boto3), so we
+    instead read the source and ``exec`` only the calculator class portion.
+
+    This keeps the unit-style test independent of the heavyweight service
+    stack while still exercising the real calculator logic.
+    """
     backend_dir = Path(__file__).resolve().parents[2]
     target = (
         backend_dir
@@ -81,16 +90,41 @@ def _load_sla_calc():
         / "enterprise"
         / "sla_enforcement_service.py"
     )
-    # Heavy module — try a normal import which will succeed in CI environments
-    # with proper sys.path; otherwise skip.
+    if not target.exists():  # pragma: no cover
+        pytest.skip(f"sla_enforcement_service.py not found at {target}")
+
+    src = target.read_text()
+    # Slice from "class BusinessHoursCalculator" up to (but excluding)
+    # "class WallClockCalculator" — the calculator's full body.
+    start = src.find("class BusinessHoursCalculator")
+    end = src.find("class WallClockCalculator")
+    if start == -1 or end == -1:  # pragma: no cover
+        pytest.skip("BusinessHoursCalculator slice not found in source")
+
+    snippet = src[start:end]
+
+    # Build a minimal namespace with the imports the class actually uses.
+    from datetime import date as _date, datetime as _datetime, timedelta as _td, timezone as _tz
+    from typing import Iterable as _Iterable, List as _List, Optional as _Optional
+
+    ns: dict = {
+        "date": _date,
+        "datetime": _datetime,
+        "timedelta": _td,
+        "timezone": _tz,
+        "Iterable": _Iterable,
+        "List": _List,
+        "Optional": _Optional,
+    }
+    # The calculator references _get_federal_holidays in its fallback path;
+    # provide a stub since the path is not exercised by these tests.
+    ns["_get_federal_holidays"] = lambda year: set()
+
     try:
-        sys.path.insert(0, str(backend_dir))
-        from services.smart_docs.enterprise.sla_enforcement_service import (  # type: ignore
-            BusinessHoursCalculator,
-        )
-        return BusinessHoursCalculator
+        exec(compile(snippet, str(target), "exec"), ns)
     except Exception as exc:
-        pytest.skip(f"BusinessHoursCalculator unavailable: {exc}")
+        pytest.skip(f"could not exec BusinessHoursCalculator snippet: {exc}")
+    return ns["BusinessHoursCalculator"]
 
 
 def test_sla_velocity_multiplier_around_tax_day():

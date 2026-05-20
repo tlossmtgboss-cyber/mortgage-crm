@@ -14,9 +14,11 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response, BackgroundTasks
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from .salesforce_models import SyncResponse, PushBatchRequest
 from .salesforce_helpers import (
@@ -54,7 +56,7 @@ def _cleanup_stale_import_jobs():
 async def import_closed_loans(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Import closed loans/opportunities from Salesforce.
@@ -69,7 +71,7 @@ async def import_closed_loans(
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    integration = db.execute(text("""
+    integration = await db.execute(text("""
         SELECT access_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
     """), {"user_id": user_id}).fetchone()
@@ -177,7 +179,7 @@ async def import_closed_loans(
         logger.info(f"Found {len(records)} closed loans in Salesforce")
 
         # Get user's organization
-        user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+        user_org = await db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
         org_id = user_org[0] if user_org and user_org[0] else None
 
         # Field mapping - try to map common Salesforce fields to our loan fields
@@ -243,7 +245,7 @@ async def import_closed_loans(
                 # Use atomic UPSERT to avoid race conditions
                 try:
                     upsert_sql, safe_data, is_insert_only = build_safe_upsert_sql(loan_data, conflict_column='salesforce_id')
-                    result = db.execute(text(upsert_sql), safe_data)
+                    result = await db.execute(text(upsert_sql), safe_data)
 
                     # Check if insert or update based on rowcount
                     # Note: For PostgreSQL, we can use RETURNING to be more precise
@@ -272,7 +274,7 @@ async def import_closed_loans(
                 })
                 results['skipped'] += 1
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -287,7 +289,7 @@ async def import_closed_loans(
         raise HTTPException(status_code=502, detail="Salesforce API error")
     except Exception as e:
         logger.error(f"Import failed: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -298,7 +300,7 @@ async def push_loan_to_salesforce(
     loan_id: int,
     request: Request,
     sf_object: str = Query("MtgPlanner_CRM__Transaction_Property__c", description="Salesforce object to push to"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Push a single loan to Salesforce.
@@ -309,7 +311,7 @@ async def push_loan_to_salesforce(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get stored tokens
-    integration = db.execute(text("""
+    integration = await db.execute(text("""
         SELECT access_token, refresh_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
     """), {"user_id": user_id}).fetchone()
@@ -336,7 +338,7 @@ async def push_loan_to_salesforce(
     from services.salesforce_sync_service import get_salesforce_sync_service
 
     # Get user's organization
-    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    user_org = await db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
     org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
@@ -368,7 +370,7 @@ async def push_loan_to_salesforce(
 async def push_loans_batch_to_salesforce(
     request: Request,
     batch_request: PushBatchRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Push multiple loans to Salesforce.
@@ -379,7 +381,7 @@ async def push_loans_batch_to_salesforce(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get stored tokens
-    integration = db.execute(text("""
+    integration = await db.execute(text("""
         SELECT access_token, refresh_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
     """), {"user_id": user_id}).fetchone()
@@ -408,7 +410,7 @@ async def push_loans_batch_to_salesforce(
     # SECURITY: Verify all loans belong to the authenticated user
     loan_ids = batch_request.loan_ids
     if loan_ids:
-        owned_count = db.execute(
+        owned_count = await db.execute(
             text("""
                 SELECT COUNT(*) FROM loans
                 WHERE id = ANY(:loan_ids) AND loan_officer_id = :user_id
@@ -423,7 +425,7 @@ async def push_loans_batch_to_salesforce(
             )
 
     # Get user's organization
-    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    user_org = await db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
     org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
@@ -449,7 +451,7 @@ async def push_loans_batch_to_salesforce(
 async def get_pending_push_loans(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get loans that need to be pushed to Salesforce.
@@ -462,7 +464,7 @@ async def get_pending_push_loans(
     from services.salesforce_sync_service import get_salesforce_sync_service
 
     # Get user's organization
-    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    user_org = await db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
     org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
@@ -479,14 +481,14 @@ async def get_pending_push_loans(
 async def get_loan_sync_status(
     loan_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get Salesforce sync status for a specific loan."""
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT id, loan_number, salesforce_id, salesforce_last_synced_at,
                salesforce_sync_status, updated_at
         FROM loans
@@ -522,7 +524,7 @@ async def pull_loan_from_salesforce(
     loan_id: int,
     request: Request,
     sf_object: str = Query("MtgPlanner_CRM__Transaction_Property__c", description="Salesforce object to pull from"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Pull/refresh a single loan from Salesforce.
@@ -534,7 +536,7 @@ async def pull_loan_from_salesforce(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get stored tokens
-    integration = db.execute(text("""
+    integration = await db.execute(text("""
         SELECT access_token, refresh_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
     """), {"user_id": user_id}).fetchone()
@@ -561,7 +563,7 @@ async def pull_loan_from_salesforce(
     from services.salesforce_sync_service import get_salesforce_sync_service
 
     # Get user's organization
-    user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+    user_org = await db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
     org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
@@ -730,7 +732,7 @@ async def import_closed_loans_from_salesforce(
     request: Request,
     background_tasks: BackgroundTasks,
     also_import_to_mum: bool = Query(True, description="Also import funded loans to MUM clients"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Import all closed/funded loans from Salesforce into the CRM.
@@ -769,7 +771,7 @@ async def import_closed_loans_from_salesforce(
 
 
 @router.get("/import-closed-loans/status/{job_id}")
-async def get_import_job_status(job_id: str, request: Request, db: Session = Depends(get_db)):
+async def get_import_job_status(job_id: str, request: Request, db: AsyncSession = Depends(get_async_db)):
     """Get the status of an import job"""
     user_id = get_current_user_id(request, db)
     if not user_id:
@@ -790,7 +792,7 @@ async def get_import_job_status(job_id: str, request: Request, db: Session = Dep
 @router.post("/import-closed-loans/test-one")
 async def test_import_one_closed_loan(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Diagnostic: Try importing just ONE closed loan from Salesforce and return full details.
@@ -886,7 +888,7 @@ async def test_import_one_closed_loan(
 @router.get("/imported-loans-check")
 async def check_imported_loans(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Diagnostic endpoint to check loans imported from Salesforce
@@ -899,7 +901,7 @@ async def check_imported_loans(
     try:
         # SECURITY: Scope all queries to the authenticated user's loans
         # Get all loans with salesforce_id belonging to this user
-        sf_loans = db.execute(text("""
+        sf_loans = await db.execute(text("""
             SELECT id, loan_number, borrower_name, stage,
                    salesforce_id, funded_date, closing_date, amount
             FROM loans
@@ -910,7 +912,7 @@ async def check_imported_loans(
         """), {"user_id": user_id}).fetchall()
 
         # Get funded loans that should be in MUM (flexible matching), scoped to user
-        should_be_in_mum = db.execute(text("""
+        should_be_in_mum = await db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date
             FROM loans l
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
@@ -926,7 +928,7 @@ async def check_imported_loans(
         """), {"user_id": user_id}).fetchall()
 
         # Get count in MUM for this user
-        mum_count = db.execute(text(
+        mum_count = await db.execute(text(
             "SELECT COUNT(*) FROM mum_clients WHERE user_id = :user_id"
         ), {"user_id": user_id}).scalar()
 
@@ -962,7 +964,7 @@ async def check_imported_loans(
 @router.post("/import-to-mum")
 async def import_funded_loans_to_mum(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Import all funded loans from the loans table to MUM clients.
@@ -976,9 +978,9 @@ async def import_funded_loans_to_mum(
 
     try:
         # Use a single atomic INSERT...SELECT to avoid the rollback bug where
-        # per-row exception handling with db.rollback() destroys ALL previous
+        # per-row exception handling with await db.rollback() destroys ALL previous
         # uncommitted inserts in the transaction (not just the failed row).
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO mum_clients (
                 client_name, loan_number, original_close_date,
                 original_rate, loan_balance,
@@ -1023,7 +1025,7 @@ async def import_funded_loans_to_mum(
         """), {'user_id': user_id})
 
         imported_count = result.rowcount
-        db.commit()
+        await db.commit()
 
         logger.info(f"Imported {imported_count} funded loans to MUM clients for user {user_id}")
 
@@ -1038,14 +1040,14 @@ async def import_funded_loans_to_mum(
 
     except SQLAlchemyError as e:
         logger.error(f"Import to MUM failed: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/fix-mum-user-ids")
 async def fix_mum_client_user_ids(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Fix MUM clients that were created without user_id.
@@ -1057,7 +1059,7 @@ async def fix_mum_client_user_ids(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # SECURITY: Require admin role to claim orphaned records
-    user = db.execute(
+    user = await db.execute(
         text("SELECT role, organization_id FROM users WHERE id = :user_id"),
         {"user_id": user_id}
     ).fetchone()
@@ -1071,7 +1073,7 @@ async def fix_mum_client_user_ids(
 
     try:
         # SECURITY: Only update MUM clients within the user's organization
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE mum_clients
             SET user_id = :user_id
             WHERE user_id IS NULL AND organization_id = :org_id
@@ -1079,7 +1081,7 @@ async def fix_mum_client_user_ids(
         """), {'user_id': user_id, 'org_id': org_id})
 
         updated = result.fetchall()
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -1091,7 +1093,7 @@ async def fix_mum_client_user_ids(
             ]
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to fix MUM user IDs: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -1099,7 +1101,7 @@ async def fix_mum_client_user_ids(
 @router.post("/fix-mum-client-names")
 async def fix_mum_client_names(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Fix MUM clients that show Salesforce IDs instead of real borrower names.
@@ -1111,7 +1113,7 @@ async def fix_mum_client_names(
 
     try:
         # Step 1: Fix from loans.borrower_name where it's a real name (not a SF ID)
-        from_loans = db.execute(text("""
+        from_loans = await db.execute(text("""
             UPDATE mum_clients m
             SET client_name = l.borrower_name
             FROM loans l
@@ -1127,7 +1129,7 @@ async def fix_mum_client_names(
         fixed_from_loans = from_loans.fetchall()
 
         # Step 2: Fix remaining from leads (first_name + last_name) via email match
-        from_leads = db.execute(text("""
+        from_leads = await db.execute(text("""
             UPDATE mum_clients m
             SET client_name = TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, ''))
             FROM leads le, loans l
@@ -1144,7 +1146,7 @@ async def fix_mum_client_names(
         fixed_from_leads = from_leads.fetchall()
 
         # Step 3: Also fix the loans table borrower_name from leads for future imports
-        loans_fixed = db.execute(text("""
+        loans_fixed = await db.execute(text("""
             UPDATE loans l
             SET borrower_name = TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, ''))
             FROM leads le
@@ -1158,12 +1160,12 @@ async def fix_mum_client_names(
         """))
         loans_updated = loans_fixed.fetchall()
 
-        db.commit()
+        await db.commit()
 
         # Step 4: Resolve remaining via Salesforce Contact API
         sf_fixed_count = 0
         try:
-            profile = db.execute(text("""
+            profile = await db.execute(text("""
                 SELECT id, access_token_encrypted, refresh_token_encrypted, instance_url, user_id
                 FROM integration_profiles
                 WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
@@ -1190,7 +1192,7 @@ async def fix_mum_client_names(
 
                 if access_token_sf and instance_url:
                     # Get SF Contact IDs from loans.borrower_name for unfixed MUM clients
-                    sf_contact_rows = db.execute(text("""
+                    sf_contact_rows = await db.execute(text("""
                         SELECT DISTINCT l.borrower_name as contact_id, l.loan_number
                         FROM loans l
                         JOIN mum_clients m ON m.loan_number = l.loan_number
@@ -1226,12 +1228,12 @@ async def fix_mum_client_names(
 
                         # Update loans and MUM clients with resolved names
                         for contact_id, real_name in contact_name_map.items():
-                            db.execute(text("""
+                            await db.execute(text("""
                                 UPDATE loans SET borrower_name = :name
                                 WHERE borrower_name = :contact_id
                             """), {"name": real_name, "contact_id": contact_id})
 
-                            result = db.execute(text("""
+                            result = await db.execute(text("""
                                 UPDATE mum_clients m
                                 SET client_name = :name
                                 FROM loans l
@@ -1242,12 +1244,12 @@ async def fix_mum_client_names(
                             """), {"name": real_name})
                             sf_fixed_count += result.rowcount
 
-                        db.commit()
+                        await db.commit()
         except Exception as sf_err:
             logger.warning(f"Salesforce Contact resolution failed: {type(sf_err).__name__}: {sf_err}")
 
         # Count remaining unfixed
-        remaining = db.execute(text("""
+        remaining = await db.execute(text("""
             SELECT COUNT(*) FROM mum_clients
             WHERE client_name LIKE 'Client - %'
                OR client_name ~ '^[0-9a-zA-Z]{15,18}$'
@@ -1269,7 +1271,7 @@ async def fix_mum_client_names(
             ]
         }
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Failed to fix MUM client names: {e}")
         return {
             "status": "error",

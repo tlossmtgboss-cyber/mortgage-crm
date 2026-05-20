@@ -4,7 +4,7 @@ Implements cold and warm transfer functionality using Telnyx TeXML
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -16,6 +16,8 @@ import uuid
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from utils.pii_mask import mask_phone
 from middleware.webhook_verification import require_telnyx_webhook
 
@@ -273,7 +275,7 @@ def get_hold_music_url(db: Session, music_id: Optional[int] = None) -> str:
 @router.post("/cold")
 async def initiate_cold_transfer(
     request: InitiateTransferRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """
@@ -310,7 +312,7 @@ async def initiate_cold_transfer(
         # Create transfer record
         transfer_uuid = str(uuid.uuid4())[:8].upper()
         org_id = getattr(current_user, 'organization_id', None) if current_user else None
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO call_transfers
             (original_call_sid, transfer_type, initiator_user_id,
              from_user_id, to_user_id, to_phone, status,
@@ -339,9 +341,9 @@ async def initiate_cold_transfer(
             transfer_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in initiate_cold_transfer: {e}")
-            transfer_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            transfer_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        db.commit()
+        await db.commit()
 
         # Build TeXML URL for the cold transfer
         base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
@@ -355,12 +357,12 @@ async def initiate_cold_transfer(
             provider.update_call(request.call_sid, url=transfer_url)
 
             # Update transfer with call info
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'completed', completed_at = CURRENT_TIMESTAMP
                 WHERE id = :transfer_id
             """), {"transfer_id": transfer_id})
-            db.commit()
+            await db.commit()
 
             logger.info(f"Cold transfer initiated successfully: {transfer_id}")
 
@@ -376,12 +378,12 @@ async def initiate_cold_transfer(
             logger.error(f"Telephony error during cold transfer: {telephony_error}")
 
             # Update transfer as failed
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'failed', failure_reason = :error
                 WHERE id = :transfer_id
             """), {"transfer_id": transfer_id, "error": str(telephony_error)})
-            db.commit()
+            await db.commit()
 
             raise HTTPException(status_code=500, detail=f"Transfer failed: {telephony_error}")
 
@@ -389,14 +391,14 @@ async def initiate_cold_transfer(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error initiating cold transfer: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/twiml/cold-connect")
 async def cold_transfer_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML endpoint for cold transfer connection.
@@ -420,7 +422,7 @@ async def cold_transfer_twiml(
         whisper = None
 
         if transfer_id:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT announce_to_recipient, whisper_message, transfer_reason,
                        to_user_id
                 FROM call_transfers WHERE id = :id
@@ -469,7 +471,7 @@ async def cold_transfer_twiml(
 @router.post("/warm")
 async def initiate_warm_transfer(
     request: InitiateTransferRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """
@@ -510,7 +512,7 @@ async def initiate_warm_transfer(
 
         # Create transfer record
         org_id = getattr(current_user, 'organization_id', None) if current_user else None
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO call_transfers
             (original_call_sid, transfer_type, initiator_user_id,
              from_user_id, to_user_id, to_phone, status,
@@ -545,9 +547,9 @@ async def initiate_warm_transfer(
             transfer_id = result.fetchone()[0]
         except Exception as e:
             logger.error(f"Error fetching RETURNING id in initiate_warm_transfer: {e}")
-            transfer_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
+            transfer_id = result.lastrowid or await db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        db.commit()
+        await db.commit()
 
         # Get hold music URL
         hold_music_url = get_hold_music_url(db, request.hold_music_id)
@@ -577,14 +579,14 @@ async def initiate_warm_transfer(
             consult_sid = consult_result.call_sid if hasattr(consult_result, 'call_sid') else str(consult_result)
 
             # Update transfer with consultation call SID
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET consultation_call_sid = :consult_sid,
                     consultation_started_at = CURRENT_TIMESTAMP,
                     status = 'consulting'
                 WHERE id = :transfer_id
             """), {"consult_sid": consult_sid, "transfer_id": transfer_id})
-            db.commit()
+            await db.commit()
 
             logger.info(f"Warm transfer consultation started: {consult_sid}")
 
@@ -602,12 +604,12 @@ async def initiate_warm_transfer(
         except Exception as telephony_error:
             logger.error(f"Telephony error during warm transfer: {telephony_error}")
 
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'failed', failure_reason = :error
                 WHERE id = :transfer_id
             """), {"transfer_id": transfer_id, "error": str(telephony_error)})
-            db.commit()
+            await db.commit()
 
             raise HTTPException(status_code=500, detail=f"Transfer failed: {telephony_error}")
 
@@ -615,14 +617,14 @@ async def initiate_warm_transfer(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error initiating warm transfer: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/warm/complete")
 async def complete_warm_transfer(
     request: CompleteWarmTransferRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """
@@ -638,7 +640,7 @@ async def complete_warm_transfer(
 
         # Get transfer details (tenant-isolated via organization_id)
         org_id = getattr(current_user, 'organization_id', None)
-        transfer = db.execute(text("""
+        transfer = await db.execute(text("""
             SELECT id, original_call_sid, consultation_call_sid, extra_data, status
             FROM call_transfers WHERE id = :id AND organization_id = :org_id
         """), {"id": request.transfer_id, "org_id": org_id}).fetchone()
@@ -666,13 +668,13 @@ async def complete_warm_transfer(
                 provider.update_call(transfer.consultation_call_sid, url=connect_url)
 
             # Update transfer status
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'completed', completed_at = CURRENT_TIMESTAMP,
                     consultation_ended_at = CURRENT_TIMESTAMP
                 WHERE id = :transfer_id
             """), {"transfer_id": request.transfer_id})
-            db.commit()
+            await db.commit()
 
             return {
                 "success": True,
@@ -697,13 +699,13 @@ async def complete_warm_transfer(
             provider.update_call(transfer.original_call_sid, url=return_url)
 
             # Update transfer status
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP,
                     consultation_ended_at = CURRENT_TIMESTAMP
                 WHERE id = :transfer_id
             """), {"transfer_id": request.transfer_id})
-            db.commit()
+            await db.commit()
 
             return {
                 "success": True,
@@ -719,7 +721,7 @@ async def complete_warm_transfer(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error completing warm transfer: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -730,7 +732,7 @@ async def complete_warm_transfer(
 @router.post("/twiml/warm-hold")
 async def warm_transfer_hold_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML for putting caller on hold during warm transfer.
@@ -748,7 +750,7 @@ async def warm_transfer_hold_twiml(
         # Get hold music
         hold_music_id = None
         if transfer_id:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT extra_data FROM call_transfers WHERE id = :id
             """), {"id": transfer_id}).fetchone()
             if result and result.extra_data:
@@ -783,7 +785,7 @@ async def warm_transfer_hold_twiml(
 @router.post("/twiml/warm-consult")
 async def warm_transfer_consult_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML for the consultation call to the recipient.
@@ -803,7 +805,7 @@ async def warm_transfer_consult_twiml(
         reason = ""
 
         if transfer_id:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 SELECT ct.caller_name, ct.caller_phone, ct.transfer_reason,
                        ct.whisper_message, ct.extra_data,
                        u.full_name as from_user_name
@@ -864,7 +866,7 @@ async def warm_transfer_consult_twiml(
 @router.post("/twiml/warm-decision")
 async def warm_transfer_decision_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle recipient's decision to accept or reject the transfer.
@@ -896,12 +898,12 @@ async def warm_transfer_decision_twiml(
             )
 
             # Update transfer status
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'completed', completed_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """), {"id": transfer_id})
-            db.commit()
+            await db.commit()
 
         else:
             # Reject - decline the transfer
@@ -909,12 +911,12 @@ async def warm_transfer_decision_twiml(
             response.hangup()
 
             # Update transfer as rejected and notify original caller
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'rejected', completed_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """), {"id": transfer_id})
-            db.commit()
+            await db.commit()
 
             # Notify the initiating agent that the transfer was declined
             _notify_agent_transfer_event(db, int(transfer_id), "rejected")
@@ -932,7 +934,7 @@ async def warm_transfer_decision_twiml(
 @router.post("/twiml/warm-connect")
 async def warm_transfer_connect_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML to connect recipient to the conference (after agent completes transfer).
@@ -970,7 +972,7 @@ async def warm_transfer_connect_twiml(
 @router.post("/twiml/warm-cancel")
 async def warm_transfer_cancel_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     TwiML when warm transfer is cancelled - return to caller.
@@ -1029,7 +1031,7 @@ async def whisper_twiml(request: Request):
 @router.post("/twiml/transfer-status")
 async def transfer_status_twiml(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle transfer dial result (success/failure).
@@ -1050,22 +1052,22 @@ async def transfer_status_twiml(
         if dial_status in ["completed", "answered"]:
             # Transfer successful - update and end
             if transfer_id:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE call_transfers
                     SET status = 'completed', completed_at = CURRENT_TIMESTAMP
                     WHERE id = :id
                 """), {"id": transfer_id})
-                db.commit()
+                await db.commit()
 
         elif dial_status in ["no-answer", "busy", "failed"]:
             # Transfer failed - update and provide fallback
             if transfer_id:
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE call_transfers
                     SET status = 'failed', failure_reason = :reason
                     WHERE id = :id
                 """), {"id": transfer_id, "reason": dial_status})
-                db.commit()
+                await db.commit()
 
                 # Notify the initiating agent that the transfer failed
                 _notify_agent_transfer_event(
@@ -1094,7 +1096,7 @@ async def transfer_status_twiml(
 @router.post("/webhook/consult-status")
 async def consultation_status_webhook(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
@@ -1114,14 +1116,14 @@ async def consultation_status_webhook(
 
         if call_status in ["no-answer", "busy", "failed", "canceled"]:
             # Consultation failed - handle fallback
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'failed',
                     failure_reason = :reason,
                     consultation_ended_at = CURRENT_TIMESTAMP
                 WHERE id = :id AND status = 'consulting'
             """), {"id": transfer_id, "reason": f"Consultation {call_status}"})
-            db.commit()
+            await db.commit()
 
             # Notify the initiating agent that the consultation failed
             if transfer_id:
@@ -1131,12 +1133,12 @@ async def consultation_status_webhook(
                 )
 
         elif call_status == "completed":
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE call_transfers
                 SET consultation_ended_at = CURRENT_TIMESTAMP
                 WHERE id = :id
             """), {"id": transfer_id})
-            db.commit()
+            await db.commit()
 
         return {"status": "ok"}
 
@@ -1155,7 +1157,7 @@ async def list_transfers(
     transfer_type: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """List call transfers"""
@@ -1192,7 +1194,7 @@ async def list_transfers(
             ORDER BY ct.initiated_at DESC
             LIMIT :limit OFFSET :offset
         """
-        results = db.execute(text(query), params).fetchall()
+        results = await db.execute(text(query), params).fetchall()
 
         transfers = []
         for row in results:
@@ -1226,13 +1228,13 @@ async def list_transfers(
 
 @router.get("/available-recipients")
 async def get_available_recipients(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Get list of users available for transfer"""
     try:
         org_id = getattr(current_user, 'organization_id', None)
-        results = db.execute(text("""
+        results = await db.execute(text("""
             SELECT id, full_name, email, phone, role, is_active
             FROM users
             WHERE is_active = TRUE
@@ -1264,13 +1266,13 @@ async def get_available_recipients(
 @router.get("/{transfer_id}")
 async def get_transfer(
     transfer_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """Get transfer details"""
     try:
         org_id = getattr(current_user, 'organization_id', None)
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT ct.*, fu.full_name as from_user_name, tu.full_name as to_user_name
             FROM call_transfers ct
             JOIN users fu ON fu.id = ct.from_user_id

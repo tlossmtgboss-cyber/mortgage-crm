@@ -5,7 +5,7 @@ Endpoints for LO candidate assessment and grading operations.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -16,6 +16,8 @@ from services.candidate_grading_service import CandidateGradingService
 from auth.dependencies import get_current_user
 from database.models import User
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -769,7 +771,7 @@ async def calculate_grade_preview(
 @router.post("/grading/run-migration")
 async def run_grading_migration(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
     Run the candidate grading system migration.
@@ -905,8 +907,8 @@ async def run_grading_migration(
         END $$;
         """
 
-        db.execute(text(migration_sql))
-        db.commit()
+        await db.execute(text(migration_sql))
+        await db.commit()
 
         return {
             "success": True,
@@ -917,7 +919,7 @@ async def run_grading_migration(
 
     except SQLAlchemyError as e:
         logger.exception("Error running grading migration")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -947,7 +949,7 @@ async def run_ai_analysis(
     candidate_id: int,
     request: Optional[AIAnalysisRequest] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
     Run AI analysis on a candidate.
@@ -1060,7 +1062,7 @@ async def apply_ai_suggestions(
     candidate_id: int,
     request: ApplySuggestionsRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
     Apply AI-suggested scores to the candidate's assessment.
@@ -1073,7 +1075,7 @@ async def apply_ai_suggestions(
         import json
 
         # Get the stored AI analysis
-        assessment = db.execute(text("""
+        assessment = await db.execute(text("""
             SELECT ai_raw_analysis, ai_confidence_score
             FROM mm_candidate_assessments
             WHERE candidate_id = :candidate_id
@@ -1127,7 +1129,7 @@ async def apply_ai_suggestions(
 async def get_ai_analysis_status(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> Dict[str, Any]:
     """
     Get the status of AI analysis for a candidate.
@@ -1137,7 +1139,7 @@ async def get_ai_analysis_status(
     try:
         _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 ai_analysis_run_at,
                 ai_confidence_score,

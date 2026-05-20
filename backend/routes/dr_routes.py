@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -118,7 +121,7 @@ def register_dr_routes(app, get_db, get_current_user, **kwargs):
 
     @app.get("/api/v1/admin/dr/degradation-health")
     async def get_degradation_health(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """

@@ -6,7 +6,7 @@ Each LO only sees their own partner recruits (owner_id + organization_id filteri
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta
@@ -16,6 +16,8 @@ from database.models import User
 import json
 import os
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 
 
@@ -257,7 +259,7 @@ def calculate_overall_grade(score: float) -> str:
 async def get_dashboard_stats(
     candidate_category: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get recruiting dashboard stats for current LO."""
     user_id = current_user.id
@@ -275,7 +277,7 @@ async def get_dashboard_stats(
         status_sql += " AND candidate_category = :candidate_category"
         params["candidate_category"] = candidate_category
     status_sql += " GROUP BY status"
-    status_counts = db.execute(text(status_sql), params).fetchall()
+    status_counts = await db.execute(text(status_sql), params).fetchall()
 
     counts = {row.status: row.count for row in status_counts}
 
@@ -289,7 +291,7 @@ async def get_dashboard_stats(
     """
     if candidate_category:
         recent_sql += " AND candidate_category = :candidate_category"
-    recent_count = db.execute(text(recent_sql), params).fetchone()
+    recent_count = await db.execute(text(recent_sql), params).fetchone()
 
     # Get upcoming meetings
     meetings_sql = """
@@ -303,7 +305,7 @@ async def get_dashboard_stats(
     """
     if candidate_category:
         meetings_sql += " AND pc.candidate_category = :candidate_category"
-    upcoming_meetings = db.execute(text(meetings_sql), params).fetchone()
+    upcoming_meetings = await db.execute(text(meetings_sql), params).fetchone()
 
     # Get pending proposals (partner-only concept)
     proposals_sql = """
@@ -315,7 +317,7 @@ async def get_dashboard_stats(
     """
     if candidate_category:
         proposals_sql += " AND pc.candidate_category = :candidate_category"
-    pending_proposals = db.execute(text(proposals_sql), params).fetchone()
+    pending_proposals = await db.execute(text(proposals_sql), params).fetchone()
 
     # Calculate total active pipeline based on category
     if candidate_category == 'employee':
@@ -484,7 +486,7 @@ async def list_partner_candidates(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List partner/employee candidates for current LO (owner_id + org filtered)."""
     user_id = current_user.id
@@ -550,11 +552,11 @@ async def list_partner_candidates(
             created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    results = db.execute(text(list_sql), params).fetchall()
+    results = await db.execute(text(list_sql), params).fetchall()
 
     # Get total count
     count_sql = "SELECT COUNT(*) as count FROM partner_candidates WHERE " + where_sql
-    count_result = db.execute(text(count_sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
+    count_result = await db.execute(text(count_sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
 
     candidates = []
     for r in results:
@@ -596,13 +598,13 @@ async def list_partner_candidates(
 async def get_partner_candidate(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get detailed partner candidate information."""
     user_id = current_user.id
     org_id = current_user.organization_id
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT
             pc.*,
             rp.id as referral_partner_id_linked
@@ -616,12 +618,12 @@ async def get_partner_candidate(
         raise HTTPException(status_code=404, detail="Partner not found")
 
     # Get assessment
-    assessment = db.execute(text("""
+    assessment = await db.execute(text("""
         SELECT * FROM partner_assessments WHERE partner_candidate_id = :partner_id
     """), {"partner_id": partner_id}).fetchone()
 
     # Get upcoming meetings
-    upcoming_meetings = db.execute(text("""
+    upcoming_meetings = await db.execute(text("""
         SELECT id, meeting_type, title, scheduled_at, duration_minutes, location, meeting_link, status
         FROM partner_meetings
         WHERE partner_candidate_id = :partner_id
@@ -632,7 +634,7 @@ async def get_partner_candidate(
     """), {"partner_id": partner_id}).fetchall()
 
     # Get latest proposal
-    latest_proposal = db.execute(text("""
+    latest_proposal = await db.execute(text("""
         SELECT id, proposal_number, proposal_type, status, sent_at, expires_at
         FROM partner_proposals
         WHERE partner_candidate_id = :partner_id
@@ -725,14 +727,14 @@ async def get_partner_candidate(
 async def create_partner_candidate(
     data: PartnerCandidateCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new partner candidate."""
     user_id = current_user.id
     org_id = current_user.organization_id
 
     # Check for duplicate email within this owner's org
-    existing = db.execute(text("""
+    existing = await db.execute(text("""
         SELECT id FROM partner_candidates
         WHERE owner_id = :user_id AND organization_id = :org_id
           AND email = :email AND is_active = true
@@ -745,7 +747,7 @@ async def create_partner_candidate(
         )
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO partner_candidates (
                 owner_id, organization_id, first_name, last_name, email, phone,
                 partner_type, license_number, license_state,
@@ -780,7 +782,7 @@ async def create_partner_candidate(
             organization_id=current_user.organization_id
         )
 
-        db.commit()
+        await db.commit()
 
         return {
             "id": partner_id,
@@ -788,7 +790,7 @@ async def create_partner_candidate(
             "message": f"Partner candidate {data.first_name} {data.last_name} created successfully"
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create partner candidate")
 
 
@@ -796,7 +798,7 @@ async def create_partner_candidate(
 async def create_employee_candidate(
     data: EmployeeCandidateCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new employee recruit candidate."""
     user_id = current_user.id
@@ -809,7 +811,7 @@ async def create_employee_candidate(
         )
 
     # Check for duplicate email within this owner's org
-    existing = db.execute(text("""
+    existing = await db.execute(text("""
         SELECT id FROM partner_candidates
         WHERE owner_id = :user_id AND organization_id = :org_id
           AND email = :email AND is_active = true
@@ -822,7 +824,7 @@ async def create_employee_candidate(
         )
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO partner_candidates (
                 owner_id, organization_id,
                 candidate_category, partner_type,
@@ -870,7 +872,7 @@ async def create_employee_candidate(
             organization_id=current_user.organization_id
         )
 
-        db.commit()
+        await db.commit()
 
         return {
             "id": candidate_id,
@@ -879,7 +881,7 @@ async def create_employee_candidate(
             "message": f"Employee candidate {data.first_name} {data.last_name} created successfully"
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create employee candidate")
 
 
@@ -887,7 +889,7 @@ async def create_employee_candidate(
 async def hire_employee_candidate(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Mark an employee candidate as hired."""
     user_id = current_user.id
@@ -900,7 +902,7 @@ async def hire_employee_candidate(
     if candidate.status == 'hired':
         raise HTTPException(status_code=400, detail="Candidate is already hired")
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE partner_candidates
         SET status = 'hired',
             hired_at = CURRENT_TIMESTAMP,
@@ -917,7 +919,7 @@ async def hire_employee_candidate(
         user_id
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "partner_id": partner_id,
@@ -931,7 +933,7 @@ async def update_partner_candidate(
     partner_id: int,
     data: PartnerCandidateUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a partner candidate."""
     user_id = current_user.id
@@ -965,17 +967,17 @@ async def update_partner_candidate(
 
     try:
         update_sql = "UPDATE partner_candidates SET " + ', '.join(update_fields) + " WHERE id = :partner_id AND owner_id = :user_id AND organization_id = :org_id RETURNING id"
-        result = db.execute(text(update_sql), params)
+        result = await db.execute(text(update_sql), params)
 
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Partner not found")
 
-        db.commit()
+        await db.commit()
         return {"id": partner_id, "updated": True}
     except HTTPException:
         raise
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to update partner candidate")
 
 
@@ -983,14 +985,14 @@ async def update_partner_candidate(
 async def delete_partner_candidate(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Soft delete a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET is_active = false, updated_at = CURRENT_TIMESTAMP
             WHERE id = :partner_id AND owner_id = :user_id
@@ -998,11 +1000,11 @@ async def delete_partner_candidate(
         """), {"partner_id": partner_id, "user_id": user_id, "org_id": current_user.organization_id})
 
         log_partner_activity(db, partner_id, "deleted", "Partner candidate deleted", user_id)
-        db.commit()
+        await db.commit()
 
         return {"id": partner_id, "deleted": True}
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete partner candidate")
 
 
@@ -1011,7 +1013,7 @@ async def update_partner_status(
     partner_id: int,
     data: PartnerStatusUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update partner/employee candidate status."""
     user_id = current_user.id
@@ -1040,7 +1042,7 @@ async def update_partner_status(
         status_sql += ", withdrawn_at = CURRENT_TIMESTAMP"
     status_sql += " WHERE id = :partner_id AND organization_id = :org_id"
 
-    db.execute(text(status_sql), {"partner_id": partner_id, "status": data.status, "user_id": user_id, "org_id": current_user.organization_id})
+    await db.execute(text(status_sql), {"partner_id": partner_id, "status": data.status, "user_id": user_id, "org_id": current_user.organization_id})
 
     log_partner_activity(
         db, partner_id, "status_change",
@@ -1049,7 +1051,7 @@ async def update_partner_status(
         metadata={"old_status": old_status, "new_status": data.status, "reason": data.reason}
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "id": partner_id,
@@ -1067,13 +1069,13 @@ async def update_partner_status(
 async def list_partner_meetings(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all meetings for a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT
             id, meeting_type, meeting_round, title,
             scheduled_at, duration_minutes, timezone, location, meeting_link,
@@ -1114,20 +1116,20 @@ async def schedule_partner_meeting(
     partner_id: int,
     data: PartnerMeetingCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Schedule a meeting with a partner candidate."""
     user_id = current_user.id
     partner = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     # Get the next round number
-    round_result = db.execute(text("""
+    round_result = await db.execute(text("""
         SELECT COALESCE(MAX(meeting_round), 0) + 1 as next_round
         FROM partner_meetings
         WHERE partner_candidate_id = :partner_id
     """), {"partner_id": partner_id}).fetchone()
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO partner_meetings (
             partner_candidate_id, meeting_type, meeting_round, title,
             scheduled_at, duration_minutes, timezone, location, meeting_link,
@@ -1155,7 +1157,7 @@ async def schedule_partner_meeting(
 
     # Update partner status to meeting_scheduled if appropriate
     if partner.status in ['new', 'contacted', 'qualified']:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET status = 'meeting_scheduled',
                 status_changed_at = CURRENT_TIMESTAMP,
@@ -1170,7 +1172,7 @@ async def schedule_partner_meeting(
         meeting_id=meeting_id
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "id": meeting_id,
@@ -1184,14 +1186,14 @@ async def complete_partner_meeting(
     meeting_id: int,
     data: PartnerMeetingComplete,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Mark a meeting as completed with outcome."""
     user_id = current_user.id
     org_id = current_user.organization_id
 
     # Get meeting and verify ownership + tenant isolation
-    meeting = db.execute(text("""
+    meeting = await db.execute(text("""
         SELECT pm.*, pc.owner_id, pc.status as partner_status
         FROM partner_meetings pm
         JOIN partner_candidates pc ON pc.id = pm.partner_candidate_id
@@ -1201,7 +1203,7 @@ async def complete_partner_meeting(
     if not meeting or meeting.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE partner_meetings
         SET status = 'completed',
             completed_at = CURRENT_TIMESTAMP,
@@ -1223,7 +1225,7 @@ async def complete_partner_meeting(
 
     # Update partner status to 'met' if appropriate
     if meeting.partner_status == 'meeting_scheduled':
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET status = 'met',
                 status_changed_at = CURRENT_TIMESTAMP,
@@ -1239,7 +1241,7 @@ async def complete_partner_meeting(
         metadata={"outcome": data.outcome, "interest_level": data.interest_level}
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "id": meeting_id,
@@ -1253,13 +1255,13 @@ async def cancel_partner_meeting(
     meeting_id: int,
     reason: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Cancel a meeting."""
     user_id = current_user.id
     org_id = current_user.organization_id
 
-    meeting = db.execute(text("""
+    meeting = await db.execute(text("""
         SELECT pm.*, pc.owner_id
         FROM partner_meetings pm
         JOIN partner_candidates pc ON pc.id = pm.partner_candidate_id
@@ -1269,7 +1271,7 @@ async def cancel_partner_meeting(
     if not meeting or meeting.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE partner_meetings
         SET status = 'cancelled',
             cancellation_reason = :reason,
@@ -1284,7 +1286,7 @@ async def cancel_partner_meeting(
         meeting_id=meeting_id
     )
 
-    db.commit()
+    await db.commit()
 
     return {"id": meeting_id, "status": "cancelled"}
 
@@ -1297,13 +1299,13 @@ async def cancel_partner_meeting(
 async def list_partner_proposals(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all proposals for a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT
             id, proposal_number, proposal_type, status,
             referral_commission_structure, co_marketing_benefits, technology_access,
@@ -1344,13 +1346,13 @@ async def create_partner_proposal(
     partner_id: int,
     data: PartnerProposalCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new proposal for a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO partner_proposals (
             partner_candidate_id, proposal_type,
             referral_commission_structure, co_marketing_benefits, technology_access,
@@ -1383,7 +1385,7 @@ async def create_partner_proposal(
         proposal_id=row.id
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "id": row.id,
@@ -1397,13 +1399,13 @@ async def send_partner_proposal(
     proposal_id: int,
     data: PartnerProposalSend,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a proposal to a partner candidate."""
     user_id = current_user.id
     org_id = current_user.organization_id
 
-    proposal = db.execute(text("""
+    proposal = await db.execute(text("""
         SELECT pp.*, pc.owner_id, pc.first_name, pc.last_name, pc.email, pc.status as partner_status
         FROM partner_proposals pp
         JOIN partner_candidates pc ON pc.id = pp.partner_candidate_id
@@ -1415,7 +1417,7 @@ async def send_partner_proposal(
 
     expires_at = datetime.now() + timedelta(days=data.expires_in_days)
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE partner_proposals
         SET status = 'sent',
             sent_at = CURRENT_TIMESTAMP,
@@ -1427,7 +1429,7 @@ async def send_partner_proposal(
 
     # Update partner status
     if proposal.partner_status in ['met', 'qualified']:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET status = 'proposal_sent',
                 status_changed_at = CURRENT_TIMESTAMP,
@@ -1442,7 +1444,7 @@ async def send_partner_proposal(
         proposal_id=proposal_id
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "id": proposal_id,
@@ -1456,13 +1458,13 @@ async def record_proposal_response(
     proposal_id: int,
     data: PartnerProposalRespond,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Record partner's response to a proposal."""
     user_id = current_user.id
     org_id = current_user.organization_id
 
-    proposal = db.execute(text("""
+    proposal = await db.execute(text("""
         SELECT pp.*, pc.owner_id, pc.first_name, pc.last_name
         FROM partner_proposals pp
         JOIN partner_candidates pc ON pc.id = pp.partner_candidate_id
@@ -1473,7 +1475,7 @@ async def record_proposal_response(
         raise HTTPException(status_code=404, detail="Proposal not found")
 
     if data.accepted:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_proposals
             SET status = 'accepted',
                 accepted_at = CURRENT_TIMESTAMP,
@@ -1484,7 +1486,7 @@ async def record_proposal_response(
         """), {"proposal_id": proposal_id, "notes": data.notes})
 
         # Update partner status to negotiating (will be onboarded manually)
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET status = 'negotiating',
                 status_changed_at = CURRENT_TIMESTAMP,
@@ -1495,7 +1497,7 @@ async def record_proposal_response(
         activity_type = "proposal_accepted"
         activity_msg = f"Proposal {proposal.proposal_number} accepted"
     else:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_proposals
             SET status = 'declined',
                 declined_at = CURRENT_TIMESTAMP,
@@ -1515,7 +1517,7 @@ async def record_proposal_response(
         proposal_id=proposal_id
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "id": proposal_id,
@@ -1531,7 +1533,7 @@ async def record_proposal_response(
 async def onboard_partner(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Onboard a partner candidate - creates a ReferralPartner record and links it.
@@ -1542,7 +1544,7 @@ async def onboard_partner(
     partner = verify_partner_ownership(partner_id, user_id, db, org_id)
 
     # Get full partner data
-    partner_data = db.execute(text("""
+    partner_data = await db.execute(text("""
         SELECT * FROM partner_candidates
         WHERE id = :partner_id AND organization_id = :org_id
     """), {"partner_id": partner_id, "org_id": org_id}).fetchone()
@@ -1551,7 +1553,7 @@ async def onboard_partner(
         raise HTTPException(status_code=400, detail="Partner is already onboarded")
 
     # Create ReferralPartner record
-    rp_result = db.execute(text("""
+    rp_result = await db.execute(text("""
         INSERT INTO referral_partners (
             name, business_name, contact_name, company, category, type,
             phone, email, license_number,
@@ -1586,7 +1588,7 @@ async def onboard_partner(
     referral_partner_id = rp_result.fetchone().id
 
     # Update partner_candidate with link and status
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE partner_candidates
         SET status = 'onboarded',
             onboarded_at = CURRENT_TIMESTAMP,
@@ -1605,7 +1607,7 @@ async def onboard_partner(
         metadata={"referral_partner_id": referral_partner_id}
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "partner_candidate_id": partner_id,
@@ -1623,13 +1625,13 @@ async def onboard_partner(
 async def list_partner_notes(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List notes for a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT
             pn.id, pn.note_type, pn.content, pn.is_private, pn.is_pinned,
             pn.created_at, pn.updated_at,
@@ -1662,13 +1664,13 @@ async def add_partner_note(
     partner_id: int,
     data: PartnerNoteCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Add a note to a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO partner_notes (
             partner_candidate_id, note_type, content, is_private,
             created_by, created_at
@@ -1688,7 +1690,7 @@ async def add_partner_note(
     note_id = result.fetchone().id
 
     # Update last activity
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE partner_candidates
         SET last_activity_at = CURRENT_TIMESTAMP
         WHERE id = :partner_id
@@ -1700,7 +1702,7 @@ async def add_partner_note(
         user_id
     )
 
-    db.commit()
+    await db.commit()
 
     return {"id": note_id, "status": "created"}
 
@@ -1710,13 +1712,13 @@ async def list_partner_activities(
     partner_id: int,
     limit: int = Query(50, ge=1, le=200),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List activity timeline for a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT
             pa.id, pa.activity_type, pa.description, pa.metadata,
             pa.meeting_id, pa.proposal_id, pa.is_automated,
@@ -1756,7 +1758,7 @@ async def log_partner_call(
     partner_id: int,
     data: LogCallRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Log a phone call with a partner candidate."""
     user_id = current_user.id
@@ -1768,7 +1770,7 @@ async def log_partner_call(
         call_update_sql += ", status = 'contacted', status_changed_at = CURRENT_TIMESTAMP"
     call_update_sql += " WHERE id = :partner_id"
 
-    db.execute(text(call_update_sql), {"partner_id": partner_id})
+    await db.execute(text(call_update_sql), {"partner_id": partner_id})
 
     log_partner_activity(
         db, partner_id, "call_made",
@@ -1781,7 +1783,7 @@ async def log_partner_call(
         }
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "logged": True,
@@ -1796,7 +1798,7 @@ async def log_partner_email(
     subject: str,
     notes: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Log an email sent to a partner candidate."""
     user_id = current_user.id
@@ -1804,7 +1806,7 @@ async def log_partner_email(
 
     # Update status if new
     if partner.status == 'new':
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET status = 'contacted',
                 status_changed_at = CURRENT_TIMESTAMP,
@@ -1812,7 +1814,7 @@ async def log_partner_email(
             WHERE id = :partner_id
         """), {"partner_id": partner_id})
     else:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET last_activity_at = CURRENT_TIMESTAMP
             WHERE id = :partner_id
@@ -1825,7 +1827,7 @@ async def log_partner_email(
         metadata={"subject": subject, "notes": notes}
     )
 
-    db.commit()
+    await db.commit()
 
     return {"logged": True, "partner_id": partner_id}
 
@@ -1838,13 +1840,13 @@ async def log_partner_email(
 async def get_partner_assessment(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get assessment for a partner candidate."""
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT * FROM partner_assessments WHERE partner_candidate_id = :partner_id
     """), {"partner_id": partner_id}).fetchone()
 
@@ -1878,7 +1880,7 @@ async def update_partner_assessment(
     partner_id: int,
     data: PartnerAssessmentUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create or update assessment for a partner/employee candidate."""
     user_id = current_user.id
@@ -1922,7 +1924,7 @@ async def update_partner_assessment(
             overall_grade = calculate_overall_grade(overall_score)
 
     # Upsert assessment (includes both partner and employee dimension columns)
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO partner_assessments (
             partner_candidate_id,
             production_score, referral_potential_score, relationship_score,
@@ -1979,7 +1981,7 @@ async def update_partner_assessment(
 
     # Update overall score on partner record too
     if overall_score:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE partner_candidates
             SET overall_score = :overall_score,
                 last_activity_at = CURRENT_TIMESTAMP
@@ -1992,7 +1994,7 @@ async def update_partner_assessment(
         user_id
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "partner_id": partner_id,

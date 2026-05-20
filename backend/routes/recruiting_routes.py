@@ -6,7 +6,7 @@ API endpoints for Master Manager Platform Phase 2 - Recruiting Engine.
 import html as html_mod
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date
@@ -15,6 +15,8 @@ from services.recruiting_service import RecruitingService
 from auth.dependencies import get_current_user
 from database.models import User
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 import logging
 import os
 
@@ -64,7 +66,7 @@ async def list_partner_recruits(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     List partner recruits (realtors) from referral_partners table.
@@ -102,11 +104,11 @@ async def list_partner_recruits(
         ORDER BY created_at DESC NULLS LAST
         LIMIT :limit OFFSET :offset
     """
-    results = db.execute(text(select_sql), params).fetchall()
+    results = await db.execute(text(select_sql), params).fetchall()
 
     # Get total count
     count_sql = "SELECT COUNT(*) FROM referral_partners WHERE " + where_sql
-    count_result = db.execute(text(count_sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
+    count_result = await db.execute(text(count_sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
 
     partners = []
     for r in results:
@@ -136,10 +138,10 @@ async def list_partner_recruits(
 async def get_partner_recruit(
     partner_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get detailed partner recruit information."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT
             id, name, contact_name, business_name, company,
             email, phone, license_number, notes,
@@ -173,14 +175,14 @@ async def update_partner_recruit_status(
     partner_id: int,
     status: str = Query(..., description="New status: active, prospect, inactive, converted"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update partner recruit status."""
     valid_statuses = ["active", "prospect", "inactive", "converted", "nurturing"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE referral_partners
         SET status = :status, updated_at = CURRENT_TIMESTAMP
         WHERE id = :id AND organization_id = :org_id
@@ -190,17 +192,17 @@ async def update_partner_recruit_status(
     if not result:
         raise HTTPException(status_code=404, detail="Partner not found")
 
-    db.commit()
+    await db.commit()
     return {"id": partner_id, "status": status}
 
 
 @router.get("/partners/stats/overview")
 async def get_partner_recruit_stats(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get partner recruiting statistics overview."""
-    stats = db.execute(text("""
+    stats = await db.execute(text("""
         SELECT
             COUNT(*) as total,
             COUNT(CASE WHEN status = 'active' THEN 1 END) as active,
@@ -486,7 +488,7 @@ async def update_candidate(
     candidate_id: int,
     data: CandidateUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update candidate details."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
@@ -515,11 +517,11 @@ async def update_candidate(
     updates.append("updated_at = NOW()")
     query = f"UPDATE mm_candidates SET {', '.join(updates)} WHERE id = :id AND organization_id = :org_id RETURNING id"
 
-    result = db.execute(text(query), params).fetchone()
+    result = await db.execute(text(query), params).fetchone()
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    db.commit()
+    await db.commit()
     return {"id": candidate_id, "updated": True}
 
 
@@ -569,13 +571,13 @@ async def escalate_candidate(
     candidate_id: int,
     data: EscalateRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Escalate/reassign a candidate to another team member."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     # Verify assigned_to user belongs to the same organization
-    target_user = db.execute(
+    target_user = await db.execute(
         text("SELECT id FROM users WHERE id = :user_id AND organization_id = :org_id"),
         {"user_id": data.assigned_to, "org_id": current_user.organization_id}
     ).fetchone()
@@ -583,7 +585,7 @@ async def escalate_candidate(
         raise HTTPException(status_code=400, detail="Target user not found in your organization")
 
     # Update the candidate's assigned_to
-    result = db.execute(
+    result = await db.execute(
         text("""
             UPDATE mm_candidates
             SET assigned_to = :assigned_to,
@@ -599,7 +601,7 @@ async def escalate_candidate(
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     # Add an activity log entry
-    db.execute(
+    await db.execute(
         text("""
             INSERT INTO mm_candidate_activities
             (candidate_id, activity_type, description, performed_by, created_at)
@@ -612,7 +614,7 @@ async def escalate_candidate(
         }
     )
 
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -672,7 +674,7 @@ async def update_job_posting(
     posting_id: int,
     data: JobPostingUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a job posting."""
     ALLOWED_FIELDS = {
@@ -702,11 +704,11 @@ async def update_job_posting(
     """
     query = text(update_sql)
 
-    result = db.execute(query, params).fetchone()
+    result = await db.execute(query, params).fetchone()
     if not result:
         raise HTTPException(status_code=404, detail="Job posting not found")
 
-    db.commit()
+    await db.commit()
     return {"id": posting_id, "updated": True}
 
 
@@ -714,10 +716,10 @@ async def update_job_posting(
 async def publish_job_posting(
     posting_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Publish a job posting."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_job_postings
         SET is_published = true,
             published_at = CURRENT_TIMESTAMP,
@@ -730,7 +732,7 @@ async def publish_job_posting(
     if not result:
         raise HTTPException(status_code=404, detail="Job posting not found")
 
-    db.commit()
+    await db.commit()
     return {"id": posting_id, "slug": result.slug, "is_published": True}
 
 
@@ -738,10 +740,10 @@ async def publish_job_posting(
 async def unpublish_job_posting(
     posting_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Unpublish a job posting."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_job_postings
         SET is_published = false,
             updated_at = CURRENT_TIMESTAMP
@@ -753,7 +755,7 @@ async def unpublish_job_posting(
     if not result:
         raise HTTPException(status_code=404, detail="Job posting not found")
 
-    db.commit()
+    await db.commit()
     return {"id": posting_id, "is_published": False}
 
 
@@ -765,12 +767,12 @@ async def unpublish_job_posting(
 async def list_candidate_interviews(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all interviews for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT
             i.id, i.interview_type, i.interview_round, i.title,
             i.scheduled_at, i.duration_minutes, i.location, i.meeting_link,
@@ -869,14 +871,14 @@ async def update_interview_status(
     interview_id: int,
     status: str = Query(..., description="New status: scheduled, confirmed, completed, cancelled, no_show"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update interview status."""
     valid_statuses = ["scheduled", "confirmed", "completed", "cancelled", "no_show"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_interviews
         SET status = :status,
             updated_at = CURRENT_TIMESTAMP
@@ -887,7 +889,7 @@ async def update_interview_status(
     if not result:
         raise HTTPException(status_code=404, detail="Interview not found")
 
-    db.commit()
+    await db.commit()
     return {"id": interview_id, "status": status}
 
 
@@ -902,7 +904,7 @@ class InterviewNotificationRequest(BaseModel):
 async def send_interview_notifications(
     interview_id: int,
     data: InterviewNotificationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """Send notifications for a scheduled interview."""
@@ -912,7 +914,7 @@ async def send_interview_notifications(
     logger = logging.getLogger(__name__)
 
     # Get interview details (scoped to caller's org)
-    interview = db.execute(text("""
+    interview = await db.execute(text("""
         SELECT
             i.id, i.interview_type, i.scheduled_at, i.duration_minutes,
             i.location, i.meeting_link, i.timezone, i.title,
@@ -1016,7 +1018,7 @@ async def send_interview_notifications(
             interviewer_ids = json.loads(interviewer_ids)
 
         if interviewer_ids:
-            interviewers = db.execute(text("""
+            interviewers = await db.execute(text("""
                 SELECT id, email, full_name FROM users WHERE id = ANY(:ids) AND organization_id = :org_id
             """), {"ids": interviewer_ids, "org_id": current_user.organization_id}).fetchall()
 
@@ -1079,7 +1081,7 @@ async def list_offers(
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all offers."""
     query = text("""
@@ -1096,7 +1098,7 @@ async def list_offers(
         LIMIT :limit
     """)
 
-    results = db.execute(query, {
+    results = await db.execute(query, {
         "org_id": current_user.organization_id,
         "status": status,
         "limit": limit
@@ -1144,10 +1146,10 @@ async def create_offer(
 async def get_offer(
     offer_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get offer details."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT
             o.*,
             c.first_name || ' ' || c.last_name as candidate_name,
@@ -1242,10 +1244,10 @@ async def withdraw_offer(
     offer_id: int,
     reason: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Withdraw an offer."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_offers
         SET status = 'withdrawn',
             withdrawn_at = CURRENT_TIMESTAMP,
@@ -1259,7 +1261,7 @@ async def withdraw_offer(
     if not result:
         raise HTTPException(status_code=404, detail="Offer not found")
 
-    db.commit()
+    await db.commit()
     return {"id": offer_id, "status": "withdrawn"}
 
 
@@ -1272,7 +1274,7 @@ async def list_candidate_notes(
     candidate_id: int,
     include_private: bool = False,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List notes for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
@@ -1289,7 +1291,7 @@ async def list_candidate_notes(
         ORDER BY n.created_at DESC
     """)
 
-    results = db.execute(query, {
+    results = await db.execute(query, {
         "candidate_id": candidate_id,
         "org_id": current_user.organization_id,
         "user_id": current_user.id
@@ -1315,12 +1317,12 @@ async def create_candidate_note(
     candidate_id: int,
     data: CandidateNoteCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a note for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO mm_candidate_notes (
             organization_id, candidate_id, note_type, content, is_private, created_by
         ) VALUES (
@@ -1336,7 +1338,7 @@ async def create_candidate_note(
         "created_by": current_user.id
     }).fetchone()
 
-    db.commit()
+    await db.commit()
     return {"id": result.id}
 
 
@@ -1349,12 +1351,12 @@ async def list_candidate_activities(
     candidate_id: int,
     limit: int = Query(50, ge=1, le=200),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List activity feed for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT
             a.id, a.activity_type, a.description, a.created_at,
             a.interview_id, a.offer_id, a.is_automated,
@@ -1390,13 +1392,13 @@ async def list_candidate_activities(
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get recruiting dashboard statistics."""
     organization_id = current_user.organization_id
 
     # Get various stats in parallel
-    candidates_stats = db.execute(text("""
+    candidates_stats = await db.execute(text("""
         SELECT
             COUNT(*) as total,
             COUNT(CASE WHEN status = 'new' THEN 1 END) as new,
@@ -1408,7 +1410,7 @@ async def get_dashboard_stats(
         AND organization_id = :org_id
     """), {"org_id": organization_id}).fetchone()
 
-    interviews_stats = db.execute(text("""
+    interviews_stats = await db.execute(text("""
         SELECT
             COUNT(CASE WHEN status = 'scheduled' AND scheduled_at >= CURRENT_DATE THEN 1 END) as upcoming,
             COUNT(CASE WHEN status = 'scheduled' AND scheduled_at::date = CURRENT_DATE THEN 1 END) as today,
@@ -1417,7 +1419,7 @@ async def get_dashboard_stats(
         WHERE organization_id = :org_id
     """), {"org_id": organization_id}).fetchone()
 
-    offers_stats = db.execute(text("""
+    offers_stats = await db.execute(text("""
         SELECT
             COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft,
             COUNT(CASE WHEN status = 'sent' THEN 1 END) as pending_response,
@@ -1426,7 +1428,7 @@ async def get_dashboard_stats(
         WHERE organization_id = :org_id
     """), {"org_id": organization_id}).fetchone()
 
-    positions_stats = db.execute(text("""
+    positions_stats = await db.execute(text("""
         SELECT
             COUNT(CASE WHEN is_published = true THEN 1 END) as open,
             COALESCE(SUM(CASE WHEN is_published = true THEN views ELSE 0 END), 0) as total_views,
@@ -1465,10 +1467,10 @@ async def get_dashboard_stats(
 async def get_upcoming_interviews(
     limit: int = Query(10, ge=1, le=50),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get upcoming interviews for the dashboard."""
-    results = db.execute(text("""
+    results = await db.execute(text("""
         SELECT
             i.id, i.interview_type, i.title, i.scheduled_at, i.duration_minutes,
             i.meeting_link, i.location,
@@ -1513,10 +1515,10 @@ async def get_upcoming_interviews(
 async def get_candidate_full_profile(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get complete candidate profile including production data and social media."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT
             c.id, c.first_name, c.last_name, c.email, c.phone,
             c.source, c.target_role_name, c.status, c.applied_at,
@@ -1545,13 +1547,13 @@ async def get_candidate_full_profile(
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     # Get interview history (org-scoped)
-    interviews = db.execute(text("""
+    interviews = await db.execute(text("""
         SELECT id, interview_type, interview_round, scheduled_at, status, overall_score
         FROM mm_interviews WHERE candidate_id = :id AND organization_id = :org_id ORDER BY scheduled_at DESC
     """), {"id": candidate_id, "org_id": current_user.organization_id}).fetchall()
 
     # Get notes (org-scoped, exclude private notes)
-    notes = db.execute(text("""
+    notes = await db.execute(text("""
         SELECT id, content, note_type, created_at
         FROM mm_candidate_notes WHERE candidate_id = :id AND organization_id = :org_id
         AND (is_private = false OR is_private IS NULL)
@@ -1559,13 +1561,13 @@ async def get_candidate_full_profile(
     """), {"id": candidate_id, "org_id": current_user.organization_id}).fetchall()
 
     # Get activity timeline (org-scoped)
-    activities = db.execute(text("""
+    activities = await db.execute(text("""
         SELECT id, activity_type, description, created_at
         FROM mm_candidate_activities WHERE candidate_id = :id AND organization_id = :org_id ORDER BY created_at DESC LIMIT 20
     """), {"id": candidate_id, "org_id": current_user.organization_id}).fetchall()
 
     # Get portal workspace info
-    portal_workspace = db.execute(text("""
+    portal_workspace = await db.execute(text("""
         SELECT id, slug, is_active, created_at
         FROM recruit_portal_workspaces
         WHERE candidate_id = :id AND is_active = true
@@ -1705,12 +1707,12 @@ async def update_candidate_social_media(
     twitter_url: Optional[str] = None,
     linkedin_url: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update candidate social media URLs."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_candidates
         SET facebook_url = COALESCE(:facebook, facebook_url),
             instagram_url = COALESCE(:instagram, instagram_url),
@@ -1731,7 +1733,7 @@ async def update_candidate_social_media(
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    db.commit()
+    await db.commit()
     return {"id": candidate_id, "status": "updated"}
 
 
@@ -1745,13 +1747,13 @@ async def update_candidate_production(
     current_title: Optional[str] = None,
     license_states: Optional[List[str]] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update candidate production data."""
     import json
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_candidates
         SET annual_volume = COALESCE(:volume, annual_volume),
             annual_units = COALESCE(:units, annual_units),
@@ -1776,7 +1778,7 @@ async def update_candidate_production(
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    db.commit()
+    await db.commit()
     return {"id": candidate_id, "status": "updated"}
 
 
@@ -1788,12 +1790,12 @@ async def update_candidate_basic_info(
     email: Optional[str] = None,
     phone: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update candidate basic information (name, email, phone)."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_candidates
         SET first_name = COALESCE(:first_name, first_name),
             last_name = COALESCE(:last_name, last_name),
@@ -1814,7 +1816,7 @@ async def update_candidate_basic_info(
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    db.commit()
+    await db.commit()
     return {"id": candidate_id, "status": "updated"}
 
 

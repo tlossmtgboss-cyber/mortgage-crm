@@ -7,12 +7,25 @@ existing fields, and edge cases (interruptions, non-US addresses).
 """
 from __future__ import annotations
 
+import importlib.util
+import pathlib
 import pytest
 
-from services.call_intelligence.intake_1003_extractor import (
-    ALL_FIELDS,
-    Intake1003Extractor,
+# Import the extractor module directly without triggering the
+# call_intelligence package __init__ (which pulls aiohttp via webhooks).
+_EXTRACTOR_PATH = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "services"
+    / "call_intelligence"
+    / "intake_1003_extractor.py"
 )
+_spec = importlib.util.spec_from_file_location(
+    "_intake_1003_extractor_under_test", str(_EXTRACTOR_PATH)
+)
+_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+_spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+Intake1003Extractor = _mod.Intake1003Extractor
+ALL_FIELDS = _mod.ALL_FIELDS
 
 
 @pytest.fixture

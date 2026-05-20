@@ -22,10 +22,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Header, WebSocket,
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from services.notification_service import NotificationService
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ def format_date(val):
 # DEPENDENCY INJECTION
 # =============================================================================
 
-from db import get_db
+from db import get_db, get_async_db
 from auth.dependencies import get_current_user
 
 _anthropic_client = None
@@ -136,7 +137,7 @@ class PartnerNoteRequest(BaseModel):
 async def realtor_login(
     http_request: Request,
     request: RealtorLoginRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Authenticate a realtor and return session token.
@@ -162,7 +163,7 @@ async def realtor_login(
 
     if request.magic_link_token:
         # Verify magic link
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT rpu.id, rpu.first_name, rpu.last_name, rpu.organization_id
             FROM realtor_magic_links rml
             JOIN realtor_portal_users rpu ON rpu.id = rml.realtor_id
@@ -178,7 +179,7 @@ async def realtor_login(
             )
 
         # Mark link as used
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE realtor_magic_links
             SET used_at = CURRENT_TIMESTAMP
             WHERE token = :token
@@ -186,7 +187,7 @@ async def realtor_login(
 
     else:
         # Email/password auth
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, first_name, last_name, organization_id, password_hash
             FROM realtor_portal_users
             WHERE email = :email AND is_active = TRUE
@@ -208,7 +209,7 @@ async def realtor_login(
                     return RealtorLoginResponse(success=False, error="Invalid credentials")
                 # Upgrade to bcrypt on successful login
                 new_hash = _bcrypt.hashpw(request.password.encode(), _bcrypt.gensalt()).decode()
-                db.execute(text("UPDATE realtor_portal_users SET password_hash = :h WHERE id = :id"),
+                await db.execute(text("UPDATE realtor_portal_users SET password_hash = :h WHERE id = :id"),
                            {"h": new_hash, "id": result[0]})
             else:
                 if not _bcrypt.checkpw(request.password.encode(), result[4].encode()):
@@ -218,7 +219,7 @@ async def realtor_login(
     session_token = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO realtor_sessions (realtor_id, token, expires_at)
         VALUES (:realtor_id, :token, :expires_at)
     """), {
@@ -228,13 +229,13 @@ async def realtor_login(
     })
 
     # Update last login
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE realtor_portal_users
         SET last_login_at = CURRENT_TIMESTAMP,
             login_count = login_count + 1
         WHERE id = :id
     """), {"id": result[0]})
-    db.commit()
+    await db.commit()
 
     return RealtorLoginResponse(
         success=True,
@@ -248,13 +249,13 @@ async def realtor_login(
 @router.post("/auth/logout")
 async def realtor_logout(
     token: str = Query(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Invalidate realtor session."""
-    db.execute(text("""
+    await db.execute(text("""
         DELETE FROM realtor_sessions WHERE token = :token
     """), {"token": token})
-    db.commit()
+    await db.commit()
 
     return {"success": True}
 
@@ -265,10 +266,10 @@ async def realtor_logout(
 
 async def get_current_realtor(
     token: str = Query(..., description="Session token"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ) -> dict:
     """Validate token and return realtor info."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT rs.realtor_id, rpu.organization_id, rpu.first_name, rpu.last_name
         FROM realtor_portal_sessions rs
         JOIN realtor_portal_users rpu ON rpu.id = rs.realtor_id
@@ -294,7 +295,7 @@ async def get_current_realtor(
 @router.get("/loans")
 async def get_realtor_loans(
     token: str = Query(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get all loans the realtor has access to."""
     realtor = await get_current_realtor(token, db)
@@ -576,7 +577,7 @@ async def download_letter_pdf(
     letter_id: int,
     token: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Download letter as PDF. Accepts token via query param or Authorization header."""
     # Extract token from Authorization header if not provided as query param
@@ -591,7 +592,7 @@ async def download_letter_pdf(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get letter directly from database (simpler than using service which has complex joins)
-    letter = db.execute(text("""
+    letter = await db.execute(text("""
         SELECT id, generated_html, download_count
         FROM pre_approval_letters
         WHERE id = :letter_id
@@ -609,13 +610,13 @@ async def download_letter_pdf(
 
     # Record download
     try:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE pre_approval_letters
             SET download_count = COALESCE(download_count, 0) + 1,
                 last_downloaded_at = CURRENT_TIMESTAMP
             WHERE id = :letter_id
         """), {"letter_id": letter_id})
-        db.commit()
+        await db.commit()
     except SQLAlchemyError as e:
         logger.error(f"Error recording download: {e}")
 
@@ -679,7 +680,7 @@ async def generate_preapproval_for_lead(
     lead_id: int,
     request: GeneratePreApprovalRequest,
     authorization: str = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Generate a pre-approval letter for a lead.
@@ -689,7 +690,7 @@ async def generate_preapproval_for_lead(
     logger.info(f"Generating pre-approval letter for lead {lead_id}")
 
     # Get lead data
-    lead = db.execute(text("""
+    lead = await db.execute(text("""
         SELECT
             l.id, l.name, l.email, l.phone, l.loan_amount, l.loan_type,
             l.address, l.city, l.state, l.zip_code, l.credit_score,
@@ -705,12 +706,12 @@ async def generate_preapproval_for_lead(
     # Get organization_id from the lead's owner
     org_id = 1  # Default
     if lead[16]:  # owner_id
-        owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[16]}).fetchone()
+        owner = await db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[16]}).fetchone()
         if owner and owner[0]:
             org_id = owner[0]
 
     # Get organization info (only columns that exist)
-    org = db.execute(text("""
+    org = await db.execute(text("""
         SELECT id, name
         FROM organizations
         WHERE id = :org_id
@@ -719,7 +720,7 @@ async def generate_preapproval_for_lead(
     # Get LO info if owner assigned
     lo_info = None
     if lead[16]:  # owner_id
-        lo = db.execute(text("""
+        lo = await db.execute(text("""
             SELECT id, full_name, email, phone, nmls_id
             FROM users
             WHERE id = :user_id
@@ -846,7 +847,7 @@ async def generate_preapproval_for_lead(
     share_token = secrets.token_urlsafe(32)
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO pre_approval_letters (
                 organization_id, lead_id, letter_type, version,
                 generated_html, variables_used, property_address, purchase_price,
@@ -870,7 +871,7 @@ async def generate_preapproval_for_lead(
             "share_token": share_token
         })
         letter_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -885,7 +886,7 @@ async def generate_preapproval_for_lead(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         import traceback
         error_details = traceback.format_exc()
         logger.error(f"Error generating pre-approval letter: {e}\n{error_details}")
@@ -895,7 +896,7 @@ async def generate_preapproval_for_lead(
 @router.post("/preapproval/notify-overlimit")
 async def notify_overlimit_request(
     request: NotifyOverLimitRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Notify loan officer about an over-limit pre-approval request.
@@ -904,7 +905,7 @@ async def notify_overlimit_request(
     that exceeds the approved terms, this endpoint notifies the LO.
     """
     # Get lead and LO info
-    lead = db.execute(text("""
+    lead = await db.execute(text("""
         SELECT
             l.id, l.name, l.email, l.phone, l.owner_id
         FROM leads l
@@ -917,7 +918,7 @@ async def notify_overlimit_request(
     # Get organization_id from the lead's owner
     owner_org_id = 1  # Default
     if lead[4]:  # owner_id
-        owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[4]}).fetchone()
+        owner = await db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[4]}).fetchone()
         if owner and owner[0]:
             owner_org_id = owner[0]
 
@@ -925,7 +926,7 @@ async def notify_overlimit_request(
     lo_email = None
     lo_name = None
     if lead[4]:  # owner_id
-        lo = db.execute(text("""
+        lo = await db.execute(text("""
             SELECT full_name, email FROM users WHERE id = :user_id
         """), {"user_id": lead[4]}).fetchone()
         if lo:
@@ -935,7 +936,7 @@ async def notify_overlimit_request(
     # Get partner info if provided
     partner_name = "A referral partner"
     if request.partner_id:
-        partner = db.execute(text("""
+        partner = await db.execute(text("""
             SELECT name, company FROM referral_partners WHERE id = :partner_id
         """), {"partner_id": request.partner_id}).fetchone()
         if partner:
@@ -976,7 +977,7 @@ async def notify_overlimit_request(
 
     # Create a task for the LO
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO tasks (
                 organization_id, lead_id, assigned_to, title, description,
                 priority, status, created_at
@@ -992,10 +993,10 @@ async def notify_overlimit_request(
             "assigned_to": lead[4],  # owner_id
             "description": f"Partner {partner_name} requested pre-approval at ${request.requested_purchase_price:,.0f}, which exceeds the max ${request.max_purchase_price:,.0f}. Please review and contact partner."
         })
-        db.commit()
+        await db.commit()
     except SQLAlchemyError as e:
         logger.error(f"Failed to create task for over-limit request: {e}")
-        db.rollback()
+        await db.rollback()
 
     return {
         "success": True,
@@ -1175,12 +1176,12 @@ async def get_messages(
     loan_id: int,
     token: str = Query(...),
     limit: int = Query(50, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get message history for a loan."""
     realtor = await get_current_realtor(token, db)
 
-    messages = db.execute(text("""
+    messages = await db.execute(text("""
         SELECT
             id, event_type, channel, direction,
             content, created_at, read_at
@@ -1220,7 +1221,7 @@ async def get_messages(
 @router.get("/clients/{lead_id}/status")
 async def get_client_portal_status(
     lead_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Check if a buyer's agent portal exists for a lead/loan.
@@ -1233,7 +1234,7 @@ async def get_client_portal_status(
     """
     try:
         # Check if this lead has a referral partner assigned
-        partner_access = db.execute(text("""
+        partner_access = await db.execute(text("""
             SELECT
                 rp.id as partner_id,
                 rp.name,
@@ -1283,7 +1284,7 @@ async def add_partner_note(
     client_id: int,
     request: PartnerNoteRequest,
     token: str = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Add a note from a partner to a client/lead.
@@ -1303,7 +1304,7 @@ async def add_partner_note(
 
     # Get lead/client info (using owner_id which is the correct column name)
     try:
-        lead_info = db.execute(text("""
+        lead_info = await db.execute(text("""
             SELECT
                 l.id,
                 l.name as borrower_name,
@@ -1332,7 +1333,7 @@ async def add_partner_note(
     # Create activity record
     activity_id = None
     try:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO activities (
                 type, content, lead_id, user_id, created_at
             ) VALUES (
@@ -1343,10 +1344,10 @@ async def add_partner_note(
             "lead_id": client_id,
             "user_id": lead_info.owner_id or 1
         })
-        db.commit()
+        await db.commit()
 
         # Get the activity ID (works for both SQLite and PostgreSQL)
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id FROM activities
             WHERE lead_id = :lead_id AND type = 'Note'
             ORDER BY created_at DESC LIMIT 1
@@ -1354,7 +1355,7 @@ async def add_partner_note(
         activity_id = result[0] if result else None
     except SQLAlchemyError as e:
         logger.error(f"Failed to create activity: {e}")
-        db.rollback()
+        await db.rollback()
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": "Failed to save note"}
@@ -1373,7 +1374,7 @@ async def add_partner_note(
     # Get other team members from the organization
     try:
         if lead_info.organization_id:
-            team_members = db.execute(text("""
+            team_members = await db.execute(text("""
                 SELECT DISTINCT u.email, u.full_name
                 FROM users u
                 WHERE u.organization_id = :org_id
@@ -1488,7 +1489,7 @@ async def ai_assistant(
 async def get_client_full_details(
     loan_id: int,
     token: str = Query(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get comprehensive client details for partner portal view.
@@ -1514,7 +1515,7 @@ async def get_client_full_details(
     validator.record_view(realtor["realtor_id"], loan_id)
 
     # 1. Get loan/lead details
-    loan = db.execute(text("""
+    loan = await db.execute(text("""
         SELECT
             l.id, l.loan_number, l.stage as status, l.amount as loan_amount,
             l.loan_type, l.property_address, l.closing_date as expected_close_date,
@@ -1532,7 +1533,7 @@ async def get_client_full_details(
         raise HTTPException(status_code=404, detail="Client not found")
 
     # 2. Get outstanding documents
-    documents = db.execute(text("""
+    documents = await db.execute(text("""
         SELECT
             sdr.id, sdr.doc_type, sdr.title, sdr.status, sdr.due_date,
             sdr.priority, sdr.created_at, sdr.upload_date,
@@ -1566,7 +1567,7 @@ async def get_client_full_details(
             received_docs.append(doc_info)
 
     # 3. Get milestones
-    milestones = db.execute(text("""
+    milestones = await db.execute(text("""
         SELECT
             pm.id, pm.milestone_name, pm.is_completed, pm.completed_at,
             pm.target_date, pm.display_order, pm.status, pm.notes
@@ -1576,7 +1577,7 @@ async def get_client_full_details(
     """), {"loan_id": loan_id}).fetchall()
 
     # 4. Get third-party orders (Appraisal, Title, Insurance)
-    third_party_orders = db.execute(text("""
+    third_party_orders = await db.execute(text("""
         SELECT
             tpo.id, tpo.order_type, tpo.vendor_name, tpo.status,
             tpo.ordered_at, tpo.due_date, tpo.received_at,
@@ -1614,7 +1615,7 @@ async def get_client_full_details(
             other_orders.append(order_info)
 
     # 5. Get conversation log
-    conversations = db.execute(text("""
+    conversations = await db.execute(text("""
         SELECT
             pce.id, pce.event_type, pce.channel, pce.direction,
             pce.content, pce.created_at, pce.metadata
@@ -1625,7 +1626,7 @@ async def get_client_full_details(
     """), {"loan_id": loan_id}).fetchall()
 
     # 6. Get important dates
-    important_dates = db.execute(text("""
+    important_dates = await db.execute(text("""
         SELECT
             lid.id, lid.date_type, lid.date_value, lid.description,
             lid.is_completed, lid.completed_at
@@ -1763,7 +1764,7 @@ async def handle_sms_webhook(
 async def handle_crm_webhook(
     webhook_type: str,
     payload: dict,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Handle CRM webhooks for real-time updates.
@@ -1887,7 +1888,7 @@ async def _realtor_ws_handler(websocket: WebSocket, token: str, db: Session):
 async def realtor_websocket_compat(
     websocket: WebSocket,
     token: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Backwards-compatible route: token in URL path (deprecated)."""
     await _realtor_ws_handler(websocket, token, db)
@@ -1896,7 +1897,7 @@ async def realtor_websocket_compat(
 @router.websocket("/ws")
 async def realtor_websocket(
     websocket: WebSocket,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Secure route: token sent as first message after connect."""
     await _realtor_ws_handler(websocket, "", db)
@@ -1909,12 +1910,12 @@ async def realtor_websocket(
 @router.get("/me")
 async def get_realtor_profile(
     token: str = Query(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get current realtor's profile."""
     realtor = await get_current_realtor(token, db)
 
-    profile = db.execute(text("""
+    profile = await db.execute(text("""
         SELECT
             id, email, phone, first_name, last_name,
             brokerage_name, license_number, license_state,
@@ -1950,7 +1951,7 @@ async def health_check():
 @router.post("/admin/create-test-realtor")
 async def create_test_realtor(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create a test realtor account for testing purposes.
@@ -1969,7 +1970,7 @@ async def create_test_realtor(
     try:
         # Step 1: Check if already exists
         logger.info("Step 1: Checking for existing realtor")
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT id, email FROM realtor_portal_users WHERE email = :email
         """), {"email": test_email}).fetchone()
 
@@ -1979,13 +1980,13 @@ async def create_test_realtor(
         else:
             # Step 2: Get organization
             logger.info("Step 2: Getting organization")
-            org = db.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
+            org = await db.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
             org_id = org[0] if org else 1
             logger.info(f"Using org_id: {org_id}")
 
             # Step 3: Get an LO
             logger.info("Step 3: Getting LO")
-            lo = db.execute(text("""
+            lo = await db.execute(text("""
                 SELECT id FROM users WHERE role IN ('loan_officer', 'admin', 'sales') LIMIT 1
             """)).fetchone()
             lo_id = lo[0] if lo else None
@@ -1993,7 +1994,7 @@ async def create_test_realtor(
 
             # Step 4: Create realtor
             logger.info("Step 4: Creating realtor")
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO realtor_portal_users (
                     organization_id, email, phone, first_name, last_name,
                     brokerage_name, license_number, license_state,
@@ -2005,7 +2006,7 @@ async def create_test_realtor(
                 ) RETURNING id
             """), {"org_id": org_id, "email": test_email, "lo_id": lo_id})
             realtor_id = result.fetchone()[0]
-            db.commit()
+            await db.commit()
             logger.info(f"Created test realtor: {realtor_id}")
 
         # Step 5: Create session token
@@ -2015,24 +2016,24 @@ async def create_test_realtor(
 
         # Step 6: Remove old sessions
         logger.info("Step 6: Removing old sessions")
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM realtor_portal_sessions WHERE realtor_id = :rid
         """), {"rid": realtor_id})
 
         # Step 7: Create new session
         logger.info("Step 7: Creating new session")
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO realtor_portal_sessions (
                 realtor_id, token, expires_at, ip_address, user_agent, created_at
             ) VALUES (
                 :rid, :token, :exp, '0.0.0.0', 'Admin API', CURRENT_TIMESTAMP
             )
         """), {"rid": realtor_id, "token": session_token, "exp": expires_at})
-        db.commit()
+        await db.commit()
 
         # Step 8: Associate with recent loans
         logger.info("Step 8: Associating with loans")
-        loans = db.execute(text("""
+        loans = await db.execute(text("""
             SELECT l.id, l.borrower_name FROM loans l
             WHERE l.id NOT IN (
                 SELECT loan_id FROM realtor_loan_associations WHERE realtor_id = :rid
@@ -2042,13 +2043,13 @@ async def create_test_realtor(
 
         associated_loans = []
         for loan in loans:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO realtor_loan_associations (
                     realtor_id, loan_id, role, access_granted_at
                 ) VALUES (:rid, :lid, 'buyer_agent', CURRENT_TIMESTAMP)
             """), {"rid": realtor_id, "lid": loan[0]})
             associated_loans.append({"id": loan[0], "borrower": loan[1]})
-        db.commit()
+        await db.commit()
 
         logger.info("Test realtor creation complete")
         return {
@@ -2065,7 +2066,7 @@ async def create_test_realtor(
         }
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         error_msg = str(e)
         stack_trace = traceback.format_exc()
         logger.error(f"Error creating test realtor: {error_msg}\n{stack_trace}")
@@ -2082,7 +2083,7 @@ async def create_test_realtor(
 @router.post("/admin/run-migration")
 async def run_realtor_portal_migration(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Run the realtor portal migration to create all required tables.
@@ -2336,18 +2337,18 @@ async def run_realtor_portal_migration(
         for name, sql in sql_commands:
             try:
                 logger.info(f"Running: {name}")
-                db.execute(text(sql))
-                db.commit()
+                await db.execute(text(sql))
+                await db.commit()
                 results.append({"step": name, "status": "success"})
             except SQLAlchemyError as e:
                 error_msg = str(e)
                 # Ignore "already exists" type errors
                 if "already exists" in error_msg.lower() or "duplicate" in error_msg.lower():
                     results.append({"step": name, "status": "skipped", "reason": "already exists"})
-                    db.rollback()
+                    await db.rollback()
                 else:
                     results.append({"step": name, "status": "error", "error": error_msg})
-                    db.rollback()
+                    await db.rollback()
 
         return {
             "success": True,
@@ -2359,7 +2360,7 @@ async def run_realtor_portal_migration(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         error_msg = str(e)
         stack_trace = traceback.format_exc()
         logger.error(f"Migration failed: {error_msg}\n{stack_trace}")
@@ -2387,7 +2388,7 @@ async def assign_partner_to_client(
     client_id: int,
     request: AssignPartnerRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Assign a referral partner to a client/lead.
@@ -2403,7 +2404,7 @@ async def assign_partner_to_client(
     """
     try:
         # Verify the lead exists
-        lead = db.execute(text("""
+        lead = await db.execute(text("""
             SELECT id, name, email, referral_partner_id
             FROM leads
             WHERE id = :client_id
@@ -2413,7 +2414,7 @@ async def assign_partner_to_client(
             raise HTTPException(status_code=404, detail=f"Lead/client {client_id} not found")
 
         # Verify the partner exists
-        partner = db.execute(text("""
+        partner = await db.execute(text("""
             SELECT id, name, company, email
             FROM referral_partners
             WHERE id = :partner_id
@@ -2423,14 +2424,14 @@ async def assign_partner_to_client(
             raise HTTPException(status_code=404, detail=f"Referral partner {request.partner_id} not found")
 
         # Update the lead with the referral partner
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE leads
             SET referral_partner_id = :partner_id,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :client_id
         """), {"partner_id": request.partner_id, "client_id": client_id})
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -2447,6 +2448,6 @@ async def assign_partner_to_client(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error assigning partner to client {client_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

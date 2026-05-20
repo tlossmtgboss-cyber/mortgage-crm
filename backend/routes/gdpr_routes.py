@@ -23,7 +23,9 @@ Registration pattern: function-based (same as scorecard_routes, admin_ops_routes
 from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from pydantic import BaseModel, Field
@@ -99,7 +101,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/admin/gdpr/export", tags=["GDPR"])
     async def export_org_data(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -156,7 +158,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
                 for table_name, query in EXPORT_TABLES:
                     try:
-                        rows = db.execute(text(query), {"org_id": org_id}).fetchall()
+                        rows = await db.execute(text(query), {"org_id": org_id}).fetchall()
                         if rows:
                             columns = rows[0]._fields if hasattr(rows[0], '_fields') else rows[0].keys()
                             data = [dict(zip(columns, row)) for row in rows]
@@ -184,7 +186,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                         "table_counts": export_manifest["tables"],
                     },
                 )
-                db.commit()
+                await db.commit()
             except Exception as audit_err:
                 logger.warning(f"Failed to log GDPR export audit: {audit_err}")
 
@@ -269,7 +271,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/admin/gdpr/deletion-requests", tags=["GDPR"])
     async def list_deletion_requests(
         limit: int = 50,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -282,7 +284,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
         require_admin(current_user)
 
         try:
-            rows = db.execute(text("""
+            rows = await db.execute(text("""
                 SELECT
                     al.id,
                     al.user_id,
@@ -621,7 +623,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/gdpr/data-subject-request", tags=["GDPR"])
     async def submit_data_subject_request(
         body: DSARSubmitBody,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         Submit a GDPR Data Subject Access Request (public, no auth required).
@@ -646,7 +648,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
             try:
                 email_domain = body.requestor_email.split("@")[1] if "@" in body.requestor_email else None
                 if email_domain:
-                    org_row = db.execute(text("""
+                    org_row = await db.execute(text("""
                         SELECT DISTINCT o.id FROM organizations o
                         JOIN users u ON u.organization_id = o.id
                         WHERE u.email LIKE :domain_pattern
@@ -658,7 +660,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                 logger.error(f"Error determining org_id from email domain: {e}")
                 pass  # Best effort — org_id can be NULL
 
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO data_subject_requests
                     (organization_id, request_type, requestor_email, requestor_name,
                      status, submitted_at, due_date, notes)
@@ -674,7 +676,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                 "due": due,
                 "notes": body.notes,
             })
-            db.commit()
+            await db.commit()
             dsr_id = result.fetchone()[0]
 
             logger.info(f"DSAR submitted: id={dsr_id}, type={body.request_type}, email={body.requestor_email}")
@@ -703,7 +705,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
     async def check_dsar_status(
         request_id: int,
         email: str = Query(..., description="Requestor email for verification"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         Check the status of a GDPR Data Subject Access Request (public).
@@ -711,7 +713,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
         The requestor must provide their email to verify identity.
         """
         try:
-            row = db.execute(text("""
+            row = await db.execute(text("""
                 SELECT id, request_type, requestor_email, requestor_name,
                        status, submitted_at, due_date, result_summary,
                        identity_verified
@@ -753,7 +755,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
     async def list_data_subject_requests(
         status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
         limit: int = Query(50, ge=1, le=200),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -788,7 +790,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                 " ORDER BY submitted_at DESC"
                 " LIMIT :limit"
             )
-            rows = db.execute(text(sql), params).fetchall()
+            rows = await db.execute(text(sql), params).fetchall()
 
             requests = []
             for row in rows:

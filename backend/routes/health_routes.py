@@ -13,7 +13,9 @@ Enterprise health check endpoints:
 from fastapi import Depends, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from datetime import datetime, timezone
 from utils.response import success_response, error_response, ErrorCodes
 import asyncio
@@ -835,11 +837,11 @@ def register_health_routes(app, get_db, **kwargs):
     # ========================================================================
 
     @app.get("/ping")
-    async def ping(db: Session = Depends(get_db)):
+    async def ping(db: AsyncSession = Depends(get_async_db)):
         """Simple ping endpoint - also creates Salesforce tables if needed"""
         tables_created = []
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS oauth_states (
                     id SERIAL PRIMARY KEY,
                     state_token VARCHAR(255) UNIQUE NOT NULL,
@@ -852,14 +854,14 @@ def register_health_routes(app, get_db, **kwargs):
                     state_metadata JSONB
                 )
             """))
-            db.commit()
+            await db.commit()
             tables_created.append("oauth_states")
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             tables_created.append("oauth_states error: table creation failed")
 
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 CREATE TABLE IF NOT EXISTS integration_profiles (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
@@ -883,10 +885,10 @@ def register_health_routes(app, get_db, **kwargs):
                     UNIQUE(user_id, provider)
                 )
             """))
-            db.commit()
+            await db.commit()
             tables_created.append("integration_profiles")
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             tables_created.append("integration_profiles error: table creation failed")
 
         return {"ping": "pong", "status": "ok", "tables": tables_created}
@@ -896,10 +898,10 @@ def register_health_routes(app, get_db, **kwargs):
     # ========================================================================
 
     @app.get("/api/v1/health")
-    async def api_health_check(db: Session = Depends(get_db)):
+    async def api_health_check(db: AsyncSession = Depends(get_async_db)):
         """API health check endpoint at /api/v1/health - database connectivity"""
         try:
-            db.execute(text("SELECT 1"))
+            await db.execute(text("SELECT 1"))
             return success_response(data={
                 "status": "healthy",
                 "database": "connected",

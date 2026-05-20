@@ -11,7 +11,7 @@ Includes:
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
@@ -27,6 +27,8 @@ from auth.dependencies import get_current_user
 from database.models import User
 from services.recruit_portal_service import RecruitPortalService
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from models.recruit_portal_models import (
     ChatRequest, ChatResponse, AppointmentCreate, Appointment,
     CalculatorInput, CalculatorResult, PortalData, CompanyUpdate
@@ -143,14 +145,14 @@ def _validate_portal_token(db: Session, token: str, *, require_active: bool = Tr
 async def generate_portal_token(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Generate a portal access token for a candidate (requires auth)."""
     # Generate a secure token
     token = secrets.token_urlsafe(32)
 
     # Store the token — scoped to the caller's organization
-    result = db.execute(text("""
+    result = await db.execute(text("""
         UPDATE mm_candidates
         SET portal_token = :token,
             portal_token_created_at = CURRENT_TIMESTAMP
@@ -161,7 +163,7 @@ async def generate_portal_token(
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    db.commit()
+    await db.commit()
 
     return {
         "token": token,
@@ -182,7 +184,7 @@ async def generate_portal_token(
 async def get_candidate_portal(
     token: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get candidate portal data using access token."""
     _enforce_rate_limit(request)
@@ -191,7 +193,7 @@ async def get_candidate_portal(
     validated = _validate_portal_token(db, token)
 
     # Fetch full profile using validated candidate id
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT
             c.id, c.first_name, c.last_name, c.email, c.phone,
             c.source, c.target_role_name, c.status, c.applied_at,
@@ -210,7 +212,7 @@ async def get_candidate_portal(
     # Try to get extended profile data (columns may not exist in all deployments)
     extended_data = {"production": {}, "social": {}, "headshot_url": None}
     try:
-        ext = db.execute(text("""
+        ext = await db.execute(text("""
             SELECT annual_volume, annual_units, avg_loan_size, nmls_id,
                    current_company, current_title,
                    facebook_url, instagram_url, twitter_url,
@@ -236,7 +238,7 @@ async def get_candidate_portal(
 
     # Get interviews (handle missing columns gracefully)
     try:
-        interviews = db.execute(text("""
+        interviews = await db.execute(text("""
             SELECT id, interview_type as type, interview_round, scheduled_at,
                    status, notes as interviewer_names
             FROM mm_interviews
@@ -249,7 +251,7 @@ async def get_candidate_portal(
 
     # Get activities (public-safe ones only)
     try:
-        activities = db.execute(text("""
+        activities = await db.execute(text("""
             SELECT id, activity_type as type, description, created_at as timestamp
             FROM mm_candidate_activities
             WHERE candidate_id = :id
@@ -357,14 +359,14 @@ async def express_interest(
     token: str,
     interest: InterestRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Allow candidate to express interest in another position."""
     _enforce_rate_limit(request)
     result = _validate_portal_token(db, token)
 
     # Log the interest
-    db.execute(text("""
+    await db.execute(text("""
         INSERT INTO mm_candidate_activities (candidate_id, activity_type, description, created_at)
         VALUES (:cid, 'expressed_interest', :desc, CURRENT_TIMESTAMP)
     """), {
@@ -372,7 +374,7 @@ async def express_interest(
         "desc": f"Expressed interest in job posting #{interest.job_id} via portal"
     })
 
-    db.commit()
+    await db.commit()
 
     return {"success": True, "message": "Interest recorded"}
 
@@ -383,7 +385,7 @@ async def update_contact_info(
     request: Request,
     phone: Optional[str] = None,
     email: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Allow candidate to update their contact information."""
     _enforce_rate_limit(request)
@@ -405,15 +407,15 @@ async def update_contact_info(
             SET """ + ', '.join(updates) + """, updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
         """
-        db.execute(text(update_sql), params)
+        await db.execute(text(update_sql), params)
 
         # Log the update
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO mm_candidate_activities (candidate_id, activity_type, description, created_at)
             VALUES (:cid, 'contact_updated', 'Updated contact information via portal', CURRENT_TIMESTAMP)
         """), {"cid": result.id})
 
-        db.commit()
+        await db.commit()
 
     return {"success": True, "message": "Contact information updated"}
 
@@ -425,7 +427,7 @@ async def update_contact_info(
 @router.post("/admin/add-portal-columns")
 async def add_portal_columns(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Add portal token columns to mm_candidates table."""
     _require_admin(current_user)
@@ -444,7 +446,7 @@ async def add_portal_columns(
                 "ALTER TABLE mm_candidates"
                 " ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
             )
-            db.execute(text(alter_sql))
+            await db.execute(text(alter_sql))
             added.append(col_name)
             logger.info(f"Added column: {col_name} ({description})")
         except SQLAlchemyError as e:
@@ -455,14 +457,14 @@ async def add_portal_columns(
 
     # Add index on portal_token
     try:
-        db.execute(text("""
+        await db.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_mm_candidates_portal_token
             ON mm_candidates(portal_token)
         """))
     except SQLAlchemyError as e:
         logger.warning(f"Error creating index: {e}")
 
-    db.commit()
+    await db.commit()
 
     return {
         "success": True,
@@ -474,13 +476,13 @@ async def add_portal_columns(
 @router.post("/admin/create-portal-tables")
 async def create_portal_tables(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create PURL portal tables."""
     _require_admin(current_user)
 
     try:
-        db.execute(text("""
+        await db.execute(text("""
             CREATE TABLE IF NOT EXISTS recruit_portal_workspaces (
                 id SERIAL PRIMARY KEY,
                 candidate_id INTEGER NOT NULL UNIQUE,
@@ -576,7 +578,7 @@ async def create_portal_tables(
                    'welcome', true
             WHERE NOT EXISTS (SELECT 1 FROM recruit_company_updates WHERE category = 'welcome' LIMIT 1);
         """))
-        db.commit()
+        await db.commit()
 
         return {"status": "success", "message": "Portal tables created successfully"}
     except SQLAlchemyError as e:
@@ -613,7 +615,7 @@ async def get_purl_portal_data(
     request: Request,
     authorization: Optional[str] = Header(default=None),
     token: Optional[str] = Query(default=None, description="Deprecated: use Authorization header"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get PURL portal data for candidate including calculator config and company info."""
     _enforce_rate_limit(request)
@@ -621,7 +623,7 @@ async def get_purl_portal_data(
     try:
         # Validate token if provided — require slug+token match via candidate
         if portal_token:
-            valid = db.execute(text("""
+            valid = await db.execute(text("""
                 SELECT w.id FROM recruit_portal_workspaces w
                 JOIN mm_candidates c ON c.id = w.candidate_id
                 WHERE w.slug = :slug AND w.is_active = true
@@ -647,7 +649,7 @@ async def get_purl_company_updates(
     request: Request,
     category: Optional[str] = None,
     limit: int = Query(10, le=50),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get company updates/propaganda for the PURL portal."""
     _enforce_rate_limit(request)
@@ -664,7 +666,7 @@ async def purl_chat_with_assistant(
     slug: str,
     chat_request: ChatRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """AI chat interaction for candidate questions on PURL portal."""
     _enforce_rate_limit(request, "chat", _RATE_MAX_CHAT)
@@ -691,7 +693,7 @@ async def get_purl_availability(
     request: Request,
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
     duration_minutes: int = Query(30, description="Meeting duration"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get available time slots for scheduling on PURL portal."""
     _enforce_rate_limit(request)
@@ -715,7 +717,7 @@ async def schedule_purl_appointment(
     slug: str,
     appointment: AppointmentCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Book an appointment through the PURL portal."""
     _enforce_rate_limit(request)
@@ -744,7 +746,7 @@ async def calculate_purl_production_impact(
     slug: str,
     input_data: CalculatorInput,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Calculate production impact if candidate joins the company."""
     _enforce_rate_limit(request)
@@ -761,7 +763,7 @@ async def get_purl_chat_history(
     slug: str,
     request: Request,
     limit: int = Query(50, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get chat message history for the PURL portal."""
     _enforce_rate_limit(request)
@@ -789,7 +791,7 @@ async def create_purl_portal_workspace(
     candidate_id: int,
     slug: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a PURL portal workspace for a candidate (admin)."""
     _require_admin(current_user)
@@ -811,14 +813,14 @@ async def update_workspace_slug_by_candidate(
     candidate_id: int,
     new_slug: str = Query(..., description="New slug for the workspace"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update workspace slug by candidate ID (admin)."""
     _require_admin(current_user)
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     try:
-        result = db.execute(
+        result = await db.execute(
             text("""
                 UPDATE recruit_portal_workspaces
                 SET slug = :new_slug
@@ -829,7 +831,7 @@ async def update_workspace_slug_by_candidate(
             {"candidate_id": candidate_id, "new_slug": new_slug, "org_id": current_user.organization_id}
         )
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if not row:
             raise HTTPException(status_code=404, detail="Workspace not found for this candidate")
@@ -844,14 +846,14 @@ async def update_workspace_slug_by_candidate(
 async def get_workspace_by_candidate(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get workspace info by candidate ID (admin)."""
     _require_admin(current_user)
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     try:
-        result = db.execute(
+        result = await db.execute(
             text("""
                 SELECT id, slug, candidate_id, is_active, created_at
                 FROM recruit_portal_workspaces
@@ -882,7 +884,7 @@ async def list_purl_portal_workspaces(
     limit: int = Query(50, le=100),
     offset: int = 0,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all PURL portal workspaces (admin)."""
     _require_admin(current_user)
@@ -900,14 +902,14 @@ async def update_candidate_email(
     candidate_id: int,
     email: str = Query(..., description="New email address"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update candidate email address (admin)."""
     _require_admin(current_user)
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     try:
-        result = db.execute(
+        result = await db.execute(
             text("""
                 UPDATE mm_candidates
                 SET email = :email
@@ -917,7 +919,7 @@ async def update_candidate_email(
             {"candidate_id": candidate_id, "email": email, "org_id": current_user.organization_id}
         )
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if not row:
             raise HTTPException(status_code=404, detail="Candidate not found")
@@ -934,7 +936,7 @@ async def create_purl_portal_token(
     scope: str = "full",
     expires_days: Optional[int] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create an access token for a PURL portal workspace."""
     _require_admin(current_user)
@@ -964,7 +966,7 @@ class CompanyUpdateCreate(BaseModel):
 async def create_purl_company_update(
     update: CompanyUpdateCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a company update/propaganda post (admin)."""
     _require_admin(current_user)
@@ -990,7 +992,7 @@ async def list_purl_company_updates(
     category: Optional[str] = None,
     limit: int = Query(50, le=100),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List company updates (admin)."""
     _require_admin(current_user)
@@ -1007,7 +1009,7 @@ async def list_purl_company_updates(
 async def delete_purl_company_update(
     update_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a company update (admin)."""
     _require_admin(current_user)
@@ -1033,7 +1035,7 @@ class CalculatorConfigUpdate(BaseModel):
 async def update_purl_calculator_config(
     config: CalculatorConfigUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update production calculator configuration (admin)."""
     _require_admin(current_user)
@@ -1052,7 +1054,7 @@ async def update_purl_calculator_config(
 @router.get("/admin/calculator-config")
 async def get_purl_calculator_config(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get production calculator configuration."""
     _require_admin(current_user)

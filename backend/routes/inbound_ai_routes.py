@@ -25,10 +25,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
-from db import get_db
+from db import get_db, get_async_db
 from routes.auth_deps import current_user_flexible_dep
 from middleware.webhook_verification import require_vapi_webhook
 from services.voice_context_builder import build_inbound_context, build_transfer_whisper
@@ -711,7 +712,7 @@ def _resolve_org_from_assistant(db: Session, assistant_id: str) -> Optional[Dict
 async def inbound_call_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Telnyx webhook for inbound calls on LO numbers.
@@ -785,7 +786,7 @@ async def inbound_call_webhook(
                     lo_info = {"user_id": lo_user_id}
                     # Fetch org info
                     try:
-                        row = db.execute(text("""
+                        row = await db.execute(text("""
                             SELECT u.first_name, u.last_name, u.organization_id,
                                    o.name AS org_name
                             FROM users u
@@ -1064,7 +1065,7 @@ async def vapi_inbound_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
     raw_body: bytes = Depends(require_vapi_webhook),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Vapi server-side webhook for inbound AI assistant events.
@@ -1227,7 +1228,7 @@ async def vapi_inbound_webhook(
         _rec_status = "available" if recording_url else "none"
         _tx_status = "completed" if transcript else "none"
         try:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO vapi_calls (
                     vapi_call_id, phone_number, direction, status,
                     transcript, summary, recording_url, stereo_recording_url,
@@ -1268,11 +1269,11 @@ async def vapi_inbound_webhook(
                 "started": call_data.get("startedAt"),
                 "ended": call_data.get("endedAt"),
             })
-            db.commit()
+            await db.commit()
         except Exception as e:
             logger.warning("Failed to log end-of-call report: %s", e)
             try:
-                db.rollback()
+                await db.rollback()
             except Exception as _exc:  # noqa: BLE001
                 pass
 
@@ -1383,7 +1384,7 @@ async def vapi_inbound_webhook(
 
 @router.get("/inbound-config")
 async def get_inbound_config_endpoint(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Get inbound AI answering configuration for the current org."""
@@ -1399,7 +1400,7 @@ async def get_inbound_config_endpoint(
 @router.put("/inbound-config")
 async def update_inbound_config_endpoint(
     body: InboundConfigUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Update inbound AI answering configuration."""
@@ -1438,15 +1439,15 @@ async def update_inbound_config_endpoint(
     set_clause = ", ".join(updates)
 
     try:
-        existing = db.execute(text(
+        existing = await db.execute(text(
             "SELECT id FROM vapi_inbound_configs WHERE organization_id = :org_id"
         ), {"org_id": org_id}).fetchone()
 
         if existing:
             sql = "UPDATE vapi_inbound_configs SET " + set_clause + " WHERE organization_id = :org_id"
-            db.execute(text(sql), params)
+            await db.execute(text(sql), params)
         else:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO vapi_inbound_configs (
                     organization_id, ai_answering_enabled, greeting_text,
                     lo_ring_timeout, vapi_assistant_id, company_name,
@@ -1466,11 +1467,11 @@ async def update_inbound_config_endpoint(
                 "now": now,
             })
 
-        db.commit()
+        await db.commit()
     except Exception as e:
         logger.error("Failed to update inbound config: %s", e)
         try:
-            db.rollback()
+            await db.rollback()
         except Exception as _exc:  # noqa: BLE001
             pass
         raise HTTPException(status_code=500, detail="Failed to update configuration")
@@ -1481,7 +1482,7 @@ async def update_inbound_config_endpoint(
 
 @router.post("/inbound-config/provision-assistant")
 async def provision_inbound_assistant(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """
@@ -1498,7 +1499,7 @@ async def provision_inbound_assistant(
     _ensure_inbound_config_table(db)
 
     # Get LO and org info
-    row = db.execute(text("""
+    row = await db.execute(text("""
         SELECT u.first_name, u.last_name, o.name AS org_name
         FROM users u
         LEFT JOIN organizations o ON o.id = u.organization_id
@@ -1513,16 +1514,16 @@ async def provision_inbound_assistant(
 
     # Clear existing assistant so a fresh one is created
     try:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE vapi_inbound_configs
             SET vapi_assistant_id = NULL, updated_at = NOW()
             WHERE organization_id = :org_id
         """), {"org_id": org_id})
-        db.commit()
+        await db.commit()
     except Exception as _exc:  # noqa: BLE001
         logger.exception("unhandled exception")
         try:
-            db.rollback()
+            await db.rollback()
         except Exception as _exc:  # noqa: BLE001
             pass
 
@@ -1548,7 +1549,7 @@ async def provision_inbound_assistant(
 
 @router.post("/inbound-config/migrate")
 async def run_inbound_migration(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(current_user_flexible_dep),
 ):
     """Create the vapi_inbound_configs table if it does not exist."""

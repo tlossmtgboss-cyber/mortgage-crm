@@ -40,8 +40,10 @@ from typing import Optional, List
 
 from fastapi import Depends, HTTPException, Request, UploadFile, File, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -679,7 +681,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         filter: Optional[str] = Query(None),
         sortBy: Optional[str] = Query(None, alias="sortBy"),
         sortOrder: Optional[str] = Query("ascending", alias="sortOrder"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         SCIM 2.0 - List/search users (RFC 7644 Section 3.4.2).
@@ -750,7 +752,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             " LEFT JOIN users m ON m.id = u.manager_id"
             " WHERE " + where_sql
         )
-        total_row = db.execute(text(count_sql), params).fetchone()
+        total_row = await db.execute(text(count_sql), params).fetchone()
         total_count = total_row.cnt if total_row else 0
 
         # Fetch page — include columns for enterprise extension (RFC 7643 Section 4.3)
@@ -768,7 +770,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             " ORDER BY " + order_column + " " + order_dir +
             " LIMIT :limit OFFSET :offset"
         )
-        rows = db.execute(text(select_sql), params).fetchall()
+        rows = await db.execute(text(select_sql), params).fetchall()
 
         base_url = str(request.base_url).rstrip("/")
         resources = [_user_to_scim(r, base_url) for r in rows]
@@ -792,7 +794,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             reason="SCIM 2.0 user list/search (IdP-initiated)",
             scim_token_hash=token_hash,
         )
-        db.commit()
+        await db.commit()
 
         return {
             "schemas": [SCIM_LIST_SCHEMA],
@@ -806,7 +808,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     @SCIM_OP_LIMIT
     async def scim_create_user(
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         SCIM 2.0 - Create user (RFC 7644 Section 3.3).
@@ -841,7 +843,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         is_active = body.get("active", True)
 
         # Check for duplicate
-        existing = db.execute(
+        existing = await db.execute(
             text("SELECT id FROM users WHERE email = :email"), {"email": user_name}
         ).fetchone()
         if existing:
@@ -897,7 +899,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         random_pw = secrets.token_urlsafe(32)
         hashed = _hash_password(random_pw)
 
-        result = db.execute(
+        result = await db.execute(
             text("""
                 INSERT INTO users (
                     email, hashed_password, first_name, last_name,
@@ -936,7 +938,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         )
 
         new_user = result.fetchone()
-        db.commit()
+        await db.commit()
 
         # Audit: SCIM user creation
         _write_audit_log(
@@ -959,7 +961,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             reason="SCIM 2.0 user provisioning (IdP-initiated)",
             scim_token_hash=token_hash,
         )
-        db.commit()
+        await db.commit()
 
         _release_scim_tenant_connection(org_id)
 
@@ -974,13 +976,13 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     async def scim_get_user(
         user_id: int,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """SCIM 2.0 - Get user by ID (RFC 7644 Section 3.4.1).
         Rate limited: 100 requests/minute per SCIM token."""
         _token, token_hash = _validate_scim_token(request)
 
-        row = db.execute(
+        row = await db.execute(
             text("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
                        u.permission_role, u.organization_id, u.created_at,
@@ -1010,7 +1012,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     async def scim_replace_user(
         user_id: int,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """SCIM 2.0 - Replace user (RFC 7644 Section 3.5.1).
         Rate limited: 100 requests/minute per SCIM token."""
@@ -1026,7 +1028,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             )
 
         # Fetch existing user for 404 check and audit before-state
-        existing = db.execute(
+        existing = await db.execute(
             text("""
                 SELECT id, email, first_name, last_name, is_active, permission_role
                 FROM users WHERE id = :user_id
@@ -1070,7 +1072,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             )
 
         # Check for email conflict with another user
-        conflict = db.execute(
+        conflict = await db.execute(
             text("SELECT id FROM users WHERE email = :email AND id != :user_id"),
             {"email": user_name, "user_id": user_id},
         ).fetchone()
@@ -1150,11 +1152,11 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             "    " + role_clause +
             " WHERE id = :user_id"
         )
-        db.execute(text(update_sql), update_params)
-        db.commit()
+        await db.execute(text(update_sql), update_params)
+        await db.commit()
 
         # Re-fetch and return (with enterprise extension columns)
-        row = db.execute(
+        row = await db.execute(
             text("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
                        u.permission_role, u.organization_id, u.created_at,
@@ -1191,7 +1193,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             reason="SCIM 2.0 user replacement (PUT, IdP-initiated)",
             scim_token_hash=token_hash,
         )
-        db.commit()
+        await db.commit()
 
         base_url = str(request.base_url).rstrip("/")
         return _user_to_scim(row, base_url)
@@ -1201,7 +1203,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     async def scim_patch_user(
         user_id: int,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         SCIM 2.0 - Partial update user (RFC 7644 Section 3.5.2).
@@ -1239,7 +1241,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             )
 
         # Fetch existing user for 404 check and audit before-state
-        existing = db.execute(
+        existing = await db.execute(
             text("""
                 SELECT id, email, first_name, last_name, is_active, permission_role
                 FROM users WHERE id = :user_id
@@ -1409,7 +1411,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         if not update_fields:
             # No-op; return current state (with enterprise extension columns)
-            row = db.execute(
+            row = await db.execute(
                 text("""
                     SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
                            u.permission_role, u.organization_id, u.created_at,
@@ -1429,7 +1431,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         # Check email uniqueness if changing email
         if "email" in update_fields:
-            conflict = db.execute(
+            conflict = await db.execute(
                 text("SELECT id FROM users WHERE email = :email AND id != :user_id"),
                 {"email": update_fields["email"], "user_id": user_id},
             ).fetchone()
@@ -1448,10 +1450,10 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             params[param_key] = val
 
         patch_sql = "UPDATE users SET " + ', '.join(set_parts) + " WHERE id = :user_id"
-        db.execute(text(patch_sql), params)
-        db.commit()
+        await db.execute(text(patch_sql), params)
+        await db.commit()
 
-        row = db.execute(
+        row = await db.execute(
             text("""
                 SELECT u.id, u.email, u.first_name, u.last_name, u.is_active,
                        u.permission_role, u.organization_id, u.created_at,
@@ -1481,7 +1483,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             reason="SCIM 2.0 user partial update (PATCH, IdP-initiated)",
             scim_token_hash=token_hash,
         )
-        db.commit()
+        await db.commit()
 
         base_url = str(request.base_url).rstrip("/")
         return _user_to_scim(row, base_url)
@@ -1491,7 +1493,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     async def scim_delete_user(
         user_id: int,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         SCIM 2.0 - Delete (deactivate) user (RFC 7644 Section 3.6).
@@ -1502,7 +1504,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         """
         _token, token_hash = _validate_scim_token(request)
 
-        existing = db.execute(
+        existing = await db.execute(
             text("""
                 SELECT id, email, first_name, last_name, is_active,
                        permission_role, organization_id
@@ -1516,11 +1518,11 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 detail=_scim_error(404, f"User {user_id} not found"),
             )
 
-        db.execute(
+        await db.execute(
             text("UPDATE users SET is_active = false WHERE id = :user_id"),
             {"user_id": user_id},
         )
-        db.commit()
+        await db.commit()
 
         # Audit: SCIM user deactivation (DELETE)
         _write_audit_log(
@@ -1543,7 +1545,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             reason="SCIM 2.0 user deactivation (DELETE, IdP-initiated)",
             scim_token_hash=token_hash,
         )
-        db.commit()
+        await db.commit()
 
         # 204 No Content per RFC 7644
         from starlette.responses import Response
@@ -1597,7 +1599,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         startIndex: int = Query(1, ge=1, alias="startIndex"),
         count: int = Query(100, ge=1, le=500, alias="count"),
         filter: Optional[str] = Query(None),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         SCIM 2.0 - List groups (RFC 7644 Section 3.4.2).
@@ -1629,7 +1631,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 " AND permission_role IS NOT NULL"
                 " ORDER BY permission_role"
             )
-            roles_rows = db.execute(
+            roles_rows = await db.execute(
                 text(roles_sql), {"org_id": org_id, "role": role_filter}
             ).fetchall()
         else:
@@ -1639,7 +1641,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 " AND permission_role IS NOT NULL"
                 " ORDER BY permission_role"
             )
-            roles_rows = db.execute(text(roles_sql), {"org_id": org_id}).fetchall()
+            roles_rows = await db.execute(text(roles_sql), {"org_id": org_id}).fetchall()
 
         all_roles = [r.permission_role for r in roles_rows if r.permission_role]
         total_count = len(all_roles)
@@ -1657,7 +1659,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 " AND is_active = true"
                 " ORDER BY id"
             )
-            member_rows = db.execute(
+            member_rows = await db.execute(
                 text(members_sql), {"org_id": org_id, "role": role}
             ).fetchall()
 
@@ -1683,7 +1685,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     async def scim_get_group(
         group_id: str,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         SCIM 2.0 - Get group by ID (RFC 7644 Section 3.4.1).
@@ -1707,7 +1709,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             "SELECT COUNT(*) as cnt FROM users"
             " WHERE organization_id = :org_id AND permission_role = :role"
         )
-        check_row = db.execute(text(check_sql), {"org_id": org_id, "role": role}).fetchone()
+        check_row = await db.execute(text(check_sql), {"org_id": org_id, "role": role}).fetchone()
         if not check_row or check_row.cnt == 0:
             raise HTTPException(
                 status_code=404,
@@ -1721,7 +1723,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             " AND is_active = true"
             " ORDER BY id"
         )
-        member_rows = db.execute(
+        member_rows = await db.execute(
             text(members_sql), {"org_id": org_id, "role": role}
         ).fetchall()
 
@@ -1740,7 +1742,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     async def scim_patch_group(
         group_id: str,
         request: Request,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
     ):
         """
         SCIM 2.0 - Update group membership (RFC 7644 Section 3.5.2).
@@ -1799,7 +1801,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                     user_id = member.get("value") if isinstance(member, dict) else member
                     if user_id:
                         try:
-                            db.execute(
+                            await db.execute(
                                 text(
                                     "UPDATE users SET permission_role = :role, role = :role"
                                     " WHERE id = :user_id AND organization_id = :org_id"
@@ -1815,7 +1817,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 member_match = re.search(r'value\s+eq\s+"(\d+)"', path)
                 if member_match:
                     user_id = int(member_match.group(1))
-                    db.execute(
+                    await db.execute(
                         text(
                             "UPDATE users SET permission_role = 'sales', role = 'sales'"
                             " WHERE id = :user_id AND organization_id = :org_id"
@@ -1829,7 +1831,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                         user_id = member.get("value") if isinstance(member, dict) else member
                         if user_id:
                             try:
-                                db.execute(
+                                await db.execute(
                                     text(
                                         "UPDATE users SET permission_role = 'sales', role = 'sales'"
                                         " WHERE id = :user_id AND organization_id = :org_id"
@@ -1843,7 +1845,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             elif op_type == "replace" and (path == "members" or not path):
                 # Replace all members: remove all current, add new
                 # First, reset current members of this role to 'sales'
-                db.execute(
+                await db.execute(
                     text(
                         "UPDATE users SET permission_role = 'sales', role = 'sales'"
                         " WHERE organization_id = :org_id AND permission_role = :role"
@@ -1856,7 +1858,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                     user_id = member.get("value") if isinstance(member, dict) else member
                     if user_id:
                         try:
-                            db.execute(
+                            await db.execute(
                                 text(
                                     "UPDATE users SET permission_role = :role, role = :role"
                                     " WHERE id = :user_id AND organization_id = :org_id"
@@ -1866,7 +1868,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                         except (ValueError, TypeError):
                             logger.warning(f"SCIM Groups PATCH replace: invalid user_id {user_id}")
 
-        db.commit()
+        await db.commit()
 
         # Audit
         _write_audit_log(
@@ -1885,7 +1887,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             reason="SCIM 2.0 group membership update (PATCH, IdP-initiated)",
             scim_token_hash=token_hash,
         )
-        db.commit()
+        await db.commit()
 
         # Return updated group
         members_sql = (
@@ -1894,7 +1896,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             " AND is_active = true"
             " ORDER BY id"
         )
-        member_rows = db.execute(
+        member_rows = await db.execute(
             text(members_sql), {"org_id": org_id, "role": role}
         ).fetchall()
 
@@ -1918,7 +1920,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         request: Request,
         file: UploadFile = File(...),
         preview: bool = Query(False, description="Dry-run mode: validate without creating users"),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -1961,14 +1963,14 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         # Look up existing branch names for the org
         branch_map: dict = {}
         if org_id:
-            branches = db.execute(
+            branches = await db.execute(
                 text("SELECT id, name FROM branches WHERE organization_id = :org_id"),
                 {"org_id": org_id},
             ).fetchall()
             branch_map = {b.name.lower(): b.id for b in branches}
 
         # Collect existing emails for duplicate detection
-        existing_emails_rows = db.execute(text("SELECT email FROM users")).fetchall()
+        existing_emails_rows = await db.execute(text("SELECT email FROM users")).fetchall()
         existing_emails = {r.email.lower() for r in existing_emails_rows}
 
         results = []
@@ -2058,7 +2060,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             random_pw = secrets.token_urlsafe(16)
             hashed = _hash_password(random_pw)
 
-            insert_result = db.execute(
+            insert_result = await db.execute(
                 text("""
                     INSERT INTO users (
                         email, hashed_password, first_name, last_name,
@@ -2085,7 +2087,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             new_id = insert_result.fetchone()
             created_ids.append(new_id[0] if new_id else None)
 
-        db.commit()
+        await db.commit()
 
         # Update results with created IDs
         created_idx = 0
@@ -2118,7 +2120,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             ip_address=request.client.host if request.client else None,
             reason=f"CSV bulk import: {len(created_ids)} users created from '{file.filename}'",
         )
-        db.commit()
+        await db.commit()
 
         return {
             "summary": summary,
@@ -2131,7 +2133,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/onboarding/mfa/setup", tags=["MFA Onboarding"])
     async def mfa_onboarding_setup(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -2157,7 +2159,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         plain_codes, hashed_codes = generate_backup_codes()
 
         # Persist secret and backup codes (not yet activated)
-        db.execute(
+        await db.execute(
             text("""
                 UPDATE users
                 SET mfa_secret = :secret,
@@ -2170,7 +2172,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 "user_id": current_user.id,
             },
         )
-        db.commit()
+        await db.commit()
 
         return {
             "secret": mfa_data["secret"],
@@ -2183,7 +2185,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/onboarding/mfa/verify", tags=["MFA Onboarding"])
     async def mfa_onboarding_verify(
         body: MfaVerifyRequest,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -2195,7 +2197,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         from auth.mfa import verify_mfa_token
 
         # Get the pending secret
-        user_row = db.execute(
+        user_row = await db.execute(
             text("SELECT mfa_secret, mfa_enabled FROM users WHERE id = :user_id"),
             {"user_id": current_user.id},
         ).fetchone()
@@ -2218,7 +2220,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             )
 
         # Activate MFA
-        db.execute(
+        await db.execute(
             text("""
                 UPDATE users
                 SET mfa_enabled = true,
@@ -2227,7 +2229,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             """),
             {"user_id": current_user.id},
         )
-        db.commit()
+        await db.commit()
 
         return {
             "verified": True,
@@ -2237,7 +2239,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
     @app.get("/api/v1/onboarding/mfa/status", tags=["MFA Onboarding"])
     async def mfa_onboarding_status(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -2251,7 +2253,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, "organization_id", None)
 
         if org_id:
-            org_row = db.execute(
+            org_row = await db.execute(
                 text("SELECT mfa_required FROM organizations WHERE id = :org_id"),
                 {"org_id": org_id},
             ).fetchone()
@@ -2259,7 +2261,7 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
                 org_requires_mfa = bool(org_row.mfa_required)
 
         # Get user MFA status
-        user_row = db.execute(
+        user_row = await db.execute(
             text("""
                 SELECT mfa_enabled, mfa_enabled_at, mfa_secret IS NOT NULL as setup_started
                 FROM users WHERE id = :user_id

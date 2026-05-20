@@ -12,7 +12,7 @@ Provides endpoints for:
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List, Callable, Any, Dict
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timezone, timedelta
@@ -22,6 +22,8 @@ import io
 from services.esign_service import EsignService, EsignError
 from services.esign_pdf_service import get_esign_pdf_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +291,7 @@ async def list_envelopes(
     limit: int = Query(50, le=200),
     offset: int = 0,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List envelopes with filters."""
     filters = []
@@ -318,7 +320,7 @@ async def list_envelopes(
         " ORDER BY e.created_at DESC"
         " LIMIT :limit OFFSET :offset"
     )
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     envelopes = [dict(row._mapping) for row in result]
 
@@ -531,7 +533,7 @@ async def validate_signing_token(
 async def get_signing_document(
     token: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get PDF document for signing.
@@ -542,7 +544,7 @@ async def get_signing_document(
 
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
-    signer = db.execute(text("""
+    signer = await db.execute(text("""
         SELECT s.id, e.pdf_storage_key, e.pdf_file_name, e.status as envelope_status
         FROM esign_signers s
         JOIN esign_envelopes e ON e.id = s.envelope_id
@@ -666,7 +668,7 @@ async def complete_signing(
 async def generate_signed_document(
     envelope_id: int,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Generate the final signed PDF and audit trail.
@@ -676,7 +678,7 @@ async def generate_signed_document(
     generates an audit trail PDF, combines them, and uploads the results
     back to S3.
     """
-    envelope = db.execute(text("""
+    envelope = await db.execute(text("""
         SELECT * FROM esign_envelopes WHERE id = :id
     """), {"id": envelope_id}).fetchone()
 
@@ -722,10 +724,10 @@ async def generate_signed_document(
 async def list_completed_documents(
     envelope_id: int,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List completed documents for an envelope."""
-    docs = db.execute(text("""
+    docs = await db.execute(text("""
         SELECT * FROM esign_completed_documents
         WHERE envelope_id = :id
         ORDER BY created_at DESC
@@ -787,7 +789,7 @@ async def extract_pdf_metadata(
 
 @router.get("/diagnostic/summary")
 async def get_esign_system_summary(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get system summary and health check.
@@ -797,7 +799,7 @@ async def get_esign_system_summary(
         summary = {}
 
         # Count envelopes by status
-        status_counts = db.execute(text("""
+        status_counts = await db.execute(text("""
             SELECT status, COUNT(*) as count
             FROM esign_envelopes
             GROUP BY status
@@ -805,10 +807,10 @@ async def get_esign_system_summary(
         summary["envelopes_by_status"] = {row[0]: row[1] for row in status_counts}
 
         # Total counts
-        summary["total_envelopes"] = db.execute(text("SELECT COUNT(*) FROM esign_envelopes")).scalar()
-        summary["total_signers"] = db.execute(text("SELECT COUNT(*) FROM esign_signers")).scalar()
-        summary["total_fields"] = db.execute(text("SELECT COUNT(*) FROM esign_fields")).scalar()
-        summary["total_audit_events"] = db.execute(text("SELECT COUNT(*) FROM esign_audit_events")).scalar()
+        summary["total_envelopes"] = await db.execute(text("SELECT COUNT(*) FROM esign_envelopes")).scalar()
+        summary["total_signers"] = await db.execute(text("SELECT COUNT(*) FROM esign_signers")).scalar()
+        summary["total_fields"] = await db.execute(text("SELECT COUNT(*) FROM esign_fields")).scalar()
+        summary["total_audit_events"] = await db.execute(text("SELECT COUNT(*) FROM esign_audit_events")).scalar()
 
         return {
             "system": "esign",
@@ -826,7 +828,7 @@ async def get_esign_system_summary(
 
 @router.post("/diagnostic/run-migration")
 async def run_esign_migration(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Run E-Sign migration.

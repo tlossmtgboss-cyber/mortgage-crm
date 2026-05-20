@@ -21,10 +21,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 from services.voice_context_builder import build_outbound_context
 
 logger = logging.getLogger(__name__)
@@ -896,7 +897,7 @@ async def trigger_call(
     body: TriggerCallRequest,
     background_tasks: BackgroundTasks,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Trigger an AI outbound call for a specific lead.
@@ -917,7 +918,7 @@ async def trigger_call(
     _ensure_tables(db)
 
     # Verify lead exists and belongs to the user's org
-    lead = db.execute(text("""
+    lead = await db.execute(text("""
         SELECT id, phone, first_name, last_name, owner_id, stage
         FROM leads
         WHERE id = :lid AND organization_id = :org_id
@@ -971,7 +972,7 @@ async def trigger_call(
 async def new_lead_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Webhook endpoint for any lead source (web form, API, LOS sync).
@@ -1014,7 +1015,7 @@ async def new_lead_webhook(
 
     # --- IDOR Fix: Verify lead exists AND belongs to a valid organization ---
     # Query requires organization_id IS NOT NULL to ensure the lead is org-scoped
-    lead = db.execute(text("""
+    lead = await db.execute(text("""
         SELECT l.id, l.phone, l.organization_id, l.owner_id, l.first_name
         FROM leads l
         INNER JOIN organizations o ON o.id = l.organization_id
@@ -1035,7 +1036,7 @@ async def new_lead_webhook(
     # --- Idempotency: reject if a speed-to-lead call was already triggered
     #     for this lead in the last 60 seconds (prevents duplicate webhook retries) ---
     try:
-        recent_event = db.execute(text("""
+        recent_event = await db.execute(text("""
             SELECT id FROM speed_to_lead_events
             WHERE lead_id = :lid
               AND event = 'call_flow_started'
@@ -1082,7 +1083,7 @@ async def new_lead_webhook(
 @router.get("/config")
 async def get_config(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Get the per-organization speed-to-lead configuration.
@@ -1109,7 +1110,7 @@ async def get_config(
 async def update_config(
     body: SpeedToLeadConfigUpdate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Update per-organization speed-to-lead configuration.
@@ -1151,7 +1152,7 @@ async def update_config(
                 )
 
     # Check if config exists
-    existing = db.execute(text("""
+    existing = await db.execute(text("""
         SELECT id FROM speed_to_lead_config WHERE organization_id = :org_id
     """), {"org_id": org_id}).fetchone()
 
@@ -1187,11 +1188,11 @@ async def update_config(
         if updates:
             updates.append("updated_at = :now")
             sql = f"UPDATE speed_to_lead_config SET {', '.join(updates)} WHERE organization_id = :org_id"
-            db.execute(text(sql), params)
-            db.commit()
+            await db.execute(text(sql), params)
+            await db.commit()
     else:
         # INSERT with defaults + provided values
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO speed_to_lead_config (
                 organization_id, sla_seconds, channels_enabled,
                 quiet_hours_start, quiet_hours_end,
@@ -1211,7 +1212,7 @@ async def update_config(
             "ago": body.ai_greeting_override,
             "now": datetime.now(timezone.utc),
         })
-        db.commit()
+        await db.commit()
 
     # Return updated config
     config = _get_org_config(db, org_id)

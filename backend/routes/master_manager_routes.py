@@ -6,7 +6,7 @@ Capacity tracking, talent state, performance, and recruiting endpoints.
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timezone, timedelta
 from pydantic import BaseModel, Field
@@ -16,6 +16,8 @@ from services.capacity_service import CapacityService, get_capacity_service
 from services.performance_service import PerformanceService, get_performance_service
 from services.risk_detection_service import RiskDetectionService, get_risk_detection_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 import os
 
 
@@ -98,7 +100,7 @@ class UserCapacityCreate(BaseModel):
 @router.get("/capacity/overview")
 async def get_capacity_overview(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get team-level capacity overview."""
     service = get_capacity_service(db)
@@ -129,7 +131,7 @@ async def get_capacity_overview(
 @router.get("/capacity/by-role")
 async def get_capacity_by_role(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get capacity metrics grouped by role."""
     service = get_capacity_service(db)
@@ -147,7 +149,7 @@ async def get_all_user_capacities(
     status: Optional[str] = Query(None, description="Filter by capacity status"),
     role: Optional[str] = Query(None, description="Filter by role name"),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get capacity metrics for all users."""
     service = get_capacity_service(db)
@@ -168,7 +170,7 @@ async def get_all_user_capacities(
 async def get_user_capacity(
     user_id: int,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get detailed capacity metrics for a specific user."""
     service = get_capacity_service(db)
@@ -210,7 +212,7 @@ async def update_user_capacity_limits(
     user_id: int,
     limits: CapacityLimitsUpdate,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update capacity limits for a user."""
     service = get_capacity_service(db)
@@ -232,7 +234,7 @@ async def update_user_availability(
     user_id: int,
     availability: AvailabilityUpdate,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update user availability status."""
     service = get_capacity_service(db)
@@ -250,7 +252,7 @@ async def update_user_availability(
 @router.post("/capacity/recalculate")
 async def recalculate_all_capacities(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Trigger recalculation of all user capacities."""
     service = get_capacity_service(db)
@@ -265,7 +267,7 @@ async def recalculate_all_capacities(
 async def create_user_capacity(
     data: UserCapacityCreate,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create capacity record for a user."""
     query = text("""
@@ -288,7 +290,7 @@ async def create_user_capacity(
         RETURNING id
     """)
 
-    result = db.execute(query, {
+    result = await db.execute(query, {
         "org_id": organization_id,
         "user_id": data.user_id,
         "role_id": data.role_definition_id,
@@ -296,7 +298,7 @@ async def create_user_capacity(
         "max_leads": data.max_leads_concurrent,
         "max_tasks": data.max_tasks_daily
     }).fetchone()
-    db.commit()
+    await db.commit()
 
     # Calculate initial capacity
     service = get_capacity_service(db)
@@ -320,7 +322,7 @@ async def suggest_assignment(
     entity_type: str = Query("loan", description="lead, loan, or task"),
     complexity: str = Query("normal", description="simple, normal, or complex"),
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get assignment recommendation based on capacity and performance."""
     service = get_capacity_service(db)
@@ -356,7 +358,7 @@ async def get_available_users(
     role: str,
     min_capacity: float = Query(25, ge=0, le=100, description="Minimum available capacity %"),
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get list of available users for a role."""
     service = get_capacity_service(db)
@@ -381,7 +383,7 @@ async def get_available_users(
 async def get_role_definitions(
     organization_id: Optional[int] = None,
     category: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get all role definitions."""
     query = text("""
@@ -397,7 +399,7 @@ async def get_role_definitions(
         ORDER BY role_category, role_name
     """)
 
-    results = db.execute(query, {
+    results = await db.execute(query, {
         "org_id": organization_id,
         "category": category
     }).fetchall()
@@ -429,7 +431,7 @@ async def get_role_definitions(
 async def create_role_definition(
     role: RoleDefinitionCreate,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new role definition."""
     query = text("""
@@ -449,7 +451,7 @@ async def create_role_definition(
     """)
 
     import json
-    result = db.execute(query, {
+    result = await db.execute(query, {
         "org_id": organization_id,
         "role_name": role.role_name,
         "role_category": role.role_category,
@@ -462,7 +464,7 @@ async def create_role_definition(
         "replacement": role.replacement_difficulty,
         "skills": json.dumps(role.required_skills) if role.required_skills else "[]"
     }).fetchone()
-    db.commit()
+    await db.commit()
 
     return {
         "id": result.id,
@@ -478,7 +480,7 @@ async def create_role_definition(
 @router.get("/talent/readiness")
 async def get_talent_readiness_board(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get talent readiness board - users grouped by state."""
     query = text("""
@@ -505,7 +507,7 @@ async def get_talent_readiness_board(
         ORDER BY ts.state
     """)
 
-    results = db.execute(query, {"org_id": organization_id}).fetchall()
+    results = await db.execute(query, {"org_id": organization_id}).fetchall()
 
     # Organize into board columns
     board = {
@@ -539,11 +541,11 @@ async def update_talent_state(
     state_update: TalentStateUpdate,
     changed_by: Optional[int] = None,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update talent state for a user."""
     # Get current state for history
-    current = db.execute(text("""
+    current = await db.execute(text("""
         SELECT state, overall_capacity_pct
         FROM mm_talent_state ts
         LEFT JOIN mm_talent_capacity tc ON tc.user_id = ts.user_id
@@ -564,7 +566,7 @@ async def update_talent_state(
         RETURNING *
     """)
 
-    result = db.execute(query, {
+    result = await db.execute(query, {
         "user_id": user_id,
         "new_state": state_update.state,
         "reason": state_update.reason,
@@ -587,7 +589,7 @@ async def update_talent_state(
         )
     """)
 
-    db.execute(history_query, {
+    await db.execute(history_query, {
         "org_id": organization_id,
         "user_id": user_id,
         "prev_state": current.state if current else None,
@@ -596,7 +598,7 @@ async def update_talent_state(
         "changed_by": changed_by,
         "capacity": current.overall_capacity_pct if current else None
     })
-    db.commit()
+    await db.commit()
 
     return {
         "user_id": user_id,
@@ -610,7 +612,7 @@ async def update_talent_state(
 async def get_talent_state(
     user_id: int,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get talent state for a user."""
     query = text("""
@@ -626,7 +628,7 @@ async def get_talent_state(
         AND (:org_id IS NULL OR ts.organization_id = :org_id)
     """)
 
-    result = db.execute(query, {
+    result = await db.execute(query, {
         "user_id": user_id,
         "org_id": organization_id
     }).fetchone()
@@ -675,7 +677,7 @@ async def get_capacity_alerts(
     status: str = Query("open", description="open, acknowledged, resolved, all"),
     severity: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get capacity and risk alerts."""
     status_filter = "AND status = :status" if status != "all" else ""
@@ -702,7 +704,7 @@ async def get_capacity_alerts(
     )
     query = text(sql)
 
-    results = db.execute(query, {
+    results = await db.execute(query, {
         "org_id": organization_id,
         "status": status if status != "all" else None,
         "severity": severity,
@@ -735,7 +737,7 @@ async def get_capacity_alerts(
 async def acknowledge_alert(
     alert_id: int,
     acknowledged_by: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Acknowledge an alert."""
     query = text("""
@@ -748,11 +750,11 @@ async def acknowledge_alert(
         RETURNING id, title
     """)
 
-    result = db.execute(query, {
+    result = await db.execute(query, {
         "alert_id": alert_id,
         "by_user": acknowledged_by
     }).fetchone()
-    db.commit()
+    await db.commit()
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
@@ -769,7 +771,7 @@ async def resolve_alert(
     alert_id: int,
     resolved_by: int,
     notes: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Resolve an alert."""
     query = text("""
@@ -783,12 +785,12 @@ async def resolve_alert(
         RETURNING id, title
     """)
 
-    result = db.execute(query, {
+    result = await db.execute(query, {
         "alert_id": alert_id,
         "by_user": resolved_by,
         "notes": notes
     }).fetchone()
-    db.commit()
+    await db.commit()
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
@@ -808,7 +810,7 @@ async def resolve_alert(
 async def get_performance_dashboard(
     period_type: str = Query("monthly", description="daily, weekly, or monthly"),
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get performance dashboard summary with leaderboard and trends."""
     service = get_performance_service(db)
@@ -825,7 +827,7 @@ async def get_performance_leaderboard(
     period_start: Optional[date] = None,
     organization_id: Optional[int] = None,
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get performance leaderboard for the specified period."""
     service = get_performance_service(db)
@@ -849,7 +851,7 @@ async def get_user_performance(
     period_type: str = Query("monthly", description="daily, weekly, or monthly"),
     limit: int = Query(12, ge=1, le=24),
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get performance history for a specific user."""
     service = get_performance_service(db)
@@ -882,7 +884,7 @@ async def calculate_daily_performance(
     target_date: Optional[date] = None,
     user_id: Optional[int] = None,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Calculate daily performance.
@@ -925,7 +927,7 @@ async def calculate_weekly_performance(
     week_start: Optional[date] = None,
     user_id: Optional[int] = None,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Calculate weekly performance.
@@ -973,7 +975,7 @@ async def calculate_monthly_performance(
     month_start: Optional[date] = None,
     user_id: Optional[int] = None,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Calculate monthly performance.
@@ -1022,7 +1024,7 @@ async def get_promotion_candidates(
     min_score: float = Query(85, ge=0, le=100, description="Minimum average score"),
     min_months: int = Query(3, ge=1, le=12, description="Minimum months of sustained performance"),
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get list of users who are potential promotion candidates based on sustained high performance."""
     service = get_performance_service(db)
@@ -1048,7 +1050,7 @@ async def get_promotion_candidates(
 @router.get("/risk/dashboard")
 async def get_risk_dashboard(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get comprehensive risk dashboard with all risk metrics."""
     service = get_risk_detection_service(db)
@@ -1061,7 +1063,7 @@ async def get_all_burnout_risks(
     min_risk_score: float = Query(0, ge=0, le=100, description="Minimum risk score filter"),
     organization_id: Optional[int] = None,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get burnout risk assessment for all users."""
     service = get_risk_detection_service(db)
@@ -1092,7 +1094,7 @@ async def get_all_burnout_risks(
 async def get_user_burnout_risk(
     user_id: int,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get detailed burnout risk assessment for a specific user."""
     service = get_risk_detection_service(db)
@@ -1119,7 +1121,7 @@ async def get_all_attrition_risks(
     min_risk_score: float = Query(0, ge=0, le=100, description="Minimum risk score filter"),
     organization_id: Optional[int] = None,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get attrition risk assessment for all users."""
     service = get_risk_detection_service(db)
@@ -1150,7 +1152,7 @@ async def get_all_attrition_risks(
 async def get_user_attrition_risk(
     user_id: int,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get detailed attrition risk assessment for a specific user."""
     service = get_risk_detection_service(db)
@@ -1175,7 +1177,7 @@ async def get_user_attrition_risk(
 @router.get("/risk/spof")
 async def get_single_points_of_failure(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Identify single points of failure - critical knowledge holders without backup."""
     service = get_risk_detection_service(db)
@@ -1204,7 +1206,7 @@ async def get_single_points_of_failure(
 @router.get("/risk/coverage-gaps")
 async def get_coverage_gaps(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Identify roles or capabilities with insufficient coverage."""
     service = get_risk_detection_service(db)
@@ -1215,7 +1217,7 @@ async def get_coverage_gaps(
 @router.get("/risk/key-dependencies")
 async def get_key_person_dependencies(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Identify key person dependencies across the organization."""
     service = get_risk_detection_service(db)
@@ -1227,7 +1229,7 @@ async def get_key_person_dependencies(
 async def get_risk_alerts(
     min_severity: str = Query("warning", description="Minimum severity: info, warning, high, critical"),
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Generate and return current risk alerts."""
     service = get_risk_detection_service(db)
@@ -1250,7 +1252,7 @@ async def get_risk_alerts(
 @router.post("/risk/calculate")
 async def calculate_all_risks(
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Recalculate all risk scores for all users."""
     service = get_risk_detection_service(db)
@@ -1262,7 +1264,7 @@ async def calculate_all_risks(
 async def calculate_user_risks(
     user_id: int,
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Calculate all risk scores for a specific user."""
     service = get_risk_detection_service(db)
@@ -1293,7 +1295,7 @@ async def calculate_user_risks(
 @router.post("/admin/run-migration")
 async def run_migration(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Run the Master Manager database migration."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -1310,7 +1312,7 @@ async def run_migration(
 @router.post("/admin/run-recruiting-migration")
 async def run_recruiting_migration(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Run the Phase 2 Recruiting tables migration."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -1327,7 +1329,7 @@ async def run_recruiting_migration(
 @router.post("/admin/fix-duplicate-roles")
 async def fix_duplicate_roles(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Remove duplicate role definitions, keeping only one of each role_name."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -1343,9 +1345,9 @@ async def fix_duplicate_roles(
                 GROUP BY role_name
             )
         """)
-        result = db.execute(delete_query)
+        result = await db.execute(delete_query)
         deleted_count = result.rowcount
-        db.commit()
+        await db.commit()
 
         # Get remaining roles
         roles_query = text("""
@@ -1353,7 +1355,7 @@ async def fix_duplicate_roles(
             FROM mm_role_definitions
             ORDER BY role_category, role_name
         """)
-        roles = db.execute(roles_query).fetchall()
+        roles = await db.execute(roles_query).fetchall()
 
         return {
             "message": f"Removed {deleted_count} duplicate roles",
@@ -1363,7 +1365,7 @@ async def fix_duplicate_roles(
             ]
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1372,7 +1374,7 @@ async def assign_role_to_user(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     user_id: int = Query(..., description="User ID"),
     role_id: int = Query(..., description="Role definition ID"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Assign a role to a user's capacity record."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -1386,7 +1388,7 @@ async def assign_role_to_user(
             FROM mm_role_definitions
             WHERE id = :role_id
         """)
-        role = db.execute(role_query, {"role_id": role_id}).fetchone()
+        role = await db.execute(role_query, {"role_id": role_id}).fetchone()
 
         if not role:
             raise HTTPException(status_code=404, detail=f"Role {role_id} not found")
@@ -1407,14 +1409,14 @@ async def assign_role_to_user(
             WHERE user_id = :user_id
             RETURNING id
         """)
-        result = db.execute(update_query, {
+        result = await db.execute(update_query, {
             "role_id": role_id,
             "user_id": user_id,
             "max_files": max_files,
             "max_leads": max_leads,
             "max_tasks": max_tasks
         }).fetchone()
-        db.commit()
+        await db.commit()
 
         if not result:
             raise HTTPException(status_code=404, detail=f"No capacity record for user {user_id}")
@@ -1433,14 +1435,14 @@ async def assign_role_to_user(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/admin/fix-duplicate-capacities")
 async def fix_duplicate_capacities(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Remove duplicate capacity records, keeping one per user."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -1455,16 +1457,16 @@ async def fix_duplicate_capacities(
                 GROUP BY user_id
             )
         """)
-        result = db.execute(delete_query)
+        result = await db.execute(delete_query)
         deleted_count = result.rowcount
-        db.commit()
+        await db.commit()
 
         return {
             "message": f"Removed {deleted_count} duplicate capacity records",
             "deleted_count": deleted_count
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -1472,7 +1474,7 @@ async def fix_duplicate_capacities(
 async def initialize_capacities(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     organization_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Initialize capacity records for all active users."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -1494,8 +1496,8 @@ async def initialize_capacities(
         RETURNING user_id
     """)
 
-    results = db.execute(query, {"org_id": organization_id}).fetchall()
-    db.commit()
+    results = await db.execute(query, {"org_id": organization_id}).fetchall()
+    await db.commit()
 
     # Also create talent state records
     state_query = text("""
@@ -1513,8 +1515,8 @@ async def initialize_capacities(
         AND (:org_id IS NULL OR u.organization_id = :org_id)
     """)
 
-    db.execute(state_query, {"org_id": organization_id})
-    db.commit()
+    await db.execute(state_query, {"org_id": organization_id})
+    await db.commit()
 
     # Recalculate all capacities
     service = get_capacity_service(db)

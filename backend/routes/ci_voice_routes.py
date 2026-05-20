@@ -29,10 +29,12 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +222,7 @@ class DashboardFilters(BaseModel):
 async def create_recording(
     request: RecordingCreateRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new call recording entry."""
@@ -228,7 +230,7 @@ async def create_recording(
         import uuid
         recording_id = str(uuid.uuid4())
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO ci_call_recordings (
                 id, loan_id, lead_id, agent_user_id, direction,
                 phone_from, phone_to, external_call_id,
@@ -249,10 +251,10 @@ async def create_recording(
             "external_call_id": request.external_call_id,
             "metadata": json.dumps(request.metadata) if request.metadata else None
         })
-        db.commit()
+        await db.commit()
 
         # Fetch the created record
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT id, loan_id, lead_id, agent_user_id, direction, status,
                    duration_seconds, recording_url, created_at
             FROM ci_call_recordings WHERE id = :id
@@ -306,7 +308,7 @@ class QuickUploadResponse(BaseModel):
 async def quick_upload_recording(
     request: QuickUploadRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -350,7 +352,7 @@ async def quick_upload_recording(
         metadata["source"] = request.source
         metadata["quick_upload"] = True
 
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_call_recordings (
                 id, agent_user_id, direction, duration_seconds,
                 status, metadata, started_at
@@ -365,7 +367,7 @@ async def quick_upload_recording(
             "duration": request.duration_seconds,
             "metadata": json.dumps(metadata)
         })
-        db.commit()
+        await db.commit()
 
         # Process with AI (transcribe + analyze)
         summary = "Call recorded successfully"
@@ -388,7 +390,7 @@ async def quick_upload_recording(
                     sentiment = analysis.get("sentiment", "neutral")
 
                     # Update recording with results
-                    db.execute(text("""
+                    await db.execute(text("""
                         UPDATE ci_call_recordings
                         SET status = 'analyzed',
                             transcript_text = :transcript,
@@ -401,7 +403,7 @@ async def quick_upload_recording(
                         "summary": summary,
                         "sentiment": sentiment
                     })
-                    db.commit()
+                    await db.commit()
                     logger.info(f"[QuickUpload] Analysis complete for {recording_id}")
             except Exception as e:
                 logger.error(f"[QuickUpload] Processing error: {e}")
@@ -500,12 +502,12 @@ Respond only with valid JSON."""
 @router.get("/recordings/{recording_id}", response_model=RecordingResponse)
 async def get_recording(
     recording_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get a specific call recording."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, loan_id, lead_id, agent_user_id, direction, status,
                    duration_seconds, recording_url, created_at
             FROM ci_call_recordings
@@ -548,7 +550,7 @@ async def list_recordings(
     end_date: Optional[datetime] = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """List call recordings with filters."""
@@ -582,7 +584,7 @@ async def list_recordings(
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         recordings = []
         for row in result.fetchall():
@@ -603,7 +605,7 @@ async def list_recordings(
 
         # Get total count
         count_sql = "SELECT COUNT(*) FROM ci_call_recordings WHERE " + where_clause
-        count_result = db.execute(text(count_sql), params)
+        count_result = await db.execute(text(count_sql), params)
         total = count_result.fetchone()[0]
 
         return {
@@ -628,13 +630,13 @@ async def upload_audio(
     recording_id: str,
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Upload audio file for a recording."""
     try:
         # Verify recording exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, status FROM ci_call_recordings WHERE id = :id
         """), {"id": recording_id})
 
@@ -651,7 +653,7 @@ async def upload_audio(
         audio_url = f"/api/v1/conversation-intelligence/recordings/{recording_id}/audio"
 
         # Update recording
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE ci_call_recordings
             SET audio_url = :audio_url,
                 file_size_bytes = :file_size,
@@ -665,7 +667,7 @@ async def upload_audio(
             "file_size": file_size,
             "format": file.content_type
         })
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -690,7 +692,7 @@ async def transcribe_recording(
     recording_id: str,
     request: TranscribeURLRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Transcribe a call recording."""
@@ -699,7 +701,7 @@ async def transcribe_recording(
         transcription_id = str(uuid.uuid4())
 
         # Verify recording exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, status, audio_url FROM ci_call_recordings WHERE id = :id
         """), {"id": recording_id})
 
@@ -708,7 +710,7 @@ async def transcribe_recording(
             raise HTTPException(status_code=404, detail="Recording not found")
 
         # Create transcription record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_call_transcriptions (
                 id, recording_id, provider, status, settings
             ) VALUES (
@@ -720,7 +722,7 @@ async def transcribe_recording(
             "provider": request.provider,
             "settings": json.dumps(request.options) if request.options else None
         })
-        db.commit()
+        await db.commit()
 
         # Start transcription in background
         background_tasks.add_task(
@@ -854,12 +856,12 @@ async def process_transcription(
 @router.get("/recordings/{recording_id}/transcription", response_model=TranscriptionResponse)
 async def get_transcription(
     recording_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get transcription for a recording."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT t.id, t.recording_id, t.status, t.transcript_text,
                    t.word_count, t.speaker_mapping
             FROM ci_call_transcriptions t
@@ -873,7 +875,7 @@ async def get_transcription(
             raise HTTPException(status_code=404, detail="Transcription not found")
 
         # Get segments
-        segments_result = db.execute(text("""
+        segments_result = await db.execute(text("""
             SELECT speaker_label, start_time, end_time, text, confidence
             FROM ci_transcription_segments
             WHERE transcription_id = :id
@@ -916,7 +918,7 @@ async def analyze_recording(
     recording_id: str,
     request: AnalysisRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Analyze a transcribed call with Claude."""
@@ -925,7 +927,7 @@ async def analyze_recording(
         analysis_id = str(uuid.uuid4())
 
         # Verify transcription exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT t.id, t.transcript_text
             FROM ci_call_transcriptions t
             WHERE t.recording_id = :recording_id
@@ -944,7 +946,7 @@ async def analyze_recording(
         transcription_id = row[0]
 
         # Create analysis record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_call_analyses (
                 id, recording_id, transcription_id, status, analysis_config
             ) VALUES (
@@ -962,7 +964,7 @@ async def analyze_recording(
                 "check_compliance": request.check_compliance
             })
         })
-        db.commit()
+        await db.commit()
 
         # Start analysis in background
         background_tasks.add_task(
@@ -1104,12 +1106,12 @@ async def process_analysis(
 @router.get("/recordings/{recording_id}/analysis", response_model=AnalysisResponse)
 async def get_analysis(
     recording_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get analysis for a recording."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, recording_id, status, summary, key_topics,
                    action_items, objections_detected, questions_raised,
                    sentiment_analysis, talk_ratio
@@ -1152,7 +1154,7 @@ async def create_qa_scorecard(
     recording_id: str,
     request: QAScorecardRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Create QA scorecard for a recording."""
@@ -1163,7 +1165,7 @@ async def create_qa_scorecard(
         scorecard_id = str(uuid.uuid4())
 
         # Verify recording has analysis
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT a.id, t.transcript_text, t.id as transcription_id
             FROM ci_call_recordings r
             LEFT JOIN ci_call_analyses a ON a.recording_id = r.id
@@ -1187,7 +1189,7 @@ async def create_qa_scorecard(
         rubric_name = "Default Mortgage QA Rubric"
 
         if rubric_id:
-            rubric_result = db.execute(text("""
+            rubric_result = await db.execute(text("""
                 SELECT id, name FROM ci_qa_rubrics WHERE id = :id AND is_active = true
             """), {"id": rubric_id})
             rubric_row = rubric_result.fetchone()
@@ -1195,7 +1197,7 @@ async def create_qa_scorecard(
                 rubric_name = rubric_row[1]
 
         # Get segments for context
-        segments_result = db.execute(text("""
+        segments_result = await db.execute(text("""
             SELECT speaker_label, text FROM ci_transcription_segments
             WHERE transcription_id = :id ORDER BY start_time
         """), {"id": row[2]})
@@ -1212,7 +1214,7 @@ async def create_qa_scorecard(
         )
 
         # Create scorecard record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_qa_scorecards (
                 id, recording_id, rubric_id, reviewer_id, reviewer_type,
                 total_score, max_possible_score, percentage_score,
@@ -1241,7 +1243,7 @@ async def create_qa_scorecard(
 
         # Insert scorecard items
         for item in scoring_result.get("items", []):
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO ci_qa_scorecard_items (
                     scorecard_id, criterion_id, criterion_name, category,
                     score, max_score, weight, evidence, notes
@@ -1262,13 +1264,13 @@ async def create_qa_scorecard(
             })
 
         # Update recording status
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE ci_call_recordings
             SET status = 'scored', updated_at = NOW()
             WHERE id = :id
         """), {"id": recording_id})
 
-        db.commit()
+        await db.commit()
 
         return QAScorecardResponse(
             scorecard_id=scorecard_id,
@@ -1291,12 +1293,12 @@ async def create_qa_scorecard(
 @router.get("/recordings/{recording_id}/qa-scorecards")
 async def get_qa_scorecards(
     recording_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get all QA scorecards for a recording."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT s.id, s.rubric_id, r.name as rubric_name,
                    s.total_score, s.max_possible_score, s.percentage_score,
                    s.grade, s.reviewer_type, s.created_at
@@ -1329,12 +1331,12 @@ async def get_qa_scorecards(
 
 @router.get("/qa-rubrics")
 async def list_qa_rubrics(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """List available QA rubrics."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, name, description, category, max_points,
                    weight, required, created_at
             FROM ci_qa_rubrics
@@ -1377,7 +1379,7 @@ async def list_qa_rubrics(
 @router.post("/realtime/sessions", response_model=RealTimeSessionResponse)
 async def create_realtime_session(
     request: RealTimeSessionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Create a real-time assist session."""
@@ -1388,7 +1390,7 @@ async def create_realtime_session(
         recording_id = str(uuid.uuid4())
 
         # Create recording first
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_call_recordings (
                 id, loan_id, lead_id, agent_user_id, direction,
                 phone_from, status, started_at
@@ -1405,7 +1407,7 @@ async def create_realtime_session(
         })
 
         # Create session
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_realtime_sessions (
                 id, recording_id, agent_user_id, status, settings
             ) VALUES (
@@ -1418,7 +1420,7 @@ async def create_realtime_session(
             "settings": json.dumps(request.context) if request.context else None
         })
 
-        db.commit()
+        await db.commit()
 
         # Generate WebSocket URL
         ws_url = f"/api/v1/conversation-intelligence/realtime/sessions/{session_id}/ws"
@@ -1520,13 +1522,13 @@ async def realtime_websocket(
 @router.post("/realtime/sessions/{session_id}/end")
 async def end_realtime_session(
     session_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """End a real-time assist session."""
     try:
         # Get session info
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, recording_id, started_at
             FROM ci_realtime_sessions
             WHERE id = :id
@@ -1541,7 +1543,7 @@ async def end_realtime_session(
         duration = (datetime.now(timezone.utc) - started_at).total_seconds() if started_at else 0
 
         # Update session
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE ci_realtime_sessions
             SET status = 'completed',
                 ended_at = NOW(),
@@ -1550,7 +1552,7 @@ async def end_realtime_session(
         """), {"id": session_id, "duration": int(duration)})
 
         # Update recording
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE ci_call_recordings
             SET status = 'completed',
                 ended_at = NOW(),
@@ -1558,7 +1560,7 @@ async def end_realtime_session(
             WHERE id = :recording_id
         """), {"recording_id": row[1], "duration": int(duration)})
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -1580,7 +1582,7 @@ async def end_realtime_session(
 @router.post("/coaching/clips", response_model=CoachingClipResponse)
 async def create_coaching_clip(
     request: CoachingClipRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Create a coaching clip from a recording."""
@@ -1589,7 +1591,7 @@ async def create_coaching_clip(
         clip_id = str(uuid.uuid4())
 
         # Verify recording exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id, audio_url FROM ci_call_recordings WHERE id = :id
         """), {"id": request.recording_id})
 
@@ -1601,7 +1603,7 @@ async def create_coaching_clip(
         user_id = current_user.get("id", 1)
 
         # Create clip
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_coaching_clips (
                 id, recording_id, title, description, category,
                 start_time, end_time, duration_seconds,
@@ -1624,7 +1626,7 @@ async def create_coaching_clip(
             "created_by": user_id
         })
 
-        db.commit()
+        await db.commit()
 
         return CoachingClipResponse(
             clip_id=clip_id,
@@ -1648,7 +1650,7 @@ async def list_coaching_clips(
     agent_id: Optional[int] = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """List coaching clips with filters."""
@@ -1676,7 +1678,7 @@ async def list_coaching_clips(
             ORDER BY c.created_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         clips = []
         for row in result.fetchall():
@@ -1702,7 +1704,7 @@ async def list_coaching_clips(
 @router.post("/coaching/assignments", response_model=CoachingAssignmentResponse)
 async def create_coaching_assignment(
     request: CoachingAssignmentRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Assign a coaching clip to an agent."""
@@ -1712,7 +1714,7 @@ async def create_coaching_assignment(
         user_id = current_user.get("id", 1)
 
         # Verify clip exists
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT id FROM ci_coaching_clips WHERE id = :id
         """), {"id": request.clip_id})
 
@@ -1720,7 +1722,7 @@ async def create_coaching_assignment(
             raise HTTPException(status_code=404, detail="Clip not found")
 
         # Create assignment
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ci_coaching_assignments (
                 id, clip_id, assigned_to, assigned_by,
                 title, description, due_date, priority, status
@@ -1739,7 +1741,7 @@ async def create_coaching_assignment(
             "priority": request.priority
         })
 
-        db.commit()
+        await db.commit()
 
         return CoachingAssignmentResponse(
             assignment_id=assignment_id,
@@ -1762,7 +1764,7 @@ async def list_coaching_assignments(
     assigned_to: Optional[int] = None,
     status: Optional[str] = None,
     limit: int = Query(default=50, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """List coaching assignments with filters."""
@@ -1789,7 +1791,7 @@ async def list_coaching_assignments(
             ORDER BY a.due_date ASC NULLS LAST, a.created_at DESC
             LIMIT :limit
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         assignments = []
         for row in result.fetchall():
@@ -1815,12 +1817,12 @@ async def list_coaching_assignments(
 @router.patch("/coaching/assignments/{assignment_id}/complete")
 async def complete_coaching_assignment(
     assignment_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Mark a coaching assignment as completed."""
     try:
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE ci_coaching_assignments
             SET status = 'completed',
                 completed_at = NOW(),
@@ -1828,7 +1830,7 @@ async def complete_coaching_assignment(
             WHERE id = :id
         """), {"id": assignment_id})
 
-        db.commit()
+        await db.commit()
 
         return {"status": "success", "assignment_id": assignment_id}
 
@@ -1846,7 +1848,7 @@ async def get_team_dashboard(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     team_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get team-level dashboard metrics."""
@@ -1873,7 +1875,7 @@ async def get_team_dashboard(
             JOIN users u ON u.id = r.agent_user_id
             WHERE r.created_at BETWEEN :start_date AND :end_date
         """ + team_filter
-        metrics_result = db.execute(text(metrics_sql), params)
+        metrics_result = await db.execute(text(metrics_sql), params)
 
         metrics_row = metrics_result.fetchone()
 
@@ -1890,7 +1892,7 @@ async def get_team_dashboard(
             JOIN users u ON u.id = r.agent_user_id
             WHERE s.created_at BETWEEN :start_date AND :end_date
         """ + team_filter
-        score_result = db.execute(text(score_sql), params)
+        score_result = await db.execute(text(score_sql), params)
 
         score_row = score_result.fetchone()
 
@@ -1909,7 +1911,7 @@ async def get_team_dashboard(
             ORDER BY avg_score DESC NULLS LAST
             LIMIT 5
         """
-        performers_result = db.execute(text(performers_sql), params)
+        performers_result = await db.execute(text(performers_sql), params)
 
         top_performers = []
         for row in performers_result.fetchall():
@@ -1953,7 +1955,7 @@ async def get_agent_dashboard(
     agent_id: int,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get individual agent dashboard metrics."""
@@ -1970,7 +1972,7 @@ async def get_agent_dashboard(
         }
 
         # Get agent metrics
-        metrics_result = db.execute(text("""
+        metrics_result = await db.execute(text("""
             SELECT
                 COUNT(*) as total_calls,
                 AVG(r.duration_seconds) as avg_duration,
@@ -1984,7 +1986,7 @@ async def get_agent_dashboard(
         metrics_row = metrics_result.fetchone()
 
         # Get QA scores
-        scores_result = db.execute(text("""
+        scores_result = await db.execute(text("""
             SELECT
                 AVG(s.percentage_score) as avg_score,
                 MIN(s.percentage_score) as min_score,
@@ -2007,7 +2009,7 @@ async def get_agent_dashboard(
             grade_dist[row[3]] = row[4]
 
         # Get recent recordings
-        recent_result = db.execute(text("""
+        recent_result = await db.execute(text("""
             SELECT r.id, r.direction, r.duration_seconds, r.status,
                    r.created_at, s.grade, s.percentage_score
             FROM ci_call_recordings r
@@ -2033,7 +2035,7 @@ async def get_agent_dashboard(
             })
 
         # Get pending assignments
-        assignments_result = db.execute(text("""
+        assignments_result = await db.execute(text("""
             SELECT COUNT(*) FROM ci_coaching_assignments
             WHERE agent_user_id = :agent_id AND status = 'pending'
         """), {"agent_id": agent_id})
@@ -2069,7 +2071,7 @@ async def get_agent_dashboard(
 async def get_compliance_dashboard(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get compliance monitoring dashboard."""
@@ -2082,7 +2084,7 @@ async def get_compliance_dashboard(
         params = {"start_date": start_date, "end_date": end_date}
 
         # Get violation summary
-        violations_result = db.execute(text("""
+        violations_result = await db.execute(text("""
             SELECT
                 v.rule_id, r.name as rule_name, r.severity,
                 COUNT(*) as violation_count
@@ -2106,7 +2108,7 @@ async def get_compliance_dashboard(
             severity_counts[row[2]] = severity_counts.get(row[2], 0) + row[3]
 
         # Get recent violations
-        recent_result = db.execute(text("""
+        recent_result = await db.execute(text("""
             SELECT v.id, v.recording_id, r.name as rule_name,
                    r.severity, v.detected_at, v.reviewed
             FROM ci_compliance_violations v
@@ -2287,17 +2289,17 @@ async def health_check():
 @router.get("/diagnostic/rubrics")
 async def diagnostic_rubrics(
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Diagnostic endpoint to check rubrics data."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT COUNT(*) as count FROM ci_qa_rubrics WHERE is_active = true
         """))
         count = result.scalar() or 0
 
         # Get sample rubrics
-        samples = db.execute(text("""
+        samples = await db.execute(text("""
             SELECT id, name, category FROM ci_qa_rubrics
             WHERE is_active = true LIMIT 5
         """))
@@ -2515,7 +2517,7 @@ async def get_summary_feed(
     sentiment: Optional[str] = None,
     limit: int = Query(default=20, le=100),
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -2554,7 +2556,7 @@ async def get_summary_feed(
             ORDER BY s.generated_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         feed = []
         for row in result.fetchall():

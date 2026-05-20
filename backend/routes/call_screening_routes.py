@@ -6,7 +6,7 @@ Endpoints for managing blocklist/whitelist and viewing screening statistics.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text, func, select
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from pydantic import BaseModel
@@ -14,6 +14,8 @@ import logging
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +71,7 @@ class ScreeningStats(BaseModel):
 
 @router.get("/blocklist")
 async def get_blocklist(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     active_only: bool = True,
     limit: int = Query(default=100, le=500),
     offset: int = 0
@@ -93,7 +95,7 @@ async def get_blocklist(
             ORDER BY blocked_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(sql), {"limit": limit, "offset": offset})
+        result = await db.execute(text(sql), {"limit": limit, "offset": offset})
 
         entries = []
         for row in result.fetchall():
@@ -113,7 +115,7 @@ async def get_blocklist(
 
         # Get total count
         count_sql = "SELECT COUNT(*) FROM phone_blocklist WHERE " + where_clause
-        count_result = db.execute(text(count_sql))
+        count_result = await db.execute(text(count_sql))
         total = count_result.scalar()
 
         return {
@@ -131,7 +133,7 @@ async def get_blocklist(
 @router.post("/blocklist")
 async def add_to_blocklist(
     entry: BlocklistEntry,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Add a phone number to the blocklist."""
     try:
@@ -160,7 +162,7 @@ async def add_to_blocklist(
 @router.delete("/blocklist/{phone_number}")
 async def remove_from_blocklist(
     phone_number: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Remove a phone number from the blocklist (deactivate)."""
     try:
@@ -172,7 +174,7 @@ async def remove_from_blocklist(
         elif not phone.startswith("+"):
             phone = f"+{phone}"
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE phone_blocklist
             SET is_active = false, updated_at = NOW()
             WHERE phone_number = :phone
@@ -180,7 +182,7 @@ async def remove_from_blocklist(
         """), {"phone": phone})
 
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if row:
             return {
@@ -195,7 +197,7 @@ async def remove_from_blocklist(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error removing from blocklist: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -205,7 +207,7 @@ async def remove_from_blocklist(
 
 @router.get("/whitelist")
 async def get_whitelist(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     category: Optional[str] = None,
     limit: int = Query(default=100, le=500),
     offset: int = 0
@@ -231,7 +233,7 @@ async def get_whitelist(
             ORDER BY priority DESC, added_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         entries = []
         for row in result.fetchall():
@@ -252,7 +254,7 @@ async def get_whitelist(
 
         # Get total count
         count_sql = "SELECT COUNT(*) FROM phone_whitelist WHERE " + where_clause
-        count_result = db.execute(text(count_sql), params)
+        count_result = await db.execute(text(count_sql), params)
         total = count_result.scalar()
 
         return {
@@ -270,7 +272,7 @@ async def get_whitelist(
 @router.post("/whitelist")
 async def add_to_whitelist(
     entry: WhitelistEntry,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Add a phone number to the whitelist."""
     try:
@@ -299,7 +301,7 @@ async def add_to_whitelist(
 @router.delete("/whitelist/{phone_number}")
 async def remove_from_whitelist(
     phone_number: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Remove a phone number from the whitelist."""
     try:
@@ -311,14 +313,14 @@ async def remove_from_whitelist(
         elif not phone.startswith("+"):
             phone = f"+{phone}"
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM phone_whitelist
             WHERE phone_number = :phone
             RETURNING id
         """), {"phone": phone})
 
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if row:
             return {
@@ -333,7 +335,7 @@ async def remove_from_whitelist(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error removing from whitelist: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -343,12 +345,12 @@ async def remove_from_whitelist(
 
 @router.get("/stats")
 async def get_screening_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     days: int = Query(default=30, le=365)
 ):
     """Get call screening statistics."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 COUNT(*) as total_calls,
                 COUNT(CASE WHEN screening_decision = 'allow' THEN 1 END) as allowed_calls,
@@ -386,7 +388,7 @@ async def get_screening_stats(
 
 @router.get("/log")
 async def get_screening_log(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     decision: Optional[str] = None,
     limit: int = Query(default=100, le=500),
     offset: int = 0
@@ -413,7 +415,7 @@ async def get_screening_log(
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         entries = []
         for row in result.fetchall():
@@ -434,7 +436,7 @@ async def get_screening_log(
 
         # Get total count
         count_sql = "SELECT COUNT(*) FROM call_screening_log WHERE " + where_clause
-        count_result = db.execute(text(count_sql), params)
+        count_result = await db.execute(text(count_sql), params)
         total = count_result.scalar()
 
         return {
@@ -455,13 +457,13 @@ async def get_screening_log(
 
 @router.get("/lookup-cache")
 async def get_lookup_cache(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     limit: int = Query(default=100, le=500),
     offset: int = 0
 ):
     """Get cached phone lookup results."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT
                 phone_number, carrier_name, carrier_type, line_type,
                 caller_name, caller_type, country_code, spam_score,
@@ -503,7 +505,7 @@ async def get_lookup_cache(
 @router.delete("/lookup-cache/{phone_number}")
 async def clear_lookup_cache(
     phone_number: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Clear cached lookup for a phone number."""
     try:
@@ -515,14 +517,14 @@ async def clear_lookup_cache(
         elif not phone.startswith("+"):
             phone = f"+{phone}"
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM phone_lookup_cache
             WHERE phone_number = :phone
             RETURNING phone_number
         """), {"phone": phone})
 
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         if row:
             return {
@@ -539,19 +541,19 @@ async def clear_lookup_cache(
 
     except SQLAlchemyError as e:
         logger.error(f"Error clearing lookup cache: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/lookup-cache/clear-expired")
-async def clear_expired_cache(db: Session = Depends(get_db)):
+async def clear_expired_cache(db: AsyncSession = Depends(get_async_db)):
     """Clear all expired lookup cache entries."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM phone_lookup_cache
             WHERE expires_at <= NOW()
         """))
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -561,7 +563,7 @@ async def clear_expired_cache(db: Session = Depends(get_db)):
 
     except SQLAlchemyError as e:
         logger.error(f"Error clearing expired cache: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

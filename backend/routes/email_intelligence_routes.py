@@ -12,7 +12,7 @@ This system provides enterprise-grade email intelligence:
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Numeric, ForeignKey, JSON, text, desc, and_, or_, func
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Numeric, ForeignKey, JSON, text, desc, and_, or_, func, select
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime, timezone, timedelta
@@ -24,6 +24,8 @@ import os
 
 from database import get_db, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -813,7 +815,7 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON."""
 
 async def get_current_user_id(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> int:
     """Extract authenticated user ID from JWT token."""
     from auth.dependencies import get_current_user_flexible
@@ -825,7 +827,7 @@ async def get_current_user_id(
 
 async def get_current_admin_user_id(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ) -> int:
     """Extract authenticated admin user ID. Raises 403 if not platform admin."""
     from auth.dependencies import get_current_user_flexible
@@ -850,7 +852,7 @@ async def get_email_queue(
     priority_only: bool = Query(False, description="Only priority emails"),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -900,14 +902,14 @@ async def get_email_queue(
 
     # Get total count
     count_query = f"SELECT COUNT(*) FROM ({query}) sq"
-    total = db.execute(text(count_query), params).scalar()
+    total = await db.execute(text(count_query), params).scalar()
 
     # Add ordering and pagination
     query += " ORDER BY is_priority DESC, received_date DESC LIMIT :limit OFFSET :offset"
     params["limit"] = limit
     params["offset"] = offset
 
-    result = db.execute(text(query), params).fetchall()
+    result = await db.execute(text(query), params).fetchall()
 
     emails = []
     for row in result:
@@ -950,12 +952,12 @@ async def get_email_queue(
 @router.get("/queue/{email_id}")
 async def get_email_detail(
     email_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Get single email with full details"""
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT
             id, email_provider, provider_message_id, thread_id,
             from_email, from_name, to_emails, cc_emails, subject,
@@ -1020,13 +1022,13 @@ async def get_email_detail(
 @router.delete("/queue/{email_id}")
 async def delete_email_from_queue(
     email_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Delete an email from the queue"""
 
     # Check if email exists and belongs to user
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id FROM email_reconciliation_queue
         WHERE id = :email_id AND user_id = :user_id
     """), {"email_id": email_id, "user_id": user_id}).fetchone()
@@ -1035,11 +1037,11 @@ async def delete_email_from_queue(
         raise HTTPException(status_code=404, detail="Email not found")
 
     # Delete the email
-    db.execute(text("""
+    await db.execute(text("""
         DELETE FROM email_reconciliation_queue
         WHERE id = :email_id AND user_id = :user_id
     """), {"email_id": email_id, "user_id": user_id})
-    db.commit()
+    await db.commit()
 
     return {"status": "success", "message": f"Email {email_id} deleted"}
 
@@ -1047,13 +1049,13 @@ async def delete_email_from_queue(
 @router.post("/queue/{email_id}/analyze")
 async def analyze_email(
     email_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Run AI analysis on email"""
 
     # Get email
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, from_email, from_name, to_emails, cc_emails, subject,
                body_preview, body_full, sent_date, has_attachments, attachment_names,
                matched_contact_id, matched_loan_id, matched_lead_id
@@ -1086,7 +1088,7 @@ async def analyze_email(
     analysis = await engine.analyze_email(email_data, borrower_context, loan_context)
 
     # Save analysis
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE email_reconciliation_queue
         SET ai_analysis = :analysis,
             analyzed_at = :analyzed_at,
@@ -1102,7 +1104,7 @@ async def analyze_email(
         "updated_at": datetime.now(timezone.utc),
         "email_id": email_id
     })
-    db.commit()
+    await db.commit()
 
     return {
         "email_id": email_id,
@@ -1114,7 +1116,7 @@ async def analyze_email(
 async def disposition_email(
     email_id: int,
     action: ReconciliationActionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -1122,7 +1124,7 @@ async def disposition_email(
     """
 
     # Get email
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, from_email, subject, body_preview, sent_date, direction,
                ai_analysis, matched_contact_id, matched_loan_id, matched_lead_id
         FROM email_reconciliation_queue
@@ -1163,7 +1165,7 @@ async def disposition_email(
         target_lead = email_data.get("matched_lead_id")
 
         if target_contact or target_loan or target_lead:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO email_conversation_log (
                     contact_id, loan_id, lead_id,
                     reconciliation_email_id, email_subject, email_date,
@@ -1205,7 +1207,7 @@ async def disposition_email(
         engine = EmailIntelligenceEngine(db)
 
         for doc_name in docs_to_track:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO email_document_tracking (
                     loan_id, lead_id, contact_id,
                     document_name, document_type, status,
@@ -1230,7 +1232,7 @@ async def disposition_email(
             results["documents_tracked"] += 1
 
     # 3. Update email status
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE email_reconciliation_queue
         SET disposition = :disposition,
             status = 'processed',
@@ -1246,7 +1248,7 @@ async def disposition_email(
         "email_id": email_id
     })
 
-    db.commit()
+    await db.commit()
 
     return results
 
@@ -1256,7 +1258,7 @@ async def get_conversation_log(
     entity_type: Literal["contact", "loan", "lead"],
     entity_id: int,
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Get conversation log for an entity"""
@@ -1279,7 +1281,7 @@ async def get_conversation_log(
         " ORDER BY email_date DESC"
         " LIMIT :limit"
     )
-    result = db.execute(text(query), {"entity_id": entity_id, "user_id": user_id, "limit": limit}).fetchall()
+    result = await db.execute(text(query), {"entity_id": entity_id, "user_id": user_id, "limit": limit}).fetchall()
 
     entries = []
     for row in result:
@@ -1311,7 +1313,7 @@ async def get_document_tracking(
     entity_type: Literal["loan", "lead"],
     entity_id: int,
     status: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Get document tracking for an entity"""
@@ -1333,7 +1335,7 @@ async def get_document_tracking(
 
     query += " ORDER BY requested_date DESC"
 
-    result = db.execute(text(query), params).fetchall()
+    result = await db.execute(text(query), params).fetchall()
 
     documents = []
     for row in result:
@@ -1358,7 +1360,7 @@ async def get_all_document_tracking(
     status: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Get all document tracking records for the current user"""
@@ -1370,7 +1372,7 @@ async def get_all_document_tracking(
         count_query += " AND status = :status"
         count_params["status"] = status
 
-    total = db.execute(text(count_query), count_params).scalar() or 0
+    total = await db.execute(text(count_query), count_params).scalar() or 0
 
     # Then get documents with source email info
     query = """
@@ -1390,7 +1392,7 @@ async def get_all_document_tracking(
 
     query += " ORDER BY COALESCE(edt.received_date, edt.created_at) DESC LIMIT :limit OFFSET :offset"
 
-    result = db.execute(text(query), params).fetchall()
+    result = await db.execute(text(query), params).fetchall()
 
     documents = []
     for row in result:
@@ -1417,12 +1419,12 @@ async def get_all_document_tracking(
 async def mark_document_received(
     doc_id: int,
     received_email_id: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Mark a tracked document as received"""
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE email_document_tracking
         SET status = 'received',
             received_date = :received_date,
@@ -1437,7 +1439,7 @@ async def mark_document_received(
         "doc_id": doc_id,
         "user_id": user_id
     })
-    db.commit()
+    await db.commit()
 
     return {"status": "success", "document_id": doc_id}
 
@@ -1445,14 +1447,14 @@ async def mark_document_received(
 @router.get("/stats")
 async def get_email_intelligence_stats(
     days: int = Query(7, le=90),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Get email intelligence statistics"""
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Queue stats by disposition
-    disposition_stats = db.execute(text("""
+    disposition_stats = await db.execute(text("""
         SELECT disposition, COUNT(*) as count
         FROM email_reconciliation_queue
         WHERE user_id = :user_id AND imported_at >= :since
@@ -1460,7 +1462,7 @@ async def get_email_intelligence_stats(
     """), {"user_id": user_id, "since": since}).fetchall()
 
     # Queue stats by direction
-    direction_stats = db.execute(text("""
+    direction_stats = await db.execute(text("""
         SELECT direction, COUNT(*) as count
         FROM email_reconciliation_queue
         WHERE user_id = :user_id AND imported_at >= :since
@@ -1468,35 +1470,35 @@ async def get_email_intelligence_stats(
     """), {"user_id": user_id, "since": since}).fetchall()
 
     # Processing stats
-    processed = db.execute(text("""
+    processed = await db.execute(text("""
         SELECT COUNT(*) FROM email_reconciliation_queue
         WHERE user_id = :user_id AND processed_at >= :since AND status = 'processed'
     """), {"user_id": user_id, "since": since}).scalar()
 
-    pending = db.execute(text("""
+    pending = await db.execute(text("""
         SELECT COUNT(*) FROM email_reconciliation_queue
         WHERE user_id = :user_id AND status = 'pending'
     """), {"user_id": user_id}).scalar()
 
     # Conversation logs created
-    logs_created = db.execute(text("""
+    logs_created = await db.execute(text("""
         SELECT COUNT(*) FROM email_conversation_log
         WHERE user_id = :user_id AND created_at >= :since
     """), {"user_id": user_id, "since": since}).scalar()
 
     # Documents tracked
-    docs_requested = db.execute(text("""
+    docs_requested = await db.execute(text("""
         SELECT COUNT(*) FROM email_document_tracking
         WHERE user_id = :user_id AND requested_date >= :since
     """), {"user_id": user_id, "since": since}).scalar()
 
-    docs_received = db.execute(text("""
+    docs_received = await db.execute(text("""
         SELECT COUNT(*) FROM email_document_tracking
         WHERE user_id = :user_id AND received_date >= :since
     """), {"user_id": user_id, "since": since}).scalar()
 
     # Identity resolution stats
-    match_method_stats = db.execute(text("""
+    match_method_stats = await db.execute(text("""
         SELECT match_method, COUNT(*) as count
         FROM email_reconciliation_queue
         WHERE user_id = :user_id AND match_method IS NOT NULL AND imported_at >= :since
@@ -1504,23 +1506,23 @@ async def get_email_intelligence_stats(
         ORDER BY count DESC
     """), {"user_id": user_id, "since": since}).fetchall()
 
-    total_matched = db.execute(text("""
+    total_matched = await db.execute(text("""
         SELECT COUNT(*) FROM email_reconciliation_queue
         WHERE user_id = :user_id AND imported_at >= :since
         AND (matched_contact_id IS NOT NULL OR matched_loan_id IS NOT NULL OR matched_lead_id IS NOT NULL)
     """), {"user_id": user_id, "since": since}).scalar() or 0
 
-    total_in_period = db.execute(text("""
+    total_in_period = await db.execute(text("""
         SELECT COUNT(*) FROM email_reconciliation_queue
         WHERE user_id = :user_id AND imported_at >= :since
     """), {"user_id": user_id, "since": since}).scalar() or 0
 
-    priority_count = db.execute(text("""
+    priority_count = await db.execute(text("""
         SELECT COUNT(*) FROM email_reconciliation_queue
         WHERE user_id = :user_id AND is_priority = TRUE AND imported_at >= :since
     """), {"user_id": user_id, "since": since}).scalar() or 0
 
-    known_clients = db.execute(text("""
+    known_clients = await db.execute(text("""
         SELECT COUNT(*) FROM known_client_emails
         WHERE user_id = :user_id
     """), {"user_id": user_id}).scalar() or 0
@@ -1550,7 +1552,7 @@ async def get_email_intelligence_stats(
 async def import_email_to_queue(
     email_data: Dict[str, Any],
     auto_analyze: bool = Query(True),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -1561,7 +1563,7 @@ async def import_email_to_queue(
 
     # Check for duplicate
     if email_data.get("provider_message_id"):
-        existing = db.execute(text("""
+        existing = await db.execute(text("""
             SELECT id FROM email_reconciliation_queue
             WHERE email_provider = :provider AND provider_message_id = :msg_id
         """), {
@@ -1573,7 +1575,7 @@ async def import_email_to_queue(
             return {"status": "duplicate", "existing_id": existing[0]}
 
     # Insert email (include entity IDs if provided)
-    result = db.execute(text("""
+    result = await db.execute(text("""
         INSERT INTO email_reconciliation_queue (
             email_provider, provider_message_id, thread_id,
             from_email, from_name, to_emails, cc_emails, subject,
@@ -1620,7 +1622,7 @@ async def import_email_to_queue(
     })
 
     email_id = result.fetchone()[0]
-    db.commit()
+    await db.commit()
 
     # Auto-match using full EmailIdentityResolver (only if entity IDs weren't provided)
     identity_resolution_result = None
@@ -1634,7 +1636,7 @@ async def import_email_to_queue(
             identity_resolution_result = {"attempted": True, "match_result": match_result}
 
             if match_result.get("match_method"):
-                db.execute(text("""
+                await db.execute(text("""
                     UPDATE email_reconciliation_queue
                     SET matched_contact_id = :contact_id,
                         matched_loan_id = :loan_id,
@@ -1658,7 +1660,7 @@ async def import_email_to_queue(
                     "is_priority": match_result.get("is_priority", False),
                     "email_id": email_id
                 })
-                db.commit()
+                await db.commit()
                 identity_resolution_result["update_executed"] = True
         except SQLAlchemyError as e:
             logger.error(f"Email identity resolution failed: {e}")
@@ -1673,7 +1675,7 @@ async def import_email_to_queue(
             engine = EmailIntelligenceEngine(db)
             analysis = await engine.analyze_email(email_data)
 
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE email_reconciliation_queue
                 SET ai_analysis = :analysis,
                     analyzed_at = :analyzed_at,
@@ -1687,7 +1689,7 @@ async def import_email_to_queue(
                 "direction": analysis.direction,
                 "email_id": email_id
             })
-            db.commit()
+            await db.commit()
         except SQLAlchemyError as e:
             logger.error(f"Auto-analysis failed: {e}")
 
@@ -1701,7 +1703,7 @@ async def import_email_to_queue(
 
 @router.post("/sync-known-clients")
 async def sync_known_client_emails(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -1713,7 +1715,7 @@ async def sync_known_client_emails(
     synced = 0
 
     # Get emails from leads — scope to this user's leads for proper user_id
-    leads = db.execute(text("""
+    leads = await db.execute(text("""
         SELECT id, email, name FROM leads
         WHERE email IS NOT NULL AND owner_id = :user_id
     """), {"user_id": user_id}).fetchall()
@@ -1723,7 +1725,7 @@ async def sync_known_client_emails(
         for lead in leads if lead[1]
     ]
     if lead_params:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, source_id, user_id)
             VALUES (:email, :lead_id, :name, 'lead', :lead_id, :user_id)
             ON CONFLICT (email_address, user_id) DO UPDATE SET
@@ -1733,7 +1735,7 @@ async def sync_known_client_emails(
     synced += len(lead_params)
 
     # Get emails from loans — scope to this user's loans
-    loans = db.execute(text("""
+    loans = await db.execute(text("""
         SELECT id, borrower_email, borrower_name FROM loans
         WHERE borrower_email IS NOT NULL AND loan_officer_id = :user_id
     """), {"user_id": user_id}).fetchall()
@@ -1743,7 +1745,7 @@ async def sync_known_client_emails(
         for loan in loans if loan[1]
     ]
     if loan_params:
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, source_id, user_id)
             VALUES (:email, :loan_id, :name, 'loan', :loan_id, :user_id)
             ON CONFLICT (email_address, user_id) DO UPDATE SET
@@ -1752,7 +1754,7 @@ async def sync_known_client_emails(
         """), loan_params)
     synced += len(loan_params)
 
-    db.commit()
+    await db.commit()
 
     return {
         "status": "success",
@@ -1762,7 +1764,7 @@ async def sync_known_client_emails(
 
 @router.post("/migrate-tables")
 async def migrate_email_intelligence_tables(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create/update email intelligence tables
@@ -2180,7 +2182,7 @@ async def queue_email_for_intelligence(
 async def batch_import_emails(
     emails: List[Dict[str, Any]],
     auto_analyze: bool = Query(False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """
@@ -2224,7 +2226,7 @@ async def batch_import_emails(
 async def cron_sync_emails_to_queue(
     api_key: str = Query(..., description="API key for cron authentication"),
     days_back: int = Query(1, le=7),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Cron endpoint to sync ALL emails from connected providers to the intelligence queue.
@@ -2244,7 +2246,7 @@ async def cron_sync_emails_to_queue(
         from sqlalchemy import text
 
         # Bulk sync all leads and loans in 2 SELECT + 2 batch INSERT (instead of 2*N queries)
-        leads = db.execute(text("""
+        leads = await db.execute(text("""
             SELECT id, email, name, owner_id FROM leads
             WHERE email IS NOT NULL AND owner_id IS NOT NULL
         """)).fetchall()
@@ -2254,7 +2256,7 @@ async def cron_sync_emails_to_queue(
             for lead in leads if lead[1]
         ]
         if lead_params:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, source_id, user_id)
                 VALUES (:email, :lead_id, :name, 'lead', :lead_id, :user_id)
                 ON CONFLICT (email_address, user_id) DO UPDATE SET
@@ -2262,7 +2264,7 @@ async def cron_sync_emails_to_queue(
                     updated_at = CURRENT_TIMESTAMP
             """), lead_params)
 
-        loans = db.execute(text("""
+        loans = await db.execute(text("""
             SELECT id, borrower_email, borrower_name, loan_officer_id FROM loans
             WHERE borrower_email IS NOT NULL AND loan_officer_id IS NOT NULL
         """)).fetchall()
@@ -2272,7 +2274,7 @@ async def cron_sync_emails_to_queue(
             for loan in loans if loan[1]
         ]
         if loan_params:
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, source_id, user_id)
                 VALUES (:email, :loan_id, :name, 'loan', :loan_id, :user_id)
                 ON CONFLICT (email_address, user_id) DO UPDATE SET
@@ -2282,7 +2284,7 @@ async def cron_sync_emails_to_queue(
 
         total_synced = len(lead_params) + len(loan_params)
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -3090,12 +3092,12 @@ def _auto_determine_disposition(direction: str, has_attachments: bool, analysis:
 async def get_loan_conversation_log(
     loan_id: int,
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Get conversation log entries for a loan"""
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, email_subject, email_date, direction, summary,
                key_points, action_items, sentiment, urgency_level,
                documents_requested, documents_received, created_at
@@ -3129,14 +3131,14 @@ async def get_loan_conversation_log(
 async def get_sla_tracking(
     status: Optional[str] = Query(None, description="Filter by status"),
     include_breached: bool = Query(True),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Get SLA tracking records"""
 
     try:
         # Check if table exists first
-        table_check = db.execute(text("""
+        table_check = await db.execute(text("""
             SELECT EXISTS (
                 SELECT FROM information_schema.tables
                 WHERE table_name = 'email_sla_tracking'
@@ -3166,7 +3168,7 @@ async def get_sla_tracking(
 
         query += " ORDER BY s.response_due_at ASC"
 
-        result = db.execute(text(query), params).fetchall()
+        result = await db.execute(text(query), params).fetchall()
     except SQLAlchemyError as e:
         logger.error(f"Error fetching SLA tracking: {e}")
         # Return empty result instead of crashing
@@ -3206,12 +3208,12 @@ async def get_sla_tracking(
 async def mark_sla_responded(
     sla_id: int,
     response_email_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_user_id),
 ):
     """Mark SLA as responded"""
 
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE email_sla_tracking
         SET status = 'responded',
             responded_at = :responded_at,
@@ -3225,7 +3227,7 @@ async def mark_sla_responded(
         "sla_id": sla_id,
         "user_id": user_id
     })
-    db.commit()
+    await db.commit()
 
     return {"status": "success", "sla_id": sla_id}
 
@@ -3237,7 +3239,7 @@ async def mark_sla_responded(
 @router.get("/debug/schema")
 async def debug_email_queue_schema(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_admin_user_id),
 ):
     """
@@ -3245,7 +3247,7 @@ async def debug_email_queue_schema(
     Shows all columns and their types.
     """
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns
             WHERE table_name = 'email_reconciliation_queue'
@@ -3288,7 +3290,7 @@ async def debug_email_queue_schema(
 async def debug_test_identity_resolution(
     email_data: Dict[str, Any],
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_admin_user_id),
 ):
     """
@@ -3323,7 +3325,7 @@ async def debug_test_identity_resolution(
 @router.post("/debug/add-missing-columns")
 async def debug_add_missing_columns(
     request: Request,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     user_id: int = Depends(get_current_admin_user_id),
 ):
     """
@@ -3342,17 +3344,17 @@ async def debug_add_missing_columns(
         for col_name, col_type in columns_to_add:
             try:
                 alter_sql = "ALTER TABLE email_reconciliation_queue ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
-                db.execute(text(alter_sql))
+                await db.execute(text(alter_sql))
                 added.append(col_name)
             except SQLAlchemyError as e:
                 logger.warning(f"Could not add column {col_name}: {e}")
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
             "columns_added": added
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         return {"status": "error", "error": "Internal server error"}

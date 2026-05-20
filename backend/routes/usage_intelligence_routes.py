@@ -16,7 +16,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # OAuth2 scheme for token extraction
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -26,7 +27,7 @@ _get_db = None
 _get_current_user = None
 
 
-from db import get_db
+from db import get_db, get_async_db
 
 
 def set_dependencies(get_db_func, get_current_user_func):
@@ -89,7 +90,7 @@ def get_projection_service(db: Session, organization_id: int = None):
 @router.get("/dashboard")
 async def get_dashboard_overview(
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get overview data for the usage intelligence dashboard.
@@ -102,7 +103,7 @@ async def get_dashboard_overview(
     prev_month_end = month_start - timedelta(days=1)
 
     # Get MTD totals
-    mtd_data = db.execute(text("""
+    mtd_data = await db.execute(text("""
         SELECT
             COALESCE(SUM(total_cost), 0) as total_cost,
             COALESCE(SUM(ai_tokens_cost), 0) as ai_cost,
@@ -121,7 +122,7 @@ async def get_dashboard_overview(
     }).fetchone()
 
     # Get previous month totals for comparison
-    prev_month_data = db.execute(text("""
+    prev_month_data = await db.execute(text("""
         SELECT
             COALESCE(SUM(total_cost), 0) as total_cost,
             COUNT(DISTINCT snapshot_date) as days_with_data
@@ -148,7 +149,7 @@ async def get_dashboard_overview(
     mom_change_pct = ((projected_monthly - prev_cost) / prev_cost * 100) if prev_cost > 0 else 0
 
     # Get recent alerts
-    alerts = db.execute(text("""
+    alerts = await db.execute(text("""
         SELECT
             id, alert_type, severity, title, message, status, created_at
         FROM usage_alerts
@@ -214,7 +215,7 @@ async def get_user_costs(
     days: int = Query(30, ge=1, le=365),
     limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get cost breakdown by user for the specified period.
@@ -245,7 +246,7 @@ async def get_user_cost_detail(
     user_id: int,
     days: int = Query(30, ge=1, le=365),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get detailed cost breakdown for a specific user.
@@ -254,7 +255,7 @@ async def get_user_cost_detail(
     start_date = end_date - timedelta(days=days)
 
     # Get user info
-    user_info = db.execute(text("""
+    user_info = await db.execute(text("""
         SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.role
         FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE u.id = :user_id
@@ -264,7 +265,7 @@ async def get_user_cost_detail(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get daily breakdown
-    daily_costs = db.execute(text("""
+    daily_costs = await db.execute(text("""
         SELECT
             snapshot_date,
             total_cost,
@@ -289,7 +290,7 @@ async def get_user_cost_detail(
     }).fetchall()
 
     # Get model breakdown
-    model_costs = db.execute(text("""
+    model_costs = await db.execute(text("""
         SELECT
             model,
             SUM(input_tokens) as input_tokens,
@@ -309,7 +310,7 @@ async def get_user_cost_detail(
     }).fetchall()
 
     # Get feature breakdown
-    feature_costs = db.execute(text("""
+    feature_costs = await db.execute(text("""
         SELECT
             COALESCE(feature, 'unknown') as feature,
             SUM(total_cost) as total_cost,
@@ -381,7 +382,7 @@ async def get_user_cost_detail(
 async def get_team_costs(
     days: int = Query(30, ge=1, le=365),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get cost breakdown by team for the specified period.
@@ -389,7 +390,7 @@ async def get_team_costs(
     end_date = date.today() - timedelta(days=1)
     start_date = end_date - timedelta(days=days)
 
-    teams = db.execute(text("""
+    teams = await db.execute(text("""
         SELECT
             tus.team_id,
             t.name as team_name,
@@ -441,7 +442,7 @@ async def get_team_costs(
 async def get_organization_costs(
     days: int = Query(30, ge=1, le=365),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get organization-wide cost summary.
@@ -449,7 +450,7 @@ async def get_organization_costs(
     end_date = date.today() - timedelta(days=1)
     start_date = end_date - timedelta(days=days)
 
-    data = db.execute(text("""
+    data = await db.execute(text("""
         SELECT
             COALESCE(SUM(total_cost), 0) as total_cost,
             COALESCE(SUM(ai_tokens_cost), 0) as ai_cost,
@@ -507,7 +508,7 @@ async def get_organization_costs(
 async def get_organization_cost_trend(
     days: int = Query(30, ge=1, le=365),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get daily cost trend for organization.
@@ -535,7 +536,7 @@ async def get_projections(
     scope_id: Optional[int] = None,
     period: int = Query(30, description="30, 60, or 90 days"),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get cost projections for specified scope.
@@ -569,7 +570,7 @@ async def get_pricing_recommendation(
     target_margin: float = Query(200, ge=50, le=500, description="Target margin percentage"),
     period_days: int = Query(30, ge=7, le=90),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Calculate pricing recommendations based on actual costs.
@@ -590,7 +591,7 @@ async def simulate_pricing(
     base_price: float = Query(..., ge=0),
     per_user_price: float = Query(..., ge=0),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Simulate margin with custom pricing.
@@ -599,7 +600,7 @@ async def simulate_pricing(
     start_date = end_date - timedelta(days=30)
 
     # Get actual costs
-    data = db.execute(text("""
+    data = await db.execute(text("""
         SELECT
             COALESCE(SUM(total_cost), 0) as total_cost,
             MAX(user_count) as user_count
@@ -643,7 +644,7 @@ async def simulate_pricing(
 async def get_ai_model_costs(
     days: int = Query(30, ge=1, le=365),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get cost breakdown by AI model.
@@ -651,7 +652,7 @@ async def get_ai_model_costs(
     end_date = date.today()
     start_date = end_date - timedelta(days=days)
 
-    models = db.execute(text("""
+    models = await db.execute(text("""
         SELECT
             provider,
             model,
@@ -695,12 +696,12 @@ async def get_ai_model_costs(
 @router.get("/ai-models/pricing")
 async def get_ai_model_pricing(
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get current AI model pricing configuration.
     """
-    pricing = db.execute(text("""
+    pricing = await db.execute(text("""
         SELECT
             provider, model_id, model_name,
             input_price_per_1m, output_price_per_1m,
@@ -735,7 +736,7 @@ async def get_usage_alerts(
     status: Optional[str] = Query(None, description="Filter by status: active, acknowledged, resolved"),
     limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get usage alerts.
@@ -759,7 +760,7 @@ async def get_usage_alerts(
         ORDER BY created_at DESC
         LIMIT :limit
     """
-    alerts = db.execute(text(query), params).fetchall()
+    alerts = await db.execute(text(query), params).fetchall()
 
     return {
         "total": len(alerts),
@@ -789,12 +790,12 @@ async def get_usage_alerts(
 async def acknowledge_alert(
     alert_id: str,
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Acknowledge a usage alert.
     """
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE usage_alerts
         SET status = 'acknowledged',
             acknowledged_by = :user_id,
@@ -807,7 +808,7 @@ async def acknowledge_alert(
         "user_id": current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, 'id', None),
         "now": datetime.now(timezone.utc)
     })
-    db.commit()
+    await db.commit()
 
     return {"status": "acknowledged", "alert_id": alert_id}
 
@@ -816,12 +817,12 @@ async def acknowledge_alert(
 async def resolve_alert(
     alert_id: str,
     current_user: dict = Depends(require_owner),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Resolve a usage alert.
     """
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE usage_alerts
         SET status = 'resolved',
             resolved_at = :now
@@ -832,6 +833,6 @@ async def resolve_alert(
         "org_id": _require_org_id(current_user),
         "now": datetime.now(timezone.utc)
     })
-    db.commit()
+    await db.commit()
 
     return {"status": "resolved", "alert_id": alert_id}

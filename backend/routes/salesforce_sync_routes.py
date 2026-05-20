@@ -13,9 +13,11 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response, Header
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from .salesforce_models import SyncResponse
 from .salesforce_helpers import (
@@ -93,7 +95,7 @@ def _safe_parse_xml(xml_string: bytes) -> xml.etree.ElementTree.Element:
 @router.post("/webhook", response_model=SyncResponse)
 async def salesforce_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Receive webhook notifications from Salesforce.
@@ -141,7 +143,7 @@ async def salesforce_webhook(
     webhook_user_id = payload.get("user_id")
     org_id = None
     if webhook_user_id:
-        org_row = db.execute(
+        org_row = await db.execute(
             text("SELECT organization_id FROM users WHERE id = :user_id"),
             {"user_id": webhook_user_id}
         ).fetchone()
@@ -206,7 +208,7 @@ def _parse_outbound_message(xml_body: bytes) -> Dict[str, Any]:
 async def salesforce_full_sync(
     request: Request,
     response: Response,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Perform a full sync from Salesforce.
@@ -221,7 +223,7 @@ async def salesforce_full_sync(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Get stored tokens
-    integration = db.execute(text("""
+    integration = await db.execute(text("""
         SELECT access_token, refresh_token, scopes FROM user_integrations
         WHERE user_id = :user_id AND provider = 'salesforce'
     """), {"user_id": user_id}).fetchone()
@@ -266,14 +268,14 @@ async def salesforce_full_sync(
 async def salesforce_sync_history(
     request: Request,
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get recent sync history."""
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    history = db.execute(text("""
+    history = await db.execute(text("""
         SELECT id, sync_type, direction, status, records_processed,
                records_created, records_updated, records_failed,
                error_message, started_at, completed_at
@@ -308,7 +310,7 @@ async def salesforce_sync_history(
 @router.get("/admin/run-migration")
 async def run_salesforce_migration(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Run Salesforce database migration.
@@ -373,8 +375,8 @@ async def run_salesforce_migration(
 
     for name, sql in migrations:
         try:
-            db.execute(text(sql))
-            db.commit()
+            await db.execute(text(sql))
+            await db.commit()
             results.append({"migration": name, "status": "success"})
             logger.info(f"Migration '{name}' completed successfully")
         except SQLAlchemyError as e:
@@ -396,7 +398,7 @@ async def run_salesforce_migration(
 async def admin_pull_recent_loans(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     limit: int = Query(10, ge=1, le=100, description="Number of loans to pull"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Admin endpoint to pull recent loans from Salesforce.
@@ -408,7 +410,7 @@ async def admin_pull_recent_loans(
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     # Get the first connected Salesforce account
-    integration = db.execute(text("""
+    integration = await db.execute(text("""
         SELECT user_id, access_token, refresh_token, scopes
         FROM user_integrations
         WHERE provider = 'salesforce' AND access_token IS NOT NULL
@@ -487,7 +489,7 @@ async def admin_pull_recent_loans(
         logger.info(f"Found {len(records)} loans in Salesforce")
 
         # Get user's organization
-        user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+        user_org = await db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
         org_id = user_org[0] if user_org and user_org[0] else None
 
         # Import the records using the sync service
@@ -506,7 +508,7 @@ async def admin_pull_recent_loans(
                 sf_id = record.get('Id')
 
                 # Check if already imported
-                existing = db.execute(text(
+                existing = await db.execute(text(
                     "SELECT id, loan_number FROM loans WHERE salesforce_id = :sf_id"
                 ), {"sf_id": sf_id}).fetchone()
 
@@ -550,7 +552,7 @@ async def admin_pull_recent_loans(
                     # Update existing loan - use safe SQL builder to prevent injection
                     try:
                         update_sql, safe_data = build_safe_update_sql(loan_data)
-                        db.execute(text(update_sql), safe_data)
+                        await db.execute(text(update_sql), safe_data)
                         results['updated'] += 1
                         action = 'updated'
                     except ValueError as ve:
@@ -561,7 +563,7 @@ async def admin_pull_recent_loans(
                     # Insert new loan - use safe SQL builder to prevent injection
                     try:
                         insert_sql, safe_data = build_safe_insert_sql(loan_data)
-                        db.execute(text(insert_sql), safe_data)
+                        await db.execute(text(insert_sql), safe_data)
                         results['imported'] += 1
                         action = 'imported'
                     except ValueError as ve:
@@ -585,7 +587,7 @@ async def admin_pull_recent_loans(
                 })
                 results['skipped'] += 1
 
-        db.commit()
+        await db.commit()
 
         return {
             "status": "success",
@@ -604,7 +606,7 @@ async def admin_pull_recent_loans(
         }
     except Exception as e:
         logger.error(f"Pull failed: {e}")
-        db.rollback()
+        await db.rollback()
         return {
             "status": "error",
             "message": "Internal server error"
@@ -616,7 +618,7 @@ async def admin_pull_recent_loans(
 @router.post("/sync-and-import-mum")
 async def sync_salesforce_and_import_mum(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Full sync: Pull closed loans from Salesforce, then import to MUM clients.
@@ -881,7 +883,7 @@ async def _sync_salesforce_and_import_mum_inner(
 @router.post("/sync-all-loans")
 async def sync_all_loans_from_salesforce(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Full sync: Link and pull ALL loans from Salesforce to CRM.

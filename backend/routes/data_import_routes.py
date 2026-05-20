@@ -33,8 +33,10 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -475,7 +477,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/imports/field-mappings", tags=["Data Import"])
     async def create_field_mapping(
         body: FieldMappingTemplate,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Save a reusable field mapping template."""
@@ -494,7 +496,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
                 detail=f"Invalid target fields: {', '.join(invalid_fields)}",
             )
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO import_field_mappings (organization_id, name, description, mappings, created_by)
             VALUES (:org_id, :name, :desc, :mappings, :user_id)
             RETURNING id, name, created_at
@@ -506,7 +508,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             "user_id": user_id,
         })
         row = result.fetchone()
-        db.commit()
+        await db.commit()
 
         return {
             "id": row[0],
@@ -518,14 +520,14 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
 
     @app.get("/api/v1/imports/field-mappings", tags=["Data Import"])
     async def list_field_mappings(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """List saved field mapping templates for this organization."""
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
 
-        rows = db.execute(text("""
+        rows = await db.execute(text("""
             SELECT id, name, description, mappings, created_at, updated_at
             FROM import_field_mappings
             WHERE organization_id = :org_id
@@ -549,14 +551,14 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
     @app.get("/api/v1/imports/field-mappings/{mapping_id}", tags=["Data Import"])
     async def get_field_mapping(
         mapping_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Get a specific field mapping template."""
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
 
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT id, name, description, mappings, created_at, updated_at
             FROM import_field_mappings
             WHERE id = :id AND organization_id = :org_id
@@ -577,18 +579,18 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
     @app.delete("/api/v1/imports/field-mappings/{mapping_id}", tags=["Data Import"])
     async def delete_field_mapping(
         mapping_id: int,
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """Delete a field mapping template."""
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
 
-        result = db.execute(text("""
+        result = await db.execute(text("""
             DELETE FROM import_field_mappings
             WHERE id = :id AND organization_id = :org_id
         """), {"id": mapping_id, "org_id": org_id})
-        db.commit()
+        await db.commit()
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Field mapping template not found")
@@ -604,7 +606,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         file: UploadFile = File(...),
         field_mapping: Optional[str] = Form(None),
         mapping_template_id: Optional[int] = Form(None),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """
@@ -668,7 +670,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
             except json.JSONDecodeError:
                 raise HTTPException(status_code=400, detail="Invalid field_mapping JSON")
         elif mapping_template_id:
-            tpl = db.execute(text("""
+            tpl = await db.execute(text("""
                 SELECT mappings FROM import_field_mappings
                 WHERE id = :id AND organization_id = :org_id
             """), {"id": mapping_template_id, "org_id": org_id}).fetchone()

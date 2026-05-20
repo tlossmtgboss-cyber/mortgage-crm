@@ -7,7 +7,7 @@ Recipients can reply to system emails and receive intelligent AI responses.
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, text
+from sqlalchemy import desc, text, select
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -17,6 +17,8 @@ import json
 import re
 import os
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -105,7 +107,7 @@ def get_current_user_dep():
 async def start_conversation(
     request: ConversationStartRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """
@@ -122,7 +124,7 @@ async def start_conversation(
         ensure_conversation_tables(db)
 
         # Create conversation record
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ai_email_conversations
             (conversation_id, user_id, recipient_email, recipient_name,
              loan_id, lead_id, conversation_type, status, context, created_at)
@@ -138,7 +140,7 @@ async def start_conversation(
             "conv_type": request.conversation_type,
             "context": json.dumps(request.context) if request.context else None
         })
-        db.commit()
+        await db.commit()
 
         # Generate message ID for threading
         message_id = f"<{conversation_id}@mortgagecrm.ai>"
@@ -173,7 +175,7 @@ async def start_conversation(
 
         if success:
             # Store outbound message
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO ai_email_messages
                 (conversation_id, direction, from_email, to_email, subject,
                  body_text, body_html, message_id, ai_generated, created_at)
@@ -188,7 +190,7 @@ async def start_conversation(
                 "body_html": enhanced_html,
                 "msg_id": message_id
             })
-            db.commit()
+            await db.commit()
 
             logger.info(f"Started AI conversation {conversation_id} with {request.recipient_email}")
 
@@ -205,7 +207,7 @@ async def start_conversation(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error starting conversation: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -213,7 +215,7 @@ async def start_conversation(
 async def inbound_email_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     SendGrid Inbound Parse webhook for receiving email replies.
@@ -296,7 +298,7 @@ async def inbound_email_webhook(
 
         if conversation_id:
             # Verify conversation exists
-            conv_result = db.execute(text("""
+            conv_result = await db.execute(text("""
                 SELECT id, user_id, recipient_email, loan_id, lead_id,
                        conversation_type, context, status
                 FROM ai_email_conversations
@@ -325,14 +327,14 @@ async def inbound_email_webhook(
             sender_name = sender_name_match.group(1).strip() if sender_name_match else from_address.split('@')[0]
 
             # Determine organization context from the recipient (LO) address
-            recipient_user = db.execute(text("""
+            recipient_user = await db.execute(text("""
                 SELECT id, organization_id FROM users WHERE email = :email LIMIT 1
             """), {"email": to_address}).fetchone()
             org_id = recipient_user.organization_id if recipient_user else None
 
             # Try to find existing lead by email (scoped to organization if known)
             if org_id:
-                existing_lead = db.execute(text("""
+                existing_lead = await db.execute(text("""
                     SELECT id, name, owner_id
                     FROM leads
                     WHERE email = :email AND organization_id = :org_id
@@ -340,7 +342,7 @@ async def inbound_email_webhook(
                     LIMIT 1
                 """), {"email": from_address, "org_id": org_id}).fetchone()
             else:
-                existing_lead = db.execute(text("""
+                existing_lead = await db.execute(text("""
                     SELECT id, name, owner_id
                     FROM leads
                     WHERE email = :email
@@ -359,7 +361,7 @@ async def inbound_email_webhook(
                 if recipient_user:
                     user_id = recipient_user.id
                 else:
-                    default_user = db.execute(text("""
+                    default_user = await db.execute(text("""
                         SELECT id FROM users
                         WHERE role IN ('admin', 'owner', 'loan_officer')
                         ORDER BY id ASC
@@ -368,7 +370,7 @@ async def inbound_email_webhook(
                     user_id = default_user.id if default_user else 1
 
                 # Create new lead with organization_id for tenant isolation
-                db.execute(text("""
+                await db.execute(text("""
                     INSERT INTO leads (name, email, source, owner_id, organization_id, created_at, updated_at)
                     VALUES (:name, :email, 'inbound_email', :owner_id, :org_id, NOW(), NOW())
                 """), {
@@ -380,18 +382,18 @@ async def inbound_email_webhook(
 
                 # Get the new lead ID (scoped to org if known)
                 if org_id:
-                    new_lead = db.execute(text("""
+                    new_lead = await db.execute(text("""
                         SELECT id FROM leads WHERE email = :email AND organization_id = :org_id ORDER BY id DESC LIMIT 1
                     """), {"email": from_address, "org_id": org_id}).fetchone()
                 else:
-                    new_lead = db.execute(text("""
+                    new_lead = await db.execute(text("""
                         SELECT id FROM leads WHERE email = :email ORDER BY id DESC LIMIT 1
                     """), {"email": from_address}).fetchone()
                 lead_id = new_lead.id if new_lead else None
                 logger.info(f"Created new lead {lead_id} from inbound email")
 
             # Create the new conversation
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO ai_email_conversations
                 (conversation_id, user_id, recipient_email, recipient_name,
                  lead_id, conversation_type, status, message_count, created_at, last_message_at)
@@ -412,7 +414,7 @@ async def inbound_email_webhook(
         logger.info(f"After cleaning - reply length: {len(clean_reply)}, content: {clean_reply[:200] if clean_reply else 'EMPTY'}...")
 
         # Store inbound message with message_id for threading
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO ai_email_messages
             (conversation_id, direction, from_email, to_email, subject,
              body_text, body_html, message_id, ai_generated, created_at)
@@ -429,14 +431,14 @@ async def inbound_email_webhook(
         })
 
         # Update conversation last_message_at
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE ai_email_conversations
             SET last_message_at = NOW(),
                 message_count = COALESCE(message_count, 0) + 1
             WHERE conversation_id = :conv_id
         """), {"conv_id": conversation_id})
 
-        db.commit()
+        await db.commit()
 
         # Process AI response in background (uses its own DB session)
         # OBS-002: Wrapped with _safe_background_task for error surfacing
@@ -463,7 +465,7 @@ async def inbound_email_webhook(
 
 @router.get("/debug/history")
 async def debug_conversation_history(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep())
 ):
     """Debug endpoint to view all conversation history (temporary)"""
@@ -471,7 +473,7 @@ async def debug_conversation_history(
         ensure_conversation_tables(db)
 
         # Get all conversations with their messages
-        conversations = db.execute(text("""
+        conversations = await db.execute(text("""
             SELECT c.conversation_id, c.recipient_email, c.recipient_name,
                    c.conversation_type, c.status, c.message_count, c.created_at,
                    c.last_message_at
@@ -483,7 +485,7 @@ async def debug_conversation_history(
         result = []
         for conv in conversations:
             # Get messages for this conversation
-            messages = db.execute(text("""
+            messages = await db.execute(text("""
                 SELECT direction, from_email, to_email, subject,
                        body_text, created_at, ai_generated
                 FROM ai_email_messages
@@ -522,7 +524,7 @@ async def debug_conversation_history(
 async def list_conversations(
     status: Optional[str] = None,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """List all AI email conversations for the current user"""
@@ -545,7 +547,7 @@ async def list_conversations(
         query += " ORDER BY last_message_at DESC NULLS LAST, created_at DESC LIMIT :limit"
         params["limit"] = limit
 
-        results = db.execute(text(query), params).fetchall()
+        results = await db.execute(text(query), params).fetchall()
 
         return [
             {
@@ -572,13 +574,13 @@ async def list_conversations(
 @router.get("/conversations/{conversation_id}/messages", response_model=List[dict])
 async def get_conversation_messages(
     conversation_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Get all messages in a conversation"""
     try:
         # Verify user owns conversation
-        conv = db.execute(text("""
+        conv = await db.execute(text("""
             SELECT id FROM ai_email_conversations
             WHERE conversation_id = :conv_id AND user_id = :user_id
         """), {"conv_id": conversation_id, "user_id": current_user.id}).fetchone()
@@ -586,7 +588,7 @@ async def get_conversation_messages(
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        messages = db.execute(text("""
+        messages = await db.execute(text("""
             SELECT id, conversation_id, direction, from_email, to_email,
                    subject, body_text, body_html, ai_generated, created_at
             FROM ai_email_messages
@@ -621,13 +623,13 @@ async def get_conversation_messages(
 async def send_manual_reply(
     conversation_id: str,
     message: str = Form(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Send a manual (non-AI) reply to a conversation"""
     try:
         # Get conversation
-        conv = db.execute(text("""
+        conv = await db.execute(text("""
             SELECT id, recipient_email, recipient_name, user_id
             FROM ai_email_conversations
             WHERE conversation_id = :conv_id AND user_id = :user_id
@@ -637,7 +639,7 @@ async def send_manual_reply(
             raise HTTPException(status_code=404, detail="Conversation not found")
 
         # Get last subject for threading
-        last_msg = db.execute(text("""
+        last_msg = await db.execute(text("""
             SELECT subject FROM ai_email_messages
             WHERE conversation_id = :conv_id
             ORDER BY created_at DESC LIMIT 1
@@ -672,7 +674,7 @@ async def send_manual_reply(
 
         if success:
             # Store message
-            db.execute(text("""
+            await db.execute(text("""
                 INSERT INTO ai_email_messages
                 (conversation_id, direction, from_email, to_email, subject,
                  body_text, body_html, ai_generated, created_at)
@@ -687,14 +689,14 @@ async def send_manual_reply(
                 "body_html": html_body
             })
 
-            db.execute(text("""
+            await db.execute(text("""
                 UPDATE ai_email_conversations
                 SET last_message_at = NOW(),
                     message_count = COALESCE(message_count, 0) + 1
                 WHERE conversation_id = :conv_id
             """), {"conv_id": conversation_id})
 
-            db.commit()
+            await db.commit()
 
             return {"success": True, "message": "Reply sent"}
         else:
@@ -710,12 +712,12 @@ async def send_manual_reply(
 @router.patch("/conversations/{conversation_id}/close", response_model=dict)
 async def close_conversation(
     conversation_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Close an AI conversation (stop auto-replies)"""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE ai_email_conversations
             SET status = 'closed', closed_at = NOW()
             WHERE conversation_id = :conv_id AND user_id = :user_id
@@ -725,7 +727,7 @@ async def close_conversation(
         if not result:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        db.commit()
+        await db.commit()
         return {"success": True, "message": "Conversation closed"}
 
     except HTTPException:
@@ -738,13 +740,13 @@ async def close_conversation(
 @router.delete("/conversations/{conversation_id}", response_model=dict)
 async def delete_conversation(
     conversation_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user = Depends(get_current_user_dep())
 ):
     """Delete an AI conversation and all its messages"""
     try:
         # Verify user owns conversation
-        conv = db.execute(text("""
+        conv = await db.execute(text("""
             SELECT id FROM ai_email_conversations
             WHERE conversation_id = :conv_id AND user_id = :user_id
         """), {"conv_id": conversation_id, "user_id": current_user.id}).fetchone()
@@ -753,18 +755,18 @@ async def delete_conversation(
             raise HTTPException(status_code=404, detail="Conversation not found")
 
         # Delete all messages first
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM ai_email_messages
             WHERE conversation_id = :conv_id
         """), {"conv_id": conversation_id})
 
         # Delete the conversation
-        db.execute(text("""
+        await db.execute(text("""
             DELETE FROM ai_email_conversations
             WHERE conversation_id = :conv_id AND user_id = :user_id
         """), {"conv_id": conversation_id, "user_id": current_user.id})
 
-        db.commit()
+        await db.commit()
         logger.info(f"Deleted AI conversation {conversation_id}")
         return {"success": True, "message": "Conversation deleted"}
 
@@ -772,7 +774,7 @@ async def delete_conversation(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error deleting conversation: {e}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

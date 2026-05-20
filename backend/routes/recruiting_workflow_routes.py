@@ -12,11 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional, List
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from workflows.recruiting_workflows import recruiting_workflow_service, RECRUITING_WORKFLOWS
 from services.recruiting_email_service import get_recruiting_email_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from auth.dependencies import get_current_user
 from database.models import User
 from database import get_db
@@ -113,7 +115,7 @@ async def create_tasks_for_candidate(
     candidate_id: int,
     request: CreateTasksRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Create workflow tasks for a candidate when their disposition changes.
@@ -124,7 +126,7 @@ async def create_tasks_for_candidate(
 
     # Validate assigned_to user belongs to same org
     if request.assigned_to:
-        assignee = db.execute(text("""
+        assignee = await db.execute(text("""
             SELECT id FROM users WHERE id = :uid AND organization_id = :org_id
         """), {"uid": request.assigned_to, "org_id": current_user.organization_id}).fetchone()
         if not assignee:
@@ -187,7 +189,7 @@ async def get_pending_tasks(
 async def get_candidate_tasks(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get all tasks for a specific candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
@@ -203,7 +205,7 @@ async def complete_task(
     task_id: int,
     request: CompleteTaskRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Mark a task as completed."""
     _verify_task_org(db, task_id, current_user.organization_id)
@@ -222,7 +224,7 @@ async def skip_task(
     task_id: int,
     request: SkipTaskRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Skip a task with a reason."""
     _verify_task_org(db, task_id, current_user.organization_id)

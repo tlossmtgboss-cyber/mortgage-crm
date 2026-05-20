@@ -33,8 +33,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 from database import get_db
 from auth.dependencies import get_current_user
@@ -75,7 +77,7 @@ def _build_org_params(current_user) -> dict:
 @router.get("/doc-analytics/dashboard")
 async def document_dashboard(
     days: int = Query(30, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -91,7 +93,7 @@ async def document_dashboard(
 
     try:
         # -- Totals --
-        totals = db.execute(sa_text("""
+        totals = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                              AS total_documents,
                 COUNT(DISTINCT sd.loan_id)                            AS total_loans_with_docs
@@ -99,7 +101,7 @@ async def document_dashboard(
             WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
         """), {"org_id": org_id}).first()
 
-        request_totals = db.execute(sa_text("""
+        request_totals = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                               AS total_requests,
                 COUNT(CASE WHEN sdr.status = 'ACCEPTED' THEN 1 END)                    AS accepted_count,
@@ -117,7 +119,7 @@ async def document_dashboard(
         completion_rate = round((accepted / total_requests) * 100, 1) if total_requests else 0.0
 
         # -- Documents by status --
-        by_status_rows = db.execute(sa_text("""
+        by_status_rows = await db.execute(sa_text("""
             SELECT sd.status, COUNT(*) AS count
             FROM smart_documents sd
             WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
@@ -127,7 +129,7 @@ async def document_dashboard(
         documents_by_status = {row[0]: row[1] for row in by_status_rows}
 
         # -- Documents by type --
-        by_type_rows = db.execute(sa_text("""
+        by_type_rows = await db.execute(sa_text("""
             SELECT sd.doc_type, COUNT(*) AS count
             FROM smart_documents sd
             WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
@@ -138,7 +140,7 @@ async def document_dashboard(
         documents_by_type = {row[0]: row[1] for row in by_type_rows}
 
         # -- Daily upload trend (last N days) --
-        daily_trend_rows = db.execute(sa_text("""
+        daily_trend_rows = await db.execute(sa_text("""
             SELECT
                 DATE(sd.uploaded_at) AS upload_date,
                 COUNT(*)            AS count
@@ -154,7 +156,7 @@ async def document_dashboard(
         ]
 
         # -- Top rejection reasons --
-        rejection_rows = db.execute(sa_text("""
+        rejection_rows = await db.execute(sa_text("""
             SELECT
                 COALESCE(sd.rejection_category, 'UNSPECIFIED') AS reason,
                 COUNT(*)                                       AS count
@@ -196,7 +198,7 @@ async def document_dashboard(
 async def pipeline_completeness(
     limit: int = Query(50, ge=1, le=200, description="Max loans to return"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -210,7 +212,7 @@ async def pipeline_completeness(
         raise HTTPException(status_code=400, detail="Organization context required")
 
     try:
-        rows = db.execute(sa_text("""
+        rows = await db.execute(sa_text("""
             SELECT
                 l.id                                                    AS loan_id,
                 l.loan_number,
@@ -267,7 +269,7 @@ async def pipeline_completeness(
 
 @router.get("/doc-analytics/sla-compliance")
 async def sla_compliance(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -282,7 +284,7 @@ async def sla_compliance(
 
     try:
         # -- Aggregate SLA stats --
-        sla_stats = db.execute(sa_text("""
+        sla_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                                        AS total_open,
                 COUNT(CASE WHEN sdr.sla_due_at IS NOT NULL AND sdr.sla_due_at < NOW() THEN 1 END) AS overdue,
@@ -301,7 +303,7 @@ async def sla_compliance(
         compliance_rate = round((within_sla / total_open) * 100, 1) if total_open else 100.0
 
         # -- Overdue by loan --
-        overdue_rows = db.execute(sa_text("""
+        overdue_rows = await db.execute(sa_text("""
             SELECT
                 l.id                        AS loan_id,
                 l.loan_number,
@@ -332,7 +334,7 @@ async def sla_compliance(
         ]
 
         # -- SLA tracking breach / at-risk counts (from smart_docs_sla_tracking) --
-        sla_tracking_stats = db.execute(sa_text("""
+        sla_tracking_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(CASE WHEN sst.breached = true THEN 1 END)                        AS breach_count,
                 COUNT(CASE WHEN sst.breached = false
@@ -369,7 +371,7 @@ async def sla_compliance(
 
 @router.post("/doc-analytics/check-sla-breaches")
 async def check_sla_breaches(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -392,7 +394,7 @@ async def check_sla_breaches(
 
     try:
         # -- Find timers that have breached but are not yet marked --
-        newly_breached_rows = db.execute(sa_text("""
+        newly_breached_rows = await db.execute(sa_text("""
             SELECT
                 sst.id,
                 sst.loan_id,
@@ -412,16 +414,16 @@ async def check_sla_breaches(
         new_breach_ids = [row[0] for row in newly_breached_rows]
 
         if new_breach_ids:
-            db.execute(sa_text("""
+            await db.execute(sa_text("""
                 UPDATE smart_docs_sla_tracking
                 SET breached = true,
                     status = 'BREACHED'
                 WHERE id = ANY(:ids)
             """), {"ids": new_breach_ids})
-            db.commit()
+            await db.commit()
 
         # -- Find timers currently in warning zone (past warning_at, not yet breached) --
-        warning_rows = db.execute(sa_text("""
+        warning_rows = await db.execute(sa_text("""
             SELECT
                 sst.id,
                 sst.loan_id,
@@ -489,7 +491,7 @@ async def check_sla_breaches(
 
 @router.get("/doc-analytics/sla-alerts")
 async def sla_alerts(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -504,7 +506,7 @@ async def sla_alerts(
 
     try:
         # -- Active breaches --
-        breach_rows = db.execute(sa_text("""
+        breach_rows = await db.execute(sa_text("""
             SELECT
                 sst.id,
                 sst.loan_id,
@@ -523,7 +525,7 @@ async def sla_alerts(
         """), {"org_id": org_id}).fetchall()
 
         # -- Active warnings (past warning_at, not yet breached) --
-        warning_rows = db.execute(sa_text("""
+        warning_rows = await db.execute(sa_text("""
             SELECT
                 sst.id,
                 sst.loan_id,
@@ -610,7 +612,7 @@ async def sla_alerts(
 @router.get("/doc-analytics/ai-performance")
 async def ai_performance(
     days: int = Query(90, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -626,7 +628,7 @@ async def ai_performance(
 
     try:
         # -- Classification accuracy from ai_document_classifications --
-        classification_stats = db.execute(sa_text("""
+        classification_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                           AS total_classifications,
                 COUNT(CASE WHEN adc.is_correct = true THEN 1 END)                  AS correct,
@@ -646,7 +648,7 @@ async def ai_performance(
         avg_confidence = round(float(classification_stats[4] or 0), 1) if classification_stats else 0.0
 
         # -- Automated review decision breakdown from smart_documents --
-        review_stats = db.execute(sa_text("""
+        review_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                           AS total_reviewed,
                 COUNT(CASE WHEN sd.decision = 'ACCEPT' THEN 1 END)                 AS auto_accepted,
@@ -668,7 +670,7 @@ async def ai_performance(
         needs_review_rate = round((needs_review / total_reviewed) * 100, 1) if total_reviewed else 0.0
 
         # -- False positives: AI rejected but human later approved --
-        fp_stats = db.execute(sa_text("""
+        fp_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(CASE WHEN sd.decision = 'REJECT' AND sd.status = 'APPROVED' THEN 1 END) AS false_positives,
                 COUNT(CASE WHEN sd.decision = 'ACCEPT' AND sd.status = 'REJECTED' THEN 1 END) AS false_negatives
@@ -721,7 +723,7 @@ async def ai_performance(
 @router.get("/doc-analytics/followup-effectiveness")
 async def followup_effectiveness(
     days: int = Query(90, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -737,7 +739,7 @@ async def followup_effectiveness(
 
     try:
         # -- Campaign summary --
-        campaign_stats = db.execute(sa_text("""
+        campaign_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                              AS total_campaigns,
                 COUNT(CASE WHEN fc.status = 'active' THEN 1 END)                      AS active,
@@ -760,7 +762,7 @@ async def followup_effectiveness(
         response_rate = round((responded / total_campaigns) * 100, 1) if total_campaigns else 0.0
 
         # -- Channel effectiveness from follow-up events --
-        channel_rows = db.execute(sa_text("""
+        channel_rows = await db.execute(sa_text("""
             SELECT
                 fe.channel,
                 COUNT(*)                                                             AS total_sent,
@@ -789,7 +791,7 @@ async def followup_effectiveness(
         ]
 
         # -- Documents collected after follow-up events --
-        docs_after_followup = db.execute(sa_text("""
+        docs_after_followup = await db.execute(sa_text("""
             SELECT COUNT(*)
             FROM document_followup_events fe
             JOIN document_followup_campaigns fc ON fc.id = fe.campaign_id
@@ -799,7 +801,7 @@ async def followup_effectiveness(
         """), {"org_id": org_id, "days": days}).scalar() or 0
 
         # -- Appointment completion rate --
-        appt_stats = db.execute(sa_text("""
+        appt_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                             AS total,
                 COUNT(CASE WHEN da.status = 'completed' THEN 1 END)                  AS completed,
@@ -848,7 +850,7 @@ async def followup_effectiveness(
 @router.get("/doc-analytics/income-summary")
 async def income_summary(
     days: int = Query(90, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -864,7 +866,7 @@ async def income_summary(
 
     try:
         # -- Calculation aggregates --
-        calc_stats = db.execute(sa_text("""
+        calc_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                                       AS total,
                 COUNT(CASE WHEN ic.status = 'completed' THEN 1 END)                            AS completed,
@@ -884,7 +886,7 @@ async def income_summary(
         approval_rate = round((approved / total_calcs) * 100, 1) if total_calcs else 0.0
 
         # -- DTI distribution (histogram buckets) --
-        dti_rows = db.execute(sa_text("""
+        dti_rows = await db.execute(sa_text("""
             SELECT
                 CASE
                     WHEN ic.dti_back_end < 30  THEN 'under_30'
@@ -906,7 +908,7 @@ async def income_summary(
 
         # -- Common AI flags (parse from JSON array column) --
         # Since ai_flags is JSON, we unnest and count
-        flag_rows = db.execute(sa_text("""
+        flag_rows = await db.execute(sa_text("""
             SELECT flag, COUNT(*) AS count
             FROM (
                 SELECT jsonb_array_elements_text(ic.ai_flags::jsonb) AS flag
@@ -923,7 +925,7 @@ async def income_summary(
         common_flags = [{"flag": row[0], "count": row[1]} for row in flag_rows]
 
         # -- Verification task completion rate --
-        task_stats = db.execute(sa_text("""
+        task_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                                  AS total_tasks,
                 COUNT(CASE WHEN ivt.status = 'completed' THEN 1 END)                      AS completed
@@ -964,7 +966,7 @@ async def income_summary(
 @router.get("/doc-analytics/bank-analysis-summary")
 async def bank_analysis_summary(
     days: int = Query(90, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -982,7 +984,7 @@ async def bank_analysis_summary(
     try:
         # Bank analysis results are stored as JSON on the loan (bank_analysis_result column).
         # Extract aggregates from the JSON for loans analyzed within the period.
-        analysis_rows = db.execute(sa_text("""
+        analysis_rows = await db.execute(sa_text("""
             SELECT
                 l.id,
                 l.bank_analysis_result,
@@ -1061,7 +1063,7 @@ async def bank_analysis_summary(
 @router.get("/doc-analytics/esign-metrics")
 async def esign_metrics(
     days: int = Query(90, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1076,7 +1078,7 @@ async def esign_metrics(
 
     try:
         # -- Envelope counts --
-        env_stats = db.execute(sa_text("""
+        env_stats = await db.execute(sa_text("""
             SELECT
                 COUNT(*)                                                               AS total,
                 COUNT(CASE WHEN ee.status = 'sent' THEN 1 END)                         AS sent,
@@ -1101,7 +1103,7 @@ async def esign_metrics(
         completion_rate = round((completed_envelopes / sent_or_further) * 100, 1) if sent_or_further else 0.0
 
         # -- Most common decline reasons --
-        decline_rows = db.execute(sa_text("""
+        decline_rows = await db.execute(sa_text("""
             SELECT
                 COALESCE(er.decline_reason, 'No reason given') AS reason,
                 COUNT(*)                                       AS count
@@ -1145,7 +1147,7 @@ async def esign_metrics(
 @router.get("/doc-analytics/processor-productivity")
 async def processor_productivity(
     days: int = Query(30, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1159,7 +1161,7 @@ async def processor_productivity(
         raise HTTPException(status_code=400, detail="Organization context required")
 
     try:
-        rows = db.execute(sa_text("""
+        rows = await db.execute(sa_text("""
             SELECT
                 sd.reviewed_by,
                 COUNT(*)                                                                   AS documents_reviewed,
@@ -1213,7 +1215,7 @@ async def processor_productivity(
 @router.get("/doc-analytics/loan/{loan_id}/timeline")
 async def loan_document_timeline(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1229,7 +1231,7 @@ async def loan_document_timeline(
         events = []
 
         # -- Document requests created --
-        req_rows = db.execute(sa_text("""
+        req_rows = await db.execute(sa_text("""
             SELECT
                 sdr.id, sdr.doc_type, sdr.title, sdr.status, sdr.created_at
             FROM smart_document_requests sdr
@@ -1248,7 +1250,7 @@ async def loan_document_timeline(
             })
 
         # -- Documents uploaded, reviewed, approved, rejected --
-        doc_rows = db.execute(sa_text("""
+        doc_rows = await db.execute(sa_text("""
             SELECT
                 sd.id, sd.doc_type, sd.file_name, sd.status, sd.decision,
                 sd.rejection_reason, sd.reviewed_by,
@@ -1283,7 +1285,7 @@ async def loan_document_timeline(
                 })
 
         # -- Doc policy events --
-        policy_rows = db.execute(sa_text("""
+        policy_rows = await db.execute(sa_text("""
             SELECT dpe.event_type, dpe.created_at, dpe.document_id, dpe.request_id
             FROM doc_policy_events dpe
             WHERE dpe.loan_id = :loan_id
@@ -1301,7 +1303,7 @@ async def loan_document_timeline(
             })
 
         # -- Follow-up campaign events --
-        fu_rows = db.execute(sa_text("""
+        fu_rows = await db.execute(sa_text("""
             SELECT
                 fe.event_type, fe.channel, fe.delivery_status,
                 fe.message_subject, fe.created_at, fe.campaign_id
@@ -1323,7 +1325,7 @@ async def loan_document_timeline(
             })
 
         # -- Appointments --
-        appt_rows = db.execute(sa_text("""
+        appt_rows = await db.execute(sa_text("""
             SELECT
                 da.id, da.appointment_type, da.title, da.status,
                 da.scheduled_time_start, da.completed_at, da.created_at
@@ -1343,7 +1345,7 @@ async def loan_document_timeline(
             })
 
         # -- E-signature events --
-        esign_rows = db.execute(sa_text("""
+        esign_rows = await db.execute(sa_text("""
             SELECT
                 eae.event_type, eae.event_description, eae.timestamp,
                 eae.envelope_id, eae.recipient_id
@@ -1364,7 +1366,7 @@ async def loan_document_timeline(
             })
 
         # -- Income calculations --
-        income_rows = db.execute(sa_text("""
+        income_rows = await db.execute(sa_text("""
             SELECT
                 ic.id, ic.calculation_type, ic.status,
                 ic.total_qualifying_monthly_income, ic.dti_back_end,
@@ -1387,7 +1389,7 @@ async def loan_document_timeline(
             })
 
         # -- Bank analysis --
-        bank_row = db.execute(sa_text("""
+        bank_row = await db.execute(sa_text("""
             SELECT bank_analysis_at
             FROM loans
             WHERE id = :loan_id AND bank_analysis_at IS NOT NULL
@@ -1431,7 +1433,7 @@ async def document_trends(
         description="Aggregation period: daily, weekly, monthly",
     ),
     days: int = Query(90, ge=1, le=365, description="Lookback period in days"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1481,7 +1483,7 @@ async def document_trends(
                 " GROUP BY period_start"
                 " ORDER BY period_start"
             )
-            rows = db.execute(sa_text(uploads_sql), {"org_id": org_id, "days": days}).fetchall()
+            rows = await db.execute(sa_text(uploads_sql), {"org_id": org_id, "days": days}).fetchall()
 
         elif metric == "approvals":
             approvals_sql = (
@@ -1495,7 +1497,7 @@ async def document_trends(
                 " GROUP BY period_start"
                 " ORDER BY period_start"
             )
-            rows = db.execute(sa_text(approvals_sql), {"org_id": org_id, "days": days}).fetchall()
+            rows = await db.execute(sa_text(approvals_sql), {"org_id": org_id, "days": days}).fetchall()
 
         elif metric == "rejections":
             rejections_sql = (
@@ -1509,7 +1511,7 @@ async def document_trends(
                 " GROUP BY period_start"
                 " ORDER BY period_start"
             )
-            rows = db.execute(sa_text(rejections_sql), {"org_id": org_id, "days": days}).fetchall()
+            rows = await db.execute(sa_text(rejections_sql), {"org_id": org_id, "days": days}).fetchall()
 
         elif metric == "completeness":
             # Average pipeline completeness over time (snapshot per period)
@@ -1524,7 +1526,7 @@ async def document_trends(
                 " GROUP BY period_start"
                 " ORDER BY period_start"
             )
-            rows = db.execute(sa_text(completeness_sql), {"org_id": org_id, "days": days}).fetchall()
+            rows = await db.execute(sa_text(completeness_sql), {"org_id": org_id, "days": days}).fetchall()
 
         data_points = [
             {
@@ -1552,7 +1554,7 @@ async def document_trends(
 
 @router.get("/doc-analytics/bottlenecks")
 async def document_bottlenecks(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user),
 ):
     """
@@ -1568,7 +1570,7 @@ async def document_bottlenecks(
 
     try:
         # -- Most commonly missing doc types (open requests) --
-        missing_rows = db.execute(sa_text("""
+        missing_rows = await db.execute(sa_text("""
             SELECT
                 sdr.doc_type,
                 COUNT(*) AS count
@@ -1587,7 +1589,7 @@ async def document_bottlenecks(
         ]
 
         # -- Average time per doc type (request to approval) --
-        time_rows = db.execute(sa_text("""
+        time_rows = await db.execute(sa_text("""
             SELECT
                 sdr.doc_type,
                 COUNT(*)                                                                 AS count,
@@ -1610,7 +1612,7 @@ async def document_bottlenecks(
         ]
 
         # -- Longest-pending requests --
-        pending_rows = db.execute(sa_text("""
+        pending_rows = await db.execute(sa_text("""
             SELECT
                 sdr.id                                                             AS request_id,
                 sdr.doc_type,
@@ -1642,7 +1644,7 @@ async def document_bottlenecks(
         ]
 
         # -- Loans blocked by documents (active loans with many open requests) --
-        blocked_rows = db.execute(sa_text("""
+        blocked_rows = await db.execute(sa_text("""
             SELECT
                 l.id                        AS loan_id,
                 l.loan_number,
@@ -1675,7 +1677,7 @@ async def document_bottlenecks(
         ]
 
         # -- Most common rejection categories --
-        rejection_rows = db.execute(sa_text("""
+        rejection_rows = await db.execute(sa_text("""
             SELECT
                 COALESCE(sd.rejection_category, 'UNSPECIFIED') AS category,
                 COUNT(*)                                       AS count

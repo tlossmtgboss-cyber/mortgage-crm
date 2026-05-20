@@ -14,7 +14,9 @@ from pydantic import BaseModel, EmailStr
 
 from utils.responses import success_response, error_response
 from sqlalchemy.exc import SQLAlchemyError
-from db import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +85,7 @@ class MagicLinkAuthRequest(BaseModel):
 async def create_transaction(
     request: CreateTransactionRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new listing transaction from a loan"""
     from services.listing_portal_service import listing_portal_service
@@ -115,7 +117,7 @@ async def create_transaction(
 @router.get("/transactions")
 async def list_transactions(
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all transactions for the current organization"""
     from sqlalchemy import text
@@ -124,7 +126,7 @@ async def list_transactions(
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization context required")
 
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT
             t.id, t.loan_id, t.property_address, t.property_city, t.property_state,
             t.purchase_price, t.target_close_date, t.current_status, t.is_active,
@@ -159,7 +161,7 @@ async def list_transactions(
 async def get_transaction(
     transaction_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get transaction details with parties and milestones"""
     from services.listing_portal_service import listing_portal_service
@@ -185,7 +187,7 @@ async def add_party(
     transaction_id: int,
     request: AddPartyRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Add a party (listing agent) to a transaction"""
     from services.listing_portal_service import listing_portal_service
@@ -216,7 +218,7 @@ async def send_portal_invite(
     transaction_id: int,
     party_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send portal invite email with magic link to a party"""
     from services.listing_portal_service import listing_portal_service
@@ -256,7 +258,7 @@ async def update_milestone(
     milestone_id: int,
     request: UpdateMilestoneRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a milestone status"""
     from services.listing_portal_service import listing_portal_service
@@ -277,7 +279,7 @@ async def update_milestone(
     # Send milestone notification to subscribed parties
     try:
         # Get parties subscribed to milestone changes
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT p.id, p.email, p.first_name, p.last_name, p.role,
                    t.property_address
             FROM transaction_parties p
@@ -324,7 +326,7 @@ async def send_message_as_lo(
     transaction_id: int,
     request: SendMessageRequest,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a message as the loan officer"""
     from services.listing_portal_service import listing_portal_service
@@ -350,7 +352,7 @@ async def get_messages(
     limit: int = Query(50, le=100),
     offset: int = Query(0, ge=0),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get messages for a transaction"""
     from services.listing_portal_service import listing_portal_service
@@ -371,7 +373,7 @@ async def get_messages(
 @router.post("/auth/magic-link")
 async def authenticate_magic_link(
     request: MagicLinkAuthRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Authenticate using a magic link token"""
     from services.listing_portal_service import listing_portal_service
@@ -387,7 +389,7 @@ async def authenticate_magic_link(
 @router.get("/auth/session")
 async def validate_session(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Validate a session token (from cookie or header)"""
     from services.listing_portal_service import listing_portal_service
@@ -409,7 +411,7 @@ async def validate_session(
 
 
 # Helper to get party from session
-async def get_portal_party(request: Request, db: Session = Depends(get_db)):
+async def get_portal_party(request: Request, db: AsyncSession = Depends(get_async_db)):
     """Get party from portal session"""
     from services.listing_portal_service import listing_portal_service
 
@@ -430,7 +432,7 @@ async def get_portal_party(request: Request, db: Session = Depends(get_db)):
 @router.get("/portal/dashboard")
 async def portal_dashboard(
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get dashboard view for logged-in party"""
     session_data = await get_portal_party(request, db)
@@ -475,7 +477,7 @@ async def portal_get_messages(
     request: Request,
     limit: int = Query(50, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get messages as a party"""
     session_data = await get_portal_party(request, db)
@@ -496,7 +498,7 @@ async def portal_get_messages(
 async def portal_send_message(
     request: Request,
     message_request: SendMessageRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a message as a party"""
     session_data = await get_portal_party(request, db)
@@ -525,7 +527,7 @@ async def portal_send_message(
 @router.get("/unsubscribe")
 async def unsubscribe_page(
     token: str = Query(..., description="Unsubscribe token"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Process unsubscribe (can be GET for email link clicks)"""
     from services.listing_portal_service import listing_portal_service
@@ -543,7 +545,7 @@ async def unsubscribe_page(
 @router.post("/unsubscribe")
 async def process_unsubscribe(
     token: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Process unsubscribe via POST"""
     from services.listing_portal_service import listing_portal_service
@@ -563,7 +565,7 @@ async def process_unsubscribe(
 @router.get("/admin/run-migration")
 async def run_migration(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Run the listing portal migration (admin only)"""
     expected_key = os.getenv("ADMIN_API_KEY", "")
@@ -585,7 +587,7 @@ async def trigger_weekly_updates(
     admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     dry_run: bool = Query(False, description="If true, don't send emails"),
     organization_id: Optional[int] = Query(None, description="Filter by organization"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Manually trigger the weekly update job (admin only)"""
     expected_key = os.getenv("ADMIN_API_KEY", "")

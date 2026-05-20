@@ -16,7 +16,7 @@ from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import text, select
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -24,6 +24,8 @@ from auth.dependencies import get_current_user
 from database.models import User
 from services.perennia_s3_service import get_s3_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -412,12 +414,12 @@ async def get_candidate_videos(
 async def mark_video_viewed(
     video_id: int,
     token: str = Query(..., description="Portal token for candidate verification"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Mark a video as viewed by the candidate. Requires portal token."""
     try:
         # Verify the token matches a valid candidate who owns this video
-        row = db.execute(text("""
+        row = await db.execute(text("""
             SELECT v.id FROM recruit_video_messages v
             JOIN mm_candidates c ON c.id = v.candidate_id
             WHERE v.id = :video_id AND c.portal_token = :token AND c.is_active = true
@@ -425,12 +427,12 @@ async def mark_video_viewed(
         if not row:
             raise HTTPException(status_code=404, detail="Video not found")
 
-        db.execute(text("""
+        await db.execute(text("""
             UPDATE recruit_video_messages
             SET viewed_at = NOW()
             WHERE id = :video_id AND viewed_at IS NULL
         """), {"video_id": video_id})
-        db.commit()
+        await db.commit()
 
         return {"success": True}
 

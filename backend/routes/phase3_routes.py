@@ -18,6 +18,9 @@ from pydantic import BaseModel, Field
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -444,7 +447,7 @@ async def get_compliance_report(
 @webhook_router.get("/endpoints")
 async def list_webhook_endpoints(
     organization_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List all registered webhook endpoints."""
     try:
@@ -460,7 +463,7 @@ async def list_webhook_endpoints(
 @webhook_router.post("/endpoints")
 async def create_webhook_endpoint(
     data: WebhookEndpointCreate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Register a new webhook endpoint.
@@ -495,7 +498,7 @@ async def create_webhook_endpoint(
 async def update_webhook_endpoint(
     endpoint_id: str,
     data: WebhookEndpointUpdate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update an existing webhook endpoint."""
     try:
@@ -521,7 +524,7 @@ async def update_webhook_endpoint(
 @webhook_router.delete("/endpoints/{endpoint_id}")
 async def delete_webhook_endpoint(
     endpoint_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a webhook endpoint."""
     try:
@@ -573,7 +576,7 @@ async def get_event_sample_payload(event: str):
 @webhook_router.post("/test/{endpoint_id}")
 async def test_webhook_endpoint(
     endpoint_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Send a test webhook to an endpoint."""
     try:
@@ -612,7 +615,7 @@ async def get_delivery_history(
     event: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get webhook delivery history."""
     try:
@@ -630,7 +633,7 @@ async def get_delivery_history(
 
 
 @webhook_router.get("/stats")
-async def get_webhook_stats(db: Session = Depends(get_db)):
+async def get_webhook_stats(db: AsyncSession = Depends(get_async_db)):
     """Get webhook delivery statistics."""
     try:
         from services.webhook_automation_service import webhook_service
@@ -646,7 +649,7 @@ async def get_webhook_stats(db: Session = Depends(get_db)):
 async def zapier_subscribe(
     event: str = Query(...),
     target_url: str = Body(..., embed=True),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Zapier subscription endpoint.
@@ -676,7 +679,7 @@ async def zapier_subscribe(
 @webhook_router.delete("/zapier/unsubscribe/{endpoint_id}")
 async def zapier_unsubscribe(
     endpoint_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Zapier unsubscription endpoint.

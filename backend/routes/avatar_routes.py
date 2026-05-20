@@ -44,6 +44,9 @@ from models.avatar_models import (
 )
 from services.avatar_service import avatar_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +79,7 @@ from auth.dependencies import get_current_user  # dedup: was local wrapper
 @router.post("", response_model=dict)
 async def create_avatar(
     data: AvatarProfileCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new avatar profile."""
@@ -98,7 +101,7 @@ async def list_avatars(
     status: Optional[str] = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """List user's avatar profiles."""
@@ -126,7 +129,7 @@ async def list_avatars(
 @router.get("/{avatar_id}", response_model=dict)
 async def get_avatar(
     avatar_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get avatar profile details."""
@@ -144,7 +147,7 @@ async def get_avatar(
 async def update_avatar(
     avatar_id: int,
     data: AvatarProfileUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Update avatar profile."""
@@ -162,7 +165,7 @@ async def update_avatar(
 @router.delete("/{avatar_id}", response_model=dict)
 async def delete_avatar(
     avatar_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Delete avatar profile."""
@@ -185,7 +188,7 @@ async def get_upload_url(
     avatar_id: int,
     file_name: str = Query(..., description="Original filename"),
     content_type: str = Query("video/mp4", description="MIME type"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get pre-signed URL for training video upload."""
@@ -208,7 +211,7 @@ async def complete_upload(
     s3_key: str = Query(..., description="S3 key of uploaded file"),
     duration_seconds: float = Query(..., description="Video duration"),
     size_bytes: int = Query(..., description="File size in bytes"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Mark training video upload as complete and start processing."""
@@ -238,7 +241,7 @@ async def complete_upload(
 async def upload_direct(
     avatar_id: int,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Direct upload for development/testing (bypasses S3)."""
@@ -296,7 +299,7 @@ async def upload_direct(
 async def start_training(
     avatar_id: int,
     request: TrainingStartRequest = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Start or restart avatar training."""
@@ -344,7 +347,7 @@ async def start_training(
 @router.get("/{avatar_id}/status", response_model=dict)
 async def get_training_status(
     avatar_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get current training status."""
@@ -366,7 +369,7 @@ async def get_training_status(
 async def preview_voice(
     avatar_id: int,
     request: VoicePreviewRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Generate a voice preview for the avatar."""
@@ -401,7 +404,7 @@ async def preview_voice(
 @router.post("/generate", response_model=dict)
 async def generate_avatar_video(
     request: AvatarJobCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Create an avatar video generation job."""
@@ -435,7 +438,7 @@ async def generate_avatar_video(
 @router.post("/quick-generate", response_model=dict)
 async def quick_generate(
     request: QuickGenerateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Quick avatar video generation with defaults."""
@@ -474,7 +477,7 @@ async def list_jobs(
     status: Optional[str] = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """List avatar generation jobs."""
@@ -498,7 +501,7 @@ async def list_jobs(
 @router.get("/jobs/{job_id}", response_model=dict)
 async def get_job(
     job_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Get avatar generation job details."""
@@ -531,7 +534,7 @@ async def test_create_avatar(
     description: str = Query("", description="Avatar description"),
     user_id: int = Query(1, description="User ID for test avatar"),
     organization_id: int = Query(1, description="Organization ID for test avatar"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a test avatar without authentication (for development/testing)."""
     try:
@@ -553,7 +556,7 @@ async def test_create_avatar(
 @router.get("/test/list", response_model=dict, dependencies=[Depends(_check_dev_only)])
 async def test_list_avatars(
     user_id: int = Query(1, description="User ID to list avatars for"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List avatars without authentication (for development/testing)."""
     try:
@@ -574,7 +577,7 @@ async def test_list_avatars(
 @router.get("/test/{avatar_id}", response_model=dict, dependencies=[Depends(_check_dev_only)])
 async def test_get_avatar(
     avatar_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get avatar details without authentication (for development/testing)."""
     try:

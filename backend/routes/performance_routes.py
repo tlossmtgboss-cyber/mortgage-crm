@@ -21,6 +21,9 @@ from database import get_db, get_pool_status
 from monitoring.performance_service import performance_service
 from monitoring.alerts_config import get_monitors_summary, export_monitors_json
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +32,7 @@ _security = HTTPBearer(auto_error=False)
 
 async def _require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Require valid authentication for performance monitoring endpoints."""
     if not credentials:
@@ -237,7 +240,7 @@ async def get_database_pool_status():
 
 
 @router.get("/database/health")
-async def check_database_health(db: Session = Depends(get_db)):
+async def check_database_health(db: AsyncSession = Depends(get_async_db)):
     """
     Check database connectivity and basic health.
 
@@ -248,7 +251,7 @@ async def check_database_health(db: Session = Depends(get_db)):
 
     start = time.time()
     try:
-        result = db.execute(text("SELECT 1")).fetchone()
+        result = await db.execute(text("SELECT 1")).fetchone()
         duration_ms = (time.time() - start) * 1000
 
         pool_status = get_pool_status()
@@ -273,7 +276,7 @@ async def check_database_health(db: Session = Depends(get_db)):
 # ============================================================================
 
 @router.get("/database/dashboard")
-async def get_database_dashboard(db: Session = Depends(get_db)):
+async def get_database_dashboard(db: AsyncSession = Depends(get_async_db)):
     """
     Comprehensive database monitoring dashboard.
 
@@ -301,7 +304,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
     # Test connectivity
     start = time.time()
     try:
-        db.execute(text("SELECT 1")).fetchone()
+        await db.execute(text("SELECT 1")).fetchone()
         dashboard["connectivity"] = {
             "status": "connected",
             "latency_ms": round((time.time() - start) * 1000, 2)
@@ -316,7 +319,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
 
     # Get database statistics (PostgreSQL specific)
     try:
-        stats = db.execute(text("""
+        stats = await db.execute(text("""
             SELECT
                 numbackends as active_connections,
                 xact_commit as transactions_committed,
@@ -367,7 +370,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
 
     # Get active/long-running queries
     try:
-        active = db.execute(text("""
+        active = await db.execute(text("""
             SELECT
                 pid,
                 usename as username,
@@ -439,7 +442,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
 
 
 @router.get("/database/connections")
-async def get_connection_details(db: Session = Depends(get_db)):
+async def get_connection_details(db: AsyncSession = Depends(get_async_db)):
     """
     Get detailed breakdown of all database connections.
 
@@ -452,7 +455,7 @@ async def get_connection_details(db: Session = Depends(get_db)):
 
     try:
         # Connections by state
-        by_state = db.execute(text("""
+        by_state = await db.execute(text("""
             SELECT
                 state,
                 COUNT(*) as count
@@ -463,7 +466,7 @@ async def get_connection_details(db: Session = Depends(get_db)):
         """)).fetchall()
 
         # Connections by application
-        by_app = db.execute(text("""
+        by_app = await db.execute(text("""
             SELECT
                 COALESCE(application_name, 'unknown') as application,
                 COUNT(*) as count,
@@ -477,7 +480,7 @@ async def get_connection_details(db: Session = Depends(get_db)):
         """)).fetchall()
 
         # Oldest idle connections
-        old_idle = db.execute(text("""
+        old_idle = await db.execute(text("""
             SELECT
                 pid,
                 application_name,
@@ -521,7 +524,7 @@ async def get_connection_details(db: Session = Depends(get_db)):
 @router.post("/database/terminate-idle")
 async def terminate_idle_connections(
     older_than_minutes: int = Query(30, ge=5, le=120, description="Terminate idle connections older than X minutes"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Terminate idle database connections older than specified time.
@@ -532,7 +535,7 @@ async def terminate_idle_connections(
 
     try:
         # Find and terminate old idle connections
-        result = db.execute(text("""
+        result = await db.execute(text("""
             SELECT pg_terminate_backend(pid), pid, application_name
             FROM pg_stat_activity
             WHERE datname = current_database()
@@ -542,7 +545,7 @@ async def terminate_idle_connections(
         """), {"minutes": older_than_minutes})
 
         terminated = result.fetchall()
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -561,7 +564,7 @@ async def terminate_idle_connections(
 # ============================================================================
 
 @router.get("/scaling/status")
-async def get_scaling_status(db: Session = Depends(get_db)):
+async def get_scaling_status(db: AsyncSession = Depends(get_async_db)):
     """
     Get database scaling status for 1000+ user readiness.
 
@@ -582,7 +585,7 @@ async def get_scaling_status(db: Session = Depends(get_db)):
 
 
 @router.get("/scaling/report")
-async def get_scaling_report(db: Session = Depends(get_db)):
+async def get_scaling_report(db: AsyncSession = Depends(get_async_db)):
     """
     Generate comprehensive scaling report for 1000+ users.
 

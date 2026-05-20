@@ -15,6 +15,9 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from db import get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +169,7 @@ def register_backup_routes(app, get_db, get_current_user, **kwargs):
 
     @app.get("/api/v1/admin/dr/status")
     async def get_dr_status(
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_async_db),
         current_user=Depends(get_current_user),
     ):
         """

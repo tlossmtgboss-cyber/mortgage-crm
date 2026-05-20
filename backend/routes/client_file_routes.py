@@ -13,8 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db import get_db
+from db import get_db, get_async_db
 
 logger = logging.getLogger(__name__)
 
@@ -191,9 +192,9 @@ def _lo_name(db: Session, user_id: Optional[int]) -> Optional[str]:
 # ─── Core CRUD ───────────────────────────────────────────────────────────
 
 @router.get("/clients/{client_file_id}")
-def get_client_file(
+async def get_client_file(
     client_file_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -243,17 +244,17 @@ class ClientFilePatch(BaseModel):
 
 
 @router.patch("/clients/{client_file_id}")
-def patch_client_file(
+async def patch_client_file(
     client_file_id: uuid.UUID,
     body: ClientFilePatch,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(cf, field, value)
-    db.commit()
-    db.refresh(cf)
+    await db.commit()
+    await db.refresh(cf)
     return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id))
 
 
@@ -262,16 +263,16 @@ class LifecycleBody(BaseModel):
 
 
 @router.post("/clients/{client_file_id}/lifecycle")
-def set_lifecycle_stage(
+async def set_lifecycle_stage(
     client_file_id: uuid.UUID,
     body: LifecycleBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
     cf.lifecycle_stage = body.lifecycle_stage
-    db.commit()
-    db.refresh(cf)
+    await db.commit()
+    await db.refresh(cf)
     return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id))
 
 
@@ -280,16 +281,16 @@ class StickyNoteBody(BaseModel):
 
 
 @router.put("/clients/{client_file_id}/sticky-note")
-def set_sticky_note(
+async def set_sticky_note(
     client_file_id: uuid.UUID,
     body: StickyNoteBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
     cf.sticky_note = body.sticky_note
-    db.commit()
-    db.refresh(cf)
+    await db.commit()
+    await db.refresh(cf)
     return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id))
 
 
@@ -298,10 +299,10 @@ class TagBody(BaseModel):
 
 
 @router.post("/clients/{client_file_id}/tags")
-def add_tag(
+async def add_tag(
     client_file_id: uuid.UUID,
     body: TagBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -309,16 +310,16 @@ def add_tag(
     if body.tag not in tags:
         tags.append(body.tag)
         cf.tags = tags
-        db.commit()
-        db.refresh(cf)
+        await db.commit()
+        await db.refresh(cf)
     return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id))
 
 
 @router.delete("/clients/{client_file_id}/tags/{tag}")
-def remove_tag(
+async def remove_tag(
     client_file_id: uuid.UUID,
     tag: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -326,8 +327,8 @@ def remove_tag(
     if tag in tags:
         tags.remove(tag)
         cf.tags = tags
-        db.commit()
-        db.refresh(cf)
+        await db.commit()
+        await db.refresh(cf)
     return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id))
 
 
@@ -364,10 +365,10 @@ def _task_to_response(task: Any, cf_id: uuid.UUID, owner_name: Optional[str] = N
 
 
 @router.get("/clients/{client_file_id}/tasks")
-def list_tasks(
+async def list_tasks(
     client_file_id: uuid.UUID,
     include_done: bool = Query(False),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -381,13 +382,13 @@ def list_tasks(
     if not include_done:
         q = q.where(Task.status != "completed")
     q = q.order_by(Task.due_date.asc().nullslast(), Task.created_at.desc())
-    tasks = db.execute(q).scalars().all()
+    tasks = await db.execute(q).scalars().all()
 
     owner_ids = {t.owner_id for t in tasks if t.owner_id}
     owner_names: dict[int, str] = {}
     if owner_ids:
         from database.models.core import User
-        users = db.execute(
+        users = await db.execute(
             select(User.id, User.first_name, User.last_name).where(User.id.in_(owner_ids))
         ).all()
         for u in users:
@@ -405,10 +406,10 @@ class CreateTaskBody(BaseModel):
 
 
 @router.post("/clients/{client_file_id}/tasks")
-def create_task(
+async def create_task(
     client_file_id: uuid.UUID,
     body: CreateTaskBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -427,8 +428,8 @@ def create_task(
         status="pending",
     )
     db.add(task)
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     return _task_to_response(task, client_file_id)
 
 
@@ -441,16 +442,16 @@ class PatchTaskBody(BaseModel):
 
 
 @router.patch("/clients/{client_file_id}/tasks/{task_id}")
-def patch_task(
+async def patch_task(
     client_file_id: uuid.UUID,
     task_id: int,
     body: PatchTaskBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)
     from database.models.task import Task
-    task = db.execute(
+    task = await db.execute(
         select(Task).where(Task.id == task_id, Task.organization_id == current_user.organization_id)
     ).scalar_one_or_none()
     if task is None:
@@ -465,51 +466,51 @@ def patch_task(
         task.due_date = datetime.fromisoformat(body.due_at) if body.due_at else None
     if body.assigned_to_user_id is not None:
         task.owner_id = body.assigned_to_user_id
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     owner_name = _lo_name(db, task.owner_id)
     return _task_to_response(task, client_file_id, owner_name)
 
 
 @router.post("/clients/{client_file_id}/tasks/{task_id}/complete")
-def complete_task(
+async def complete_task(
     client_file_id: uuid.UUID,
     task_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)
     from database.models.task import Task
-    task = db.execute(
+    task = await db.execute(
         select(Task).where(Task.id == task_id, Task.organization_id == current_user.organization_id)
     ).scalar_one_or_none()
     if task is None:
         raise HTTPException(404, "task not found")
     task.status = "completed"
     task.completed_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     return _task_to_response(task, client_file_id)
 
 
 @router.post("/clients/{client_file_id}/tasks/{task_id}/reopen")
-def reopen_task(
+async def reopen_task(
     client_file_id: uuid.UUID,
     task_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)
     from database.models.task import Task
-    task = db.execute(
+    task = await db.execute(
         select(Task).where(Task.id == task_id, Task.organization_id == current_user.organization_id)
     ).scalar_one_or_none()
     if task is None:
         raise HTTPException(404, "task not found")
     task.status = "pending"
     task.completed_at = None
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     return _task_to_response(task, client_file_id)
 
 
@@ -534,9 +535,9 @@ class CadenceSequenceResponse(BaseModel):
 
 
 @router.get("/clients/{client_file_id}/cadence-sequences")
-def list_cadence_sequences(
+async def list_cadence_sequences(
     client_file_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -544,7 +545,7 @@ def list_cadence_sequences(
     if not loan_ids:
         return []
     from database.models.followup_cadence import FollowupExecution
-    execs = db.execute(
+    execs = await db.execute(
         select(FollowupExecution).where(
             FollowupExecution.loan_id.in_(loan_ids),
             FollowupExecution.organization_id == current_user.organization_id,
@@ -576,11 +577,11 @@ def list_cadence_sequences(
 
 
 @router.get("/clients/{client_file_id}/timeline")
-def list_timeline(
+async def list_timeline(
     client_file_id: uuid.UUID,
     category: str = Query("all"),
     limit: int = Query(100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -624,7 +625,7 @@ def list_timeline(
             ActivityType.MEETING: "activity",
             ActivityType.DOCUMENT: "documents",
         }
-        for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
+        for a in await db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
             events.append(_make_timeline_event(
                 id=f"act-{a.id}",
                 client_file_id=str(client_file_id),
@@ -648,7 +649,7 @@ def list_timeline(
                 .order_by(SMSMessage.created_at.desc())
                 .limit(limit)
             )
-            for s in db.execute(sms_q).scalars():
+            for s in await db.execute(sms_q).scalars():
                 seen_sms_ids.add(s.id)
                 inbound = s.direction == "inbound"
                 events.append(_make_timeline_event(
@@ -669,7 +670,7 @@ def list_timeline(
             if not normalized.startswith("+"):
                 normalized = "+1" + normalized if len(normalized) == 10 else "+" + normalized
             conv_ids = [
-                c.id for c in db.execute(
+                c.id for c in await db.execute(
                     select(SMSConversation.id).where(
                         SMSConversation.organization_id == org_id,
                         SMSConversation.phone_number == normalized,
@@ -686,7 +687,7 @@ def list_timeline(
                     .order_by(SMSMessage.created_at.desc())
                     .limit(limit)
                 )
-                for s in db.execute(phone_sms_q).scalars():
+                for s in await db.execute(phone_sms_q).scalars():
                     if s.id in seen_sms_ids:
                         continue
                     seen_sms_ids.add(s.id)
@@ -706,7 +707,7 @@ def list_timeline(
 
     # ── Emails (outbound via email_messages + inbound via emails) ──────
     if category in ("all", "emails") and lead_id:
-        for em in db.execute(
+        for em in await db.execute(
             select(EmailMessage)
             .where(EmailMessage.lead_id == lead_id, EmailMessage.organization_id == org_id)
             .order_by(EmailMessage.created_at.desc())
@@ -726,7 +727,7 @@ def list_timeline(
                 related_message_id=em.microsoft_message_id,
             ))
 
-        for e in db.execute(
+        for e in await db.execute(
             select(Email)
             .where(Email.lead_id == lead_id, Email.organization_id == org_id)
             .order_by(Email.received_date.desc())
@@ -821,9 +822,9 @@ def _make_timeline_event(
 
 
 @router.get("/clients/{client_file_id}/insight")
-def get_insight(
+async def get_insight(
     client_file_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)
@@ -831,9 +832,9 @@ def get_insight(
 
 
 @router.post("/clients/{client_file_id}/insight/recompute", status_code=501)
-def recompute_insight(
+async def recompute_insight(
     client_file_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     return {"detail": "insight recompute not yet implemented"}
@@ -893,9 +894,9 @@ def _get_loan_ids_for_cf(db: Session, cf, org_id: int) -> list[int]:
 
 
 @router.get("/clients/{client_file_id}/document-sets")
-def list_document_sets(
+async def list_document_sets(
     client_file_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -905,7 +906,7 @@ def list_document_sets(
 
     from models.smart_docs_models import DocumentRequest, SmartDocument
 
-    requests = db.execute(
+    requests = await db.execute(
         select(DocumentRequest).where(
             DocumentRequest.loan_id.in_(loan_ids),
             DocumentRequest.is_active == True,
@@ -915,7 +916,7 @@ def list_document_sets(
     docs_by_request: dict[int, list] = {}
     if requests:
         req_ids = [r.id for r in requests]
-        docs = db.execute(
+        docs = await db.execute(
             select(SmartDocument).where(
                 SmartDocument.request_id.in_(req_ids),
                 SmartDocument.status != "DELETED",
@@ -1100,10 +1101,10 @@ def list_documents(
 
 
 @router.get("/clients/{client_file_id}/documents/{document_id}")
-def get_document_detail(
+async def get_document_detail(
     client_file_id: uuid.UUID,
     document_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """Get full document detail including AI review results."""
@@ -1113,7 +1114,7 @@ def get_document_detail(
         raise HTTPException(404, "no loans linked to this client file")
 
     from models.smart_docs_models import SmartDocument
-    doc = db.execute(
+    doc = await db.execute(
         select(SmartDocument).where(
             SmartDocument.id == document_id,
             SmartDocument.loan_id.in_(loan_ids),
@@ -1174,10 +1175,10 @@ class CreateDocRequestBody(BaseModel):
 
 
 @router.post("/clients/{client_file_id}/documents/request")
-def create_document_request(
+async def create_document_request(
     client_file_id: uuid.UUID,
     body: CreateDocRequestBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """Create a new document request for this client's loan."""
@@ -1212,8 +1213,8 @@ def create_document_request(
         due_date=due,
     )
     db.add(req)
-    db.commit()
-    db.refresh(req)
+    await db.commit()
+    await db.refresh(req)
 
     return {
         "id": req.id,
@@ -1227,10 +1228,10 @@ def create_document_request(
 
 
 @router.post("/clients/{client_file_id}/documents/{document_id}/approve")
-def approve_document(
+async def approve_document(
     client_file_id: uuid.UUID,
     document_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -1239,7 +1240,7 @@ def approve_document(
         raise HTTPException(404, "no loans linked")
 
     from models.smart_docs_models import SmartDocument, DocumentRequest
-    doc = db.execute(
+    doc = await db.execute(
         select(SmartDocument).where(
             SmartDocument.id == document_id,
             SmartDocument.loan_id.in_(loan_ids),
@@ -1259,7 +1260,7 @@ def approve_document(
             req.status = "ACCEPTED"
             req.fulfilled_at = datetime.now(timezone.utc)
 
-    db.commit()
+    await db.commit()
     return {"status": "approved", "document_id": document_id}
 
 
@@ -1270,11 +1271,11 @@ class RejectDocBody(BaseModel):
 
 
 @router.post("/clients/{client_file_id}/documents/{document_id}/reject")
-def reject_document(
+async def reject_document(
     client_file_id: uuid.UUID,
     document_id: int,
     body: RejectDocBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -1283,7 +1284,7 @@ def reject_document(
         raise HTTPException(404, "no loans linked")
 
     from models.smart_docs_models import SmartDocument, DocumentRequest
-    doc = db.execute(
+    doc = await db.execute(
         select(SmartDocument).where(
             SmartDocument.id == document_id,
             SmartDocument.loan_id.in_(loan_ids),
@@ -1305,15 +1306,15 @@ def reject_document(
         if req:
             req.status = "REJECTED"
 
-    db.commit()
+    await db.commit()
     return {"status": "rejected", "document_id": document_id}
 
 
 @router.post("/clients/{client_file_id}/documents/{document_id}/ai-review")
-def trigger_ai_review(
+async def trigger_ai_review(
     client_file_id: uuid.UUID,
     document_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """Trigger AI review for a document."""
@@ -1323,7 +1324,7 @@ def trigger_ai_review(
         raise HTTPException(404, "no loans linked")
 
     from models.smart_docs_models import SmartDocument
-    doc = db.execute(
+    doc = await db.execute(
         select(SmartDocument).where(
             SmartDocument.id == document_id,
             SmartDocument.loan_id.in_(loan_ids),
@@ -1351,10 +1352,10 @@ def trigger_ai_review(
 
 
 @router.get("/clients/{client_file_id}/documents/{document_id}/download-url")
-def get_document_download_url(
+async def get_document_download_url(
     client_file_id: uuid.UUID,
     document_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """Get a presigned download URL for a document."""
@@ -1364,7 +1365,7 @@ def get_document_download_url(
         raise HTTPException(404, "no loans linked")
 
     from models.smart_docs_models import SmartDocument
-    doc = db.execute(
+    doc = await db.execute(
         select(SmartDocument).where(
             SmartDocument.id == document_id,
             SmartDocument.loan_id.in_(loan_ids),
@@ -1382,9 +1383,9 @@ def get_document_download_url(
 
 
 @router.get("/clients/{client_file_id}/relationships")
-def list_relationships(
+async def list_relationships(
     client_file_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)
@@ -1392,9 +1393,9 @@ def list_relationships(
 
 
 @router.get("/clients/{client_file_id}/action-plan-runs")
-def list_action_plan_runs(
+async def list_action_plan_runs(
     client_file_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)
@@ -1406,10 +1407,10 @@ class NoteBody(BaseModel):
 
 
 @router.post("/clients/{client_file_id}/notes", status_code=201)
-def add_note(
+async def add_note(
     client_file_id: uuid.UUID,
     payload: NoteBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -1427,8 +1428,8 @@ def add_note(
         content=payload.body,
     )
     db.add(activity)
-    db.commit()
-    db.refresh(activity)
+    await db.commit()
+    await db.refresh(activity)
 
     return _make_timeline_event(
         id=f"act-{activity.id}",
@@ -1455,7 +1456,7 @@ class SendMessageBody(BaseModel):
 async def send_message(
     client_file_id: uuid.UUID,
     payload: SendMessageBody,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
@@ -1693,10 +1694,10 @@ async def _send_email_from_client_file(
 
 
 @router.post("/clients/{client_file_id}/timeline/{event_id}/star")
-def star_event(
+async def star_event(
     client_file_id: uuid.UUID,
     event_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)
@@ -1844,9 +1845,9 @@ def _find_lead_for_mum(db: Session, mum_id: int, org_id: int) -> int:
 
 
 @router.get("/loans/{loan_id}/client-file-id")
-def get_client_file_id_for_loan(
+async def get_client_file_id_for_loan(
     loan_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """Return (or auto-create) the client_file for a loan."""
@@ -1856,9 +1857,9 @@ def get_client_file_id_for_loan(
 
 
 @router.get("/mum-clients/{mum_id}/client-file-id")
-def get_client_file_id_for_mum(
+async def get_client_file_id_for_mum(
     mum_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     """Return (or auto-create) the client_file for a MUM client."""
@@ -1868,10 +1869,10 @@ def get_client_file_id_for_mum(
 
 
 @router.delete("/clients/{client_file_id}/timeline/{event_id}/star")
-def unstar_event(
+async def unstar_event(
     client_file_id: uuid.UUID,
     event_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user=Depends(get_current_user_dep()),
 ):
     _get_cf(db, client_file_id, current_user.organization_id)

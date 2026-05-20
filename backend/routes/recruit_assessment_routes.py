@@ -12,11 +12,13 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from database import get_db
 from services.recruit_assessment_service import recruit_assessment_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_async_db
 from models.recruit_assessment_models import (
     QuizForDisposition,
     QuizSubmission,
@@ -82,7 +84,7 @@ async def submit_quiz_responses(
     candidate_id: int,
     submission: QuizSubmission,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """
     Submit quiz responses for a candidate and update their assessment scores.
@@ -111,7 +113,7 @@ async def check_quiz_completed(
     candidate_id: int,
     disposition: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Check if a quiz has been completed for a specific disposition."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
@@ -127,7 +129,7 @@ async def check_quiz_completed(
 async def get_candidate_scores(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get assessment scores for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
@@ -141,7 +143,7 @@ async def get_candidate_scores(
 async def get_score_breakdown(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Get detailed score breakdown with quiz history and recommendations."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
@@ -152,7 +154,7 @@ async def get_score_breakdown(
 async def recalculate_scores(
     candidate_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
 ):
     """Force recalculation of assessment scores from all quiz responses."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)

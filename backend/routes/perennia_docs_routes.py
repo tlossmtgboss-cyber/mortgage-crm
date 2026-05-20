@@ -12,13 +12,14 @@ Provides endpoints for:
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select
 from typing import Optional, List, Callable, Any, Dict
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timezone, timedelta
 import secrets
 import logging
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/api/v1/perennia-docs", tags=["Perennia Docs AI"])
 # DEPENDENCY INJECTION STORAGE
 # ============================================================================
 
-from db import get_db
+from db import get_db, get_async_db
 
 _get_current_user: Callable = None
 _User: Any = None
@@ -303,11 +304,11 @@ class CreateDocumentRulePayload(BaseModel):
 async def create_document_request(
     payload: CreateDocumentRequestPayload,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new document request for a loan."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO perennia_document_requests (
                 loan_id, lead_id, doc_type, doc_subtype, title, description,
                 quantity, priority, expiration_date, expiration_threshold,
@@ -332,10 +333,10 @@ async def create_document_request(
         })
 
         request_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         # Log event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO perennia_document_events (
                 loan_id, lead_id, request_id, event_type, event_data,
                 actor_type, actor_id, created_at
@@ -350,12 +351,12 @@ async def create_document_request(
             "event_data": {"doc_type": payload.doc_type, "title": payload.title},
             "user_id": current_user.id
         })
-        db.commit()
+        await db.commit()
 
         return {"success": True, "request_id": request_id}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -367,7 +368,7 @@ async def list_document_requests(
     limit: int = Query(50, le=200),
     offset: int = 0,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List document requests with filters."""
     filters = []
@@ -394,13 +395,13 @@ async def list_document_requests(
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     requests = [dict(row._mapping) for row in result]
 
     # Get total count
     sql = "SELECT COUNT(*) FROM perennia_document_requests " + where_clause
-    count_result = db.execute(text(sql), params)
+    count_result = await db.execute(text(sql), params)
     total = count_result.scalar()
 
     return {
@@ -415,10 +416,10 @@ async def list_document_requests(
 async def get_document_request(
     request_id: int,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific document request with uploaded documents."""
-    request_result = db.execute(text("""
+    request_result = await db.execute(text("""
         SELECT id, loan_id, lead_id, doc_type, doc_subtype, title, description,
                quantity, status, priority, expiration_date, expiration_threshold,
                reminder_schedule, reminder_count, last_reminder_sent,
@@ -434,7 +435,7 @@ async def get_document_request(
     request_data = dict(row._mapping)
 
     # Get associated documents
-    docs_result = db.execute(text("""
+    docs_result = await db.execute(text("""
         SELECT id, file_name, file_size, mime_type, status,
                classification_status, doc_type, doc_subtype,
                classification_confidence, virus_scan_status,
@@ -455,7 +456,7 @@ async def update_document_request(
     request_id: int,
     payload: UpdateDocumentRequestPayload,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a document request."""
     updates = []
@@ -492,16 +493,16 @@ async def update_document_request(
             WHERE id = :id
             RETURNING id
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Document request not found")
 
-        db.commit()
+        await db.commit()
         return {"success": True, "request_id": request_id}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -509,11 +510,11 @@ async def update_document_request(
 async def delete_document_request(
     request_id: int,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Delete a document request (soft delete by setting status to cancelled)."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE perennia_document_requests
             SET status = 'cancelled', updated_at = NOW()
             WHERE id = :id
@@ -523,11 +524,11 @@ async def delete_document_request(
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Document request not found")
 
-        db.commit()
+        await db.commit()
         return {"success": True, "message": "Document request cancelled"}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -541,7 +542,7 @@ async def list_template_packs(
     employment_type: Optional[str] = None,
     is_active: bool = True,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List available template packs with optional filters."""
     filters = ["is_active = :is_active"]
@@ -564,7 +565,7 @@ async def list_template_packs(
         WHERE """ + where_clause + """
         ORDER BY name
     """
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     templates = [dict(row._mapping) for row in result]
     return {"templates": templates, "count": len(templates)}
@@ -574,10 +575,10 @@ async def list_template_packs(
 async def get_template_pack(
     template_id: int,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific template pack with full configuration."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, name, slug, description, version,
                loan_programs, employment_types, property_types,
                config, is_active, created_at, updated_at
@@ -596,7 +597,7 @@ async def get_template_pack(
 async def create_template_pack(
     payload: CreateTemplatePackPayload,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a new template pack."""
     config = {
@@ -605,7 +606,7 @@ async def create_template_pack(
     }
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO perennia_template_packs (
                 name, slug, description, version,
                 loan_programs, employment_types, property_types,
@@ -627,12 +628,12 @@ async def create_template_pack(
         })
 
         template_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {"success": True, "template_id": template_id}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -641,7 +642,7 @@ async def update_template_pack(
     template_id: int,
     payload: UpdateTemplatePackPayload,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Update a template pack."""
     updates = []
@@ -672,16 +673,16 @@ async def update_template_pack(
             WHERE id = :id
             RETURNING id
         """
-        result = db.execute(text(sql), params)
+        result = await db.execute(text(sql), params)
 
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Template pack not found")
 
-        db.commit()
+        await db.commit()
         return {"success": True, "template_id": template_id}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -689,7 +690,7 @@ async def update_template_pack(
 async def apply_template_pack(
     payload: ApplyTemplatePackRequest,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Apply a template pack to a loan, creating document requests.
@@ -697,7 +698,7 @@ async def apply_template_pack(
     This generates a checklist of required documents based on the template.
     """
     # Get template
-    template_result = db.execute(text("""
+    template_result = await db.execute(text("""
         SELECT id, name, version, config
         FROM perennia_template_packs
         WHERE id = :id AND is_active = true
@@ -715,7 +716,7 @@ async def apply_template_pack(
 
     try:
         for req in requirements:
-            result = db.execute(text("""
+            result = await db.execute(text("""
                 INSERT INTO perennia_document_requests (
                     loan_id, lead_id, template_pack_id, template_pack_version,
                     doc_type, doc_subtype, title, description,
@@ -750,7 +751,7 @@ async def apply_template_pack(
             })
 
         # Log event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO perennia_document_events (
                 loan_id, lead_id, event_type, event_data,
                 actor_type, actor_id, created_at
@@ -769,7 +770,7 @@ async def apply_template_pack(
             "user_id": current_user.id
         })
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -779,7 +780,7 @@ async def apply_template_pack(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -797,7 +798,7 @@ async def list_documents(
     limit: int = Query(50, le=200),
     offset: int = 0,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List documents with filters."""
     filters = []
@@ -832,7 +833,7 @@ async def list_documents(
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     documents = [dict(row._mapping) for row in result]
 
@@ -852,7 +853,7 @@ async def get_review_queue(
     page: int = Query(1, ge=1),
     limit: int = Query(20, le=100),
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get documents for admin review queue with borrower/loan info."""
     offset = (page - 1) * limit
@@ -888,7 +889,7 @@ async def get_review_queue(
         ORDER BY d.created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     documents = [dict(row._mapping) for row in result]
 
@@ -899,7 +900,7 @@ async def get_review_queue(
         LEFT JOIN loans l ON d.loan_id = l.id
         LEFT JOIN contacts c ON l.borrower_id = c.id OR d.lead_id = c.lead_id
         """ + where_clause
-    count_result = db.execute(text(sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']})
+    count_result = await db.execute(text(sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']})
     total = count_result.fetchone()[0]
 
     return {
@@ -914,7 +915,7 @@ async def get_review_queue(
 async def bulk_approve_documents(
     payload: dict,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Bulk approve documents."""
     document_ids = payload.get("document_ids", [])
@@ -922,7 +923,7 @@ async def bulk_approve_documents(
         raise HTTPException(status_code=400, detail="No document IDs provided")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE perennia_documents
             SET status = 'approved', updated_at = NOW()
             WHERE id = ANY(:ids) AND status = 'pending'
@@ -930,7 +931,7 @@ async def bulk_approve_documents(
         """), {"ids": document_ids})
 
         approved_ids = [row[0] for row in result.fetchall()]
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -938,7 +939,7 @@ async def bulk_approve_documents(
             "approved_ids": approved_ids
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -946,7 +947,7 @@ async def bulk_approve_documents(
 async def bulk_reject_documents(
     payload: dict,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Bulk reject documents with reason."""
     document_ids = payload.get("document_ids", [])
@@ -956,7 +957,7 @@ async def bulk_reject_documents(
         raise HTTPException(status_code=400, detail="No document IDs provided")
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE perennia_documents
             SET status = 'rejected',
                 rejection_reason = :reason,
@@ -966,7 +967,7 @@ async def bulk_reject_documents(
         """), {"ids": document_ids, "reason": reason})
 
         rejected_ids = [row[0] for row in result.fetchall()]
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -974,7 +975,7 @@ async def bulk_reject_documents(
             "rejected_ids": rejected_ids
         }
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -982,10 +983,10 @@ async def bulk_reject_documents(
 async def get_document(
     document_id: int,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific document with full details."""
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT id, loan_id, lead_id, request_id, borrower_id, uploaded_by_user_id,
                file_name, file_size, mime_type,
                original_storage_key, compressed_storage_key, preview_storage_key,
@@ -1013,13 +1014,13 @@ async def approve_or_reject_document(
     document_id: int,
     payload: DocumentApprovalPayload,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Approve or reject a document."""
     new_status = "approved" if payload.approved else "rejected"
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE perennia_documents
             SET status = :status,
                 rejection_reason = :reason,
@@ -1038,7 +1039,7 @@ async def approve_or_reject_document(
 
         # Log event
         event_type = "document_approved" if payload.approved else "document_rejected"
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO perennia_document_events (
                 loan_id, lead_id, request_id, document_id,
                 event_type, event_data, actor_type, actor_id, created_at
@@ -1060,7 +1061,7 @@ async def approve_or_reject_document(
         if row[3] and payload.approved:
             _update_request_status(db, row[3])
 
-        db.commit()
+        await db.commit()
 
         return {
             "success": True,
@@ -1069,7 +1070,7 @@ async def approve_or_reject_document(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -1078,11 +1079,11 @@ async def override_document_classification(
     document_id: int,
     payload: DocumentClassificationOverride,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Override AI classification for a document."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE perennia_documents
             SET doc_type = :doc_type,
                 doc_subtype = :doc_subtype,
@@ -1099,11 +1100,11 @@ async def override_document_classification(
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Document not found")
 
-        db.commit()
+        await db.commit()
         return {"success": True, "document_id": document_id}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -1138,7 +1139,7 @@ async def get_upload_presigned_url(
     file_name: str = Query(...),
     content_type: str = Query(...),
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get a presigned URL for direct S3 upload.
@@ -1156,7 +1157,7 @@ async def get_upload_presigned_url(
 
     try:
         # Create document record
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO perennia_documents (
                 loan_id, request_id, uploaded_by_user_id,
                 file_name, file_size, mime_type,
@@ -1178,7 +1179,7 @@ async def get_upload_presigned_url(
         })
 
         document_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         # Generate actual presigned URL from S3
         try:
@@ -1219,7 +1220,7 @@ async def get_upload_presigned_url(
         }
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -1229,7 +1230,7 @@ async def complete_upload(
     file_size: int = Query(...),
     background_tasks: BackgroundTasks = None,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Complete upload and trigger processing pipeline.
@@ -1240,7 +1241,7 @@ async def complete_upload(
     3. Compression (if applicable)
     """
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE perennia_documents
             SET file_size = :file_size,
                 status = 'uploaded',
@@ -1259,7 +1260,7 @@ async def complete_upload(
             raise HTTPException(status_code=404, detail="Document not found or already processed")
 
         # Log upload event
-        db.execute(text("""
+        await db.execute(text("""
             INSERT INTO perennia_document_events (
                 loan_id, lead_id, request_id, document_id,
                 event_type, event_data, actor_type, actor_id, created_at
@@ -1276,7 +1277,7 @@ async def complete_upload(
             "user_id": current_user.id
         })
 
-        db.commit()
+        await db.commit()
 
         # Trigger background jobs for virus scan and AI classification
         if background_tasks:
@@ -1292,7 +1293,7 @@ async def complete_upload(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -1304,14 +1305,14 @@ async def complete_upload(
 async def generate_magic_link(
     payload: GenerateMagicLinkRequest,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Generate a magic link for borrower portal access."""
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(hours=payload.expires_in_hours)
 
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO perennia_portal_sessions (
                 lead_id, loan_id, magic_link_token,
                 token_expires_at, is_active, created_at
@@ -1327,7 +1328,7 @@ async def generate_magic_link(
         })
 
         session_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         # Generate portal URL
         portal_url = f"https://portal.perennia.ai/docs/{token}"
@@ -1341,21 +1342,21 @@ async def generate_magic_link(
         }
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
 @router.post("/portal/validate")
 async def validate_magic_link(
     payload: ValidateMagicLinkRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Validate a magic link token and return session info.
 
     This is a PUBLIC endpoint (no auth required).
     """
-    result = db.execute(text("""
+    result = await db.execute(text("""
         SELECT ps.id, ps.lead_id, ps.loan_id,
                ps.token_expires_at, ps.session_expires_at,
                l.first_name, l.last_name, l.email
@@ -1372,13 +1373,13 @@ async def validate_magic_link(
 
     # Update session activity
     session_expires = datetime.now(timezone.utc) + timedelta(hours=2)
-    db.execute(text("""
+    await db.execute(text("""
         UPDATE perennia_portal_sessions
         SET session_expires_at = :expires,
             last_activity_at = NOW()
         WHERE id = :id
     """), {"id": row[0], "expires": session_expires})
-    db.commit()
+    await db.commit()
 
     return {
         "valid": True,
@@ -1397,7 +1398,7 @@ async def validate_magic_link(
 @router.get("/portal/checklist")
 async def get_borrower_checklist(
     token: str = Query(...),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get document checklist for borrower portal.
@@ -1405,7 +1406,7 @@ async def get_borrower_checklist(
     PUBLIC endpoint - validates token.
     """
     # Validate session
-    session = db.execute(text("""
+    session = await db.execute(text("""
         SELECT lead_id, loan_id
         FROM perennia_portal_sessions
         WHERE magic_link_token = :token
@@ -1419,7 +1420,7 @@ async def get_borrower_checklist(
     loan_id = session[1]
 
     # Get document requests
-    requests = db.execute(text("""
+    requests = await db.execute(text("""
         SELECT dr.id, dr.doc_type, dr.title, dr.description,
                dr.quantity, dr.status, dr.priority,
                COUNT(d.id) FILTER (WHERE d.status = 'approved') as approved_count,
@@ -1464,7 +1465,7 @@ async def list_document_events(
     limit: int = Query(50, le=200),
     offset: int = 0,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List document events (audit trail)."""
     filters = []
@@ -1493,7 +1494,7 @@ async def list_document_events(
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     """
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     events = [dict(row._mapping) for row in result]
 
@@ -1516,7 +1517,7 @@ async def list_notifications(
     channel: Optional[str] = None,
     limit: int = Query(50, le=200),
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List notifications with filters."""
     filters = []
@@ -1544,7 +1545,7 @@ async def list_notifications(
         ORDER BY created_at DESC
         LIMIT :limit
     """
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     notifications = [dict(row._mapping) for row in result]
     return {"notifications": notifications, "count": len(notifications)}
@@ -1554,11 +1555,11 @@ async def list_notifications(
 async def create_notification(
     payload: CreateNotificationPayload,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a notification (queued for delivery)."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO perennia_notifications (
                 loan_id, lead_id, channel, template,
                 recipient_email, recipient_phone, subject, body,
@@ -1582,12 +1583,12 @@ async def create_notification(
         })
 
         notification_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {"success": True, "notification_id": notification_id}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -1600,7 +1601,7 @@ async def list_document_rules(
     trigger: Optional[str] = None,
     is_active: bool = True,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """List document automation rules."""
     filters = ["is_active = :is_active"]
@@ -1620,7 +1621,7 @@ async def list_document_rules(
         WHERE """ + where_clause + """
         ORDER BY priority ASC
     """
-    result = db.execute(text(sql), params)
+    result = await db.execute(text(sql), params)
 
     rules = [dict(row._mapping) for row in result]
     return {"rules": rules, "count": len(rules)}
@@ -1630,11 +1631,11 @@ async def list_document_rules(
 async def create_document_rule(
     payload: CreateDocumentRulePayload,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Create a document automation rule."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             INSERT INTO perennia_document_rules (
                 name, description, trigger, conditions, actions,
                 priority, is_active, created_at, updated_at
@@ -1652,12 +1653,12 @@ async def create_document_rule(
         })
 
         rule_id = result.fetchone()[0]
-        db.commit()
+        await db.commit()
 
         return {"success": True, "rule_id": rule_id}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -1665,11 +1666,11 @@ async def create_document_rule(
 async def toggle_document_rule(
     rule_id: int,
     current_user: Any = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """Toggle a document rule on/off."""
     try:
-        result = db.execute(text("""
+        result = await db.execute(text("""
             UPDATE perennia_document_rules
             SET is_active = NOT is_active, updated_at = NOW()
             WHERE id = :id
@@ -1680,11 +1681,11 @@ async def toggle_document_rule(
         if not row:
             raise HTTPException(status_code=404, detail="Rule not found")
 
-        db.commit()
+        await db.commit()
         return {"success": True, "rule_id": row[0], "is_active": row[1]}
 
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Bad request")
 
 
@@ -1694,7 +1695,7 @@ async def toggle_document_rule(
 
 @router.get("/diagnostic/summary")
 async def get_docs_system_summary(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get system summary and health check.
@@ -1719,7 +1720,7 @@ async def get_docs_system_summary(
             try:
                 # Table name comes from hardcoded allowlist above, not user input
                 sql = "SELECT COUNT(*) FROM " + table
-                count = db.execute(text(sql)).scalar()
+                count = await db.execute(text(sql)).scalar()
                 summary[table] = count
             except Exception as e:
                 logger.error(f"Error querying table {table} in system_summary: {e}")
@@ -1727,7 +1728,7 @@ async def get_docs_system_summary(
 
         # Get request status breakdown
         try:
-            status_breakdown = db.execute(text("""
+            status_breakdown = await db.execute(text("""
                 SELECT status, COUNT(*) as count
                 FROM perennia_document_requests
                 GROUP BY status
@@ -1739,7 +1740,7 @@ async def get_docs_system_summary(
 
         # Get document status breakdown
         try:
-            doc_status = db.execute(text("""
+            doc_status = await db.execute(text("""
                 SELECT status, COUNT(*) as count
                 FROM perennia_documents
                 GROUP BY status
@@ -1765,7 +1766,7 @@ async def get_docs_system_summary(
 
 @router.post("/diagnostic/run-migration")
 async def run_perennia_docs_migration(
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Run Perennia Docs migration.
