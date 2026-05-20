@@ -45,10 +45,11 @@ class LeadScoringAgent:
 
     AGENT_TYPE = "lead_scoring"
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db = db
         self.org_id = org_id
         self.config = config or {}
+        self.gateway = gateway
         self.logger = logging.getLogger(f"{__name__}.org_{org_id}")
 
     # ------------------------------------------------------------------
@@ -376,7 +377,16 @@ class LeadScoringAgent:
                 ),
                 link=f"/leads/{lead_data['lead_id']}",
             )
-            self.db.add(notification)
+            if self.gateway:
+                self.gateway.propose(
+                    "create_notification",
+                    lambda n=notification: self.db.add(n),
+                    target_entity="lead",
+                    target_id=lead_data.get("lead_id"),
+                    description=f"Hot lead alert for {lead_data['lead_name']}",
+                )
+            else:
+                self.db.add(notification)
 
     # ------------------------------------------------------------------
     # Helpers

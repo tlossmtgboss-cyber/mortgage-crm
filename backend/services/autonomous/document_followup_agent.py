@@ -65,8 +65,9 @@ class DocumentFollowupAgent:
         "CLOSING": ["closing_docs", "wire_instructions"],
     }
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db, self.org_id, self.config = db, org_id, (config or {})
+        self.gateway = gateway
         self.logger = logging.getLogger(f"{__name__}.org_{org_id}")
 
     async def run(self) -> dict:
@@ -219,12 +220,20 @@ class DocumentFollowupAgent:
         doc_list = ", ".join(_DOC_KEY_LABELS.get(k, k) for k in missing_docs)
         tag = {"critical": "[CRITICAL]", "high": "[HIGH]", "medium": "[MEDIUM]", "low": "[LOW]"}.get(urgency, "")
         closing_str = loan.closing_date.strftime("%m/%d/%Y") if loan.closing_date else "Not set"
-        self.db.add(Notification(
+        notif = Notification(
             organization_id=self.org_id, user_id=loan.loan_officer_id,
             type="doc_followup", title=f"{tag} Missing docs for {name}",
             message=f"Loan {loan.loan_number} (stage: {loan.stage}) is missing: {doc_list}. Closing: {closing_str}.",
             link=f"/loans/{loan.id}", is_read=False,
-        ))
+        )
+        if self.gateway:
+            self.gateway.propose(
+                "create_notification", lambda n=notif: self.db.add(n),
+                target_entity="loan", target_id=loan.id,
+                description=f"Missing docs notification for {name}",
+            )
+        else:
+            self.db.add(notif)
 
     def _check_doc_staleness(self, loan: Loan) -> list[Document]:
         """Find documents uploaded but not updated/reviewed within the staleness window."""

@@ -483,6 +483,24 @@ DO NOT use a canned/scripted response. Be natural and human."""
             memory_context = sanitize_for_llm(memory_context)
             system_prompt += "\n\n## User Context & Preferences\nThe following are remembered facts and preferences about this user. Use them to personalize your response where relevant:\n" + memory_context
 
+        # Inject few-shot learning examples from feedback-driven training
+        try:
+            intent_str = query_intent.value if query_intent else None
+            agent_role = state.get("agent_role")
+            if intent_str:
+                from services.conversation_ai_learning_service import ConversationAILearningService
+                db = state.get("db")
+                if db:
+                    learning_svc = ConversationAILearningService(db)
+                    examples = learning_svc.get_few_shot_examples(intent_str, agent_role=agent_role, limit=2)
+                    if examples:
+                        examples_text = "\n".join(
+                            f"Q: {ex['query']}\nA: {ex['response']}" for ex in examples
+                        )
+                        system_prompt += f"\n\n## Quality Examples\nHere are examples of high-quality responses for this type of query. Follow this style:\n{examples_text}"
+        except Exception:
+            pass
+
         # Sanitize user message: strip boundary markers, mask PII, neutralize injection
         safe_message = strip_boundary_markers(user_message)
         safe_message = _mask_pii_value("message", safe_message)

@@ -283,6 +283,15 @@ def register_shutdown_event(app: FastAPI):
         except Exception as e:
             logger.warning(f"Scheduler shutdown error: {e}")
 
+        # Stop autonomous task executor
+        try:
+            from services.autonomous.task_executor import get_executor
+            executor = get_executor()
+            await executor.stop()
+            logger.info("Autonomous task executor stopped")
+        except Exception as e:
+            logger.warning(f"Autonomous executor shutdown error: {e}")
+
         if hasattr(app.state, "langgraph_executor"):
             app.state.langgraph_executor.shutdown(wait=False)
             logger.info("LangGraph thread pool executor shut down")

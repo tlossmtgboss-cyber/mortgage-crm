@@ -41,9 +41,10 @@ class RateAlertAgent:
 
     AGENT_TYPE = "rate_alert"
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db = db
         self.org_id = org_id
+        self.gateway = gateway
         self.now = datetime.now(timezone.utc)
         self.cfg = {**_DEFAULTS, **(config or {})}
         self.logger = logger
@@ -318,7 +319,7 @@ class RateAlertAgent:
         }
 
         try:
-            self.db.add(Notification(
+            notif = Notification(
                 user_id=lo_id,
                 organization_id=self.org_id,
                 type=alert_type,
@@ -326,15 +327,29 @@ class RateAlertAgent:
                 message=message,
                 link=f"/pipeline/loans/{loan.id}",
                 is_read=False,
-            ))
-            self.db.add(Activity(
+            )
+            act = Activity(
                 organization_id=self.org_id,
                 type=ActivityType.NOTE,
                 content=f"[{self.AGENT_TYPE}] {message}",
                 loan_id=loan.id,
                 lead_id=lead.id if lead else None,
                 user_id=lo_id,
-            ))
+            )
+            if self.gateway:
+                self.gateway.propose(
+                    "create_notification", lambda n=notif: self.db.add(n),
+                    target_entity="loan", target_id=loan.id,
+                    description=title_map.get(alert_type, "Rate Alert"),
+                )
+                self.gateway.propose(
+                    "create_activity", lambda a=act: self.db.add(a),
+                    target_entity="loan", target_id=loan.id,
+                    description=f"Rate alert activity for loan {loan.id}",
+                )
+            else:
+                self.db.add(notif)
+                self.db.add(act)
         except Exception as e:
             self.logger.warning(
                 "Failed to create rate alert for loan %s: %s", loan.id, e,

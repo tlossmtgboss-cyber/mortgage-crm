@@ -88,10 +88,12 @@ class ClientAuditAgent:
         db: Session,
         org_id: int,
         config: Optional[Dict[str, Any]] = None,
+        gateway=None,
     ):
         self.db = db
         self.org_id = org_id
         self.config = config or {}
+        self.gateway = gateway
         self._load_models()
 
     def _load_models(self):

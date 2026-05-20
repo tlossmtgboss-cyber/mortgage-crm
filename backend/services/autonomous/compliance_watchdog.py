@@ -128,10 +128,11 @@ class ComplianceWatchdogAgent:
 
     AGENT_TYPE = "compliance_watchdog"
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db = db
         self.org_id = org_id
         self.config = config or {}
+        self.gateway = gateway
         self.now = datetime.now(timezone.utc)
         self.today = self.now.date()
         self.logger = logging.getLogger(f"{__name__}.org_{org_id}")
@@ -701,9 +702,18 @@ class ComplianceWatchdogAgent:
             days_remaining=days_remaining,
             status="open",
         )
-        self.db.add(alert)
-        # Flush so alert.id is available for the caller
-        self.db.flush()
+        if self.gateway:
+            self.gateway.propose(
+                "create_compliance_alert",
+                lambda: (self.db.add(alert), self.db.flush()),
+                target_entity="loan",
+                target_id=loan.id,
+                description=f"{alert_type}: {title}",
+                payload={"severity": severity, "alert_type": alert_type},
+            )
+        else:
+            self.db.add(alert)
+            self.db.flush()
         self.logger.info(
             "Created compliance alert %d: %s [%s] for loan %d",
             alert.id, alert_type, severity, loan.id,

@@ -52,10 +52,11 @@ class ReportingAgent:
 
     AGENT_TYPE = "reporting"
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db = db
         self.org_id = org_id
         self.config = config or {}
+        self.gateway = gateway
         self.now = datetime.now(timezone.utc)
         self.today = self.now.date()
         self.logger = logging.getLogger(f"{__name__}.org_{org_id}")
@@ -327,12 +328,20 @@ class ReportingAgent:
 
     def _create_notification(self, user_id: int) -> None:
         """Create a notification linking the LO to their morning briefing."""
-        self.db.add(Notification(
+        notif = Notification(
             user_id=user_id, organization_id=self.org_id,
             type="morning_briefing", title="Morning Briefing Ready",
             message=f"Your briefing for {self.today.strftime('%B %d, %Y')} is ready.",
-            link="/dashboard/briefing", is_read=False))
-        self.db.flush()
+            link="/dashboard/briefing", is_read=False)
+        if self.gateway:
+            self.gateway.propose(
+                "create_notification", lambda n=notif: (self.db.add(n), self.db.flush()),
+                target_entity="user", target_id=user_id,
+                description="Morning briefing notification",
+            )
+        else:
+            self.db.add(notif)
+            self.db.flush()
 
     # -- Active LOs ------------------------------------------------------------
 

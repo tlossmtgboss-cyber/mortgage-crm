@@ -195,9 +195,13 @@ class AutonomousTaskExecutor:
             if agent_cls is None:
                 raise ValueError(f"Unknown agent_type: {agent_type!r}")
             from db import get_db_with_tenant
+            from services.autonomous.action_gateway import ActionGateway
             with get_db_with_tenant(org_id) as db:
-                agent = agent_cls(db=db, org_id=org_id, config=task.config or {})
+                gateway = ActionGateway(db=db, org_id=org_id)
+                agent = agent_cls(db=db, org_id=org_id, config=task.config or {}, gateway=gateway)
                 result = await asyncio.wait_for(agent.run(), timeout=timeout)
+                if gateway.stats["proposed"] > 0:
+                    result["autonomy"] = gateway.stats
                 db.commit()
         except asyncio.TimeoutError:
             status = "timeout"
@@ -280,6 +284,9 @@ class AutonomousTaskExecutor:
             db.add(execution)
             db.commit()
 
+            # Backfill execution_id on AgentActions created during this run
+            self._backfill_action_execution_id(db, org_id, execution)
+
             # Update confidence graduation for any auto-executed actions
             self._update_confidence_for_execution(db, org_id, execution.id, status)
         except Exception as e:
@@ -287,6 +294,34 @@ class AutonomousTaskExecutor:
             logger.exception("Failed to write TaskExecution for task %d: %s", task_id, e)
         finally:
             db.close()
+
+    @staticmethod
+    def _backfill_action_execution_id(
+        db: Session, org_id: int, execution: "TaskExecution",
+    ) -> None:
+        """Link orphaned AgentActions to their TaskExecution.
+
+        AgentActions are created by the gateway inside the agent's session
+        (with execution_id=None) because the TaskExecution doesn't exist yet.
+        After recording the execution, backfill the FK.
+        """
+        try:
+            from database.models.autonomous_task import AgentAction
+            orphans = (
+                db.query(AgentAction)
+                .filter(
+                    AgentAction.organization_id == org_id,
+                    AgentAction.execution_id.is_(None),
+                    AgentAction.created_at >= execution.started_at,
+                )
+                .all()
+            )
+            for action in orphans:
+                action.execution_id = execution.id
+            if orphans:
+                db.commit()
+        except Exception as e:
+            logger.debug("Action backfill skipped: %s", e)
 
     @staticmethod
     def _update_confidence_for_execution(

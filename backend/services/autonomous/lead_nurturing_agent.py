@@ -121,10 +121,11 @@ class LeadNurturingAgent:
 
     AGENT_TYPE = "lead_nurturing"
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db = db
         self.org_id = org_id
         self.config = config or {}
+        self.gateway = gateway
         self.logger = logging.getLogger(f"{__name__}.org_{org_id}")
 
     # ------------------------------------------------------------------
@@ -403,10 +404,23 @@ class LeadNurturingAgent:
                 "automated": True,
             },
         )
-        self.db.add(activity)
 
-        # Update lead.last_contact so we don't re-pick it next cycle
-        lead.last_contact = datetime.now(timezone.utc)
+        def _execute_outreach():
+            self.db.add(activity)
+            lead.last_contact = datetime.now(timezone.utc)
+
+        if self.gateway:
+            action_type = "send_sms" if channel == "sms" else "send_email"
+            self.gateway.propose(
+                action_type,
+                _execute_outreach,
+                target_entity="lead",
+                target_id=lead.id,
+                description=f"Automated {channel} follow-up to {lead.first_name or 'lead'}",
+                payload={"channel": channel, "stage": lead.stage},
+            )
+        else:
+            _execute_outreach()
 
         # Notify the assigned LO (if any)
         if lead.owner_id:
@@ -424,7 +438,16 @@ class LeadNurturingAgent:
                 link=f"/leads/{lead.id}",
                 is_read=False,
             )
-            self.db.add(notification)
+            if self.gateway:
+                self.gateway.propose(
+                    "create_notification",
+                    lambda: self.db.add(notification),
+                    target_entity="lead",
+                    target_id=lead.id,
+                    description="LO notification for automated nurture outreach",
+                )
+            else:
+                self.db.add(notification)
 
         self.logger.debug(
             "Recorded %s outreach for lead %d (%s)",

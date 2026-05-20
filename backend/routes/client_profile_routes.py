@@ -1576,6 +1576,20 @@ async def approve_unified_task(
                 )
                 db.add(training)
 
+        # Feed approval into the confidence graduation system
+        confidence_result = None
+        try:
+            from services.autonomous.confidence_graduation import ConfidenceGraduationService
+            org_id = getattr(current_user, "organization_id", None)
+            if org_id:
+                grad_service = ConfidenceGraduationService(db)
+                action_type = f"task_{source}" if source else "task_general"
+                confidence_result = grad_service.record_decision(
+                    org_id=org_id, action_type=action_type, approved=True,
+                )
+        except Exception as e:
+            logger.debug("Confidence graduation record skipped: %s", e)
+
         db.commit()
 
         # Invalidate the unified tasks cache so completed tasks don't reappear
@@ -1588,7 +1602,8 @@ async def approve_unified_task(
             "status": "success",
             "message": "Task approved and AI trained",
             "task_id": task_id,
-            "source": source
+            "source": source,
+            "confidence": confidence_result,
         }
 
     except HTTPException:

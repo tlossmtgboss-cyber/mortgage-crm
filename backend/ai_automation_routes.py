@@ -345,7 +345,7 @@ async def review_training_task(
             SET status = 'completed', ai_approved_at = NOW()
             WHERE id = :task_id
         """), {"task_id": task_id})
-        
+
         # Update training history
         db.execute(text("""
             UPDATE ai_training_history
@@ -354,12 +354,25 @@ async def review_training_task(
                 reviewed_at = NOW()
             WHERE task_instance_id = :task_id
         """), {"task_id": task_id, "user_id": user_id})
-        
-        # Increment training counter
+
+        # Increment training counter for backward compat
         new_count = task.training_progress_count + 1
-        
-        # Check if training complete
-        if new_count >= 5:
+
+        # Record decision in the real confidence graduation system
+        confidence_result = None
+        graduated = False
+        try:
+            from services.autonomous.confidence_graduation import ConfidenceGraduationService
+            grad_service = ConfidenceGraduationService(db)
+            action_type = task.task_type_name or "general_task"
+            confidence_result = grad_service.record_decision(
+                org_id=company_id, action_type=action_type, approved=True,
+            )
+            graduated = confidence_result and confidence_result.get("graduated", False)
+        except Exception as e:
+            logger.warning("Confidence graduation record failed: %s", e)
+
+        if graduated or new_count >= 5:
             db.execute(text("""
                 UPDATE ai_task_type_authorizations
                 SET authorization_status = 'active',
@@ -368,8 +381,7 @@ async def review_training_task(
                     updated_at = NOW()
                 WHERE authorization_id = :auth_id
             """), {"auth_id": task.authorization_id, "count": new_count})
-            
-            # Save rollback state
+
             db.execute(text("""
                 INSERT INTO ai_rollback_states (
                     authorization_id, state_snapshot, tasks_completed_count,
@@ -378,16 +390,23 @@ async def review_training_task(
                 VALUES (:auth_id, :snapshot, :count, 'training_complete', NOW())
             """), {
                 "auth_id": task.authorization_id,
-                "snapshot": json.dumps({"training_completed": True}),
+                "snapshot": json.dumps({
+                    "training_completed": True,
+                    "confidence": confidence_result,
+                }),
                 "count": new_count
             })
-            
+
             db.commit()
-            
+
+            conf_pct = ""
+            if confidence_result:
+                conf_pct = f" (confidence: {confidence_result.get('confidence', 0):.0%})"
             return {
                 "status": "training_complete",
-                "training_progress": "5/5",
-                "message": f"🎉 AI training complete for '{task.task_type_name}'! AI will now handle these tasks automatically."
+                "training_progress": f"{new_count}/{new_count}",
+                "confidence": confidence_result,
+                "message": f"AI training complete for '{task.task_type_name}'! AI will now handle these tasks automatically{conf_pct}."
             }
         else:
             db.execute(text("""
@@ -395,20 +414,23 @@ async def review_training_task(
                 SET training_progress_count = :count, updated_at = NOW()
                 WHERE authorization_id = :auth_id
             """), {"auth_id": task.authorization_id, "count": new_count})
-        
+
         db.commit()
-        
+
+        conf_info = ""
+        if confidence_result:
+            conf_info = f" Confidence: {confidence_result.get('confidence', 0):.0%}."
         return {
             "status": "approved",
             "training_progress": f"{new_count}/5",
-            "message": f"Task approved. {5 - new_count} more approvals needed."
+            "confidence": confidence_result,
+            "message": f"Task approved.{conf_info} Keep approving to build AI confidence."
         }
-    
+
     elif review.action == 'rejected':
-        # Update training history with feedback
         feedback_text = review.feedback.text if review.feedback else None
         feedback_structured = json.dumps(review.feedback.structured) if review.feedback and review.feedback.structured else None
-        
+
         db.execute(text("""
             UPDATE ai_training_history
             SET user_response = 'rejected',
@@ -423,20 +445,36 @@ async def review_training_task(
             "text": feedback_text,
             "structured": feedback_structured
         })
-        
+
+        # Record rejection in confidence graduation system
+        confidence_result = None
+        try:
+            from services.autonomous.confidence_graduation import ConfidenceGraduationService
+            grad_service = ConfidenceGraduationService(db)
+            action_type = task.task_type_name or "general_task"
+            confidence_result = grad_service.record_decision(
+                org_id=company_id, action_type=action_type, approved=False,
+            )
+        except Exception as e:
+            logger.warning("Confidence graduation reject record failed: %s", e)
+
         # Mark task for manual completion
         db.execute(text("""
             UPDATE tasks
             SET status = 'pending', completion_method = 'manual'
             WHERE id = :task_id
         """), {"task_id": task_id})
-        
+
         db.commit()
-        
+
+        conf_info = ""
+        if confidence_result:
+            conf_info = f" Confidence adjusted to {confidence_result.get('confidence', 0):.0%}."
         return {
             "status": "rejected",
             "training_progress": f"{task.training_progress_count}/5",
-            "message": "Feedback received. AI will apply your corrections to future tasks."
+            "confidence": confidence_result,
+            "message": f"Feedback received. AI will apply your corrections to future tasks.{conf_info}"
         }
     
     else:
@@ -1042,41 +1080,80 @@ async def regenerate_message(
     stage = request_data.get("stage", "")
     training_instruction = request_data.get("training_instruction", "")
 
-    # Build the message based on channel and training instructions
-    if channel == "email":
-        message = f"""Hi {client_name},
+    # Fetch stored training instructions for this user + task type
+    stored_instructions = []
+    try:
+        user_id = int_to_uuid(current_user.id)
+        task_type = request_data.get("task_type", "general")
+        rows = db.execute(text("""
+            SELECT instruction_text FROM ai_training_instructions
+            WHERE user_id = :uid AND task_type = :tt AND status = 'active'
+            ORDER BY created_at DESC LIMIT 5
+        """), {"uid": user_id, "tt": task_type}).fetchall()
+        stored_instructions = [r.instruction_text for r in rows]
+    except Exception:
+        pass
 
-{training_instruction + chr(10) + chr(10) if training_instruction else ''}I wanted to reach out regarding your loan application{f' ({task_title})' if task_title else ''}.
+    all_instructions = stored_instructions[:]
+    if training_instruction:
+        all_instructions.insert(0, training_instruction)
 
-If you have any questions or need assistance, please don't hesitate to contact me. I'm here to help make this process as smooth as possible.
+    try:
+        import anthropic
+        client = anthropic.Anthropic()
 
-Best regards,
-[Your Name]
-Loan Officer"""
+        channel_desc = {
+            "email": "professional email (include greeting, body, and sign-off)",
+            "text": "brief SMS text message (under 160 characters)",
+            "phone": "phone call script with numbered talking points",
+            "voicemail": "short voicemail script (under 30 seconds when read aloud)",
+        }.get(channel, "message")
 
-    elif channel == "text":
-        message = f"Hi {client_name}! {training_instruction + ' ' if training_instruction else ''}Just checking in on your loan. Let me know if you have any questions!"
+        instruction_block = ""
+        if all_instructions:
+            instruction_block = "\n\nUser training instructions (follow these):\n" + "\n".join(
+                f"- {inst}" for inst in all_instructions
+            )
 
-    elif channel == "phone":
-        message = f"""CALL SCRIPT for {client_name}:
-{chr(10) + 'Key Point: ' + training_instruction + chr(10) if training_instruction else ''}
-1. Greeting: "Hi {client_name}, this is [Your Name] calling about your loan application."
-2. Purpose: {task_title or 'Discuss current status and next steps'}
-3. Ask: "Do you have any questions I can help with?"
-4. Close: Schedule follow-up if needed"""
-
-    elif channel == "voicemail":
-        message = f"""Hi {client_name}, this is [Your Name] from [Company]. {training_instruction + ' ' if training_instruction else ''}I'm calling about your loan application. Please call me back at your convenience at [phone number]. Thank you!"""
-
-    else:
-        message = f"Hi {client_name}, reaching out about your loan application."
+        resp = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Write a {channel_desc} from a loan officer to {client_name} "
+                    f"about: {task_title or 'their loan application'}. "
+                    f"Loan stage: {stage or 'in progress'}. "
+                    f"Be warm, professional, and action-oriented."
+                    f"{instruction_block}\n\n"
+                    f"Return ONLY the message text, no preamble."
+                ),
+            }],
+        )
+        message = resp.content[0].text.strip()
+    except Exception as e:
+        logger.warning("AI message generation failed, using template: %s", e)
+        if channel == "email":
+            message = (
+                f"Hi {client_name},\n\nI wanted to reach out regarding "
+                f"your loan application{f' ({task_title})' if task_title else ''}.\n\n"
+                f"If you have any questions, please don't hesitate to contact me.\n\n"
+                f"Best regards"
+            )
+        elif channel == "text":
+            message = f"Hi {client_name}! Just checking in on your loan. Let me know if you have any questions!"
+        elif channel == "phone":
+            message = f"CALL SCRIPT: Greet {client_name}, discuss {task_title or 'application status'}, ask about questions, schedule follow-up."
+        else:
+            message = f"Hi {client_name}, reaching out about your loan application."
 
     return {
         "status": "success",
         "channel": channel,
         "message": message,
         "client_name": client_name,
-        "training_applied": bool(training_instruction)
+        "training_applied": bool(all_instructions),
+        "instructions_used": len(all_instructions),
     }
 
 

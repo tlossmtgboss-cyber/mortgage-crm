@@ -443,7 +443,19 @@ async def approve_email_response(
             user_id=current_user.id,
             db=db
         )
-        db.commit()  # Commit execution changes
+
+        # Feed into confidence graduation for progressive autonomy
+        try:
+            from services.autonomous.confidence_graduation import ConfidenceGraduationService
+            org_id = getattr(current_user, "organization_id", None)
+            if org_id:
+                grad_svc = ConfidenceGraduationService(db)
+                email_intent = getattr(queue_item, "email_intent", "email_response")
+                grad_svc.record_decision(org_id=org_id, action_type=f"email_{email_intent}", approved=True)
+        except Exception as e:
+            logger.debug("Confidence graduation skipped: %s", e)
+
+        db.commit()
 
         return {
             "status": "success",
@@ -529,6 +541,17 @@ async def reject_email_response(
                 reviewed_at = NOW()
             WHERE id = :queue_id
         """), {"queue_id": rejection.queue_id, "user_id": current_user.id})
+
+        # Feed rejection into confidence graduation
+        try:
+            from services.autonomous.confidence_graduation import ConfidenceGraduationService
+            org_id = getattr(current_user, "organization_id", None)
+            if org_id:
+                grad_svc = ConfidenceGraduationService(db)
+                email_intent = getattr(queue_item, "email_intent", "email_response")
+                grad_svc.record_decision(org_id=org_id, action_type=f"email_{email_intent}", approved=False)
+        except Exception as e:
+            logger.debug("Confidence graduation skipped: %s", e)
 
         db.commit()
 

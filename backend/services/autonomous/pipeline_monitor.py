@@ -68,10 +68,11 @@ class PipelineMonitorAgent:
         "DOCS_OUT": 3,
     }
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db = db
         self.org_id = org_id
         self.config = config or {}
+        self.gateway = gateway
         self.now = datetime.now(timezone.utc)
         self.logger = logging.getLogger(f"{__name__}.org_{org_id}")
 
@@ -340,11 +341,21 @@ class PipelineMonitorAgent:
                     msg = (f"{len(loans)} loans exceeding SLAs. Worst: {w['borrower_name']} "
                            f"in {w['stage']} for {w['days_in_stage']}d (SLA: {w['sla_days']}d).")
 
-                self.db.add(Notification(
+                notif = Notification(
                     user_id=lo_id, organization_id=self.org_id,
                     type="pipeline_stalled", title=title, message=msg,
                     link="/pipeline?filter=stalled", is_read=False,
-                ))
+                )
+                if self.gateway:
+                    self.gateway.propose(
+                        "create_notification",
+                        lambda n=notif: self.db.add(n),
+                        target_entity="loan",
+                        target_id=w.get("loan_id"),
+                        description=title,
+                    )
+                else:
+                    self.db.add(notif)
                 created += 1
             except Exception as e:
                 self.logger.warning("Failed to create notification for LO %s: %s", lo_id, e)

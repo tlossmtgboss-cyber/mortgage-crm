@@ -70,9 +70,10 @@ class ClientLifecycleAgent:
         1095: "3-year anniversary",
     }
 
-    def __init__(self, db: Session, org_id: int, config: dict | None = None):
+    def __init__(self, db: Session, org_id: int, config: dict | None = None, gateway=None):
         self.db = db
         self.org_id = org_id
+        self.gateway = gateway
         self.now = datetime.now(timezone.utc)
         self.config = config or {}
         self.logger = logging.getLogger(f"{__name__}.org_{org_id}")
@@ -228,21 +229,37 @@ class ClientLifecycleAgent:
     def _record_lifecycle_touch(self, lead: Lead, loan: Loan, touch_type: str, message: str) -> None:
         """Create Activity + Notification for the assigned LO."""
         lo_id = loan.loan_officer_id or lead.owner_id
-        self.db.add(Activity(
+        activity = Activity(
             organization_id=self.org_id, lead_id=lead.id, loan_id=loan.id,
             user_id=lo_id, type=ActivityType.NOTE, content=message,
             sentiment="positive",
             user_metadata={"source": self.AGENT_TYPE, "touch_type": touch_type, "automated": True},
-        ))
+        )
+        if self.gateway:
+            self.gateway.propose(
+                "create_activity", lambda a=activity: self.db.add(a),
+                target_entity="loan", target_id=loan.id,
+                description=f"Lifecycle {touch_type} for {lead.first_name or 'client'}",
+            )
+        else:
+            self.db.add(activity)
         if lo_id:
             borrower = lead.first_name or lead.name or "Client"
-            self.db.add(Notification(
+            notif = Notification(
                 organization_id=self.org_id, user_id=lo_id,
                 type="lifecycle_touch",
                 title=f"Lifecycle: {touch_type.replace('_', ' ').title()}",
                 message=f"Automated {touch_type.replace('_', ' ')} queued for {borrower} (Loan #{loan.loan_number}). Review and personalize.",
                 link=f"/loans/{loan.id}", is_read=False,
-            ))
+            )
+            if self.gateway:
+                self.gateway.propose(
+                    "create_notification", lambda n=notif: self.db.add(n),
+                    target_entity="loan", target_id=loan.id,
+                    description=f"Lifecycle touch notification for {borrower}",
+                )
+            else:
+                self.db.add(notif)
 
     def _calculate_refi_savings(self, loan: Loan, current_market_rate: Decimal) -> dict:
         """Monthly/annual savings using standard amortization formula."""
