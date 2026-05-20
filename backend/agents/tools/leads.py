@@ -51,15 +51,15 @@ def get_lead_details(
         lead_query = """
             SELECT
                 l.id, l.first_name, l.last_name, l.email, l.phone,
-                l.status, l.source, l.created_at, l.updated_at,
-                l.estimated_loan_amount, l.estimated_down_payment,
-                l.credit_score_range, l.property_type_interest,
-                l.timeline, l.notes, l.assigned_to,
+                l.stage, l.source, l.created_at, l.updated_at,
+                l.loan_amount, l.down_payment,
+                l.credit_score, l.property_type,
+                l.buying_timeline_category, l.notes, l.owner_id,
                 COALESCE(es.full_name, lo.email) as assigned_lo_name,
-                l.last_contact_date, l.next_followup_date,
-                l.lead_score
+                l.last_contact,
+                l.ai_score
             FROM leads l
-            LEFT JOIN users lo ON l.assigned_to = lo.id
+            LEFT JOIN users lo ON l.owner_id = lo.id
             LEFT JOIN email_signatures es ON es.user_id = lo.id
             WHERE l.id = :lead_id
         """
@@ -70,8 +70,8 @@ def get_lead_details(
 
         # Get activity history
         activity_query = """
-            SELECT activity_type, description, created_at, created_by
-            FROM lead_activities
+            SELECT type as activity_type, content as description, created_at, user_id as created_by
+            FROM activities
             WHERE lead_id = :lead_id
             ORDER BY created_at DESC
             LIMIT 10
@@ -80,8 +80,8 @@ def get_lead_details(
 
         # Calculate days since last contact
         days_since_contact = None
-        if lead["last_contact_date"]:
-            days_since_contact = days_between(lead["last_contact_date"])
+        if lead["last_contact"]:
+            days_since_contact = days_between(lead["last_contact"])
 
         # Calculate lead age
         lead_age = days_between(lead["created_at"]) if lead["created_at"] else 0
@@ -92,24 +92,24 @@ def get_lead_details(
                 "name": f"{lead['first_name']} {lead['last_name']}",
                 "email": lead["email"],
                 "phone": lead["phone"],
-                "status": lead["status"],
+                "status": lead["stage"],
                 "source": lead["source"],
-                "lead_score": lead["lead_score"],
+                "lead_score": lead["ai_score"],
                 "assigned_to": lead["assigned_lo_name"],
             },
             "financial_profile": {
-                "estimated_loan_amount": float(lead["estimated_loan_amount"]) if lead["estimated_loan_amount"] else None,
-                "estimated_loan_formatted": format_currency(lead["estimated_loan_amount"]),
-                "estimated_down_payment": float(lead["estimated_down_payment"]) if lead["estimated_down_payment"] else None,
-                "credit_score_range": lead["credit_score_range"],
-                "property_interest": lead["property_type_interest"],
+                "estimated_loan_amount": float(lead["loan_amount"]) if lead["loan_amount"] else None,
+                "estimated_loan_formatted": format_currency(lead["loan_amount"]),
+                "estimated_down_payment": float(lead["down_payment"]) if lead["down_payment"] else None,
+                "credit_score_range": lead["credit_score"],
+                "property_interest": lead["property_type"],
             },
             "engagement": {
-                "timeline": lead["timeline"],
+                "timeline": lead["buying_timeline_category"],
                 "lead_age_days": lead_age,
                 "days_since_contact": days_since_contact,
-                "next_followup": format_date(lead["next_followup_date"]),
-                "last_contact": format_date(lead["last_contact_date"]),
+                "next_followup": None,
+                "last_contact": format_date(lead["last_contact"]),
             },
             "notes": lead["notes"],
             "recent_activities": [{
@@ -143,14 +143,14 @@ def get_engagement_history(
         # Get all activities
         activities_query = """
             SELECT
-                activity_type,
-                description,
-                outcome,
+                type as activity_type,
+                content as description,
+                sentiment as outcome,
                 created_at,
-                created_by,
-                duration_minutes,
-                channel
-            FROM lead_activities
+                user_id as created_by,
+                duration as duration_minutes,
+                NULL as channel
+            FROM activities
             WHERE lead_id = :lead_id
             ORDER BY created_at DESC
             LIMIT :limit
@@ -229,10 +229,10 @@ def score_lead(
         lead_query = """
             SELECT
                 l.id, l.first_name, l.last_name,
-                l.credit_score_range, l.estimated_loan_amount,
-                l.estimated_down_payment, l.timeline,
-                l.property_type_interest, l.employment_status,
-                l.created_at, l.last_contact_date
+                l.credit_score, l.loan_amount,
+                l.down_payment, l.buying_timeline_category as timeline,
+                l.property_type, l.employment_status,
+                l.created_at, l.last_contact
             FROM leads l
             WHERE l.id = :lead_id
         """
@@ -246,8 +246,8 @@ def score_lead(
             SELECT
                 COUNT(*) as total_activities,
                 COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as recent_activities,
-                COUNT(CASE WHEN outcome = 'positive' THEN 1 END) as positive_outcomes
-            FROM lead_activities
+                COUNT(CASE WHEN sentiment = 'positive' THEN 1 END) as positive_outcomes
+            FROM activities
             WHERE lead_id = :lead_id
         """
         engagement = execute_single(engagement_query, {"lead_id": lead_id})
@@ -263,7 +263,15 @@ def score_lead(
             "poor": 40, "580-639": 40,
             "unknown": 50, None: 50,
         }
-        credit_range = lead.get("credit_score_range", "").lower() if lead.get("credit_score_range") else "unknown"
+        credit_val = lead.get("credit_score")
+        if credit_val and isinstance(credit_val, int):
+            if credit_val >= 760: credit_range = "excellent"
+            elif credit_val >= 700: credit_range = "good"
+            elif credit_val >= 640: credit_range = "fair"
+            elif credit_val >= 580: credit_range = "poor"
+            else: credit_range = "poor"
+        else:
+            credit_range = "unknown"
         scores["credit_score"] = credit_ranges.get(credit_range, 50)
 
         if scores["credit_score"] < 60:
@@ -281,8 +289,8 @@ def score_lead(
         scores["income_stability"] = employment_scores.get(lead.get("employment_status"), 50)
 
         # 3. Down Payment (0-100)
-        loan_amt = float(lead["estimated_loan_amount"] or 0)
-        down_pmt = float(lead["estimated_down_payment"] or 0)
+        loan_amt = float(lead["loan_amount"] or 0)
+        down_pmt = float(lead["down_payment"] or 0)
         if loan_amt > 0 and down_pmt > 0:
             down_pct = down_pmt / (loan_amt + down_pmt) * 100
             if down_pct >= 20:
@@ -328,7 +336,7 @@ def score_lead(
             recommendations.append("Prioritize - hot lead with immediate timeline")
 
         # 6. Property Identified (0-100)
-        if lead.get("property_type_interest"):
+        if lead.get("property_type"):
             scores["property_identified"] = 75
         else:
             scores["property_identified"] = 30
@@ -360,7 +368,7 @@ def score_lead(
             with get_db() as db:
                 from sqlalchemy import text
                 db.execute(
-                    text("UPDATE leads SET lead_score = :score WHERE id = :lead_id"),
+                    text("UPDATE leads SET ai_score = :score WHERE id = :lead_id"),
                     {"score": total_score, "lead_id": lead_id}
                 )
 
@@ -399,9 +407,9 @@ def suggest_followup(
         # Get lead details
         lead_query = """
             SELECT
-                l.id, l.first_name, l.last_name, l.status,
-                l.timeline, l.last_contact_date, l.next_followup_date,
-                l.lead_score, l.preferred_contact_method,
+                l.id, l.first_name, l.last_name, l.stage as status,
+                l.buying_timeline_category as timeline, l.last_contact,
+                l.ai_score as lead_score, l.preferred_communication as preferred_contact_method,
                 l.email, l.phone
             FROM leads l
             WHERE l.id = :lead_id
@@ -413,17 +421,17 @@ def suggest_followup(
 
         # Get recent activities
         recent_query = """
-            SELECT activity_type, outcome, created_at
-            FROM lead_activities
+            SELECT type as activity_type, sentiment as outcome, created_at
+            FROM activities
             WHERE lead_id = :lead_id
             ORDER BY created_at DESC
             LIMIT 5
         """
         recent_activities = execute_query(recent_query, {"lead_id": lead_id})
 
-        days_since_contact = days_between(lead["last_contact_date"]) if lead["last_contact_date"] else 999
-        lead_score = lead["lead_score"] or 50
-        status = lead["status"] or "new"
+        days_since_contact = days_between(lead["last_contact"]) if lead["last_contact"] else 999
+        lead_score = lead["ai_score"] or 50
+        status = (lead["status"] or "new").lower()
 
         suggestions = []
         primary_action = None
@@ -552,8 +560,8 @@ def draft_message(
         lead_query = """
             SELECT
                 l.id, l.first_name, l.last_name, l.email,
-                l.status, l.timeline, l.estimated_loan_amount,
-                l.property_type_interest, l.source
+                l.stage as status, l.buying_timeline_category as timeline, l.loan_amount,
+                l.property_type, l.source
             FROM leads l
             WHERE l.id = :lead_id
         """
@@ -564,8 +572,8 @@ def draft_message(
 
         # Get last interaction
         last_activity_query = """
-            SELECT activity_type, description, created_at
-            FROM lead_activities
+            SELECT type as activity_type, content as description, created_at
+            FROM activities
             WHERE lead_id = :lead_id
             ORDER BY created_at DESC
             LIMIT 1
@@ -573,7 +581,7 @@ def draft_message(
         last_activity = execute_single(last_activity_query, {"lead_id": lead_id})
 
         first_name = lead["first_name"]
-        loan_amount = format_currency(lead["estimated_loan_amount"]) if lead["estimated_loan_amount"] else "your target loan amount"
+        loan_amount = format_currency(lead["loan_amount"]) if lead["loan_amount"] else "your target loan amount"
 
         # Message templates
         templates = {
@@ -584,7 +592,7 @@ def draft_message(
 
 Thank you for your interest in getting a mortgage! I'm excited to help you on your homeownership journey.
 
-I noticed you're looking at {lead['property_type_interest'] or 'purchasing a home'} with a timeline of {lead['timeline'] or 'the near future'}.
+I noticed you're looking at {lead['property_type'] or 'purchasing a home'} with a timeline of {lead['timeline'] or 'the near future'}.
 
 I'd love to schedule a quick 15-minute call to understand your goals and show you how we can help you secure the best rate possible.
 
@@ -666,7 +674,7 @@ Warmly,
                 "personalization_used": {
                     "first_name": first_name,
                     "timeline": lead["timeline"],
-                    "property_interest": lead["property_type_interest"],
+                    "property_interest": lead["property_type"],
                     "loan_amount": loan_amount,
                 },
             }
@@ -727,12 +735,6 @@ def schedule_outreach(
         with get_db() as db:
             from sqlalchemy import text
 
-            # Update lead's next followup date
-            db.execute(
-                text("UPDATE leads SET next_followup_date = :date WHERE id = :lead_id"),
-                {"date": schedule_dt, "lead_id": lead_id}
-            )
-
             # Create task
             db.execute(
                 text("""
@@ -788,8 +790,8 @@ def get_similar_converted_leads(
         # Get current lead profile
         lead_query = """
             SELECT
-                id, credit_score_range, estimated_loan_amount,
-                timeline, property_type_interest, source
+                id, credit_score, loan_amount,
+                buying_timeline_category as timeline, property_type, source
             FROM leads
             WHERE id = :lead_id
         """
@@ -802,26 +804,26 @@ def get_similar_converted_leads(
         similar_query = """
             SELECT
                 l.id, l.first_name, l.last_name,
-                l.credit_score_range, l.estimated_loan_amount,
-                l.timeline, l.source, l.created_at,
-                l.converted_at,
-                EXTRACT(EPOCH FROM (l.converted_at - l.created_at)) / 86400 as days_to_convert
+                l.credit_score, l.loan_amount,
+                l.buying_timeline_category as timeline, l.source, l.created_at,
+                l.updated_at as converted_at,
+                EXTRACT(EPOCH FROM (l.updated_at - l.created_at)) / 86400 as days_to_convert
             FROM leads l
-            WHERE l.status = 'converted'
+            WHERE l.stage = 'Converted'
             AND l.id != :lead_id
             AND (
-                l.credit_score_range = :credit_range
+                l.credit_score = :credit_score
                 OR l.source = :source
-                OR ABS(l.estimated_loan_amount - :loan_amount) / NULLIF(:loan_amount, 0) < 0.2
+                OR ABS(l.loan_amount - :loan_amount) / NULLIF(:loan_amount, 0) < 0.2
             )
-            ORDER BY l.converted_at DESC
+            ORDER BY l.updated_at DESC
             LIMIT :limit
         """
         similar = execute_query(similar_query, {
             "lead_id": lead_id,
-            "credit_range": lead["credit_score_range"],
+            "credit_score": lead["credit_score"],
             "source": lead["source"],
-            "loan_amount": lead["estimated_loan_amount"] or 0,
+            "loan_amount": lead["loan_amount"] or 0,
             "limit": limit,
         })
 
@@ -833,19 +835,19 @@ def get_similar_converted_leads(
         for s in similar:
             engagement_query = """
                 SELECT
-                    activity_type,
+                    type as activity_type,
                     COUNT(*) as count
-                FROM lead_activities
+                FROM activities
                 WHERE lead_id = :lead_id
-                GROUP BY activity_type
+                GROUP BY type
             """
             engagement = execute_query(engagement_query, {"lead_id": s["id"]})
 
             results.append({
                 "lead_id": s["id"],
                 "profile": {
-                    "credit_range": s["credit_score_range"],
-                    "loan_amount": format_currency(s["estimated_loan_amount"]),
+                    "credit_range": s["credit_score"],
+                    "loan_amount": format_currency(s["loan_amount"]),
                     "timeline": s["timeline"],
                     "source": s["source"],
                 },
@@ -930,16 +932,16 @@ def get_optimal_contact_time(
             SELECT
                 EXTRACT(DOW FROM created_at) as day_of_week,
                 EXTRACT(HOUR FROM created_at) as hour,
-                outcome
-            FROM lead_activities
+                sentiment as outcome
+            FROM activities
             WHERE lead_id = :lead_id
-            AND activity_type IN ('call', 'meeting')
+            AND type IN ('call', 'meeting')
         """
         history = execute_query(history_query, {"lead_id": lead_id})
 
-        # Get lead's timezone preference (if available)
+        # Get lead's contact preferences
         lead_query = """
-            SELECT timezone, preferred_contact_time
+            SELECT preferred_communication, NULL as preferred_contact_time
             FROM leads
             WHERE id = :lead_id
         """
@@ -1048,29 +1050,29 @@ def get_stale_leads(
                     l.stage,
                     l.status,
                     l.created_at,
-                    l.last_contact_date,
-                    l.lead_score,
-                    l.assigned_to,
+                    l.last_contact,
+                    l.ai_score,
+                    l.owner_id,
                     COALESCE(es.full_name, lo.email) as assigned_lo_name,
                     COALESCE(
-                        EXTRACT(DAY FROM NOW() - l.last_contact_date),
+                        EXTRACT(DAY FROM NOW() - l.last_contact),
                         EXTRACT(DAY FROM NOW() - l.created_at)
                     ) as days_stale,
                     CASE
-                        WHEN l.last_contact_date IS NULL THEN true
+                        WHEN l.last_contact IS NULL THEN true
                         ELSE false
                     END as never_contacted
                 FROM leads l
-                LEFT JOIN users lo ON l.assigned_to = lo.id
+                LEFT JOIN users lo ON l.owner_id = lo.id
                 LEFT JOIN email_signatures es ON es.user_id = lo.id
                 WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify', 'Converted')
                     AND l.status NOT IN ('dead', 'unqualified', 'converted')
                     AND (
-                        l.last_contact_date < NOW() - INTERVAL :days_interval
-                        OR l.last_contact_date IS NULL
+                        l.last_contact < NOW() - INTERVAL :days_interval
+                        OR l.last_contact IS NULL
                     )
                 ORDER BY
-                    CASE WHEN l.last_contact_date IS NULL THEN 0 ELSE 1 END,
+                    CASE WHEN l.last_contact IS NULL THEN 0 ELSE 1 END,
                     days_stale DESC
                 LIMIT :limit
             """
@@ -1086,19 +1088,19 @@ def get_stale_leads(
                     l.stage,
                     l.status,
                     l.created_at,
-                    l.last_contact_date,
-                    l.lead_score,
-                    l.assigned_to,
+                    l.last_contact,
+                    l.ai_score,
+                    l.owner_id,
                     COALESCE(es.full_name, lo.email) as assigned_lo_name,
-                    EXTRACT(DAY FROM NOW() - l.last_contact_date) as days_stale,
+                    EXTRACT(DAY FROM NOW() - l.last_contact) as days_stale,
                     false as never_contacted
                 FROM leads l
-                LEFT JOIN users lo ON l.assigned_to = lo.id
+                LEFT JOIN users lo ON l.owner_id = lo.id
                 LEFT JOIN email_signatures es ON es.user_id = lo.id
                 WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify', 'Converted')
                     AND l.status NOT IN ('dead', 'unqualified', 'converted')
-                    AND l.last_contact_date IS NOT NULL
-                    AND l.last_contact_date < NOW() - INTERVAL :days_interval
+                    AND l.last_contact IS NOT NULL
+                    AND l.last_contact < NOW() - INTERVAL :days_interval
                 ORDER BY days_stale DESC
                 LIMIT :limit
             """
@@ -1136,10 +1138,10 @@ def get_stale_leads(
                 "email": lead["email"],
                 "lead_source": lead["lead_source"],
                 "stage": lead["stage"] or lead["status"],
-                "lead_score": lead["lead_score"],
+                "lead_score": lead["ai_score"],
                 "assigned_to": lead["assigned_lo_name"],
                 "created_at": format_date(lead["created_at"]),
-                "last_contact_date": format_date(lead["last_contact_date"]) if lead["last_contact_date"] else "Never",
+                "last_contact_date": format_date(lead["last_contact"]) if lead["last_contact"] else "Never",
                 "days_stale": int(lead["days_stale"] or 0),
                 "never_contacted": lead["never_contacted"],
             })

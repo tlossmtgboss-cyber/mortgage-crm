@@ -102,7 +102,7 @@ def find_clients_for_outreach(
     # Days since contact filter
     if int(days_since_contact) > 0:
         conditions.append(
-            "(l.last_contact_date IS NULL OR l.last_contact_date < NOW() - INTERVAL :days_interval)"
+            "(l.last_contact IS NULL OR l.last_contact < NOW() - INTERVAL :days_interval)"
         )
         params["days_interval"] = f"{int(days_since_contact)} days"
 
@@ -122,10 +122,10 @@ def find_clients_for_outreach(
 
     clients = execute_query(
         f"""SELECT l.id, l.first_name, l.last_name, l.phone, l.email,
-                   l.stage, l.loan_type, l.last_contact_date, l.created_at
+                   l.stage, l.loan_type, l.last_contact, l.created_at
             FROM leads l
             WHERE {where_clause}
-            ORDER BY l.last_contact_date ASC NULLS FIRST
+            ORDER BY l.last_contact ASC NULLS FIRST
             LIMIT :limit""",
         params,
     )

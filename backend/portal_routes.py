@@ -396,15 +396,15 @@ def get_task_details(
 def update_task(
     task_id: int = Path(..., description="Task ID"),
     request: TaskUpdateRequest = Body(...),
-    user_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Update task status."""
     service = PortalMilestoneService(db)
     return service.update_task_status(
         task_id=task_id,
         status=request.status,
-        completed_by=user_id,
+        completed_by=str(current_user.id),
         metadata=request.metadata,
     )
 
@@ -413,6 +413,7 @@ def update_task(
 def get_borrower_tasks(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get tasks requiring borrower action."""
     service = PortalMilestoneService(db)
@@ -428,6 +429,7 @@ def create_close_schedule(
     loan_id: int = Path(..., description="Loan ID"),
     request: CloseScheduleRequest = Body(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Create a Close-On-Time schedule for a loan."""
     service = PortalCloseOnTimeService(db)
@@ -442,6 +444,7 @@ def create_close_schedule(
 def get_close_schedule(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get Close-On-Time schedule for a loan."""
     service = PortalCloseOnTimeService(db)
@@ -455,6 +458,7 @@ def get_close_schedule(
 def get_close_countdown(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get countdown display data for a loan."""
     service = PortalCloseOnTimeService(db)
@@ -467,6 +471,7 @@ def get_close_calendar(
     start_date: Optional[date] = Query(None),
     weeks: int = Query(6, ge=1, le=12),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get calendar view data for Close-On-Time display."""
     service = PortalCloseOnTimeService(db)
@@ -481,6 +486,7 @@ def get_close_calendar(
 def generate_milestone_calendar(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """
     Generate and download an ICS calendar file with all loan milestones.
@@ -586,14 +592,14 @@ def generate_milestone_calendar(
 @router.post("/close-milestones/{milestone_id}/complete")
 def complete_close_milestone(
     milestone_id: int = Path(..., description="Close-On-Time milestone ID"),
-    user_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Mark a Close-On-Time milestone as completed."""
     service = PortalCloseOnTimeService(db)
     return service.complete_schedule_milestone(
         milestone_id=milestone_id,
-        completed_by=user_id,
+        completed_by=str(current_user.id),
     )
 
 
@@ -601,6 +607,7 @@ def complete_close_milestone(
 def get_federal_holidays(
     year: int = Path(..., description="Year"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get all federal holidays for a year."""
     service = PortalCloseOnTimeService(db)
@@ -611,8 +618,10 @@ def get_federal_holidays(
 def seed_federal_holidays(
     year: int = Path(..., description="Year"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
-    """Seed federal holidays for a given year."""
+    """Seed federal holidays for a given year. Requires admin access."""
+    require_admin(current_user)
     service = PortalCloseOnTimeService(db)
     return service.seed_federal_holidays(year)
 
@@ -622,6 +631,7 @@ def count_business_days(
     start_date: date = Query(...),
     end_date: date = Query(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Count business days between two dates."""
     service = PortalCloseOnTimeService(db)
@@ -641,6 +651,7 @@ def set_property_baseline(
     loan_id: int = Path(..., description="Loan ID"),
     request: PropertyBaselineRequest = Body(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Set property value baseline."""
     service = PortalHomeValueService(db)
@@ -660,6 +671,7 @@ def set_property_baseline(
 def get_property_baseline(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get property value baseline."""
     service = PortalHomeValueService(db)
@@ -673,6 +685,7 @@ def get_property_baseline(
 def get_current_home_value(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Calculate current property value."""
     service = PortalHomeValueService(db)
@@ -683,6 +696,7 @@ def get_current_home_value(
 def get_home_value_dashboard(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get complete home value dashboard data."""
     service = PortalHomeValueService(db)
@@ -694,6 +708,7 @@ def calculate_equity(
     loan_id: int = Path(..., description="Loan ID"),
     current_loan_balance: Decimal = Query(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Calculate current equity position."""
     service = PortalHomeValueService(db)
@@ -706,6 +721,7 @@ def calculate_equity_unlock(
     current_loan_balance: Decimal = Query(...),
     max_ltv: Decimal = Query(Decimal("0.80")),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Calculate potential equity available to unlock."""
     service = PortalHomeValueService(db)
@@ -716,6 +732,7 @@ def calculate_equity_unlock(
 def get_home_value_insights(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get active home value insights."""
     service = PortalHomeValueService(db)
@@ -726,6 +743,7 @@ def get_home_value_insights(
 def generate_home_value_insights(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Generate home value insights for a loan."""
     service = PortalHomeValueService(db)
@@ -736,6 +754,7 @@ def generate_home_value_insights(
 def dismiss_insight(
     insight_id: int = Path(..., description="Insight ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Dismiss a home value insight."""
     service = PortalHomeValueService(db)
@@ -753,6 +772,7 @@ def get_loan_documents(
     status: Optional[DocumentStatus] = Query(None),
     borrower_view: bool = Query(False),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get all documents for a loan."""
     service = PortalDocumentService(db)
@@ -768,6 +788,7 @@ def get_loan_documents(
 def get_document(
     document_id: int = Path(..., description="Document ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get document details."""
     service = PortalDocumentService(db)
@@ -781,15 +802,15 @@ def get_document(
 def update_document_status(
     document_id: int = Path(..., description="Document ID"),
     request: DocumentStatusRequest = Body(...),
-    user_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Update document status."""
     service = PortalDocumentService(db)
     return service.update_document_status(
         document_id=document_id,
         status=request.status,
-        reviewed_by=user_id,
+        reviewed_by=str(current_user.id),
         rejection_reason=request.rejection_reason,
     )
 
@@ -798,6 +819,7 @@ def update_document_status(
 def get_document_extraction(
     document_id: int = Path(..., description="Document ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get extraction data for a document."""
     service = PortalDocumentService(db)
@@ -812,6 +834,7 @@ def get_document_checklist(
     loan_id: int = Path(..., description="Loan ID"),
     lifecycle_stage: str = Query(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get document checklist for current lifecycle stage."""
     service = PortalDocumentService(db)
@@ -822,6 +845,7 @@ def get_document_checklist(
 def get_document_summary(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get document upload summary for a loan."""
     service = PortalDocumentService(db)
@@ -833,6 +857,7 @@ def set_property_costs(
     loan_id: int = Path(..., description="Loan ID"),
     request: PropertyCostsRequest = Body(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Set or update property costs for a loan."""
     service = PortalDocumentService(db)
@@ -851,6 +876,7 @@ def set_property_costs(
 def get_property_costs(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get property costs for a loan."""
     service = PortalDocumentService(db)
@@ -869,6 +895,7 @@ def queue_notification(
     loan_id: int = Path(..., description="Loan ID"),
     request: NotificationQueueRequest = Body(...),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Queue a notification for delivery."""
     service = PortalNotificationService(db)
@@ -889,6 +916,7 @@ def get_notification_history(
     loan_id: int = Path(..., description="Loan ID"),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get notification history for a loan."""
     service = PortalNotificationService(db)
@@ -899,8 +927,10 @@ def get_notification_history(
 def process_notifications(
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
-    """Process pending notifications in the queue."""
+    """Process pending notifications in the queue. Requires admin access."""
+    require_admin(current_user)
     service = PortalNotificationService(db)
     return service.process_pending_notifications(limit)
 
@@ -910,6 +940,7 @@ def get_notification_templates(
     event_type: Optional[str] = Query(None),
     channel: Optional[NotificationChannel] = Query(None),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Get notification templates."""
     service = PortalNotificationService(db)
@@ -966,8 +997,9 @@ def get_partner_portal_data(
 def get_borrower_dashboard(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Get comprehensive borrower dashboard data."""
+    """Get comprehensive borrower dashboard data. Requires PURL token auth."""
     lifecycle_service = PortalLifecycleService(db)
     milestone_service = PortalMilestoneService(db)
     close_service = PortalCloseOnTimeService(db)
@@ -996,8 +1028,9 @@ def get_borrower_dashboard(
 def get_mum_dashboard(
     loan_id: int = Path(..., description="Loan ID"),
     db: Session = Depends(get_db),
+    purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Get MUM (Member Until Maturity) servicing dashboard."""
+    """Get MUM (Member Until Maturity) servicing dashboard. Requires PURL token auth."""
     lifecycle_service = PortalLifecycleService(db)
     home_value_service = PortalHomeValueService(db)
 
@@ -1854,6 +1887,7 @@ def log_multi_loan_portal_activity(
 def get_portal_by_loan_id(
     loan_id: int = Path(..., description="Loan ID (either portal_loans.id or crm_deal_id)"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
 ):
     """Look up portal access by loan ID.
 
@@ -1862,6 +1896,7 @@ def get_portal_by_loan_id(
     - portal_loans.crm_deal_id (the CRM deal ID)
 
     Returns portal access information for redirecting to the borrower portal.
+    Requires LO authentication since it returns access tokens.
     """
     from models.portal_models import PortalLoan
     from services.purl_token_service import PURLTokenService

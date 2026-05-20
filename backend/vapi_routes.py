@@ -476,10 +476,20 @@ async def assistant_request_webhook(
         except Exception as e:
             logger.warning(f"Could not fetch lead data: {e}")
 
-        # New caller
+        # New caller — resolve org name dynamically
+        org_name = "our office"
+        try:
+            org_id = _resolve_org_id_from_assistant(db, data)
+            if org_id:
+                from sqlalchemy import text as _text
+                row = db.execute(_text("SELECT name FROM organizations WHERE id = :oid"), {"oid": org_id}).fetchone()
+                if row and row[0]:
+                    org_name = row[0]
+        except Exception:
+            pass
         return {
             "assistant": {
-                "firstMessage": "Hello! Thank you for calling CMG Home Loans. I'm your AI assistant. How can I help you today?",
+                "firstMessage": f"Hello! Thank you for calling {org_name}. I'm your AI assistant. How can I help you today?",
                 "model": {
                     "messages": [{
                         "role": "system",

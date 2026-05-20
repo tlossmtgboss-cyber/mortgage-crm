@@ -195,22 +195,26 @@ class RefiOpportunityEvaluator:
 
     async def _load_candidate_loans(self) -> list[tuple[LoanSnapshot, object]]:
         """
-        Joins active loans with their active target rate rows.
-        The actual query joins your loans table + borrower_target_rates.
-        Implementation depends on Perennia's existing loans schema.
+        Joins funded loans with their active target rate rows.
+        Uses the actual `loans` table with column aliases.
         """
         sql = """
             SELECT
-                l.loan_id, l.borrower_id, l.loan_officer_id,
-                l.current_balance, l.current_rate, l.current_term_months,
-                l.months_remaining, l.current_monthly_payment,
+                l.id AS loan_id,
+                l.id AS borrower_id,
+                l.loan_officer_id,
+                l.amount AS current_balance,
+                l.rate AS current_rate,
+                l.term AS current_term_months,
+                l.term AS months_remaining,
+                COALESCE(l.monthly_payment, 0) AS current_monthly_payment,
                 btr.id AS target_id, btr.product, btr.target_rate,
                 btr.min_monthly_savings, btr.min_break_even_months,
                 btr.cooldown_days
-            FROM loans_under_management l
+            FROM loans l
             JOIN borrower_target_rates btr
-                ON btr.loan_id = l.loan_id AND btr.active = TRUE
-            WHERE l.status = 'active'
+                ON btr.loan_id = l.id AND btr.active = TRUE
+            WHERE l.stage = 'FUNDED'
         """
         async with self.db.acquire() as conn:
             rows = await conn.fetch(sql)

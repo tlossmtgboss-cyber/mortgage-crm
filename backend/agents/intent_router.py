@@ -146,18 +146,18 @@ def is_haiku_intent(intent: str) -> bool:
 # =============================================================================
 
 INTENT_TO_AGENTS: Dict[str, List[str]] = {
-    # Core intents (original 21 agents)
+    # Core intents — all agents must exist in tool_integration.AGENT_CONFIGS
     "greeting": [],                                       # No tools needed - direct Haiku response
     "simple": ["pipeline_analyst"],                       # Basic lookup with Haiku
-    "pipeline": ["pipeline_analyst", "revenue_forecaster"],
+    "pipeline": ["pipeline_analyst", "profitability_analyst"],
     "historical": ["pipeline_analyst"],                   # Historical comparisons (Q3 vs Q4, etc.)
-    "compliance": ["compliance_checker", "quality_control"],
+    "compliance": ["compliance_checker"],
     "tasks": ["task_automation"],
     "priorities": ["pipeline_analyst", "task_automation"],
     "top_leads": ["lead_nurturer"],                       # Specific for "call my top leads" queries
-    "leads": ["lead_nurturer", "pre_approval_specialist"],
-    "documents": ["document_tracker", "closing_coordinator"],
-    "rates": ["rate_advisor", "secondary_market"],
+    "leads": ["lead_nurturer"],
+    "documents": ["document_tracker"],
+    "rates": ["rate_advisor"],
     "schedule": ["smart_scheduler"],
     "sla": ["sla_tracker"],
     "calls": ["voice_os", "ai_receptionist"],
@@ -166,73 +166,73 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "reports": ["reporting_engine"],
     "billing": ["subscription_manager"],
     "team": ["team_coach"],
-    "coaching": ["team_coach", "training_specialist"],
-    "customer": ["customer_intelligence", "borrower_concierge"],
-    "integrations": ["integrations", "migration_assistant"],
-    "operations": ["ops_manager"],
-    "profit": ["profitability_analyst", "pricing_strategist"],
+    "coaching": ["team_coach"],
+    "customer": ["customer_intelligence"],
+    "integrations": ["integrations"],
+    "operations": ["pipeline_analyst"],
+    "profit": ["profitability_analyst"],
     "notifications": ["notification_center"],
     "onboarding": ["onboarding_assistant"],
 
     # Revenue & Production intents
-    "revenue": ["revenue_forecaster", "profitability_analyst"],
-    "pricing": ["pricing_strategist", "rate_advisor"],
-    "closing": ["closing_coordinator", "document_tracker"],
-    "structuring": ["loan_structuring", "pricing_strategist"],
+    "revenue": ["profitability_analyst"],
+    "pricing": ["profitability_analyst", "rate_advisor"],
+    "closing": ["document_tracker"],
+    "structuring": ["refinance_advisor", "profitability_analyst"],
 
     # Borrower Experience intents
-    "borrower": ["borrower_concierge", "pre_approval_specialist"],
-    "pre_approval": ["pre_approval_specialist"],
-    "credit_repair": ["credit_repair_advisor"],
-    "down_payment": ["down_payment_advisor"],
-    "post_closing": ["post_closing_care", "review_manager"],
+    "borrower": ["customer_intelligence"],
+    "pre_approval": ["lead_nurturer"],
+    "credit_repair": ["credit_monitor"],
+    "down_payment": ["refinance_advisor"],
+    "post_closing": ["customer_intelligence"],
 
-    # Risk & Fraud intents
-    "fraud": ["fraud_detector"],
-    "risk": ["risk_assessor", "quality_control"],
-    "qc": ["quality_control", "compliance_checker"],
-    "turn_down": ["turn_down_specialist"],
+    # Risk & Compliance intents
+    "fraud": ["compliance_checker"],
+    "risk": ["compliance_checker"],
+    "qc": ["compliance_checker"],
+    "turn_down": ["compliance_checker"],
 
     # Marketing & Content intents
-    "content": ["content_creator", "social_media_manager"],
-    "social_media": ["social_media_manager"],
-    "market": ["market_analyst"],
-    "campaign": ["campaign_manager"],
-    "reviews": ["review_manager"],
+    "content": ["email_intelligence"],
+    "social_media": ["email_intelligence"],
+    "market": ["pipeline_analyst"],
+    "campaign": ["email_intelligence"],
+    "reviews": ["customer_intelligence"],
 
     # HR & Workforce intents
-    "recruiting": ["recruiter"],
-    "training": ["training_specialist"],
-    "performance": ["performance_manager", "team_coach"],
+    "recruiting": ["team_coach"],
+    "training": ["team_coach"],
+    "performance": ["team_coach"],
 
     # Partner & Referral intents
-    "referral": ["referral_partner_manager"],
-    "title": ["title_vendor_manager"],
-    "appraisal": ["appraiser_coordinator"],
-    "insurance": ["insurance_coordinator"],
+    "referral": ["lead_nurturer"],
+    "title": ["document_tracker"],
+    "appraisal": ["document_tracker"],
+    "insurance": ["document_tracker"],
 
     # Operations intents
-    "warehouse": ["warehouse_manager"],
-    "shipping": ["shipping_coordinator"],
-    "secondary": ["secondary_market", "rate_advisor"],
-    "servicing": ["servicing_transfer"],
-    "investor": ["investor_relations"],
+    "warehouse": ["pipeline_analyst"],
+    "shipping": ["pipeline_analyst"],
+    "secondary": ["rate_advisor"],
+    "servicing": ["pipeline_analyst"],
+    "investor": ["profitability_analyst"],
 
     # Platform intents
-    "system_health": ["system_health_monitor"],
-    "data_quality": ["data_quality_manager"],
-    "migration": ["migration_assistant"],
+    "system_health": ["data_quality"],
+    "data_quality": ["data_quality"],
+    "migration": ["integrations"],
 
     # Specialty Lending intents
-    "va_loan": ["va_loan_specialist"],
-    "fha_loan": ["fha_loan_specialist"],
-    "jumbo": ["jumbo_specialist"],
-    "reverse_mortgage": ["reverse_mortgage_advisor"],
-    "construction": ["construction_loan_advisor"],
-    "commercial": ["commercial_bridge"],
+    "va_loan": ["refinance_advisor"],
+    "fha_loan": ["refinance_advisor"],
+    "jumbo": ["refinance_advisor"],
+    "reverse_mortgage": ["refinance_advisor"],
+    "construction": ["refinance_advisor"],
+    "commercial": ["refinance_advisor"],
 
     # Compound & fallback
-    "compound": ["pipeline_analyst", "lead_nurturer", "smart_scheduler", "email_intelligence", "voice_os", "task_automation", "closing_coordinator"],
+    "compound": ["pipeline_analyst", "lead_nurturer", "smart_scheduler", "email_intelligence", "voice_os", "task_automation", "document_tracker"],
     "general": ["pipeline_analyst", "task_automation"],  # Default
 }
 

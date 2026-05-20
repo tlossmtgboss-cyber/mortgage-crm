@@ -781,14 +781,14 @@ def get_best_practices(
     # Activity patterns
     activity_patterns = execute_query("""
         SELECT
-            activity_type,
+            la.type as activity_type,
             COUNT(*) / COUNT(DISTINCT l.loan_officer_id) as avg_per_lo,
-            AVG(CASE WHEN outcome = 'contacted' THEN 1 ELSE 0 END) * 100 as contact_rate
-        FROM lead_activities la
+            AVG(CASE WHEN la.sentiment = 'positive' THEN 1 ELSE 0 END) * 100 as contact_rate
+        FROM activities la
         JOIN loans l ON l.loan_officer_id = la.user_id
         WHERE l.loan_officer_id = ANY(:top_ids)
             AND la.created_at >= CURRENT_DATE - 90
-        GROUP BY activity_type
+        GROUP BY la.type
         ORDER BY avg_per_lo DESC
     """, {"top_ids": top_ids})
 
@@ -797,15 +797,15 @@ def get_best_practices(
         SELECT
             attempt_number,
             COUNT(*) as attempts,
-            AVG(CASE WHEN outcome = 'contacted' THEN 1 ELSE 0 END) * 100 as success_rate
+            AVG(CASE WHEN la.sentiment = 'positive' THEN 1 ELSE 0 END) * 100 as success_rate
         FROM (
             SELECT
                 la.*,
                 ROW_NUMBER() OVER (PARTITION BY la.lead_id ORDER BY la.created_at) as attempt_number
-            FROM lead_activities la
+            FROM activities la
             JOIN loans l ON l.loan_officer_id = la.user_id
             WHERE l.loan_officer_id = ANY(:top_ids)
-                AND la.activity_type IN ('call', 'email', 'sms')
+                AND la.type IN ('call', 'email', 'sms')
         ) numbered
         GROUP BY attempt_number
         ORDER BY attempt_number
