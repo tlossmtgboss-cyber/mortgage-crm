@@ -151,6 +151,27 @@ def handle_inbound_sms(
         except Exception as e:
             logger.warning("Lead extraction failed for phone=%s: %s", phone_number, e)
 
+    # Check if conversation has reached a scheduling decision
+    if organization_id and auto_responded and is_active_conversation:
+        try:
+            from services.sms_ai_responder import extract_conversation_intent
+            intent = extract_conversation_intent(db, phone_number, organization_id)
+            if intent.get("action") == "schedule" and intent.get("time_description"):
+                _schedule_appointment_from_sms(
+                    db, phone_number, organization_id, assigned_user_id,
+                    contact_name=intent.get("name") or contact_name,
+                    time_description=intent["time_description"],
+                    lead_id=lead_id,
+                )
+            elif intent.get("action") == "call_now":
+                _notify_immediate_callback(
+                    db, phone_number, organization_id, assigned_user_id,
+                    contact_name=intent.get("name") or contact_name,
+                    lead_id=lead_id,
+                )
+        except Exception as e:
+            logger.warning("Scheduling intent handling failed for phone=%s: %s", phone_number, e)
+
     db.commit()
 
     if not auto_responded and assigned_user_id:
@@ -478,3 +499,180 @@ def _try_create_lead_from_conversation(
         )
     except Exception as e:
         logger.warning("Failed to create lead from SMS conversation: %s", e)
+
+
+def _schedule_appointment_from_sms(
+    db: Session,
+    phone_number: str,
+    organization_id: int,
+    assigned_user_id: Optional[int],
+    contact_name: Optional[str] = None,
+    time_description: Optional[str] = None,
+    lead_id: Optional[int] = None,
+) -> None:
+    """Parse a natural-language time and create a calendar appointment."""
+    from dateutil import parser as dateutil_parser
+    import pytz
+
+    if not time_description or not assigned_user_id:
+        return
+
+    # Resolve lead_id if we don't have one
+    if not lead_id:
+        row = db.execute(
+            text("SELECT id FROM leads WHERE phone = :phone AND organization_id = :oid LIMIT 1"),
+            {"phone": phone_number, "oid": organization_id},
+        ).fetchone()
+        if row:
+            lead_id = row.id
+
+    # Use LLM to parse the natural-language time into an ISO datetime
+    eastern = pytz.timezone("America/New_York")
+    now_eastern = datetime.now(eastern)
+    try:
+        from services.llm_gateway import llm_gateway
+        parse_result = llm_gateway.complete_sync(
+            intent="calls",
+            system_prompt=(
+                "Convert this scheduling text to an ISO 8601 datetime. "
+                f"The current date/time is {now_eastern.strftime('%Y-%m-%d %H:%M %A')} Eastern. "
+                "Reply with ONLY the datetime in format YYYY-MM-DDTHH:MM:00, nothing else. "
+                "If the time is ambiguous (e.g. 'morning'), pick a reasonable default (10:00 AM for morning, 2:00 PM for afternoon). "
+                "If you truly cannot determine a date/time, reply with NONE."
+            ),
+            messages=[{"role": "user", "content": time_description}],
+            max_tokens_override=30,
+            temperature_override=0.0,
+        )
+        raw = parse_result.text.strip()
+        if not raw or raw.upper() == "NONE":
+            logger.info("[SMS Schedule] Could not parse time: %r", time_description)
+            return
+        scheduled_start = dateutil_parser.isoparse(raw)
+    except Exception as e:
+        logger.warning("[SMS Schedule] Time parsing failed for %r: %s", time_description, e)
+        return
+
+    # Make timezone-aware in Eastern, then convert to UTC for storage
+    if scheduled_start.tzinfo is None:
+        scheduled_start = eastern.localize(scheduled_start)
+    scheduled_start_utc = scheduled_start.astimezone(pytz.utc)
+    scheduled_end_utc = scheduled_start_utc + __import__("datetime").timedelta(minutes=15)
+
+    # Don't schedule in the past
+    if scheduled_start_utc < datetime.now(timezone.utc):
+        logger.info("[SMS Schedule] Parsed time is in the past: %s", scheduled_start_utc)
+        return
+
+    # Check for duplicate — don't double-book same phone+time
+    dup = db.execute(
+        text("""
+            SELECT id FROM scheduler_appointments
+            WHERE organization_id = :oid AND attendee_phone = :phone
+              AND scheduled_start = :start AND status NOT IN ('cancelled', 'no_show')
+            LIMIT 1
+        """),
+        {"oid": organization_id, "phone": phone_number, "start": scheduled_start_utc.replace(tzinfo=None)},
+    ).fetchone()
+    if dup:
+        logger.info("[SMS Schedule] Duplicate appointment exists for phone=%s at %s", phone_number, scheduled_start_utc)
+        return
+
+    now = datetime.now(timezone.utc)
+    display_name = contact_name or phone_number
+    try:
+        db.execute(
+            text("""
+                INSERT INTO scheduler_appointments (
+                    organization_id, assigned_user_id, lead_id,
+                    title, description, meeting_type, meeting_mode,
+                    scheduled_start, scheduled_end, duration_minutes,
+                    timezone, attendee_name, attendee_phone,
+                    status, status_changed_at, booked_by_ai,
+                    ai_booking_context, external_source,
+                    created_at, updated_at
+                ) VALUES (
+                    :oid, :uid, :lid,
+                    :title, :desc, 'consultation', 'phone',
+                    :start, :end, 15,
+                    'America/New_York', :name, :phone,
+                    'booked', :now, true,
+                    :context, 'sms_auto_responder',
+                    :now, :now
+                )
+            """),
+            {
+                "oid": organization_id,
+                "uid": assigned_user_id,
+                "lid": lead_id,
+                "title": f"Call with {display_name}",
+                "desc": f"Scheduled via SMS conversation. Borrower requested: {time_description}",
+                "start": scheduled_start_utc.replace(tzinfo=None),
+                "end": scheduled_end_utc.replace(tzinfo=None),
+                "name": display_name,
+                "phone": phone_number,
+                "now": now,
+                "context": json.dumps({"source": "sms_intake", "time_description": time_description}),
+            },
+        )
+        db.flush()
+        logger.info(
+            "[SMS Schedule] Appointment created for %s at %s (org=%s)",
+            display_name, scheduled_start_utc.isoformat(), organization_id,
+        )
+    except Exception as e:
+        logger.warning("[SMS Schedule] Failed to create appointment: %s", e)
+        return
+
+    # Notify the LO about the new appointment
+    try:
+        from services.push_notification_service import PushNotificationService
+        push_svc = PushNotificationService()
+        time_str = scheduled_start.strftime("%-I:%M %p on %b %-d")
+        push_svc.send_to_user(
+            db,
+            user_id=assigned_user_id,
+            title=f"New Call Scheduled — {display_name}",
+            body=f"Aria booked a call for {time_str} via SMS",
+            notification_type="appointment_booked",
+            extra_data={"phone": phone_number, "lead_id": lead_id},
+        )
+    except Exception as e:
+        logger.warning("[SMS Schedule] Push notification failed: %s", e)
+
+
+def _notify_immediate_callback(
+    db: Session,
+    phone_number: str,
+    organization_id: int,
+    assigned_user_id: Optional[int],
+    contact_name: Optional[str] = None,
+    lead_id: Optional[int] = None,
+) -> None:
+    """Send a high-priority push notification telling the LO to call this person now."""
+    if not assigned_user_id:
+        return
+
+    display_name = contact_name or phone_number
+    try:
+        from services.push_notification_service import PushNotificationService
+        push_svc = PushNotificationService()
+        push_svc.send_to_user(
+            db,
+            user_id=assigned_user_id,
+            title=f"Call Now — {display_name}",
+            body=f"{display_name} is requesting a call right now",
+            notification_type="sms_callback_request",
+            extra_data={
+                "phone": phone_number,
+                "lead_id": lead_id,
+                "action": "call_now",
+                "priority": "urgent",
+            },
+        )
+        logger.info(
+            "[SMS Callback] Sent urgent callback notification for %s to user=%s org=%s",
+            phone_number, assigned_user_id, organization_id,
+        )
+    except Exception as e:
+        logger.warning("[SMS Callback] Push notification failed for phone=%s: %s", phone_number, e)

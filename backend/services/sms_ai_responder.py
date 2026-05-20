@@ -21,8 +21,9 @@ SYSTEM_PROMPT = (
     "INTAKE FLOW — follow this when texting an unknown or new contact:\n"
     "1. Greet warmly, acknowledge their message, and ask for their FULL NAME.\n"
     "2. Once you have a name, ask for their EMAIL ADDRESS so you can send next steps.\n"
-    "3. Once you have name + email, ask when they'd be available for a quick call with {lo_name}.\n"
-    "4. Once you have name + email + preferred time, confirm everything and say {lo_name} will reach out.\n\n"
+    "3. Once you have name + email, ask: \"Would you like {lo_name} to call you now, or would you prefer to schedule a time?\"\n"
+    "4. If they want a call NOW, confirm: \"Great, {lo_name} will call you shortly!\"\n"
+    "5. If they give a specific day/time, confirm it: \"Perfect, I've got you down for [time]. {lo_name} will call then!\"\n\n"
     "If the conversation history already contains their name/email, skip those steps.\n"
     "If they ask a question, answer it briefly and then continue collecting missing info.\n"
     "Always be conversational — you're texting, not writing an email."
@@ -532,3 +533,57 @@ def _get_similar_patterns(db: Session, category: str, organization_id: int, limi
     ).mappings().all()
 
     return [dict(r) for r in rows]
+
+
+def extract_conversation_intent(db: Session, phone_number: str, organization_id: int) -> dict:
+    """Analyze SMS conversation to extract structured data: name, email, and scheduling intent."""
+    from telephony.phone_utils import normalize_phone
+    phone_number = normalize_phone(phone_number)
+
+    messages = db.execute(
+        text("""
+            SELECT direction, body, created_at FROM sms_panel_messages
+            WHERE phone = :phone AND organization_id = :oid
+            ORDER BY created_at ASC LIMIT 20
+        """),
+        {"phone": phone_number, "oid": organization_id},
+    ).mappings().all()
+
+    if len(messages) < 2:
+        return {"action": "gathering", "name": None, "email": None, "time": None}
+
+    transcript = "\n".join(
+        f"{'Borrower' if m['direction'] == 'inbound' else 'Aria'}: {m['body'] or ''}"
+        for m in messages
+    )
+
+    try:
+        from services.llm_gateway import llm_gateway
+        result = llm_gateway.complete_sync(
+            intent="calls",
+            system_prompt=(
+                "Analyze this SMS conversation and extract structured info. "
+                "Reply with ONLY valid JSON, no other text.\n"
+                "Fields:\n"
+                '- "name": full name if the borrower gave it, else null\n'
+                '- "email": email address if given, else null\n'
+                '- "action": one of "call_now", "schedule", or "gathering"\n'
+                '  - "call_now" = borrower wants to be called immediately/ASAP/right now\n'
+                '  - "schedule" = borrower gave a specific day or time for a call\n'
+                '  - "gathering" = still collecting info, no scheduling decision yet\n'
+                '- "time_description": if action is "schedule", the raw time text they gave (e.g. "tomorrow at 2pm", "Thursday morning"), else null\n'
+            ),
+            messages=[{"role": "user", "content": transcript[:1500]}],
+            max_tokens_override=200,
+            temperature_override=0.0,
+        )
+        parsed = json.loads(result.text.strip())
+        return {
+            "action": parsed.get("action", "gathering"),
+            "name": parsed.get("name"),
+            "email": parsed.get("email"),
+            "time_description": parsed.get("time_description"),
+        }
+    except Exception as e:
+        logger.warning("Conversation intent extraction failed: %s", e)
+        return {"action": "gathering", "name": None, "email": None, "time_description": None}
