@@ -39,6 +39,27 @@ export function usePOSApplication(loanId?: number) {
   // Track whether there are unsaved changes (pending debounce or active save).
   const dirtyRef = useRef(false);
 
+  // ---------- one-time sweep of legacy draft backups ----------
+  //
+  // Earlier revisions of this hook wrote a JSON copy of every section's
+  // form data to localStorage under `pos_draft_<appId>_<sectionKey>` as a
+  // network-failure recovery net. For the `personal` section that included
+  // SSN and DOB, leaving plaintext PII sitting in localStorage indefinitely.
+  // No code path consumes those backups, so we no longer write them (see
+  // saveSection below) and we proactively purge any stragglers on mount.
+  useEffect(() => {
+    try {
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('pos_draft_')) toRemove.push(k);
+      }
+      toRemove.forEach(k => {
+        try { localStorage.removeItem(k); } catch { /* ignore */ }
+      });
+    } catch { /* storage disabled — fine */ }
+  }, []);
+
   // ---------- beforeunload guard ----------
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -122,13 +143,13 @@ export function usePOSApplication(loanId?: number) {
   const saveSection = useCallback(
     async (sectionKey: SectionKey, body: SectionUpdateRequest) => {
       if (!application) return;
-      // Back up to localStorage before network save so data survives failures.
-      try {
-        localStorage.setItem(
-          `pos_draft_${application.id}_${sectionKey}`,
-          JSON.stringify(body.data),
-        );
-      } catch (_) { /* quota exceeded — best effort */ }
+      // SECURITY: do NOT write body.data to localStorage as a network-failure
+      // backup. The `personal` section includes SSN and DOB (see PII_KEYS in
+      // services/pos/application_service.py), and stashing those in
+      // localStorage leaves plaintext PII readable by any XSS payload on
+      // this origin. No consumer reads `pos_draft_*` keys today, so the
+      // backup was dead weight — the autosave debounce + beforeunload guard
+      // are sufficient. The mount-time sweep above removes any stragglers.
       setSaveState('saving');
       try {
         const section = await posApi.updateSection(application.id, sectionKey, body);
@@ -138,8 +159,6 @@ export function usePOSApplication(loanId?: number) {
         }
         dirtyRef.current = false;
         setSaveState('saved');
-        // Clear draft backup on successful save.
-        try { localStorage.removeItem(`pos_draft_${application.id}_${sectionKey}`); } catch {}
         setTimeout(() => setSaveState(prev => (prev === 'saved' ? 'idle' : prev)), 2000);
         return section;
       } catch (e) {

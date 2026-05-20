@@ -10,6 +10,40 @@ import React from 'react';
 import type { ApplicationResponse, SectionResponse } from '../../types';
 import type { ApplicationSubmitRequest, ApplicationSubmitResponse } from '../../types';
 
+// ---------- Currency helpers ----------
+//
+// Money is stored as a canonical decimal string (e.g. "250000" or "250000.10")
+// — never as a JS `number`. Doubles silently drop trailing zeros and drift
+// under arithmetic, both of which break TRID tolerance math downstream. The
+// helpers below convert between the canonical store representation and the
+// comma-formatted display string used by the input. Use them ONLY at the
+// input boundary.
+
+export function decimalToDisplay(s: string | number | null | undefined): string {
+  if (s === null || s === undefined || s === '') return '';
+  const raw = String(s);
+  // Strip anything that isn't a digit, dot, or leading minus.
+  const cleaned = raw.replace(/[^\d.]/g, '');
+  if (!cleaned) return '';
+  const [intPart, fracPart] = cleaned.split('.', 2);
+  const grouped = (intPart || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fracPart !== undefined ? `${grouped}.${fracPart}` : grouped;
+}
+
+export function displayToDecimal(s: string): string {
+  if (s === null || s === undefined) return '';
+  // Strip thousands separators / whitespace; keep digits and the decimal point.
+  const cleaned = String(s).replace(/[^\d.]/g, '');
+  if (!cleaned) return '';
+  // Collapse any accidental multi-dot inputs to a single decimal point.
+  const firstDot = cleaned.indexOf('.');
+  if (firstDot === -1) return cleaned;
+  return (
+    cleaned.slice(0, firstDot + 1) +
+    cleaned.slice(firstDot + 1).replace(/\./g, '')
+  );
+}
+
 export interface IntakeData {
   is_veteran: boolean | null;
   loan_purpose: 'purchase' | 'refinance' | null;
@@ -61,7 +95,17 @@ export const TextField: React.FC<FieldProps> = ({
   inputMode,
 }) => {
   const isCurrency = type === 'currency';
-  const inputType = isCurrency ? 'number' : type;
+  // Currency uses a text input so we can render grouped thousands
+  // separators on display. We NEVER coerce currency to Number() — see the
+  // helpers at the top of this file for the rationale.
+  const inputType = isCurrency ? 'text' : type;
+  const resolvedInputMode = inputMode ?? (isCurrency ? 'decimal' : undefined);
+
+  // Value rendered in the input. For currency, format the canonical decimal
+  // string into a display string with commas. For other fields, pass through.
+  const displayValue = isCurrency
+    ? decimalToDisplay(value as string | number | null | undefined)
+    : ((value as string | number | null | undefined) ?? '');
 
   return (
     <div
@@ -77,20 +121,25 @@ export const TextField: React.FC<FieldProps> = ({
           id={`f-${name}`}
           name={name}
           type={inputType}
-          inputMode={inputMode as any}
+          inputMode={resolvedInputMode as any}
           className="urla-field__input"
-          value={(value as string | number) ?? ''}
+          value={displayValue as string | number}
           placeholder={placeholder}
-          onChange={e =>
-            onChange(
-              name,
-              type === 'number' || isCurrency
-                ? e.target.value === ''
-                  ? null
-                  : Number(e.target.value)
-                : e.target.value,
-            )
-          }
+          onChange={e => {
+            if (isCurrency) {
+              // Store the canonical decimal string. Never Number().
+              onChange(name, displayToDecimal(e.target.value));
+            } else if (type === 'number') {
+              // Plain numeric (non-money) fields like counts / years still
+              // use JS number — losing trailing zeros is fine for integers.
+              onChange(
+                name,
+                e.target.value === '' ? null : Number(e.target.value),
+              );
+            } else {
+              onChange(name, e.target.value);
+            }
+          }}
         />
       </div>
       {helpText && <p className="urla-field__help">{helpText}</p>}

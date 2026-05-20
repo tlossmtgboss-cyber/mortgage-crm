@@ -1,7 +1,20 @@
 // API client for the POS feature.
 //
 // Assumes a PURL token is set via setPurlToken() or present in
-// localStorage under key "perennia_purl_token".
+// sessionStorage under key "perennia_purl_token".
+//
+// SECURITY: The PURL token is stored in sessionStorage (not localStorage)
+// so it cannot be exfiltrated by an XSS payload that persists across tabs
+// or page reloads of other origins. Borrower sessions are short-lived
+// (the URLA flow typically takes < 1 hour), so the per-tab inconvenience
+// is acceptable. If the borrower opted into "Remember this device" during
+// verify, the httpOnly `pos_device_token` cookie set by the verify endpoint
+// restores their session on next login — so long-lived trust is still
+// supported without keeping a JS-readable bearer token sitting around.
+//
+// One-time migration: if a token is found under the legacy `localStorage`
+// key, it is copied into `sessionStorage` and removed from `localStorage`
+// so previously-issued tokens are not lost.
 
 import type {
   ApplicationResponse,
@@ -40,10 +53,28 @@ export function setPurlToken(token: string | null): void {
   _purlToken = token;
 }
 
+const PURL_TOKEN_KEY = 'perennia_purl_token';
+
 function getPurlToken(): string {
   if (_purlToken) return _purlToken;
   if (typeof window === 'undefined') return '';
-  return window.localStorage?.getItem('perennia_purl_token') || '';
+  // Prefer sessionStorage (XSS-resistant for cross-tab persistence).
+  const fromSession = window.sessionStorage?.getItem(PURL_TOKEN_KEY);
+  if (fromSession) return fromSession;
+  // One-time migration: legacy tokens in localStorage are moved into
+  // sessionStorage and removed from localStorage so we don't keep an
+  // XSS-readable copy lying around. Subsequent reads will hit sessionStorage.
+  try {
+    const fromLocal = window.localStorage?.getItem(PURL_TOKEN_KEY);
+    if (fromLocal) {
+      window.sessionStorage?.setItem(PURL_TOKEN_KEY, fromLocal);
+      window.localStorage?.removeItem(PURL_TOKEN_KEY);
+      return fromLocal;
+    }
+  } catch {
+    // storage disabled — best effort
+  }
+  return '';
 }
 
 class APIError extends Error {
