@@ -512,6 +512,43 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         meeting_name: Optional[str] = None
         call_duration_seconds: Optional[int] = None
 
+    def _ensure_email_drafts_table(db_session: Session):
+        """Create email_drafts table if it doesn't exist. Called as recovery on first query failure."""
+        try:
+            db_session.execute(text("""
+                CREATE TABLE IF NOT EXISTS email_drafts (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+                    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+                    loan_id INTEGER REFERENCES loans(id) ON DELETE SET NULL,
+                    recipient_email VARCHAR(255),
+                    recipient_name VARCHAR(255),
+                    cc_emails JSONB DEFAULT '[]',
+                    subject VARCHAR(500),
+                    body_html TEXT,
+                    body_text TEXT,
+                    source_type VARCHAR(50),
+                    source_id VARCHAR(255),
+                    recording_url TEXT,
+                    call_summary TEXT,
+                    action_items JSONB DEFAULT '[]',
+                    status VARCHAR(50) DEFAULT 'draft',
+                    sent_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db_session.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_user ON email_drafts(user_id)"))
+            db_session.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_lead ON email_drafts(lead_id)"))
+            db_session.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_status ON email_drafts(status)"))
+            db_session.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_org ON email_drafts(organization_id)"))
+            db_session.commit()
+            logger.info("email_drafts table created successfully")
+        except Exception as table_err:
+            logger.error(f"Failed to create email_drafts table: {table_err}")
+            db_session.rollback()
+
     @app.post("/api/v1/email-drafts/setup-table")
     async def setup_email_drafts_table(
         db: Session = Depends(get_db),
@@ -596,6 +633,8 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             logger.error(f"Error creating email draft: {e}")
             db.rollback()
+            # Table may not exist — try to create it so the next attempt works
+            _ensure_email_drafts_table(db)
             raise HTTPException(status_code=500, detail="Internal server error")
 
     @app.get("/api/v1/email-drafts")
@@ -648,7 +687,11 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             }
         except Exception as e:
             logger.error(f"Error fetching email drafts: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            db.rollback()
+            # Table may not exist yet — try to create it for future requests
+            _ensure_email_drafts_table(db)
+            # Return empty list instead of 500
+            return {"drafts": [], "total": 0}
 
     @app.get("/api/v1/email-drafts/{draft_id}")
     async def get_email_draft(
