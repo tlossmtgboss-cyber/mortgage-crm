@@ -1114,6 +1114,69 @@ def _run_critical_schema_migrations():
                 fail_count += 1
                 logger.error(f"Table creation FAILED: {e}", exc_info=True)
 
+        # --- SMS AI confidence: align model columns with SQL migration schema ---
+        sms_conf_alters = [
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS total_recommendations INTEGER DEFAULT 0",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS confidence_score FLOAT DEFAULT 20.0",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS auto_respond_threshold FLOAT DEFAULT 80.0",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()",
+            "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS user_id INTEGER",
+        ]
+        for alter in sms_conf_alters:
+            try:
+                db.execute(sa_text(alter))
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        # Copy data from old column names if they exist
+        try:
+            db.execute(sa_text("""
+                UPDATE sms_ai_confidence
+                SET total_recommendations = total_suggestions
+                WHERE total_recommendations = 0 AND total_suggestions > 0
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        # Unique index with COALESCE for nullable user_id (matches engine UPSERT)
+        try:
+            db.execute(sa_text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_sms_ai_conf_org_user_cat
+                ON sms_ai_confidence (organization_id, COALESCE(user_id, 0), category)
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        # --- SMS response patterns: align model columns with table schema ---
+        sms_patterns_alters = [
+            "ALTER TABLE sms_response_patterns ADD COLUMN IF NOT EXISTS times_used INTEGER DEFAULT 1",
+            "ALTER TABLE sms_response_patterns ADD COLUMN IF NOT EXISTS times_accepted INTEGER DEFAULT 0",
+            "ALTER TABLE sms_response_patterns ADD COLUMN IF NOT EXISTS times_edited INTEGER DEFAULT 0",
+            "ALTER TABLE sms_response_patterns ADD COLUMN IF NOT EXISTS times_rejected INTEGER DEFAULT 0",
+            "ALTER TABLE sms_response_patterns ADD COLUMN IF NOT EXISTS message_keywords JSONB",
+            "ALTER TABLE sms_response_patterns ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ",
+            "ALTER TABLE sms_response_patterns ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER",
+        ]
+        for alter in sms_patterns_alters:
+            try:
+                db.execute(sa_text(alter))
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        # Unique constraint for ON CONFLICT UPSERT in pattern recording
+        try:
+            db.execute(sa_text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_sms_patterns_org_cat_template
+                ON sms_response_patterns (organization_id, category, md5(response_template))
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
             logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")

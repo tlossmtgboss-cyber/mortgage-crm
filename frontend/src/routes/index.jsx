@@ -300,6 +300,7 @@ const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 const MemoryStaging = lazyRetry(() => import('../pages/MemoryStaging'));
 const MissionControl = lazyRetry(() => import('../pages/MissionControl'));
+const ApprovalQueuePage = lazyRetry(() => import('../pages/ApprovalQueuePage'));
 
 // Settings pages
 const EmailIntegrationSettings = lazyRetry(() => import('../pages/EmailIntegrationSettings'));
@@ -694,6 +695,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/agent/:agentId/settings" path="/agent/:agentId/settings" element={withMainLayout(AgentGovernanceSettings)} />,
     <Route key="/agent-gym" path="/agent-gym" element={withMainLayout(AgentGym)} />,
     <Route key="/mission-control" path="/mission-control" element={withMainLayout(MissionControl)} />,
+    <Route key="/approval-queue" path="/approval-queue" element={withMainLayout(ApprovalQueuePage)} />,
 
     // Accounting
     <Route key="/accounting/accounts" path="/accounting/accounts" element={withMainLayout(ChartOfAccounts)} />,

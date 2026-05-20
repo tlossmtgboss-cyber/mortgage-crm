@@ -709,7 +709,16 @@ class ComplianceWatchdogAgent:
                 target_entity="loan",
                 target_id=loan.id,
                 description=f"{alert_type}: {title}",
-                payload={"severity": severity, "alert_type": alert_type},
+                payload={
+                    "loan_id": loan.id,
+                    "severity": severity,
+                    "alert_type": alert_type,
+                    "title": title,
+                    "description": message,
+                    "status": "open",
+                    "deadline_date": deadline_date.isoformat() if deadline_date else None,
+                },
+                notify_user_id=loan.loan_officer_id,
             )
         else:
             self.db.add(alert)

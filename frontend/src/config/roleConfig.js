@@ -325,6 +325,13 @@ export const NAVIGATION_ITEMS = {
     module: 'base',
     adminOnly: true
   },
+  approvalQueue: {
+    path: '/approval-queue',
+    label: 'Approval Queue',
+    matchPaths: ['/approval-queue'],
+    module: 'base',
+    adminOnly: true
+  },
   // Admin-only navigation items
   adminPanel: {
     path: '/admin',
@@ -372,6 +379,7 @@ export const ROLE_NAVIGATION = {
     'missionControl',       // Mission Control: AI agent health & metrics
     'agentDashboard',       // Agent Dashboard: 22 AI agents overview
     'agentGym',             // Agent Gym: Agent training & testing
+    'approvalQueue',        // Approval Queue: Review AI-proposed actions
     'capacity',
     'productionPredictor',
     'dealAlerts'
@@ -399,7 +407,8 @@ export const ROLE_NAVIGATION = {
     'opsManager',           // Ops Manager: Pipeline health & impediments
     'missionControl',       // Mission Control: AI agent health & metrics
     'agentDashboard',       // Agent Dashboard: 22 AI agents overview
-    'agentGym'              // Agent Gym: Agent training & testing
+    'agentGym',             // Agent Gym: Agent training & testing
+    'approvalQueue'         // Approval Queue: Review AI-proposed actions
   ],
 
   // Loan Officer - Full sales navigation
@@ -922,7 +931,7 @@ export const MASTER_ADMIN_NAVIGATION = [
     key: 'management',
     label: 'Management',
     path: '/accounting',
-    matchPaths: ['/master-manager', '/usage-intelligence', '/voice', '/dialer', '/conversation-intelligence', '/mission-control', '/agents', '/agent-gym'],
+    matchPaths: ['/master-manager', '/usage-intelligence', '/voice', '/dialer', '/conversation-intelligence', '/mission-control', '/agents', '/agent-gym', '/approval-queue'],
     children: [
       { path: '/master-manager', label: 'Capacity', icon: 'fa-chart-pie' },
       { path: '/usage-intelligence', label: 'Usage Intelligence', icon: 'fa-chart-bar' },
@@ -931,6 +940,7 @@ export const MASTER_ADMIN_NAVIGATION = [
         icon: 'fa-brain',
         children: [
           { path: '/mission-control', label: 'Mission Control' },
+          { path: '/approval-queue', label: 'Approval Queue' },
           { path: '/agents', label: 'Agent Dashboard' },
           { path: '/agent-gym', label: 'Agent Gym' },
         ]

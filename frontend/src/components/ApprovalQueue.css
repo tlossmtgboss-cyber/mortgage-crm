@@ -1,0 +1,433 @@
+/* =========================================================
+   ApprovalQueue — styles matching MissionControl patterns
+   ========================================================= */
+
+.approval-queue {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.approval-queue.embedded {
+  padding: 0;
+}
+
+/* Loading / Error states */
+.aq-loading,
+.aq-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: 12px;
+  color: #6b7280;
+}
+
+.aq-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: aq-spin 0.7s linear infinite;
+}
+
+@keyframes aq-spin {
+  to { transform: rotate(360deg); }
+}
+
+.aq-error {
+  color: #dc2626;
+}
+
+/* Page header (standalone page only) */
+.aq-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.aq-page-header h1 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.aq-page-header p {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.aq-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.aq-last-updated {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* Buttons */
+.aq-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+}
+
+.aq-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.aq-btn-refresh,
+.aq-btn-retry {
+  background: #f3f4f6;
+  color: #374151;
+}
+.aq-btn-refresh:hover:not(:disabled),
+.aq-btn-retry:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.aq-btn-approve {
+  background: #059669;
+  color: #fff;
+}
+.aq-btn-approve:hover:not(:disabled) {
+  background: #047857;
+}
+
+.aq-btn-reject {
+  background: #dc2626;
+  color: #fff;
+}
+.aq-btn-reject:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+/* Summary strip */
+.aq-summary-strip {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.aq-summary-card {
+  flex: 1;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  text-align: center;
+}
+
+.aq-summary-card.aq-pending {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.aq-summary-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.aq-summary-label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Graduation section */
+.aq-graduation-section {
+  margin-bottom: 24px;
+}
+
+.aq-graduation-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 12px 0;
+}
+
+.aq-graduation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.aq-graduation-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.aq-graduation-card.level-autonomous {
+  border-left: 3px solid #059669;
+}
+.aq-graduation-card.level-supervised {
+  border-left: 3px solid #f59e0b;
+}
+.aq-graduation-card.level-manual {
+  border-left: 3px solid #6b7280;
+}
+
+.aq-grad-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.aq-grad-type {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.aq-grad-level {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+.aq-grad-level.level-autonomous {
+  background: #d1fae5;
+  color: #065f46;
+}
+.aq-grad-level.level-supervised {
+  background: #fef3c7;
+  color: #92400e;
+}
+.aq-grad-level.level-manual {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.aq-progress-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.aq-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #059669);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.aq-grad-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* Filter bar */
+.aq-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.aq-filter-bar select {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #374151;
+}
+
+/* Empty state */
+.aq-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: #6b7280;
+}
+
+.aq-empty-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #d1fae5;
+  color: #059669;
+  font-size: 28px;
+  border-radius: 50%;
+}
+
+.aq-empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.aq-empty-state p {
+  margin: 0;
+  font-size: 14px;
+  max-width: 420px;
+  margin-inline: auto;
+}
+
+/* Action cards */
+.aq-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.aq-action-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  transition: box-shadow 0.15s;
+}
+
+.aq-action-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.aq-action-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.aq-action-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.aq-action-icon {
+  font-size: 18px;
+}
+
+.aq-action-type {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.aq-action-target {
+  font-size: 12px;
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.aq-action-time {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.aq-action-description {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+/* Payload details */
+.aq-action-payload {
+  margin-bottom: 12px;
+}
+
+.aq-action-payload summary {
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  user-select: none;
+}
+
+.aq-action-payload summary:hover {
+  color: #3b82f6;
+}
+
+.aq-action-payload pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  overflow-x: auto;
+  max-height: 200px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Approve / Reject buttons row */
+.aq-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .approval-queue {
+    padding: 16px;
+  }
+
+  .aq-page-header {
+    flex-direction: column;
+  }
+
+  .aq-summary-strip {
+    flex-direction: column;
+  }
+
+  .aq-graduation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aq-action-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .aq-action-buttons {
+    flex-direction: column;
+  }
+
+  .aq-action-buttons .aq-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

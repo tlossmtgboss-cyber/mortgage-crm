@@ -231,6 +231,16 @@ class DocumentFollowupAgent:
                 "create_notification", lambda n=notif: self.db.add(n),
                 target_entity="loan", target_id=loan.id,
                 description=f"Missing docs notification for {name}",
+                payload={
+                    "user_id": loan.loan_officer_id,
+                    "loan_id": loan.id,
+                    "lead_id": lead.id if lead else None,
+                    "type": "doc_followup",
+                    "title": notif.title,
+                    "message": notif.message,
+                    "link": f"/loans/{loan.id}",
+                },
+                notify_user_id=loan.loan_officer_id,
             )
         else:
             self.db.add(notif)

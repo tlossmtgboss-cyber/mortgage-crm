@@ -200,21 +200,36 @@ def process_user_response(
         logger.warning("Confidence recording failed for task=%s: %s", task_id, e)
 
     try:
-        from services.sms_ai_responder import _get_similar_patterns
         now = datetime.now(timezone.utc)
+        # User-edited responses are the best training signal — they show
+        # what the LO actually wants. Rate them high so they're used as
+        # patterns for future recommendations.
+        rate_map = {
+            "ai_accepted": 1.0,
+            "ai_suggested": 1.0,
+            "ai": 1.0,
+            "auto": 1.0,
+            "ai_edited": 0.85,
+            "manual": 0.75,
+        }
+        rate = rate_map.get(response_source, 0.75)
         db.execute(
             text("""
                 INSERT INTO sms_response_patterns
                     (organization_id, category, response_template, success_rate, times_used, created_at, updated_at)
                 VALUES
                     (:org_id, :category, :template, :rate, 1, :now, :now)
-                ON CONFLICT DO NOTHING
+                ON CONFLICT (organization_id, category, md5(response_template))
+                DO UPDATE SET
+                    times_used = sms_response_patterns.times_used + 1,
+                    success_rate = GREATEST(sms_response_patterns.success_rate, EXCLUDED.success_rate),
+                    updated_at = EXCLUDED.updated_at
             """),
             {
                 "org_id": organization_id,
                 "category": category,
                 "template": response_text[:500],
-                "rate": 1.0 if response_source in ("ai_accepted", "ai_suggested", "ai", "auto") else 0.6 if response_source == "ai_edited" else 0.0,
+                "rate": rate,
                 "now": now,
             },
         )

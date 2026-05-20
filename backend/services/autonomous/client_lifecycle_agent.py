@@ -240,6 +240,14 @@ class ClientLifecycleAgent:
                 "create_activity", lambda a=activity: self.db.add(a),
                 target_entity="loan", target_id=loan.id,
                 description=f"Lifecycle {touch_type} for {lead.first_name or 'client'}",
+                payload={
+                    "type": "note",
+                    "content": message,
+                    "loan_id": loan.id,
+                    "lead_id": lead.id,
+                    "user_id": lo_id,
+                },
+                notify_user_id=lo_id,
             )
         else:
             self.db.add(activity)
@@ -257,6 +265,16 @@ class ClientLifecycleAgent:
                     "create_notification", lambda n=notif: self.db.add(n),
                     target_entity="loan", target_id=loan.id,
                     description=f"Lifecycle touch notification for {borrower}",
+                    payload={
+                        "user_id": lo_id,
+                        "loan_id": loan.id,
+                        "lead_id": lead.id,
+                        "type": "lifecycle_touch",
+                        "title": f"Lifecycle: {touch_type.replace('_', ' ').title()}",
+                        "message": notif.message,
+                        "link": f"/loans/{loan.id}",
+                    },
+                    notify_user_id=lo_id,
                 )
             else:
                 self.db.add(notif)

@@ -341,11 +341,29 @@ class RateAlertAgent:
                     "create_notification", lambda n=notif: self.db.add(n),
                     target_entity="loan", target_id=loan.id,
                     description=title_map.get(alert_type, "Rate Alert"),
+                    payload={
+                        "user_id": lo_id,
+                        "loan_id": loan.id,
+                        "lead_id": lead.id if lead else None,
+                        "type": alert_type,
+                        "title": title_map.get(alert_type, "Rate Alert"),
+                        "message": message,
+                        "link": f"/pipeline/loans/{loan.id}",
+                    },
+                    notify_user_id=lo_id,
                 )
                 self.gateway.propose(
                     "create_activity", lambda a=act: self.db.add(a),
                     target_entity="loan", target_id=loan.id,
                     description=f"Rate alert activity for loan {loan.id}",
+                    payload={
+                        "type": "note",
+                        "content": f"[{self.AGENT_TYPE}] {message}",
+                        "loan_id": loan.id,
+                        "lead_id": lead.id if lead else None,
+                        "user_id": lo_id,
+                    },
+                    notify_user_id=lo_id,
                 )
             else:
                 self.db.add(notif)

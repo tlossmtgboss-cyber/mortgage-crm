@@ -35,7 +35,7 @@ PRIORITY_KEYWORDS = {
     "low": ["hello", "hi", "hey", "thanks", "thank you", "appreciate", "good morning", "good afternoon"],
 }
 
-WELL_UNDERSTOOD_CATEGORIES = {"scheduling", "greeting", "document_request", "follow_up"}
+WELL_UNDERSTOOD_CATEGORIES = {"scheduling", "greeting", "document_request", "follow_up", "question", "rate_inquiry"}
 
 
 def classify_message(inbound_message: str) -> Tuple[str, str]:
@@ -125,10 +125,31 @@ def generate_recommendation(db: Session, task_id: int, organization_id: int) -> 
 
     confidence = min(confidence, 95)
 
+    # Blend in the learned confidence from user feedback history.
+    # As the org accumulates more accept/edit/reject outcomes, the learned
+    # score gradually outweighs the static heuristic.
+    try:
+        from services.sms_confidence_engine import get_confidence
+        learned = get_confidence(db, organization_id, category)
+        learned_score = learned.get("confidence_score", 0)
+        total_recs = learned.get("total_recommendations", 0)
+        if total_recs > 0:
+            # Weight shifts from static→learned as samples grow
+            # At 10 samples: ~33% learned. At 30: ~67%. At 50+: ~80%.
+            import math
+            learned_weight = 1.0 - math.exp(-total_recs / 20.0)
+            confidence = round(confidence * (1 - learned_weight) + learned_score * learned_weight)
+            confidence = max(5, min(95, confidence))
+    except Exception as e:
+        logger.warning("Could not blend learned confidence: %s", e)
+
     pattern_section = ""
     if patterns:
-        examples = "\n".join(f"- \"{p['response_template']}\" (success: {p['success_rate']:.0%})" for p in patterns[:3])
-        pattern_section = f"\n\nSuccessful response templates for {category} messages:\n{examples}"
+        examples = "\n".join(f"- \"{p['response_template']}\"" for p in patterns[:5])
+        pattern_section = (
+            f"\n\nThe loan officer's preferred response style for {category} messages "
+            f"(match their tone, phrasing, and level of warmth):\n{examples}"
+        )
 
     prompt = f"""Inbound SMS from borrower: "{inbound_message}"
 
@@ -137,7 +158,7 @@ Priority: {priority}
 
 {context_prompt}{pattern_section}
 
-Generate a single SMS reply. No quotes, no explanation, just the message text."""
+Generate a single SMS reply matching the loan officer's communication style shown above. No quotes, no explanation, just the message text."""
 
     try:
         from anthropic import Anthropic
@@ -267,10 +288,26 @@ def regenerate_recommendation(db: Session, task_id: int, organization_id: int, f
         confidence += 15
     confidence = min(confidence, 95)
 
+    try:
+        from services.sms_confidence_engine import get_confidence
+        learned = get_confidence(db, organization_id, category)
+        learned_score = learned.get("confidence_score", 0)
+        total_recs = learned.get("total_recommendations", 0)
+        if total_recs > 0:
+            import math
+            learned_weight = 1.0 - math.exp(-total_recs / 20.0)
+            confidence = round(confidence * (1 - learned_weight) + learned_score * learned_weight)
+            confidence = max(5, min(95, confidence))
+    except Exception as e:
+        logger.warning("Could not blend learned confidence for regen: %s", e)
+
     pattern_section = ""
     if patterns:
-        examples = "\n".join(f"- \"{p['response_template']}\" (success: {p['success_rate']:.0%})" for p in patterns[:3])
-        pattern_section = f"\n\nSuccessful response templates for {category} messages:\n{examples}"
+        examples = "\n".join(f"- \"{p['response_template']}\"" for p in patterns[:5])
+        pattern_section = (
+            f"\n\nThe loan officer's preferred response style for {category} messages "
+            f"(match their tone, phrasing, and level of warmth):\n{examples}"
+        )
 
     feedback_section = ""
     if previous_recommendation:
@@ -285,7 +322,7 @@ Priority: {priority}
 
 {context_prompt}{pattern_section}{feedback_section}
 
-Generate a new, improved SMS reply incorporating the feedback. No quotes, no explanation, just the message text."""
+Generate a new, improved SMS reply matching the loan officer's communication style. No quotes, no explanation, just the message text."""
 
     try:
         from anthropic import Anthropic

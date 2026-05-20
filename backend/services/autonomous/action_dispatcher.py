@@ -65,12 +65,28 @@ class ActionDispatcher:
             )
             return False
 
+    @staticmethod
+    def _resolve_assignee(payload: dict) -> str | None:
+        for key in ("assigned_to_id", "lo_id", "assigned", "assigned_to", "owner_id"):
+            val = payload.get(key)
+            if val is not None:
+                return str(val)
+        return None
+
+    @staticmethod
+    def _resolve_user(payload: dict) -> str | None:
+        for key in ("user_id", "lo_id", "uid", "owner_id", "assigned_to_id"):
+            val = payload.get(key)
+            if val is not None:
+                return str(val)
+        return None
+
     def _replay_create_task(self, payload: dict) -> None:
         """Replay a create_task action by inserting into the tasks table."""
         p = {
             "title": payload.get("title", "AI-created task"),
             "description": payload.get("description") or payload.get("desc", ""),
-            "assigned_to_id": payload.get("assigned_to_id") or payload.get("lo_id"),
+            "assigned_to_id": self._resolve_assignee(payload),
             "loan_id": payload.get("loan_id"),
             "lead_id": payload.get("lead_id"),
             "priority": payload.get("priority", "medium"),
@@ -108,7 +124,7 @@ class ActionDispatcher:
     def _replay_create_notification(self, payload: dict) -> None:
         """Replay a create_notification action."""
         p = {
-            "user_id": payload.get("user_id") or payload.get("lo_id"),
+            "user_id": self._resolve_user(payload),
             "org_id": self.org_id,
             "type": payload.get("type", "agent_alert"),
             "title": payload.get("title", "AI Agent Notification"),
@@ -135,7 +151,7 @@ class ActionDispatcher:
             "content": payload.get("content") or payload.get("desc", ""),
             "loan_id": payload.get("loan_id"),
             "lead_id": payload.get("lead_id"),
-            "user_id": payload.get("user_id") or payload.get("lo_id"),
+            "user_id": self._resolve_user(payload),
         }
 
         cols = ["organization_id", "type", "content", "created_at"]
@@ -168,9 +184,57 @@ class ActionDispatcher:
         except KeyError as e:
             logger.warning("SMS replay missing required field: %s", e)
 
+    def _replay_send_email(self, payload: dict) -> None:
+        """Replay a send_email action — queue an email for delivery."""
+        logger.info(
+            "Email replay for action: to=%s, subject=%s",
+            payload.get("to_email"), (payload.get("subject") or "")[:50],
+        )
+        try:
+            from services.email_service import send_email
+            send_email(
+                to_email=payload["to_email"],
+                subject=payload["subject"],
+                body=payload.get("body", ""),
+                from_user_id=self._resolve_user(payload),
+                organization_id=self.org_id,
+            )
+        except ImportError:
+            logger.warning("Email service not available for replay")
+        except KeyError as e:
+            logger.warning("Email replay missing required field: %s", e)
+
+    def _replay_create_compliance_alert(self, payload: dict) -> None:
+        """Replay a create_compliance_alert action."""
+        p = {
+            "org_id": self.org_id,
+            "title": payload.get("title", "Compliance Alert"),
+            "description": payload.get("description") or payload.get("desc", ""),
+            "severity": payload.get("severity", "medium"),
+            "alert_type": payload.get("alert_type", "general"),
+            "loan_id": payload.get("loan_id"),
+            "lead_id": payload.get("lead_id"),
+            "status": payload.get("status", "open"),
+        }
+
+        cols = ["organization_id", "title", "description", "severity",
+                "alert_type", "status", "created_at"]
+        vals = [":org_id", ":title", ":description", ":severity",
+                ":alert_type", ":status", "CURRENT_TIMESTAMP"]
+
+        for optional in ("loan_id", "lead_id"):
+            if p.get(optional):
+                cols.append(optional)
+                vals.append(f":{optional}")
+
+        sql = f"INSERT INTO compliance_alerts ({', '.join(cols)}) VALUES ({', '.join(vals)})"
+        self.db.execute(text(sql), p)
+
     _REPLAY_MAP = {
         "create_task": _replay_create_task,
         "create_notification": _replay_create_notification,
         "create_activity": _replay_create_activity,
+        "create_compliance_alert": _replay_create_compliance_alert,
         "send_sms": _replay_send_sms,
+        "send_email": _replay_send_email,
     }

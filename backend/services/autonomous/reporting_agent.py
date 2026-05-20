@@ -338,6 +338,14 @@ class ReportingAgent:
                 "create_notification", lambda n=notif: (self.db.add(n), self.db.flush()),
                 target_entity="user", target_id=user_id,
                 description="Morning briefing notification",
+                payload={
+                    "user_id": user_id,
+                    "type": "morning_briefing",
+                    "title": "Morning Briefing Ready",
+                    "message": notif.message,
+                    "link": "/dashboard/briefing",
+                },
+                notify_user_id=user_id,
             )
         else:
             self.db.add(notif)

@@ -417,7 +417,17 @@ class LeadNurturingAgent:
                 target_entity="lead",
                 target_id=lead.id,
                 description=f"Automated {channel} follow-up to {lead.first_name or 'lead'}",
-                payload={"channel": channel, "stage": lead.stage},
+                payload={
+                    "lead_id": lead.id,
+                    "lo_id": lead.owner_id,
+                    "channel": channel,
+                    "stage": lead.stage,
+                    "phone": lead.phone if channel == "sms" else None,
+                    "to_email": lead.email if channel == "email" else None,
+                    "message": message,
+                    "subject": f"Follow-up: {lead.first_name or 'Your Mortgage Inquiry'}" if channel == "email" else None,
+                },
+                notify_user_id=lead.owner_id,
             )
         else:
             _execute_outreach()
@@ -445,6 +455,15 @@ class LeadNurturingAgent:
                     target_entity="lead",
                     target_id=lead.id,
                     description="LO notification for automated nurture outreach",
+                    payload={
+                        "user_id": lead.owner_id,
+                        "lead_id": lead.id,
+                        "type": "automated_nurture",
+                        "title": "Automated follow-up sent",
+                        "message": notification.message,
+                        "link": f"/leads/{lead.id}",
+                    },
+                    notify_user_id=lead.owner_id,
                 )
             else:
                 self.db.add(notification)

@@ -96,6 +96,16 @@ class ConfidenceGraduationService:
 
         self.db.flush()
 
+        # Check for graduation before building result
+        newly_graduated = False
+        if not record.is_graduated and self._should_graduate(record):
+            self._graduate(record)
+            newly_graduated = True
+            logger.info(
+                "Action type '%s' graduated for org %d (confidence=%.4f, decisions=%d)",
+                action_type, org_id, record.confidence_score, record.total_decisions,
+            )
+
         result = {
             "org_id": org_id,
             "action_type": action_type,
@@ -104,15 +114,8 @@ class ConfidenceGraduationService:
             "total_decisions": record.total_decisions,
             "is_graduated": record.is_graduated,
         }
-
-        # Check for graduation
-        if not record.is_graduated and self._should_graduate(record):
-            self._graduate(record)
+        if newly_graduated:
             result["graduated"] = True
-            logger.info(
-                "Action type '%s' graduated for org %d (confidence=%.4f, decisions=%d)",
-                action_type, org_id, record.confidence_score, record.total_decisions,
-            )
 
         return result
 
@@ -229,7 +232,11 @@ class ConfidenceGraduationService:
     # -----------------------------------------------------------------------
 
     def _get_or_create(self, org_id: int, action_type: str):
-        """Get or create an ActionTypeConfidence record."""
+        """Get or create an ActionTypeConfidence record.
+
+        Handles concurrent INSERT race: if flush raises IntegrityError
+        (unique constraint violation), roll back and re-fetch.
+        """
         record = (
             self.db.query(self.ActionTypeConfidence)
             .filter_by(organization_id=org_id, action_type=action_type)
@@ -247,7 +254,17 @@ class ConfidenceGraduationService:
                 is_graduated=False,
             )
             self.db.add(record)
-            self.db.flush()
+            try:
+                self.db.flush()
+            except Exception:
+                self.db.rollback()
+                record = (
+                    self.db.query(self.ActionTypeConfidence)
+                    .filter_by(organization_id=org_id, action_type=action_type)
+                    .first()
+                )
+                if record is None:
+                    raise
         return record
 
     def _calculate_confidence(self, record) -> Decimal:
@@ -313,8 +330,16 @@ class ConfidenceGraduationService:
         return failure_rate > REVOCATION_FAILURE_RATE
 
     def _revoke(self, record) -> None:
-        """Revoke graduation — action type goes back to requiring approval."""
+        """Revoke graduation — action type goes back to requiring approval.
+
+        Resets counters so the action type must earn a fresh sample window
+        before it can re-graduate. Without this, a 95% historical rate
+        would cause instant re-graduation on the next approval.
+        """
         record.is_graduated = False
         record.revoked_at = datetime.now(timezone.utc)
-        # Reset confidence to current approval rate without sample boost
-        record.confidence_score = Decimal(str(record.approval_rate)).quantize(Decimal("0.0001"))
+        record.total_proposed = 0
+        record.total_approved = 0
+        record.total_rejected = 0
+        record.total_auto_executed = 0
+        record.confidence_score = Decimal("0.0")

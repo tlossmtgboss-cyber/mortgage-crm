@@ -786,10 +786,9 @@ def register_autonomous_task_routes(app, get_db, get_current_user, **kwargs):
             except Exception as e:
                 logger.warning(f"Action replay failed for {action_id}: {e}")
 
-            # Mark as approved
-            action.status = "completed"
             action.approved_by = current_user.id
             action.approved_at = datetime.now(timezone.utc)
+            action.status = "completed" if replayed else "failed_replay"
 
             # Record decision in confidence graduation system
             confidence_result = None

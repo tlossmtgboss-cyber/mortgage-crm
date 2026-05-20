@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
+import ApprovalQueue from '../components/ApprovalQueue';
 import './MissionControl.css';
 import { getToken } from '../utils/tokenStore';
 
@@ -302,7 +303,15 @@ function MissionControl() {
         </section>
       )}
 
-      {/* SECTION 3: RECENT ACTIONS */}
+      {/* SECTION 3: APPROVAL QUEUE */}
+      <section className="mc-section">
+        <div className="section-header">
+          <h2>Pending Approvals</h2>
+        </div>
+        <ApprovalQueue embedded={true} />
+      </section>
+
+      {/* SECTION 4: RECENT ACTIONS */}
       <section className="mc-section">
         <div className="section-header">
           <h2>Recent AI Actions</h2>
@@ -354,7 +363,7 @@ function MissionControl() {
         </div>
       </section>
 
-      {/* SECTION 4: AI INSIGHTS */}
+      {/* SECTION 5: AI INSIGHTS */}
       {insights.length > 0 && (
         <section className="mc-section">
           <div className="section-header">

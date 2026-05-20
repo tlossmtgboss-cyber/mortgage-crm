@@ -141,7 +141,7 @@ def pipeline_monitor(
                 "desc": f"{lock[2]} ({lock[1]}) — lock expires {lock[4]}. Extend or push to close.",
                 "lo_id": str(lock[3]),
                 "loan_id": str(lock[0]),
-                "due": lock[4],
+                "due": str(lock[4]) if lock[4] else None,
                 "org_id": organization_id,
             }
             def _do_lock_insert(_p=_lock_params):

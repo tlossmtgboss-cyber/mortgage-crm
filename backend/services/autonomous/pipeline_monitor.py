@@ -353,6 +353,15 @@ class PipelineMonitorAgent:
                         target_entity="loan",
                         target_id=w.get("loan_id"),
                         description=title,
+                        payload={
+                            "user_id": lo_id,
+                            "loan_id": w.get("loan_id"),
+                            "type": "pipeline_stalled",
+                            "title": title,
+                            "message": msg,
+                            "link": "/pipeline?filter=stalled",
+                        },
+                        notify_user_id=lo_id,
                     )
                 else:
                     self.db.add(notif)

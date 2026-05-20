@@ -384,6 +384,15 @@ class LeadScoringAgent:
                     target_entity="lead",
                     target_id=lead_data.get("lead_id"),
                     description=f"Hot lead alert for {lead_data['lead_name']}",
+                    payload={
+                        "user_id": owner_id,
+                        "lead_id": lead_data.get("lead_id"),
+                        "type": "hot_lead",
+                        "title": "Hot Lead Alert",
+                        "message": notification.message,
+                        "link": f"/leads/{lead_data['lead_id']}",
+                    },
+                    notify_user_id=owner_id,
                 )
             else:
                 self.db.add(notification)
