@@ -121,10 +121,14 @@ const VoiceConversation = () => {
         const response = await fetch(`${API_BASE_URL}/api/v1/mobile-voice/voices`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (response.status === 401) {
+          toast.error('Session expired. Please log out and log back in.');
+        }
         const data = await response.json();
         setVoices(data.voices || []);
       } catch (error) {
         console.error('Error loading voices:', error);
+        toast.error('Failed to load voices. Please refresh the page.');
       } finally {
         setLoadingVoices(false);
       }
@@ -141,6 +145,7 @@ const VoiceConversation = () => {
         const response = await fetch(`${API_BASE_URL}/api/v1/mobile-voice/user-voice-preference`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (response.status === 401) return;
         const data = await response.json();
         if (data.has_preference) {
           setSavedVoice({ voice_id: data.voice_id, provider: data.provider });
@@ -180,6 +185,18 @@ const VoiceConversation = () => {
         })
       });
 
+      if (response.status === 401) {
+        toast.error('Session expired. Please log out and log back in to preview voices.');
+        setPlayingVoice(null);
+        return;
+      }
+
+      if (!response.ok) {
+        toast.error('Voice preview unavailable. Try again later.');
+        setPlayingVoice(null);
+        return;
+      }
+
       const data = await response.json();
 
       if (data.audio) {
@@ -187,10 +204,12 @@ const VoiceConversation = () => {
         audio.play();
         audio.onended = () => setPlayingVoice(null);
       } else {
+        toast.error('No audio returned for this voice.');
         setPlayingVoice(null);
       }
     } catch (error) {
       console.error('Error playing voice sample:', error);
+      toast.error('Failed to play voice preview.');
       setPlayingVoice(null);
     }
   };
@@ -214,11 +233,17 @@ const VoiceConversation = () => {
         })
       });
 
+      if (response.status === 401) {
+        toast.error('Session expired. Please log out and log back in.');
+        setSaving(false);
+        return;
+      }
+
       const data = await response.json();
 
       if (data.success) {
         setSavedVoice(selectedVoice);
-        toast.success('Voice preference saved! Aria will now use this voice.');
+        toast.success('Voice saved! Aria will use this voice for all calls.');
       } else {
         toast.error('Failed to save voice preference');
       }
@@ -294,9 +319,10 @@ const VoiceConversation = () => {
   }, {});
 
   const providerNames = {
-    google: 'Google Cloud TTS',
+    deepgram: 'Deepgram (Recommended for Calls)',
     elevenlabs: 'ElevenLabs',
-    openai: 'OpenAI'
+    openai: 'OpenAI',
+    google: 'Google Cloud TTS',
   };
 
   const statusDisplay = getStatusDisplay();

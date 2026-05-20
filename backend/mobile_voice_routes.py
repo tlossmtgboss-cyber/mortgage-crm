@@ -1104,26 +1104,22 @@ async def synthesize_text(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/voices")
 async def list_available_voices():
-    """List available TTS voices"""
+    """List available TTS voices for both preview and Vapi calls"""
     voices = []
 
-    # Google Cloud TTS voices (Neural2 are highest quality)
-    if GOOGLE_TTS_ENABLED:
-        voices.extend([
-            {"id": "en-US-Neural2-C", "name": "Neural2-C", "provider": "google", "description": "Female, warm and professional", "language": "en-US"},
-            {"id": "en-US-Neural2-D", "name": "Neural2-D", "provider": "google", "description": "Male, deep and authoritative", "language": "en-US"},
-            {"id": "en-US-Neural2-E", "name": "Neural2-E", "provider": "google", "description": "Female, soft and friendly", "language": "en-US"},
-            {"id": "en-US-Neural2-F", "name": "Neural2-F", "provider": "google", "description": "Female, expressive", "language": "en-US"},
-            {"id": "en-US-Neural2-G", "name": "Neural2-G", "provider": "google", "description": "Female, casual", "language": "en-US"},
-            {"id": "en-US-Neural2-H", "name": "Neural2-H", "provider": "google", "description": "Female, warm", "language": "en-US"},
-            {"id": "en-US-Neural2-I", "name": "Neural2-I", "provider": "google", "description": "Male, casual", "language": "en-US"},
-            {"id": "en-US-Neural2-J", "name": "Neural2-J", "provider": "google", "description": "Male, conversational", "language": "en-US"},
-            {"id": "en-US-Studio-O", "name": "Studio-O", "provider": "google", "description": "Female, studio quality", "language": "en-US"},
-            {"id": "en-US-Studio-Q", "name": "Studio-Q", "provider": "google", "description": "Male, studio quality", "language": "en-US"},
-        ])
+    # Deepgram voices — default for Vapi calls, always available
+    voices.extend([
+        {"id": "asteria", "name": "Asteria", "provider": "deepgram", "description": "Warm, professional female voice (default)"},
+        {"id": "luna", "name": "Luna", "provider": "deepgram", "description": "Soft, empathetic female voice"},
+        {"id": "stella", "name": "Stella", "provider": "deepgram", "description": "Clear, confident female voice"},
+        {"id": "athena", "name": "Athena", "provider": "deepgram", "description": "Strong, authoritative female voice"},
+        {"id": "hera", "name": "Hera", "provider": "deepgram", "description": "Polished, elegant female voice"},
+        {"id": "orion", "name": "Orion", "provider": "deepgram", "description": "Deep, authoritative male voice"},
+        {"id": "arcas", "name": "Arcas", "provider": "deepgram", "description": "Warm, conversational male voice"},
+        {"id": "perseus", "name": "Perseus", "provider": "deepgram", "description": "Clear, professional male voice"},
+    ])
 
     if ELEVENLABS_API_KEY:
-        # ElevenLabs voices
         voices.extend([
             {"id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel", "provider": "elevenlabs", "description": "Warm, professional female voice"},
             {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "provider": "elevenlabs", "description": "Soft, friendly female voice"},
@@ -1141,6 +1137,72 @@ async def list_available_voices():
         ])
 
     return {"voices": voices}
+
+
+# =============================================================================
+# Vapi voice provider mapping (our provider names → Vapi provider names)
+# =============================================================================
+VAPI_PROVIDER_MAP = {
+    "deepgram": "deepgram",
+    "elevenlabs": "11labs",
+    "openai": "openai",
+    "cartesia": "cartesia",
+    "google": "google",
+}
+
+VAPI_API_KEY = os.getenv("VAPI_API_KEY", "")
+VAPI_API_BASE = "https://api.vapi.ai"
+
+
+async def _update_vapi_assistant_voice(
+    db: Session, user_id: int, provider: str, voice_id: str
+):
+    """Update the Vapi inbound assistant voice for the user's org."""
+    if not VAPI_API_KEY:
+        logger.warning("[VoicePreference] VAPI_API_KEY not set, skipping assistant update")
+        return
+
+    from sqlalchemy import text as sa_text
+    try:
+        row = db.execute(
+            sa_text("""
+                SELECT vic.vapi_assistant_id
+                FROM vapi_inbound_configs vic
+                JOIN users u ON u.organization_id = vic.organization_id
+                WHERE u.id = :user_id AND vic.vapi_assistant_id IS NOT NULL
+                LIMIT 1
+            """),
+            {"user_id": user_id}
+        ).fetchone()
+
+        if not row:
+            logger.info("[VoicePreference] No Vapi assistant found for user %s", user_id)
+            return
+
+        assistant_id = row[0]
+        vapi_provider = VAPI_PROVIDER_MAP.get(provider, provider)
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                f"{VAPI_API_BASE}/assistant/{assistant_id}",
+                json={"voice": {"provider": vapi_provider, "voiceId": voice_id}},
+                headers={
+                    "Authorization": f"Bearer {VAPI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+            )
+            if resp.status_code < 400:
+                logger.info(
+                    "[VoicePreference] Updated Vapi assistant %s voice to %s/%s",
+                    assistant_id, vapi_provider, voice_id,
+                )
+            else:
+                logger.error(
+                    "[VoicePreference] Vapi assistant update failed %s: %s",
+                    resp.status_code, resp.text[:300],
+                )
+    except Exception as e:
+        logger.error("[VoicePreference] Error updating Vapi assistant: %s", e)
 
 
 # =============================================================================
@@ -1240,6 +1302,9 @@ async def save_user_voice_preference(
         db.commit()
 
         logger.info(f"[VoicePreference] Saved preference for user {current_user.id}: {provider}/{voice_id}")
+
+        # Propagate to Vapi assistant so inbound/outbound calls use this voice
+        await _update_vapi_assistant_voice(db, current_user.id, provider, voice_id)
 
         return {
             "success": True,

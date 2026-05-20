@@ -352,6 +352,30 @@ def _get_inbound_config(db: Session, org_id: int) -> Dict[str, Any]:
 # Vapi Assistant Management
 # ---------------------------------------------------------------------------
 
+def _get_org_voice_preference(db: Session, org_id: int) -> dict:
+    """Read voice preference for the org's primary user (admin or first user)."""
+    try:
+        row = db.execute(text("""
+            SELECT us.setting_key, us.setting_value
+            FROM user_settings us
+            JOIN users u ON u.id = us.user_id
+            WHERE u.organization_id = :org_id
+              AND us.setting_key IN ('tts_voice', 'tts_provider')
+            ORDER BY u.role = 'admin' DESC, u.id ASC
+            LIMIT 2
+        """), {"org_id": org_id}).fetchall()
+        settings = {r[0]: r[1] for r in row}
+        if settings.get("tts_voice") and settings.get("tts_provider"):
+            provider_map = {"deepgram": "deepgram", "elevenlabs": "11labs", "openai": "openai", "cartesia": "cartesia"}
+            return {
+                "provider": provider_map.get(settings["tts_provider"], settings["tts_provider"]),
+                "voiceId": settings["tts_voice"],
+            }
+    except Exception as e:
+        logger.warning("[InboundAI] Could not read voice preference: %s", e)
+    return {"provider": "deepgram", "voiceId": "asteria"}
+
+
 async def _get_or_create_vapi_assistant(
     db: Session,
     org_id: int,
@@ -461,10 +485,7 @@ async def _get_or_create_vapi_assistant(
                 },
             ],
         },
-        "voice": {
-            "provider": "deepgram",
-            "voiceId": "asteria",
-        },
+        "voice": _get_org_voice_preference(db, org_id),
         "firstMessage": first_message,
         "endCallMessage": (
             f"Thank you for calling {company}. "
