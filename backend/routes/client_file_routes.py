@@ -734,6 +734,82 @@ def list_timeline(
                 logger.exception("Timeline: failed to load phone-based SMS for client %s: %s", client_file_id, e)
                 db.rollback()
 
+        # ── SMS from sms_delivery_log (outbound Telnyx tracking) ──────
+        phone_suffix = ""
+        if client_phone:
+            phone_suffix = client_phone.strip().replace("-", "").replace("(", "").replace(")", "").replace(" ", "").replace("+", "")
+            if len(phone_suffix) > 10:
+                phone_suffix = phone_suffix[-10:]
+
+        if lead_id or phone_suffix:
+            try:
+                conditions = []
+                dl_params: dict = {"org_id": org_id, "lim": limit}
+                if lead_id:
+                    conditions.append("lead_id = :lead_id")
+                    dl_params["lead_id"] = lead_id
+                if phone_suffix:
+                    conditions.append("REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :phone_pat")
+                    dl_params["phone_pat"] = f"%{phone_suffix}"
+                where_clause = " OR ".join(conditions)
+                for r in db.execute(text(f"""
+                    SELECT id, message_body, sent_at, created_at, user_id, telnyx_message_id
+                    FROM sms_delivery_log
+                    WHERE organization_id = :org_id AND ({where_clause})
+                    ORDER BY COALESCE(sent_at, created_at) DESC
+                    LIMIT :lim
+                """), dl_params).fetchall():
+                    events.append(_make_timeline_event(
+                        id=f"dl-{r[0]}",
+                        client_file_id=str(client_file_id),
+                        org_id=str(org_id),
+                        kind="message_sent_sms",
+                        event_category="texts",
+                        occurred_at=r[2] or r[3],
+                        headline="Text sent",
+                        body=r[1],
+                        actor_user_id=str(r[4]) if r[4] else None,
+                        related_message_id=r[5],
+                    ))
+            except Exception as exc:
+                logger.warning("Timeline: sms_delivery_log query failed: %s", exc)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
+        # ── SMS from sms_panel_messages (two-way SMS archive) ─────────
+        if phone_suffix:
+            try:
+                for r in db.execute(text("""
+                    SELECT id, direction, body, sender_name, sender_user_id, status,
+                           created_at, telnyx_message_id
+                    FROM sms_panel_messages
+                    WHERE organization_id = :org_id
+                      AND REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :phone_pat
+                    ORDER BY created_at DESC
+                    LIMIT :lim
+                """), {"org_id": org_id, "phone_pat": f"%{phone_suffix}", "lim": limit}).fetchall():
+                    inbound = r[1] == "inbound"
+                    events.append(_make_timeline_event(
+                        id=f"pm-{r[0]}",
+                        client_file_id=str(client_file_id),
+                        org_id=str(org_id),
+                        kind="message_received_sms" if inbound else "message_sent_sms",
+                        event_category="texts",
+                        occurred_at=r[6],
+                        headline="Text received" if inbound else "Text sent",
+                        body=r[2],
+                        actor_user_id=str(r[4]) if r[4] and not inbound else None,
+                        related_message_id=r[7],
+                    ))
+            except Exception as exc:
+                logger.warning("Timeline: sms_panel_messages query failed: %s", exc)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
     # ── Emails (outbound via email_messages + inbound via emails) ──────
     if category in ("all", "emails") and lead_id:
         try:
@@ -789,7 +865,7 @@ def list_timeline(
     detailed_keys: set[str] = set()
     for ev in events:
         eid = ev.get("id", "")
-        if eid.startswith(("sms-", "em-", "graph-")):
+        if eid.startswith(("sms-", "em-", "graph-", "dl-", "pm-")):
             body_key = (ev.get("body") or "")[:100]
             if not body_key:
                 continue
