@@ -192,8 +192,16 @@ const fetchReconciliationItems = async () => {
   return items.map(item => ({
     ...item,
     taskType: 'reconciliation',
-    title: item.subject || item.email_subject || '(No Subject)',
-    borrower: item.from_name || item.from_email || item.sender_name || 'Unknown',
+    title: item.email_subject || item.email?.subject || '(No Subject)',
+    borrower: item.email_from || item.email?.sender || 'Unknown',
+    subject: item.email_subject || item.email?.subject,
+    from_email: item.email_from || item.email?.sender,
+    from_name: item.email_from || item.email?.sender,
+    sent_date: item.email_received_at || item.email?.received_at || item.created_at,
+    body_preview: item.email_body || item.email?.body,
+    body: item.email_body || item.email?.body,
+    matched_loan_id: item.match_entity_type === 'loan' ? item.match_entity_id : null,
+    matched_lead_id: item.match_entity_type === 'lead' ? item.match_entity_id : null,
   }));
 };
 
