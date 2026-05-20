@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { teamAPI, tasksAPI, reconciliationAPI, leadsAPI, loansAPI, API_BASE_URL } from '../services/api';
 import { useLayoutFix } from '../hooks/useLayoutFix';
-import TaskDetailPanel from '../components/shared/TaskDetailPanel';
 import ReconciliationDetailPanel from '../components/shared/ReconciliationDetailPanel';
 import CallDetailPanel from '../components/shared/CallDetailPanel';
 import TasksSkeleton from '../components/shared/TasksSkeleton';
@@ -245,6 +244,8 @@ function Tasks() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [completingTask, setCompletingTask] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showDelegateDropdown, setShowDelegateDropdown] = useState(false);
 
   // SMS detail state
   const [smsTaskDetail, setSmsTaskDetail] = useState(null);
@@ -321,6 +322,11 @@ function Tasks() {
       setPhoneTasksList(phoneTasks_raw);
     }
   }, [phoneTasks_raw]);
+
+  useEffect(() => {
+    setShowStatusDropdown(false);
+    setShowDelegateDropdown(false);
+  }, [selectedItem?.id]);
 
   // Auto-select first item when filter changes
   useEffect(() => {
@@ -1191,25 +1197,189 @@ function Tasks() {
     </div>
   );
 
-  // Workflow / manual task detail (cream themed wrapper)
-  const renderWorkflowDetail = () => (
-    <div className="tasks-detail">
-      <TaskDetailPanel
-        task={selectedItem}
-        onComplete={handleComplete}
-        onDelete={handleDelete}
-        onSnooze={handleSnooze}
-        onDelegate={handleDelegate}
-        onSend={handleSend}
-        onApproveAi={handleApproveAiTask}
-        onChangeStatus={handleChangeStatus}
-        completing={completingTask}
-        updatingStatus={updatingStatus}
-        teamMembers={teamMembers}
-        statusOptions={LEAD_STAGES}
-      />
-    </div>
-  );
+  // Workflow / manual task detail (cream themed — matches mockup)
+  const renderWorkflowDetail = () => {
+    const task = selectedItem;
+    if (!task) return renderEmptyDetail();
+
+    const methods = task.communication_methods || ['email'];
+    const dueFormatted = task.due_date
+      ? new Date(task.due_date).toLocaleDateString()
+      : '--';
+
+    return (
+      <div className="tasks-detail">
+        <div className="tasks-detail-header">
+          <div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+              <span className="tasks-type-chip workflow">{task.source || 'Workflow'}</span>
+              {task.urgency && (
+                <span className={`tasks-badge ${urgencyLabel(task.urgency)}`}>
+                  {(task.urgency || '').toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="tasks-detail-title">{task.title}</div>
+          </div>
+          {task.ai_confidence > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted, #8B8A7E)' }}>
+              AI Confidence: {task.ai_confidence}%
+            </span>
+          )}
+        </div>
+
+        <div className="tasks-detail-grid">
+          <div className="tasks-detail-field">
+            <label>Client</label>
+            <div
+              className="val link"
+              onClick={() => {
+                if (task.lead_id) navigate(`/leads/${task.lead_id}`);
+                else if (task.loan_id) navigate(`/loans/${task.loan_id}`);
+                else if (task.entity_id && task.entity_type === 'lead') navigate(`/leads/${task.entity_id}`);
+                else if (task.entity_id && task.entity_type === 'loan') navigate(`/loans/${task.entity_id}`);
+              }}
+            >
+              {task.borrower || '--'}
+            </div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Stage</label>
+            <div className="val">{task.stage || task.source || '--'}</div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Priority</label>
+            <div className="val">
+              <span className={`tasks-badge ${urgencyLabel(task.urgency)}`}>
+                {(task.urgency || 'medium').toUpperCase()}
+              </span>
+            </div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Due Date</label>
+            <div className="val">{dueFormatted}</div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Owner</label>
+            <div className="val">{task.owner || 'Loan Officer'}</div>
+          </div>
+          <div className="tasks-detail-field">
+            <label>Source</label>
+            <div className="val">{task.workflow_name || task.source || 'Workflow Engine'}</div>
+          </div>
+        </div>
+
+        <div className="tasks-channel-row">
+          {['Email', 'Text', 'Phone', 'Voicemail'].map(ch => (
+            <div
+              key={ch}
+              className={`tasks-channel-btn${methods.includes(ch.toLowerCase()) ? ' active' : ''}`}
+              onClick={() => {
+                if (ch === 'Email') handleSend(task.id, 'email', task.ai_message);
+                else if (ch === 'Phone') {
+                  const phone = task.contact_phone || task.phone;
+                  if (phone) window.open(`tel:${phone}`);
+                } else {
+                  setCommModal({ type: ch, subject: task.title, body: task.ai_message });
+                }
+              }}
+            >
+              {ch}
+            </div>
+          ))}
+        </div>
+
+        <div className="tasks-actions">
+          <button className="tasks-btn primary" onClick={() => handleSend(task.id, 'email', task.ai_message)}>
+            Send via Email
+          </button>
+          <button className="tasks-btn accent" onClick={() => handleApproveAiTask(task.id)}>
+            Approve AI Action
+          </button>
+          <button className="tasks-btn outline" onClick={() => setShowStatusDropdown(v => !v)}>
+            Change Status
+          </button>
+          <button className="tasks-btn outline" onClick={() => handleSnooze(task.id)}>
+            Snooze
+          </button>
+          <button className="tasks-btn outline" onClick={() => setShowDelegateDropdown(v => !v)}>
+            Delegate
+          </button>
+          <button
+            className="tasks-btn success"
+            onClick={() => handleComplete(task.id)}
+            disabled={completingTask}
+          >
+            {completingTask ? 'Completing...' : 'Complete Task'}
+          </button>
+        </div>
+
+        {showStatusDropdown && (
+          <div className="tasks-detail-section" style={{ padding: 12 }}>
+            <h4 style={{ marginBottom: 8 }}>Select New Status</h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {LEAD_STAGES.map(s => (
+                <button
+                  key={s.value}
+                  className="tasks-btn outline"
+                  style={{ fontSize: 11, padding: '4px 10px' }}
+                  disabled={updatingStatus}
+                  onClick={() => { handleChangeStatus(s.value); setShowStatusDropdown(false); }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showDelegateDropdown && (
+          <div className="tasks-detail-section" style={{ padding: 12 }}>
+            <h4 style={{ marginBottom: 8 }}>Delegate To</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {teamMembers.length > 0 ? teamMembers.map(m => (
+                <button
+                  key={m.id}
+                  className="tasks-btn outline"
+                  style={{ fontSize: 12, justifyContent: 'flex-start' }}
+                  onClick={() => { handleDelegate(m); setShowDelegateDropdown(false); }}
+                >
+                  {m.name || m.email || `Member ${m.id}`}
+                </button>
+              )) : (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No team members available</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="tasks-detail-section">
+          <h4>What to Accomplish</h4>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary, #4F554E)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--primary, #1F3D2E)' }}>Action:</strong>{' '}
+            {task.description || task.ai_message || task.title}
+            <br />
+            <strong style={{ color: 'var(--primary, #1F3D2E)' }}>Goal:</strong>{' '}
+            {task.goal || 'Maintain communication and move the process forward'}
+            <br />
+            <strong style={{ color: 'var(--primary, #1F3D2E)' }}>Talking Points:</strong>
+            <ul style={{ marginTop: 4, paddingLeft: 18 }}>
+              {(Array.isArray(task.talking_points) && task.talking_points.length > 0
+                ? task.talking_points
+                : [
+                    'Review the client\'s current status before reaching out',
+                    'Share any relevant updates or information',
+                    'Ask if they have any questions or concerns',
+                  ]
+              ).map((point, idx) => (
+                <li key={idx}>{point}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Empty detail
   const renderEmptyDetail = () => (
@@ -1280,15 +1450,6 @@ function Tasks() {
           {/* Left column: item list */}
           <div className="tasks-inbox-list">
             <div className="tasks-inbox-search">
-              {activeFilter !== 'completed' && filteredItems.length > 0 && (
-                <input
-                  type="checkbox"
-                  checked={filteredItems.length > 0 && filteredItems.every(t => selectedTaskIds.has(t.id))}
-                  onChange={() => handleSelectAll(filteredItems)}
-                  title="Select all"
-                  style={{ marginRight: 8 }}
-                />
-              )}
               <input
                 type="text"
                 placeholder="Search tasks..."
@@ -1329,12 +1490,10 @@ function Tasks() {
           <div className="tasks-disposition-modal" onClick={(e) => e.stopPropagation()}>
             <button className="tasks-btn outline" onClick={() => setCommModal(null)} style={{ position: 'absolute', top: 12, right: 12 }}>X</button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <span>
-                {commModal.type === 'Email' && '📧'}
-                {commModal.type === 'Phone' && '📞'}
-                {commModal.type === 'Text' && '💬'}
+              <span className={`tasks-type-chip ${commModal.type === 'Email' ? 'workflow' : commModal.type === 'Phone' ? 'phone' : 'sms'}`}>
+                {commModal.type}
               </span>
-              <h2 style={{ margin: 0, fontSize: 18 }}>{commModal.subject}</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: 'var(--primary, #1F3D2E)' }}>{commModal.subject}</h2>
             </div>
           </div>
         </div>
