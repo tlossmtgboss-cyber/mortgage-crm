@@ -26,8 +26,11 @@ Notes:
 """
 
 import functools
+import logging
 from fastapi import HTTPException, Request
 from feature_tiers import FeatureTier, get_tier
+
+logger = logging.getLogger(__name__)
 
 
 def require_feature_tier(module: str):
@@ -55,7 +58,11 @@ def require_feature_tier(module: str):
                         request = arg
                         break
 
-            if request and hasattr(request.state, 'organization'):
+            if not request:
+                logger.warning("Feature gate: could not find request in args for %s", module)
+                raise HTTPException(status_code=403, detail="Feature access check failed")
+
+            if hasattr(request.state, 'organization'):
                 org = request.state.organization
                 org_tier = getattr(org, 'feature_tier', 'core')
 

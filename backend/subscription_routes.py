@@ -13,7 +13,7 @@ import json
 import logging
 
 from database import get_db
-from routes.auth_deps import require_auth
+from routes.auth_deps import require_auth, current_user_dep
 from subscription_service import SubscriptionService
 from subscription_models import SUBSCRIPTION_TIERS, FEATURE_ADDONS
 
@@ -84,10 +84,13 @@ async def get_available_addons():
 
 @router.get("/my-subscription")
 async def get_my_subscription(
-    organization_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(current_user_dep),
 ):
     """Get current user's organization subscription"""
+    organization_id = getattr(current_user, 'organization_id', None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="No organization")
     sub = SubscriptionService.get_organization_subscription(db, organization_id)
     if not sub:
         raise HTTPException(status_code=404, detail="No subscription found")
@@ -103,20 +106,26 @@ async def get_my_subscription(
 
 @router.get("/my-usage")
 async def get_my_usage(
-    organization_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(current_user_dep),
 ):
     """Get usage summary for current period"""
+    organization_id = getattr(current_user, 'organization_id', None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="No organization")
     usage = SubscriptionService.get_usage_summary(db, organization_id)
     return {"usage": usage}
 
 
 @router.get("/my-allowed-stages")
 async def get_my_allowed_stages(
-    organization_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(current_user_dep),
 ):
     """Get pipeline stages allowed for current tier"""
+    organization_id = getattr(current_user, 'organization_id', None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="No organization")
     stages = SubscriptionService.get_allowed_stages(db, organization_id)
     return {"stages": stages}
 
@@ -124,20 +133,26 @@ async def get_my_allowed_stages(
 @router.post("/check-feature/{feature_key}")
 async def check_feature_access(
     feature_key: str,
-    organization_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(current_user_dep),
 ):
     """Check if organization can access a specific feature"""
+    organization_id = getattr(current_user, 'organization_id', None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="No organization")
     access = SubscriptionService.can_access_feature(db, organization_id, feature_key)
     return access
 
 
 @router.get("/my-warnings")
 async def get_my_warnings(
-    organization_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(current_user_dep),
 ):
     """Get unacknowledged usage warnings"""
+    organization_id = getattr(current_user, 'organization_id', None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="No organization")
     try:
         result = db.execute(text("""
             SELECT id, feature_key, warning_type, threshold_percent, message, created_at

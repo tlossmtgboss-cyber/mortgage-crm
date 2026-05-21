@@ -368,11 +368,25 @@ Priority: {priority}
 
 Generate a new, improved SMS reply matching the loan officer's communication style. No quotes, no explanation, just the message text."""
 
+    # Look up LO name for the system prompt (same as generate_recommendation)
+    lo_name = "your loan officer"
+    try:
+        lo_row = db.execute(
+            text("SELECT first_name, last_name FROM users WHERE organization_id = :oid ORDER BY role = 'admin' DESC LIMIT 1"),
+            {"oid": organization_id},
+        ).mappings().first()
+        if lo_row:
+            lo_name = f"{lo_row['first_name'] or ''} {lo_row['last_name'] or ''}".strip() or "your loan officer"
+    except Exception:
+        pass
+
+    system_prompt = SYSTEM_PROMPT.replace("{lo_name}", lo_name)
+
     try:
         from services.llm_gateway import llm_gateway
         llm_result = llm_gateway.complete_sync(
             intent="calls",
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             messages=[{"role": "user", "content": prompt}],
             max_tokens_override=500,
         )

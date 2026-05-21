@@ -23,6 +23,9 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Token decryption for Microsoft OAuth
+from services.calendly_service import decrypt_token
+
 # Import models
 from database.models import (
     User, EmailSignature, EmailDraft, Lead, MicrosoftOAuthToken,
@@ -560,6 +563,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             db.execute(text("""
                 CREATE TABLE IF NOT EXISTS email_drafts (
                     id SERIAL PRIMARY KEY,
+                    organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
                     user_id INTEGER REFERENCES users(id),
                     lead_id INTEGER REFERENCES leads(id),
                     loan_id INTEGER REFERENCES loans(id),
@@ -606,6 +610,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
         try:
             new_draft = EmailDraft(
                 user_id=current_user.id,
+                organization_id=current_user.organization_id,
                 lead_id=draft.lead_id,
                 loan_id=draft.loan_id,
                 recipient_email=draft.recipient_email,
@@ -835,7 +840,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
                 response = await client.post(
                     "https://graph.microsoft.com/v1.0/me/sendMail",
                     headers={
-                        "Authorization": f"Bearer {oauth_record.access_token}",
+                        "Authorization": f"Bearer {decrypt_token(oauth_record.access_token)}",
                         "Content-Type": "application/json"
                     },
                     json=email_data,
@@ -912,7 +917,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
     - Complete and return disclosure forms"""
 
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -953,6 +958,7 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             # Create the draft
             new_draft = EmailDraft(
                 user_id=current_user.id,
+                organization_id=current_user.organization_id,
                 lead_id=request.lead_id,
                 loan_id=request.loan_id,
                 recipient_email=request.recipient_email,

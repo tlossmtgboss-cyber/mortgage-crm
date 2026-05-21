@@ -215,20 +215,19 @@ class OpportunityDetectionService:
                     l.id,
                     l.loan_number,
                     l.borrower_name,
-                    l.loan_amount,
-                    l.interest_rate,
+                    l.amount as loan_amount,
+                    l.rate as interest_rate,
                     l.loan_type,
-                    l.loan_term,
-                    l.funded_at as funded_date,
-                    c.phone as borrower_phone,
-                    c.email as borrower_email
+                    l.term as loan_term,
+                    l.funded_date,
+                    l.borrower_phone,
+                    l.borrower_email
                 FROM loans l
-                LEFT JOIN contacts c ON c.id = l.borrower_id
-                WHERE l.status = 'funded'
-                    AND l.interest_rate IS NOT NULL
-                    AND l.loan_amount IS NOT NULL
-                    AND l.funded_at >= :min_date
-                ORDER BY l.funded_at DESC
+                WHERE l.stage = 'FUNDED'
+                    AND l.rate IS NOT NULL
+                    AND l.amount IS NOT NULL
+                    AND l.funded_date >= :min_date
+                ORDER BY l.funded_date DESC
                 LIMIT 1000
             """)
 
@@ -345,7 +344,8 @@ class OpportunityDetectionService:
         if not opp:
             return None
 
-        opp.status = status
+        if status is not None:
+            opp.status = status
         if notes:
             opp.notes = notes
 

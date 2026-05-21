@@ -258,26 +258,48 @@ def process_user_response(
             "manual": 0.75,
         }
         rate = rate_map.get(response_source, 0.75)
-        db.execute(
-            text("""
-                INSERT INTO sms_response_patterns
-                    (organization_id, category, response_template, success_rate, times_used, created_at, updated_at)
-                VALUES
-                    (:org_id, :category, :template, :rate, 1, :now, :now)
-                ON CONFLICT (organization_id, category, md5(response_template))
-                DO UPDATE SET
-                    times_used = sms_response_patterns.times_used + 1,
-                    success_rate = GREATEST(sms_response_patterns.success_rate, EXCLUDED.success_rate),
-                    updated_at = EXCLUDED.updated_at
-            """),
-            {
-                "org_id": organization_id,
-                "category": category,
-                "template": response_text[:500],
-                "rate": rate,
-                "now": now,
-            },
-        )
+        template_val = response_text[:500]
+        params = {
+            "org_id": organization_id,
+            "category": category,
+            "template": template_val,
+            "rate": rate,
+            "now": now,
+        }
+        # Try upsert first; fall back to plain INSERT if conflict target doesn't exist
+        try:
+            existing = db.execute(
+                text("""
+                    SELECT id, times_used, success_rate FROM sms_response_patterns
+                    WHERE organization_id = :org_id AND category = :category
+                      AND response_template = :template
+                    LIMIT 1
+                """),
+                params,
+            ).fetchone()
+            if existing:
+                db.execute(
+                    text("""
+                        UPDATE sms_response_patterns
+                        SET times_used = times_used + 1,
+                            success_rate = GREATEST(success_rate, :rate),
+                            updated_at = :now
+                        WHERE id = :pid
+                    """),
+                    {"rate": rate, "now": now, "pid": existing.id},
+                )
+            else:
+                db.execute(
+                    text("""
+                        INSERT INTO sms_response_patterns
+                            (organization_id, category, response_template, success_rate, times_used, created_at, updated_at)
+                        VALUES
+                            (:org_id, :category, :template, :rate, 1, :now, :now)
+                    """),
+                    params,
+                )
+        except Exception as upsert_err:
+            logger.warning("Pattern upsert failed, skipping: %s", upsert_err)
     except Exception as e:
         logger.warning("Pattern recording failed for task=%s: %s", task_id, e)
 
@@ -472,18 +494,20 @@ def _try_create_lead_from_conversation(
 
     now = datetime.now(timezone.utc)
     try:
+        full_name = f"{first_name} {last_name}".strip() or first_name
         db.execute(
             text("""
                 INSERT INTO leads (
-                    organization_id, first_name, last_name, email, phone,
-                    source, stage, assigned_user_id, created_at, updated_at
+                    organization_id, name, first_name, last_name, email, phone,
+                    source, stage, owner_id, created_at, updated_at
                 ) VALUES (
-                    :oid, :first, :last, :email, :phone,
+                    :oid, :name, :first, :last, :email, :phone,
                     'SMS Conversation', 'New', :uid, :now, :now
                 )
             """),
             {
                 "oid": organization_id,
+                "name": full_name,
                 "first": first_name,
                 "last": last_name,
                 "email": email,

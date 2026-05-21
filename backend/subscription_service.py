@@ -74,7 +74,7 @@ class SubscriptionService:
                 }
 
             # Check subscription status
-            if sub["status"] not in ["active", "trial"]:
+            if sub["status"] not in ["active", "trial", "trialing"]:
                 return {
                     "allowed": False,
                     "reason": "inactive_subscription",

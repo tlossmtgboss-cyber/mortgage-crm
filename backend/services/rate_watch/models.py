@@ -138,7 +138,6 @@ class CurrentRate(BaseModel):
     source: SourceName
     observation_id: int
 
-    @property
     def is_stale(self, max_age_minutes: int = 60) -> bool:
         age = (datetime.now(timezone.utc) - self.observed_at).total_seconds() / 60
         return age > max_age_minutes
@@ -166,8 +165,8 @@ class LoanSnapshot(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    loan_id: UUID
-    borrower_id: UUID
+    loan_id: int
+    borrower_id: int
     loan_officer_id: UUID
     current_balance: Decimal
     current_rate: RateValue

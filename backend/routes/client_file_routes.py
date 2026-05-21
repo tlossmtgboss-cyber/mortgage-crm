@@ -1809,7 +1809,7 @@ async def _send_email_from_client_file(
 @router.post("/clients/{client_file_id}/timeline/{event_id}/star")
 def star_event(
     client_file_id: uuid.UUID,
-    event_id: uuid.UUID,
+    event_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
@@ -1984,7 +1984,7 @@ def get_client_file_id_for_mum(
 @router.delete("/clients/{client_file_id}/timeline/{event_id}/star")
 def unstar_event(
     client_file_id: uuid.UUID,
-    event_id: uuid.UUID,
+    event_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):

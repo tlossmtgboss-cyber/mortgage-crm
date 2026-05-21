@@ -159,6 +159,10 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
 
             # Calculate proration
             now = datetime.now(timezone.utc)
+            if period_start and period_start.tzinfo is None:
+                period_start = period_start.replace(tzinfo=timezone.utc)
+            if period_end and period_end.tzinfo is None:
+                period_end = period_end.replace(tzinfo=timezone.utc)
             if period_start and period_end:
                 total_days = (period_end - period_start).days or 30
                 days_used = (now - period_start).days
@@ -184,14 +188,12 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
                 SET tier = :new_tier,
                     monthly_price = :new_price,
                     billing_cycle = :cycle,
-                    proration_credit = :credit,
                     updated_at = NOW()
                 WHERE organization_id = :org_id
             """), {
                 "new_tier": body.new_tier,
                 "new_price": new_price,
                 "cycle": body.billing_cycle,
-                "credit": credit,
                 "org_id": org_id,
             })
 
@@ -296,7 +298,7 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
             rows = db.execute(text("""
                 SELECT id, invoice_number, status, total_amount, currency,
                        period_start, period_end, due_date, paid_at, created_at,
-                       line_items, pdf_url
+                       line_items, invoice_pdf_url
                 FROM invoices
                 WHERE organization_id = :org_id
                 ORDER BY created_at DESC
@@ -337,11 +339,28 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
         org_id = getattr(current_user, 'organization_id', None)
 
         try:
+            # Store payment method ID in user_metadata JSON column
             db.execute(text("""
                 UPDATE organization_subscriptions
-                SET stripe_payment_method_id = :pm_id, updated_at = NOW()
+                SET user_metadata = COALESCE(user_metadata, '{}'::jsonb) || jsonb_build_object('stripe_payment_method_id', :pm_id),
+                    updated_at = NOW()
                 WHERE organization_id = :org_id
             """), {"pm_id": body.stripe_payment_method_id, "org_id": org_id})
+
+            # Log the update in audit log
+            db.execute(text("""
+                INSERT INTO audit_logs
+                    (user_id, changed_by_id, change_type, entity_type, reason,
+                     after_state, timestamp, organization_id)
+                VALUES
+                    (:user_id, :user_id, 'payment_method_update', 'subscription', 'payment method updated',
+                     CAST(:after AS jsonb), NOW(), :org_id)
+            """), {
+                "user_id": current_user.id,
+                "org_id": org_id,
+                "after": json.dumps({"stripe_payment_method_id": body.stripe_payment_method_id}),
+            })
+
             db.commit()
             return {"status": "updated", "payment_method_id": body.stripe_payment_method_id}
         except Exception as e:

@@ -10,15 +10,18 @@ export type LifecycleStage =
   | "new_lead"
   | "contacted"
   | "engaged"
+  | "prospect"
   | "pre_app"
   | "pre_approved"
   | "shopping"
   | "under_contract"
+  | "active_borrower"
   | "in_processing"
   | "in_underwriting"
   | "clear_to_close"
   | "closed_active"
   | "closed_past_client"
+  | "post_close"
   | "dead";
 
 export type LoanProgram =

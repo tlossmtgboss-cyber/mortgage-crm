@@ -565,6 +565,8 @@ class OptOutCheckResponse(BaseModel):
 
 def normalize_phone(phone: str) -> str:
     """Normalize phone number to E.164 format"""
+    if not phone:
+        return ""
     # Remove all non-digit characters
     digits = re.sub(r'\D', '', phone)
 
@@ -1681,23 +1683,40 @@ async def telephony_sms_webhook(
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     try:
-        # Extract webhook data (form-encoded)
-        message_sid = request_data.get("MessageSid")
-        from_phone = request_data.get("From")
-        to_phone = request_data.get("To")
-        body = request_data.get("Body", "")
-        num_media = int(request_data.get("NumMedia", 0))
-
-        # Collect media URLs if present
+        # Detect format: Telnyx uses nested {"data": {"payload": ...}}, Twilio uses flat fields
         media_urls = []
         media_types = []
-        for i in range(num_media):
-            media_url = request_data.get(f"MediaUrl{i}")
-            media_type = request_data.get(f"MediaContentType{i}")
-            if media_url:
-                media_urls.append(media_url)
-            if media_type:
-                media_types.append(media_type)
+        if "data" in request_data:
+            # ---- Telnyx format ----
+            payload = request_data.get("data", {}).get("payload", {})
+            message_sid = payload.get("id", "")
+            from_info = payload.get("from", {})
+            from_phone = from_info.get("phone_number", "") if isinstance(from_info, dict) else str(from_info)
+            to_list = payload.get("to", [])
+            to_phone = to_list[0].get("phone_number", "") if to_list and isinstance(to_list[0], dict) else (to_list[0] if to_list else "")
+            body = payload.get("text", "")
+            telnyx_media = payload.get("media", [])
+            num_media = len(telnyx_media)
+            for m in telnyx_media:
+                if isinstance(m, dict):
+                    if m.get("url"):
+                        media_urls.append(m["url"])
+                    if m.get("content_type"):
+                        media_types.append(m["content_type"])
+        else:
+            # ---- Twilio format (form-encoded) ----
+            message_sid = request_data.get("MessageSid", "")
+            from_phone = request_data.get("From", "")
+            to_phone = request_data.get("To", "")
+            body = request_data.get("Body", "")
+            num_media = int(request_data.get("NumMedia", 0))
+            for i in range(num_media):
+                media_url = request_data.get(f"MediaUrl{i}")
+                media_type = request_data.get(f"MediaContentType{i}")
+                if media_url:
+                    media_urls.append(media_url)
+                if media_type:
+                    media_types.append(media_type)
 
         # Persist MMS media to S3 (Telnyx URLs are temporary)
         media_s3_keys = []
@@ -1961,9 +1980,9 @@ async def send_sms(
         # Check opt-out status (scoped to current user)
         opt_out_check = db.execute(text("""
             SELECT phone_number FROM sms_opt_outs
-            WHERE phone_number = :phone AND organization_id = :org_id AND active = true
+            WHERE phone_number = :phone AND confirmed = true
             LIMIT 1
-        """), {"phone": normalized_phone, "org_id": current_user.organization_id}).fetchone()
+        """), {"phone": normalized_phone}).fetchone()
 
         if opt_out_check:
             return {

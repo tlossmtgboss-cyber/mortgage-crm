@@ -9,6 +9,8 @@
 // API is at a different origin. Default is same-origin /api/v1.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { getToken } from "../utils/tokenStore";
+
 import type {
   ActionPlanRun,
   ActivityCategory,
@@ -49,11 +51,7 @@ export class ApiError extends Error {
 }
 
 function getAuthToken(): string | null {
-  try {
-    return localStorage.getItem("token") || null;
-  } catch {
-    return null;
-  }
+  return getToken();
 }
 
 async function request<T>(
