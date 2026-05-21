@@ -667,7 +667,7 @@ _NUKE_SAFE_TABLES = frozenset({
     "ai_tasks", "tasks", "activities", "documents",
     "email_intakes", "attachment_intakes",
     "loans", "leads", "referral_partners",
-    "org_subscriptions", "api_keys", "branches",
+    "organization_subscriptions", "api_keys", "branches",
 })
 
 
@@ -682,7 +682,7 @@ def _nuke_demo_org(db, org_id):
         "ai_tasks", "tasks", "activities", "documents",
         "email_intakes", "attachment_intakes",
         "loans", "leads", "referral_partners",
-        "org_subscriptions", "api_keys", "branches",
+        "organization_subscriptions", "api_keys", "branches",
     ]
     for table in tables:
         if table not in _NUKE_SAFE_TABLES:

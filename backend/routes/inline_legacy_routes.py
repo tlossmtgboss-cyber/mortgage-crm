@@ -220,14 +220,9 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.error(f"❌ Admin ops routes failed: {e}")
 
-    try:
-        from routes.email_management_routes import register_email_management_routes
-        _email_exports = register_email_management_routes(app, get_db, get_current_user, **kwargs)
-        if _email_exports:
-            _exported_functions.update(_email_exports)
-        logger.info("✅ Email management routes loaded (extracted)")
-    except Exception as e:
-        logger.error(f"❌ Email management routes failed: {e}")
+    # NOTE: email_management_routes registration REMOVED here — it is registered
+    # by router_registry.py with the required refresh_microsoft_token dependency.
+    # Registering here too caused double-registration (and without refresh_microsoft_token).
 
     try:
         from routes.mum_activity_routes import register_mum_activity_routes

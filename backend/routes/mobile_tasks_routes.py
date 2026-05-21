@@ -58,10 +58,11 @@ async def get_mobile_tasks(
     """
     user_id = current_user.id
     now = datetime.now(timezone.utc)
-    params: dict = {"user_id": user_id, "limit": limit, "now": now}
+    org_id = current_user.organization_id
+    params: dict = {"user_id": user_id, "org_id": org_id, "limit": limit, "now": now}
 
     # Build WHERE clauses
-    where_clauses = ["t.owner_id = :user_id"]
+    where_clauses = ["t.owner_id = :user_id", "t.organization_id = :org_id"]
 
     if status == "overdue":
         # Overdue = still pending but past due_date
@@ -179,7 +180,8 @@ async def get_mobile_tasks_summary(
     user_id = current_user.id
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    params = {"user_id": user_id, "now": now, "today_start": today_start}
+    org_id = current_user.organization_id
+    params = {"user_id": user_id, "org_id": org_id, "now": now, "today_start": today_start}
 
     summary_sql = """
         SELECT
@@ -194,7 +196,7 @@ async def get_mobile_tasks_summary(
             COUNT(*) FILTER (WHERE t.status IN ('pending', 'in_progress'))
                 AS total_active
         FROM tasks t
-        WHERE t.owner_id = :user_id
+        WHERE t.owner_id = :user_id AND t.organization_id = :org_id
     """
 
     try:

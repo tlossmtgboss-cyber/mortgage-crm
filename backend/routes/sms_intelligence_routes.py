@@ -977,46 +977,46 @@ async def get_sms_queue(
         params["limit"] = limit
         params["offset"] = offset
 
-        results = db.execute(text(query), params).fetchall()
+        results = db.execute(text(query), params).mappings().fetchall()
 
         items = []
         for row in results:
             items.append({
-                "id": row[0],
-                "sms_provider": row[1],
-                "provider_message_id": row[2],
-                "from_phone": row[3],
-                "to_phone": row[4],
-                "direction": row[5],
-                "message_body": row[6],
-                "has_media": row[7],
-                "media_count": row[8],
-                "media_urls": row[9],
-                "media_types": row[10],
-                "sent_at": row[11].isoformat() if row[11] else None,
-                "received_at": row[12].isoformat() if row[12] else None,
-                "imported_at": row[13].isoformat() if row[13] else None,
-                "ai_analysis": row[14],
-                "analyzed_at": row[15].isoformat() if row[15] else None,
-                "matched_borrower_id": row[16],
-                "matched_loan_id": row[17],
-                "matched_lead_id": row[18],
-                "match_method": row[19],
-                "match_confidence": float(row[20]) if row[20] else None,
-                "disposition": row[21],
-                "processed_by": row[22],
-                "processed_at": row[23].isoformat() if row[23] else None,
-                "processing_notes": row[24],
-                "is_priority": row[25],
-                "requires_response": row[26],
-                "is_opt_out": row[27],
-                "status": row[28],
-                "error_message": row[29],
-                "user_id": row[30],
-                "created_at": row[31].isoformat() if row[31] else None,
-                "borrower_name": row[33] if len(row) > 33 else None,
-                "loan_number": row[34] if len(row) > 34 else None,
-                "lead_name": row[35] if len(row) > 35 else None,
+                "id": row["id"],
+                "sms_provider": row["sms_provider"],
+                "provider_message_id": row["provider_message_id"],
+                "from_phone": row["from_phone"],
+                "to_phone": row["to_phone"],
+                "direction": row["direction"],
+                "message_body": row["message_body"],
+                "has_media": row["has_media"],
+                "media_count": row["media_count"],
+                "media_urls": row["media_urls"],
+                "media_types": row["media_types"],
+                "sent_at": row["sent_at"].isoformat() if row["sent_at"] else None,
+                "received_at": row["received_at"].isoformat() if row["received_at"] else None,
+                "imported_at": row["imported_at"].isoformat() if row["imported_at"] else None,
+                "ai_analysis": row["ai_analysis"],
+                "analyzed_at": row["analyzed_at"].isoformat() if row["analyzed_at"] else None,
+                "matched_borrower_id": row["matched_borrower_id"],
+                "matched_loan_id": row["matched_loan_id"],
+                "matched_lead_id": row["matched_lead_id"],
+                "match_method": row["match_method"],
+                "match_confidence": float(row["match_confidence"]) if row["match_confidence"] else None,
+                "disposition": row["disposition"],
+                "processed_by": row["processed_by"],
+                "processed_at": row["processed_at"].isoformat() if row["processed_at"] else None,
+                "processing_notes": row["processing_notes"],
+                "is_priority": row["is_priority"],
+                "requires_response": row["requires_response"],
+                "is_opt_out": row["is_opt_out"],
+                "status": row["status"],
+                "error_message": row["error_message"],
+                "user_id": row["user_id"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                "borrower_name": row.get("loan_borrower_name"),
+                "loan_number": row.get("loan_number"),
+                "lead_name": row.get("lead_name"),
             })
 
         return {
@@ -1049,38 +1049,38 @@ async def get_sms_detail(
             LEFT JOIN loans l ON s.matched_loan_id = l.id
             LEFT JOIN leads ld ON s.matched_lead_id = ld.id
             WHERE s.id = :sms_id AND s.user_id = :user_id
-        """), {"sms_id": sms_id, "user_id": current_user.id}).fetchone()
+        """), {"sms_id": sms_id, "user_id": current_user.id}).mappings().fetchone()
 
         if not result:
             raise HTTPException(status_code=404, detail="SMS not found")
 
         return {
-            "id": result[0],
-            "sms_provider": result[1],
-            "provider_message_id": result[2],
-            "from_phone": result[3],
-            "to_phone": result[4],
-            "direction": result[5],
-            "message_body": result[6],
-            "has_media": result[7],
-            "media_count": result[8],
-            "media_urls": result[9],
-            "media_types": result[10],
-            "sent_at": result[11].isoformat() if result[11] else None,
-            "received_at": result[12].isoformat() if result[12] else None,
-            "ai_analysis": result[14],
-            "matched_borrower_id": result[16],
-            "matched_loan_id": result[17],
-            "matched_lead_id": result[18],
-            "match_confidence": float(result[20]) if result[20] else None,
-            "disposition": result[21],
-            "status": result[28],
-            "is_priority": result[25],
-            "requires_response": result[26],
-            "is_opt_out": result[27],
-            "borrower_name": result[33] if len(result) > 33 else None,
-            "loan_number": result[34] if len(result) > 34 else None,
-            "lead_name": result[35] if len(result) > 35 else None,
+            "id": result["id"],
+            "sms_provider": result["sms_provider"],
+            "provider_message_id": result["provider_message_id"],
+            "from_phone": result["from_phone"],
+            "to_phone": result["to_phone"],
+            "direction": result["direction"],
+            "message_body": result["message_body"],
+            "has_media": result["has_media"],
+            "media_count": result["media_count"],
+            "media_urls": result["media_urls"],
+            "media_types": result["media_types"],
+            "sent_at": result["sent_at"].isoformat() if result["sent_at"] else None,
+            "received_at": result["received_at"].isoformat() if result["received_at"] else None,
+            "ai_analysis": result["ai_analysis"],
+            "matched_borrower_id": result["matched_borrower_id"],
+            "matched_loan_id": result["matched_loan_id"],
+            "matched_lead_id": result["matched_lead_id"],
+            "match_confidence": float(result["match_confidence"]) if result["match_confidence"] else None,
+            "disposition": result["disposition"],
+            "status": result["status"],
+            "is_priority": result["is_priority"],
+            "requires_response": result["requires_response"],
+            "is_opt_out": result["is_opt_out"],
+            "borrower_name": result.get("loan_borrower_name"),
+            "loan_number": result.get("loan_number"),
+            "lead_name": result.get("lead_name"),
         }
 
     except HTTPException:
@@ -1568,22 +1568,22 @@ async def get_pending_sla(
             JOIN sms_intelligence_queue sq ON st.sms_queue_id = sq.id
             WHERE st.status = 'pending' AND st.user_id = :user_id
             ORDER BY st.response_due_at ASC
-        """), {"user_id": current_user.id}).fetchall()
+        """), {"user_id": current_user.id}).mappings().fetchall()
 
         pending = []
         for row in results:
             pending.append({
-                "id": row[0],
-                "sms_queue_id": row[1],
-                "phone_number": row[2],
-                "sla_type": row[3],
-                "sla_minutes": row[4],
-                "message_received_at": row[5].isoformat() if row[5] else None,
-                "response_due_at": row[6].isoformat() if row[6] else None,
-                "status": row[8],
-                "message_body": row[12] if len(row) > 12 else None,
-                "from_phone": row[13] if len(row) > 13 else None,
-                "direction": row[15] if len(row) > 15 else None
+                "id": row["id"],
+                "sms_queue_id": row["sms_queue_id"],
+                "phone_number": row["phone_number"],
+                "sla_type": row["sla_type"],
+                "sla_minutes": row["sla_minutes"],
+                "message_received_at": row["message_received_at"].isoformat() if row["message_received_at"] else None,
+                "response_due_at": row["response_due_at"].isoformat() if row["response_due_at"] else None,
+                "status": row["status"],
+                "message_body": row.get("message_body"),
+                "from_phone": row.get("from_phone"),
+                "direction": row.get("direction"),
             })
 
         return {"pending_sla": pending, "count": len(pending)}
@@ -1735,17 +1735,46 @@ async def telephony_sms_webhook(
             except Exception as media_err:
                 logger.warning(f"MMS media S3 persistence failed: {media_err}")
 
+        # Resolve user_id from the receiving Telnyx number so the background
+        # processor can determine the organization (RLS context).
+        normalized_to = normalize_phone(to_phone)
+        webhook_user_id = None
+
+        # 1) Check users table: phone, office_phone, cell_phone
+        user_row = db.execute(text("""
+            SELECT id FROM users
+            WHERE phone = :phone OR office_phone = :phone OR cell_phone = :phone
+            LIMIT 1
+        """), {"phone": normalized_to}).fetchone()
+        if user_row:
+            webhook_user_id = user_row[0]
+
+        # 2) Fallback: check agent_telephony_settings.business_caller_id or cell_phone
+        if not webhook_user_id:
+            tel_row = db.execute(text("""
+                SELECT user_id FROM agent_telephony_settings
+                WHERE business_caller_id = :phone OR cell_phone = :phone
+                LIMIT 1
+            """), {"phone": normalized_to}).fetchone()
+            if tel_row:
+                webhook_user_id = tel_row[0]
+
+        if not webhook_user_id:
+            logger.warning("SMS webhook: could not resolve user_id for to_phone=%s", normalized_to)
+
         # Insert into queue (with S3 keys for persisted media)
         result = db.execute(text("""
             INSERT INTO sms_intelligence_queue (
                 sms_provider, provider_message_id, from_phone, to_phone,
                 direction, message_body, has_media, media_count,
                 media_urls, media_types, media_s3_keys,
+                user_id,
                 received_at, status
             ) VALUES (
                 'telnyx', :message_sid, :from_phone, :to_phone,
                 'inbound', :body, :has_media, :media_count,
                 :media_urls, :media_types, :media_s3_keys,
+                :user_id,
                 CURRENT_TIMESTAMP, 'pending'
             )
             ON CONFLICT (sms_provider, provider_message_id) DO NOTHING
@@ -1753,13 +1782,14 @@ async def telephony_sms_webhook(
         """), {
             "message_sid": message_sid,
             "from_phone": normalize_phone(from_phone),
-            "to_phone": normalize_phone(to_phone),
+            "to_phone": normalized_to,
             "body": body,
             "has_media": num_media > 0,
             "media_count": num_media,
             "media_urls": json.dumps(media_urls) if media_urls else None,
             "media_types": json.dumps(media_types) if media_types else None,
             "media_s3_keys": json.dumps(media_s3_keys) if media_s3_keys else "[]",
+            "user_id": webhook_user_id,
         })
 
         new_id = result.fetchone()
