@@ -140,7 +140,7 @@ ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS borrower_target_rates (
     id                  BIGSERIAL PRIMARY KEY,
     borrower_id         UUID NOT NULL,              -- FK to your borrowers table
-    loan_id             UUID NOT NULL,              -- FK to your loans table (the current loan)
+    loan_id             INTEGER NOT NULL REFERENCES loans(id),  -- FK to your loans table (the current loan)
     product             TEXT NOT NULL,              -- the product they'd refi INTO (often same as current)
     target_rate         NUMERIC(7,4) NOT NULL,      -- the rate that triggers outreach
     min_monthly_savings NUMERIC(10,2),              -- floor: don't trigger if savings below this

@@ -106,6 +106,14 @@ class PauseLoanBody(BaseModel):
     reason: str = "Manual pause"
 
 
+class PauseSequenceBody(BaseModel):
+    reason: str = "Manual pause"
+
+
+class CancelSequenceBody(BaseModel):
+    reason: str = "lo_cancelled"
+
+
 # ---------------------------------------------------------------------------
 # Cadence Template CRUD
 # ---------------------------------------------------------------------------
@@ -343,3 +351,171 @@ async def seed_system_cadences(
     service = _get_service(db, current_user)
     count = await service.seed_system_cadences()
     return {"seeded": count, "message": f"Seeded {count} system cadence templates"}
+
+
+# ===========================================================================
+# Sequence-level endpoints (consumed by frontend client-file cadenceApi)
+#
+# The frontend calls:
+#   POST /api/v1/cadence/sequences/{sequence_id}/pause
+#   POST /api/v1/cadence/sequences/{sequence_id}/resume
+#   POST /api/v1/cadence/sequences/{sequence_id}/cancel
+#
+# This router is mounted at /api/v1 in router_registry.py so the full
+# paths resolve correctly.
+# ===========================================================================
+
+sequences_router = APIRouter(
+    prefix="/cadence", tags=["cadence-sequences"],
+)
+
+
+def _serialize_execution(ex) -> dict:
+    """Serialize a FollowupExecution to the shape the frontend expects."""
+    return {
+        "id": str(ex.id),
+        "cadence_id": ex.cadence_id,
+        "loan_id": ex.loan_id,
+        "status": ex.status,
+        "attempts_made": ex.attempts_made or 0,
+        "max_attempts": None,  # lives on cadence template, not execution
+        "current_step": ex.current_step,
+        "next_send_at": ex.next_send_at.isoformat() if ex.next_send_at else None,
+        "paused_at": ex.paused_at.isoformat() if ex.paused_at else None,
+        "pause_reason": ex.pause_reason,
+        "cancelled_at": ex.cancelled_at.isoformat() if ex.cancelled_at else None,
+        "cancel_reason": ex.cancel_reason,
+        "started_at": ex.created_at.isoformat() if ex.created_at else None,
+        "ended_at": (
+            (ex.completed_at or ex.cancelled_at).isoformat()
+            if (ex.completed_at or ex.cancelled_at)
+            else None
+        ),
+        "borrower_email": ex.borrower_email,
+        "borrower_name": ex.borrower_name,
+    }
+
+
+def _get_execution_or_404(db, execution_id: int, org_id: int):
+    """Look up a FollowupExecution by ID, scoped to org. Raises 404 if missing."""
+    from database.models.followup_cadence import FollowupExecution
+
+    execution = (
+        db.query(FollowupExecution)
+        .filter(
+            FollowupExecution.id == execution_id,
+            FollowupExecution.organization_id == org_id,
+        )
+        .first()
+    )
+    if not execution:
+        raise HTTPException(status_code=404, detail="Cadence sequence not found")
+    return execution
+
+
+@sequences_router.post("/sequences/{sequence_id}/pause")
+async def pause_sequence(
+    sequence_id: int,
+    body: PauseSequenceBody = None,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Pause a single cadence execution (sequence).
+
+    Sets status to PAUSED and records the pause timestamp and reason.
+    Only ACTIVE executions can be paused.
+    """
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
+
+    execution = _get_execution_or_404(db, sequence_id, org_id)
+
+    if execution.status != "ACTIVE":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot pause sequence with status '{execution.status}'; must be ACTIVE",
+        )
+
+    reason = body.reason if body else "Manual pause"
+
+    execution.status = "PAUSED"
+    execution.paused_at = datetime.utcnow()
+    execution.pause_reason = reason
+    execution.next_send_at = None
+    db.commit()
+    db.refresh(execution)
+
+    logger.info("Paused cadence sequence %d for org %d: %s", sequence_id, org_id, reason)
+    return _serialize_execution(execution)
+
+
+@sequences_router.post("/sequences/{sequence_id}/resume")
+async def resume_sequence(
+    sequence_id: int,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Resume a paused cadence execution (sequence).
+
+    Resets status to ACTIVE, clears pause fields, and schedules
+    next_send_at to now so the scheduler picks it up promptly.
+    """
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
+
+    execution = _get_execution_or_404(db, sequence_id, org_id)
+
+    if execution.status != "PAUSED":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot resume sequence with status '{execution.status}'; must be PAUSED",
+        )
+
+    execution.status = "ACTIVE"
+    execution.paused_at = None
+    execution.pause_reason = None
+    execution.next_send_at = datetime.utcnow()
+    db.commit()
+    db.refresh(execution)
+
+    logger.info("Resumed cadence sequence %d for org %d", sequence_id, org_id)
+    return _serialize_execution(execution)
+
+
+@sequences_router.post("/sequences/{sequence_id}/cancel")
+async def cancel_sequence(
+    sequence_id: int,
+    body: CancelSequenceBody = None,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Cancel a cadence execution (sequence).
+
+    Sets status to CANCELLED and records the cancellation timestamp
+    and reason. Both ACTIVE and PAUSED executions can be cancelled.
+    """
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
+
+    execution = _get_execution_or_404(db, sequence_id, org_id)
+
+    if execution.status not in ("ACTIVE", "PAUSED"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel sequence with status '{execution.status}'; must be ACTIVE or PAUSED",
+        )
+
+    reason = body.reason if body else "lo_cancelled"
+
+    execution.status = "CANCELLED"
+    execution.cancelled_at = datetime.utcnow()
+    execution.cancel_reason = reason
+    execution.next_send_at = None
+    db.commit()
+    db.refresh(execution)
+
+    logger.info("Cancelled cadence sequence %d for org %d: %s", sequence_id, org_id, reason)
+    return _serialize_execution(execution)

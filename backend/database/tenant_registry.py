@@ -542,8 +542,8 @@ TENANT_SCOPED_MODELS: set[str] = {
     "TaskExecution",
     "AgentAction",
 
-    # --- subscription.py: shares __tablename__ with OrgSubscription (billing.py)
-    # which adds organization_id to the merged Table at runtime ---
+    # --- subscription.py: user-level subscriptions (tablename='subscriptions') ---
+    # OrgSubscription (models/billing.py) now uses separate 'org_subscriptions' table
     "Subscription",
 
     # =========================================================================
@@ -928,8 +928,8 @@ SYSTEM_SCOPED_MODELS: set[str] = {
 
     # --- subscription.py: Global billing/plan data ---
     "SubscriptionPlan",
-    # NOTE: Subscription moved to TENANT — shares __tablename__ 'subscriptions'
-    # with OrgSubscription (models/billing.py) which adds organization_id at runtime
+    # NOTE: Subscription is in TENANT list above (user-level, tablename='subscriptions')
+    # OrgSubscription (models/billing.py) now uses separate 'org_subscriptions' table
     "PromoCode",
     "TeamMember",
 

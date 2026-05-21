@@ -7,6 +7,7 @@ for the mortgage CRM SaaS platform.
 
 import stripe
 import os
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, TYPE_CHECKING
 from sqlalchemy.orm import Session
@@ -14,8 +15,12 @@ from sqlalchemy.orm import Session
 if TYPE_CHECKING:
     import stripe.checkout
 
+logger = logging.getLogger(__name__)
+
 # Initialize Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+if not stripe.api_key:
+    logger.warning("STRIPE_SECRET_KEY not set — Stripe operations will fail")
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 
 

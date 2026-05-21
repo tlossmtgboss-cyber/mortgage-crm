@@ -234,7 +234,7 @@ async def sync_user_emails(
 
     stored = 0
     stored += _store_emails(db, inbox, user_id, org_id, "Inbox")
-    stored += _store_emails(db, sent, user_id, org_id, "Sent Items")
+    stored += _store_emails(db, sent, user_id, org_id, "SentItems")
     db.commit()
 
     matched = match_unlinked_emails(db, org_id)

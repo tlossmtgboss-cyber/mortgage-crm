@@ -493,13 +493,12 @@ def _build_context_prompt(db: Session, phone_number: str, lead_id: Optional[int]
             parts.append(f"Loan Stage: {lead_row['stage']}")
 
     if lead_id:
-        notes = db.execute(
-            text("SELECT content FROM lead_notes WHERE lead_id = :lid ORDER BY created_at DESC LIMIT 3"),
+        note_row = db.execute(
+            text("SELECT notes FROM leads WHERE id = :lid"),
             {"lid": lead_id},
-        ).mappings().all()
-        if notes:
-            note_texts = [n["content"][:100] for n in notes]
-            parts.append(f"Recent Notes: {'; '.join(note_texts)}")
+        ).fetchone()
+        if note_row and note_row[0]:
+            parts.append(f"Recent Notes: {note_row[0][:300]}")
 
         loan_row = db.execute(
             text("SELECT loan_amount, loan_type, stage, property_address FROM loans WHERE lead_id = :lid AND organization_id = :oid AND stage NOT IN ('FUNDED','CANCELLED','DENIED','DEAD','WITHDRAWN') ORDER BY created_at DESC LIMIT 1"),

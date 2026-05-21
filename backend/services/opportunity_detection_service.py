@@ -57,8 +57,8 @@ class OpportunityDetectionService:
         """
         from models.rate_sheet import RateSheet, RateSheetRate, RefinanceOpportunity
 
-        min_savings = min_savings or self.min_savings_threshold
-        min_rate_drop = min_rate_drop or self.min_rate_drop
+        min_savings = min_savings if min_savings is not None else self.min_savings_threshold
+        min_rate_drop = min_rate_drop if min_rate_drop is not None else self.min_rate_drop
 
         # Verify rate sheet exists and has rates
         rate_sheet = self.db.query(RateSheet).filter(RateSheet.id == rate_sheet_id).first()

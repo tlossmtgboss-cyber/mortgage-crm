@@ -1765,11 +1765,14 @@ async def telephony_sms_webhook(
         new_id = result.fetchone()
         db.commit()
 
-        if new_id:
-            # Schedule background analysis - don't pass db, task creates its own
-            background_tasks.add_task(process_incoming_sms, new_id[0])
+        if not new_id:
+            # ON CONFLICT DO NOTHING — duplicate message, skip processing
+            return {"success": True, "message_id": None, "duplicate": True}
 
-        return {"success": True, "message_id": new_id[0] if new_id else None}
+        # Schedule background analysis - don't pass db, task creates its own
+        background_tasks.add_task(process_incoming_sms, new_id[0])
+
+        return {"success": True, "message_id": new_id[0]}
 
     except SQLAlchemyError as e:
         logger.error(f"Error processing SMS webhook: {e}")
@@ -1788,11 +1791,14 @@ async def process_incoming_sms(sms_id: int):
             JOIN users u ON u.id = s.user_id
             WHERE s.id = :sms_id
         """), {"sms_id": sms_id}).fetchone()
-        if _sms_org and _sms_org[0]:
-            from database.tenant_mixin import set_tenant_context
-            set_tenant_context(db, _sms_org[0])
+        if not _sms_org:
+            logger.warning("SMS %s: cannot resolve organization — no user_id", sms_id)
+            return
+        from database.tenant_mixin import set_tenant_context
+        set_tenant_context(db, _sms_org[0])
     except Exception:
-        pass
+        logger.warning("SMS %s: org resolution failed, skipping", sms_id)
+        return
     try:
         # Get the SMS
         result = db.execute(text("""

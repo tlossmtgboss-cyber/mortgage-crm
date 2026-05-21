@@ -138,8 +138,9 @@ class OrgSubscription(Base):
 
     Links an organization to their billing plan and Stripe subscription.
     Renamed from 'Subscription' to avoid conflict with database.models.subscription.Subscription.
+    Uses 'org_subscriptions' table to avoid __tablename__ collision with user-level 'subscriptions'.
     """
-    __tablename__ = "subscriptions"
+    __tablename__ = "org_subscriptions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"),
@@ -187,8 +188,7 @@ class OrgSubscription(Base):
     usage_records = relationship("UsageRecord", back_populates="subscription", cascade="all, delete-orphan")
 
     __table_args__ = (
-        Index("ix_subscription_org_status", "organization_id", "status"),
-        {'extend_existing': True},
+        Index("ix_org_subscription_org_status", "organization_id", "status"),
     )
 
     def is_active(self) -> bool:
@@ -224,7 +224,7 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    subscription_id = Column(UUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="CASCADE"),
+    subscription_id = Column(UUID(as_uuid=True), ForeignKey("org_subscriptions.id", ondelete="CASCADE"),
                             nullable=False, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"),
                             nullable=False, index=True)
@@ -300,7 +300,7 @@ class UsageRecord(Base):
     __tablename__ = "usage_records"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    subscription_id = Column(UUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="CASCADE"),
+    subscription_id = Column(UUID(as_uuid=True), ForeignKey("org_subscriptions.id", ondelete="CASCADE"),
                             nullable=False, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"),
                             nullable=False, index=True)
@@ -407,7 +407,7 @@ class StripeEvent(Base):
 
     # Related objects
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), index=True)
-    subscription_id = Column(UUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="SET NULL"))
+    subscription_id = Column(UUID(as_uuid=True), ForeignKey("org_subscriptions.id", ondelete="SET NULL"))
     invoice_id = Column(UUID(as_uuid=True), ForeignKey("invoices.id", ondelete="SET NULL"))
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

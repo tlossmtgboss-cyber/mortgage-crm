@@ -66,7 +66,7 @@ class RateObservation(Base):
     source = Column(String, nullable=False)
     product = Column(String, nullable=False)
     rate = Column(Numeric(7, 4), nullable=False)
-    points = Column(Numeric(5, 3), nullable=False, default=0)
+    points = Column(Numeric(7, 3), nullable=False, default=0)
     change_pct = Column(Numeric(7, 4))
     observed_at = Column(DateTime(timezone=True), nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

@@ -147,10 +147,7 @@ async def upload_rate_sheet(
         )
     else:
         # Parse synchronously
-        import asyncio
-        result = asyncio.get_event_loop().run_until_complete(
-            parser_service.parse_rate_sheet(file_content, file.filename, rate_sheet.id)
-        )
+        result = await parser_service.parse_rate_sheet(file_content, file.filename, rate_sheet.id)
 
     return {
         'success': True,

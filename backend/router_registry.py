@@ -278,6 +278,17 @@ def _register_smart_docs_routes(app):
         import traceback
         traceback.print_exc()
 
+    # Cadence sequence-level endpoints (pause/resume/cancel by execution ID)
+    # Frontend expects: POST /api/v1/cadence/sequences/{id}/pause|resume|cancel
+    try:
+        from routes.smart_docs_cadence_routes import sequences_router
+        app.include_router(sequences_router, prefix="/api/v1", tags=["cadence-sequences"])
+        logger.info("Cadence sequence routes loaded (pause, resume, cancel)")
+    except Exception as e:
+        logger.error(f"Cadence sequence routes failed to load: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 def _register_compliance_routes(app, get_db, get_current_user):
     """SOC 2, TCPA, credit monitoring, content governance, scheduling intelligence."""
@@ -895,8 +906,10 @@ def _register_core_crm_routes(app, get_db, get_current_user, get_current_user_fl
     # Email management
     try:
         from routes.email_management_routes import register_email_management_routes
+        from services.dre_helpers import refresh_microsoft_token
         register_email_management_routes(
             app=app, get_db=get_db, get_current_user=get_current_user,
+            refresh_microsoft_token=refresh_microsoft_token,
         )
         logger.info("Email management routes loaded")
     except Exception as e:
