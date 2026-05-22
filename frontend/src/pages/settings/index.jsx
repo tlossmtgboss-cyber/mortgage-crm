@@ -252,6 +252,7 @@ function Settings() {
                 {sidebarChild('account-settings', 'Account Settings')}
                 {sidebarChild('security', 'Security')}
                 {sidebarChild('email-signature', 'Email Signature')}
+                {sidebarChild('contact-card-team', 'Contact Card')}
                 {sidebarChild('work-hours', 'Work Hours')}
                 {sidebarChild('morning-briefing', 'Morning Briefing')}
               </>);
