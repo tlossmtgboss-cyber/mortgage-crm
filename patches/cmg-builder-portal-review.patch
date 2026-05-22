@@ -1,0 +1,82 @@
+--- a/review.html	2026-05-22 15:29:06.588737495 +0000
++++ b/review.html	2026-05-22 15:29:44.455772150 +0000
+@@ -1555,11 +1555,46 @@
+     setTimeout(function() { t.style.opacity = '0'; setTimeout(function() { t.remove(); }, 300); }, 3500);
+   }
+ 
+-  function pushToBackend(sigData) {
++  function recoverSubmissionToken() {
++    // Last-resort recovery: ask the backend for the token using lo_slug + email
++    // stored in builderAccount. Used when localStorage was cleared, the browser
++    // changed, or registration silently failed (no ?lo= on register.html).
+     return new Promise(function(resolve, reject) {
+-      var token = getSubmissionToken();
+-      if (!token) { reject('no-token'); return; }
++      var loSlug = '';
++      var acct = {};
++      try { loSlug = localStorage.getItem('builderLOSlug') || ''; } catch(e) {}
++      try { acct = JSON.parse(localStorage.getItem('builderAccount') || '{}'); } catch(e) {}
++
++      if (!loSlug || !acct.email) { reject('no-token'); return; }
+ 
++      var xhr = new XMLHttpRequest();
++      xhr.open('POST', API_BASE + '/builder-portal/recover-token', true);
++      xhr.setRequestHeader('Content-Type', 'application/json');
++      xhr.onload = function() {
++        if (xhr.status >= 200 && xhr.status < 300) {
++          try {
++            var resp = JSON.parse(xhr.responseText);
++            if (resp && resp.submission_token) {
++              try { localStorage.setItem('builderSubmissionToken', resp.submission_token); } catch(e) {}
++              if (resp.application_id) {
++                try { localStorage.setItem('builderApplicationId', String(resp.application_id)); } catch(e) {}
++              }
++              resolve(resp.submission_token);
++              return;
++            }
++          } catch(e) {}
++          reject('no-token');
++        } else {
++          reject('no-token');
++        }
++      };
++      xhr.onerror = function() { reject('network-error'); };
++      xhr.send(JSON.stringify({ lo_slug: loSlug, email: acct.email }));
++    });
++  }
++
++  function submitWithToken(token, sigData) {
++    return new Promise(function(resolve, reject) {
+       var formData = {};
+       try { formData = JSON.parse(localStorage.getItem('builderFormData') || '{}'); } catch(e) {}
+ 
+@@ -1571,6 +1606,8 @@
+         if (xhr.status >= 200 && xhr.status < 300) {
+           try { localStorage.setItem('builderSubmitted', 'true'); } catch(e) {}
+           resolve();
++        } else if (xhr.status === 401) {
++          reject('invalid-token');
+         } else {
+           reject('server-error');
+         }
+@@ -1583,6 +1620,20 @@
+     });
+   }
+ 
++  function pushToBackend(sigData) {
++    var token = getSubmissionToken();
++    var attempt = token ? submitWithToken(token, sigData) : Promise.reject('no-token');
++
++    return attempt.catch(function(reason) {
++      if (reason !== 'no-token' && reason !== 'invalid-token') {
++        throw reason;
++      }
++      return recoverSubmissionToken().then(function(recoveredToken) {
++        return submitWithToken(recoveredToken, sigData);
++      });
++    });
++  }
++
+   window.submitPacket = function() {
+     var sigInput = document.getElementById('finalSignature');
+     if (!sigInput || sigInput.value.trim().length < 3) return;

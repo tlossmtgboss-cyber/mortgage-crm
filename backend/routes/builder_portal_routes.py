@@ -5,6 +5,7 @@ API endpoints for the CMG Builder Portal (static HTML on GitHub Pages).
 
 Public endpoints (builder-facing, token-authenticated):
 - POST /api/v1/builder-portal/register           Register + get submission token
+- POST /api/v1/builder-portal/recover-token      Recover token for existing draft (lo_slug + email)
 - POST /api/v1/builder-portal/documents/upload    Initiate S3 presigned upload
 - POST /api/v1/builder-portal/documents/confirm   Confirm S3 upload
 - POST /api/v1/builder-portal/submit              Submit completed application
@@ -133,6 +134,17 @@ class RegisterResponse(BaseModel):
     submission_token: str
     lo_name: str
     lo_company: Optional[str] = None
+
+
+class RecoverTokenRequest(BaseModel):
+    lo_slug: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=3, max_length=255)
+
+
+class RecoverTokenResponse(BaseModel):
+    application_id: int
+    submission_token: str
+    status: str
 
 
 class InitiateUploadRequest(BaseModel):
@@ -298,6 +310,52 @@ async def register_builder(body: RegisterRequest, request: Request, db: Session 
         submission_token=app.submission_token,
         lo_name=f"{lo.first_name or ''} {lo.last_name or ''}".strip() or lo.email,
         lo_company=getattr(lo, 'company', None),
+    )
+
+
+@router.post("/api/v1/builder-portal/recover-token", response_model=RecoverTokenResponse)
+async def recover_builder_token(
+    body: RecoverTokenRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Recover the submission token for an existing builder application.
+
+    Used when the builder's localStorage was cleared, they switched browsers,
+    or registration silently failed. Matches on lo_slug + email and returns
+    the token for the most recent non-terminal application.
+    """
+    _check_register_rate_limit(request)
+
+    from database.models.core import User
+    from database.models.builder_application import BuilderApplication
+
+    lo = db.query(User).filter(
+        User.slug == body.lo_slug,
+        User.is_active == True,
+    ).first()
+    if not lo:
+        raise HTTPException(status_code=404, detail="Loan officer not found")
+
+    app = db.query(BuilderApplication).filter(
+        BuilderApplication.lo_user_id == lo.id,
+        BuilderApplication.contact_email == body.email,
+        BuilderApplication.status.in_(("DRAFT", "SUBMITTED")),
+    ).order_by(BuilderApplication.created_at.desc()).first()
+
+    if not app:
+        raise HTTPException(status_code=404, detail="No application found for this email")
+
+    if app.created_at and (datetime.now(timezone.utc) - app.created_at) > timedelta(days=30):
+        raise HTTPException(status_code=410, detail="Application expired — please re-register")
+
+    logger.info(f"Builder token recovered for application {app.id} ({body.email})")
+
+    return RecoverTokenResponse(
+        application_id=app.id,
+        submission_token=app.submission_token,
+        status=app.status,
     )
 
 
