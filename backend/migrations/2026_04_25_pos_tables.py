@@ -125,9 +125,14 @@ def run_migration(engine=None) -> bool:
             co_ssn_encrypted VARCHAR,
             dob             DATE,
             co_dob          DATE,
+            dob_encrypted   VARCHAR,
+            co_dob_encrypted VARCHAR,
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         """,
+
+        "ALTER TABLE pos_application_pii ADD COLUMN IF NOT EXISTS dob_encrypted VARCHAR;",
+        "ALTER TABLE pos_application_pii ADD COLUMN IF NOT EXISTS co_dob_encrypted VARCHAR;",
 
         # ----------------------------------------------------------------
         # 4. pos_application_audit

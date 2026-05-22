@@ -810,7 +810,7 @@ function SignupForm({
     try {
       localStorage.removeItem('perennia_purl_token');
       const phoneDigits = unformatPhone(phone);
-      const resp = await fetch(`${API_BASE}/api/v1/pos/start-demo`, {
+      const resp = await fetch(`${API_BASE}/api/v1/pos/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -827,7 +827,12 @@ function SignupForm({
         throw new Error(data.detail || 'Failed to start application');
       }
 
-      onVerified(data.token, data.borrower_name);
+      onStarted({
+        sessionId: data.session_id,
+        emailMasked: data.email_masked,
+        expiresAt: data.expires_at,
+        flowType: 'signup',
+      });
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -953,18 +958,30 @@ function LoginForm({
     setSubmitting(true);
 
     try {
-      const resp = await fetch(`${API_BASE}/api/v1/pos/login-demo`, {
+      const resp = await fetch(`${API_BASE}/api/v1/pos/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email: email.trim() }),
       });
 
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        throw new Error(data.detail || 'No account found. Please create a new account.');
+        throw new Error(data.detail || 'Something went wrong. Please try again.');
       }
 
-      onVerified(data.token, data.borrower_name);
+      if (data.trusted_device && data.token) {
+        onVerified(data.token, data.borrower_name);
+      } else if (data.session_id) {
+        onStarted({
+          sessionId: data.session_id,
+          emailMasked: data.email_masked,
+          expiresAt: data.expires_at,
+          flowType: 'login',
+        });
+      } else {
+        setError('If you have an account, check your email for a verification code.');
+      }
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -1107,6 +1124,7 @@ function VerifyCodeForm({
       const resp = await fetch(`${API_BASE}/api/v1/pos/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           session_id: session.sessionId,
           code: finalCode,

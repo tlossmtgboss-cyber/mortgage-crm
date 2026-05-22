@@ -1640,6 +1640,21 @@ def _register_late_routes(app, get_db, get_current_user, engine, SessionLocal):
     except Exception as _tbl_err:
         logger.warning(f"pos_borrower_messages table creation skipped: {_tbl_err}")
 
+    try:
+        from sqlalchemy import text as _sa_text
+        with engine.connect() as _conn:
+            _conn.execute(_sa_text(
+                "ALTER TABLE pos_application_pii "
+                "ADD COLUMN IF NOT EXISTS dob_encrypted VARCHAR"
+            ))
+            _conn.execute(_sa_text(
+                "ALTER TABLE pos_application_pii "
+                "ADD COLUMN IF NOT EXISTS co_dob_encrypted VARCHAR"
+            ))
+            _conn.commit()
+    except Exception as _pii_err:
+        logger.warning(f"pos_application_pii DOB columns note: {_pii_err}")
+
     # iMessage / BlueBubbles Integration
     try:
         from integrations.imessage import api_router as imessage_api_router
