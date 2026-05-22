@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from database.models.pos import (
@@ -130,7 +131,7 @@ class ApplicationService:
         stmt = select(POSApplication).where(
             and_(
                 POSApplication.contact_id == contact_id,
-                POSApplication.loan_id == loan_id,
+                POSApplication.loan_id == loan_id if loan_id is not None else POSApplication.loan_id.is_(None),
                 POSApplication.status == POSStatus.DRAFT,
             )
         )
@@ -139,18 +140,26 @@ class ApplicationService:
         if existing is not None:
             return existing
 
-        app = POSApplication(
-            organization_id=organization_id,
-            workspace_id=workspace_id,
-            contact_id=contact_id,
-            loan_id=loan_id,
-            source_channel=source_channel,
-            status=POSStatus.DRAFT,
-            current_step=POSSectionKey.PERSONAL,
-            completion_pct=0,
-        )
-        session.add(app)
-        session.flush()  # populate app.id
+        try:
+            app = POSApplication(
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                contact_id=contact_id,
+                loan_id=loan_id,
+                source_channel=source_channel,
+                status=POSStatus.DRAFT,
+                current_step=POSSectionKey.PERSONAL,
+                completion_pct=0,
+            )
+            session.add(app)
+            session.flush()
+        except IntegrityError:
+            session.rollback()
+            result = session.execute(stmt)
+            existing = result.scalar_one_or_none()
+            if existing is not None:
+                return existing
+            raise
 
         self._write_audit(
             session,
@@ -206,6 +215,7 @@ class ApplicationService:
         )
 
         if section is not None and expected_updated_at is not None:
+            session.refresh(section, ["updated_at"])
             if section.updated_at != expected_updated_at:
                 raise ApplicationStateError(
                     "Section was modified by another session. "

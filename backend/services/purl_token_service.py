@@ -105,9 +105,8 @@ class PURLTokenService:
             }
         )
         token_id = result.scalar()
-        self.db.commit()
+        self.db.flush()
 
-        # Emit event - wrapped in try-except with its own transaction
         try:
             self._emit_event(
                 organization_id=organization_id,
@@ -120,11 +119,8 @@ class PURLTokenService:
                     "expires_at": expires_at.isoformat() if expires_at else None
                 }
             )
-            # Commit event separately so failure doesn't affect token creation
-            self.db.commit()
+            self.db.flush()
         except SQLAlchemyError as e:
-            # Rollback just the event, keep the token
-            self.db.rollback()
             logger.warning(f"Failed to emit token_created event: {e}")
 
         logger.info(f"Created PURL token {token_id} for workspace {workspace_id}")

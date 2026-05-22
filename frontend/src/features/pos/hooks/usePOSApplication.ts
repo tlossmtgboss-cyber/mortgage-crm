@@ -39,6 +39,9 @@ export function usePOSApplication(loanId?: number) {
   // Track whether there are unsaved changes (pending debounce or active save).
   const dirtyRef = useRef(false);
 
+  // Sequence counter to prevent stale autosave responses from overwriting newer data.
+  const saveSeqRef = useRef(0);
+
   // ---------- beforeunload guard ----------
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -129,18 +132,21 @@ export function usePOSApplication(loanId?: number) {
           JSON.stringify(body.data),
         );
       } catch (_) { /* quota exceeded — best effort */ }
+      const seq = ++saveSeqRef.current;
       setSaveState('saving');
       try {
         const section = await posApi.updateSection(application.id, sectionKey, body);
-        setSections(prev => ({ ...prev, [sectionKey]: section }));
-        if (section.application) {
-          setApplication(section.application);
+        if (seq === saveSeqRef.current) {
+          setSections(prev => ({ ...prev, [sectionKey]: section }));
+          if (section.application) {
+            setApplication(section.application);
+          }
+          dirtyRef.current = Object.values(timersRef.current).some(t => t != null);
+          setSaveState('saved');
+          // Clear draft backup on successful save.
+          try { localStorage.removeItem(`pos_draft_${application.id}_${sectionKey}`); } catch {}
+          setTimeout(() => setSaveState(prev => (prev === 'saved' ? 'idle' : prev)), 2000);
         }
-        dirtyRef.current = false;
-        setSaveState('saved');
-        // Clear draft backup on successful save.
-        try { localStorage.removeItem(`pos_draft_${application.id}_${sectionKey}`); } catch {}
-        setTimeout(() => setSaveState(prev => (prev === 'saved' ? 'idle' : prev)), 2000);
         return section;
       } catch (e) {
         // Keep dirtyRef true — data is still unsaved.
@@ -190,17 +196,21 @@ export function usePOSApplication(loanId?: number) {
   const markComplete = useCallback(
     async (sectionKey: SectionKey) => {
       if (!application) return;
-      const current = sections[sectionKey];
+      let current = sections[sectionKey];
+      if (!current) {
+        current = await loadSection(sectionKey);
+      }
+      if (!current) return;
       // Cancel any pending autosave for this section — we'll save with
       // mark_complete=true instead.
       const t = timersRef.current[sectionKey];
       if (t) clearTimeout(t);
       return saveSection(sectionKey, {
-        data: current?.data || {},
+        data: current.data || {},
         mark_complete: true,
       });
     },
-    [application, sections, saveSection],
+    [application, sections, saveSection, loadSection],
   );
 
   // ---------- submit ----------

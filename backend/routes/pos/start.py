@@ -14,11 +14,13 @@ Enterprise hardening:
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
 import os
 import random
+import re
 import secrets
 import time
 import uuid
@@ -224,7 +226,9 @@ def _resolve_organization_id(db: Session, lo_slug: Optional[str]) -> int:
 
 
 def _hash_code(code: str) -> str:
-    salt = os.getenv("SECRET_KEY", "pos-otp-salt")
+    salt = os.getenv("SECRET_KEY")
+    if not salt:
+        raise RuntimeError("SECRET_KEY environment variable is required for OTP hashing")
     return hmac.new(salt.encode(), code.encode(), hashlib.sha256).hexdigest()
 
 
@@ -243,6 +247,14 @@ class StartRequest(BaseModel):
     email: EmailStr
     phone: str = Field("", max_length=20, description="Optional phone for contact records")
     lo_slug: Optional[str] = Field(None, max_length=200, description="Loan officer slug from PURL")
+
+    @field_validator("first_name", "last_name", mode="before")
+    @classmethod
+    def clean_name(cls, v: str) -> str:
+        v = re.sub(r"<[^>]*>", "", v).strip()
+        if not v:
+            raise ValueError("Name cannot be blank")
+        return v
 
 
 class StartResponse(BaseModel):
@@ -451,6 +463,7 @@ def verify_code(body: VerifyRequest, request: Request, response: Response, db: S
     verification = (
         db.query(POSVerification)
         .filter(POSVerification.session_id == body.session_id)
+        .with_for_update()
         .first()
     )
     if not verification:
@@ -499,6 +512,18 @@ def verify_code(body: VerifyRequest, request: Request, response: Response, db: S
         slug = workspace.slug
         borrower_name = contact.first_name or verification.first_name
     else:
+        from database.models.pos import POSApplication, POSStatus
+        old_contacts = (
+            db.query(PURLContact)
+            .filter(PURLContact.email == verification.email, PURLContact.organization_id == org_id)
+            .all()
+        )
+        for old_contact in old_contacts:
+            db.query(POSApplication).filter(
+                POSApplication.contact_id == old_contact.id,
+                POSApplication.status == POSStatus.DRAFT,
+            ).update({"status": POSStatus.ABANDONED})
+
         slug = f"{verification.first_name.lower()}-{verification.last_name.lower()}-{uuid.uuid4().hex[:8]}"
         display_name = f"{verification.first_name} {verification.last_name}"
 
@@ -557,11 +582,12 @@ def verify_code(body: VerifyRequest, request: Request, response: Response, db: S
             max_age=TRUSTED_DEVICE_DAYS * 86400,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite="strict",
         )
 
     db.commit()
-    redirect_url = f"https://app.perenniaai.com/pos?token={full_token}"
+    base_url = os.getenv("POS_REDIRECT_BASE_URL", "https://app.perenniaai.com")
+    redirect_url = f"{base_url}/pos?token={full_token}"
 
     return VerifyResponse(
         token=full_token,
@@ -628,7 +654,7 @@ def resend_code(body: ResendRequest, request: Request, db: Session = Depends(get
     status_code=status.HTTP_200_OK,
     summary="Sign in with email — sends email verification code",
 )
-def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+async def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     _ensure_table(db)
 
     ip = _client_ip(request)
@@ -651,7 +677,7 @@ def login_start(body: LoginRequest, request: Request, db: Session = Depends(get_
         # M1 fix: Sleep a random duration to match the typical latency of the
         # "account exists" path (DB queries + email send = 200-2000ms). Without
         # this, an attacker can distinguish account existence via response time.
-        time.sleep(random.uniform(0.5, 1.5))
+        await asyncio.sleep(random.uniform(0.5, 1.5))
         return LoginResponse(
             session_id="",
             email_masked=_mask_email(email_lower),
@@ -762,7 +788,12 @@ class LoginDemoResponse(BaseModel):
     summary="Demo login — returns token directly without email verification",
 )
 def login_demo(body: LoginDemoRequest, request: Request, db: Session = Depends(get_db)):
+    if os.getenv("ENVIRONMENT", "production").lower() not in ("development", "test"):
+        raise HTTPException(status_code=404, detail="Not found")
     _ensure_table(db)
+
+    ip = _client_ip(request)
+    _check_ip_rate_limit(ip)
 
     email_lower = body.email.strip().lower()
 
@@ -803,6 +834,14 @@ class DemoStartRequest(BaseModel):
     phone: str = Field("", max_length=20)
     lo_slug: Optional[str] = Field(None, max_length=200)
 
+    @field_validator("first_name", "last_name", mode="before")
+    @classmethod
+    def clean_name(cls, v: str) -> str:
+        v = re.sub(r"<[^>]*>", "", v).strip()
+        if not v:
+            raise ValueError("Name cannot be blank")
+        return v
+
 
 class DemoStartResponse(BaseModel):
     token: str
@@ -817,15 +856,14 @@ class DemoStartResponse(BaseModel):
     summary="Demo start — creates application immediately without email verification",
 )
 def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(get_db)):
-    """Create-or-resume a borrower workspace and issue a PURL token.
-
-    Each phase is tagged so a 500 in production logs the exact failure
-    point (e.g. `POS demo start[create_workspace]: ...`). Without this it's
-    indistinguishable which DB step blew up.
-    """
+    if os.getenv("ENVIRONMENT", "production").lower() not in ("development", "test"):
+        raise HTTPException(status_code=404, detail="Not found")
     phase = "ensure_table"
     try:
         _ensure_table(db)
+
+        ip = _client_ip(request)
+        _check_ip_rate_limit(ip)
 
         phase = "resolve_org"
         try:
@@ -842,7 +880,7 @@ def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(g
         from database.models.pos import POSApplication, POSStatus
         existing_contacts = (
             db.query(PURLContact)
-            .filter(PURLContact.email == email_lower)
+            .filter(PURLContact.email == email_lower, PURLContact.organization_id == org_id)
             .all()
         )
         for old_contact in existing_contacts:

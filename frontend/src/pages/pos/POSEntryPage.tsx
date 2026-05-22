@@ -36,6 +36,35 @@ interface VerifySession {
 const SESSION_KEY = 'perennia_pos_verify';
 const SIGNUP_DRAFT_KEY = 'perennia_pos_signup_draft';
 
+class ChunkErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="pos-start">
+          <div className="pos-start__card" style={{ textAlign: 'center' }}>
+            <p style={{ color: '#6B7B75', fontSize: 15, marginBottom: 16 }}>
+              Something went wrong loading the application.
+            </p>
+            <button
+              className="pos-start__btn"
+              onClick={() => window.location.reload()}
+              style={{ maxWidth: 200 }}
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const POSEntryPage: React.FC = () => {
   const [searchParams] = useSearchParams();
 
@@ -189,20 +218,22 @@ const POSEntryPage: React.FC = () => {
 
   if (flowStep === 'app' && purlToken) {
     return (
-      <Suspense fallback={
-        <div className="pos-start">
-          <div className="pos-start__card" style={{ textAlign: 'center' }}>
-            <span className="pos-start__spinner" />
+      <ChunkErrorBoundary>
+        <Suspense fallback={
+          <div className="pos-start">
+            <div className="pos-start__card" style={{ textAlign: 'center' }}>
+              <span className="pos-start__spinner" />
+            </div>
           </div>
-        </div>
-      }>
-        <POSContainer
-          loanId={loanId}
-          borrowerName={borrowerName}
-          userInitials={searchParams.get('initials') || borrowerName.charAt(0).toUpperCase()}
-          onAuthError={handleAuthError}
-        />
-      </Suspense>
+        }>
+          <POSContainer
+            loanId={loanId}
+            borrowerName={borrowerName}
+            userInitials={searchParams.get('initials') || borrowerName.charAt(0).toUpperCase()}
+            onAuthError={handleAuthError}
+          />
+        </Suspense>
+      </ChunkErrorBoundary>
     );
   }
 
@@ -297,7 +328,7 @@ function AuthGate({
 
   const VARIANT_ORDER: DesignVariant[] = ['conversational', 'split', 'social', 'rate', 'personal', 'minimal', 'dashboard', 'timeline'];
 
-  const showPicker = process.env.NODE_ENV === 'development' || new URLSearchParams(window.location.search).has('design');
+  const showPicker = process.env.NODE_ENV === 'development';
 
   const picker = showPicker ? (
     <div className="pos-picker" role="toolbar" aria-label="Design variant picker">

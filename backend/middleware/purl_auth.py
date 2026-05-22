@@ -126,28 +126,6 @@ async def get_purl_context_optional(
     if not token:
         return None
 
-    # Dev-mode test token bypass — requires BOTH conditions:
-    #   1. ENVIRONMENT explicitly set to "development" or "test" (not absent, not anything else)
-    #   2. ALLOW_TEST_TOKENS explicitly "true"
-    # SEC-001: Reject if ENVIRONMENT is unset, "production", "staging", or any unknown value.
-    import os
-    _env = os.getenv("ENVIRONMENT", "").lower()
-    if (
-        token == "purl_live_dev_test_token_00000000"
-        and _env in ("development", "test")
-        and os.getenv("ALLOW_TEST_TOKENS", "").lower() == "true"
-    ):
-        logger.warning("Dev-mode PURL token accepted (env=%s)", _env)
-        return PURLAuthContext(
-            token_id=0,
-            organization_id=1,
-            workspace_id=1,
-            workspace_slug="dev-test",
-            workspace_status="active",
-            scope=TokenScope.WRITE,
-            contact_id=9999,
-        )
-
     try:
         token_service = PURLTokenService(db)
         context_data = token_service.verify_token(token)
@@ -311,7 +289,7 @@ class PURLAuditMiddleware:
 
         # Check if this is a PURL route
         path = scope.get("path", "")
-        if not path.startswith("/api/purl/"):
+        if not (path.startswith("/api/purl/") or path.startswith("/api/v1/pos/")):
             await self.app(scope, receive, send)
             return
 
