@@ -1590,6 +1590,11 @@ async def submit_mortgage_planner_questionnaire(
             # Create new lead
             from database.enums import LeadStage
             name_parts = submission.name.strip().split(None, 1) if submission.name else []
+            # Look up organization_id from the loan officer's user record
+            from database.models import User as _User
+            lo_user = db.query(_User).filter(_User.id == loan_officer_id).first()
+            lo_org_id = lo_user.organization_id if lo_user and lo_user.organization_id else 1
+
             lead = Lead(
                 name=submission.name,
                 first_name=name_parts[0] if name_parts else None,
@@ -1597,6 +1602,7 @@ async def submit_mortgage_planner_questionnaire(
                 email=submission.email,
                 phone=submission.phone,
                 owner_id=loan_officer_id,
+                organization_id=lo_org_id,
                 source="Mortgage Planner Questionnaire",
                 stage=LeadStage.NEW
             )
@@ -2105,7 +2111,7 @@ async def verify_phone_code(
 
         # Update user's phone verification status if user_id provided
         if request.user_id:
-            from models import User
+            from database.models import User
             user = db.query(User).filter(User.id == request.user_id).first()
             if user:
                 user.phone_verified = True
@@ -2146,7 +2152,7 @@ async def check_email_verification(
                 del verification_codes[key]
 
                 # Update user if found
-                from models import User
+                from database.models import User
                 user = db.query(User).filter(User.email == email).first()
                 if user:
                     user.email_verified = True
@@ -2302,10 +2308,16 @@ IP: {req.client.host if req.client else 'Unknown'}
         try:
             from sqlalchemy import text
 
+            # Look up default organization for public contact form leads
+            org_row = db.execute(
+                text("SELECT id FROM organizations ORDER BY id LIMIT 1")
+            ).fetchone()
+            default_org_id = org_row[0] if org_row else 1
+
             db.execute(
                 text("""
-                    INSERT INTO leads (first_name, last_name, email, phone, source, stage, notes, created_at)
-                    VALUES (:first_name, :last_name, :email, :phone, 'website_contact', 'New', :notes, :now)
+                    INSERT INTO leads (first_name, last_name, email, phone, source, stage, notes, created_at, organization_id)
+                    VALUES (:first_name, :last_name, :email, :phone, 'website_contact', 'New', :notes, :now, :organization_id)
                     ON CONFLICT DO NOTHING
                 """),
                 {
@@ -2315,6 +2327,7 @@ IP: {req.client.host if req.client else 'Unknown'}
                     "phone": e164_phone,
                     "notes": f"[{subject_label}] {request.message[:500]}",
                     "now": datetime.now(timezone.utc),
+                    "organization_id": default_org_id,
                 },
             )
             db.commit()

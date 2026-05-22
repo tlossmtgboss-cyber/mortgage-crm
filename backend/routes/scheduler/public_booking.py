@@ -413,15 +413,12 @@ async def get_public_booking_page(
                                 description="Schedule a personalized demo of our platform",
                                 default_duration_minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES,
                                 allowed_durations=ALLOWED_APPOINTMENT_DURATIONS,
-                                meeting_type="consultation",
+                                meeting_type="custom",
                                 default_mode="phone",
                                 color="#2563eb",
                                 icon="phone",
                                 is_public=True,
                                 is_active=True,
-                                requires_confirmation=False,
-                                buffer_before_minutes=DEFAULT_BUFFER_BEFORE_MINUTES,
-                                buffer_after_minutes=DEFAULT_BUFFER_AFTER_MINUTES
                             )
                             db.add(user_type)
                             db.flush()

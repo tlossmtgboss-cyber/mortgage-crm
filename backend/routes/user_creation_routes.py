@@ -321,7 +321,8 @@ def get_user_creation_routes(
                 phone=phone,
                 role="pending",
                 permission_role="pending",
-                is_active=False
+                is_active=False,
+                organization_id=current_user.organization_id
             )
             db.add(new_user)
             db.flush()
@@ -481,7 +482,8 @@ def get_user_creation_routes(
                 phone=data.phone,
                 role="pending",
                 permission_role="pending",
-                is_active=False
+                is_active=False,
+                organization_id=current_user.organization_id
             )
             db.add(new_user)
             db.flush()  # Get the ID

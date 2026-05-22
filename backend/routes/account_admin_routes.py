@@ -111,7 +111,7 @@ async def get_kpis(
         # Get active users count
         users_result = db.execute(text("""
             SELECT COUNT(*) FROM users
-            WHERE tenant_account_id IS NOT NULL
+            WHERE organization_id IS NOT NULL
             AND is_active = true
         """)).scalar() or 0
 
@@ -123,7 +123,7 @@ async def get_kpis(
                 updated_at < NOW() - INTERVAL '30 days'
                 OR NOT EXISTS (
                     SELECT 1 FROM users
-                    WHERE tenant_account_id = tenant_accounts.id
+                    WHERE organization_id = tenant_accounts.id
                     AND last_activity_at > NOW() - INTERVAL '30 days'
                 )
             )
@@ -214,7 +214,7 @@ async def list_accounts(
                 ta.suspended_at, ta.canceled_at, ta.created_at, ta.updated_at,
                 ta.owner_user_id,
                 u.full_name as owner_name, u.email as owner_email,
-                (SELECT MAX(last_activity_at) FROM users WHERE tenant_account_id = ta.id) as last_activity_at,
+                (SELECT MAX(last_activity_at) FROM users WHERE organization_id = ta.id) as last_activity_at,
                 (SELECT current_period_end FROM account_subscriptions
                  WHERE account_id = ta.id AND status = 'active' LIMIT 1) as renewal_date,
                 COALESCE((SELECT price_amount FROM account_subscriptions
@@ -559,7 +559,7 @@ async def delete_account(
 
         # Get user IDs for this account
         user_rows = db.execute(text("""
-            SELECT id FROM users WHERE tenant_account_id = :account_id
+            SELECT id FROM users WHERE organization_id = :account_id
         """), {'account_id': account_id}).fetchall()
         user_ids = [row[0] for row in user_rows]
 
@@ -643,7 +643,7 @@ async def delete_account(
 
         # Delete associated users
         db.execute(text("""
-            DELETE FROM users WHERE tenant_account_id = :account_id
+            DELETE FROM users WHERE organization_id = :account_id
         """), {'account_id': account_id})
 
         # Soft delete the account
@@ -701,7 +701,7 @@ async def list_account_users(
         users = db.execute(text("""
             SELECT
                 u.id, u.email, u.full_name, u.role, u.is_active, u.mfa_enabled,
-                u.created_at, u.last_activity_at, u.device_count, u.active_sessions_count,
+                u.created_at, u.last_activity_at,
                 COALESCE(s.tasks_completed, 0) as tasks_30d,
                 COALESCE(s.calls_placed, 0) as calls_placed_30d,
                 COALESCE(s.calls_received, 0) as calls_received_30d,
@@ -710,14 +710,14 @@ async def list_account_users(
             FROM users u
             LEFT JOIN user_activity_stats s ON s.user_id = u.id
                 AND s.period = to_char(NOW(), 'YYYY-MM')
-            WHERE u.tenant_account_id = :account_id
+            WHERE u.organization_id = :account_id
             ORDER BY u.created_at DESC
             LIMIT :limit OFFSET :offset
         """), {'account_id': account_id, 'limit': limit, 'offset': (page - 1) * limit}).fetchall()
 
         total = db.execute(text("""
             SELECT COUNT(*) FROM users
-            WHERE tenant_account_id = :account_id
+            WHERE organization_id = :account_id
         """), {'account_id': account_id}).scalar() or 0
 
         user_list = []
@@ -732,15 +732,13 @@ async def list_account_users(
                 'mfaEnabled': u[5] or False,
                 'createdAt': u[6].isoformat() if u[6] else None,
                 'lastLoginAt': u[7].isoformat() if u[7] else None,
-                'deviceCount': u[8] or 0,
-                'activeSessions': u[9] or 0,
                 'accountId': account_id,
                 'accountName': account[0],
-                'tasksCompleted30d': u[10],
-                'callsPlaced30d': u[11],
-                'callsReceived30d': u[12],
-                'textsSent30d': u[13],
-                'emailsSent30d': u[14],
+                'tasksCompleted30d': u[8],
+                'callsPlaced30d': u[9],
+                'callsReceived30d': u[10],
+                'textsSent30d': u[11],
+                'emailsSent30d': u[12],
             })
 
         return success_response(
@@ -781,7 +779,7 @@ async def get_user_detail(
                 s.emails_sent, s.notes_created, s.leads_created, s.loans_created,
                 s.documents_uploaded, s.ai_actions_triggered
             FROM users u
-            LEFT JOIN tenant_accounts ta ON ta.id = u.tenant_account_id
+            LEFT JOIN tenant_accounts ta ON ta.id = u.organization_id
             LEFT JOIN user_activity_stats s ON s.user_id = u.id
                 AND s.period = to_char(NOW(), 'YYYY-MM')
             WHERE u.id = :user_id
@@ -796,15 +794,13 @@ async def get_user_detail(
             'id': str(user.id),
             'email': user.email,
             'name': user.full_name or '',
-            'accountId': str(user.tenant_account_id) if user.tenant_account_id else None,
+            'accountId': str(user.organization_id) if user.organization_id else None,
             'accountName': user.account_name or '',
             'roles': [user.role] if user.role else [],
             'status': status,
             'mfaEnabled': user.mfa_enabled or False,
             'createdAt': user.created_at.isoformat() if user.created_at else None,
             'lastLoginAt': user.last_activity_at.isoformat() if user.last_activity_at else None,
-            'deviceCount': user.device_count or 0,
-            'activeSessions': user.active_sessions_count or 0,
             'tasksCompleted30d': user.tasks_completed or 0,
             'callsPlaced30d': user.calls_placed or 0,
             'callsReceived30d': user.calls_received or 0,
@@ -1331,7 +1327,7 @@ async def start_impersonation(
             raise ValidationException("Cannot impersonate yourself")
 
         target_user = db.execute(text("""
-            SELECT id, full_name, email, tenant_account_id, role, permission_role
+            SELECT id, full_name, email, organization_id, role, permission_role
             FROM users
             WHERE id = :user_id
         """), {'user_id': user_id_int}).fetchone()
@@ -1340,8 +1336,8 @@ async def start_impersonation(
             raise NotFoundException(f"User {imp_request.user_id} not found")
 
         # C1 guardrail: cross-org impersonation blocked unless superadmin
-        admin_tenant = getattr(current_user, 'tenant_account_id', None)
-        target_tenant = target_user[3]  # tenant_account_id
+        admin_tenant = getattr(current_user, 'organization_id', None)
+        target_tenant = target_user[3]  # organization_id
         is_superadmin = getattr(current_user, 'is_superadmin', False)
         if target_tenant != admin_tenant and not is_superadmin:
             raise PermissionException("Cannot impersonate users in other organizations")
@@ -1402,8 +1398,8 @@ async def stop_impersonation(
 
         # Find active session
         session = db.execute(text("""
-            SELECT id, target_user_id FROM impersonation_sessions
-            WHERE admin_user_id = :admin_id AND is_active = true
+            SELECT id, impersonated_user_id FROM impersonation_sessions
+            WHERE manager_id = :admin_id AND is_active = true
             ORDER BY started_at DESC LIMIT 1
         """), {'admin_id': current_user.id}).fetchone()
 

@@ -107,7 +107,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     # Group leads by status
     lead_status_breakdown = {}
     for lead in all_leads:
-        status = lead.stage.value if lead.stage else 'Unassigned'
+        status = lead.stage if lead.stage else 'Unassigned'
         lead_status_breakdown[status] = lead_status_breakdown.get(status, 0) + 1
 
     # Get ACTUAL LOAN DATA - use raw SQL to avoid enum deserialization issues
@@ -203,7 +203,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         })
 
     # New leads need initial contact
-    new_stage_leads = [l for l in all_leads if l.stage and l.stage.value == 'New']
+    new_stage_leads = [l for l in all_leads if l.stage and l.stage == 'New']
     if new_stage_leads:
         follow_ups.append({
             "type": "New Leads Follow-up",
@@ -212,7 +212,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         })
 
     # Pre-approved leads - rate lock opportunities
-    preapproved = [l for l in all_leads if l.stage and l.stage.value == 'Pre-Approved']
+    preapproved = [l for l in all_leads if l.stage and l.stage == 'Pre-Approved']
     if preapproved:
         follow_ups.append({
             "type": "Pre-Approved - Rate Lock Check",
@@ -221,7 +221,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         })
 
     # Prospects need nurturing
-    prospects = [l for l in all_leads if l.stage and l.stage.value == 'Prospect']
+    prospects = [l for l in all_leads if l.stage and l.stage == 'Prospect']
     if prospects:
         follow_ups.append({
             "type": "Prospect Nurturing",
@@ -323,7 +323,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
             "workflow_tasks": len(workflow_tasks),
             "overdue_tasks": len(overdue_tasks),
             "active_leads": total_leads,
-            "hot_prospects": len([l for l in all_leads if l.stage and l.stage.value in ['Prospect', 'Pre-Approved']]),
+            "hot_prospects": len([l for l in all_leads if l.stage and l.stage in ['Prospect', 'Pre-Approved']]),
             "loans_in_pipeline": total_loans,
             "pipeline_volume": f"${total_pipeline_value:,.0f}",
             "unread_messages": unread_messages,
@@ -382,7 +382,7 @@ def search_records(db: Session, user_id: int, query: str) -> Dict[str, Any]:
                 "name": l.name,
                 "email": l.email,
                 "phone": l.phone,
-                "status": l.stage.value if l.stage else "Unassigned"
+                "status": l.stage if l.stage else "Unassigned"
             } for l in leads
         ],
         "loans": loan_results,

@@ -959,17 +959,17 @@ async def get_agent_performance_view(request: Request, db: Session = Depends(get
         """))
 
         performance = []
-        for row in result.fetchall():
+        for row in result.mappings().fetchall():
             performance.append({
-                "id": str(row[0]),
-                "name": row[1],
-                "status": row[2],
-                "total_calls": row[3] or 0,
-                "successful_calls": row[4] or 0,
-                "success_rate_percent": float(row[5]) if row[5] else 0,
-                "avg_duration_seconds": row[6] or 0,
-                "avg_satisfaction": float(row[7]) if row[7] else None,
-                "active_calls_now": row[8] or 0
+                "id": str(row["id"]),
+                "name": row["name"],
+                "status": row["status"],
+                "total_calls": row["total_calls"] or 0,
+                "successful_calls": row["successful_calls"] or 0,
+                "success_rate_percent": float(row["success_rate_percent"]) if row["success_rate_percent"] else 0,
+                "avg_duration_seconds": row["avg_duration_seconds"] or 0,
+                "avg_satisfaction": float(row["avg_satisfaction"]) if row["avg_satisfaction"] else None,
+                "active_calls_now": row["active_calls_now"] or 0
             })
 
         return {"agents": performance}

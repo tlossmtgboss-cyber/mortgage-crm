@@ -627,19 +627,19 @@ async def get_results_summary(candidate_id: int):
             WHERE dr.candidate_id = :candidate_id
             ORDER BY dr.computed_at DESC
             LIMIT 1
-        """), {"candidate_id": candidate_id}).fetchone()
+        """), {"candidate_id": candidate_id}).mappings().fetchone()
 
         if not result:
             return {"has_results": False}
 
         return {
             "has_results": True,
-            "disc_style": result[0],
-            "wheel_zone": result[1],
-            "quality_tier": result[2],
-            "top_motivator": result[3],
-            "second_motivator": result[4],
-            "completed_at": result[5].isoformat() if result[5] else None
+            "disc_style": result["combined_style"],
+            "wheel_zone": result["wheel_zone_name"],
+            "quality_tier": result["quality_tier"],
+            "top_motivator": result["top_motivator"],
+            "second_motivator": result["second_motivator"],
+            "completed_at": result["completed_at"].isoformat() if result["completed_at"] else None
         }
 
 
@@ -651,12 +651,12 @@ async def generate_ai_content(candidate_id: int):
         disc = conn.execute(text("""
             SELECT * FROM disc_results WHERE candidate_id = :id
             ORDER BY computed_at DESC LIMIT 1
-        """), {"id": candidate_id}).fetchone()
+        """), {"id": candidate_id}).mappings().fetchone()
 
         motivator = conn.execute(text("""
             SELECT * FROM motivator_results WHERE candidate_id = :id
             ORDER BY computed_at DESC LIMIT 1
-        """), {"id": candidate_id}).fetchone()
+        """), {"id": candidate_id}).mappings().fetchone()
 
         if not disc or not motivator:
             raise HTTPException(status_code=404, detail="Results not found")
@@ -664,42 +664,42 @@ async def generate_ai_content(candidate_id: int):
         # Get candidate name
         candidate = conn.execute(text("""
             SELECT first_name, last_name FROM mm_candidates WHERE id = :id
-        """), {"id": candidate_id}).fetchone()
+        """), {"id": candidate_id}).mappings().fetchone()
 
-        candidate_name = f"{candidate[0]} {candidate[1]}" if candidate else "the candidate"
+        candidate_name = f"{candidate['first_name']} {candidate['last_name']}" if candidate else "the candidate"
 
         # Build result objects for content generator
         from services.disc.scoring_service import DISCScores, DISCResult, QualityTier
         from services.disc.motivators_service import MotivatorScores, MotivatorResult
 
         disc_result = DISCResult(
-            adapted=DISCScores(d=disc[3], i=disc[4], s=disc[5], c=disc[6]),
-            natural=DISCScores(d=disc[8], i=disc[9], s=disc[10], c=disc[11]),
-            adapted_style=disc[7],
-            natural_style=disc[12],
-            combined_style=disc[13],
-            calibration_score=float(disc[17] or 0.5),
-            consistency_score=float(disc[18] or 0.5),
-            response_time_score=float(disc[19] or 0.5),
-            quality_tier=QualityTier(disc[20] or "MEDIUM"),
+            adapted=DISCScores(d=disc["adapted_d"], i=disc["adapted_i"], s=disc["adapted_s"], c=disc["adapted_c"]),
+            natural=DISCScores(d=disc["natural_d"], i=disc["natural_i"], s=disc["natural_s"], c=disc["natural_c"]),
+            adapted_style=disc["adapted_style"],
+            natural_style=disc["natural_style"],
+            combined_style=disc["combined_style"],
+            calibration_score=float(disc["calibration_score"] or 0.5),
+            consistency_score=float(disc["consistency_score"] or 0.5),
+            response_time_score=float(disc["response_time_score"] or 0.5),
+            quality_tier=QualityTier(disc["quality_tier"] or "MEDIUM"),
         )
 
         motivator_scores = MotivatorScores(
-            aesthetic=motivator[3],
-            economic=motivator[4],
-            individualistic=motivator[5],
-            political=motivator[6],
-            altruistic=motivator[7],
-            regulatory=motivator[8],
-            theoretical=motivator[9],
+            aesthetic=motivator["aesthetic"],
+            economic=motivator["economic"],
+            individualistic=motivator["individualistic"],
+            political=motivator["political"],
+            altruistic=motivator["altruistic"],
+            regulatory=motivator["regulatory"],
+            theoretical=motivator["theoretical"],
         )
 
         motivator_result = MotivatorResult(
             scores=motivator_scores,
-            ranking=motivator[10] or {},
-            top_motivator=motivator[11],
-            second_motivator=motivator[12],
-            lowest_motivator=motivator[13],
+            ranking=motivator["ranking"] or {},
+            top_motivator=motivator["top_motivator"],
+            second_motivator=motivator["second_motivator"],
+            lowest_motivator=motivator["lowest_motivator"],
         )
 
         wheel_pos = wheel_calculator.calculate_position(
@@ -844,12 +844,12 @@ async def download_disc_pdf(candidate_id: int):
         # Get candidate name
         candidate = conn.execute(text("""
             SELECT first_name, last_name, name FROM mm_candidates WHERE id = :id
-        """), {"id": candidate_id}).fetchone()
+        """), {"id": candidate_id}).mappings().fetchone()
 
         if not candidate:
             raise HTTPException(status_code=404, detail="Candidate not found")
 
-        candidate_name = f"{candidate[0] or ''} {candidate[1] or ''}".strip() or candidate[2] or "Unknown"
+        candidate_name = f"{candidate['first_name'] or ''} {candidate['last_name'] or ''}".strip() or candidate['name'] or "Unknown"
 
         # Get DISC results
         disc = conn.execute(text("""
@@ -861,7 +861,7 @@ async def download_disc_pdf(candidate_id: int):
             FROM disc_results
             WHERE candidate_id = :candidate_id
             ORDER BY computed_at DESC LIMIT 1
-        """), {"candidate_id": candidate_id}).fetchone()
+        """), {"candidate_id": candidate_id}).mappings().fetchone()
 
         if not disc:
             raise HTTPException(status_code=404, detail="No DISC results found")
@@ -873,68 +873,68 @@ async def download_disc_pdf(candidate_id: int):
             FROM motivator_results
             WHERE candidate_id = :candidate_id
             ORDER BY computed_at DESC LIMIT 1
-        """), {"candidate_id": candidate_id}).fetchone()
+        """), {"candidate_id": candidate_id}).mappings().fetchone()
 
         if not motivator:
             raise HTTPException(status_code=404, detail="No Motivator results found")
 
         # Build DISCResult object
         disc_result = DISCResult(
-            adapted_d=disc[0],
-            adapted_i=disc[1],
-            adapted_s=disc[2],
-            adapted_c=disc[3],
-            adapted_style=disc[4],
-            natural_d=disc[5],
-            natural_i=disc[6],
-            natural_s=disc[7],
-            natural_c=disc[8],
-            natural_style=disc[9],
-            wheel_zone=disc[10],
-            wheel_position=disc[11],
-            calibration_score=float(disc[12] or 0.8),
+            adapted_d=disc["adapted_d"],
+            adapted_i=disc["adapted_i"],
+            adapted_s=disc["adapted_s"],
+            adapted_c=disc["adapted_c"],
+            adapted_style=disc["adapted_style"],
+            natural_d=disc["natural_d"],
+            natural_i=disc["natural_i"],
+            natural_s=disc["natural_s"],
+            natural_c=disc["natural_c"],
+            natural_style=disc["natural_style"],
+            wheel_zone=disc["wheel_zone"],
+            wheel_position=disc["wheel_position"],
+            calibration_score=float(disc["calibration_score"] or 0.8),
             consistency_score=0.9,
-            quality_tier=disc[13] or "MEDIUM"
+            quality_tier=disc["quality_tier"] or "MEDIUM"
         )
 
         motivator_scores = {
-            'aesthetic': motivator[0],
-            'economic': motivator[1],
-            'individualistic': motivator[2],
-            'political': motivator[3],
-            'altruistic': motivator[4],
-            'regulatory': motivator[5],
-            'theoretical': motivator[6],
+            'aesthetic': motivator["aesthetic"],
+            'economic': motivator["economic"],
+            'individualistic': motivator["individualistic"],
+            'political': motivator["political"],
+            'altruistic': motivator["altruistic"],
+            'regulatory': motivator["regulatory"],
+            'theoretical': motivator["theoretical"],
         }
 
-        motivator_ranking = motivator[7] if isinstance(motivator[7], dict) else {}
+        motivator_ranking = motivator["ranking"] if isinstance(motivator["ranking"], dict) else {}
 
         # Parse generated content if available
         generated_content = {}
-        if disc[14]:  # characteristics
-            generated_content['characteristics'] = disc[14]
-        if disc[15]:  # communication_tips
+        if disc["characteristics"]:
+            generated_content['characteristics'] = disc["characteristics"]
+        if disc["communication_tips"]:
             import json
             try:
-                generated_content['communication_tips'] = json.loads(disc[15]) if isinstance(disc[15], str) else disc[15]
+                generated_content['communication_tips'] = json.loads(disc["communication_tips"]) if isinstance(disc["communication_tips"], str) else disc["communication_tips"]
             except Exception as e:
                 logger.error(f"Error parsing communication_tips JSON in download_disc_pdf: {e}")
-        if disc[16]:  # strengths
+        if disc["strengths"]:
             import json
             try:
-                generated_content['strengths'] = json.loads(disc[16]) if isinstance(disc[16], str) else disc[16]
+                generated_content['strengths'] = json.loads(disc["strengths"]) if isinstance(disc["strengths"], str) else disc["strengths"]
             except Exception as e:
                 logger.error(f"Error parsing strengths JSON in download_disc_pdf: {e}")
-        if disc[17]:  # stress_behaviors
+        if disc["stress_behaviors"]:
             import json
             try:
-                generated_content['stress_behaviors'] = json.loads(disc[17]) if isinstance(disc[17], str) else disc[17]
+                generated_content['stress_behaviors'] = json.loads(disc["stress_behaviors"]) if isinstance(disc["stress_behaviors"], str) else disc["stress_behaviors"]
             except Exception as e:
                 logger.error(f"Error parsing stress_behaviors JSON in download_disc_pdf: {e}")
-        if disc[18]:  # improvements
+        if disc["areas_for_improvement"]:
             import json
             try:
-                generated_content['improvements'] = json.loads(disc[18]) if isinstance(disc[18], str) else disc[18]
+                generated_content['improvements'] = json.loads(disc["areas_for_improvement"]) if isinstance(disc["areas_for_improvement"], str) else disc["areas_for_improvement"]
             except Exception as e:
                 logger.error(f"Error parsing improvements JSON in download_disc_pdf: {e}")
 

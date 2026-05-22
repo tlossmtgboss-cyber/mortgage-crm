@@ -101,7 +101,7 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid token")
 
         result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            text("SELECT id, email, COALESCE(first_name || ' ' || last_name, email) as full_name FROM users WHERE email = :email"),
             {"email": email}
         )
         user_row = result.fetchone()

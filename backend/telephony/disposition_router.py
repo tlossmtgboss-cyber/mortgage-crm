@@ -30,6 +30,53 @@ def set_dependencies(db_dependency, user_dependency):
 
 
 # =============================================================================
+# DNC Helper
+# =============================================================================
+
+def _add_to_dnc(db: Session, lead_id: int, current_user, reason: str = ""):
+    """
+    Add a lead to the Do Not Call list.
+
+    Creates a ContactDNCStatus record (the canonical DNC table) keyed by phone,
+    and sets do_not_call=True on the lead's ChannelPreference if one exists.
+    """
+    from database.models import Lead
+    from database.models.dialer import ContactDNCStatus
+    from database.models.communication import ChannelPreference
+
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        logger.warning(f"DNC: Lead {lead_id} not found, skipping")
+        return
+
+    org_id = getattr(current_user, 'organization_id', None)
+
+    # 1. Create ContactDNCStatus entry if the lead has a phone number
+    if lead.phone:
+        existing = db.query(ContactDNCStatus).filter(
+            ContactDNCStatus.phone_number == lead.phone,
+            ContactDNCStatus.organization_id == org_id,
+        ).first()
+        if not existing:
+            dnc_entry = ContactDNCStatus(
+                phone_number=lead.phone,
+                organization_id=org_id,
+                reason=reason,
+                added_by_id=current_user.id,
+            )
+            db.add(dnc_entry)
+
+    # 2. Set do_not_call on ChannelPreference if one exists for this lead
+    pref = db.query(ChannelPreference).filter(
+        ChannelPreference.lead_id == lead_id,
+    ).first()
+    if pref:
+        pref.do_not_call = True
+
+    db.flush()
+
+
+# =============================================================================
 # Enhanced Disposition Endpoints
 # =============================================================================
 
@@ -100,7 +147,7 @@ async def submit_task_disposition(
     if follow_up_required and follow_up_date:
         # Create follow-up task
         new_task = Task(
-            user_id=current_user.id,
+            owner_id=current_user.id,
             title=f"Follow up: {task.contact_name}",
             description=f"Follow up from call: {notes or 'No notes'}",
             due_date=follow_up_date,
@@ -122,7 +169,7 @@ async def submit_task_disposition(
     elif referral_opportunity:
         # Create referral opportunity task
         new_task = Task(
-            user_id=current_user.id,
+            owner_id=current_user.id,
             title=f"Referral opportunity: {task.contact_name}",
             description=f"Referral opportunity from call: {notes or 'No notes'}",
             priority="medium",
@@ -143,11 +190,11 @@ async def submit_task_disposition(
     # Handle DNC if applicable
     if disposition.lower() in ["do not call", "do not call again", "dnc"]:
         if task.lead_id:
-            contact = db.query(Contact).filter(Contact.id == task.lead_id).first()
-            if contact:
-                contact.dnc_flag = True
-                db.commit()
+            try:
+                _add_to_dnc(db, task.lead_id, current_user, reason=f"Disposition: {disposition}")
                 logger.info(f"Added contact {task.lead_id} to DNC list")
+            except Exception as e:
+                logger.error(f"Error adding lead {task.lead_id} to DNC: {e}")
 
     # Process voice note if provided
     ai_summary = None
@@ -227,7 +274,7 @@ async def submit_call_log_disposition(
 
     if follow_up_required and follow_up_date:
         new_task = Task(
-            user_id=current_user.id,
+            owner_id=current_user.id,
             title=f"Follow up call",
             description=f"Follow up from call: {notes or 'No notes'}",
             due_date=follow_up_date,
@@ -248,7 +295,7 @@ async def submit_call_log_disposition(
 
     elif referral_opportunity:
         new_task = Task(
-            user_id=current_user.id,
+            owner_id=current_user.id,
             title=f"Referral opportunity",
             description=f"Referral opportunity from call: {notes or 'No notes'}",
             priority="medium",
@@ -269,9 +316,11 @@ async def submit_call_log_disposition(
     # Handle DNC
     if disposition.lower() in ["do not call", "do not call again", "dnc"]:
         if call_log.lead_id:
-            contact = db.query(Contact).filter(Contact.id == call_log.lead_id).first()
-            if contact:
-                contact.dnc_flag = True
+            try:
+                _add_to_dnc(db, call_log.lead_id, current_user, reason=f"Disposition: {disposition}")
+                logger.info(f"Added contact (lead {call_log.lead_id}) to DNC list")
+            except Exception as e:
+                logger.error(f"Error adding lead {call_log.lead_id} to DNC: {e}")
 
     db.commit()
 

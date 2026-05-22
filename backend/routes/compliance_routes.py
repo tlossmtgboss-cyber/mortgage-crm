@@ -1213,7 +1213,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
             if entry.changed_by_id:
                 user = db.query(User).filter(User.id == entry.changed_by_id).first()
                 if user:
-                    changed_by = user.name or user.email
+                    changed_by = user.full_name or user.email
 
             entries.append({
                 "audit_id": entry.id,

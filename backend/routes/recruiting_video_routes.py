@@ -311,7 +311,8 @@ async def complete_upload(
                     is_featured,
                     is_active,
                     published_at,
-                    created_by
+                    created_by,
+                    organization_id
                 ) VALUES (
                     :title,
                     :content,
@@ -320,13 +321,15 @@ async def complete_upload(
                     true,
                     true,
                     NOW(),
-                    :created_by
+                    :created_by,
+                    :organization_id
                 )
             """), {
                 "title": f"Personal Message from {recruiter.full_name if recruiter else 'Your Recruiter'}",
                 "content": request.message or "Your recruiter recorded a personalized message just for you!",
                 "media_url": video_url,
-                "created_by": user_id
+                "created_by": user_id,
+                "organization_id": org_id
             })
             db.commit()
         except Exception as company_update_error:

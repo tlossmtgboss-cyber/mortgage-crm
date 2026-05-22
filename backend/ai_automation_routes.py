@@ -58,7 +58,7 @@ async def get_current_user(
 
         # Get user with raw SQL
         result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            text("SELECT id, email, COALESCE(first_name || ' ' || last_name, email) as full_name FROM users WHERE email = :email"),
             {"email": email}
         )
         user_row = result.fetchone()

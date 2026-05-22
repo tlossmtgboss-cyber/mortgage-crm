@@ -44,7 +44,7 @@ async def execute_email_campaign(
         names = recipient_name.split()
         if len(names) >= 2:
             lead = db.query(Lead).filter(
-                Lead.user_id == user_id,
+                Lead.owner_id == user_id,
                 Lead.first_name == names[0],
                 Lead.last_name == names[-1]
             ).first()
@@ -78,7 +78,7 @@ async def execute_bulk_update(
     """Execute a bulk update operation"""
     main = get_main_module()
     Lead = main.Lead
-    Deal = main.Deal
+    Loan = main.Loan
 
     records = preview.get("records", [])
     field = modifications.get("field", preview.get("field", ""))
@@ -86,7 +86,7 @@ async def execute_bulk_update(
 
     updated_count = 0
     _protected_lead = {'id', 'organization_id', 'created_at', 'updated_at', 'owner_id'}
-    _protected_deal = {'id', 'organization_id', 'created_at', 'updated_at'}
+    _protected_loan = {'id', 'organization_id', 'created_at', 'updated_at'}
 
     for record in records:
         record_id = record.get("id")
@@ -95,7 +95,7 @@ async def execute_bulk_update(
         if record_type == "lead":
             lead = db.query(Lead).filter(
                 Lead.id == record_id,
-                Lead.user_id == user_id
+                Lead.owner_id == user_id
             ).first()
 
             if lead and hasattr(lead, field) and field not in _protected_lead:
@@ -103,13 +103,13 @@ async def execute_bulk_update(
                 updated_count += 1
 
         elif record_type == "deal":
-            deal = db.query(Deal).filter(
-                Deal.id == record_id,
-                Deal.user_id == user_id
+            loan = db.query(Loan).filter(
+                Loan.id == record_id,
+                Loan.loan_officer_id == user_id
             ).first()
 
-            if deal and hasattr(deal, field) and field not in _protected_deal:
-                setattr(deal, field, new_value)
+            if loan and hasattr(loan, field) and field not in _protected_loan:
+                setattr(loan, field, new_value)
                 updated_count += 1
 
     db.commit()
@@ -144,7 +144,7 @@ async def execute_voicemail_drop(
         names = recipient_name.split()
         if len(names) >= 2:
             lead = db.query(Lead).filter(
-                Lead.user_id == user_id,
+                Lead.owner_id == user_id,
                 Lead.first_name == names[0],
                 Lead.last_name == names[-1]
             ).first()
@@ -325,7 +325,7 @@ NMLS# {lo_nmls or settings.signature_nmls or 'N/A'}
 
         # Create activity record if we have a lead
         if lead_id:
-            lead = db.query(Lead).filter(Lead.id == lead_id, Lead.user_id == user_id).first()
+            lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == user_id).first()
             if lead:
                 activity = Activity(
                     user_id=user_id,

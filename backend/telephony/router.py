@@ -394,7 +394,7 @@ async def get_callable_contacts(
                 'contact_name': lead.name,
                 'contact_phone': lead.phone,
                 'contact_email': lead.email,
-                'stage': lead.stage.value if lead.stage else None,
+                'stage': lead.stage if lead.stage else None,
                 'last_contact': lead.last_contact.isoformat() if lead.last_contact else None,
                 'source': lead.source,
                 'lead_id': lead.id,
@@ -426,7 +426,7 @@ async def get_callable_contacts(
                     'contact_name': loan.borrower_name,
                     'contact_phone': loan.borrower_phone,
                     'contact_email': loan.borrower_email,
-                    'stage': loan.stage.value if loan.stage else None,
+                    'stage': loan.stage if loan.stage else None,
                     'last_contact': None,
                     'loan_number': loan.loan_number,
                     'lead_id': None,
@@ -1204,12 +1204,13 @@ async def webhook_call_status(
     session_id: Optional[int] = None,
     task_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    raw_body: bytes = Depends(require_telnyx_webhook)
 ):
     """
     Status callback for power dialer session calls.
 
     Updates session state based on call progress.
+    This is a webhook endpoint called by Telnyx — no user auth required.
     """
     form_data = await request.form()
     call_sid = form_data.get("CallSid", "")
@@ -1221,7 +1222,15 @@ async def webhook_call_status(
 
     if session_id and task_id:
         try:
-            engine = DialerEngine(db, current_user.id if current_user else 0, organization_id=getattr(current_user, 'organization_id', None) if current_user else None)
+            # Look up the session to get agent/org context since this is a webhook (no auth)
+            from database.models import DialerSession
+            session = db.query(DialerSession).filter(
+                DialerSession.id == session_id
+            ).first()
+            agent_id = session.agent_id if session else 0
+            org_id = session.organization_id if session else None
+
+            engine = DialerEngine(db, agent_id, organization_id=org_id)
             engine.handle_call_status(
                 session_id=session_id,
                 task_id=task_id,
@@ -1325,12 +1334,13 @@ async def webhook_recording_complete(
                 call_metadata["contact_phone"] = task.contact_phone
 
         # Send to Conversation Intelligence pipeline
+        # NOTE: Don't pass the request-scoped db session to background tasks —
+        # it will be closed when the request completes. Create a fresh session instead.
         asyncio.create_task(
-            process_call_recording_for_ci(
+            _process_recording_bg(
                 recording_url=f"{recording_url}.mp3",  # Telnyx provides MP3 format
                 recording_sid=recording_sid,
                 call_metadata=call_metadata,
-                db=db
             )
         )
 
@@ -1339,6 +1349,27 @@ async def webhook_recording_complete(
     except Exception as e:
         logger.error(f"Error processing recording webhook: {e}")
         return {"success": False, "error": "Internal server error"}
+
+
+async def _process_recording_bg(
+    recording_url: str,
+    recording_sid: str,
+    call_metadata: dict,
+):
+    """Wrapper that creates its own DB session for background CI processing."""
+    from db import SessionLocal
+    db = SessionLocal()
+    try:
+        await process_call_recording_for_ci(
+            recording_url=recording_url,
+            recording_sid=recording_sid,
+            call_metadata=call_metadata,
+            db=db,
+        )
+    except Exception as e:
+        logger.error(f"Background CI recording processing failed: {e}")
+    finally:
+        db.close()
 
 
 async def process_call_recording_for_ci(

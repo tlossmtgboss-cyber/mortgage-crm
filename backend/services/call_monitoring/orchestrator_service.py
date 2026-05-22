@@ -2035,40 +2035,13 @@ class CallMonitoringOrchestrator:
         if not risk_flag:
             return None
 
-        # Create loan condition
-        self.db.execute(text("""
-            INSERT INTO loan_conditions (
-                id, loan_id, condition_type, category, description,
-                status, priority, created_by, source, source_id,
-                organization_id
-            ) VALUES (
-                :id, :loan_id, :condition_type, :category, :description,
-                'open', :priority, :created_by, 'call_monitoring', :source_id,
-                :org_id
-            )
-        """), {
-            "id": condition_id,
-            "loan_id": session.get('loan_id'),
-            "condition_type": risk_flag[5] or 'prior_to_docs',
-            "category": risk_flag[3],
-            "description": f"{risk_flag[1]}: {risk_flag[2]}",
-            "priority": 'high' if risk_flag[4] in ('high', 'critical') else 'medium',
-            "created_by": user_id,
-            "source_id": session.get('id'),
-            "org_id": self.organization_id,
-        })
-
-        # Update risk flag with condition link
-        risk_update_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
-        risk_update_params = {"id": str(risk_flag[0]), "condition_id": condition_id}
-        if self.organization_id:
-            risk_update_params["org_id"] = self.organization_id
-        query = f"""
-            UPDATE call_risk_flags SET condition_id = :condition_id WHERE id = :id {risk_update_org_filter}
-        """
-        self.db.execute(text(query), risk_update_params)
-
-        return condition_id
+        # loan_conditions table does not exist yet — skip insert, log warning
+        logger.warning(
+            "Skipping loan condition creation: loan_conditions table not yet implemented. "
+            "Risk flag %s for loan %s would have created condition %s",
+            artifact_id, session.get('loan_id'), condition_id
+        )
+        return None
 
     # =========================================================================
     # REVIEW SCREEN

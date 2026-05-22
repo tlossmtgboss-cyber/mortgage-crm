@@ -1301,7 +1301,7 @@ AI Mortgage Assistant | Perennia AI"""
         try:
             # Get received documents count
             received = self.db.execute(text("""
-                SELECT COUNT(*) FROM loan_documents
+                SELECT COUNT(*) FROM documents
                 WHERE loan_id = :loan_id AND status = 'approved'
             """), {"loan_id": loan_id}).scalar() or 0
 

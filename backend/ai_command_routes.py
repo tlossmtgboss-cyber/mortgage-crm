@@ -1569,7 +1569,7 @@ def generate_mock_response(message: str, db: Session, user_id: int) -> Dict[str,
 
     elif "email" in message_lower or "send" in message_lower:
         # Get some sample clients
-        clients = db.query(Lead).filter(Lead.user_id == user_id).limit(5).all()
+        clients = db.query(Lead).filter(Lead.owner_id == user_id).limit(5).all()
         return {
             "intent": "EMAIL_CAMPAIGN",
             "explanation": "I'll prepare an email campaign for you.",
@@ -1604,7 +1604,7 @@ def generate_mock_response(message: str, db: Session, user_id: int) -> Dict[str,
         }
 
     elif "voicemail" in message_lower:
-        clients = db.query(Lead).filter(Lead.user_id == user_id).limit(3).all()
+        clients = db.query(Lead).filter(Lead.owner_id == user_id).limit(3).all()
         return {
             "intent": "VOICEMAIL_DROP",
             "explanation": "I'll set up a ringless voicemail campaign.",

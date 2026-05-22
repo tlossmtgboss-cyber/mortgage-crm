@@ -734,16 +734,19 @@ async def handle_full_sync(
         }
 
         # Sync milestones from CRM (filtered by org via loan ownership)
-        milestones = db.execute(sa_text("""
-            SELECT lm.id FROM loan_milestones lm
-            JOIN loans l ON l.id = lm.loan_id
-            WHERE lm.loan_id = :loan_id AND l.organization_id = :org_id
-        """), {"loan_id": loan_id, "org_id": org_id}).fetchall()
-        sync_results["milestones_synced"] = len(milestones)
+        try:
+            milestones = db.execute(sa_text("""
+                SELECT pm.id FROM process_milestones pm
+                JOIN loans l ON l.id = pm.loan_id
+                WHERE pm.loan_id = :loan_id AND l.organization_id = :org_id
+            """), {"loan_id": loan_id, "org_id": org_id}).fetchall()
+            sync_results["milestones_synced"] = len(milestones)
+        except Exception:
+            sync_results["milestones_synced"] = 0
 
         # Sync lifecycle stage (filtered by org)
         loan = db.execute(sa_text("""
-            SELECT lifecycle_stage FROM loans
+            SELECT stage FROM loans
             WHERE id = :loan_id AND organization_id = :org_id
         """), {"loan_id": loan_id, "org_id": org_id}).fetchone()
         if loan:
@@ -752,9 +755,9 @@ async def handle_full_sync(
 
         # Sync documents (filtered by org via loan ownership)
         documents = db.execute(sa_text("""
-            SELECT ld.id FROM loan_documents ld
-            JOIN loans l ON l.id = ld.loan_id
-            WHERE ld.loan_id = :loan_id AND l.organization_id = :org_id
+            SELECT d.id FROM documents d
+            JOIN loans l ON l.id = d.loan_id
+            WHERE d.loan_id = :loan_id AND l.organization_id = :org_id
         """), {"loan_id": loan_id, "org_id": org_id}).fetchall()
         sync_results["documents_synced"] = len(documents)
 
