@@ -61,7 +61,7 @@ class ChatStreamRequest(BaseModel):
 async def chat_stream(
     request: ChatStreamRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(lambda: get_db_dep()),
+    db: Session = Depends(get_db_dep()),
     current_user = Depends(current_user_flexible_dep)
 ):
     """

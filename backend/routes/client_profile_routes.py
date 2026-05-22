@@ -510,9 +510,7 @@ async def get_tasks(
     main = get_main_module()
     AITask = main.AITask
     TaskType = main.TaskType
-    get_entity_name = main.get_entity_name
-    classify_email_intent = main.classify_email_intent
-    generate_recommended_action = main.generate_recommended_action
+    from services.dre_helpers import get_entity_name, classify_email_intent, generate_recommended_action
 
     try:
         query = db.query(AITask).filter(

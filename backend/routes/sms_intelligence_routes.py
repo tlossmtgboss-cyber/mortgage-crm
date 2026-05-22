@@ -1255,21 +1255,21 @@ async def get_sms_conversation(
         query += " ORDER BY message_date DESC LIMIT :limit"
         params["limit"] = limit
 
-        results = db.execute(text(query), params).fetchall()
+        results = db.execute(text(query), params).mappings().fetchall()
 
         conversations = []
         for row in results:
             conversations.append({
-                "id": row[0],
-                "phone_number": row[1],
-                "direction": row[2],
-                "message_body": row[3],
-                "message_date": row[4].isoformat() if row[4] else None,
-                "summary": row[5],
-                "intent": row[6],
-                "sentiment": row[7],
-                "requires_response": row[8],
-                "response_sent": row[9]
+                "id": row["id"],
+                "phone_number": row["phone_number"],
+                "direction": row["direction"],
+                "message_body": row["message_body"],
+                "message_date": row["message_date"].isoformat() if row["message_date"] else None,
+                "summary": row["summary"],
+                "intent": row["intent"],
+                "sentiment": row["sentiment"],
+                "requires_response": row["requires_response"],
+                "response_sent": row["response_sent"]
             })
 
         return {"phone_number": normalized, "conversations": conversations}
@@ -1289,7 +1289,9 @@ async def get_sms_templates(
     """Get SMS templates"""
     try:
         # Issue 1 FIX: filter by user_id
-        query = "SELECT * FROM sms_templates WHERE is_active = :is_active AND user_id = :user_id"
+        query = """SELECT id, name, category, template_body, variables_used,
+                          times_used, last_used_at, is_active
+                   FROM sms_templates WHERE is_active = :is_active AND user_id = :user_id"""
         params = {"is_active": is_active, "user_id": current_user.id}
 
         if category:
@@ -1298,19 +1300,19 @@ async def get_sms_templates(
 
         query += " ORDER BY times_used DESC, name"
 
-        results = db.execute(text(query), params).fetchall()
+        results = db.execute(text(query), params).mappings().fetchall()
 
         templates = []
         for row in results:
             templates.append({
-                "id": row[0],
-                "name": row[1],
-                "category": row[2],
-                "template_body": row[3],
-                "variables_used": row[4],
-                "times_used": row[5],
-                "last_used_at": row[6].isoformat() if row[6] else None,
-                "is_active": row[7]
+                "id": row["id"],
+                "name": row["name"],
+                "category": row["category"],
+                "template_body": row["template_body"],
+                "variables_used": row["variables_used"],
+                "times_used": row["times_used"],
+                "last_used_at": row["last_used_at"].isoformat() if row["last_used_at"] else None,
+                "is_active": row["is_active"]
             })
 
         return {"templates": templates}
@@ -1402,17 +1404,17 @@ async def get_opt_outs(
             WHERE user_id = :user_id
             ORDER BY opted_out_at DESC
             LIMIT :limit OFFSET :offset
-        """), {"limit": limit, "offset": offset, "user_id": current_user.id}).fetchall()
+        """), {"limit": limit, "offset": offset, "user_id": current_user.id}).mappings().fetchall()
 
         opt_outs = []
         for row in results:
             opt_outs.append({
-                "phone_number": row[0],
-                "opted_out_at": row[1].isoformat() if row[1] else None,
-                "opt_out_message": row[2],
-                "borrower_id": row[3],
-                "loan_id": row[4],
-                "lead_id": row[5]
+                "phone_number": row["phone_number"],
+                "opted_out_at": row["opted_out_at"].isoformat() if row["opted_out_at"] else None,
+                "opt_out_message": row["opt_out_message"],
+                "borrower_id": row["borrower_id"],
+                "loan_id": row["loan_id"],
+                "lead_id": row["lead_id"]
             })
 
         total = db.execute(text(
@@ -1497,7 +1499,10 @@ async def get_document_mentions(
         # Issue 1 FIX: filter by user_id
         query = """
             SELECT
-                dm.*,
+                dm.id, dm.loan_id, dm.lead_id, dm.borrower_id, dm.sms_queue_id,
+                dm.document_mentioned, dm.document_type, dm.mention_context,
+                dm.mentioned_at, dm.status, dm.follow_up_date, dm.followed_up,
+                dm.received_date, dm.received_via,
                 s.message_body as sms_message,
                 s.from_phone
             FROM sms_document_mentions dm
@@ -1521,25 +1526,25 @@ async def get_document_mentions(
         query += " ORDER BY dm.mentioned_at DESC LIMIT :limit"
         params["limit"] = limit
 
-        results = db.execute(text(query), params).fetchall()
+        results = db.execute(text(query), params).mappings().fetchall()
 
         mentions = []
         for row in results:
             mentions.append({
-                "id": row[0],
-                "loan_id": row[1],
-                "lead_id": row[2],
-                "borrower_id": row[3],
-                "sms_queue_id": row[4],
-                "document_mentioned": row[5],
-                "document_type": row[6],
-                "mention_context": row[7],
-                "mentioned_at": row[8].isoformat() if row[8] else None,
-                "status": row[9],
-                "follow_up_date": row[10].isoformat() if row[10] else None,
-                "followed_up": row[11],
-                "received_date": row[12].isoformat() if row[12] else None,
-                "received_via": row[13]
+                "id": row["id"],
+                "loan_id": row["loan_id"],
+                "lead_id": row["lead_id"],
+                "borrower_id": row["borrower_id"],
+                "sms_queue_id": row["sms_queue_id"],
+                "document_mentioned": row["document_mentioned"],
+                "document_type": row["document_type"],
+                "mention_context": row["mention_context"],
+                "mentioned_at": row["mentioned_at"].isoformat() if row["mentioned_at"] else None,
+                "status": row["status"],
+                "follow_up_date": row["follow_up_date"].isoformat() if row["follow_up_date"] else None,
+                "followed_up": row["followed_up"],
+                "received_date": row["received_date"].isoformat() if row["received_date"] else None,
+                "received_via": row["received_via"]
             })
 
         return {"document_mentions": mentions}
@@ -1617,7 +1622,7 @@ async def get_sms_stats(
                 COUNT(*) FILTER (WHERE is_priority = true AND status = 'pending') as priority_pending
             FROM sms_intelligence_queue
             WHERE created_at >= :cutoff AND user_id = :user_id
-        """), {"cutoff": cutoff, "user_id": current_user.id}).fetchone()
+        """), {"cutoff": cutoff, "user_id": current_user.id}).mappings().fetchone()
 
         # Disposition breakdown
         disposition_result = db.execute(text("""
@@ -1626,7 +1631,7 @@ async def get_sms_stats(
             WHERE created_at >= :cutoff AND user_id = :user_id
             GROUP BY disposition
             ORDER BY count DESC
-        """), {"cutoff": cutoff, "user_id": current_user.id}).fetchall()
+        """), {"cutoff": cutoff, "user_id": current_user.id}).mappings().fetchall()
 
         # SLA stats
         sla_result = db.execute(text("""
@@ -1637,29 +1642,29 @@ async def get_sms_stats(
                 AVG(response_time_minutes) as avg_response_minutes
             FROM sms_sla_tracking
             WHERE created_at >= :cutoff AND user_id = :user_id
-        """), {"cutoff": cutoff, "user_id": current_user.id}).fetchone()
+        """), {"cutoff": cutoff, "user_id": current_user.id}).mappings().fetchone()
 
         return {
             "period_days": days,
             "totals": {
-                "total": total_result[0],
-                "inbound": total_result[1],
-                "outbound": total_result[2],
-                "pending": total_result[3],
-                "completed": total_result[4],
-                "needs_response": total_result[5],
-                "opt_outs": total_result[6],
-                "priority_pending": total_result[7]
+                "total": total_result["total"],
+                "inbound": total_result["inbound"],
+                "outbound": total_result["outbound"],
+                "pending": total_result["pending"],
+                "completed": total_result["completed"],
+                "needs_response": total_result["needs_response"],
+                "opt_outs": total_result["opt_outs"],
+                "priority_pending": total_result["priority_pending"]
             },
             "disposition_breakdown": [
-                {"disposition": row[0], "count": row[1]}
+                {"disposition": row["disposition"], "count": row["count"]}
                 for row in disposition_result
             ],
             "sla": {
-                "total_tracked": sla_result[0],
-                "met": sla_result[1],
-                "breached": sla_result[2],
-                "avg_response_minutes": float(sla_result[3]) if sla_result[3] else None
+                "total_tracked": sla_result["total"],
+                "met": sla_result["met"],
+                "breached": sla_result["breached"],
+                "avg_response_minutes": float(sla_result["avg_response_minutes"]) if sla_result["avg_response_minutes"] else None
             }
         }
 
