@@ -412,17 +412,20 @@ async def on_pos_application_submitted_promote(event: Event) -> None:
         if personal.get("phone"):
             lead.phone = personal["phone"]
 
-        # Employment fields from employment section
+        # Employment fields from employment section (nested under employer/income)
         employment = (sections.get("employment") or {}).get("data") or {}
-        if employment.get("employment_status"):
-            lead.employment_status = employment["employment_status"]
-        if employment.get("annual_income") is not None:
-            try:
-                lead.annual_income = float(employment["annual_income"])
-            except (ValueError, TypeError):
-                pass
-        if employment.get("employer_name"):
-            lead.employer_name = employment["employer_name"]
+        if employment.get("employment_type"):
+            lead.employment_status = employment["employment_type"]
+        employer = employment.get("employer") or {}
+        if employer.get("name"):
+            lead.employer_name = employer["name"]
+        income = employment.get("income") or {}
+        try:
+            annual = sum(float(income.get(k) or 0) for k in ("base", "overtime", "bonus", "commission"))
+            if annual > 0:
+                lead.annual_income = annual
+        except (ValueError, TypeError):
+            pass
 
         # Mark application completion date on the lead
         lead.application_completed_date = datetime.now(timezone.utc)
@@ -473,34 +476,56 @@ async def on_pos_application_submitted_promote(event: Event) -> None:
             loan.loan_purpose = loan_section["loan_purpose"]
         if loan_section.get("loan_type"):
             loan.loan_type = loan_section["loan_type"]
-        if loan_section.get("property_type"):
-            loan.property_type = loan_section["property_type"]
+
+        # Subject property lives nested under loan_section["property"]
+        subject_prop = loan_section.get("property") or {}
+        if subject_prop.get("type"):
+            loan.property_type = subject_prop["type"]
+        if subject_prop.get("occupancy"):
+            loan.occupancy_type = subject_prop["occupancy"]
+
         if loan_section.get("purchase_price") is not None:
             try:
                 loan.purchase_price = float(loan_section["purchase_price"])
             except (ValueError, TypeError):
                 pass
-        if loan_section.get("down_payment") is not None:
-            try:
-                loan.down_payment = float(loan_section["down_payment"])
-            except (ValueError, TypeError):
-                pass
+
+        # Down payment: frontend computes it (purchase_price - loan_amount)
+        try:
+            pp = float(loan_section.get("purchase_price") or 0)
+            la = float(loan_section.get("loan_amount") or 0)
+            if pp > 0 and la > 0 and la <= pp:
+                loan.down_payment = pp - la
+        except (ValueError, TypeError):
+            pass
+
         if loan_section.get("term") is not None:
             try:
                 loan.term = int(loan_section["term"])
             except (ValueError, TypeError):
                 pass
 
-        # Property details from the residence section
+        # Subject property address from loan section (not residence)
+        if subject_prop.get("address"):
+            loan.property_address = subject_prop["address"]
+        if subject_prop.get("city"):
+            loan.property_city = subject_prop["city"]
+        if subject_prop.get("state"):
+            loan.property_state = subject_prop["state"]
+        if subject_prop.get("zip"):
+            loan.property_zip = subject_prop["zip"]
+
+        # Borrower's current address from residence section (nested under "current")
         residence = (sections.get("residence") or {}).get("data") or {}
-        if residence.get("property_address"):
-            loan.property_address = residence["property_address"]
-        if residence.get("city"):
-            loan.property_city = residence["city"]
-        if residence.get("state"):
-            loan.property_state = residence["state"]
-        if residence.get("zip_code"):
-            loan.property_zip = residence["zip_code"]
+        current_addr = residence.get("current") or {}
+        if current_addr.get("street"):
+            lead.address = current_addr["street"]
+        if current_addr.get("city"):
+            lead.city = current_addr["city"]
+        if current_addr.get("state"):
+            lead.state = current_addr["state"]
+        if current_addr.get("zip"):
+            lead.zip_code = current_addr["zip"]
 
         # PII → Lead encrypted fields (SSN/DOB live on Lead, not Loan)
         if pii.get("ssn"):
@@ -1135,6 +1160,154 @@ async def on_pos_application_submitted_mismo_email(event: Event) -> None:
 
 
 # =============================================================================
+# POS submission — Aria intro SMS + team contact card
+# =============================================================================
+
+
+async def on_pos_application_submitted_sms_intro(event: Event) -> None:
+    """Send Aria's welcome SMS sequence with team vCard to the applicant.
+
+    3-message sequence via Telnyx (+18438838956):
+      1. Aria introduces herself as the LO's AI assistant
+      2. Prompt to save the team contact card
+      3. MMS with the team vCard attachment
+    """
+    import asyncio
+    import os
+    import time
+
+    data = event.data
+    application_id = data.get("application_id")
+    contact_id = data.get("contact_id")
+    payload = data.get("payload") or {}
+    org_id = event.org_id
+
+    if not contact_id:
+        logger.warning("sms_intro: no contact_id — skipping [%s]", event.correlation_id)
+        return
+
+    sections = payload.get("sections") or {}
+    personal = (sections.get("personal") or {}).get("data") or {}
+    borrower_first = personal.get("first_name") or "there"
+
+    try:
+        from db import SessionLocal
+        from database.models.lead_loan import Lead
+        from database.models.core import User, Organization
+    except ImportError:
+        logger.debug("sms_intro: DB models not available — skipping")
+        return
+
+    session = SessionLocal()
+    if org_id:
+        try:
+            from database.tenant_mixin import set_tenant_context
+            set_tenant_context(session, int(org_id))
+        except Exception:
+            pass
+
+    try:
+        lead = session.query(Lead).filter(Lead.id == int(contact_id)).first()
+        if not lead:
+            logger.error("sms_intro: Lead %s not found — skipping", contact_id)
+            return
+
+        borrower_phone = lead.phone or personal.get("phone")
+        if not borrower_phone:
+            logger.warning("sms_intro: no borrower phone on lead %s — skipping", contact_id)
+            return
+        if borrower_first == "there" and lead.first_name:
+            borrower_first = lead.first_name
+
+        lo_name = "your loan officer"
+        lo_user_id = lead.owner_id
+        if lo_user_id:
+            lo = session.query(User).filter(User.id == lo_user_id).first()
+            if lo:
+                lo_name = (lo.full_name or f"{lo.first_name or ''} {lo.last_name or ''}".strip()) or "your loan officer"
+
+        company_name = "Perennia AI"
+        if lead.organization_id:
+            org = session.query(Organization).filter(Organization.id == lead.organization_id).first()
+            if org and org.name:
+                company_name = org.name
+
+        # ── Message 1: Aria introduction ──────────────────────────────
+        msg1 = (
+            f"Hi {borrower_first}! This is Aria, {lo_name}'s AI assistant at "
+            f"{company_name}. Thank you for submitting your mortgage application! "
+            f"I'm here to help with anything you need throughout your loan process "
+            f"— just text me anytime with questions."
+        )
+
+        # ── Message 2: Save contact prompt ────────────────────────────
+        msg2 = (
+            f"I'm sending you {lo_name}'s team contact card now — please save it "
+            f"to your phone so you'll always know who's calling you in the future."
+        )
+
+        # ── Message 3: MMS vCard ──────────────────────────────────────
+        from routes.vcard_routes import _sign_vcard_token
+        vcard_token = _sign_vcard_token(lead.id)
+        api_domain = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
+        vcard_url = f"{api_domain}/api/v1/vcard/team/{vcard_token}"
+
+        from telephony.sms import send_sms_verified
+        telnyx_from = os.getenv("TELNYX_PHONE_NUMBER", "+18438838956")
+        org_id_int = int(org_id) if org_id else None
+
+        r1 = send_sms_verified(
+            to=borrower_phone,
+            from_=telnyx_from,
+            text=msg1,
+            user_id=lo_user_id,
+            lead_id=lead.id,
+            organization_id=org_id_int,
+            db=session,
+            bypass_compliance=True,
+        )
+        logger.info(
+            "sms_intro msg1 to ...%s: %s",
+            borrower_phone[-4:] if borrower_phone else "?",
+            r1.get("status"),
+        )
+
+        await asyncio.sleep(2)
+
+        r2 = send_sms_verified(
+            to=borrower_phone,
+            from_=telnyx_from,
+            text=msg2,
+            user_id=lo_user_id,
+            lead_id=lead.id,
+            organization_id=org_id_int,
+            db=session,
+            bypass_compliance=True,
+        )
+        logger.info("sms_intro msg2: %s", r2.get("status"))
+
+        await asyncio.sleep(2)
+
+        r3 = send_sms_verified(
+            to=borrower_phone,
+            from_=telnyx_from,
+            text=f"Contact card for {lo_name}'s team at {company_name}",
+            media_urls=[vcard_url],
+            user_id=lo_user_id,
+            lead_id=lead.id,
+            organization_id=org_id_int,
+            db=session,
+            bypass_compliance=True,
+        )
+        logger.info("sms_intro vcard MMS: %s", r3.get("status"))
+
+    except Exception as e:
+        logger.error("sms_intro failed for POS application %s: %s", application_id, e)
+    finally:
+        session.close()
+
+
+# =============================================================================
 # POS appointment booked
 # =============================================================================
 
@@ -1400,6 +1573,7 @@ def register_all_subscribers() -> None:
     event_bus.subscribe(EventType.POS_APPLICATION_SUBMITTED, on_pos_application_submitted_audit)
     event_bus.subscribe(EventType.POS_APPLICATION_SUBMITTED, on_pos_application_submitted_notify_lo)
     event_bus.subscribe(EventType.POS_APPLICATION_SUBMITTED, on_pos_application_submitted_mismo_email)
+    event_bus.subscribe(EventType.POS_APPLICATION_SUBMITTED, on_pos_application_submitted_sms_intro)
 
     # -- pos.appointment.booked --
     event_bus.subscribe(EventType.POS_APPOINTMENT_BOOKED, on_pos_appointment_booked_create_task)
