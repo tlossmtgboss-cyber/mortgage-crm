@@ -85,12 +85,19 @@ const POSEntryPage: React.FC = () => {
         });
         const data = await resp.json().catch(() => ({ valid: false }));
         if (data.valid) {
-          localStorage.setItem('perennia_purl_token', token);
+          // SECURITY: Store PURL token in sessionStorage so an XSS payload
+          // cannot read it from other tabs / persist after the tab is closed.
+          // The httpOnly pos_device_token cookie set by /verify (when the
+          // borrower opts in) restores them on next login anyway.
+          sessionStorage.setItem('perennia_purl_token', token);
+          // One-time cleanup of any legacy localStorage copy.
+          localStorage.removeItem('perennia_purl_token');
           setApiPurlToken(token);
           setPurlToken(token);
           if (data.borrower_name) setBorrowerName(data.borrower_name);
           setFlowStep('app');
         } else {
+          sessionStorage.removeItem('perennia_purl_token');
           localStorage.removeItem('perennia_purl_token');
           setApiPurlToken(null);
           setPurlToken(null);
@@ -98,6 +105,7 @@ const POSEntryPage: React.FC = () => {
         }
       } catch (err) {
         console.error('Token validation failed:', err);
+        sessionStorage.removeItem('perennia_purl_token');
         localStorage.removeItem('perennia_purl_token');
         setApiPurlToken(null);
         setPurlToken(null);
@@ -112,7 +120,18 @@ const POSEntryPage: React.FC = () => {
       window.history.replaceState({}, '', url.toString());
       validateToken(tokenParam);
     } else {
-      const stored = localStorage.getItem('perennia_purl_token');
+      // Prefer sessionStorage; fall back to legacy localStorage for tokens
+      // issued before the sessionStorage migration (one-time migration —
+      // see client.ts getPurlToken for the in-API-client equivalent).
+      let stored = sessionStorage.getItem('perennia_purl_token');
+      if (!stored) {
+        const legacy = localStorage.getItem('perennia_purl_token');
+        if (legacy) {
+          sessionStorage.setItem('perennia_purl_token', legacy);
+          localStorage.removeItem('perennia_purl_token');
+          stored = legacy;
+        }
+      }
       if (stored) {
         validateToken(stored);
       } else {
@@ -124,6 +143,7 @@ const POSEntryPage: React.FC = () => {
   const [authBounceError, setAuthBounceError] = useState<string | null>(null);
 
   const handleAuthError = () => {
+    sessionStorage.removeItem('perennia_purl_token');
     localStorage.removeItem('perennia_purl_token');
     setApiPurlToken(null);
     setPurlToken(null);
@@ -140,7 +160,11 @@ const POSEntryPage: React.FC = () => {
   };
 
   const handleVerified = (token: string, name?: string) => {
-    localStorage.setItem('perennia_purl_token', token);
+    // SECURITY: sessionStorage instead of localStorage — see top of file /
+    // client.ts for rationale. Trust-this-device persistence is handled by
+    // the httpOnly pos_device_token cookie set by /verify.
+    sessionStorage.setItem('perennia_purl_token', token);
+    localStorage.removeItem('perennia_purl_token');
     setApiPurlToken(token);
     setPurlToken(token);
     if (name) setBorrowerName(name);

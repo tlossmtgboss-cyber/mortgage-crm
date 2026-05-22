@@ -23,6 +23,7 @@ from database.models.pos import POSApplication, POSStatus
 from middleware.purl_auth import (
     PURLAuthContext,
     TokenScope,
+    check_purl_rate_limit,
     require_purl_token,
     require_purl_write_scope,
 )
@@ -70,6 +71,47 @@ def _make_purl_ctx(
         contact_id=contact_id,
         scope=scope,
     )
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter reset (autouse)
+# ---------------------------------------------------------------------------
+#
+# The in-memory PURLRateLimiter is a module-level singleton in
+# middleware/purl_auth.py. Without resetting, request counts accumulate across
+# tests for the same token_id (9999) and trigger 429 cascades that mask the
+# real assertions. We belt-and-suspenders this two ways:
+#
+#   1. An autouse fixture clears the limiter's internal buckets before every
+#      test (handles any route that uses check_purl_rate_limit even if the
+#      test app forgets to override it).
+#   2. The `app` fixture below also short-circuits check_purl_rate_limit via
+#      dependency_overrides so the limiter is never even consulted in tests.
+#
+@pytest.fixture(autouse=True)
+def _reset_purl_rate_limiter():
+    from middleware import purl_auth as _pa
+
+    limiter = getattr(_pa, "_rate_limiter", None)
+    if limiter is not None:
+        # Preferred: explicit reset() if it ever gets added.
+        reset = getattr(limiter, "reset", None)
+        if callable(reset):
+            reset()
+        else:
+            # Fall back to clearing any dict-shaped internal store.
+            for attr in (
+                "_minute_counters",
+                "_hour_counters",
+                "_buckets",
+                "_counts",
+                "_requests",
+                "_window",
+            ):
+                store = getattr(limiter, attr, None)
+                if isinstance(store, dict):
+                    store.clear()
+    yield
 
 
 @pytest.fixture
@@ -160,6 +202,8 @@ def _pos_engine():
                 co_ssn_encrypted TEXT,
                 dob DATE,
                 co_dob DATE,
+                dob_encrypted TEXT,
+                co_dob_encrypted TEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
@@ -302,6 +346,10 @@ def app(
     test_app.dependency_overrides[get_db] = _override_db
     test_app.dependency_overrides[require_purl_token] = lambda: borrower_alice
     test_app.dependency_overrides[require_purl_write_scope] = lambda: borrower_alice
+    # Short-circuit the in-memory PURLRateLimiter so tests never produce 429
+    # cascades from singleton state. See _reset_purl_rate_limiter above for
+    # the autouse counterpart that also clears any direct module access.
+    test_app.dependency_overrides[check_purl_rate_limit] = lambda: borrower_alice
 
     # Override service singletons with fakes.
     from routes.pos.calendar import get_calendar_service
@@ -323,6 +371,7 @@ def app_as_bob(
     """Same app, but PURL context resolves to Bob (a different borrower)."""
     app.dependency_overrides[require_purl_token] = lambda: borrower_bob
     app.dependency_overrides[require_purl_write_scope] = lambda: borrower_bob
+    app.dependency_overrides[check_purl_rate_limit] = lambda: borrower_bob
     return app
 
 

@@ -276,6 +276,11 @@ async def log_purl_action(
         user_agent: Client user agent
         request_id: Request ID for correlation
     """
+    # Truncate user_agent to 1000 chars to match the cap used in
+    # routes/pos/_helpers.py:58 — prevents unbounded growth in audit/log
+    # tables and stops log-injection via oversized headers.
+    safe_user_agent = user_agent[:1000] if user_agent else user_agent
+
     audit_entry = PURLAuditLog(
         organization_id=context.organization_id,
         actor_type=ActorType.CONTACT.value if context.contact_id else ActorType.API.value,
@@ -287,7 +292,7 @@ async def log_purl_action(
         changes=changes,
         metadata=metadata or {},
         ip_address=ip_address,
-        user_agent=user_agent,
+        user_agent=safe_user_agent,
         request_id=request_id
     )
 
@@ -342,6 +347,10 @@ class PURLAuditMiddleware:
                 db = SessionLocal()
 
                 try:
+                    # Truncate user_agent at ingest as well — defense in
+                    # depth; matches routes/pos/_helpers.py:58 pattern.
+                    raw_ua = request.headers.get("user-agent")
+                    safe_ua = raw_ua[:1000] if raw_ua else raw_ua
                     await log_purl_action(
                         db=db,
                         context=context,
@@ -352,7 +361,7 @@ class PURLAuditMiddleware:
                             "duration_ms": (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
                         },
                         ip_address=request.client.host if request.client else None,
-                        user_agent=request.headers.get("user-agent")
+                        user_agent=safe_ua
                     )
                     db.commit()
                 except Exception as e:

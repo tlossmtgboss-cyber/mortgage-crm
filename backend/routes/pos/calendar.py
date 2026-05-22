@@ -6,6 +6,7 @@ other than their own.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -199,36 +200,42 @@ async def create_hold(
     """
     from ._helpers import resolve_application_direct
 
-    application = resolve_application_direct(
-        body.application_id,
-        purl_ctx=purl_ctx,
-        db=db,
-    )
+    loop = asyncio.get_running_loop()
+
+    def _prepare_sync() -> tuple[POSApplication, Any, int | None]:
+        application = resolve_application_direct(
+            body.application_id,
+            purl_ctx=purl_ctx,
+            db=db,
+        )
+        lo = service.resolve_loan_officer(db, application)
+        link = service.get_booking_link_for_lo(db, lo.id)
+        appointment_type_id: int | None = None
+        if link is not None:
+            try:
+                from services.pos.calendar_service import (
+                    _resolve_appointment_type_id,
+                    MEETING_TYPES,
+                )
+
+                # Default to the application_review duration since this is the
+                # primary POS Step 9 flow.
+                for mt in ("application_review", "checkin", "full_consultation"):
+                    try:
+                        appointment_type_id = _resolve_appointment_type_id(mt, link)
+                        break
+                    except Exception:
+                        continue
+            except Exception:
+                appointment_type_id = None
+        return application, lo, appointment_type_id
 
     try:
-        lo = service.resolve_loan_officer(db, application)
+        application, lo, appointment_type_id = await loop.run_in_executor(
+            None, _prepare_sync
+        )
     except NoLoanOfficerAssignedError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    link = service.get_booking_link_for_lo(db, lo.id)
-    appointment_type_id: int | None = None
-    if link is not None:
-        try:
-            from services.pos.calendar_service import (
-                _resolve_appointment_type_id,
-                MEETING_TYPES,
-            )
-
-            # Default to the application_review duration since this is the
-            # primary POS Step 9 flow.
-            for mt in ("application_review", "checkin", "full_consultation"):
-                try:
-                    appointment_type_id = _resolve_appointment_type_id(mt, link)
-                    break
-                except Exception:
-                    continue
-        except Exception:
-            appointment_type_id = None
 
     held = await service._bridge.hold_slot(  # noqa: SLF001 — intentional cross-module
         loan_officer_user_id=lo.id,
@@ -267,27 +274,32 @@ async def create_booking(
 ) -> BookingResponse:
     from ._helpers import resolve_application_direct
 
-    application = resolve_application_direct(
-        body.application_id,
-        purl_ctx=purl_ctx,
-        db=db,
-    )
+    loop = asyncio.get_running_loop()
 
-    # Prevent duplicate bookings on the same application.
-    if application.submitted_appointment_id is not None:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail="An appointment has already been booked for this application.",
+    def _prepare_sync() -> tuple[POSApplication, str, str, str | None, Any]:
+        application = resolve_application_direct(
+            body.application_id,
+            purl_ctx=purl_ctx,
+            db=db,
         )
-
-    attendee_name, attendee_email, attendee_phone = _resolve_attendee_info(
-        db, purl_ctx, application
-    )
-
-    # Resolve LO once — reuse for both the booking call and the response
-    # instead of resolving again after book() returns.
-    try:
+        # Prevent duplicate bookings on the same application.
+        if application.submitted_appointment_id is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="An appointment has already been booked for this application.",
+            )
+        attendee_name, attendee_email, attendee_phone = _resolve_attendee_info(
+            db, purl_ctx, application
+        )
+        # Resolve LO once — reuse for both the booking call and the response
+        # instead of resolving again after book() returns.
         lo = service.resolve_loan_officer(db, application)
+        return application, attendee_name, attendee_email, attendee_phone, lo
+
+    try:
+        application, attendee_name, attendee_email, attendee_phone, lo = (
+            await loop.run_in_executor(None, _prepare_sync)
+        )
     except NoLoanOfficerAssignedError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
@@ -313,8 +325,11 @@ async def create_booking(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     # Link the appointment to the application for duplicate prevention.
-    application.submitted_appointment_id = booking.appointment_id
-    db.commit()
+    def _persist_booking_sync() -> None:
+        application.submitted_appointment_id = booking.appointment_id
+        db.commit()
+
+    await loop.run_in_executor(None, _persist_booking_sync)
 
     return BookingResponse(
         appointment_id=booking.appointment_id,
@@ -349,23 +364,30 @@ async def cancel_booking(
     # We must verify the appointment belongs to the borrower's application
     # before allowing cancellation. Look it up via Appointment.loan_id.
     from database.models.scheduler import Appointment
-
-    appointment = db.get(Appointment, appointment_id)
-    if appointment is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Appointment not found")
-
-    # Find a draft application for this borrower with this loan.
     from sqlalchemy import select
 
-    stmt = select(POSApplication).where(
-        POSApplication.contact_id == purl_ctx.contact_id,
-        POSApplication.loan_id == appointment.loan_id,
-    )
-    result = db.execute(stmt)
-    application = result.scalar_one_or_none()
-    if application is None:
-        # Don't reveal whether the appointment exists for someone else.
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+    loop = asyncio.get_running_loop()
+
+    def _lookup_sync() -> tuple[Any, POSApplication]:
+        appointment = db.get(Appointment, appointment_id)
+        if appointment is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+            )
+        stmt = select(POSApplication).where(
+            POSApplication.contact_id == purl_ctx.contact_id,
+            POSApplication.loan_id == appointment.loan_id,
+        )
+        result = db.execute(stmt)
+        application = result.scalar_one_or_none()
+        if application is None:
+            # Don't reveal whether the appointment exists for someone else.
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+            )
+        return appointment, application
+
+    appointment, application = await loop.run_in_executor(None, _lookup_sync)
 
     cancellation = await service._bridge.cancel(  # noqa: SLF001
         appointment_id=appointment_id,
@@ -375,10 +397,13 @@ async def cancel_booking(
         organization_id=application.organization_id,
     )
 
-    # Clear the duplicate-prevention guard so the borrower can rebook.
-    if application.submitted_appointment_id == appointment_id:
-        application.submitted_appointment_id = None
-    db.commit()
+    def _clear_and_commit_sync() -> None:
+        # Clear the duplicate-prevention guard so the borrower can rebook.
+        if application.submitted_appointment_id == appointment_id:
+            application.submitted_appointment_id = None
+        db.commit()
+
+    await loop.run_in_executor(None, _clear_and_commit_sync)
 
     return BookingCancelResponse(
         appointment_id=cancellation.appointment_id,

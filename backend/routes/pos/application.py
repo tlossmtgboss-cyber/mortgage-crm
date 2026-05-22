@@ -5,11 +5,16 @@ authenticated contact_id — no borrower can read or modify another's draft.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from middleware.purl_auth import (
@@ -68,19 +73,41 @@ def get_or_start_my_application(
     ctx: AuditContext = Depends(build_audit_context),
 ) -> ApplicationResponse:
     """Return the borrower's in-progress draft, creating one on first call."""
-    application = service.get_or_create_for_loan(
-        db,
-        organization_id=purl_ctx.organization_id,
-        workspace_id=purl_ctx.workspace_id,
-        contact_id=purl_ctx.contact_id,
-        loan_id=loan_id,
-        source_channel=source_channel,
-        ctx=ctx,
-    )
-    db.commit()
-    db.refresh(application)
-
-    return ApplicationResponse(**application_to_response_dict(application))
+    # Phase-tagged so a production 500 logs exactly where it blew up. The
+    # global error handler sanitizes the user-facing response to "Internal
+    # server error", so without this tag we have no idea which step failed.
+    phase = "get_or_create"
+    try:
+        application = service.get_or_create_for_loan(
+            db,
+            organization_id=purl_ctx.organization_id,
+            workspace_id=purl_ctx.workspace_id,
+            contact_id=purl_ctx.contact_id,
+            loan_id=loan_id,
+            source_channel=source_channel,
+            ctx=ctx,
+        )
+        phase = "commit"
+        db.commit()
+        phase = "refresh"
+        db.refresh(application)
+        phase = "serialize"
+        return ApplicationResponse(**application_to_response_dict(application))
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.exception(
+            "POS /applications/me[%s] failed for contact=%s loan_id=%s: %s: %s",
+            phase, purl_ctx.contact_id, loan_id, type(e).__name__, e,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"applications/me failed at phase={phase} error={type(e).__name__}",
+        ) from e
 
 
 @router.get(
@@ -214,6 +241,11 @@ async def submit_application(
     service: ApplicationService = Depends(get_application_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> ApplicationSubmitResponse:
+    # service.submit is genuinely async (awaits event_bus.publish), so it must
+    # stay on the loop. Wrap only the synchronous commit/refresh in the
+    # threadpool so the sync ORM I/O doesn't block other borrowers.
+    loop = asyncio.get_running_loop()
+
     try:
         submitted = await service.submit(
             db,
@@ -225,8 +257,12 @@ async def submit_application(
     except ApplicationStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    db.commit()
-    db.refresh(submitted)
+    def _commit_and_refresh() -> POSApplication:
+        db.commit()
+        db.refresh(submitted)
+        return submitted
+
+    submitted = await loop.run_in_executor(None, _commit_and_refresh)
 
     confirmation = _build_confirmation_number(submitted)
     next_steps = _next_steps_for_borrower(submitted)

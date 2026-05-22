@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from database.models.pos import (
@@ -124,18 +125,28 @@ class ApplicationService:
     ) -> POSApplication:
         """Return the in-progress draft for this borrower+loan, creating one if needed.
 
-        Enforced by the partial unique index `ix_pos_app_one_active_per_loan`
-        at the database level.
+        The partial unique index `ix_pos_app_one_active_per_loan` enforces
+        one draft per (contact_id, loan_id) — BUT PostgreSQL treats NULLs as
+        distinct in unique indexes, so prequal flows (loan_id IS NULL) can
+        legally end up with duplicate drafts after a concurrent first-load
+        race. Pick the newest draft instead of crashing with
+        `MultipleResultsFound`.
         """
-        stmt = select(POSApplication).where(
-            and_(
-                POSApplication.contact_id == contact_id,
-                POSApplication.loan_id == loan_id,
-                POSApplication.status == POSStatus.DRAFT,
+        # Order by created_at desc so concurrent-race duplicates collapse to
+        # the most recent row. .first() is tolerant of 0, 1, or N matches.
+        stmt = (
+            select(POSApplication)
+            .where(
+                and_(
+                    POSApplication.contact_id == contact_id,
+                    POSApplication.loan_id == loan_id,
+                    POSApplication.status == POSStatus.DRAFT,
+                )
             )
+            .order_by(POSApplication.created_at.desc())
+            .limit(1)
         )
-        result = session.execute(stmt)
-        existing = result.scalar_one_or_none()
+        existing = session.execute(stmt).scalars().first()
         if existing is not None:
             return existing
 
@@ -150,7 +161,16 @@ class ApplicationService:
             completion_pct=0,
         )
         session.add(app)
-        session.flush()  # populate app.id
+        try:
+            session.flush()  # populate app.id
+        except IntegrityError:
+            # Lost a race against a concurrent /me request — the partial unique
+            # index fired (non-NULL loan_id case). Recover by re-querying.
+            session.rollback()
+            existing = session.execute(stmt).scalars().first()
+            if existing is not None:
+                return existing
+            raise
 
         self._write_audit(
             session,

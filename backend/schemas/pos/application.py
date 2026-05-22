@@ -80,6 +80,15 @@ class ApplicationResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# M4: Cap section payloads at 100 KB serialized and 10 levels of nesting to
+# prevent abuse via deeply nested or oversized JSON. Defined at module scope
+# because Pydantic v2 reinterprets underscore-prefixed class attributes as
+# ModelPrivateAttr — so referencing `cls._MAX_DATA_BYTES` inside a validator
+# would compare ints to a ModelPrivateAttr descriptor and raise TypeError.
+_SECTION_DATA_MAX_BYTES = 100_000  # 100 KB
+_SECTION_DATA_MAX_DEPTH = 10
+
+
 class SectionData(BaseModel):
     """Container for arbitrary section JSON.
 
@@ -90,11 +99,6 @@ class SectionData(BaseModel):
     frontend/src/features/pos/schemas/) and at submit time in the
     canonical-store mapper.
     """
-
-    # M4: Cap at 100 KB serialized and 10 levels of nesting to prevent
-    # abuse via deeply nested or oversized JSON payloads.
-    _MAX_DATA_BYTES: int = 100_000  # 100 KB
-    _MAX_NESTING_DEPTH: int = 10
 
     data: dict[str, Any] = Field(
         default_factory=dict,
@@ -111,16 +115,14 @@ class SectionData(BaseModel):
     @field_validator("data")
     @classmethod
     def _validate_data_limits(cls, v: dict[str, Any]) -> dict[str, Any]:
-        # Size check
         serialized = json.dumps(v, default=str)
-        if len(serialized) > cls._MAX_DATA_BYTES:
+        if len(serialized) > _SECTION_DATA_MAX_BYTES:
             raise ValueError(
-                f"Section data exceeds maximum size of {cls._MAX_DATA_BYTES // 1000} KB"
+                f"Section data exceeds maximum size of {_SECTION_DATA_MAX_BYTES // 1000} KB"
             )
-        # Depth check
-        if _check_depth(v) > cls._MAX_NESTING_DEPTH:
+        if _check_depth(v) > _SECTION_DATA_MAX_DEPTH:
             raise ValueError(
-                f"Section data exceeds maximum nesting depth of {cls._MAX_NESTING_DEPTH}"
+                f"Section data exceeds maximum nesting depth of {_SECTION_DATA_MAX_DEPTH}"
             )
         return v
 

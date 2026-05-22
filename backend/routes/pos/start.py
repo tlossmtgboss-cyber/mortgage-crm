@@ -931,8 +931,8 @@ def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(g
         # sanitized to "Internal server error" by the global handler.
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as rollback_err:
+            logger.warning("db rollback failed: %s", rollback_err)
         logger.exception(
             "POS demo start[%s] failed for email=%s lo_slug=%r: %s: %s",
             phase, body.email, body.lo_slug, type(e).__name__, e,
@@ -963,5 +963,11 @@ def check_token(request: Request, db: Session = Depends(get_db)):
         contact = db.query(PURLContact).filter(PURLContact.id == ctx.get("contact_id")).first()
         name = contact.first_name if contact else ""
         return TokenCheckResponse(valid=True, borrower_name=name or "")
-    except Exception:
+    except Exception as e:
+        # Log so we know *why* tokens are being rejected (expired? signature?
+        # DB error?). Still return valid=False — never leak details to the
+        # client because token-validation responses are unauthenticated.
+        logger.warning(
+            "check_token verification failed: %s", e, exc_info=True
+        )
         return TokenCheckResponse(valid=False)
