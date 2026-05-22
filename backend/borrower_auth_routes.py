@@ -44,10 +44,7 @@ _BORROWER_EMAIL_RATE_MAX = 10  # max 10 OAuth attempts per email per hour
 
 
 def _get_client_ip(request) -> str:
-    """Extract real client IP, accounting for reverse proxy."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Extract real client IP from ASGI server (set by Railway's reverse proxy)."""
     return request.client.host if request.client else "unknown"
 
 

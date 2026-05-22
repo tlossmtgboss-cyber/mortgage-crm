@@ -112,6 +112,13 @@ const RateMonitorV5 = lazyRetry(() => import('../pages/RateMonitorV5'));
 const RateMonitorV6 = lazyRetry(() => import('../pages/RateMonitorV6'));
 const RateMonitorV7 = lazyRetry(() => import('../pages/RateMonitorV7'));
 const RateMonitorV8 = lazyRetry(() => import('../pages/RateMonitorV8'));
+const WorkflowBuilderShowcase = lazyRetry(() => import('../pages/WorkflowBuilderShowcase'));
+const WorkflowBuilderV1 = lazyRetry(() => import('../pages/WorkflowBuilderV1'));
+const WorkflowBuilderV2 = lazyRetry(() => import('../pages/WorkflowBuilderV2'));
+const WorkflowBuilderV3 = lazyRetry(() => import('../pages/WorkflowBuilderV3'));
+const WorkflowBuilderV4 = lazyRetry(() => import('../pages/WorkflowBuilderV4'));
+const WorkflowBuilderV5 = lazyRetry(() => import('../pages/WorkflowBuilderV5'));
+const WorkflowBuilderV6 = lazyRetry(() => import('../pages/WorkflowBuilderV6'));
 const Tasks = lazyRetry(() => import('../pages/Tasks'));
 // SMSTasks removed — merged into unified Tasks page
 const Calendar = lazyRetry(() => import('../pages/Calendar'));
@@ -495,6 +502,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/terms-of-service" path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />,
     <Route key="/terms" path="/terms" element={<LazyPage><TermsOfService /></LazyPage>} />,
     <Route key="/aria-test" path="/aria-test" element={<LazyPage><AriaTestPage /></LazyPage>} />,
+    <Route key="/workflow/builders" path="/workflow/builders" element={<LazyPage><WorkflowBuilderShowcase /></LazyPage>} />,
     <Route key="/pos" path="/pos" element={<LazyPage><POSEntryPage /></LazyPage>} />,
     <Route key="/pos-test" path="/pos-test" element={<LazyPage><POSTestPage /></LazyPage>} />,
 
@@ -615,6 +623,12 @@ export function getRoutes(layoutProps, options = {}) {
 
     // Workflow
     <Route key="/workflow" path="/workflow" element={withMainLayout(WorkflowDashboard)} />,
+    <Route key="/workflow/builder/v1" path="/workflow/builder/v1" element={withMainLayout(WorkflowBuilderV1)} />,
+    <Route key="/workflow/builder/v2" path="/workflow/builder/v2" element={withMainLayout(WorkflowBuilderV2)} />,
+    <Route key="/workflow/builder/v3" path="/workflow/builder/v3" element={withMainLayout(WorkflowBuilderV3)} />,
+    <Route key="/workflow/builder/v4" path="/workflow/builder/v4" element={withMainLayout(WorkflowBuilderV4)} />,
+    <Route key="/workflow/builder/v5" path="/workflow/builder/v5" element={withMainLayout(WorkflowBuilderV5)} />,
+    <Route key="/workflow/builder/v6" path="/workflow/builder/v6" element={withMainLayout(WorkflowBuilderV6)} />,
     <Route key="/workflow/:stage" path="/workflow/:stage" element={withMainLayout(WorkflowStagePage)} />,
     <Route key="/workflow/status/:statusId" path="/workflow/status/:statusId" element={withMainLayout(WorkflowStatusDetail)} />,
 
