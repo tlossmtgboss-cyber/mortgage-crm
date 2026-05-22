@@ -125,8 +125,23 @@ else:
         }
     )
 
-# Connection pool event logging (for debugging connection exhaustion)
-# Note: These events work differently with NullPool vs QueuePool
+# Connection pool event logging (for debugging connection exhaustion).
+# Only QueuePool exposes size/checkedin/checkedout/overflow as methods;
+# NullPool (PgBouncer / DATABASE_POOLED_URL), SingletonThreadPool (SQLite
+# in-memory), and StaticPool expose them as None or as int attributes,
+# which would raise "TypeError: 'int' object is not callable" on every
+# checkout/checkin and 500 every request. Guard accordingly.
+def _pool_stats_str(pool) -> str:
+    parts = []
+    for name in ("size", "checkedin", "checkedout", "overflow"):
+        attr = getattr(pool, name, None)
+        if callable(attr):
+            try:
+                parts.append(f"{name}={attr()}")
+            except Exception:
+                parts.append(f"{name}=?")
+    return ", ".join(parts) if parts else "n/a"
+
 
 @event.listens_for(engine, "checkout")
 def on_checkout(dbapi_conn, connection_record, connection_proxy):
@@ -134,12 +149,7 @@ def on_checkout(dbapi_conn, connection_record, connection_proxy):
     if USE_PGBOUNCER:
         logger.debug("DB connection acquired from PgBouncer")
     else:
-        pool = engine.pool
-        logger.debug(
-            f"DB connection checkout - Pool status: "
-            f"size={pool.size()}, checkedin={pool.checkedin()}, "
-            f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
-        )
+        logger.debug(f"DB connection checkout - Pool status: {_pool_stats_str(engine.pool)}")
 
 @event.listens_for(engine, "checkin")
 def on_checkin(dbapi_conn, connection_record):
@@ -147,12 +157,7 @@ def on_checkin(dbapi_conn, connection_record):
     if USE_PGBOUNCER:
         logger.debug("DB connection returned to PgBouncer")
     else:
-        pool = engine.pool
-        logger.debug(
-            f"DB connection checkin - Pool status: "
-            f"size={pool.size()}, checkedin={pool.checkedin()}, "
-            f"checkedout={pool.checkedout()}, overflow={pool.overflow()}"
-        )
+        logger.debug(f"DB connection checkin - Pool status: {_pool_stats_str(engine.pool)}")
 
 @event.listens_for(engine, "connect")
 def on_connect(dbapi_conn, connection_record):
