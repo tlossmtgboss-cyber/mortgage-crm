@@ -838,38 +838,18 @@ def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(g
 
         email_lower = body.email.strip().lower()
 
-        phase = "find_existing_contact"
-        existing_contact = (
+        phase = "abandon_old_drafts"
+        from database.models.pos import POSApplication, POSStatus
+        existing_contacts = (
             db.query(PURLContact)
             .filter(PURLContact.email == email_lower)
-            .order_by(PURLContact.id.desc())
-            .first()
+            .all()
         )
-
-        if existing_contact:
-            phase = "load_existing_workspace"
-            workspace = db.query(PURLWorkspace).filter(PURLWorkspace.id == existing_contact.workspace_id).first()
-            if workspace:
-                phase = "issue_token_existing"
-                token_service = PURLTokenService(db)
-                _token_id, full_token = token_service.create_token(
-                    organization_id=existing_contact.organization_id,
-                    workspace_id=workspace.id,
-                    scope=TokenScope.WRITE,
-                    contact_id=existing_contact.id,
-                    expires_in_days=90,
-                )
-                phase = "commit_existing"
-                db.commit()
-                logger.info(
-                    "POS demo start: returning existing workspace=%d contact=%d for email=%s",
-                    workspace.id, existing_contact.id, email_lower,
-                )
-                return DemoStartResponse(
-                    token=full_token,
-                    workspace_slug=workspace.slug,
-                    borrower_name=existing_contact.first_name or body.first_name,
-                )
+        for old_contact in existing_contacts:
+            db.query(POSApplication).filter(
+                POSApplication.contact_id == old_contact.id,
+                POSApplication.status == POSStatus.DRAFT,
+            ).update({"status": POSStatus.ABANDONED})
 
         slug = f"{body.first_name.strip().lower()}-{body.last_name.strip().lower()}-{uuid.uuid4().hex[:8]}"
         display_name = f"{body.first_name.strip()} {body.last_name.strip()}"

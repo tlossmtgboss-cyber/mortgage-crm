@@ -808,6 +808,7 @@ function SignupForm({
     setSubmitting(true);
 
     try {
+      localStorage.removeItem('perennia_purl_token');
       const phoneDigits = unformatPhone(phone);
       const resp = await fetch(`${API_BASE}/api/v1/pos/start-demo`, {
         method: 'POST',
