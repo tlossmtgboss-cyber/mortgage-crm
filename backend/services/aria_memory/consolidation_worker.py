@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from services.aria_memory.pii_scrubber import scrub_pii
+
 logger = logging.getLogger("aria.consolidation")
 
 AUTO_COMMIT_THRESHOLD = 0.85
@@ -85,6 +87,8 @@ class ConsolidationWorker:
         return row is not None
 
     async def _extract_facts(self, transcript: str, tenant_id: int) -> list[dict]:
+        transcript = scrub_pii(transcript)
+
         from services.aria_memory.exclusion_list import ExclusionChecker
         checker = ExclusionChecker(self._db)
         exclusion_section = checker.get_exclusion_prompt_section()
@@ -302,6 +306,8 @@ TRANSCRIPT:
     async def _detect_false_negatives(
         self, transcript: str, tenant_id: int, borrower_id: int, source_call_id: str
     ) -> None:
+        transcript = scrub_pii(transcript)
+
         import anthropic
 
         prompt = f"""Analyze this call transcript. Did the borrower reference prior context

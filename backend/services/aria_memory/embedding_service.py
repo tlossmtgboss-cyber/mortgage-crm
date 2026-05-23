@@ -13,6 +13,8 @@ import logging
 import re
 from typing import Optional
 
+from services.aria_memory.pii_scrubber import scrub_pii_for_embedding
+
 logger = logging.getLogger("aria.memory.embedding")
 
 EMBEDDING_MODEL = "text-embedding-3-small"
@@ -35,6 +37,7 @@ def generate_embedding_sync(text: str) -> Optional[list[float]]:
     try:
         import openai
 
+        text = scrub_pii_for_embedding(text)
         normalized = _normalize_text(text)
         if not normalized:
             logger.warning("Empty text after normalization, skipping embedding")
@@ -60,6 +63,7 @@ async def generate_embedding_async(text: str) -> Optional[list[float]]:
     try:
         import openai
 
+        text = scrub_pii_for_embedding(text)
         normalized = _normalize_text(text)
         if not normalized:
             logger.warning("Empty text after normalization, skipping embedding")

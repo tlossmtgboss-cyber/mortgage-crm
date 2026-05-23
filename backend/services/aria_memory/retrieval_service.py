@@ -17,6 +17,8 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from services.aria_memory.pii_scrubber import scrub_pii_for_embedding
+
 logger = logging.getLogger("aria.retrieval")
 
 EMBEDDING_MODEL = "text-embedding-3-small"
@@ -173,6 +175,7 @@ class AriaRetrievalService:
 
     async def _embed_query(self, text_input: str) -> list[float]:
         import re
+        text_input = scrub_pii_for_embedding(text_input)
         normalized = re.sub(r"\s+", " ", text_input.lower().strip())
         normalized = re.sub(r"[^\w\s]", "", normalized)
 
