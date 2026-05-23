@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
 from middleware.purl_auth import (
@@ -19,7 +19,8 @@ from middleware.purl_auth import (
     require_purl_write_scope,
 )
 
-from database.models.pos import POSApplication, POSSectionKey
+from sqlalchemy import select
+from database.models.pos import POSApplication, POSApplicationPII, POSSectionKey
 from schemas.pos.application import (
     ApplicationResponse,
     ApplicationSubmitRequest,
@@ -78,7 +79,14 @@ def get_or_start_my_application(
         ctx=ctx,
     )
     db.commit()
-    db.refresh(application)
+    application = db.execute(
+        select(POSApplication)
+        .where(POSApplication.id == application.id)
+        .options(
+            selectinload(POSApplication.sections),
+            selectinload(POSApplication.pii),
+        )
+    ).scalar_one()
 
     return ApplicationResponse(**application_to_response_dict(application))
 

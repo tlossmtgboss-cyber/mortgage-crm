@@ -127,7 +127,7 @@ export function usePOSApplication(loanId?: number) {
       if (!application) return;
       // Back up to localStorage before network save so data survives failures.
       try {
-        localStorage.setItem(
+        sessionStorage.setItem(
           `pos_draft_${application.id}_${sectionKey}`,
           JSON.stringify(body.data),
         );
@@ -144,7 +144,7 @@ export function usePOSApplication(loanId?: number) {
           dirtyRef.current = Object.values(timersRef.current).some(t => t != null);
           setSaveState('saved');
           // Clear draft backup on successful save.
-          try { localStorage.removeItem(`pos_draft_${application.id}_${sectionKey}`); } catch {}
+          try { sessionStorage.removeItem(`pos_draft_${application.id}_${sectionKey}`); } catch {}
           setTimeout(() => setSaveState(prev => (prev === 'saved' ? 'idle' : prev)), 2000);
         }
         return section;

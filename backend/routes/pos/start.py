@@ -710,15 +710,13 @@ async def login_start(body: LoginRequest, request: Request, db: Session = Depend
         .first()
     )
     if not contact:
-        # No account — return generic response. Do NOT send email or reveal absence.
-        # M1 fix: Sleep a random duration to match the typical latency of the
-        # "account exists" path (DB queries + email send = 200-2000ms). Without
-        # this, an attacker can distinguish account existence via response time.
+        # No account — return identical response shape to prevent enumeration.
         await asyncio.sleep(random.uniform(0.5, 1.5))
+        dummy_expires = (datetime.now(timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)).isoformat()
         return LoginResponse(
-            session_id="",
+            session_id=f"pos_sess_{secrets.token_hex(16)}",
             email_masked=_mask_email(email_lower),
-            expires_at="",
+            expires_at=dummy_expires,
             message=generic_message,
         )
 

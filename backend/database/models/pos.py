@@ -174,7 +174,7 @@ class POSApplication(Base):
         back_populates="application",
         cascade="all, delete-orphan",
         uselist=False,
-        lazy="joined",
+        lazy="noload",
     )
     audit_events = relationship(
         "POSApplicationAudit",
