@@ -87,6 +87,7 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
         '@capgo/capacitor-ssl-pinning': path.resolve(__dirname, './src/stubs/capacitor-ssl-pinning.js'),
       },
+      dedupe: ['react', 'react-dom'],
     },
 
     // Environment variable prefix — include REACT_APP_ for CRA backward compatibility
@@ -117,6 +118,8 @@ export default defineConfig(({ mode }) => {
       include: [
         'react',
         'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
         'react-router-dom',
         '@mui/material',
         '@emotion/react',

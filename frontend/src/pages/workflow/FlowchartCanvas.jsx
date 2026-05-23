@@ -50,6 +50,13 @@ export default function FlowchartCanvas({
     setZoom(z => Math.max(0.3, Math.min(2, z - e.deltaY * 0.001)));
   }, []);
 
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
+
   const handleCanvasMouseDown = (e) => {
     if (e.target === canvasRef.current || e.target.closest('.wf-canvas-svg')) {
       if (placingNodeType) {
@@ -114,7 +121,6 @@ export default function FlowchartCanvas({
       className="wf-canvas"
       ref={canvasRef}
       onMouseDown={handleCanvasMouseDown}
-      onWheel={handleWheel}
       style={{ cursor: placingNodeType ? 'crosshair' : 'default' }}
     >
       <div

@@ -45,20 +45,23 @@ root.render(
   </React.StrictMode>
 );
 
-// Register service worker for offline support and push notifications.
-// Guard is inside serviceWorkerRegistration.register() — it checks for native
-// platform and will no-op on iOS/Android Capacitor where WKWebView lacks SW support.
-serviceWorkerRegistration.register({
-  onUpdate: (registration) => {
-    console.log('[App] New version available — will activate on next reload');
-  },
-  onSuccess: () => {
-    console.log('[App] Offline support ready');
-  },
-  onMutationQueued: (data) => {
-    console.log('[App] Change saved offline:', data.method, data.url);
-  },
-  onSyncComplete: (data) => {
-    console.log('[App] Offline changes synced, remaining:', data.remaining);
-  },
-});
+// In dev mode, unregister any stale service worker to prevent cached chunk conflicts.
+// In production, register for offline support and push notifications.
+if (import.meta.env.DEV) {
+  serviceWorkerRegistration.unregister();
+} else {
+  serviceWorkerRegistration.register({
+    onUpdate: (registration) => {
+      console.log('[App] New version available — will activate on next reload');
+    },
+    onSuccess: () => {
+      console.log('[App] Offline support ready');
+    },
+    onMutationQueued: (data) => {
+      console.log('[App] Change saved offline:', data.method, data.url);
+    },
+    onSyncComplete: (data) => {
+      console.log('[App] Offline changes synced, remaining:', data.remaining);
+    },
+  });
+}

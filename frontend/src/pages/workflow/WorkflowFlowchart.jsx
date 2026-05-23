@@ -23,10 +23,12 @@ export default function WorkflowFlowchart() {
     try {
       const { data } = await workflowGraphApi.getGraph(workflowKey);
       setGraph(data.definition);
-      setNodes(data.nodes);
-      setEdges(data.edges);
-    } catch (err) {
-      toast.error('Failed to load workflow');
+      setNodes(data.nodes || []);
+      setEdges(data.edges || []);
+    } catch {
+      setGraph({ key: workflowKey, name: workflowKey });
+      setNodes([]);
+      setEdges([]);
     } finally {
       setLoading(false);
     }

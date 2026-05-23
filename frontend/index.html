@@ -61,9 +61,21 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script>
-      // Service worker is registered by main.jsx via serviceWorkerRegistration.js
-      // Do NOT register here — duplicate registrations cause cache conflicts.
-      // The registration module handles native-platform guards (Capacitor/WKWebView).
+      // In dev mode, forcibly unregister stale service workers before app boots.
+      // Stale SWs cache old Vite dep chunks and cause dual-React crashes.
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(r) { r.unregister(); });
+            if (regs.length > 0) {
+              console.log('[Dev] Unregistered ' + regs.length + ' stale service worker(s)');
+              caches.keys().then(function(names) {
+                names.forEach(function(name) { caches.delete(name); });
+              });
+            }
+          });
+        }
+      }
 
       // Global error handler to prevent blank pages
       window.addEventListener('error', function(event) {
