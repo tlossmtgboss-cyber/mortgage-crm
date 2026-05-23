@@ -1581,6 +1581,14 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     except Exception as e:
         logger.warning(f"SMS conversation routes skipped: {e}")
 
+    # Workflow Graph (flowchart builder)
+    try:
+        from routes.workflow_graph_routes import router as workflow_graph_router
+        app.include_router(workflow_graph_router)
+        logger.info("Workflow graph routes loaded (definitions, nodes, edges, live data, AI review)")
+    except Exception as e:
+        logger.warning(f"Workflow graph routes skipped: {e}")
+
 
 def _register_late_routes(app, get_db, get_current_user, engine, SessionLocal):
     """Late-stage route registrations: mobile API, POS, integrations, table creation."""
