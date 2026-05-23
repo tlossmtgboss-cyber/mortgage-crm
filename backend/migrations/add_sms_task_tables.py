@@ -192,8 +192,7 @@ def run_migration(engine):
                     confidence_score REAL DEFAULT 20.0,
                     auto_respond_enabled BOOLEAN DEFAULT FALSE,
                     auto_respond_threshold REAL DEFAULT 80.0,
-                    updated_at TIMESTAMPTZ DEFAULT NOW(),
-                    UNIQUE(organization_id, COALESCE(user_id, 0), category)
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """))
             conn.commit()
@@ -204,6 +203,20 @@ def run_migration(engine):
                 logger.info("  sms_ai_confidence table already exists")
             else:
                 logger.error(f"Failed to create sms_ai_confidence table: {e}")
+
+        try:
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_sms_ai_confidence_org_user_cat "
+                "ON sms_ai_confidence (organization_id, COALESCE(user_id, 0), category)"
+            ))
+            conn.commit()
+            logger.info("  Created unique index uq_sms_ai_confidence_org_user_cat")
+        except Exception as e:
+            error_str = str(e).lower()
+            if "already exists" in error_str:
+                pass
+            else:
+                logger.warning(f"Could not create sms_ai_confidence unique index: {e}")
 
         # sms_ai_confidence index
         try:

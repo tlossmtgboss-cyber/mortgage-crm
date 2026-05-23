@@ -40,15 +40,22 @@ def run_migration():
                     active BOOLEAN NOT NULL DEFAULT TRUE,
                     opted_out_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                     opted_in_at TIMESTAMP WITH TIME ZONE
-                );
-
-                CREATE INDEX IF NOT EXISTS ix_sms_opt_outs_phone
-                    ON sms_opt_outs(phone_number);
-                CREATE INDEX IF NOT EXISTS ix_sms_opt_outs_org_id
-                    ON sms_opt_outs(organization_id);
-                CREATE INDEX IF NOT EXISTS ix_sms_opt_outs_org_phone
-                    ON sms_opt_outs(organization_id, phone_number);
+                )
             """))
+            # Ensure organization_id exists (table may pre-date this column)
+            conn.execute(text(
+                "ALTER TABLE sms_opt_outs ADD COLUMN IF NOT EXISTS "
+                "organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_sms_opt_outs_phone ON sms_opt_outs(phone_number)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_sms_opt_outs_org_id ON sms_opt_outs(organization_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_sms_opt_outs_org_phone ON sms_opt_outs(organization_id, phone_number)"
+            ))
         else:
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS sms_opt_outs (

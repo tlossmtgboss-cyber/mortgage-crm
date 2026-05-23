@@ -32,8 +32,14 @@ def run_migration():
         if table.name in existing:
             print(f"  Table '{table.name}' already exists, skipping.")
         else:
-            table.create(engine, checkfirst=True)
-            print(f"  Created table '{table.name}'.")
+            try:
+                table.create(engine, checkfirst=True)
+                print(f"  Created table '{table.name}'.")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    print(f"  Table '{table.name}' already exists (index conflict), skipping.")
+                else:
+                    raise
     print("Migration complete.")
 
 

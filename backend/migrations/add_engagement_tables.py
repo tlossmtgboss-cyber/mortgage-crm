@@ -26,10 +26,10 @@ def run_migration():
         CREATE TABLE IF NOT EXISTS call_dispositions (
             id VARCHAR(255) PRIMARY KEY,
             call_log_id VARCHAR(255),
-            lead_id VARCHAR(255) REFERENCES leads(id),
+            lead_id INTEGER REFERENCES leads(id),
             loan_id VARCHAR(255),
-            user_id VARCHAR(255) REFERENCES users(id),
-            organization_id VARCHAR(255) NOT NULL,
+            user_id INTEGER REFERENCES users(id),
+            organization_id INTEGER NOT NULL,
             disposition VARCHAR(50) NOT NULL,
             sub_disposition VARCHAR(50),
             call_direction VARCHAR(20) DEFAULT 'outbound',
@@ -57,7 +57,7 @@ def run_migration():
 
         """
         CREATE TABLE IF NOT EXISTS organization_ai_configs (
-            organization_id VARCHAR(255) PRIMARY KEY,
+            organization_id INTEGER PRIMARY KEY,
             config_data JSON NOT NULL DEFAULT '{}',
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
@@ -66,10 +66,13 @@ def run_migration():
 
     with engine.connect() as conn:
         for sql in sql_commands:
+            conn.execute(text("SAVEPOINT engagement_stmt"))
             try:
                 conn.execute(text(sql))
+                conn.execute(text("RELEASE SAVEPOINT engagement_stmt"))
                 logger.info(f"Executed: {sql[:60]}...")
             except Exception as e:
+                conn.execute(text("ROLLBACK TO SAVEPOINT engagement_stmt"))
                 logger.warning(f"Skipped: {e}")
         conn.commit()
 

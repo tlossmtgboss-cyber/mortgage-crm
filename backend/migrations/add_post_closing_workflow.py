@@ -14,7 +14,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import create_engine, text
-from database import DATABASE_URL
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/perennia")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 
 def run_migration():

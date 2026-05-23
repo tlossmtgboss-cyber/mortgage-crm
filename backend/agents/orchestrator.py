@@ -34,7 +34,8 @@ from .state import (
 from .nodes.analyze import analyze_query
 from .nodes.gather import gather_data
 from .nodes.execute import execute_actions
-from .nodes.reason_and_respond import reason_and_respond, format_structured_response
+from .nodes.reason_and_respond import reason_and_respond
+from .nodes.respond import format_structured_response
 from .hallucination_verifier import get_hallucination_verifier
 from .orchestration.quality_analyzer import QualityAnalyzer
 from .checkpointer import get_checkpointer

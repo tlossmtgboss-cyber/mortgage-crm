@@ -225,6 +225,61 @@ CAMPAIGN_TEMPLATES = [
 ]
 
 
+def _ensure_columns(conn):
+    """Reconcile tenant_email_templates schema.
+
+    The original CREATE TABLE used template_key/template_name/html_body/text_body,
+    but all application code expects template_type/name/body_html/body_text plus
+    cta_text, cta_url, category, and created_by_id.  Rename old columns if they
+    still exist, and add any missing columns.
+    """
+    # Rename old columns → new names (safe: only renames if old name exists)
+    renames = [
+        ("template_key", "template_type"),
+        ("template_name", "name"),
+        ("html_body", "body_html"),
+        ("text_body", "body_text"),
+    ]
+    for old_col, new_col in renames:
+        has_old = conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'tenant_email_templates' AND column_name = :col"
+        ), {"col": old_col}).fetchone()
+        if has_old:
+            has_new = conn.execute(text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'tenant_email_templates' AND column_name = :col"
+            ), {"col": new_col}).fetchone()
+            if not has_new:
+                conn.execute(text(
+                    f'ALTER TABLE tenant_email_templates RENAME COLUMN "{old_col}" TO "{new_col}"'
+                ))
+                logger.info(f"Migration: renamed column {old_col} → {new_col}")
+
+    # Add columns that were never in the original DDL
+    adds = [
+        ("template_type", "VARCHAR(100)"),
+        ("name", "VARCHAR(255)"),
+        ("body_html", "TEXT"),
+        ("body_text", "TEXT"),
+        ("cta_text", "VARCHAR(255)"),
+        ("cta_url", "VARCHAR(500)"),
+        ("category", "VARCHAR(50) DEFAULT 'transactional'"),
+        ("created_by_id", "INTEGER"),
+    ]
+    for col_name, col_def in adds:
+        conn.execute(text(
+            f"ALTER TABLE tenant_email_templates ADD COLUMN IF NOT EXISTS {col_name} {col_def}"
+        ))
+
+    # Update the UNIQUE constraint if it still references template_key
+    # (template_key was renamed to template_type above, PG renames in-place so
+    # the constraint follows automatically — nothing extra needed)
+
+    conn.commit()
+    logger.info("Migration: tenant_email_templates schema reconciled")
+
+
 def run_migration(engine):
     """Seed campaign templates for all existing organizations."""
     with engine.connect() as conn:
@@ -237,6 +292,9 @@ def run_migration(engine):
             if not result:
                 logger.info("Migration: tenant_email_templates table does not exist, skipping seed")
                 return
+
+            # Ensure the table has the columns the seed data expects
+            _ensure_columns(conn)
 
             # Get all organization IDs
             orgs = conn.execute(text("SELECT id FROM organizations")).fetchall()

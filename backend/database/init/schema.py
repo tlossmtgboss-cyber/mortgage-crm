@@ -423,18 +423,20 @@ def _create_tenant_tables(engine):
                 CREATE TABLE IF NOT EXISTS tenant_email_templates (
                     id SERIAL PRIMARY KEY,
                     organization_id INTEGER NOT NULL,
-                    template_key VARCHAR(100) NOT NULL,
-                    template_name VARCHAR(255) NOT NULL,
+                    template_type VARCHAR(100) NOT NULL,
+                    name VARCHAR(255) NOT NULL,
                     subject VARCHAR(500),
-                    html_body TEXT,
-                    text_body TEXT,
+                    body_html TEXT,
+                    body_text TEXT,
+                    cta_text VARCHAR(255),
+                    cta_url VARCHAR(500),
                     merge_fields JSONB DEFAULT '[]',
+                    category VARCHAR(50) DEFAULT 'transactional',
                     is_active BOOLEAN DEFAULT TRUE,
-                    created_by INTEGER,
-                    updated_by INTEGER,
+                    created_by_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(organization_id, template_key)
+                    UNIQUE(organization_id, template_type)
                 )
             """))
             conn.commit()

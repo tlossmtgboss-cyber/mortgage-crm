@@ -21,7 +21,10 @@ import uuid
 # Add parent directory to path to import database module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import engine, DATABASE_URL
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost:5432/perennia")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+engine = create_engine(DATABASE_URL)
 
 
 def generate_uuid():
