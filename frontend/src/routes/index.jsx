@@ -208,6 +208,9 @@ const AriaMortgageCalculator = lazyRetry(() => import('../pages/aria/AriaMortgag
 const AriaTestPage = lazyRetry(() => import('../pages/AriaTestPage'));
 
 // Workflow & Analytics pages
+const WorkflowLayout = lazyRetry(() => import('../pages/workflow/WorkflowLayout'));
+const WorkflowFlowchart = lazyRetry(() => import('../pages/workflow/WorkflowFlowchart'));
+const WorkflowSettings = lazyRetry(() => import('../pages/workflow/WorkflowSettings'));
 const WorkflowDashboard = lazyRetry(() => import('../pages/WorkflowDashboard'));
 const WorkflowStagePage = lazyRetry(() => import('../pages/WorkflowStagePage'));
 const WorkflowStatusDetail = lazyRetry(() => import('../pages/WorkflowStatusDetail'));
@@ -622,15 +625,17 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/efficiency/bottleneck/:bottleneckId" path="/efficiency/bottleneck/:bottleneckId" element={withMainLayout(BottleneckLoans)} />,
 
     // Workflow
-    <Route key="/workflow" path="/workflow" element={withMainLayout(WorkflowDashboard)} />,
+    <Route key="/workflow" path="/workflow" element={withMainLayout(WorkflowLayout)}>
+      <Route index element={null} />
+      <Route path="settings" element={<Suspense fallback={<PageLoader />}><WorkflowSettings /></Suspense>} />
+      <Route path=":workflowKey" element={<Suspense fallback={<PageLoader />}><WorkflowFlowchart /></Suspense>} />
+    </Route>,
     <Route key="/workflow/builder/v1" path="/workflow/builder/v1" element={withMainLayout(WorkflowBuilderV1)} />,
     <Route key="/workflow/builder/v2" path="/workflow/builder/v2" element={withMainLayout(WorkflowBuilderV2)} />,
     <Route key="/workflow/builder/v3" path="/workflow/builder/v3" element={withMainLayout(WorkflowBuilderV3)} />,
     <Route key="/workflow/builder/v4" path="/workflow/builder/v4" element={withMainLayout(WorkflowBuilderV4)} />,
     <Route key="/workflow/builder/v5" path="/workflow/builder/v5" element={withMainLayout(WorkflowBuilderV5)} />,
     <Route key="/workflow/builder/v6" path="/workflow/builder/v6" element={withMainLayout(WorkflowBuilderV6)} />,
-    <Route key="/workflow/:stage" path="/workflow/:stage" element={withMainLayout(WorkflowStagePage)} />,
-    <Route key="/workflow/status/:statusId" path="/workflow/status/:statusId" element={withMainLayout(WorkflowStatusDetail)} />,
 
     // Analytics & Intelligence
     <Route key="/market" path="/market" element={withMainLayout(MarketDashboard)} />,
