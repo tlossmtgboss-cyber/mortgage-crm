@@ -451,6 +451,7 @@ class POSVerification(Base):
     last_name = Column(String, nullable=False, default="")
     email = Column(String, nullable=False, default="")
     organization_id = Column(Integer, nullable=True)
+    lo_slug = Column(String, nullable=True)
     flow_type = Column(String, nullable=False, default="signup")
     contact_id = Column(Integer, nullable=True)
     attempts = Column(Integer, default=0)

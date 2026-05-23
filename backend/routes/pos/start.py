@@ -174,6 +174,10 @@ def _ensure_table(db: Session):
         ))
         db.execute(text(
             "ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
+            "lo_slug VARCHAR"
+        ))
+        db.execute(text(
+            "ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
             "contact_id INTEGER"
         ))
         db.execute(text(
@@ -424,6 +428,7 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
         last_name=body.last_name.strip(),
         email=email_lower,
         organization_id=org_id,
+        lo_slug=body.lo_slug,
         ip_address=ip,
         consent_at=now,
         created_at=now,
@@ -550,6 +555,38 @@ def verify_code(body: VerifyRequest, request: Request, response: Response, db: S
         db.add(contact)
         db.flush()
         borrower_name = verification.first_name
+
+        # Create a CRM Lead so the loan officer can see this borrower.
+        try:
+            from database.models.lead_loan import Lead
+            existing_lead = (
+                db.query(Lead)
+                .filter(Lead.email == verification.email, Lead.organization_id == org_id)
+                .first()
+            )
+            if not existing_lead:
+                lo_user_id = None
+                if verification.lo_slug:
+                    lo_user = db.query(User).filter(User.slug == verification.lo_slug).first()
+                    if lo_user:
+                        lo_user_id = lo_user.id
+                lead = Lead(
+                    organization_id=org_id,
+                    name=f"{verification.first_name} {verification.last_name}",
+                    first_name=verification.first_name,
+                    last_name=verification.last_name,
+                    email=verification.email,
+                    phone=verification.phone or None,
+                    stage="APPLICATION",
+                    source="POS Portal",
+                    owner_id=lo_user_id,
+                    application_started_date=datetime.now(timezone.utc),
+                )
+                db.add(lead)
+                db.flush()
+                logger.info("POS verify: created CRM lead id=%d for email=%s", lead.id, verification.email)
+        except Exception as e:
+            logger.warning("POS verify: failed to create CRM lead for %s: %s", verification.email, e)
 
     token_service = PURLTokenService(db)
     _token_id, full_token = token_service.create_token(
