@@ -1002,7 +1002,8 @@ function LoginForm({
           flowType: 'login',
         });
       } else {
-        setError('If you have an account, check your email for a verification code.');
+        setError('No account found with this email. Please create an account first.');
+        onSwitchToSignup();
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
