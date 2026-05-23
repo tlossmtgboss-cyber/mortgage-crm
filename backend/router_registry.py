@@ -1793,6 +1793,12 @@ def _setup_client_file_tables(engine):
         _BD.__table__.create(engine, checkfirst=True)
         logger.info("Builder Application tables verified/created")
 
+        # Knowledge Graph tables
+        from database.models.knowledge_graph import KnowledgeGraphNode as _KGN, KnowledgeGraphEdge as _KGE
+        _KGN.__table__.create(engine, checkfirst=True)
+        _KGE.__table__.create(engine, checkfirst=True)
+        logger.info("Knowledge Graph tables verified/created")
+
         # Ensure all ClientFile columns exist
         try:
             from sqlalchemy import text as _sa_cf_text

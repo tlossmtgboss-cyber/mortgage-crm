@@ -262,6 +262,57 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
         except Exception as e:
             logger.warning(f"Email inbox sync skipped: {e}")
 
+        # Knowledge Graph — initial sync + daily scheduled re-sync
+        try:
+            from services.scheduler_service import scheduler_service as _kg_sched
+
+            async def _knowledge_graph_sync_job():
+                from db import SessionLocal
+                from database.models.core import Organization
+                lookup_db = SessionLocal()
+                try:
+                    org_ids = [r[0] for r in lookup_db.query(Organization.id).filter(Organization.is_active == True).all()]
+                finally:
+                    lookup_db.close()
+
+                total_nodes = 0
+                failed_orgs = []
+                for oid in org_ids:
+                    org_db = SessionLocal()
+                    try:
+                        from services.knowledge_graph import KnowledgeGraphSyncService
+                        svc = KnowledgeGraphSyncService(org_db, oid)
+                        result = svc.sync_all()
+                        total_nodes += result.get("total_nodes", 0)
+                        org_db.commit()
+                    except Exception as _org_err:
+                        org_db.rollback()
+                        failed_orgs.append(oid)
+                        logger.error(f"Knowledge graph sync failed for org {oid}: {_org_err}")
+                    finally:
+                        org_db.close()
+
+                if failed_orgs:
+                    logger.warning(f"Knowledge graph sync: {len(failed_orgs)} orgs failed: {failed_orgs}")
+                logger.info(f"Knowledge graph sync complete: {len(org_ids)} orgs, {total_nodes} total nodes")
+
+            _kg_sched.register_job("knowledge_graph_sync", _knowledge_graph_sync_job, "cron",
+                                   description="Knowledge graph full entity sync", lock_ttl=600, hour=2, minute=30)
+            logger.info("Knowledge graph daily sync scheduled (02:30 UTC)")
+
+            import asyncio
+
+            async def _kg_initial_sync_wrapper():
+                try:
+                    await _knowledge_graph_sync_job()
+                except Exception as e:
+                    logger.error(f"Knowledge graph initial sync failed: {e}")
+
+            asyncio.create_task(_kg_initial_sync_wrapper())
+            logger.info("Knowledge graph initial sync started (background)")
+        except Exception as e:
+            logger.warning(f"Knowledge graph sync skipped: {e}")
+
         # LangGraph thread pool executor
         from concurrent.futures import ThreadPoolExecutor
         langgraph_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="langgraph")
