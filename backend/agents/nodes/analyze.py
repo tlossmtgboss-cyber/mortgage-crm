@@ -155,13 +155,54 @@ def _score_memory_relevance(memory_value: str, query: str) -> float:
     return min(score, 1.0)
 
 
-def _retrieve_user_memories(user_id: str, organization_id: Optional[int], current_query: str = "") -> tuple:
+def _cosine_similarity(a: list, b: list) -> float:
+    """
+    Compute cosine similarity between two embedding vectors using numpy.
+
+    Returns a float between -1.0 and 1.0 (typically 0.0-1.0 for normalized
+    OpenAI embeddings).  Returns 0.0 on any error.
+    """
+    try:
+        import numpy as np
+        a_arr = np.asarray(a, dtype=np.float32)
+        b_arr = np.asarray(b, dtype=np.float32)
+        denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
+        if denom < 1e-10:
+            return 0.0
+        return float(np.dot(a_arr, b_arr) / denom)
+    except Exception:
+        return 0.0
+
+
+async def _generate_query_embedding(query_text: str) -> Optional[list]:
+    """
+    Generate an embedding for the user query using the same model as
+    retrieval_service (text-embedding-3-small).
+
+    Returns None on failure so callers fall back to keyword-only scoring.
+    """
+    try:
+        from services.aria_memory.embedding_service import generate_embedding_async
+        return await generate_embedding_async(query_text)
+    except Exception as e:
+        logger.debug(f"[ANALYZE] Query embedding generation failed: {e}")
+        return None
+
+
+async def _retrieve_user_memories(user_id: str, organization_id: Optional[int], current_query: str = "") -> tuple:
     """
     Query AgentMemory table for the current user's stored memories.
 
-    Applies TTL filtering (expired memories excluded), then ranks by a
-    combined score of confidence and relevance to the current query.
-    Returns the top 10 most relevant memories.
+    Uses hybrid keyword + semantic scoring:
+    - Keyword relevance: Jaccard-style word overlap (always available)
+    - Semantic relevance: cosine similarity of embeddings (when available)
+
+    Scoring formula per memory:
+    - WITH embedding:  0.25*confidence + 0.30*semantic + 0.25*keyword + 0.20*type_boost
+    - WITHOUT embedding: 0.40*confidence + 0.40*keyword + 0.20*type_boost  (legacy)
+
+    Applies TTL filtering (expired memories excluded), then ranks by
+    combined score.  Returns the top 10 most relevant memories.
 
     Returns:
         Tuple of (memories_list, formatted_memory_context_string).
@@ -210,14 +251,39 @@ def _retrieve_user_memories(user_id: str, organization_id: Optional[int], curren
             if not memories_rows:
                 return [], ""
 
-            # Build candidate list with relevance scoring
+            # Generate query embedding ONCE for semantic scoring.
+            # Only attempt if at least one memory has an embedding
+            # (avoids wasting an API call when the DB has no embeddings).
+            query_embedding = None
+            has_any_embedding = any(
+                getattr(mem, "embedding", None) is not None for mem in memories_rows
+            )
+            if current_query and has_any_embedding:
+                query_embedding = await _generate_query_embedding(current_query)
+
+            semantic_hit_count = 0
+
+            # Build candidate list with hybrid relevance scoring
             candidates = []
             for mem in memories_rows:
                 mem_type = mem.memory_type.value if hasattr(mem.memory_type, 'value') else str(mem.memory_type)
                 confidence = mem.confidence or 0.5
 
-                # Relevance score from keyword overlap with current query
-                relevance = _score_memory_relevance(mem.value or "", current_query)
+                # Keyword relevance (always computed)
+                keyword_relevance = _score_memory_relevance(mem.value or "", current_query)
+
+                # Semantic relevance (only when both query and memory have embeddings)
+                mem_embedding = getattr(mem, "embedding", None)
+                semantic_relevance = 0.0
+                has_semantic = False
+
+                if query_embedding is not None and mem_embedding is not None:
+                    # pgvector returns embeddings as lists; compute cosine sim
+                    sim = _cosine_similarity(query_embedding, list(mem_embedding))
+                    # Clamp to [0, 1] — OpenAI normalized embeddings rarely go negative
+                    semantic_relevance = max(0.0, min(sim, 1.0))
+                    has_semantic = True
+                    semantic_hit_count += 1
 
                 # Directives and preferences get a base relevance boost —
                 # they should almost always be injected regardless of query
@@ -225,8 +291,22 @@ def _retrieve_user_memories(user_id: str, organization_id: Optional[int], curren
                 if mem_type in ("directive", "preference"):
                     type_boost = 0.4
 
-                # Combined score: 40% confidence + 40% relevance + 20% type boost
-                combined_score = (0.4 * confidence) + (0.4 * relevance) + (0.2 * min(type_boost + relevance, 1.0))
+                # Combined score depends on whether semantic signal is available
+                if has_semantic:
+                    # Hybrid: 25% confidence + 30% semantic + 25% keyword + 20% type boost
+                    combined_score = (
+                        0.25 * confidence
+                        + 0.30 * semantic_relevance
+                        + 0.25 * keyword_relevance
+                        + 0.20 * min(type_boost + keyword_relevance, 1.0)
+                    )
+                else:
+                    # Keyword-only fallback: 40% confidence + 40% keyword + 20% type boost
+                    combined_score = (
+                        0.40 * confidence
+                        + 0.40 * keyword_relevance
+                        + 0.20 * min(type_boost + keyword_relevance, 1.0)
+                    )
 
                 candidates.append({
                     "id": mem.id,
@@ -234,7 +314,8 @@ def _retrieve_user_memories(user_id: str, organization_id: Optional[int], curren
                     "key": mem.key,
                     "value": mem.value,
                     "confidence": confidence,
-                    "relevance": relevance,
+                    "keyword_relevance": keyword_relevance,
+                    "semantic_relevance": semantic_relevance if has_semantic else None,
                     "combined_score": combined_score,
                 })
 
@@ -248,9 +329,14 @@ def _retrieve_user_memories(user_id: str, organization_id: Optional[int], curren
                 lines.append(f"[{m['type'].upper()}] {m['value']} (confidence: {m['confidence']:.1f})")
             formatted = "\n".join(lines)
 
+            scoring_mode = (
+                f"hybrid ({semantic_hit_count}/{len(candidates)} with embeddings)"
+                if semantic_hit_count > 0
+                else "keyword-only"
+            )
             logger.info(
-                f"[ANALYZE] Retrieved {len(memories_list)} memories (from {len(candidates)} candidates) "
-                f"for user {user_id}"
+                f"[ANALYZE] Retrieved {len(memories_list)} memories (from {len(candidates)} candidates, "
+                f"scoring={scoring_mode}) for user {user_id}"
             )
             return memories_list, formatted
 
@@ -915,7 +1001,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
 
             if not _skip_memory:
                 mem_start = time.time()
-                user_memories, memory_context = _retrieve_user_memories(
+                user_memories, memory_context = await _retrieve_user_memories(
                     state.get("user_id", ""), state.get("organization_id"),
                     current_query=state.get("user_message", "")
                 )
@@ -1062,8 +1148,9 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
         # MEMORY RETRIEVAL (after intent classification, before return)
         # =================================================================
         mem_start = time.time()
-        user_memories, memory_context = _retrieve_user_memories(
-            state.get("user_id", ""), state.get("organization_id")
+        user_memories, memory_context = await _retrieve_user_memories(
+            state.get("user_id", ""), state.get("organization_id"),
+            current_query=user_message,
         )
         timing["memory_retrieve"] = (time.time() - mem_start) * 1000
         if user_memories or memory_context:

@@ -186,6 +186,10 @@ async def approve_item(
             db.commit()
             return {"status": "confirmed", "memory_id": existing.id}
 
+    # Generate embedding for vector search
+    from services.aria_memory.embedding_service import generate_embedding_async, EMBEDDING_MODEL
+    embedding = await generate_embedding_async(item.fact_text)
+
     memory = AgentMemory(
         user_id=item.borrower_id,
         organization_id=tenant_id,
@@ -200,6 +204,8 @@ async def approve_item(
         transcript_span=item.transcript_span,
         fact_key=item.fact_key,
         content_hash=content_hash,
+        embedding=embedding,
+        embedding_model=EMBEDDING_MODEL if embedding else None,
     )
     db.add(memory)
     db.flush()
@@ -236,7 +242,24 @@ async def approve_item(
     db.add(audit)
     db.commit()
 
-    return {"status": "approved", "memory_id": memory.id}
+    # --- Conflict detection (post-commit) ---
+    conflict_summary = None
+    try:
+        from services.aria_memory.conflict_detector import detect_conflicts, resolve_auto_conflicts
+        conflicts = detect_conflicts(db, memory)
+        if conflicts:
+            conflict_summary = resolve_auto_conflicts(db, memory, conflicts)
+            logger.info(
+                "Conflict resolution for memory %d: %s",
+                memory.id, conflict_summary,
+            )
+    except Exception as e:
+        logger.warning("Conflict detection failed for memory %d: %s", memory.id, e)
+
+    result = {"status": "approved", "memory_id": memory.id}
+    if conflict_summary:
+        result["conflicts"] = conflict_summary
+    return result
 
 
 @router.post("/{item_id}/reject")

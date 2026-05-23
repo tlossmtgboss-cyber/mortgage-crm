@@ -11,6 +11,14 @@ from .context_loader import AriaContextLoader, BorrowerContext, ContextLoadReque
 from .consolidation_worker import ConsolidationWorker
 from .exclusion_list import ExclusionChecker
 from .shadow_evaluator import ShadowEvaluator
+from .embedding_service import generate_embedding_sync, generate_embedding_async
+from .conflict_detector import (
+    ConflictResult,
+    SuggestedAction,
+    detect_conflicts,
+    resolve_auto_conflicts,
+    apply_confidence_decay,
+)
 
 __all__ = [
     "AriaRetrievalService",
@@ -20,4 +28,11 @@ __all__ = [
     "ConsolidationWorker",
     "ExclusionChecker",
     "ShadowEvaluator",
+    "generate_embedding_sync",
+    "generate_embedding_async",
+    "ConflictResult",
+    "SuggestedAction",
+    "detect_conflicts",
+    "resolve_auto_conflicts",
+    "apply_confidence_decay",
 ]

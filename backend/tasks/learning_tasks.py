@@ -355,6 +355,15 @@ def refresh_agent_memory_scores(
 
         db.commit()
 
+        # Step 4: Verification-based confidence decay (90/180-day tiers)
+        try:
+            from services.aria_memory.conflict_detector import apply_confidence_decay
+            decay_result = apply_confidence_decay(db)
+            results["verification_decay"] = decay_result
+        except Exception as e:
+            logger.warning("Verification-based confidence decay failed: %s", e)
+            results["verification_decay"] = {"error": str(e)}
+
         logger.info(
             "Memory maintenance complete: %d expired, %d decayed, %d removed, %d old convs",
             results["expired_pruned"],

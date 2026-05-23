@@ -52,7 +52,7 @@ class ConsolidationWorker:
 
         staged_count = 0
         if memory_items:
-            self._write_to_staging(memory_items, tenant_id, borrower_id, call_session_id)
+            await self._write_to_staging(memory_items, tenant_id, borrower_id, call_session_id)
             staged_count = len(memory_items)
 
         for item in other_items:
@@ -161,7 +161,7 @@ TRANSCRIPT:
             return False
         return confidence >= AUTO_COMMIT_THRESHOLD
 
-    def _write_to_staging(
+    async def _write_to_staging(
         self,
         items: list[dict],
         tenant_id: int,
@@ -171,24 +171,119 @@ TRANSCRIPT:
         from database.models.memory_staging import MemoryStaging
 
         for item in items:
+            confidence = item.get("confidence", 0.0)
             content_hash = hashlib.md5(item["fact_text"].encode()).hexdigest()[:32]
-            staging = MemoryStaging(
-                organization_id=tenant_id,
-                borrower_id=borrower_id,
-                source_call_id=source_call_id,
-                fact_text=item["fact_text"],
-                fact_type=item["fact_type"],
-                topic=item.get("topic"),
-                confidence=item["confidence"],
-                transcript_span=item.get("transcript_span"),
-                fact_key=item.get("fact_key"),
-                destination=item["destination"],
-                status="pending_review",
-                content_hash=content_hash,
-            )
-            self._db.add(staging)
+
+            if self._should_auto_commit(confidence, exclusion_flagged=False):
+                # High-confidence fact: auto-commit directly to agent_memories
+                await self._auto_commit_to_memory(
+                    item, tenant_id, borrower_id, source_call_id, content_hash,
+                )
+            else:
+                staging = MemoryStaging(
+                    organization_id=tenant_id,
+                    borrower_id=borrower_id,
+                    source_call_id=source_call_id,
+                    fact_text=item["fact_text"],
+                    fact_type=item["fact_type"],
+                    topic=item.get("topic"),
+                    confidence=confidence,
+                    transcript_span=item.get("transcript_span"),
+                    fact_key=item.get("fact_key"),
+                    destination=item["destination"],
+                    status="pending_review",
+                    content_hash=content_hash,
+                )
+                self._db.add(staging)
 
         self._db.commit()
+
+    async def _auto_commit_to_memory(
+        self,
+        item: dict,
+        tenant_id: int,
+        borrower_id: int,
+        source_call_id: str,
+        content_hash: str,
+    ) -> None:
+        """Auto-commit a high-confidence fact directly to agent_memories with embedding."""
+        from database.models.agent_memory import AgentMemory, MemoryType
+        from services.aria_memory.embedding_service import generate_embedding_async, EMBEDDING_MODEL
+
+        type_map = {
+            "preference": MemoryType.PREFERENCE,
+            "fact": MemoryType.FACT,
+            "context": MemoryType.CONTEXT,
+            "insight": MemoryType.INSIGHT,
+            "directive": MemoryType.DIRECTIVE,
+        }
+
+        # Dedup: check if this exact content already exists
+        existing = self._db.query(AgentMemory).filter(
+            AgentMemory.borrower_id == borrower_id,
+            AgentMemory.organization_id == tenant_id,
+            AgentMemory.content_hash == content_hash,
+            AgentMemory.superseded_by.is_(None),
+        ).first()
+        if existing:
+            existing.last_verified_at = datetime.now(timezone.utc)
+            logger.info("Auto-commit dedup: refreshed memory %d", existing.id)
+            return
+
+        # Supersession for preferences with same fact_key
+        superseded_id = None
+        fact_key = item.get("fact_key")
+        if fact_key:
+            old = self._db.query(AgentMemory).filter(
+                AgentMemory.borrower_id == borrower_id,
+                AgentMemory.organization_id == tenant_id,
+                AgentMemory.fact_key == fact_key,
+                AgentMemory.superseded_by.is_(None),
+            ).first()
+            if old:
+                superseded_id = old.id
+
+        # Generate embedding
+        embedding = await generate_embedding_async(item["fact_text"])
+
+        memory = AgentMemory(
+            user_id=borrower_id,
+            organization_id=tenant_id,
+            memory_type=type_map.get(item.get("fact_type"), MemoryType.FACT),
+            key=fact_key or f"auto_{item.get('fact_type', 'fact')}_{source_call_id[:8]}",
+            value=item["fact_text"],
+            confidence=item.get("confidence", 0.0),
+            agent_role="consolidation_worker",
+            borrower_id=borrower_id,
+            topic=item.get("topic"),
+            source_call_id=source_call_id,
+            transcript_span=item.get("transcript_span"),
+            fact_key=fact_key,
+            content_hash=content_hash,
+            embedding=embedding,
+            embedding_model=EMBEDDING_MODEL if embedding else None,
+        )
+        self._db.add(memory)
+        self._db.flush()
+
+        if superseded_id:
+            old_mem = self._db.query(AgentMemory).filter(AgentMemory.id == superseded_id).first()
+            if old_mem:
+                old_mem.superseded_by = memory.id
+
+        self._log_audit(
+            "auto_commit", tenant_id, borrower_id, source_call_id,
+            details={
+                "memory_id": memory.id,
+                "confidence": item.get("confidence"),
+                "fact_key": fact_key,
+                "has_embedding": embedding is not None,
+            },
+        )
+        logger.info(
+            "Auto-committed memory %d (confidence=%.2f, embedding=%s)",
+            memory.id, item.get("confidence", 0), "yes" if embedding else "no",
+        )
 
     def _route_non_memory(
         self, item: dict, tenant_id: int, borrower_id: int, source_call_id: str
