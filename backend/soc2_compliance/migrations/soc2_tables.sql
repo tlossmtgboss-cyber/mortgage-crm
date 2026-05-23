@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS soc2_audit_log (
     timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     -- Who
-    user_id         UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_id         INTEGER REFERENCES users(id) ON DELETE SET NULL,
     user_email      VARCHAR(255),
     user_role       VARCHAR(100),
     tenant_id       UUID,  -- Multi-tenant isolation
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS soc2_access_event (
     timestamp           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     -- Who
-    user_id             UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_id             INTEGER REFERENCES users(id) ON DELETE SET NULL,
     attempted_email     VARCHAR(255),
     tenant_id           UUID,
     
@@ -127,8 +127,8 @@ CREATE TABLE IF NOT EXISTS soc2_security_incident (
     status          VARCHAR(30) NOT NULL DEFAULT 'open',  -- IncidentStatus enum
     
     -- People
-    reported_by     UUID REFERENCES users(id) ON DELETE SET NULL,
-    assigned_to     UUID REFERENCES users(id) ON DELETE SET NULL,
+    reported_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    assigned_to     INTEGER REFERENCES users(id) ON DELETE SET NULL,
     tenant_id       UUID,
     
     -- Impact
@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS soc2_incident_timeline (
     timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     action          VARCHAR(100) NOT NULL,  -- e.g., 'status_change', 'assigned', 'note_added'
-    actor_id        UUID REFERENCES users(id) ON DELETE SET NULL,
+    actor_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
     description     TEXT NOT NULL,
     
     old_value       TEXT,
@@ -207,9 +207,9 @@ CREATE TABLE IF NOT EXISTS soc2_change_record (
     status          VARCHAR(30) NOT NULL DEFAULT 'requested',  -- ChangeStatus enum
     
     -- Who
-    requested_by    UUID REFERENCES users(id) ON DELETE SET NULL,
-    approved_by     UUID REFERENCES users(id) ON DELETE SET NULL,
-    implemented_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    requested_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    approved_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    implemented_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
     tenant_id       UUID,
     
     -- Details
@@ -315,7 +315,7 @@ CREATE INDEX idx_compliance_check_category ON soc2_compliance_check(check_catego
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS soc2_active_session (
     id              VARCHAR(255) PRIMARY KEY,
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     tenant_id       UUID,
     
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -345,7 +345,7 @@ CREATE TABLE IF NOT EXISTS soc2_api_key_registry (
     -- Owner
     name            VARCHAR(255) NOT NULL,
     description     TEXT,
-    created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
     tenant_id       UUID,
     
     -- Key info (store hash, never plaintext)
@@ -360,7 +360,7 @@ CREATE TABLE IF NOT EXISTS soc2_api_key_registry (
     expires_at      TIMESTAMPTZ,
     last_used_at    TIMESTAMPTZ,
     revoked_at      TIMESTAMPTZ,
-    revoked_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    revoked_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
     revoke_reason   TEXT
 );
 

@@ -39,6 +39,7 @@ def run_migration():
             # PostgreSQL version
             try:
                 # Ensure session_id column exists on call_artifacts (may have been created by older migration)
+                # No FK constraint — call_sessions.id type may differ across environments
                 session.execute(text("""
                     DO $$
                     BEGIN
@@ -46,7 +47,7 @@ def run_migration():
                             SELECT 1 FROM information_schema.columns
                             WHERE table_name = 'call_artifacts' AND column_name = 'session_id'
                         ) THEN
-                            ALTER TABLE call_artifacts ADD COLUMN session_id UUID REFERENCES call_sessions(id) ON DELETE CASCADE;
+                            ALTER TABLE call_artifacts ADD COLUMN session_id UUID;
                         END IF;
                     END $$;
                 """))

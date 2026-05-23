@@ -400,30 +400,29 @@ def run_migration():
     statements = [s.strip() for s in sql_statements.split(';') if s.strip()]
 
     with engine.connect() as conn:
-        success_count = 0
-        error_count = 0
+        with conn.begin():
+            success_count = 0
+            error_count = 0
 
-        for i, stmt in enumerate(statements):
-            if not stmt or stmt.startswith('--'):
-                continue
-            conn.execute(text("SAVEPOINT call_monitor_stmt"))
-            try:
-                conn.execute(text(stmt))
-                conn.execute(text("RELEASE SAVEPOINT call_monitor_stmt"))
-                success_count += 1
-                if 'CREATE TABLE' in stmt:
-                    table_name = stmt.split('CREATE TABLE IF NOT EXISTS')[1].split('(')[0].strip() if 'IF NOT EXISTS' in stmt else 'unknown'
-                    print(f"  ✓ Created table: {table_name}")
-            except Exception as e:
-                conn.execute(text("ROLLBACK TO SAVEPOINT call_monitor_stmt"))
-                error_msg = str(e)
-                if 'already exists' in error_msg.lower():
-                    print(f"  ⊘ Skipped (exists): statement {i+1}")
-                else:
-                    error_count += 1
-                    print(f"  ✗ Error in statement {i+1}: {error_msg[:100]}")
-
-        conn.commit()
+            for i, stmt in enumerate(statements):
+                if not stmt or stmt.startswith('--'):
+                    continue
+                conn.execute(text("SAVEPOINT call_monitor_stmt"))
+                try:
+                    conn.execute(text(stmt))
+                    conn.execute(text("RELEASE SAVEPOINT call_monitor_stmt"))
+                    success_count += 1
+                    if 'CREATE TABLE' in stmt:
+                        table_name = stmt.split('CREATE TABLE IF NOT EXISTS')[1].split('(')[0].strip() if 'IF NOT EXISTS' in stmt else 'unknown'
+                        print(f"  ✓ Created table: {table_name}")
+                except Exception as e:
+                    conn.execute(text("ROLLBACK TO SAVEPOINT call_monitor_stmt"))
+                    error_msg = str(e)
+                    if 'already exists' in error_msg.lower():
+                        print(f"  ⊘ Skipped (exists): statement {i+1}")
+                    else:
+                        error_count += 1
+                        print(f"  ✗ Error in statement {i+1}: {error_msg[:100]}")
 
     print("\n" + "=" * 60)
     print(f"Migration completed: {success_count} statements succeeded, {error_count} errors")

@@ -320,7 +320,7 @@ def run_migration(engine):
                              cta_text, merge_fields, category, is_active, created_at, updated_at)
                         VALUES
                             (:org_id, :template_type, :name, :subject, :body_html, :body_text,
-                             :cta_text, :merge_fields::jsonb, :category, true, NOW(), NOW())
+                             :cta_text, CAST(:merge_fields AS jsonb), :category, true, NOW(), NOW())
                     """), {
                         "org_id": org_id,
                         "template_type": tmpl["template_type"],

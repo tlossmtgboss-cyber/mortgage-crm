@@ -1621,6 +1621,30 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ scheduled_reports table note: {e}")
 
+        # Ensure organization_branding table exists before adding columns
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS organization_branding (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                        company_name VARCHAR(200),
+                        logo_url VARCHAR(500),
+                        primary_color VARCHAR(7) DEFAULT '#1a56db',
+                        secondary_color VARCHAR(7) DEFAULT '#7c3aed',
+                        accent_color VARCHAR(7) DEFAULT '#059669',
+                        setting_type VARCHAR(50),
+                        settings JSON,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_org_branding_org_id ON organization_branding (organization_id)"))
+                conn.commit()
+                logger.info("✅ organization_branding table ensured")
+        except Exception as e:
+            logger.warning(f"⚠️ organization_branding table note: {e}")
+
         # Add white-label branding columns (Enterprise Readiness Domain 12)
         try:
             with _engine.connect() as conn:
