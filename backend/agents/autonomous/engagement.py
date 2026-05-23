@@ -431,14 +431,14 @@ def appointment_prep(
     actions = 0
 
     upcoming = db.execute(text("""
-        SELECT sa.id, sa.title, sa.start_time, sa.user_id, sa.lead_id,
-               sa.appointment_type, sa.meeting_type,
+        SELECT sa.id, sa.title, sa.scheduled_start, sa.assigned_user_id, sa.lead_id,
+               sa.meeting_type AS appointment_type, sa.meeting_type,
                l.first_name, l.last_name, l.email, l.phone,
                l.loan_amount, l.credit_score, l.loan_purpose, l.stage AS lead_stage
         FROM scheduler_appointments sa
         LEFT JOIN leads l ON l.id = sa.lead_id
         WHERE sa.organization_id = :org_id
-          AND sa.start_time BETWEEN CURRENT_TIMESTAMP + INTERVAL '90 minutes'
+          AND sa.scheduled_start BETWEEN CURRENT_TIMESTAMP + INTERVAL '90 minutes'
                                 AND CURRENT_TIMESTAMP + INTERVAL '2 hours 15 minutes'
           AND sa.status NOT IN ('cancelled', 'no_show', 'completed')
     """), {"org_id": organization_id}).fetchall()

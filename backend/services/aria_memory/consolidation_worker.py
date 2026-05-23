@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from services.aria_memory.pii_scrubber import scrub_pii
@@ -273,7 +274,21 @@ TRANSCRIPT:
             embedding_model=EMBEDDING_MODEL if embedding else None,
         )
         self._db.add(memory)
-        self._db.flush()
+        try:
+            self._db.begin_nested()  # SAVEPOINT
+            self._db.flush()
+        except IntegrityError:
+            self._db.rollback()  # rolls back to SAVEPOINT only
+            logger.info("Auto-commit dedup: duplicate detected for call %s, refreshing existing", source_call_id)
+            existing = self._db.query(AgentMemory).filter(
+                AgentMemory.borrower_id == borrower_id,
+                AgentMemory.organization_id == tenant_id,
+                AgentMemory.content_hash == content_hash,
+                AgentMemory.superseded_by.is_(None),
+            ).first()
+            if existing:
+                existing.last_verified_at = datetime.now(timezone.utc)
+            return
 
         if superseded_id:
             old_mem = self._db.query(AgentMemory).filter(AgentMemory.id == superseded_id).first()

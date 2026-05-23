@@ -80,7 +80,7 @@ def _insert_task(db: Session, *, title: str, description: str,
     }
     def _do():
         db.execute(text(f"""
-            INSERT INTO tasks (title, description, assigned_to_id, loan_id, lead_id,
+            INSERT INTO tasks (title, description, owner_id, loan_id, lead_id,
                                priority, status, due_date, created_at, organization_id)
             VALUES (:title, :desc, :assigned_to, :loan_id, :lead_id,
                     :priority, 'pending', {due_date_expr}, CURRENT_TIMESTAMP, :org_id)
@@ -579,12 +579,12 @@ def task_overdue_escalator(
 
     # ---- Fetch all overdue tasks ----
     overdue_tasks = db.execute(text("""
-        SELECT t.id, t.title, t.assigned_to_id, t.priority, t.due_date,
+        SELECT t.id, t.title, t.owner_id, t.priority, t.due_date,
                t.loan_id, t.lead_id,
                CONCAT(u.first_name, ' ', u.last_name) as assigned_name,
                (CURRENT_DATE - t.due_date) as days_overdue
         FROM tasks t
-        LEFT JOIN users u ON u.id = t.assigned_to_id
+        LEFT JOIN users u ON u.id = t.owner_id
         WHERE t.organization_id = :org_id
           AND t.status IN ('pending', 'in_progress')
           AND t.due_date < CURRENT_DATE
@@ -647,8 +647,8 @@ def task_overdue_escalator(
         ooo_row = db.execute(text("""
             SELECT id FROM scheduler_appointments
             WHERE organization_id = :org_id
-              AND (host_user_id = :lo_id OR assigned_to_id = :lo_id)
-              AND CURRENT_DATE BETWEEN DATE(start_time) AND DATE(end_time)
+              AND (created_by_user_id = :lo_id OR assigned_user_id = :lo_id)
+              AND CURRENT_DATE BETWEEN DATE(scheduled_start) AND DATE(scheduled_end)
               AND (title ILIKE '%out of office%' OR title ILIKE '%ooo%'
                    OR title ILIKE '%vacation%' OR title ILIKE '%pto%')
             LIMIT 1
@@ -665,7 +665,7 @@ def task_overdue_escalator(
                 COUNT(*) FILTER (WHERE status IN ('completed', 'done')) as completed,
                 COUNT(*) as total
             FROM tasks
-            WHERE assigned_to_id = :lo_id
+            WHERE owner_id = :lo_id
               AND organization_id = :org_id
               AND created_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
         """), {"lo_id": lo_id, "org_id": organization_id}).fetchone()

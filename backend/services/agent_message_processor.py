@@ -262,7 +262,7 @@ def process_pending_messages(batch_size: int = 50) -> Dict[str, int]:
         rows = session.execute(
             text("""
                 SELECT
-                    id, message_id, from_agent_id, to_agent_id,
+                    id, from_agent_id, to_agent_id,
                     message_type, subject, content, payload, priority
                 FROM ai_agent_messages
                 WHERE status = 'pending'
@@ -286,11 +286,11 @@ def process_pending_messages(batch_size: int = 50) -> Dict[str, int]:
         logger.info("[MSG-PROCESSOR] Processing %d pending messages", len(rows))
 
         for row in rows:
-            msg_id = row[1]  # message_id
-            to_agent = row[3]  # to_agent_id
-            subject = row[5] or ""
-            content = row[6] or ""
-            raw_payload = row[7]
+            msg_id = row[0]  # id (primary key, the message identifier)
+            to_agent = row[2]  # to_agent_id
+            subject = row[4] or ""
+            content = row[5] or ""
+            raw_payload = row[6]
 
             # Parse payload
             if isinstance(raw_payload, str):
@@ -362,7 +362,7 @@ def _mark_processed(session, message_id: str) -> None:
         session.execute(
             text(
                 "UPDATE ai_agent_messages SET status = 'processed' "
-                "WHERE message_id = :mid"
+                "WHERE id = :mid"
             ),
             {"mid": message_id},
         )
@@ -376,7 +376,7 @@ def _mark_failed(session, message_id: str, error: str) -> None:
         session.execute(
             text(
                 "UPDATE ai_agent_messages SET status = 'failed' "
-                "WHERE message_id = :mid"
+                "WHERE id = :mid"
             ),
             {"mid": message_id},
         )

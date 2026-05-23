@@ -90,6 +90,9 @@ class TaskGeneratorService:
             started_at = instance['started_at']
             if not started_at:
                 started_at = datetime.now(timezone.utc)
+            # Normalize to timezone-aware (DB may return naive TIMESTAMP WITHOUT TIME ZONE)
+            if getattr(started_at, 'tzinfo', None) is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
             days_elapsed = (datetime.now(timezone.utc) - started_at).days
 
             # Get contact info for the entity
@@ -228,6 +231,9 @@ class TaskGeneratorService:
 
             # Calculate due date
             started_at = instance['started_at'] or datetime.now(timezone.utc)
+            # Normalize to timezone-aware (DB may return naive TIMESTAMP WITHOUT TIME ZONE)
+            if getattr(started_at, 'tzinfo', None) is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
             due_date = started_at + timedelta(days=day_config['day_value'] or 0)
 
             # Handle AM/PM timing
@@ -470,6 +476,20 @@ class TaskGeneratorService:
             if existing:
                 logger.info(f"Dedup: task already exists (id={existing[0]}) for instance {instance['id']}, day {day_config['id']}, type {task_type}")
                 return existing[0]
+
+            # Guard: verify the referenced lead still exists before INSERT to avoid FK violation.
+            # Leads can be deleted while a workflow_instance still holds a reference.
+            lead_id = instance.get('lead_id')
+            if lead_id is not None:
+                lead_exists = self.db.execute(text(
+                    "SELECT 1 FROM leads WHERE id = :lead_id LIMIT 1"
+                ), {"lead_id": lead_id}).fetchone()
+                if not lead_exists:
+                    logger.warning(
+                        f"Skipping task generation for workflow instance {instance['id']}: "
+                        f"lead_id={lead_id} no longer exists in leads table"
+                    )
+                    return None
 
             # Build task name
             contact_name = contact_info.get('name', 'Contact')

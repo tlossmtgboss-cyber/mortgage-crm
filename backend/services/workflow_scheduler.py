@@ -358,6 +358,9 @@ class WorkflowScheduler:
                 task_id = task[0]
                 task_name = task[1]
                 due_date = task[2]
+                # Normalize due_date to timezone-aware so it can be compared with now (UTC-aware)
+                if due_date is not None and getattr(due_date, 'tzinfo', None) is None:
+                    due_date = due_date.replace(tzinfo=timezone.utc)
                 user_id = task[3]
                 lead_id = task[4]
                 loan_id = task[5]

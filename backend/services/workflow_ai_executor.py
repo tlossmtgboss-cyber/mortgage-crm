@@ -300,7 +300,7 @@ class WorkflowAIExecutor:
             " COALESCE(l.phone, lo.borrower_phone) as contact_phone,"
             " COALESCE(l.email, lo.borrower_email) as contact_email"
             " FROM workflow_task_instances wti"
-            " LEFT JOIN workflow_ai_confidence wac ON wac.task_instance_id = wti.id"
+            " LEFT JOIN workflow_ai_confidence wac ON wac.workflow_task_instance_id = wti.id"
             " LEFT JOIN leads l ON l.id = wti.lead_id"
             " LEFT JOIN loans lo ON lo.id = wti.loan_id"
             " WHERE " + where_clause

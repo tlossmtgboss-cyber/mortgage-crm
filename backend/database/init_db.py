@@ -2119,6 +2119,15 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ HNSW index migration note: {e}")
 
+        # Partial unique indexes on agent_memories for dedup enforcement
+        try:
+            import importlib
+            _uniq_mod = importlib.import_module("migrations.add_agent_memory_unique_indexes")
+            _uniq_mod.run_migration(_engine)
+            logger.info("✅ Agent memory unique indexes ready")
+        except Exception as e:
+            logger.warning(f"⚠️ Agent memory unique indexes migration note: {e}")
+
         # Ensure tloss@cmgfi.com has full admin permissions
         try:
             with _engine.connect() as conn:

@@ -17,6 +17,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -222,7 +223,13 @@ async def approve_item(
         embedding_model="text-embedding-3-small" if embedding else None,
     )
     db.add(memory)
-    db.flush()
+    try:
+        db.begin_nested()  # SAVEPOINT
+        db.flush()
+    except IntegrityError:
+        db.rollback()  # rolls back to SAVEPOINT only
+        logger.warning("Duplicate memory detected during approval of item %d", item_id)
+        raise HTTPException(status_code=409, detail="A memory with the same content already exists")
 
     # Complete supersession: point old fact to new one
     if superseded_id:

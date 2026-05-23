@@ -18,7 +18,7 @@ import os
 import logging
 import time
 import functools
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -384,24 +384,33 @@ class SchedulerService:
                     ba.borrower_first_name,
                     ba.borrower_phone,
                     ba.status,
-                    ba.reminder_count,
-                    ba.last_reminder_at,
+                    ba.owner_id,
                     ba.updated_at,
-                    ba.assigned_lo_id,
+                    COALESCE(rn.reminder_count, 0) AS reminder_count,
+                    rn.last_reminder_at,
                     u.first_name as lo_first_name,
                     u.last_name as lo_last_name,
-                    EXTRACT(EPOCH FROM (NOW() - COALESCE(ba.last_reminder_at, ba.updated_at))) / 3600 as hours_since_activity
+                    EXTRACT(EPOCH FROM (NOW() - COALESCE(rn.last_reminder_at, ba.updated_at))) / 3600 as hours_since_activity
                 FROM borrower_applications ba
-                LEFT JOIN users u ON u.id = ba.assigned_lo_id
+                LEFT JOIN users u ON u.id = ba.owner_id
+                LEFT JOIN (
+                    SELECT
+                        application_id,
+                        COUNT(*) AS reminder_count,
+                        MAX(created_at) AS last_reminder_at
+                    FROM application_notifications
+                    WHERE notification_type = 'application_reminder'
+                    GROUP BY application_id
+                ) rn ON rn.application_id = ba.id
                 WHERE ba.status IN ('draft', 'in_progress')
                 AND ba.borrower_email IS NOT NULL
                 AND (
-                    (ba.reminder_count = 0 AND EXTRACT(EPOCH FROM (NOW() - ba.updated_at)) / 3600 >= :first_interval)
-                    OR (ba.reminder_count = 1 AND EXTRACT(EPOCH FROM (NOW() - ba.last_reminder_at)) / 3600 >= :second_interval)
-                    OR (ba.reminder_count = 2 AND EXTRACT(EPOCH FROM (NOW() - ba.last_reminder_at)) / 3600 >= :third_interval)
-                    OR (ba.reminder_count = 3 AND EXTRACT(EPOCH FROM (NOW() - ba.last_reminder_at)) / 3600 >= :final_interval)
+                    (COALESCE(rn.reminder_count, 0) = 0 AND EXTRACT(EPOCH FROM (NOW() - ba.updated_at)) / 3600 >= :first_interval)
+                    OR (COALESCE(rn.reminder_count, 0) = 1 AND EXTRACT(EPOCH FROM (NOW() - rn.last_reminder_at)) / 3600 >= :second_interval)
+                    OR (COALESCE(rn.reminder_count, 0) = 2 AND EXTRACT(EPOCH FROM (NOW() - rn.last_reminder_at)) / 3600 >= :third_interval)
+                    OR (COALESCE(rn.reminder_count, 0) = 3 AND EXTRACT(EPOCH FROM (NOW() - rn.last_reminder_at)) / 3600 >= :final_interval)
                 )
-                AND ba.reminder_count < 4
+                AND COALESCE(rn.reminder_count, 0) < 4
                 AND ba.organization_id IS NOT NULL
                 ORDER BY ba.organization_id, ba.updated_at ASC
                 LIMIT 100
@@ -497,14 +506,18 @@ class SchedulerService:
                                 resume_link=resume_link,
                             )
 
-                    # Update reminder count
+                    # Record that we sent a reminder (reminder_count is derived
+                    # from application_notifications; borrower_applications has no
+                    # reminder_count / last_reminder_at columns).
                     update_query = text("""
-                        UPDATE borrower_applications
-                        SET reminder_count = reminder_count + 1,
-                            last_reminder_at = NOW()
-                        WHERE id = :app_id
+                        INSERT INTO application_notifications
+                            (application_id, notification_type, channel,
+                             recipient_email, status, sent_at, created_at)
+                        VALUES
+                            (:app_id, 'application_reminder', 'email',
+                             :borrower_email, 'sent', NOW(), NOW())
                     """)
-                    session.execute(update_query, {"app_id": app_id})
+                    session.execute(update_query, {"app_id": app_id, "borrower_email": borrower_email})
                     session.commit()
 
                     sent_count += 1
@@ -547,13 +560,13 @@ class SchedulerService:
                     ba.organization_id,
                     ba.borrower_email,
                     ba.borrower_first_name,
-                    ba.assigned_lo_id,
+                    ba.owner_id,
                     u.email as lo_email,
                     u.first_name as lo_first_name,
                     u.last_name as lo_last_name
                 FROM application_documents ad
                 JOIN borrower_applications ba ON ba.id = ad.application_id
-                LEFT JOIN users u ON u.id = ba.assigned_lo_id
+                LEFT JOIN users u ON u.id = ba.owner_id
                 WHERE ad.expires_at IS NOT NULL
                 AND ad.expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
                 AND ad.expiration_notified = false
@@ -569,7 +582,9 @@ class SchedulerService:
             for doc in docs:
                 try:
                     doc_dict = dict(doc._mapping)
-                    days_until_expiry = (doc_dict["expires_at"] - datetime.now()).days
+                    expires_at = doc_dict["expires_at"]
+                    now_for_expiry = datetime.now(timezone.utc) if getattr(expires_at, 'tzinfo', None) is not None else datetime.now()
+                    days_until_expiry = (expires_at - now_for_expiry).days
 
                     # Notify borrower
                     upload_link = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/apply/documents/{doc_dict['application_id']}"
@@ -1484,17 +1499,18 @@ class SchedulerService:
                 return
 
             # Expire active holds past their TTL
+            # Note: scheduler_slot_holds uses is_active BOOLEAN (not a status column)
             expired = session.execute(text("""
                 UPDATE scheduler_slot_holds
-                SET status = 'expired', updated_at = NOW()
-                WHERE status = 'active' AND expires_at < NOW()
+                SET is_active = FALSE
+                WHERE is_active = TRUE AND expires_at < NOW()
             """)).rowcount
 
-            # Delete old expired/released records (>1 hour old)
+            # Delete old inactive records (>1 hour past expiry)
             deleted = session.execute(text("""
                 DELETE FROM scheduler_slot_holds
-                WHERE status IN ('expired', 'released')
-                AND updated_at < NOW() - INTERVAL '1 hour'
+                WHERE is_active = FALSE
+                AND expires_at < NOW() - INTERVAL '1 hour'
             """)).rowcount
 
             session.commit()
@@ -1563,6 +1579,23 @@ class SchedulerService:
         import asyncio
 
         logger.info("Running webhook dead-letter retry job")
+
+        # Ensure webhook tables exist before querying them.
+        # The migration (database/migrations/add_webhook_tables.py) may not have
+        # run in all environments. Use checkfirst=True so this is a no-op when
+        # the tables already exist.
+        try:
+            from database.models.webhook import WebhookDeliveryLog, WebhookSubscription, WebhookEventCatalog
+            from database import engine as _engine
+            WebhookSubscription.__table__.create(_engine, checkfirst=True)
+            WebhookDeliveryLog.__table__.create(_engine, checkfirst=True)
+            WebhookEventCatalog.__table__.create(_engine, checkfirst=True)
+        except Exception as _table_err:
+            logger.error(
+                "Webhook dead-letter retry job aborted: could not ensure webhook tables exist: %s",
+                _table_err,
+            )
+            return
 
         session = get_db_session()
 

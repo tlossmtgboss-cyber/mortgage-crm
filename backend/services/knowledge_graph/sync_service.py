@@ -10,7 +10,6 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .graph_service import KnowledgeGraphService
@@ -43,6 +42,7 @@ class KnowledgeGraphSyncService:
         self._sync_loan_team_members(since)
         self._sync_mum_clients(since)
         self._cleanup_stale_edges()
+        self._cleanup_deleted_nodes()
 
         self.db.flush()
         stats = self.graph.get_stats()
@@ -230,6 +230,7 @@ class KnowledgeGraphSyncService:
     def _sync_loan_team_members(self, since: datetime | None = None) -> None:
         from database.models.referral import LoanTeamMember
         from database.models.lead_loan import Loan
+        from database.models.knowledge_graph import KnowledgeGraphNode
 
         q = (
             self.db.query(LoanTeamMember)
@@ -239,13 +240,35 @@ class KnowledgeGraphSyncService:
         if since:
             q = q.filter(LoanTeamMember.updated_at >= since)
         members = q.all()
+        if not members:
+            return
+
+        loan_eids = {str(m.loan_id) for m in members}
+        user_eids = {str(m.user_id) for m in members if m.user_id}
+        rp_eids = {str(m.referral_partner_id) for m in members if m.referral_partner_id}
+
+        node_cache: dict[tuple[str, str], KnowledgeGraphNode] = {}
+        for ntype, eids in [("loan", loan_eids), ("user", user_eids), ("referral_partner", rp_eids)]:
+            if not eids:
+                continue
+            for n in (
+                self.db.query(KnowledgeGraphNode)
+                .filter(
+                    KnowledgeGraphNode.organization_id == self.organization_id,
+                    KnowledgeGraphNode.node_type == ntype,
+                    KnowledgeGraphNode.entity_id.in_(eids),
+                )
+                .all()
+            ):
+                node_cache[(n.node_type, n.entity_id)] = n
+
         for m in members:
-            loan_node = self.graph.get_node("loan", str(m.loan_id))
+            loan_node = node_cache.get(("loan", str(m.loan_id)))
             if not loan_node:
                 continue
 
             if m.user_id:
-                user_node = self.graph.get_node("user", str(m.user_id))
+                user_node = node_cache.get(("user", str(m.user_id)))
                 if user_node:
                     self.graph.upsert_edge(
                         user_node.id, loan_node.id, "team_member_on",
@@ -253,7 +276,7 @@ class KnowledgeGraphSyncService:
                     )
                     self._stats["edges_upserted"] += 1
             elif m.referral_partner_id:
-                rp_node = self.graph.get_node("referral_partner", str(m.referral_partner_id))
+                rp_node = node_cache.get(("referral_partner", str(m.referral_partner_id)))
                 if rp_node:
                     self.graph.upsert_edge(
                         rp_node.id, loan_node.id, "team_member_on",
@@ -321,6 +344,7 @@ class KnowledgeGraphSyncService:
         node = self.graph.upsert_node("lead", str(lead.id), label, _clean(props))
 
         self.graph.delete_edges_for_target(node.id, ["owns_lead", "referred"])
+        self.graph.delete_edges_for_source(node.id, ["co_applicant"])
 
         if lead.owner_id:
             owner_node = self.graph.get_node("user", str(lead.owner_id))
@@ -330,6 +354,13 @@ class KnowledgeGraphSyncService:
             rp_node = self.graph.get_node("referral_partner", str(lead.referral_partner_id))
             if rp_node:
                 self.graph.upsert_edge(rp_node.id, node.id, "referred")
+        if lead.co_applicant_email:
+            co_label = lead.co_applicant_name or "Co-Applicant"
+            co_node = self.graph.upsert_node(
+                "contact", f"co_{lead.id}", co_label,
+                _clean({"email": lead.co_applicant_email, "role": "co_applicant"}),
+            )
+            self.graph.upsert_edge(node.id, co_node.id, "co_applicant")
 
     def sync_loan(self, loan_id: int) -> None:
         from database.models.lead_loan import Lead, Loan
@@ -499,13 +530,91 @@ class KnowledgeGraphSyncService:
             logger.info(f"Cleaned up {stale_count} stale edges for org {org}")
         self._stats["edges_removed"] = stale_count
 
+    def _cleanup_deleted_nodes(self) -> None:
+        """Remove graph nodes for deleted leads/loans and orphaned contacts."""
+        from database.models.knowledge_graph import KnowledgeGraphEdge, KnowledgeGraphNode
+        from database.models.lead_loan import Lead, Loan
+        from sqlalchemy import or_
+
+        org = self.organization_id
+        deleted_count = 0
+
+        for node_type, Model in [("lead", Lead), ("loan", Loan)]:
+            graph_nodes = (
+                self.db.query(KnowledgeGraphNode.id, KnowledgeGraphNode.entity_id)
+                .filter(
+                    KnowledgeGraphNode.organization_id == org,
+                    KnowledgeGraphNode.node_type == node_type,
+                )
+                .all()
+            )
+            if not graph_nodes:
+                continue
+
+            entity_id_map: dict[int, int] = {}
+            for node_id, eid in graph_nodes:
+                try:
+                    entity_id_map[int(eid)] = node_id
+                except (ValueError, TypeError):
+                    pass
+
+            if not entity_id_map:
+                continue
+
+            live_ids = set(
+                r[0] for r in self.db.query(Model.id)
+                .filter(Model.id.in_(entity_id_map.keys()), Model.deleted_at == None)
+                .all()
+            )
+
+            orphan_node_ids = [nid for eid, nid in entity_id_map.items() if eid not in live_ids]
+            if orphan_node_ids:
+                self.db.query(KnowledgeGraphNode).filter(
+                    KnowledgeGraphNode.id.in_(orphan_node_ids),
+                ).delete(synchronize_session="fetch")
+                deleted_count += len(orphan_node_ids)
+
+        if deleted_count:
+            self.db.flush()
+
+        edge_exists = (
+            self.db.query(KnowledgeGraphEdge.id)
+            .filter(
+                or_(
+                    KnowledgeGraphEdge.source_node_id == KnowledgeGraphNode.id,
+                    KnowledgeGraphEdge.target_node_id == KnowledgeGraphNode.id,
+                )
+            )
+            .correlate(KnowledgeGraphNode)
+            .exists()
+        )
+        orphan_contact_ids = [
+            nid for (nid,) in self.db.query(KnowledgeGraphNode.id)
+            .filter(
+                KnowledgeGraphNode.organization_id == org,
+                KnowledgeGraphNode.node_type == "contact",
+                ~edge_exists,
+            )
+            .all()
+        ]
+        if orphan_contact_ids:
+            self.db.query(KnowledgeGraphNode).filter(
+                KnowledgeGraphNode.id.in_(orphan_contact_ids),
+            ).delete(synchronize_session="fetch")
+            deleted_count += len(orphan_contact_ids)
+
+        if deleted_count:
+            self.db.flush()
+            logger.info(f"Cleaned up {deleted_count} orphan nodes for org {org}")
+        self._stats["nodes_removed"] = deleted_count
+
     def _ensure_branch_node(self, branch_id: int) -> Any:
         existing = self.graph.get_node("branch", str(branch_id))
         if existing:
             return existing
         from database.models.core import Branch
 
-        branch = self.db.query(Branch).filter(Branch.id == branch_id).first()
+        branch = self.db.query(Branch).filter(Branch.id == branch_id, Branch.organization_id == self.organization_id).first()
         if not branch:
             return None
         node = self.graph.upsert_node(

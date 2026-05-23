@@ -1266,6 +1266,18 @@ def _run_critical_schema_migrations():
         except Exception:
             db.rollback()
 
+        # --- workflow_task_instances: add retry tracking columns if missing ---
+        wti_retry_alters = [
+            "ALTER TABLE workflow_task_instances ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE workflow_task_instances ADD COLUMN IF NOT EXISTS last_failed_at TIMESTAMP",
+        ]
+        for alter in wti_retry_alters:
+            try:
+                db.execute(sa_text(alter))
+                db.commit()
+            except Exception:
+                db.rollback()
+
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
             logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")

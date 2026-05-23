@@ -45,6 +45,14 @@ _SSN_BARE = re.compile(
     r"(?![-\s]?\d)"          # not followed by separator-digit
 )
 
+# Keywords that precede 9-digit numbers and indicate they are NOT SSNs.
+# These reference/case/order numbers are common in mortgage contexts.
+_NON_SSN_CONTEXT = re.compile(
+    r"(?i)(?:reference|ref|case|order|confirmation|conf|tracking|trace|"
+    r"invoice|ticket|claim|policy|routing|aba|wire|fha|va|nmls|mls|"
+    r"loan|file)\s*(?:#|number|num|no\.?|id)?[\s:]*$"
+)
+
 # DOB: keyword ("date of birth", "DOB", "born on", "birthday", "birth date")
 # followed by optional separator and a date in common formats.
 _DOB_KEYWORD = re.compile(
@@ -185,6 +193,9 @@ def scrub_pii(text: str) -> str:
     #     patterns have already consumed their digit sequences) ---
     for m in reversed(list(_SSN_BARE.finditer(text))):
         if not _is_phone_number(m.group()):
+            preceding = text[max(0, m.start() - 40):m.start()]
+            if _NON_SSN_CONTEXT.search(preceding):
+                continue
             text = text[:m.start()] + "[SSN_REDACTED]" + text[m.end():]
             redaction_count += 1
 

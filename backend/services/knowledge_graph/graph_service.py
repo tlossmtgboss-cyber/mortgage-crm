@@ -121,6 +121,23 @@ class KnowledgeGraphService:
         )
         return count
 
+    def delete_edges_for_source(
+        self,
+        source_node_id: int,
+        relationship_types: list[str],
+    ) -> int:
+        """Delete all outgoing edges of given types from a source node."""
+        count = (
+            self.db.query(KnowledgeGraphEdge)
+            .filter(
+                KnowledgeGraphEdge.organization_id == self.organization_id,
+                KnowledgeGraphEdge.source_node_id == source_node_id,
+                KnowledgeGraphEdge.relationship_type.in_(relationship_types),
+            )
+            .delete(synchronize_session="fetch")
+        )
+        return count
+
     def count_nodes(self, node_type: str | None = None) -> int:
         q = self.db.query(func.count(KnowledgeGraphNode.id)).filter(
             KnowledgeGraphNode.organization_id == self.organization_id,
