@@ -66,11 +66,19 @@ def run_migration():
                     WHERE artifact_type LIKE 'five_c_%'
                 """))
 
-                # Index for UW review items
+                # Index for UW review items (only if execution_status column exists)
                 session.execute(text("""
-                    CREATE INDEX IF NOT EXISTS ix_call_artifacts_uw_review
-                    ON call_artifacts (artifact_type, session_id, execution_status)
-                    WHERE artifact_type = 'uw_review_item'
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name = 'call_artifacts' AND column_name = 'execution_status'
+                        ) THEN
+                            EXECUTE 'CREATE INDEX IF NOT EXISTS ix_call_artifacts_uw_review
+                                ON call_artifacts (artifact_type, session_id, execution_status)
+                                WHERE artifact_type = ''uw_review_item''';
+                        END IF;
+                    END $$;
                 """))
 
                 # Add task_type column to tasks table if not exists

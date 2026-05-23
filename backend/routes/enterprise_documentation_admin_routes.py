@@ -14,7 +14,7 @@ from datetime import datetime
 
 from db import get_db
 from auth.dependencies import get_current_user
-from models.auth import User
+from database.models import User
 
 logger = logging.getLogger(__name__)
 
