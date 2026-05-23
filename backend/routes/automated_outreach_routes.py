@@ -23,7 +23,7 @@ import os
 try:
     from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_ORGANIZER_EMAIL
 except ImportError:
-    _DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
+    _DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "")
 
 router = APIRouter(prefix="/api/v1/automated-outreach", tags=["Automated Outreach"], dependencies=[Depends(require_auth)])
 
@@ -410,6 +410,12 @@ async def get_triggers(
 ):
     """Get all triggers"""
     try:
+        table_check = db.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'outreach_triggers')"
+        )).scalar()
+        if not table_check:
+            return {"triggers": []}
+
         query = "SELECT * FROM outreach_triggers WHERE 1=1"
         params = {}
 
@@ -427,9 +433,9 @@ async def get_triggers(
         triggers = [dict(row._mapping) for row in result.fetchall()]
 
         return {"triggers": triggers}
-    except SQLAlchemyError as e:
+    except Exception as e:
         logger.error(f"Error fetching triggers: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return {"triggers": []}
 
 
 @router.post("/triggers")

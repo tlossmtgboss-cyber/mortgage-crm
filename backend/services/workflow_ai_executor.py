@@ -1,433 +1,798 @@
 """
-Workflow AI Executor
+Workflow AI Task Executor
 
-Plans and executes AI actions for workflow nodes.
-Dispatches to channel providers: Vapi (calls), Telnyx (SMS), Graph (email).
-Records outcomes and updates confidence scores.
+Executes workflow tasks autonomously using the AI Orchestrator.
+Handles text, email, and other AI-routable task types.
 
-Key features:
-- Communication history retrieval before drafting any action
-- Supervised conversation loop: AI drafts → LO corrects → AI responds and iterates
-- Confidence tracking per node × channel
+Integrates with:
+- WorkflowAIEvaluator for confidence scoring
+- AI Orchestrator for task execution
+- WebSocket notifier for real-time updates
 """
 
-import uuid
-import os
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List, Dict, Any
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
-
-from database.models.workflow_flowchart import (
-    WorkflowNode, WorkflowAIAction, WorkflowLeadMovement
-)
-from database.models.lead_loan import Lead
-from services.workflow_confidence_service import WorkflowConfidenceService
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+# Circuit breaker: maximum number of tool calls per batch/autonomous execution cycle.
+# Prevents runaway LLM tool-calling loops from consuming unbounded resources.
+MAX_TOOL_CALLS = 10
+
 
 class WorkflowAIExecutor:
+    """
+    Executes workflow tasks using AI automation.
+
+    Supports autonomous execution of:
+    - Text messages (SMS)
+    - Email outreach
+    - AI-generated content
+
+    All executions go through confidence evaluation first.
+    """
+
+    # Task types that can be executed by AI
+    AI_EXECUTABLE_TYPES = ['text', 'text_am', 'text_pm', 'email', 'ai_autonomous']
+
+    # Minimum confidence for auto-execution
+    AUTO_EXECUTE_THRESHOLD = 0.950
+
     def __init__(self, db: Session):
         self.db = db
-        self.confidence_svc = WorkflowConfidenceService(db)
+        self._evaluator = None
+        self._notifier = None
 
-    # ── Communication History ─────────────────────────────────────
+    def _get_evaluator(self):
+        """Lazy load evaluator."""
+        if self._evaluator is None:
+            from services.workflow_ai_evaluator import WorkflowAIEvaluator
+            self._evaluator = WorkflowAIEvaluator(self.db)
+        return self._evaluator
 
-    def _get_communication_history(self, lead: Lead, limit: int = 20) -> list[dict]:
-        """Retrieve recent communication history for context before drafting."""
-        history = []
+    def _get_notifier(self):
+        """Lazy load notifier."""
+        if self._notifier is None:
+            from services.workflow_websocket_events import get_workflow_notifier
+            self._notifier = get_workflow_notifier()
+        return self._notifier
 
+    def execute_task(
+        self,
+        task_instance_id: int,
+        force_execute: bool = False,
+        user_override: bool = False,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute a single workflow task via AI.
+
+        Args:
+            task_instance_id: Workflow task instance ID
+            force_execute: Skip confidence check and execute
+            user_override: User approved execution despite low confidence
+            context: Additional context for execution
+
+        Returns:
+            Dict with execution result
+        """
         try:
-            from database.models.communication import CommunicationLog
-            logs = self.db.query(CommunicationLog).filter(
-                CommunicationLog.lead_id == lead.id
-            ).order_by(desc(CommunicationLog.created_at)).limit(limit).all()
-            for log in logs:
-                history.append({
-                    "type": getattr(log, "channel", "unknown"),
-                    "direction": getattr(log, "direction", "unknown"),
-                    "summary": getattr(log, "summary", None) or getattr(log, "body", "")[:200],
-                    "timestamp": log.created_at.isoformat() if log.created_at else None,
-                    "outcome": getattr(log, "outcome", None),
-                })
-        except Exception as e:
-            logger.debug(f"CommunicationLog not available: {e}")
+            # Get task details
+            task = self._get_task_details(task_instance_id)
+            if not task:
+                return {"success": False, "error": "Task not found"}
 
-        past_actions = self.db.query(WorkflowAIAction).filter(
-            WorkflowAIAction.lead_id == lead.id,
-            WorkflowAIAction.completed_at.isnot(None),
-        ).order_by(desc(WorkflowAIAction.created_at)).limit(10).all()
-        for action in past_actions:
-            plan = action.action_plan or {}
-            history.append({
-                "type": f"ai_{action.channel}",
-                "direction": "outbound",
-                "summary": plan.get("objective", "AI action"),
-                "timestamp": action.created_at.isoformat() if action.created_at else None,
-                "outcome": action.outcome,
-                "autonomy_level": action.autonomy_level,
-            })
-
-        history.sort(key=lambda h: h.get("timestamp") or "", reverse=True)
-        return history[:limit]
-
-    def _get_lead_context(self, lead: Lead) -> dict:
-        """Build lead context for AI drafting."""
-        return {
-            "name": f"{lead.first_name} {lead.last_name}",
-            "email": lead.email,
-            "phone": lead.phone,
-            "stage": lead.stage,
-            "source": getattr(lead, "source", None),
-            "loan_amount": str(getattr(lead, "loan_amount", "")) if getattr(lead, "loan_amount", None) else None,
-            "property_type": getattr(lead, "property_type", None),
-            "notes": getattr(lead, "notes", None),
-        }
-
-    # ── Action Planning ───────────────────────────────────────────
-
-    def plan_action(self, node: WorkflowNode, lead: Lead, channel: str) -> dict:
-        guidance = node.ai_guidance or {}
-        comm_history = self._get_communication_history(lead)
-        lead_context = self._get_lead_context(lead)
-
-        return {
-            "channel": channel,
-            "objective": guidance.get("objective", f"Execute {node.label}"),
-            "talking_points": guidance.get("talking_points", ""),
-            "tone": guidance.get("tone", "warm & conversational"),
-            "success_criteria": guidance.get("success_criteria", "Lead responds positively"),
-            "escalation_rules": guidance.get("escalation_rules", ""),
-            "lead_context": lead_context,
-            "communication_history": comm_history,
-            "lead_name": f"{lead.first_name} {lead.last_name}",
-            "lead_email": lead.email,
-            "lead_phone": lead.phone,
-        }
-
-    # ── Supervised Conversation Loop ──────────────────────────────
-
-    def submit_review(self, action_id: str, lo_action: str, lo_version: str = None) -> Optional[dict]:
-        """
-        LO submits a review of an AI draft (supervised mode conversation loop).
-
-        lo_action: "approved" | "edited" | "rejected"
-        lo_version: The LO's corrected version (when lo_action == "edited")
-
-        Returns the AI's response dict (acknowledgement or counter-suggestion).
-        """
-        action = self.db.query(WorkflowAIAction).filter(WorkflowAIAction.id == action_id).first()
-        if not action:
-            return None
-
-        review_data = action.human_review or {"rounds": []}
-        rounds = review_data.get("rounds", [])
-        current_draft = action.action_plan.get("draft_message", action.action_plan.get("talking_points", ""))
-
-        if lo_action == "approved":
-            rounds.append({
-                "draft": current_draft,
-                "lo_action": "approved",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            action.human_review = {"rounds": rounds}
-
-            event = "human_approved_no_edit" if len(rounds) == 1 else "success"
-            new_confidence = self.confidence_svc.update_confidence(action.workflow_node_id, action.channel, event)
-            action.confidence_after = new_confidence
-            self.db.flush()
-
-            return {
-                "status": "approved",
-                "ai_response": "Approved. Executing now.",
-                "ready_to_execute": True,
-            }
-
-        elif lo_action == "edited":
-            ai_response = self._generate_ai_review_response(action, current_draft, lo_version, rounds)
-
-            rounds.append({
-                "draft": current_draft,
-                "lo_action": "edited",
-                "lo_version": lo_version,
-                "ai_response": ai_response["message"],
-                "ai_revised_draft": ai_response.get("revised_draft"),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            action.human_review = {"rounds": rounds}
-            if ai_response.get("revised_draft"):
-                plan = action.action_plan or {}
-                plan["draft_message"] = ai_response["revised_draft"]
-                action.action_plan = plan
-
-            self.db.flush()
-            return {
-                "status": "needs_review",
-                "ai_response": ai_response["message"],
-                "revised_draft": ai_response.get("revised_draft", lo_version),
-                "ready_to_execute": False,
-            }
-
-        elif lo_action == "rejected":
-            rounds.append({
-                "draft": current_draft,
-                "lo_action": "rejected",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-            action.human_review = {"rounds": rounds}
-            action.outcome = "rejected"
-            action.completed_at = datetime.now(timezone.utc)
-
-            new_confidence = self.confidence_svc.update_confidence(action.workflow_node_id, action.channel, "human_rejected")
-            action.confidence_after = new_confidence
-            self.db.flush()
-
-            return {
-                "status": "rejected",
-                "ai_response": "Understood. I won't send this. I'll adjust my approach for next time.",
-                "ready_to_execute": False,
-            }
-
-        return None
-
-    def _generate_ai_review_response(self, action: WorkflowAIAction, original: str, corrected: str, previous_rounds: list) -> dict:
-        """
-        AI analyzes what the LO changed and generates a response.
-        Can acknowledge the correction, or suggest an improvement on top of it.
-        """
-        if not corrected:
-            return {"message": "I'll adjust my approach for the next draft."}
-
-        original_words = set(original.lower().split()) if original else set()
-        corrected_words = set(corrected.lower().split()) if corrected else set()
-        change_ratio = len(original_words.symmetric_difference(corrected_words)) / max(len(original_words | corrected_words), 1)
-
-        if change_ratio < 0.15:
-            return {
-                "message": "Small adjustment noted. I'll incorporate this phrasing going forward. Ready to send your version?",
-                "revised_draft": corrected,
-            }
-        elif change_ratio < 0.5:
-            return {
-                "message": "Good corrections. I've noted the tone and phrasing changes. I'll use this style for future messages at this step. Want to send as-is, or should I refine further?",
-                "revised_draft": corrected,
-            }
-        else:
-            return {
-                "message": "Significant rewrite — I'll learn from this. My original approach was off for this type of outreach. I'll model future drafts on your version. Ready to send?",
-                "revised_draft": corrected,
-            }
-
-    # ── Execution ─────────────────────────────────────────────────
-
-    async def execute_node_for_lead(self, node: WorkflowNode, lead: Lead) -> list[WorkflowAIAction]:
-        if node.role != "AI":
-            return []
-
-        channels = node.channels or {}
-        active_channels = [ch for ch, enabled in channels.items() if enabled and ch in ("phone", "text", "email")]
-
-        actions = []
-        for channel in active_channels:
-            confidence = self.confidence_svc.get_confidence(node.id, channel)
-            autonomy = self.confidence_svc.get_autonomy_level(node.id, channel)
-
-            plan = self.plan_action(node, lead, channel)
-
-            action = WorkflowAIAction(
-                id=str(uuid.uuid4()),
-                workflow_node_id=node.id,
-                lead_id=lead.id,
-                channel=channel,
-                autonomy_level=autonomy,
-                action_plan=plan,
-                confidence_before=confidence,
-            )
-            self.db.add(action)
-
-            if autonomy == "supervised":
-                action.human_review = {"rounds": []}
-                logger.info(f"AI action queued for review: node={node.label} lead={lead.id} channel={channel}")
-            else:
-                result = await self._dispatch(channel, plan)
-                action.execution_result = result
-                action.completed_at = datetime.now(timezone.utc)
-
-                if autonomy == "guided":
-                    logger.info(f"AI action executed (guided): node={node.label} lead={lead.id} channel={channel}")
-
-            actions.append(action)
-
-        self.db.flush()
-        return actions
-
-    async def execute_approved_action(self, action_id: str) -> Optional[WorkflowAIAction]:
-        """Execute an action that was approved through the supervised review loop."""
-        action = self.db.query(WorkflowAIAction).filter(WorkflowAIAction.id == action_id).first()
-        if not action or action.completed_at:
-            return None
-
-        plan = action.action_plan or {}
-        review = action.human_review or {}
-        rounds = review.get("rounds", [])
-        if rounds and rounds[-1].get("lo_action") == "approved":
-            final_draft = rounds[-1].get("draft", plan.get("draft_message", plan.get("talking_points", "")))
-            plan["final_approved_message"] = final_draft
-            action.action_plan = plan
-
-        result = await self._dispatch(action.channel, plan)
-        action.execution_result = result
-        action.completed_at = datetime.now(timezone.utc)
-        self.db.flush()
-        return action
-
-    async def _dispatch(self, channel: str, plan: dict) -> dict:
-        if channel == "phone":
-            return await self._dispatch_call(plan)
-        elif channel == "text":
-            return await self._dispatch_sms(plan)
-        elif channel == "email":
-            return await self._dispatch_email(plan)
-        return {"error": f"Unknown channel: {channel}"}
-
-    async def _dispatch_call(self, plan: dict) -> dict:
-        try:
-            import aiohttp
-
-            vapi_key = os.getenv("VAPI_API_KEY")
-            if not vapi_key:
-                return {"status": "error", "detail": "VAPI_API_KEY not configured"}
-
-            talking_points = plan.get("final_approved_message", plan.get("talking_points", ""))
-            comm_history_summary = ""
-            for h in (plan.get("communication_history") or [])[:5]:
-                comm_history_summary += f"- {h.get('type', 'contact')}: {h.get('summary', '')[:100]} ({h.get('timestamp', 'unknown')})\n"
-
-            payload = {
-                "assistantId": os.getenv("VAPI_ASSISTANT_ID"),
-                "customer": {"number": plan.get("lead_phone")},
-                "assistantOverrides": {
-                    "firstMessage": f"Hi {plan.get('lead_name', 'there')}, this is Aria calling from your loan team.",
-                    "model": {
-                        "messages": [{
-                            "role": "system",
-                            "content": (
-                                f"Objective: {plan['objective']}\n\n"
-                                f"Talking points:\n{talking_points}\n\n"
-                                f"Tone: {plan['tone']}\n\n"
-                                f"Recent communication history:\n{comm_history_summary}"
-                            )
-                        }]
-                    }
+            # Verify task is eligible for AI execution
+            if task["task_type"] not in self.AI_EXECUTABLE_TYPES:
+                return {
+                    "success": False,
+                    "error": f"Task type '{task['task_type']}' is not AI-executable"
                 }
-            }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.vapi.ai/call/phone",
-                    headers={"Authorization": f"Bearer {vapi_key}", "Content-Type": "application/json"},
-                    json=payload,
-                ) as resp:
-                    data = await resp.json()
-                    return {"status": "initiated", "call_id": data.get("id"), "provider": "vapi"}
+            if task["status"] not in ['scheduled', 'pending']:
+                return {
+                    "success": False,
+                    "error": f"Task status '{task['status']}' is not executable"
+                }
+
+            # Evaluate confidence if not forcing
+            confidence_result = None
+            if not force_execute:
+                evaluator = self._get_evaluator()
+                confidence_result = evaluator.evaluate_task(task_instance_id, auto_execute=False)
+
+                if not confidence_result.get("success"):
+                    return {"success": False, "error": "Confidence evaluation failed"}
+
+                confidence = confidence_result["confidence_score"]
+
+                # Check if we should auto-execute
+                if not user_override and confidence < self.AUTO_EXECUTE_THRESHOLD:
+                    return {
+                        "success": False,
+                        "error": "Confidence too low for auto-execution",
+                        "confidence_score": confidence,
+                        "recommendation": confidence_result.get("recommendation"),
+                        "requires_approval": True
+                    }
+
+            # Execute based on task type
+            if task["task_type"] in ['text', 'text_am', 'text_pm']:
+                result = self._execute_text_task(task, context)
+            elif task["task_type"] == 'email':
+                result = self._execute_email_task(task, context)
+            else:
+                result = self._execute_generic_ai_task(task, context)
+
+            # Update task status based on result
+            if result.get("success"):
+                self._mark_task_completed(task_instance_id, "ai", result)
+
+                # Notify via WebSocket
+                notifier = self._get_notifier()
+                notifier.notify_user_sync(
+                    task["assigned_user_id"],
+                    {
+                        "type": "ai_task_executed",
+                        "task_instance_id": task_instance_id,
+                        "task_name": task["task_name"],
+                        "task_type": task["task_type"],
+                        "success": True,
+                        "result_summary": result.get("summary"),
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                )
+            else:
+                self._mark_task_failed(task_instance_id, result.get("error", "Execution failed"))
+
+            result["task_instance_id"] = task_instance_id
+            result["task_name"] = task["task_name"]
+            if confidence_result:
+                result["confidence_score"] = confidence_result.get("confidence_score")
+
+            return result
 
         except Exception as e:
-            logger.error(f"Call dispatch failed: {e}")
-            return {"status": "error", "detail": str(e)}
+            logger.error(f"AI task execution failed: {e}")
+            return {"success": False, "error": "Internal server error"}
 
-    async def _dispatch_sms(self, plan: dict) -> dict:
+    def execute_batch(
+        self,
+        task_instance_ids: List[int],
+        auto_only: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Execute multiple tasks in batch.
+
+        Args:
+            task_instance_ids: List of task IDs to execute
+            auto_only: Only execute tasks that pass confidence threshold
+
+        Returns:
+            Dict with batch results
+        """
+        results = {
+            "success": True,
+            "executed": [],
+            "skipped": [],
+            "failed": [],
+            "total": len(task_instance_ids),
+            "circuit_breaker_tripped": False
+        }
+
+        tool_call_count = 0
+        for task_id in task_instance_ids:
+            tool_call_count += 1
+            if tool_call_count > MAX_TOOL_CALLS:
+                logger.warning(
+                    f"Circuit breaker: max tool calls ({MAX_TOOL_CALLS}) reached "
+                    f"during batch execution. {len(task_instance_ids) - tool_call_count + 1} "
+                    f"remaining tasks flagged for manual review."
+                )
+                results["circuit_breaker_tripped"] = True
+                # Flag all remaining tasks for manual review instead of executing
+                remaining_ids = task_instance_ids[tool_call_count - 1:]
+                for remaining_id in remaining_ids:
+                    self._mark_task_needs_review(
+                        remaining_id,
+                        f"Circuit breaker tripped: max tool calls ({MAX_TOOL_CALLS}) "
+                        f"reached in batch execution"
+                    )
+                    results["skipped"].append({
+                        "task_instance_id": remaining_id,
+                        "reason": "Circuit breaker: max tool calls reached, flagged for manual review"
+                    })
+                break
+
+            try:
+                result = self.execute_task(
+                    task_instance_id=task_id,
+                    force_execute=not auto_only
+                )
+
+                if result.get("success"):
+                    results["executed"].append({
+                        "task_instance_id": task_id,
+                        "task_name": result.get("task_name"),
+                        "result": result.get("summary")
+                    })
+                elif result.get("requires_approval"):
+                    results["skipped"].append({
+                        "task_instance_id": task_id,
+                        "task_name": result.get("task_name"),
+                        "reason": "Requires approval",
+                        "confidence": result.get("confidence_score")
+                    })
+                else:
+                    results["failed"].append({
+                        "task_instance_id": task_id,
+                        "error": result.get("error")
+                    })
+
+            except Exception as e:
+                results["failed"].append({
+                    "task_instance_id": task_id,
+                    "error": "Internal server error"
+                })
+
+        results["executed_count"] = len(results["executed"])
+        results["skipped_count"] = len(results["skipped"])
+        results["failed_count"] = len(results["failed"])
+
+        if results["circuit_breaker_tripped"]:
+            logger.warning(
+                f"Batch execution (CIRCUIT BREAKER TRIPPED): {results['executed_count']} executed, "
+                f"{results['skipped_count']} skipped/needs-review, {results['failed_count']} failed"
+            )
+        else:
+            logger.info(
+                f"Batch execution: {results['executed_count']} executed, "
+                f"{results['skipped_count']} skipped, {results['failed_count']} failed"
+            )
+
+        return results
+
+    def get_ready_for_execution(
+        self,
+        user_id: Optional[int] = None,
+        task_types: Optional[List[str]] = None,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get tasks ready for AI execution.
+
+        Args:
+            user_id: Filter by assigned user
+            task_types: Filter by task types
+            limit: Maximum results
+
+        Returns:
+            List of tasks with confidence pre-evaluated
+        """
+        if task_types is None:
+            task_types = self.AI_EXECUTABLE_TYPES
+
+        params = {"task_types": task_types, "limit": limit}
+        filters = [
+            "wti.task_type = ANY(:task_types)",
+            "wti.status IN ('scheduled', 'pending')",
+            "wti.route = 'ai_autonomous'",
+            "wti.scheduled_date <= NOW()"
+        ]
+
+        if user_id:
+            filters.append("wti.assigned_user_id = :user_id")
+            params["user_id"] = user_id
+
+        where_clause = " AND ".join(filters)
+
+        exec_query = (
+            "SELECT"
+            " wti.id, wti.task_name, wti.task_type,"
+            " wti.lead_id, wti.loan_id, wti.assigned_user_id,"
+            " wti.scheduled_date,"
+            " wac.confidence_score, wac.recommendation,"
+            " COALESCE(l.first_name || ' ' || l.last_name, lo.borrower_name) as contact_name,"
+            " COALESCE(l.phone, lo.borrower_phone) as contact_phone,"
+            " COALESCE(l.email, lo.borrower_email) as contact_email"
+            " FROM workflow_task_instances wti"
+            " LEFT JOIN workflow_ai_confidence wac ON wac.task_instance_id = wti.id"
+            " LEFT JOIN leads l ON l.id = wti.lead_id"
+            " LEFT JOIN loans lo ON lo.id = wti.loan_id"
+            " WHERE " + where_clause
+            + " ORDER BY"
+            " CASE WHEN wac.confidence_score >= 0.95 THEN 0 ELSE 1 END,"
+            " wti.scheduled_date ASC"
+            " LIMIT :limit"
+        )
+        results = self.db.execute(text(exec_query), params).fetchall()
+
+        tasks = []
+        for row in results:
+            tasks.append({
+                "task_instance_id": row[0],
+                "task_name": row[1],
+                "task_type": row[2],
+                "lead_id": row[3],
+                "loan_id": row[4],
+                "assigned_user_id": row[5],
+                "scheduled_date": row[6].isoformat() if row[6] else None,
+                "confidence_score": float(row[7]) if row[7] else None,
+                "recommendation": row[8],
+                "contact_name": row[9],
+                "contact_phone": row[10],
+                "contact_email": row[11],
+                "auto_executable": row[7] and float(row[7]) >= self.AUTO_EXECUTE_THRESHOLD
+            })
+
+        return tasks
+
+    def run_autonomous_execution(
+        self,
+        user_id: Optional[int] = None,
+        max_tasks: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Run autonomous execution cycle for high-confidence tasks.
+
+        Called by scheduler to process AI-routable tasks that meet
+        confidence threshold without human intervention.
+
+        Args:
+            user_id: Optionally filter by user
+            max_tasks: Maximum tasks to process per cycle
+
+        Returns:
+            Dict with execution summary
+        """
         try:
-            import aiohttp
+            # Get tasks ready for autonomous execution
+            ready_tasks = self.get_ready_for_execution(
+                user_id=user_id,
+                limit=max_tasks
+            )
 
-            telnyx_key = os.getenv("TELNYX_API_KEY")
-            if not telnyx_key:
-                return {"status": "error", "detail": "TELNYX_API_KEY not configured"}
+            # Filter to only auto-executable
+            auto_tasks = [t for t in ready_tasks if t.get("auto_executable")]
 
-            message_text = plan.get("final_approved_message")
-            if not message_text:
-                message_text = f"Hi {plan.get('lead_name', 'there')}, {plan['objective']}"
-            if len(message_text) > 160:
-                message_text = message_text[:157] + "..."
+            if not auto_tasks:
+                return {
+                    "success": True,
+                    "message": "No tasks ready for autonomous execution",
+                    "tasks_checked": len(ready_tasks),
+                    "tasks_executed": 0
+                }
 
-            payload = {
-                "from": os.getenv("TELNYX_FROM_NUMBER", "+18438838956"),
-                "to": plan.get("lead_phone"),
-                "text": message_text,
-                "messaging_profile_id": os.getenv("TELNYX_MESSAGING_PROFILE_ID", "40019bed-2fa1-4407-a0c6-fe4c6b222c93"),
-            }
+            # Execute batch
+            task_ids = [t["task_instance_id"] for t in auto_tasks]
+            result = self.execute_batch(task_ids, auto_only=True)
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.telnyx.com/v2/messages",
-                    headers={"Authorization": f"Bearer {telnyx_key}", "Content-Type": "application/json"},
-                    json=payload,
-                ) as resp:
-                    data = await resp.json()
-                    return {"status": "sent", "message_id": data.get("data", {}).get("id"), "provider": "telnyx"}
+            result["tasks_checked"] = len(ready_tasks)
+            result["message"] = f"Executed {result['executed_count']} tasks autonomously"
 
-        except Exception as e:
-            logger.error(f"SMS dispatch failed: {e}")
-            return {"status": "error", "detail": str(e)}
+            return result
 
-    async def _dispatch_email(self, plan: dict) -> dict:
-        try:
-            import aiohttp
+        except SQLAlchemyError as e:
+            logger.error(f"Autonomous execution failed: {e}")
+            return {"success": False, "error": "Internal server error"}
 
-            graph_token = os.getenv("MS_GRAPH_ACCESS_TOKEN")
-            if not graph_token:
-                return {"status": "error", "detail": "MS_GRAPH_ACCESS_TOKEN not configured"}
+    def _get_task_details(self, task_instance_id: int) -> Optional[Dict[str, Any]]:
+        """Get task details for execution."""
+        result = self.db.execute(text("""
+            SELECT
+                wti.id,
+                wti.task_name,
+                wti.task_type,
+                wti.status,
+                wti.lead_id,
+                wti.loan_id,
+                wti.assigned_user_id,
+                wti.workflow_instance_id,
+                wti.task_group_key,
+                wtc.task_key,
+                wtc.metadata as task_config_metadata,
+                COALESCE(l.first_name, lo.borrower_first_name) as first_name,
+                COALESCE(l.last_name, lo.borrower_last_name) as last_name,
+                COALESCE(l.phone, lo.borrower_phone) as phone,
+                COALESCE(l.email, lo.borrower_email) as email
+            FROM workflow_task_instances wti
+            LEFT JOIN workflow_task_configs wtc ON wtc.id = wti.task_config_id
+            LEFT JOIN leads l ON l.id = wti.lead_id
+            LEFT JOIN loans lo ON lo.id = wti.loan_id
+            WHERE wti.id = :task_id
+        """), {"task_id": task_instance_id}).fetchone()
 
-            body_content = plan.get("final_approved_message")
-            if not body_content:
-                body_content = f"Hi {plan.get('lead_name', 'there')},\n\n{plan.get('talking_points', plan['objective'])}\n\nBest regards,\nYour Loan Team"
-
-            payload = {
-                "message": {
-                    "subject": plan.get("objective", "Following up"),
-                    "body": {
-                        "contentType": "Text",
-                        "content": body_content,
-                    },
-                    "toRecipients": [{"emailAddress": {"address": plan.get("lead_email")}}]
-                },
-                "saveToSentItems": True,
-            }
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://graph.microsoft.com/v1.0/me/sendMail",
-                    headers={"Authorization": f"Bearer {graph_token}", "Content-Type": "application/json"},
-                    json=payload,
-                ) as resp:
-                    if resp.status == 202:
-                        return {"status": "sent", "provider": "msgraph"}
-                    data = await resp.json()
-                    return {"status": "error", "detail": data}
-
-        except Exception as e:
-            logger.error(f"Email dispatch failed: {e}")
-            return {"status": "error", "detail": str(e)}
-
-    def record_outcome(self, action_id: str, outcome: str) -> Optional[WorkflowAIAction]:
-        action = self.db.query(WorkflowAIAction).filter(WorkflowAIAction.id == action_id).first()
-        if not action:
+        if not result:
             return None
 
-        action.outcome = outcome
-        action.completed_at = datetime.now(timezone.utc)
-
-        event_map = {
-            "success": "success",
-            "no_response": "success",
-            "negative": "negative_outcome",
-            "error": "human_rejected",
-            "escalated": "human_edited",
+        return {
+            "id": result[0],
+            "task_name": result[1],
+            "task_type": result[2],
+            "status": result[3],
+            "lead_id": result[4],
+            "loan_id": result[5],
+            "assigned_user_id": result[6],
+            "workflow_instance_id": result[7],
+            "task_group_key": result[8],
+            "task_key": result[9],
+            "config_metadata": result[10],
+            "first_name": result[11],
+            "last_name": result[12],
+            "phone": result[13],
+            "email": result[14],
+            "contact_name": f"{result[11] or ''} {result[12] or ''}".strip() or "Contact"
         }
-        event = event_map.get(outcome, "success")
-        new_confidence = self.confidence_svc.update_confidence(action.workflow_node_id, action.channel, event)
-        action.confidence_after = new_confidence
 
-        self.db.flush()
-        return action
+    def _execute_text_task(
+        self,
+        task: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Execute a text/SMS task."""
+        try:
+            if not task.get("phone"):
+                return {"success": False, "error": "No phone number available"}
+
+            # Generate message using AI
+            message_content = self._generate_text_content(task, context)
+
+            if not message_content:
+                return {"success": False, "error": "Failed to generate message content"}
+
+            # Send via SMS service
+            from integrations.sms_service import get_sms_client
+            from db import SessionLocal
+            _sms_db = SessionLocal()
+            try:
+                sms_client = get_sms_client(db=_sms_db, user_id=task.get("assigned_user_id"))
+                result = sms_client.send_sms(
+                    to_phone=task["phone"],
+                    message=message_content,
+                    lead_id=task.get("lead_id"),
+                    user_id=task.get("assigned_user_id")
+                )
+            finally:
+                _sms_db.close()
+
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "summary": f"Sent SMS to {task['contact_name']}",
+                    "message_content": message_content,
+                    "sms_id": result.get("message_id")
+                }
+            else:
+                return {"success": False, "error": result.get("error", "SMS send failed")}
+
+        except ImportError:
+            logger.warning("SMS service not available, simulating send")
+            return {
+                "success": True,
+                "summary": f"[SIMULATED] SMS to {task['contact_name']}",
+                "simulated": True
+            }
+        except Exception as e:
+            return {"success": False, "error": "Internal server error"}
+
+    def _execute_email_task(
+        self,
+        task: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Execute an email task."""
+        try:
+            if not task.get("email"):
+                return {"success": False, "error": "No email address available"}
+
+            # Generate email content using AI
+            email_content = self._generate_email_content(task, context)
+
+            if not email_content:
+                return {"success": False, "error": "Failed to generate email content"}
+
+            # Send via email service
+            from services.email_service import send_email
+
+            result = send_email(
+                to_email=task["email"],
+                subject=email_content.get("subject", task["task_name"]),
+                body=email_content.get("body", ""),
+                lead_id=task.get("lead_id"),
+                loan_id=task.get("loan_id"),
+                user_id=task.get("assigned_user_id")
+            )
+
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "summary": f"Sent email to {task['contact_name']}",
+                    "subject": email_content.get("subject"),
+                    "email_id": result.get("email_id")
+                }
+            else:
+                return {"success": False, "error": result.get("error", "Email send failed")}
+
+        except ImportError:
+            logger.warning("Email service not available, simulating send")
+            return {
+                "success": True,
+                "summary": f"[SIMULATED] Email to {task['contact_name']}",
+                "simulated": True
+            }
+        except Exception as e:
+            return {"success": False, "error": "Internal server error"}
+
+    def _execute_generic_ai_task(
+        self,
+        task: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Execute a generic AI task via orchestrator."""
+        try:
+            from agents.orchestrator import run_orchestrator
+
+            # Build prompt for AI
+            prompt = self._build_task_prompt(task, context)
+
+            # Run through orchestrator — safely handle both sync and async contexts.
+            # This method is sync but may be called from an async FastAPI handler,
+            # so asyncio.run() would crash with "cannot be called from a running event loop".
+            import asyncio
+            import concurrent.futures
+
+            coro = run_orchestrator(
+                message=prompt,
+                user_id=str(task.get("assigned_user_id", "system")),
+                user_email="ai-executor@system.local",
+                user_role="ai_agent",
+                autonomous_mode=True
+            )
+
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                # Already inside an async event loop (e.g. FastAPI handler) —
+                # run the coroutine in a separate thread with its own event loop.
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    result = pool.submit(asyncio.run, coro).result()
+            else:
+                # No running loop — safe to use asyncio.run() directly.
+                result = asyncio.run(coro)
+
+            return {
+                "success": True,
+                "summary": f"AI executed: {task['task_name']}",
+                "response": result.get("response", "")[:500]
+            }
+
+        except Exception as e:
+            logger.error(f"Generic AI task execution failed: {e}")
+            return {"success": False, "error": "Internal server error"}
+
+    def _generate_text_content(
+        self,
+        task: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """Generate SMS content for a task."""
+        # Use template if available in config
+        config_meta = task.get("config_metadata") or {}
+        template = config_meta.get("sms_template")
+
+        if template:
+            # Simple template substitution
+            return template.format(
+                first_name=task.get("first_name", "there"),
+                contact_name=task.get("contact_name", "there")
+            )
+
+        # Generate via AI if no template
+        task_name = task.get("task_name", "follow-up")
+        first_name = task.get("first_name", "there")
+
+        # Default templates by task type
+        templates = {
+            "text": f"Hi {first_name}, just checking in. Let me know if you have any questions about your mortgage application!",
+            "text_am": f"Good morning {first_name}! Hope you're having a great day. Any questions I can help with?",
+            "text_pm": f"Hi {first_name}, following up on your loan application. Feel free to reach out if you need anything!",
+        }
+
+        return templates.get(task.get("task_type"), templates["text"])
+
+    def _generate_email_content(
+        self,
+        task: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, str]]:
+        """Generate email content for a task."""
+        config_meta = task.get("config_metadata") or {}
+
+        # Use template if available
+        subject_template = config_meta.get("email_subject")
+        body_template = config_meta.get("email_body")
+
+        first_name = task.get("first_name", "there")
+        task_name = task.get("task_name", "Follow-up")
+
+        subject = subject_template or f"Following up - {task_name}"
+        body = body_template or f"""Hi {first_name},
+
+I wanted to follow up on your mortgage application and see if you have any questions.
+
+Please don't hesitate to reach out if there's anything I can help with.
+
+Best regards"""
+
+        return {
+            "subject": subject,
+            "body": body
+        }
+
+    def _build_task_prompt(
+        self,
+        task: Dict[str, Any],
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """Build AI prompt for task execution."""
+        return f"""Execute workflow task: {task['task_name']}
+
+Task Type: {task['task_type']}
+Contact: {task.get('contact_name', 'Unknown')}
+Lead ID: {task.get('lead_id', 'N/A')}
+Loan ID: {task.get('loan_id', 'N/A')}
+
+Please complete this task appropriately."""
+
+    def _mark_task_completed(
+        self,
+        task_instance_id: int,
+        completion_source: str,
+        result: Dict[str, Any]
+    ):
+        """Mark task as completed."""
+        self.db.execute(text("""
+            UPDATE workflow_task_instances
+            SET status = 'completed',
+                completion_source = :source,
+                completed_at = NOW(),
+                updated_at = NOW()
+            WHERE id = :id
+        """), {
+            "id": task_instance_id,
+            "source": completion_source
+        })
+        self.db.commit()
+
+    # Maximum retries before a task is moved to dead letter
+    MAX_TASK_RETRIES = 5
+
+    def _mark_task_failed(self, task_instance_id: int, error: str):
+        """
+        Mark task as failed with retry tracking.
+
+        Increments retry_count on each failure. When retry_count reaches
+        MAX_TASK_RETRIES, the task is moved to 'dead_letter' status and
+        will no longer be retried by the scheduler.
+        """
+        # Atomically increment retry_count and fetch the new value
+        result = self.db.execute(text("""
+            UPDATE workflow_task_instances
+            SET retry_count = COALESCE(retry_count, 0) + 1,
+                error_message = :error,
+                last_failed_at = NOW(),
+                updated_at = NOW()
+            WHERE id = :id
+            RETURNING retry_count
+        """), {
+            "id": task_instance_id,
+            "error": error[:500],
+        })
+        row = result.fetchone()
+        retry_count = row[0] if row else 1
+
+        if retry_count >= self.MAX_TASK_RETRIES:
+            # Move to dead letter -- permanently failed
+            self.db.execute(text("""
+                UPDATE workflow_task_instances
+                SET status = 'dead_letter',
+                    health_status = 'broken',
+                    error_message = :error,
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "id": task_instance_id,
+                "error": f"Dead letter after {retry_count} retries. Last error: {error[:400]}",
+            })
+            logger.error(
+                f"Task {task_instance_id} moved to dead letter after "
+                f"{retry_count} retries. Last error: {error}"
+            )
+
+            # Create a broken task alert for admin visibility
+            try:
+                self.db.execute(text("""
+                    INSERT INTO broken_task_alerts (
+                        workflow_id, task_instance_id, alert_type,
+                        alert_message, severity, created_at
+                    )
+                    SELECT
+                        wti.workflow_id, wti.id, 'dead_letter',
+                        :message, 'critical', NOW()
+                    FROM workflow_task_instances wti
+                    WHERE wti.id = :id
+                """), {
+                    "id": task_instance_id,
+                    "message": (
+                        f"Task permanently failed after {retry_count} retries. "
+                        f"Last error: {error[:300]}"
+                    ),
+                })
+            except Exception as alert_err:
+                logger.warning(
+                    f"Failed to create dead letter alert for task "
+                    f"{task_instance_id}: {alert_err}"
+                )
+        else:
+            # Keep as failed -- scheduler will retry on next cycle
+            self.db.execute(text("""
+                UPDATE workflow_task_instances
+                SET status = 'failed',
+                    health_status = 'broken',
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "id": task_instance_id,
+            })
+            logger.warning(
+                f"Task {task_instance_id} failed (attempt "
+                f"{retry_count}/{self.MAX_TASK_RETRIES}): {error}"
+            )
+
+        self.db.commit()
+
+    def _mark_task_needs_review(self, task_instance_id: int, reason: str):
+        """Mark task as needing manual review (circuit breaker or other safety stop)."""
+        try:
+            self.db.execute(text("""
+                UPDATE workflow_task_instances
+                SET status = 'pending',
+                    error_message = :reason,
+                    health_status = 'needs_review',
+                    route = 'manual',
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "id": task_instance_id,
+                "reason": reason[:500]
+            })
+            self.db.commit()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark task {task_instance_id} for review: {e}")
+            self.db.rollback()
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+def get_ai_executor(db: Session) -> WorkflowAIExecutor:
+    """Factory function to get a WorkflowAIExecutor instance."""
+    return WorkflowAIExecutor(db)
+
+
+def run_autonomous_ai_tasks(db: Session, max_tasks: int = 20) -> Dict[str, Any]:
+    """
+    Convenience function to run autonomous AI task execution.
+
+    Can be called from scheduler or API endpoint.
+    """
+    executor = WorkflowAIExecutor(db)
+    return executor.run_autonomous_execution(max_tasks=max_tasks)

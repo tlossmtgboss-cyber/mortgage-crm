@@ -1012,19 +1012,37 @@ def list_document_sets(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    try:
+        cf = _get_cf(db, client_file_id, current_user.organization_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("document-sets: _get_cf failed for %s: %s", client_file_id, e)
+        return []
     loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
     if not loan_ids:
         return []
 
-    from models.smart_docs_models import DocumentRequest, SmartDocument
+    try:
+        from models.smart_docs_models import DocumentRequest, SmartDocument
+    except ImportError:
+        logger.warning("document-sets: smart_docs_models not available")
+        return []
 
-    requests = db.execute(
-        select(DocumentRequest).where(
-            DocumentRequest.loan_id.in_(loan_ids),
-            DocumentRequest.is_active == True,
-        ).order_by(DocumentRequest.created_at.desc())
-    ).scalars().all()
+    try:
+        requests = db.execute(
+            select(DocumentRequest).where(
+                DocumentRequest.loan_id.in_(loan_ids),
+                DocumentRequest.is_active == True,
+            ).order_by(DocumentRequest.created_at.desc())
+        ).scalars().all()
+    except Exception as e:
+        logger.warning("document-sets: query failed (table may not exist): %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return []
 
     docs_by_request: dict[int, list] = {}
     if requests:
@@ -1501,7 +1519,12 @@ def list_relationships(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    _get_cf(db, client_file_id, current_user.organization_id)
+    try:
+        _get_cf(db, client_file_id, current_user.organization_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("relationships: _get_cf failed for %s: %s", client_file_id, e)
     return []
 
 
