@@ -76,6 +76,9 @@ class AriaRetrievalService:
 
         embedding = await self._embed_query(query)
 
+        if embedding is None:
+            return RetrievalResult(facts=[], no_results=True)
+
         where_clauses = ["am.organization_id = :org_id"]
         params: Dict[str, Any] = {"org_id": tenant_id, "top_k": top_k, "min_relevance": MIN_RELEVANCE_THRESHOLD}
 
@@ -173,18 +176,22 @@ class AriaRetrievalService:
             return "aging"
         return "stale"
 
-    async def _embed_query(self, text_input: str) -> list[float]:
-        from services.aria_memory.embedding_service import _normalize_text
-        text_input = scrub_pii_for_embedding(text_input)
-        normalized = _normalize_text(text_input)
+    async def _embed_query(self, text_input: str) -> Optional[list[float]]:
+        try:
+            from services.aria_memory.embedding_service import _normalize_text
+            text_input = scrub_pii_for_embedding(text_input)
+            normalized = _normalize_text(text_input)
 
-        import openai
-        client = openai.AsyncOpenAI()
-        response = await client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=normalized,
-        )
-        return response.data[0].embedding
+            import openai
+            client = openai.AsyncOpenAI()
+            response = await client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=normalized,
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            logger.warning("Query embedding failed (retrieval will return empty): %s", e)
+            return None
 
     def _cache_key(self, scope: str, tenant_id: int, entity_id, query: str) -> str:
         query_hash = hashlib.sha256(query.lower().strip().encode()).hexdigest()[:24]

@@ -205,7 +205,7 @@ TRANSCRIPT:
                 )
                 self._db.add(staging)
 
-        self._db.commit()
+        self._db.flush()
 
     async def _auto_commit_to_memory(
         self,

@@ -194,8 +194,15 @@ async def approve_item(
             return {"status": "confirmed", "memory_id": existing.id}
 
     # Generate embedding for vector search
-    from services.aria_memory.embedding_service import generate_embedding_async, EMBEDDING_MODEL
-    embedding = await generate_embedding_async(item.fact_text)
+    embedding = None
+    try:
+        from services.aria_memory.embedding_service import generate_embedding_async
+        embedding = await generate_embedding_async(item.fact_text)
+    except Exception as e:
+        logger.warning("Embedding generation failed during approval of item %d: %s", item_id, e)
+
+    if embedding is None:
+        logger.warning("Approved memory for item %d will have no embedding (not vector-searchable)", item_id)
 
     memory = AgentMemory(
         user_id=item.borrower_id,
@@ -212,7 +219,7 @@ async def approve_item(
         fact_key=item.fact_key,
         content_hash=content_hash,
         embedding=embedding,
-        embedding_model=EMBEDDING_MODEL if embedding else None,
+        embedding_model="text-embedding-3-small" if embedding else None,
     )
     db.add(memory)
     db.flush()
@@ -231,6 +238,20 @@ async def approve_item(
         )
         db.add(supersession_audit)
 
+    # --- Conflict detection (pre-commit) ---
+    conflict_summary = None
+    try:
+        from services.aria_memory.conflict_detector import detect_conflicts, resolve_auto_conflicts
+        conflicts = detect_conflicts(db, memory)
+        if conflicts:
+            conflict_summary = resolve_auto_conflicts(db, memory, conflicts)
+            logger.info(
+                "Conflict resolution for memory %d: %s",
+                memory.id, conflict_summary,
+            )
+    except Exception as e:
+        logger.warning("Conflict detection failed for memory %d: %s", memory.id, e)
+
     item.status = "approved"
     item.review_action = "approved"
     item.reviewed_by = user.id
@@ -248,20 +269,6 @@ async def approve_item(
     )
     db.add(audit)
     db.commit()
-
-    # --- Conflict detection (post-commit) ---
-    conflict_summary = None
-    try:
-        from services.aria_memory.conflict_detector import detect_conflicts, resolve_auto_conflicts
-        conflicts = detect_conflicts(db, memory)
-        if conflicts:
-            conflict_summary = resolve_auto_conflicts(db, memory, conflicts)
-            logger.info(
-                "Conflict resolution for memory %d: %s",
-                memory.id, conflict_summary,
-            )
-    except Exception as e:
-        logger.warning("Conflict detection failed for memory %d: %s", memory.id, e)
 
     try:
         redis = None

@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, Float,
     ForeignKey, Index, JSON, Boolean,
-    Enum as SAEnum, UniqueConstraint,
+    Enum as SAEnum, UniqueConstraint, text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
@@ -137,6 +137,18 @@ class AgentMemory(Base):
         Index("ix_agent_mem_verified", "last_verified_at"),
         Index("ix_agent_mem_superseded", "superseded_by"),
         Index("ix_agent_mem_hash", "content_hash"),
+        Index(
+            "ix_agent_mem_active_fact_key",
+            "borrower_id", "organization_id", "fact_key",
+            unique=True,
+            postgresql_where=text("superseded_by IS NULL AND fact_key IS NOT NULL"),
+        ),
+        Index(
+            "ix_agent_mem_active_content_hash",
+            "borrower_id", "organization_id", "content_hash",
+            unique=True,
+            postgresql_where=text("superseded_by IS NULL AND content_hash IS NOT NULL"),
+        ),
         {"extend_existing": True},
     )
 
