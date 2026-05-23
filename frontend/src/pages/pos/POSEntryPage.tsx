@@ -99,61 +99,52 @@ const POSEntryPage: React.FC = () => {
   );
   const [verifySession, setVerifySession] = useState<VerifySession | null>(savedSession.current);
 
-  // On mount: validate existing token or handle URL token
+  // On mount: require login unless a token is passed via URL query param.
+  // No auto-login from stored tokens — users must authenticate every visit.
   useEffect(() => {
     if (savedSession.current) return; // mid-verify, don't interfere
 
-    const validateToken = async (token: string) => {
-      try {
-        const resp = await fetch(`${API_BASE}/api/v1/pos/check-token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const data = await resp.json().catch(() => ({ valid: false }));
-        if (data.valid) {
-          localStorage.setItem('perennia_purl_token', token);
-          setApiPurlToken(token);
-          setPurlToken(token);
-          if (data.borrower_name) setBorrowerName(data.borrower_name);
-          setFlowStep('app');
-        } else {
-          localStorage.removeItem('perennia_purl_token');
-          setApiPurlToken(null);
-          setPurlToken(null);
-          setFlowStep('auth');
-        }
-      } catch (err) {
-        console.error('Token validation failed:', err);
-        localStorage.removeItem('perennia_purl_token');
-        setApiPurlToken(null);
-        setPurlToken(null);
-        setFlowStep('auth');
-      }
-    };
+    // Clear any stale tokens from previous sessions
+    localStorage.removeItem('perennia_purl_token');
 
     if (tokenParam) {
-      // Clean token from URL
+      // Token passed via URL (e.g. from email link) — validate it
       const url = new URL(window.location.href);
       url.searchParams.delete('token');
       window.history.replaceState({}, '', url.toString());
-      validateToken(tokenParam);
+
+      (async () => {
+        try {
+          const resp = await fetch(`${API_BASE}/api/v1/pos/check-token`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${tokenParam}`,
+            },
+          });
+          const data = await resp.json().catch(() => ({ valid: false }));
+          if (data.valid) {
+            sessionStorage.setItem('perennia_purl_token', tokenParam);
+            setApiPurlToken(tokenParam);
+            setPurlToken(tokenParam);
+            if (data.borrower_name) setBorrowerName(data.borrower_name);
+            setFlowStep('app');
+          } else {
+            setFlowStep('auth');
+          }
+        } catch {
+          setFlowStep('auth');
+        }
+      })();
     } else {
-      const stored = localStorage.getItem('perennia_purl_token');
-      if (stored) {
-        validateToken(stored);
-      } else {
-        setFlowStep('auth');
-      }
+      setFlowStep('auth');
     }
   }, [tokenParam]);
 
   const [authBounceError, setAuthBounceError] = useState<string | null>(null);
 
   const handleAuthError = () => {
-    localStorage.removeItem('perennia_purl_token');
+    sessionStorage.removeItem('perennia_purl_token');
     setApiPurlToken(null);
     setPurlToken(null);
     setAuthBounceError(
@@ -169,7 +160,7 @@ const POSEntryPage: React.FC = () => {
   };
 
   const handleVerified = (token: string, name?: string) => {
-    localStorage.setItem('perennia_purl_token', token);
+    sessionStorage.setItem('perennia_purl_token', token);
     setApiPurlToken(token);
     setPurlToken(token);
     if (name) setBorrowerName(name);
@@ -839,7 +830,7 @@ function SignupForm({
     setSubmitting(true);
 
     try {
-      localStorage.removeItem('perennia_purl_token');
+      sessionStorage.removeItem('perennia_purl_token');
       const phoneDigits = unformatPhone(phone);
       const resp = await fetch(`${API_BASE}/api/v1/pos/start`, {
         method: 'POST',

@@ -1,7 +1,7 @@
 // API client for the POS feature.
 //
-// Assumes a PURL token is set via setPurlToken() or present in
-// localStorage under key "perennia_purl_token".
+// Assumes a PURL token is set via setPurlToken() before making requests.
+// Token is session-scoped — users must log in each visit.
 
 import type {
   ApplicationResponse,
@@ -42,8 +42,7 @@ export function setPurlToken(token: string | null): void {
 
 function getPurlToken(): string {
   if (_purlToken) return _purlToken;
-  if (typeof window === 'undefined') return '';
-  return window.localStorage?.getItem('perennia_purl_token') || '';
+  return '';
 }
 
 class APIError extends Error {
