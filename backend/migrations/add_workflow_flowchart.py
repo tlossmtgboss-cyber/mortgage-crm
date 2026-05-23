@@ -67,6 +67,17 @@ def run_migration(engine_or_db=None) -> dict:
         own_connection = False
 
     try:
+        # If workflow_definitions exists but is missing columns (from a broken prior run), drop and recreate
+        check = conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'workflow_definitions' AND column_name = 'organization_id'
+        """))
+        table_exists = conn.execute(text("SELECT to_regclass('workflow_definitions')")).scalar()
+        if table_exists and not check.fetchone():
+            logger.info("Dropping incomplete workflow tables for recreation")
+            for t in ["workflow_ai_actions", "workflow_lead_movements", "workflow_edges", "workflow_nodes", "workflow_definitions"]:
+                conn.execute(text(f"DROP TABLE IF EXISTS {t} CASCADE"))
+
         # -- workflow_definitions --
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS workflow_definitions (
