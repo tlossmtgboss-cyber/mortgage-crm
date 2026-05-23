@@ -267,7 +267,7 @@ class AriaContextLoader:
         if not row or not row.summary:
             return None
 
-        date_str = row.started_at.strftime("%-m/%d") if row.started_at else "recently"
+        date_str = f"{row.started_at.month}/{row.started_at.strftime('%d')}" if row.started_at else "recently"
         summary = row.summary[:150]
         return f"Spoke {date_str} -- {summary}"[:200]
 

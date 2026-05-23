@@ -416,6 +416,11 @@ def apply_confidence_decay(
       - > 90 days since verification:  confidence *= 0.9
       - > 180 days since verification: confidence *= 0.7
 
+    Idempotent: each tier only queries memories with confidence above
+    that tier's multiplier threshold.  Once a memory has been decayed
+    (e.g. 1.0 -> 0.9 for tier 1), its confidence no longer exceeds the
+    threshold so it is skipped on subsequent runs.
+
     DIRECTIVE type is exempt (explicit user instructions don't decay).
 
     Can be scoped to a single org or run globally (organization_id=None).
@@ -447,7 +452,7 @@ def apply_confidence_decay(
             *base_filter,
             AgentMemory.last_verified_at < cutoff_90,
             AgentMemory.last_verified_at >= cutoff_180,
-            AgentMemory.confidence > 0.1,  # Don't decay already-low memories
+            AgentMemory.confidence > DECAY_90_DAY_MULTIPLIER,  # Idempotent: skip if already decayed to/below 0.9
         )
         .all()
     )
@@ -466,7 +471,7 @@ def apply_confidence_decay(
         .filter(
             *base_filter,
             AgentMemory.last_verified_at < cutoff_180,
-            AgentMemory.confidence > 0.1,
+            AgentMemory.confidence > DECAY_180_DAY_MULTIPLIER,  # Idempotent: skip if already decayed to/below 0.7
         )
         .all()
     )

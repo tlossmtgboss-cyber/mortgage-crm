@@ -232,16 +232,17 @@ def save_memory(
         # Best-effort embedding generation so memories are vector-searchable
         embedding = None
         emb_model = None
-        try:
-            from services.aria_memory.embedding_service import (
-                generate_embedding_sync,
-                EMBEDDING_MODEL,
-            )
-            embedding = generate_embedding_sync(value)
-            if embedding is not None:
-                emb_model = EMBEDDING_MODEL
-        except Exception as e:
-            logger.warning("Embedding generation failed for memory key=%s: %s", key, e)
+        if len(value) >= 10:
+            try:
+                from services.aria_memory.embedding_service import (
+                    generate_embedding_sync,
+                    EMBEDDING_MODEL,
+                )
+                embedding = generate_embedding_sync(value)
+                if embedding is not None:
+                    emb_model = EMBEDDING_MODEL
+            except Exception as e:
+                logger.warning("Embedding generation failed for memory key=%s: %s", key, e)
 
         if existing:
             existing.value = value

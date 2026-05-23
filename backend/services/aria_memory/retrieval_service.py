@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from services.aria_memory.pii_scrubber import scrub_pii_for_embedding
+from services.aria_memory.pii_scrubber import scrub_pii, scrub_pii_for_embedding
 
 logger = logging.getLogger("aria.retrieval")
 
@@ -139,7 +139,7 @@ class AriaRetrievalService:
                 text=row.value,
                 topic=row.topic or "general",
                 source_call_date=source_date.date() if source_date else None,
-                transcript_span=row.transcript_span,
+                transcript_span=scrub_pii(row.transcript_span) if row.transcript_span else None,
                 confidence=row.confidence or 0.0,
                 freshness=freshness,
                 fact_type=mem_type,
@@ -174,10 +174,9 @@ class AriaRetrievalService:
         return "stale"
 
     async def _embed_query(self, text_input: str) -> list[float]:
-        import re
+        from services.aria_memory.embedding_service import _normalize_text
         text_input = scrub_pii_for_embedding(text_input)
-        normalized = re.sub(r"\s+", " ", text_input.lower().strip())
-        normalized = re.sub(r"[^\w\s]", "", normalized)
+        normalized = _normalize_text(text_input)
 
         import openai
         client = openai.AsyncOpenAI()

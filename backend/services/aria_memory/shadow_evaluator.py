@@ -96,7 +96,7 @@ class ShadowEvaluator:
             details=metrics,
         )
         self._db.add(event)
-        self._db.commit()
+        self._db.flush()
 
         if metrics["exit_ready"]:
             logger.info("Shadow mode exit criteria met! Manual graduation required.")
