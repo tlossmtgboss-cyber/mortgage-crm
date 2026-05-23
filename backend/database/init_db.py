@@ -2076,6 +2076,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ pos_borrower_messages table note: {e}")
 
+        # Workflow flowchart tables + lead columns + default workflows
+        try:
+            from migrations.add_workflow_flowchart import run_migration as run_workflow_flowchart
+            run_workflow_flowchart()
+            logger.info("✅ Workflow flowchart migration complete")
+        except Exception as e:
+            logger.warning(f"⚠️ Workflow flowchart migration note: {e}")
+
         # Ensure tloss@cmgfi.com has full admin permissions
         try:
             with _engine.connect() as conn:
