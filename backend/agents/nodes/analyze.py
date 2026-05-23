@@ -215,6 +215,10 @@ async def _retrieve_user_memories(user_id: str, organization_id: Optional[int], 
 
         db = SessionLocal()
         try:
+            if organization_id is not None:
+                from sqlalchemy import text as sa_text
+                db.execute(sa_text("SET LOCAL app.current_tenant = :tid"), {"tid": str(organization_id)})
+
             now = datetime.now(timezone.utc)
 
             # Query PREFERENCE, DIRECTIVE, CONTEXT, and FACT memories
@@ -239,6 +243,8 @@ async def _retrieve_user_memories(user_id: str, organization_id: Optional[int], 
             query = query.filter(
                 (AgentMemory.expires_at.is_(None)) | (AgentMemory.expires_at > now)
             )
+
+            query = query.filter(AgentMemory.superseded_by.is_(None))
 
             # Fetch a broader pool so we can re-rank by relevance
             memories_rows = (

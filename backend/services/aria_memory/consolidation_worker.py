@@ -19,6 +19,7 @@ logger = logging.getLogger("aria.consolidation")
 
 AUTO_COMMIT_THRESHOLD = 0.85
 EXTRACTION_MODEL = "claude-haiku-4-5-20251001"
+MAX_FACT_TEXT_LEN = 500
 
 
 class ConsolidationWorker:
@@ -171,8 +172,9 @@ TRANSCRIPT:
         from database.models.memory_staging import MemoryStaging
 
         for item in items:
+            item["fact_text"] = item["fact_text"][:MAX_FACT_TEXT_LEN]
             confidence = item.get("confidence", 0.0)
-            content_hash = hashlib.md5(item["fact_text"].encode()).hexdigest()[:32]
+            content_hash = hashlib.sha256(item["fact_text"].encode()).hexdigest()[:32]
 
             if self._should_auto_commit(confidence, exclusion_flagged=False):
                 # High-confidence fact: auto-commit directly to agent_memories
@@ -251,7 +253,7 @@ TRANSCRIPT:
             organization_id=tenant_id,
             memory_type=type_map.get(item.get("fact_type"), MemoryType.FACT),
             key=fact_key or f"auto_{item.get('fact_type', 'fact')}_{source_call_id[:8]}",
-            value=item["fact_text"],
+            value=item["fact_text"][:MAX_FACT_TEXT_LEN],
             confidence=item.get("confidence", 0.0),
             agent_role="consolidation_worker",
             borrower_id=borrower_id,
@@ -348,6 +350,6 @@ TRANSCRIPT:
                 details=kwargs.get("details"),
             )
             self._db.add(event)
-            self._db.commit()
+            self._db.flush()
         except Exception as e:
             logger.warning("Audit event logging failed: %s", e)

@@ -57,14 +57,16 @@ class ShadowEvaluator:
         sql = text("""
             SELECT COUNT(*) FROM memory_audit_events
             WHERE event_type = 'exclusion'
+            AND (:tenant_id IS NULL OR organization_id = :tenant_id)
         """)
-        exclusion_violations = self._db.execute(sql).scalar() or 0
+        exclusion_violations = self._db.execute(sql, {"tenant_id": tenant_id}).scalar() or 0
 
         fn_sql = text("""
             SELECT COUNT(*) FROM memory_audit_events
             WHERE event_type = 'false_negative_detected'
+            AND (:tenant_id IS NULL OR organization_id = :tenant_id)
         """)
-        false_negatives = self._db.execute(fn_sql).scalar() or 0
+        false_negatives = self._db.execute(fn_sql, {"tenant_id": tenant_id}).scalar() or 0
         total_opportunities = approved + false_negatives
         recall = approved / total_opportunities if total_opportunities > 0 else 0.0
 

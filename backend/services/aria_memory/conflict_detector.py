@@ -301,11 +301,9 @@ def resolve_auto_conflicts(
 
     if summary["superseded"] > 0 or summary["flagged_for_review"] > 0:
         try:
-            db.commit()
+            db.flush()
         except Exception as e:
-            logger.error("Failed to commit conflict resolution: %s", e)
-            db.rollback()
-            raise
+            logger.warning("Failed to flush conflict resolution: %s", e)
 
     return summary
 

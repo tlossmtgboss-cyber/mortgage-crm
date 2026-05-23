@@ -7,6 +7,7 @@ proxy inference rules. Updated without a deploy via DB.
 """
 
 import logging
+import re
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -60,14 +61,15 @@ class ExclusionChecker:
 
         for rule in self._rules:
             keywords = self._extract_keywords(rule["pattern"])
-            if any(kw in text_lower for kw in keywords):
-                if rule["transformation"]:
-                    return ExclusionResult(
-                        excluded=False,
-                        category=rule["category"],
-                        transformation=rule["transformation"],
-                    )
-                return ExclusionResult(excluded=True, category=rule["category"])
+            for kw in keywords:
+                if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
+                    if rule["transformation"]:
+                        return ExclusionResult(
+                            excluded=False,
+                            category=rule["category"],
+                            transformation=rule["transformation"],
+                        )
+                    return ExclusionResult(excluded=True, category=rule["category"])
 
         return ExclusionResult(excluded=False)
 

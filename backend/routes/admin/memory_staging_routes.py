@@ -11,7 +11,7 @@ All endpoints require authenticated admin user + tenant scoping.
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -64,6 +64,13 @@ async def list_staging(
     tenant_id = user.organization_id
 
     from database.models.memory_staging import MemoryStaging
+
+    cleanup_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    db.query(MemoryStaging).filter(
+        MemoryStaging.organization_id == tenant_id,
+        MemoryStaging.status.in_(["approved", "rejected"]),
+        MemoryStaging.created_at < cleanup_cutoff,
+    ).delete(synchronize_session='fetch')
 
     query = db.query(MemoryStaging).filter(MemoryStaging.organization_id == tenant_id)
 
@@ -146,7 +153,7 @@ async def approve_item(
         "directive": MemoryType.DIRECTIVE,
     }
 
-    content_hash = hashlib.md5(item.fact_text.encode()).hexdigest()[:32]
+    content_hash = hashlib.sha256(item.fact_text.encode()).hexdigest()[:32]
 
     # Supersession check: if a preference with the same fact_key exists, supersede it
     superseded_id = None
@@ -331,7 +338,7 @@ async def edit_item(
 
     if body.fact_text is not None:
         item.fact_text = body.fact_text
-        item.content_hash = hashlib.md5(body.fact_text.encode()).hexdigest()[:32]
+        item.content_hash = hashlib.sha256(body.fact_text.encode()).hexdigest()[:32]
     if body.topic is not None:
         item.topic = body.topic
     if body.fact_type is not None:

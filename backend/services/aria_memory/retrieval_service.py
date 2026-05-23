@@ -24,6 +24,7 @@ EMBEDDING_DIMS = 1536
 CACHE_TTL_SECONDS = 60
 FRESHNESS_FRESH_DAYS = 30
 FRESHNESS_AGING_DAYS = 90
+MIN_RELEVANCE_THRESHOLD = 0.3
 
 
 class RetrievedFact(BaseModel):
@@ -74,7 +75,7 @@ class AriaRetrievalService:
         embedding = await self._embed_query(query)
 
         where_clauses = ["am.organization_id = :org_id"]
-        params: Dict[str, Any] = {"org_id": tenant_id, "top_k": top_k}
+        params: Dict[str, Any] = {"org_id": tenant_id, "top_k": top_k, "min_relevance": MIN_RELEVANCE_THRESHOLD}
 
         if scope == "memory":
             if borrower_id is None:
@@ -110,6 +111,7 @@ class AriaRetrievalService:
             FROM agent_memories am
             WHERE {where_sql}
               AND am.embedding IS NOT NULL
+              AND 1 - (am.embedding <=> CAST(:embedding AS vector)) > :min_relevance
             ORDER BY am.embedding <=> CAST(:embedding AS vector)
             LIMIT :top_k
         """)
@@ -183,7 +185,7 @@ class AriaRetrievalService:
         return response.data[0].embedding
 
     def _cache_key(self, scope: str, tenant_id: int, entity_id, query: str) -> str:
-        query_hash = hashlib.md5(query.lower().strip().encode()).hexdigest()[:12]
+        query_hash = hashlib.sha256(query.lower().strip().encode()).hexdigest()[:24]
         return f"aria:cache:{scope}:{tenant_id}:{entity_id}:{query_hash}"
 
     def _cache_get(self, key: str) -> Optional[RetrievalResult]:
@@ -232,6 +234,6 @@ class AriaRetrievalService:
                 details=kwargs.get("details"),
             )
             self._db.add(event)
-            self._db.commit()
+            self._db.flush()
         except Exception as e:
             logger.warning("Audit event logging failed: %s", e)

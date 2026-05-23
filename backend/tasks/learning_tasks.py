@@ -280,22 +280,15 @@ def _infer_session_outcome(session):
     soft_time_limit=240,
     time_limit=300,
 )
-def refresh_agent_memory_scores(
-    decay_rate: float = 0.02,
-    min_confidence: float = 0.1,
-):
+def refresh_agent_memory_scores():
     """
     Maintain agent memory health:
     1. Delete expired memories (expires_at < now).
-    2. Decay confidence on old, unaccessed memories.
-    3. Clean up orphaned conversation records.
-
-    Args:
-        decay_rate: Amount to reduce confidence per cycle on stale memories.
-        min_confidence: Memories below this threshold are deleted.
+    2. Clean up orphaned conversation records.
+    3. Apply tiered confidence decay (90/180-day via apply_confidence_decay).
 
     Returns:
-        Dict with counts of expired pruned, decayed, and removed.
+        Dict with counts of expired pruned and old conversations removed.
     """
     db = None
     try:
@@ -306,12 +299,9 @@ def refresh_agent_memory_scores(
             prune_expired_memories,
             prune_old_conversations,
         )
-        from database.models.agent_memory import AgentMemory
 
         results = {
             "expired_pruned": 0,
-            "confidence_decayed": 0,
-            "below_threshold_removed": 0,
             "old_conversations_pruned": 0,
         }
 
@@ -319,43 +309,13 @@ def refresh_agent_memory_scores(
         expired_count = prune_expired_memories(db)
         results["expired_pruned"] = expired_count
 
-        # Step 2: Decay confidence on memories not updated in 30+ days
-        stale_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-
-        stale_memories = (
-            db.query(AgentMemory)
-            .filter(
-                AgentMemory.updated_at < stale_cutoff,
-                AgentMemory.confidence > min_confidence,
-                # Only decay non-directive memories (directives are explicit user instructions)
-                AgentMemory.memory_type != "directive",
-            )
-            .all()
-        )
-
-        decayed = 0
-        removed = 0
-        for memory in stale_memories:
-            new_confidence = max(
-                (memory.confidence or 1.0) - decay_rate, 0.0
-            )
-            if new_confidence < min_confidence:
-                db.delete(memory)
-                removed += 1
-            else:
-                memory.confidence = new_confidence
-                decayed += 1
-
-        results["confidence_decayed"] = decayed
-        results["below_threshold_removed"] = removed
-
-        # Step 3: Prune old conversation summaries (older than 180 days)
+        # Step 2: Prune old conversation summaries (older than 180 days)
         old_convs = prune_old_conversations(db, days=180)
         results["old_conversations_pruned"] = old_convs
 
         db.commit()
 
-        # Step 4: Verification-based confidence decay (90/180-day tiers)
+        # Step 3: Verification-based confidence decay (90/180-day tiers)
         try:
             from services.aria_memory.conflict_detector import apply_confidence_decay
             decay_result = apply_confidence_decay(db)
@@ -365,10 +325,8 @@ def refresh_agent_memory_scores(
             results["verification_decay"] = {"error": str(e)}
 
         logger.info(
-            "Memory maintenance complete: %d expired, %d decayed, %d removed, %d old convs",
+            "Memory maintenance complete: %d expired, %d old convs",
             results["expired_pruned"],
-            results["confidence_decayed"],
-            results["below_threshold_removed"],
             results["old_conversations_pruned"],
         )
         return results
