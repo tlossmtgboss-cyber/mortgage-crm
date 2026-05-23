@@ -19,7 +19,7 @@ export default function WorkflowFlowchart() {
   const [loading, setLoading] = useState(true);
   const positionTimer = useRef(null);
 
-  const fetchGraph = useCallback(async () => {
+  const reloadGraph = useCallback(async () => {
     try {
       const { data } = await workflowGraphApi.getGraph(workflowKey);
       setGraph(data.definition);
@@ -34,7 +34,30 @@ export default function WorkflowFlowchart() {
     }
   }, [workflowKey]);
 
-  useEffect(() => { fetchGraph(); }, [fetchGraph]);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadGraph() {
+      try {
+        const { data } = await workflowGraphApi.getGraph(workflowKey);
+        if (!cancelled) {
+          setGraph(data.definition);
+          setNodes(data.nodes || []);
+          setEdges(data.edges || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setGraph({ key: workflowKey, name: workflowKey });
+          setNodes([]);
+          setEdges([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    setLoading(true);
+    loadGraph();
+    return () => { cancelled = true; };
+  }, [workflowKey]);
 
   const handleNodeDrag = useCallback((nodeId, x, y) => {
     setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, x, y } : n));
@@ -55,7 +78,7 @@ export default function WorkflowFlowchart() {
         x, y,
       });
       setPlacingNodeType(null);
-      fetchGraph();
+      reloadGraph();
     } catch (err) {
       toast.error('Failed to add node');
     }
@@ -74,7 +97,7 @@ export default function WorkflowFlowchart() {
     try {
       await workflowGraphApi.deleteNode(workflowKey, nodeId);
       setSelectedId(null);
-      fetchGraph();
+      reloadGraph();
       onRefresh();
     } catch (err) {
       toast.error('Failed to delete node');

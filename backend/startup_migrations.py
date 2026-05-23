@@ -449,6 +449,16 @@ def run_all_startup_migrations(engine: Any) -> None:
     except Exception as e:
         logger.warning(f"Subscription modules migration: {e}")
 
+    # --- Workflow Flowchart ---
+    try:
+        from migrations.add_workflow_flowchart import run_migration as _run_workflow_flowchart
+        if run_tracked:
+            run_tracked(engine, "add_workflow_flowchart", _run_workflow_flowchart)
+        else:
+            _run_workflow_flowchart()
+    except Exception as e:
+        logger.warning(f"Workflow flowchart migration: {e}")
+
     # --- Encompass LOS Integration ---
     try:
         from migrations.add_encompass_columns import run_migration as _run_encompass

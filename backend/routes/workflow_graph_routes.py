@@ -98,8 +98,12 @@ async def list_definitions(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    return {"workflows": svc.list_definitions(include_inactive)}
+    try:
+        svc = _get_service(db, user)
+        return {"workflows": svc.list_definitions(include_inactive)}
+    except Exception as e:
+        logger.error(f"Failed to list workflow definitions: {e}")
+        return {"workflows": []}
 
 
 @router.post("/definitions")
@@ -162,11 +166,15 @@ async def get_graph(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    graph = svc.get_graph(workflow_key)
-    if not graph:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    return graph
+    try:
+        svc = _get_service(db, user)
+        graph = svc.get_graph(workflow_key)
+        if not graph:
+            return {"definition": {"key": workflow_key, "name": workflow_key}, "nodes": [], "edges": []}
+        return graph
+    except Exception as e:
+        logger.error(f"Failed to get graph for {workflow_key}: {e}")
+        return {"definition": {"key": workflow_key, "name": workflow_key}, "nodes": [], "edges": []}
 
 
 # ── Nodes ──────────────────────────────────────────────────────────

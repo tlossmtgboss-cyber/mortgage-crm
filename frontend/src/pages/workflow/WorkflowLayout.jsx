@@ -5,14 +5,14 @@ import { workflowGraphApi } from '../../services/workflowGraphApi';
 import './WorkflowLayout.css';
 
 const DEFAULT_WORKFLOWS = [
-  { key: 'prospect', name: 'Prospect', color: '#22c55e', lead_count: 0 },
-  { key: 'prequal', name: 'Pre-Qual', color: '#3b82f6', lead_count: 0 },
-  { key: 'pre_approved', name: 'Pre-Approved', color: '#8b5cf6', lead_count: 0 },
-  { key: 'under_contract', name: 'Under Contract', color: '#f59e0b', lead_count: 0 },
-  { key: 'processing', name: 'Processing', color: '#06b6d4', lead_count: 0 },
-  { key: 'closing', name: 'Closing', color: '#10b981', lead_count: 0 },
-  { key: 'post_close', name: 'Post-Close', color: '#6366f1', lead_count: 0 },
-  { key: 'nurture', name: 'Nurture', color: '#ec4899', lead_count: 0 },
+  { id: 'default-prospect', key: 'prospect', name: 'Prospect', color: '#22c55e', lead_count: 0 },
+  { id: 'default-prequal', key: 'prequal', name: 'Pre-Qual', color: '#3b82f6', lead_count: 0 },
+  { id: 'default-pre_approved', key: 'pre_approved', name: 'Pre-Approved', color: '#8b5cf6', lead_count: 0 },
+  { id: 'default-under_contract', key: 'under_contract', name: 'Under Contract', color: '#f59e0b', lead_count: 0 },
+  { id: 'default-processing', key: 'processing', name: 'Processing', color: '#06b6d4', lead_count: 0 },
+  { id: 'default-closing', key: 'closing', name: 'Closing', color: '#10b981', lead_count: 0 },
+  { id: 'default-post_close', key: 'post_close', name: 'Post-Close', color: '#6366f1', lead_count: 0 },
+  { id: 'default-nurture', key: 'nurture', name: 'Nurture', color: '#ec4899', lead_count: 0 },
 ];
 
 export default function WorkflowLayout() {

@@ -44,7 +44,7 @@ export default function WorkflowSettings() {
 
       <div className="wf-settings-list">
         {workflows.map((wf, i) => (
-          <div key={wf.id} className="wf-settings-row">
+          <div key={wf.id || wf.key} className="wf-settings-row">
             <span className="wf-settings-dot" style={{ background: wf.color }} />
             {editingId === wf.id ? (
               <div className="wf-settings-edit">
