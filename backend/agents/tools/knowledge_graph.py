@@ -38,7 +38,7 @@ def graph_get_entity_context(
     if not org_id:
         return ToolResult.error("No tenant context")
 
-    valid_types = {"lead", "loan", "user", "referral_partner", "borrower", "mum_client", "contact", "branch"}
+    valid_types = {"lead", "loan", "user", "referral_partner", "mum_client", "contact", "branch"}
     if entity_type not in valid_types:
         return ToolResult.error(f"Invalid entity type. Must be one of: {', '.join(sorted(valid_types))}")
 
@@ -246,11 +246,8 @@ def graph_get_referral_network(
         leads = svc.get_neighbors(user_node.id, relationship_types=["owns_lead"], direction="out")
         loans = svc.get_neighbors(user_node.id, relationship_types=["officers_loan"], direction="out")
 
-        referred_leads = []
-        for p in partners:
-            partner_node_id = p["node"]["id"]
-            referred = svc.get_neighbors(partner_node_id, relationship_types=["referred"], direction="out")
-            referred_leads.extend(referred)
+        partner_node_ids = [p["node"]["id"] for p in partners]
+        referred_count = svc.count_edges_from(partner_node_ids, "referred")
 
         return ToolResult.success({
             "user": {"id": user_id, "label": user_node.label},
@@ -262,6 +259,6 @@ def graph_get_referral_network(
             } for p in partners],
             "total_leads": len(leads),
             "total_loans": len(loans),
-            "referred_leads": len(referred_leads),
+            "referred_leads": referred_count,
             "partner_count": len(partners),
         })

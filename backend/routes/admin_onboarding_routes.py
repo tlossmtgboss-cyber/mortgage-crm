@@ -988,7 +988,7 @@ async def complete_onboarding(
                         first_name VARCHAR(100),
                         last_name VARCHAR(100),
                         permission_role VARCHAR(50) DEFAULT 'loan_officer',
-                        invited_by UUID REFERENCES users(id),
+                        invited_by INTEGER REFERENCES users(id),
                         organization_id UUID REFERENCES tenant_accounts(id),
                         token VARCHAR(255) UNIQUE NOT NULL,
                         expires_at TIMESTAMP,

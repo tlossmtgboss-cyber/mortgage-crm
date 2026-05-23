@@ -209,7 +209,7 @@ def get_postgres_commands():
             model VARCHAR(100) DEFAULT 'claude-sonnet-4-20250514',
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            created_by UUID REFERENCES users(id) ON DELETE SET NULL
+            created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
         );
         """,
         "CREATE INDEX IF NOT EXISTS idx_agents_agent_id ON agents(agent_id);",
@@ -224,7 +224,7 @@ def get_postgres_commands():
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
             conversation_id UUID NOT NULL,
-            user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
             stage VARCHAR(100) NOT NULL,
             intent_detected VARCHAR(255),
@@ -255,7 +255,7 @@ def get_postgres_commands():
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             conversation_id UUID UNIQUE NOT NULL,
             agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
-            user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
             organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
             outcome_type VARCHAR(50) NOT NULL,
             total_messages INTEGER NOT NULL DEFAULT 0,
@@ -301,7 +301,7 @@ def get_postgres_commands():
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             started_at TIMESTAMP WITH TIME ZONE,
             ended_at TIMESTAMP WITH TIME ZONE,
-            created_by UUID REFERENCES users(id) ON DELETE SET NULL
+            created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
         );
         """,
         "CREATE INDEX IF NOT EXISTS idx_agent_ab_tests_agent_id ON agent_ab_tests(agent_id);",

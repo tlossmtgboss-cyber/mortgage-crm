@@ -48,7 +48,7 @@ def run_migration():
         loan_id UUID,
         lead_id UUID,
         contact_id UUID,
-        user_id UUID REFERENCES users(id),
+        user_id INTEGER REFERENCES users(id),
 
         -- Session status
         status VARCHAR(30) NOT NULL DEFAULT 'active',
@@ -111,7 +111,7 @@ def run_migration():
 
         -- Link to existing entities
         contact_id UUID,
-        user_id UUID REFERENCES users(id),
+        user_id INTEGER REFERENCES users(id),
 
         -- Participation timing
         joined_at TIMESTAMPTZ,
@@ -228,7 +228,7 @@ def run_migration():
         -- Approval workflow
         approval_status VARCHAR(30) DEFAULT 'pending',
         requires_approval BOOLEAN DEFAULT TRUE,
-        approved_by UUID REFERENCES users(id),
+        approved_by INTEGER REFERENCES users(id),
         approved_at TIMESTAMPTZ,
         rejection_reason TEXT,
 
@@ -293,7 +293,7 @@ def run_migration():
 
         -- Status
         status VARCHAR(30) DEFAULT 'pending',
-        applied_by UUID REFERENCES users(id),
+        applied_by INTEGER REFERENCES users(id),
         applied_at TIMESTAMPTZ,
 
         -- Multi-tenant
@@ -333,7 +333,7 @@ def run_migration():
         -- Status
         status VARCHAR(30) DEFAULT 'open',
         resolution_notes TEXT,
-        resolved_by UUID REFERENCES users(id),
+        resolved_by INTEGER REFERENCES users(id),
         resolved_at TIMESTAMPTZ,
 
         -- Links
@@ -390,9 +390,9 @@ def run_migration():
         BEFORE UPDATE ON intake_field_updates
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-    DROP TRIGGER IF EXISTS update_risk_flags_updated_at ON risk_flags;
-    CREATE TRIGGER update_risk_flags_updated_at
-        BEFORE UPDATE ON risk_flags
+    DROP TRIGGER IF EXISTS update_call_risk_flags_updated_at ON call_risk_flags;
+    CREATE TRIGGER update_call_risk_flags_updated_at
+        BEFORE UPDATE ON call_risk_flags
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     """
 
@@ -407,16 +407,15 @@ def run_migration():
             for i, stmt in enumerate(statements):
                 if not stmt or stmt.startswith('--'):
                     continue
-                conn.execute(text("SAVEPOINT call_monitor_stmt"))
                 try:
+                    nested = conn.begin_nested()
                     conn.execute(text(stmt))
-                    conn.execute(text("RELEASE SAVEPOINT call_monitor_stmt"))
+                    nested.commit()
                     success_count += 1
                     if 'CREATE TABLE' in stmt:
                         table_name = stmt.split('CREATE TABLE IF NOT EXISTS')[1].split('(')[0].strip() if 'IF NOT EXISTS' in stmt else 'unknown'
                         print(f"  ✓ Created table: {table_name}")
                 except Exception as e:
-                    conn.execute(text("ROLLBACK TO SAVEPOINT call_monitor_stmt"))
                     error_msg = str(e)
                     if 'already exists' in error_msg.lower():
                         print(f"  ⊘ Skipped (exists): statement {i+1}")

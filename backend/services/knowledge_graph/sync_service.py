@@ -380,14 +380,14 @@ class KnowledgeGraphSyncService:
         from database.models.knowledge_graph import KnowledgeGraphEdge, KnowledgeGraphNode
         from database.models.lead_loan import Lead, Loan
         from database.models.core import User
-        from database.models.referral import ReferralPartner
+        from database.models.referral import MUMClient, ReferralPartner
 
         org = self.organization_id
         stale_count = 0
 
         revalidate_types = [
             "owns_lead", "officers_loan", "referred", "works_with", "manages",
-            "in_branch",
+            "in_branch", "manages_mum",
         ]
 
         edges = (
@@ -442,6 +442,12 @@ class KnowledgeGraphSyncService:
             for r in self.db.query(ReferralPartner.id, ReferralPartner.owner_id).filter(ReferralPartner.id.in_(rp_ids)).all():
                 rp_fks[r.id] = str(r.owner_id) if r.owner_id else None
 
+        mum_ids = _safe_int_set(n.entity_id for n in nodes if n.node_type == "mum_client")
+        mum_fks = {}
+        if mum_ids:
+            for m in self.db.query(MUMClient.id, MUMClient.user_id).filter(MUMClient.id.in_(mum_ids)).all():
+                mum_fks[m.id] = str(m.user_id) if m.user_id else None
+
         for edge in edges:
             src = node_map.get(edge.source_node_id)
             tgt = node_map.get(edge.target_node_id)
@@ -480,6 +486,9 @@ class KnowledgeGraphSyncService:
                     continue
                 fk = user_fks.get(src_eid)
                 valid = fk is not None and fk[1] == tgt.entity_id
+            elif rt == "manages_mum":
+                fk = mum_fks.get(tgt_eid)
+                valid = fk is not None and fk == src.entity_id
 
             if not valid:
                 self.db.delete(edge)

@@ -9,7 +9,6 @@ Uses PostgreSQL recursive CTEs for traversal — no external graph DB required.
 Optional pgvector column for semantic search over node labels/properties.
 """
 
-import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (

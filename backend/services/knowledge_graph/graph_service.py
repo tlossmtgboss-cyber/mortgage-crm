@@ -90,7 +90,7 @@ class KnowledgeGraphService:
         safe_query = _escape_like(query)
         q = self.db.query(KnowledgeGraphNode).filter(
             KnowledgeGraphNode.organization_id == self.organization_id,
-            KnowledgeGraphNode.label.ilike(f"%{safe_query}%"),
+            KnowledgeGraphNode.label.ilike(f"%{safe_query}%", escape="\\"),
         )
         if node_type:
             q = q.filter(KnowledgeGraphNode.node_type == node_type)
@@ -173,6 +173,23 @@ class KnowledgeGraphService:
         if relationship_type:
             q = q.filter(KnowledgeGraphEdge.relationship_type == relationship_type)
         return q.scalar() or 0
+
+    def count_edges_from(
+        self,
+        source_node_ids: list[int],
+        relationship_type: str,
+    ) -> int:
+        if not source_node_ids:
+            return 0
+        return (
+            self.db.query(func.count(KnowledgeGraphEdge.id))
+            .filter(
+                KnowledgeGraphEdge.organization_id == self.organization_id,
+                KnowledgeGraphEdge.source_node_id.in_(source_node_ids),
+                KnowledgeGraphEdge.relationship_type == relationship_type,
+            )
+            .scalar() or 0
+        )
 
     # =====================================================================
     # Traversal — immediate neighbors

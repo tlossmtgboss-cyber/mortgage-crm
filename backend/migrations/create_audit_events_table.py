@@ -40,7 +40,7 @@ def run_migration():
                 occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 event_type VARCHAR(64) NOT NULL,
                 outcome VARCHAR(16) NOT NULL DEFAULT 'success',
-                actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
                 actor_email VARCHAR(320),
                 actor_role VARCHAR(32),
                 org_id UUID,
