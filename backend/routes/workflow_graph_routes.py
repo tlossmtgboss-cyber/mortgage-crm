@@ -352,9 +352,9 @@ async def submit_review(
     user=Depends(get_current_user),
 ):
     """Submit LO review for a supervised AI action (part of the conversation loop)."""
-    from services.workflow_ai_executor import WorkflowAIExecutor
+    from services.workflow_flowchart_executor import WorkflowFlowchartExecutor
 
-    executor = WorkflowAIExecutor(db)
+    executor = WorkflowFlowchartExecutor(db)
     result = executor.submit_review(action_id, body.lo_action, body.lo_version)
     if not result:
         raise HTTPException(status_code=404, detail="Action not found")
