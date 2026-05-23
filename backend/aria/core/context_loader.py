@@ -36,6 +36,8 @@ class AriaContextLoader:
                     return {"user_name": "there", "org_name": "", "pipeline_summary": "", "recent_contacts": ""}
 
                 org_id = user_row[2]
+                if org_id:
+                    db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
                 user_name = f"{user_row[0] or ''} {user_row[1] or ''}".strip()
 
                 # Active loan count
@@ -104,6 +106,8 @@ class AriaContextLoader:
                     return "No context available."
 
                 org_id = user_row[0]
+                if org_id:
+                    db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
 
                 # If asking about a borrower, show recent leads
                 if slot.slot_type == "borrower":

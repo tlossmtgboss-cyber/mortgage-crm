@@ -263,6 +263,20 @@ async def approve_item(
     except Exception as e:
         logger.warning("Conflict detection failed for memory %d: %s", memory.id, e)
 
+    try:
+        redis = None
+        try:
+            from services.redis_service import redis_client
+            redis = redis_client
+        except Exception:
+            pass
+        if redis and item.borrower_id:
+            from services.aria_memory.retrieval_service import AriaRetrievalService
+            svc = AriaRetrievalService(db=db, redis=redis)
+            svc.invalidate_cache("memory", tenant_id, item.borrower_id)
+    except Exception:
+        pass
+
     result = {"status": "approved", "memory_id": memory.id}
     if conflict_summary:
         result["conflicts"] = conflict_summary

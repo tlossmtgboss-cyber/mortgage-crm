@@ -297,6 +297,7 @@ def get_relevant_context(
                 _AgentMemory.expires_at.is_(None),
                 _AgentMemory.expires_at > now,
             ),
+            _AgentMemory.superseded_by.is_(None),
         )
         if org_id is not None:
             mem_query = mem_query.filter(_AgentMemory.organization_id == org_id)
@@ -401,6 +402,7 @@ def get_user_preferences(
                 _AgentMemory.expires_at.is_(None),
                 _AgentMemory.expires_at > now,
             ),
+            _AgentMemory.superseded_by.is_(None),
         )
         if org_id is not None:
             query = query.filter(_AgentMemory.organization_id == org_id)

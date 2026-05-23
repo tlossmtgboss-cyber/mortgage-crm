@@ -8,6 +8,7 @@ POST /internal/aria/consolidate — Trigger consolidation after call end
 Auth: X-Internal-API-Key header (same as aria_tool_routes.py).
 """
 
+import asyncio
 import os
 import logging
 from typing import Any, Dict, Literal, Optional
@@ -27,8 +28,10 @@ router = APIRouter(prefix="/internal/aria", tags=["Aria Memory Internal"])
 def _verify_internal_key(request: Request):
     import hmac
     expected = os.environ.get("INTERNAL_API_KEY", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="Internal API not configured")
     key = request.headers.get("X-Internal-API-Key", "")
-    if not expected or not hmac.compare_digest(key, expected):
+    if not hmac.compare_digest(key, expected):
         raise HTTPException(status_code=403, detail="Invalid internal API key")
 
 
@@ -127,15 +130,29 @@ async def consolidate(
             from services.aria_memory.consolidation_worker import ConsolidationWorker
             redis = _get_redis()
             worker = ConsolidationWorker(db=consolidation_db, redis=redis)
-            await worker.process_call(
-                call_session_id=req.call_session_id,
-                tenant_id=req.tenant_id,
-                borrower_id=req.borrower_id,
-                transcript=req.transcript,
-                call_metadata=req.call_metadata,
+            await asyncio.wait_for(
+                worker.process_call(
+                    call_session_id=req.call_session_id,
+                    tenant_id=req.tenant_id,
+                    borrower_id=req.borrower_id,
+                    transcript=req.transcript,
+                    call_metadata=req.call_metadata,
+                ),
+                timeout=120,
             )
+            consolidation_db.commit()
+        except asyncio.TimeoutError:
+            logger.error("Consolidation timed out for call %s", req.call_session_id)
+            try:
+                consolidation_db.rollback()
+            except Exception:
+                pass
         except Exception as e:
             logger.error("Consolidation failed for call %s: %s", req.call_session_id, e)
+            try:
+                consolidation_db.rollback()
+            except Exception:
+                pass
         finally:
             consolidation_db.close()
 

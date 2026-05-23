@@ -121,14 +121,17 @@ TRANSCRIPT:
             messages=[{"role": "user", "content": prompt}],
         )
 
-        text_content = response.content[0].text
-        text_content = text_content.strip()
+        text_content = response.content[0].text.strip()
         if text_content.startswith("```"):
-            text_content = text_content.split("\n", 1)[1]
-            if text_content.endswith("```"):
-                text_content = text_content[:-3]
+            lines = text_content.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            text_content = "\n".join(lines).strip()
 
-        return json.loads(text_content)
+        try:
+            return json.loads(text_content)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Extraction LLM returned unparseable JSON, returning empty")
+            return []
 
     def _check_exclusions(self, items: list[dict]) -> list[dict]:
         """Hook for patching in tests; production path uses _apply_exclusion_filter."""
@@ -323,11 +326,18 @@ TRANSCRIPT:
 
         text_content = response.content[0].text.strip()
         if text_content.startswith("```"):
-            text_content = text_content.split("\n", 1)[1]
-            if text_content.endswith("```"):
-                text_content = text_content[:-3]
+            lines = text_content.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            text_content = "\n".join(lines).strip()
 
-        refs = json.loads(text_content)
+        try:
+            refs = json.loads(text_content)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("False-negative detection returned unparseable JSON")
+            return
+
+        if not isinstance(refs, list):
+            return
         for ref in refs:
             if ref.get("unaddressed"):
                 self._log_audit(
