@@ -51,14 +51,20 @@ DEFAULT_WORKFLOWS = [
 ]
 
 
-def run_migration(db: Session = None) -> dict:
+def run_migration(engine_or_db=None) -> dict:
     results = {"tables_created": [], "columns_added": [], "workflows_seeded": 0}
+    own_connection = False
 
-    if db:
-        conn = db.connection()
+    if engine_or_db is None:
+        engine_or_db = create_engine(DATABASE_URL)
+
+    from sqlalchemy.engine import Engine
+    if isinstance(engine_or_db, Engine):
+        conn = engine_or_db.connect()
+        own_connection = True
     else:
-        engine = create_engine(DATABASE_URL)
-        conn = engine.connect()
+        conn = engine_or_db.connection()
+        own_connection = False
 
     try:
         # -- workflow_definitions --
@@ -198,21 +204,21 @@ def run_migration(db: Session = None) -> dict:
                     })
                     results["workflows_seeded"] += 1
 
-        if not db:
+        if own_connection:
             conn.commit()
         else:
-            db.flush()
+            engine_or_db.flush()
 
         logger.info(f"Migration complete: {results}")
         return results
 
     except Exception as e:
         logger.error(f"Migration failed: {e}")
-        if not db:
+        if own_connection:
             conn.rollback()
         raise
     finally:
-        if not db:
+        if own_connection:
             conn.close()
 
 
