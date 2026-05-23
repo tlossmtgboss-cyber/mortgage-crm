@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 
 from db import get_db
-from auth.auth import get_current_user
+from auth.dependencies import get_current_user
 from models.auth import User
 
 logger = logging.getLogger(__name__)

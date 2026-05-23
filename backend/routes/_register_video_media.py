@@ -23,7 +23,6 @@ def register_video_media_routes(app, get_db, get_current_user, get_current_user_
         from video_meeting_models import create_video_meeting_models
         from video_meeting_routes import router as video_meeting_router, set_dependencies as set_video_meeting_deps
 
-        video_meeting_models = create_video_meeting_models(engine.__class__.__bases__[0].__subclasses__()[0].__bases__[0] if False else None)
         # Use Base from database module
         from database import Base
         video_meeting_models = create_video_meeting_models(Base)

@@ -913,7 +913,7 @@ def _run_critical_schema_migrations():
             ("phone", "VARCHAR(50)"),
             ("nmls_number", "VARCHAR(50)"),
             ("business_address", "VARCHAR(500)"),
-            ("current_role", "VARCHAR(100)"),
+            ('"current_role"', "VARCHAR(100)"),
             ("business_hours", "JSON"),
             ("email_verified_at", "TIMESTAMP"),
             ("phone_verified_at", "TIMESTAMP"),

@@ -107,13 +107,12 @@ def deploy_soc2_tables(engine=None):
                 if "CREATE INDEX" in stmt.upper() and "IF NOT EXISTS" not in stmt.upper():
                     stmt = stmt.replace("CREATE INDEX", "CREATE INDEX IF NOT EXISTS", 1)
 
+                conn.execute(text("SAVEPOINT soc2_stmt"))
                 try:
                     conn.execute(text(stmt))
+                    conn.execute(text("RELEASE SAVEPOINT soc2_stmt"))
                 except Exception as e:
-                    error_str = str(e).lower()
-                    # Skip "already exists" errors gracefully
-                    if "already exists" in error_str:
-                        continue
+                    conn.execute(text("ROLLBACK TO SAVEPOINT soc2_stmt"))
                     logger.warning(f"SOC 2 migration statement warning: {e}")
                     continue
 

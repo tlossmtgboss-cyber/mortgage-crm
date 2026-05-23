@@ -35,6 +35,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
 )
@@ -56,7 +57,7 @@ class TCPAConsent(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("organizations.id"),
         nullable=False,
     )
@@ -110,7 +111,7 @@ class TCPAConsent(Base):
     # ------------------------------------------------------------------
     # Audit trail
     # ------------------------------------------------------------------
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(
         DateTime,

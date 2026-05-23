@@ -947,17 +947,6 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 except Exception as e:
                     logger.error(f"Error creating voicemail_drops RVM session index: {e}")
                     _vm_conn.rollback()
-                # Copy contact_phone -> phone_number for rows that used old column name
-                try:
-                    _vm_conn.execute(_vm_text(
-                        "UPDATE voicemail_drops SET phone_number = contact_phone "
-                        "WHERE phone_number IS NULL AND contact_phone IS NOT NULL"
-                    ))
-                    _vm_conn.commit()
-                except Exception as e:
-                    logger.error(f"Error copying contact_phone to phone_number: {e}")
-                    _vm_conn.rollback()
-
             logger.info("✅ Voicemail tables verified/created (columns synced)")
 
             # Seed default templates if table is empty
