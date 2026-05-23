@@ -87,6 +87,8 @@ class Lead(Base):
 
     # Pipeline status
     stage = Column(String, default="New")
+    workflow_definition_id = Column(String(36), ForeignKey("workflow_definitions.id", ondelete="SET NULL"), nullable=True, index=True)
+    workflow_node_id = Column(String(36), ForeignKey("workflow_nodes.id", ondelete="SET NULL"), nullable=True, index=True)
     source = Column(String)
     organization_code = Column(String)  # Branch/organization identifier
     referral_partner_id = Column(Integer, ForeignKey("referral_partners.id", ondelete="SET NULL"))

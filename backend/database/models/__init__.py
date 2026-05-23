@@ -137,6 +137,14 @@ from .workflow import (
     ProcessTask,
 )
 
+from .workflow_flowchart import (
+    WorkflowDefinition,
+    WorkflowNode,
+    WorkflowEdge,
+    WorkflowLeadMovement,
+    WorkflowAIAction,
+)
+
 # Permission models
 from .permission import (
     EmployeeInvite,
@@ -824,6 +832,15 @@ __all__ = [
     "ProcessRole",
     "ProcessMilestone",
     "ProcessTask",
+
+    # =====================
+    # Workflow Flowchart
+    # =====================
+    "WorkflowDefinition",
+    "WorkflowNode",
+    "WorkflowEdge",
+    "WorkflowLeadMovement",
+    "WorkflowAIAction",
 
     # =====================
     # Permission
