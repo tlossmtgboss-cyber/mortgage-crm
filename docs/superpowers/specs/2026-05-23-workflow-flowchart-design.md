@@ -139,6 +139,13 @@ Rows are append-only. Queried for the History tab and for dwell-time metrics.
 | GET | `/api/v1/workflow/:key/nodes/:id/metrics` | Completion rate, avg dwell time, throughput (Metrics tab) |
 | GET | `/api/v1/workflow/:key/nodes/:id/history` | Recent lead movements in/out (History tab) |
 
+### AI Supervised Review Loop
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/v1/workflow/:key/ai-actions/pending` | List AI actions awaiting LO review |
+| POST | `/api/v1/workflow/:key/ai-actions/:id/review` | Submit LO review (approve/edit/reject) — returns AI response |
+
 The `GET /graph` endpoint returns the full flowchart in one call to avoid N+1 queries. Detail drawer tabs make separate calls only when opened.
 
 ## Frontend Components
@@ -202,11 +209,46 @@ Every AI-assigned node has a **confidence score** (0–100%) that determines the
 
 | Level | Score | Behavior |
 |-------|-------|----------|
-| Supervised | 0–59% | AI drafts action → LO reviews & approves before execution |
+| Supervised | 0–59% | AI drafts action → LO reviews, corrects, or approves → AI responds and iterates (see Supervised Conversation Loop below) |
 | Guided | 60–84% | AI executes automatically → LO gets notified and can override within window |
 | Autonomous | 85–100% | AI executes independently → outcomes logged, LO reviews periodically |
 
 LO always has a kill switch — any node can be manually forced to Supervised mode regardless of score. Confidence can also be capped per channel (e.g., "never let AI make calls above Guided mode").
+
+### Supervised Conversation Loop
+
+When AI operates in supervised mode, it's not a one-shot "approve or reject." It's a two-way conversation where AI learns from the LO's corrections:
+
+1. **AI drafts** — AI creates draft message/call script based on node guidance + communication history (see below)
+2. **LO reviews** — LO can approve as-is, edit the draft, or reject entirely
+3. **AI responds** — If LO edits the draft, AI reads the corrections and responds:
+   - AI may acknowledge the improvement: *"Got it — I'll use this warmer opening in future messages for this step."*
+   - AI may build on the correction: *"Good call softening the tone. I'd also suggest adding a reference to their pre-approval timeline — want me to revise?"*
+   - AI records what changed and why (stored in `human_review` on the action record)
+4. **Iterate until approved** — The loop continues until the LO approves a final version. Each iteration is tracked.
+
+This loop is how AI earns confidence. When the LO approves without edits, confidence increases. When the LO consistently corrects the same patterns, AI adapts its drafts to incorporate those patterns automatically.
+
+The conversation history for each review loop is stored in the `workflow_ai_actions.human_review` JSON field as an array of review rounds:
+```json
+{
+  "rounds": [
+    {"draft": "...", "lo_action": "edited", "lo_version": "...", "ai_response": "...", "timestamp": "..."},
+    {"draft": "...", "lo_action": "approved", "timestamp": "..."}
+  ]
+}
+```
+
+### Communication History Awareness
+
+Before drafting any action, AI must review the lead's communication history to understand context:
+
+- **What's happened before** — Previous calls, texts, emails with this lead (from `communication_logs`, `call_records`, SMS history)
+- **Where the lead is in their journey** — Current pipeline stage, loan status, recent activity
+- **Past AI interactions** — Previous `workflow_ai_actions` for this lead across all nodes, including what worked and what didn't
+- **Goal context** — What this workflow step is trying to accomplish relative to the lead's overall trajectory
+
+This context is assembled into a structured prompt that AI uses when drafting actions. AI never operates in a vacuum — every draft is informed by the full picture of the relationship with this lead.
 
 ### Learning Loop
 
@@ -269,7 +311,7 @@ New table: `workflow_ai_actions`
 | channel | String | "phone", "text", "email" |
 | autonomy_level | String | "supervised", "guided", "autonomous" |
 | action_plan | JSON | What AI planned to do (draft text, call script) |
-| human_review | JSON, nullable | LO edits/approval if in supervised/guided mode |
+| human_review | JSON, nullable | Conversation loop: array of review rounds (draft → LO action → AI response) |
 | execution_result | JSON | What happened (call duration, delivery status) |
 | outcome | String | "success", "no_response", "negative", "error", "escalated" |
 | confidence_before | Float | Score before this action |
