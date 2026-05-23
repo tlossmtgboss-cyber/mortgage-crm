@@ -26,22 +26,28 @@ export const CoBorrowerPanel: React.FC<PanelProps> = ({
 
   const hasCoBorrower = data.has_coborrower as boolean | null;
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleContinue = async () => {
     if (!application) return;
-    // Only validate co-borrower fields if a co-borrower is being added.
     if (hasCoBorrower) {
       const result = validateSection('coborrower', data);
       if (!result.ok) {
-        setErrors(result.issues);
+        setErrors('issues' in result ? result.issues : []);
         return;
       }
     }
     setErrors([]);
+    setSaveError(null);
     const body: SectionUpdateRequest = { data, mark_complete: true };
     if (coSSN) body.co_ssn = coSSN;
     if (coDOB) body.co_dob = coDOB;
-    await posApi.updateSection(application.id, 'coborrower', body);
-    onComplete();
+    try {
+      await posApi.updateSection(application.id, 'coborrower', body);
+      onComplete();
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to save. Please try again.');
+    }
   };
 
   return (
@@ -50,6 +56,15 @@ export const CoBorrowerPanel: React.FC<PanelProps> = ({
         If someone is applying with you, enter their information below.
         A co-borrower's income and credit are considered jointly.
       </p>
+
+      {saveError && (
+        <div role="alert" style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+        }}>
+          <p style={{ fontWeight: 600, color: '#991b1b', margin: 0, fontSize: 14 }}>{saveError}</p>
+        </div>
+      )}
 
       {errors.length > 0 && (
         <div className="pos-validation-errors" role="alert" style={{
@@ -93,10 +108,12 @@ export const CoBorrowerPanel: React.FC<PanelProps> = ({
 
           <FormSection>
             <TextField label="Date of birth" name="_co_dob" type="date" required value={coDOB} onChange={(_, v) => setCoDOB(v as string)}
-              helpText={(application as any)?.has_co_dob ? 'Already on file — leave blank to keep' : undefined} />
+              helpText={(application as any)?.has_co_dob ? 'Already on file — leave blank to keep' : !coDOB ? 'Required — not yet saved' : undefined}
+              helpVariant={!(application as any)?.has_co_dob && !coDOB ? 'warning' : 'default'} />
             <TextField label="Social Security #" name="_co_ssn" required value={coSSN} placeholder="•••-••-XXXX"
               onChange={(_, v) => setCoSSN(v as string)} inputMode="numeric"
-              helpText={application?.has_co_ssn ? 'Already on file — leave blank to keep' : undefined} />
+              helpText={application?.has_co_ssn ? 'Already on file — leave blank to keep' : !coSSN ? 'Required — not yet saved' : undefined}
+              helpVariant={!application?.has_co_ssn && !coSSN ? 'warning' : 'default'} />
             <SelectField label="Marital status" name="co_marital_status" required value={data.co_marital_status} onChange={updateField} options={[
               { value: 'married', label: 'Married' },
               { value: 'single', label: 'Single' },

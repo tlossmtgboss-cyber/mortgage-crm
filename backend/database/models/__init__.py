@@ -719,6 +719,9 @@ from .rate_watch import (
     RefiOpportunityEvent,
 )
 
+# Knowledge Graph models (entity relationship graph over CRM data)
+from .knowledge_graph import KnowledgeGraphNode, KnowledgeGraphEdge
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1489,4 +1492,10 @@ __all__ = [
     "RateMarginConfig",
     "BorrowerTargetRate",
     "RefiOpportunityEvent",
+
+    # =====================
+    # Knowledge Graph
+    # =====================
+    "KnowledgeGraphNode",
+    "KnowledgeGraphEdge",
 ]

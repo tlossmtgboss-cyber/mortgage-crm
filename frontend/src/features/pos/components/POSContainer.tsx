@@ -174,15 +174,20 @@ export const POSContainer: React.FC<POSContainerProps> = ({
     );
   }
 
-  if (error || !application) {
-    const isSessionError = error && (
-      error.includes('401') || error.includes('403') || error.includes('400') ||
-      error.includes('404') || error.includes('Not Found') || error.includes('Unauthorized')
-    );
+  const isSessionError = !!(error && (
+    error.includes('401') || error.includes('403') || error.includes('400') ||
+    error.includes('404') || error.includes('Not Found') || error.includes('Unauthorized')
+  ));
+
+  useEffect(() => {
     if (isSessionError && onAuthError) {
       onAuthError();
-      return null;
     }
+  }, [isSessionError, onAuthError]);
+
+  if (isSessionError && onAuthError) return null;
+
+  if (error || !application) {
     return (
       <div className="pos-page">
         <div className="pos-error">
@@ -341,7 +346,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
                           const sectionData = sections[activeStep]?.data || {};
                           const result = validateSection(activeStep, sectionData);
                           if (!result.ok) {
-                            setValidationErrors(result.issues);
+                            setValidationErrors('issues' in result ? result.issues : []);
                             return;
                           }
                         }

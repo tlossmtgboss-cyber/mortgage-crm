@@ -66,7 +66,7 @@ export function useAriaChat(applicationId: string | undefined, currentStep?: str
       cancelled = true;
       inFlight.current?.abort();
     };
-  }, [applicationId, currentStep]);
+  }, [applicationId]);
 
   // ---------- ask ----------
 

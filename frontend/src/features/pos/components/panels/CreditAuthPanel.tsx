@@ -27,7 +27,7 @@ export const CreditAuthPanel: React.FC<PanelProps> = ({
     };
     const result = validateSection('credit_auth', submitData);
     if (!result.ok) {
-      setErrors(result.issues);
+      setErrors((result as { ok: false; issues: { path: string; message: string }[] }).issues);
       return;
     }
     setErrors([]);

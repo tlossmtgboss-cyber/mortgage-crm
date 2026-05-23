@@ -146,6 +146,7 @@ def hydrate_from_voice(
     voice_source_channel = f"voice:{body.urla_loan_id}"
     existing = db.query(POSApplication).filter(
         POSApplication.source_channel == voice_source_channel,
+        POSApplication.organization_id == body.organization_id,
     ).first()
     if existing:
         logger.info(

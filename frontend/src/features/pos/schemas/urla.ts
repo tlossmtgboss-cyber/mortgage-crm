@@ -175,9 +175,9 @@ export const coborrowerSchema = z.object({
 });
 
 export const creditAuthSchema = z.object({
-  authorization_granted: z.literal(true, {
-    errorMap: () => ({ message: 'You must authorize a credit check to proceed' }),
-  }),
+  authorization_granted: z.literal(true).check(
+    z.refine((val) => val === true, { message: 'You must authorize a credit check to proceed' })
+  ),
   borrower_name: z.string().min(1, 'Required'),
   authorized_at: z.string().optional(),
 });

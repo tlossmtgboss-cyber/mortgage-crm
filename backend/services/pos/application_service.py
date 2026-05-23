@@ -141,6 +141,7 @@ class ApplicationService:
             return existing
 
         try:
+            nested = session.begin_nested()
             app = POSApplication(
                 organization_id=organization_id,
                 workspace_id=workspace_id,
@@ -154,7 +155,7 @@ class ApplicationService:
             session.add(app)
             session.flush()
         except IntegrityError:
-            session.rollback()
+            nested.rollback()
             result = session.execute(stmt)
             existing = result.scalar_one_or_none()
             if existing is not None:

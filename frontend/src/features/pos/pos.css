@@ -736,6 +736,11 @@
   margin: 4px 0 0;
 }
 
+.urla-field__help--warning {
+  color: #b45309;
+  font-weight: 600;
+}
+
 /* Computed read-only value */
 .urla-computed-value {
   padding: 11px 14px;

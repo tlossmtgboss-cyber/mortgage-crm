@@ -42,6 +42,9 @@ export function usePOSApplication(loanId?: number) {
   // Sequence counter to prevent stale autosave responses from overwriting newer data.
   const saveSeqRef = useRef(0);
 
+  // Track last known updated_at per section via ref to avoid stale closure issues.
+  const lastUpdatedRef = useRef<Partial<Record<SectionKey, string | undefined>>>({});
+
   // ---------- beforeunload guard ----------
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -91,6 +94,7 @@ export function usePOSApplication(loanId?: number) {
       try {
         const section = await posApi.getSection(application.id, sectionKey);
         setSections(prev => ({ ...prev, [sectionKey]: section }));
+        lastUpdatedRef.current[sectionKey] = section.updated_at;
         return section;
       } catch (e) {
         // Don't promote a per-section 401/403 to the global error state once
@@ -134,10 +138,12 @@ export function usePOSApplication(loanId?: number) {
       } catch (_) { /* quota exceeded — best effort */ }
       const seq = ++saveSeqRef.current;
       setSaveState('saving');
+      setError(null);
       try {
         const section = await posApi.updateSection(application.id, sectionKey, body);
         if (seq === saveSeqRef.current) {
           setSections(prev => ({ ...prev, [sectionKey]: section }));
+          lastUpdatedRef.current[sectionKey] = section.updated_at;
           if (section.application) {
             setApplication(section.application);
           }
@@ -181,16 +187,15 @@ export function usePOSApplication(loanId?: number) {
       const existing = timersRef.current[sectionKey];
       if (existing) clearTimeout(existing);
       dirtyRef.current = true;
-      const lastUpdated = sections[sectionKey]?.updated_at;
       timersRef.current[sectionKey] = setTimeout(() => {
         saveSection(sectionKey, {
           data,
           mark_complete: false,
-          expected_updated_at: lastUpdated,
+          expected_updated_at: lastUpdatedRef.current[sectionKey],
         });
       }, AUTOSAVE_DELAY_MS);
     },
-    [saveSection, sections],
+    [saveSection],
   );
 
   const markComplete = useCallback(

@@ -1512,6 +1512,14 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     except Exception as e:
         logger.warning(f"Rate watch routes skipped: {e}")
 
+    # Knowledge Graph (entity relationship graph)
+    try:
+        from routes.knowledge_graph_routes import router as kg_router
+        app.include_router(kg_router, tags=["Knowledge Graph"])
+        logger.info("Knowledge graph routes loaded")
+    except Exception as e:
+        logger.warning(f"Knowledge graph routes skipped: {e}")
+
     # Data Quality / Deduplication
     try:
         from routes.deduplication_routes import router as dedup_router
@@ -1627,6 +1635,7 @@ def _register_late_routes(app, get_db, get_current_user, engine, SessionLocal):
         "start": ("routes.pos.start", "router"),
         "tasks": ("routes.pos.tasks", "router"),
         "team": ("routes.pos.team", "router"),
+        "upload": ("routes.pos.upload", "router"),
     }
     for _pos_name, (_pos_mod, _pos_attr) in _pos_routers.items():
         try:

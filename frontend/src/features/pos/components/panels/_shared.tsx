@@ -43,6 +43,7 @@ export interface FieldProps {
   placeholder?: string;
   required?: boolean;
   helpText?: string;
+  helpVariant?: 'default' | 'warning';
   cols?: 1 | 2 | 3 | 4;
   options?: { value: string; label: string }[];
   inputMode?: string;
@@ -57,6 +58,7 @@ export const TextField: React.FC<FieldProps> = ({
   placeholder,
   required,
   helpText,
+  helpVariant = 'default',
   cols = 1,
   inputMode,
 }) => {
@@ -93,7 +95,7 @@ export const TextField: React.FC<FieldProps> = ({
           }
         />
       </div>
-      {helpText && <p className="urla-field__help">{helpText}</p>}
+      {helpText && <p className={`urla-field__help${helpVariant === 'warning' ? ' urla-field__help--warning' : ''}`}>{helpText}</p>}
     </div>
   );
 };

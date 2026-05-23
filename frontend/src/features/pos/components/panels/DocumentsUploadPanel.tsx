@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 
 import { ContinueButton, FormSection, PanelProps, usePanelData } from './_shared';
-import { posApi } from '../../api';
+import { posApi, API_BASE, getPurlToken } from '../../api';
 
 interface UploadedFile {
   name: string;
@@ -39,30 +39,76 @@ export const DocumentsUploadPanel: React.FC<PanelProps> = ({
     fileInputRef.current?.click();
   };
 
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [fileProgress, setFileProgress] = useState<Record<string, 'uploading' | 'done' | 'error'>>({});
+
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length || !application) return;
 
     const category = activeCategoryRef.current;
     setUploading(category);
+    setUploadError(null);
+
+    const token = getPurlToken();
+    const uploadUrl = `${API_BASE}/api/v1/pos/applications/${application.id}/documents/upload`;
 
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const newFile: UploadedFile = {
-          name: file.name,
-          category,
-          size: file.size,
-          uploadedAt: new Date().toISOString(),
-        };
-        setUploadedFiles(prev => {
-          const updated = [...prev, newFile];
-          onChange({ ...data, uploaded_files: updated });
-          return updated;
-        });
+        if (file.size > 25 * 1024 * 1024) {
+          setUploadError(`${file.name} exceeds the 25 MB limit.`);
+          continue;
+        }
+
+        const fileKey = `${file.name}-${Date.now()}`;
+        setFileProgress(prev => ({ ...prev, [fileKey]: 'uploading' }));
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('category', category);
+
+        try {
+          const resp = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: formData,
+            credentials: 'include',
+          });
+
+          if (!resp.ok) {
+            let detail = 'Upload failed';
+            try {
+              const err = await resp.json();
+              detail = err.detail || detail;
+            } catch { /* ignore parse errors */ }
+            setFileProgress(prev => ({ ...prev, [fileKey]: 'error' }));
+            setUploadError(`${file.name}: ${detail}`);
+            continue;
+          }
+
+          setFileProgress(prev => ({ ...prev, [fileKey]: 'done' }));
+          const uploaded: UploadedFile = {
+            name: file.name,
+            category,
+            size: file.size,
+            uploadedAt: new Date().toISOString(),
+          };
+          setUploadedFiles(prev => {
+            const updated = [...prev, uploaded];
+            onChange({ ...data, uploaded_files: updated });
+            return updated;
+          });
+        } catch (err: any) {
+          setFileProgress(prev => ({ ...prev, [fileKey]: 'error' }));
+          setUploadError(`${file.name}: ${err?.message || 'Network error'}`);
+        }
       }
     } finally {
       setUploading(null);
+      setFileProgress({});
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }, [application, data, onChange]);
@@ -77,11 +123,16 @@ export const DocumentsUploadPanel: React.FC<PanelProps> = ({
 
   const handleContinue = async () => {
     if (!application) return;
-    await posApi.updateSection(application.id, 'documents_upload', {
-      data: { ...data, uploaded_files: uploadedFiles },
-      mark_complete: true,
-    });
-    onComplete();
+    setUploadError(null);
+    try {
+      await posApi.updateSection(application.id, 'documents_upload', {
+        data: { ...data, uploaded_files: uploadedFiles },
+        mark_complete: true,
+      });
+      onComplete();
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to save. Please try again.');
+    }
   };
 
   return (
@@ -90,6 +141,15 @@ export const DocumentsUploadPanel: React.FC<PanelProps> = ({
         Upload your supporting documents now to speed up processing.
         You can always add more later from the Documents tab.
       </p>
+
+      {uploadError && (
+        <div role="alert" style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+        }}>
+          <p style={{ fontWeight: 600, color: '#991b1b', margin: 0, fontSize: 14 }}>{uploadError}</p>
+        </div>
+      )}
 
       <input
         ref={fileInputRef}

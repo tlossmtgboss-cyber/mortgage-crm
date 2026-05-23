@@ -24,22 +24,29 @@ export const PersonalPanel: React.FC<PanelProps> = ({
   const [dob, setDOB] = useState('');
   const [errors, setErrors] = useState<{ path: string; message: string }[]>([]);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleContinue = async () => {
     if (!application) return;
     const result = validateSection('personal', data);
     if (!result.ok) {
-      setErrors(result.issues);
+      setErrors('issues' in result ? result.issues : []);
       return;
     }
     setErrors([]);
+    setSaveError(null);
     const body: SectionUpdateRequest = {
       data,
       mark_complete: true,
     };
     if (ssn) body.ssn = ssn;
     if (dob) body.dob = dob;
-    await posApi.updateSection(application.id, 'personal', body);
-    onComplete();
+    try {
+      await posApi.updateSection(application.id, 'personal', body);
+      onComplete();
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to save. Please try again.');
+    }
   };
 
   const citizenship = (data.citizenship as string) || '';
@@ -49,6 +56,15 @@ export const PersonalPanel: React.FC<PanelProps> = ({
       <p className="urla-form-section__desc">
         Tell us a bit about yourself. This information is used to verify your identity and pull credit when you're ready.
       </p>
+
+      {saveError && (
+        <div role="alert" style={{
+          background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+        }}>
+          <p style={{ fontWeight: 600, color: '#991b1b', margin: 0, fontSize: 14 }}>{saveError}</p>
+        </div>
+      )}
 
       {errors.length > 0 && (
         <div className="pos-validation-errors" role="alert" style={{
@@ -86,10 +102,12 @@ export const PersonalPanel: React.FC<PanelProps> = ({
 
       <FormSection>
         <TextField label="Date of birth" name="_dob" type="date" required value={dob} onChange={(_, v) => setDOB(v as string)}
-          helpText={application?.has_dob ? 'Already on file — leave blank to keep' : undefined} />
+          helpText={application?.has_dob ? 'Already on file — leave blank to keep' : !dob ? 'Required — not yet saved' : undefined}
+          helpVariant={!application?.has_dob && !dob ? 'warning' : 'default'} />
         <TextField label="Social Security #" name="_ssn" required value={ssn} placeholder="•••-••-XXXX"
           onChange={(_, v) => setSSN(v as string)} inputMode="numeric"
-          helpText={application?.has_ssn ? 'Already on file — leave blank to keep' : undefined} />
+          helpText={application?.has_ssn ? 'Already on file — leave blank to keep' : !ssn ? 'Required — not yet saved' : undefined}
+          helpVariant={!application?.has_ssn && !ssn ? 'warning' : 'default'} />
         <SelectField label="Marital status" name="marital_status" required value={data.marital_status} onChange={updateField} options={[
           { value: 'married', label: 'Married' },
           { value: 'single', label: 'Single' },

@@ -68,7 +68,13 @@ class ChunkErrorBoundary extends React.Component<
 const POSEntryPage: React.FC = () => {
   const [searchParams] = useSearchParams();
 
-  const tokenParam = searchParams.get('token');
+  // Support token in query param (?token=) or URL fragment (#token=) — fragment
+  // is preferred because it's never sent in Referer headers or server logs.
+  const tokenParam = searchParams.get('token') || (() => {
+    const hash = window.location.hash;
+    const match = hash.match(/[#&]token=([^&]*)/);
+    return match ? match[1] : null;
+  })();
   const loSlug = searchParams.get('lo');
   const loanIdParam = searchParams.get('loan_id');
   const loanId = loanIdParam ? parseInt(loanIdParam, 10) : undefined;
@@ -87,30 +93,32 @@ const POSEntryPage: React.FC = () => {
       .catch((err) => { console.error('Failed to load LO profile:', err); });
   }, [loSlug]);
 
-  // Recover verify session if user refreshes mid-flow
-  const savedSession = useRef<VerifySession | null>(null);
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    if (raw) savedSession.current = JSON.parse(raw);
-  } catch (err) { console.error('Failed to parse saved verify session:', err); }
+  // Recover verify session if user refreshes mid-flow (read once via lazy init)
+  const [initialSession] = useState<VerifySession | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
 
   const [flowStep, setFlowStep] = useState<FlowStep>(
-    savedSession.current ? 'verify' : 'checking',
+    initialSession ? 'verify' : 'checking',
   );
-  const [verifySession, setVerifySession] = useState<VerifySession | null>(savedSession.current);
+  const [verifySession, setVerifySession] = useState<VerifySession | null>(initialSession);
 
   // On mount: require login unless a token is passed via URL query param.
   // No auto-login from stored tokens — users must authenticate every visit.
   useEffect(() => {
-    if (savedSession.current) return; // mid-verify, don't interfere
+    if (initialSession) return; // mid-verify, don't interfere
 
     // Clear any stale tokens from previous sessions
     localStorage.removeItem('perennia_purl_token');
 
     if (tokenParam) {
-      // Token passed via URL (e.g. from email link) — validate it
+      // Token passed via URL (query or fragment) — validate it, then strip from URL
       const url = new URL(window.location.href);
       url.searchParams.delete('token');
+      url.hash = url.hash.replace(/[#&]token=[^&]*/, '').replace(/^#$/, '');
       window.history.replaceState({}, '', url.toString());
 
       (async () => {
@@ -263,10 +271,6 @@ function AuthGate({
   const [tab, setTab] = useState<AuthTab>('signup');
   const [variant, setVariant] = useState<DesignVariant>('conversational');
 
-  useEffect(() => {
-    if (loProfile && variant === 'conversational') setVariant('conversational');
-  }, [loProfile]);
-
   const tabButtons = (
     <div className="pos-start__tabs">
       <button
@@ -296,7 +300,7 @@ function AuthGate({
       onClearBounceError={onClearBounceError}
     />
   ) : (
-    <LoginForm onStarted={onStarted} onVerified={onVerified} onSwitchToSignup={() => setTab('signup')} />
+    <LoginForm onStarted={onStarted} onVerified={onVerified} onSwitchToSignup={() => setTab('signup')} loSlug={loSlug} />
   );
 
   const trustBadge = (
@@ -962,10 +966,12 @@ function LoginForm({
   onStarted,
   onVerified,
   onSwitchToSignup,
+  loSlug,
 }: {
   onStarted: (session: VerifySession) => void;
   onVerified: (token: string, name?: string) => void;
   onSwitchToSignup: () => void;
+  loSlug?: string | null;
 }) {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -984,7 +990,7 @@ function LoginForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), lo_slug: loSlug || undefined }),
       });
 
       const data = await resp.json().catch(() => ({}));

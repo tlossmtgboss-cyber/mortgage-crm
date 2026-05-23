@@ -345,9 +345,9 @@ export function attachInterceptors(api: AxiosInstance): void {
   // ---------------------------------------------------------------------------
   import('../../services/certificatePinning.js').then((mod) => {
     const certificatePinning = mod.default;
-    const pinRequestInterceptor = certificatePinning.createAxiosInterceptor();
+    const pinRequestInterceptor: any = certificatePinning.createAxiosInterceptor();
     api.interceptors.request.use(pinRequestInterceptor);
-    const pinResponseInterceptor = certificatePinning.createAxiosResponseInterceptor();
+    const pinResponseInterceptor: any = certificatePinning.createAxiosResponseInterceptor();
     api.interceptors.response.use(pinResponseInterceptor.onFulfilled, pinResponseInterceptor.onRejected);
   }).catch(() => {
     // Certificate pinning module not available -- skip

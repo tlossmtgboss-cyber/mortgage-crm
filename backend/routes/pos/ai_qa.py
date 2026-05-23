@@ -116,7 +116,7 @@ async def ask_aria(
             latency_ms=0,
             confidence="escalate",
             escalation_recommended=True,
-            escalation_reason=f"Agent error: {type(exc).__name__}",
+            escalation_reason="technical_error",
             created_at=_dt.now(_tz.utc),
         )
 

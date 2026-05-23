@@ -118,6 +118,9 @@ from . import dedup_tools
 from . import referral_tools
 from . import credit_monitoring_tools
 
+# Knowledge Graph Tools (entity relationship queries for Aria)
+from . import knowledge_graph
+
 
 # =============================================================================
 # Agent Configuration

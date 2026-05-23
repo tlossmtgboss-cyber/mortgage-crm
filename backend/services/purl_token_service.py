@@ -171,11 +171,9 @@ class PURLTokenService:
             )
             return None
 
-        # Check expiration
         if token_record.expires_at and token_record.expires_at < datetime.now(timezone.utc):
-            # Auto-expire the token
             token_record.status = TokenStatus.EXPIRED.value
-            self.db.commit()
+            self.db.flush()
             logger.info(
                 "PURL verify rejected: token %d auto-expired (expires_at=%s)",
                 token_record.id,
@@ -196,22 +194,15 @@ class PURLTokenService:
             )
             return None
 
-        # Update last_used_at — flush only, don't commit. The route handler
-        # owns the transaction and will commit when it's done. Committing here
-        # would finalize the session prematurely; failing without rollback
-        # would leave the session in a broken state for the route handler.
         try:
             from sqlalchemy import text
+            nested = self.db.begin_nested()
             self.db.execute(
                 text("UPDATE purl_access_tokens SET last_used_at = :now WHERE id = :id"),
                 {"now": datetime.now(timezone.utc), "id": token_record.id}
             )
-            self.db.flush()
+            nested.commit()
         except SQLAlchemyError as e:
-            try:
-                self.db.rollback()
-            except Exception:
-                pass
             logger.warning(f"Failed to update last_used_at for token {token_record.id}: {e}")
 
         return {
@@ -286,9 +277,6 @@ class PURLTokenService:
         token.revoked_by = revoked_by
         token.revoked_reason = reason
 
-        self.db.commit()
-
-        # Emit event - wrapped in try-except
         try:
             self._emit_event(
                 organization_id=token.organization_id,
@@ -300,10 +288,10 @@ class PURLTokenService:
                     "reason": reason
                 }
             )
-            self.db.commit()
         except SQLAlchemyError as e:
-            self.db.rollback()
             logger.warning(f"Failed to emit token_revoked event: {e}")
+
+        self.db.flush()
 
         logger.info(f"Revoked token {token_id}")
         return True

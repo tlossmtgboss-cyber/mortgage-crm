@@ -309,17 +309,18 @@ class PURLAuditMiddleware:
 
         await self.app(scope, receive, send_wrapper)
 
-        # Log audit entry after response
         try:
             if hasattr(request.state, "purl_context"):
                 context = request.state.purl_context
                 status_code = getattr(request.state, "response_status", 0)
 
-                # Get database session
                 from database import SessionLocal
                 db = SessionLocal()
 
                 try:
+                    if hasattr(context, "organization_id") and context.organization_id:
+                        from sqlalchemy import text
+                        db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(context.organization_id)})
                     await log_purl_action(
                         db=db,
                         context=context,
@@ -334,9 +335,11 @@ class PURLAuditMiddleware:
                     )
                     db.commit()
                 except Exception as e:
-                    logger.exception(f"Failed to log PURL action and commit: {e}")
-                    db.rollback()
-                    raise
+                    logger.warning(f"Failed to log PURL action: {e}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
                 finally:
                     db.close()
 
@@ -365,6 +368,16 @@ class PURLRateLimiter:
         """Get rate limit identifier from context."""
         return f"token:{context.token_id}"
 
+    _MAX_TRACKED_KEYS = 10_000
+
+    def _evict_if_needed(self):
+        """Evict oldest entries if tracker exceeds memory bounds."""
+        if len(self._minute_counters) > self._MAX_TRACKED_KEYS:
+            to_remove = list(self._minute_counters.keys())[:len(self._minute_counters) - self._MAX_TRACKED_KEYS]
+            for k in to_remove:
+                self._minute_counters.pop(k, None)
+                self._hour_counters.pop(k, None)
+
     def check_rate_limit(self, context: PURLAuthContext) -> bool:
         """
         Check if request is within rate limits.
@@ -374,14 +387,14 @@ class PURLRateLimiter:
         """
         import time
 
+        self._evict_if_needed()
+
         identifier = self._get_identifier(context)
         now = time.time()
 
-        # Clean up old entries
         minute_ago = now - 60
         hour_ago = now - 3600
 
-        # Minute check
         if identifier not in self._minute_counters:
             self._minute_counters[identifier] = []
         self._minute_counters[identifier] = [
@@ -391,7 +404,6 @@ class PURLRateLimiter:
         if len(self._minute_counters[identifier]) >= self.requests_per_minute:
             return False
 
-        # Hour check
         if identifier not in self._hour_counters:
             self._hour_counters[identifier] = []
         self._hour_counters[identifier] = [
@@ -401,7 +413,6 @@ class PURLRateLimiter:
         if len(self._hour_counters[identifier]) >= self.requests_per_hour:
             return False
 
-        # Record request
         self._minute_counters[identifier].append(now)
         self._hour_counters[identifier].append(now)
 

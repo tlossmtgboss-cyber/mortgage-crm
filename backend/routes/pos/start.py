@@ -56,6 +56,13 @@ IP_RATE_LIMIT = 5
 IP_RATE_WINDOW_MINUTES = 10
 
 
+def _sanitize_slug(name: str) -> str:
+    """Normalize a name into a URL-safe slug component."""
+    s = re.sub(r"[^a-z0-9\s-]", "", name.lower().strip())
+    s = re.sub(r"[\s-]+", "-", s).strip("-")
+    return s or "user"
+
+
 # ── IP rate limiter (Redis-backed with in-memory fallback) ────────
 # SEC-003: Primary rate limiting via Redis INCR with TTL so limits survive
 # deploys. Falls back to in-memory tracking if Redis is unavailable.
@@ -300,6 +307,7 @@ class ResendResponse(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
+    lo_slug: Optional[str] = Field(None, max_length=200)
 
 
 class LoginResponse(BaseModel):
@@ -384,21 +392,20 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
         raise
     except Exception as e:
         logger.exception("POS start: failed to resolve organization: %s", e)
-        raise HTTPException(status_code=500, detail=f"Organization lookup failed: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Something went wrong. Please try again.")
 
     email_lower = body.email.strip().lower()
     dedup_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
 
     try:
-        existing = (
-            db.query(POSVerification)
-            .filter(
-                POSVerification.email == email_lower,
-                POSVerification.verified_at == None,
-                POSVerification.created_at > dedup_cutoff,
-            )
-            .first()
+        dedup_query = db.query(POSVerification).filter(
+            POSVerification.email == email_lower,
+            POSVerification.verified_at == None,
+            POSVerification.created_at > dedup_cutoff,
         )
+        if org_id:
+            dedup_query = dedup_query.filter(POSVerification.organization_id == org_id)
+        existing = dedup_query.first()
     except Exception as e:
         logger.exception("POS start: dedup query failed: %s", e)
         db.rollback()
@@ -442,7 +449,7 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Could not create verification session: {type(e).__name__}",
+            detail="Something went wrong. Please try again.",
         )
 
     _send_verification_email(email_lower, code)
@@ -529,7 +536,7 @@ def verify_code(body: VerifyRequest, request: Request, response: Response, db: S
                 POSApplication.status == POSStatus.DRAFT,
             ).update({"status": POSStatus.ABANDONED})
 
-        slug = f"{verification.first_name.lower()}-{verification.last_name.lower()}-{uuid.uuid4().hex[:8]}"
+        slug = f"{_sanitize_slug(verification.first_name)}-{_sanitize_slug(verification.last_name)}-{uuid.uuid4().hex[:8]}"
         display_name = f"{verification.first_name} {verification.last_name}"
 
         workspace = PURLWorkspace(
@@ -624,13 +631,13 @@ def verify_code(body: VerifyRequest, request: Request, response: Response, db: S
 
     db.commit()
     base_url = os.getenv("POS_REDIRECT_BASE_URL", "https://app.perenniaai.com")
-    redirect_url = f"{base_url}/pos?token={full_token}"
+    redirect_url = f"{base_url}/pos#token={full_token}"
 
     return VerifyResponse(
         token=full_token,
         workspace_slug=slug,
         redirect_url=redirect_url,
-        borrower_name=borrower_name,
+        borrower_name=verification.first_name or "",
     )
 
 
@@ -668,11 +675,16 @@ def resend_code(body: ResendRequest, request: Request, db: Session = Depends(get
                 detail=f"Please wait {wait} seconds before requesting a new code.",
             )
 
+    resend_count = getattr(verification, "resend_count", 0) or 0
+    if resend_count >= 5:
+        raise HTTPException(status_code=429, detail="Maximum resend limit reached. Please start over.")
     code = f"{secrets.randbelow(900000) + 100000}"
     verification.code_hash = _hash_code(code)
     verification.attempts = 0
     verification.created_at = now
     verification.last_resend_at = now
+    if hasattr(verification, "resend_count"):
+        verification.resend_count = resend_count + 1
     db.commit()
 
     _send_verification_email(verification.email, code)
@@ -703,14 +715,20 @@ async def login_start(body: LoginRequest, request: Request, db: Session = Depend
     # Never reveal whether the email exists via different status codes or messages.
     generic_message = "If an account exists, a verification code has been sent."
 
-    contact = (
-        db.query(PURLContact)
-        .filter(PURLContact.email == email_lower)
-        .order_by(PURLContact.id.desc())
-        .first()
-    )
+    # Resolve organization from lo_slug so login is scoped to the correct tenant.
+    org_id = None
+    if body.lo_slug:
+        try:
+            org_id = _resolve_organization_id(db, body.lo_slug)
+        except Exception:
+            pass
+
+    contact_query = db.query(PURLContact).filter(PURLContact.email == email_lower)
+    if org_id:
+        contact_query = contact_query.filter(PURLContact.organization_id == org_id)
+    contact = contact_query.order_by(PURLContact.id.desc()).first()
+
     if not contact:
-        # No account — return identical response shape to prevent enumeration.
         await asyncio.sleep(random.uniform(0.5, 1.5))
         dummy_expires = (datetime.now(timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)).isoformat()
         return LoginResponse(
@@ -808,6 +826,7 @@ async def login_start(body: LoginRequest, request: Request, db: Session = Depend
 
 class LoginDemoRequest(BaseModel):
     email: EmailStr
+    lo_slug: Optional[str] = Field(None, max_length=200)
 
 
 class LoginDemoResponse(BaseModel):
@@ -832,12 +851,16 @@ def login_demo(body: LoginDemoRequest, request: Request, db: Session = Depends(g
 
     email_lower = body.email.strip().lower()
 
-    contact = (
-        db.query(PURLContact)
-        .filter(PURLContact.email == email_lower)
-        .order_by(PURLContact.id.desc())
-        .first()
-    )
+    org_id = None
+    if body.lo_slug:
+        try:
+            org_id = _resolve_organization_id(db, body.lo_slug)
+        except Exception:
+            pass
+    contact_query = db.query(PURLContact).filter(PURLContact.email == email_lower)
+    if org_id:
+        contact_query = contact_query.filter(PURLContact.organization_id == org_id)
+    contact = contact_query.order_by(PURLContact.id.desc()).first()
     if not contact:
         raise HTTPException(status_code=404, detail="No account found with this email. Please create a new account.")
 
@@ -907,7 +930,7 @@ def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(g
             raise
         except Exception as e:
             logger.exception("POS demo start[resolve_org]: failed for lo_slug=%r: %s", body.lo_slug, e)
-            raise HTTPException(status_code=500, detail=f"Organization lookup failed: {type(e).__name__}")
+            raise HTTPException(status_code=500, detail="Something went wrong. Please try again.")
 
         email_lower = body.email.strip().lower()
 
@@ -924,7 +947,7 @@ def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(g
                 POSApplication.status == POSStatus.DRAFT,
             ).update({"status": POSStatus.ABANDONED})
 
-        slug = f"{body.first_name.strip().lower()}-{body.last_name.strip().lower()}-{uuid.uuid4().hex[:8]}"
+        slug = f"{_sanitize_slug(body.first_name)}-{_sanitize_slug(body.last_name)}-{uuid.uuid4().hex[:8]}"
         display_name = f"{body.first_name.strip()} {body.last_name.strip()}"
         phone_raw = body.phone.strip() if body.phone else ""
 
@@ -992,7 +1015,7 @@ def start_demo(body: DemoStartRequest, request: Request, db: Session = Depends(g
         )
         raise HTTPException(
             status_code=500,
-            detail=f"start-demo failed at phase={phase} error={type(e).__name__}",
+            detail="Something went wrong. Please try again.",
         )
 
 
