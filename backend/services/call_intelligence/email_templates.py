@@ -324,7 +324,7 @@ DEFAULT_SMS_TEMPLATES: Dict[str, Dict[str, Any]] = {
         "name": "Welcome SMS",
         "category": "welcome",
         "description": "Initial welcome text message",
-        "message": "Hi {first_name}, thanks for speaking with {company_name} about your mortgage! We'll be in touch soon with next steps. Reply STOP to opt out.",
+        "message": "Hi {first_name}, thanks for speaking with {company_name} about your mortgage! We'll be in touch soon with next steps.",
         "required_variables": ["first_name", "company_name"],
     },
     "document_reminder": {

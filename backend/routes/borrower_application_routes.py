@@ -1653,8 +1653,7 @@ async def schedule_review_call(
                 sms_message = (
                     f"Hi {borrower_name.split()[0] if borrower_name != 'there' else 'there'}, "
                     f"your loan review call with {lo_name} is confirmed for {local_time} ({data.timezone}). "
-                    f"We'll {'call you' if data.contact_method == 'phone' else 'send you a meeting link'}. "
-                    f"Reply STOP to opt out."
+                    f"We'll {'call you' if data.contact_method == 'phone' else 'send you a meeting link'}."
                 )
                 notification_service.send_sms(to_phone=borrower_phone, message=sms_message)
                 logger.info(f"Review call confirmation SMS sent to {mask_phone(borrower_phone)}")
@@ -2515,7 +2514,7 @@ If you weren't expecting this invitation, please contact {borrower_name}.
                 sms_message = (
                     f"Hi {coborrower_name.split()[0] if coborrower_name != 'there' else 'there'}, "
                     f"{borrower_name} invited you as a co-borrower on their mortgage application. "
-                    f"Complete your info here: {invite_url} (expires in 14 days). Reply STOP to opt out."
+                    f"Complete your info here: {invite_url} (expires in 14 days)."
                 )
                 notification_service.send_sms(to_phone=data.phone, message=sms_message)
                 logger.info(f"Co-borrower invitation SMS sent to {mask_phone(data.phone)}")

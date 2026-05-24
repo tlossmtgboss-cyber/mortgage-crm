@@ -317,7 +317,7 @@ class QualityAnalyzer:
             "has_objective": "Start with 'Your job is to [specific objective]'",
             "has_success_criteria": "End with 'Success Criteria: [what success looks like]'",
             "has_out_of_scope": "Add handling for out-of-scope questions (e.g., 'That's a great question for our specialist')",
-            "has_opt_out": "Include opt-out mechanism (e.g., 'Reply STOP to unsubscribe')",
+            "has_opt_out": "Ensure opt-out keywords (STOP, UNSUBSCRIBE) are handled by the compliance gate",
         }
         return suggestions.get(check_id)
 

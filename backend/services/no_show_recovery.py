@@ -13,8 +13,8 @@ Recovery sequence:
     Step 3 (24 hours after):        Reschedule offer SMS
     Step 4 (72 hours after):        Final outreach email
 
-Every message includes an opt-out mechanism:
-    - SMS: "Reply STOP to opt out."
+Opt-out mechanism:
+    - SMS: STOP keyword handled by carrier + compliance gate
     - Email: Unsubscribe link with signed JWT token
 """
 
@@ -104,13 +104,11 @@ RECOVERY_STEPS: List[Dict] = [
 SMS_TEMPLATES = {
     "gentle_sms": (
         "Hi {name}, we noticed you weren't able to make your appointment today. "
-        "No worries at all! Would you like to reschedule? {reschedule_link}\n"
-        "Reply STOP to opt out of these messages."
+        "No worries at all! Would you like to reschedule? {reschedule_link}"
     ),
     "reschedule_offer": (
         "Hi {name}, just a gentle reminder that we'd love to help whenever "
-        "you're ready. Book at your convenience: {reschedule_link}\n"
-        "Reply STOP to opt out."
+        "you're ready. Book at your convenience: {reschedule_link}"
     ),
 }
 

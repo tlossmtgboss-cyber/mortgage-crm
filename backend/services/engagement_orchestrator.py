@@ -553,52 +553,49 @@ def _build_sms_body(ctx: Dict[str, Any], trigger_event: str) -> str:
     bodies = {
         "new_lead": (
             f"Hi {first_name}! Thanks for your interest in mortgage options. "
-            f"A loan officer will be reaching out shortly. "
-            f"Reply STOP to opt out."
+            f"A loan officer will be reaching out shortly."
         ),
         "no_answer": (
             f"Hi {first_name}, we just tried to reach you about your mortgage inquiry. "
-            f"Feel free to call us back or reply here. Reply STOP to opt out."
+            f"Feel free to call us back or reply here."
         ),
         "voicemail_dropped": (
             f"Hi {first_name}, we left you a voicemail about your mortgage options. "
-            f"Reply here if you'd like to chat or have any questions! Reply STOP to opt out."
+            f"Reply here if you'd like to chat or have any questions!"
         ),
         "email_opened": (
             f"Hi {first_name}, just following up on the email we sent. "
-            f"Would you like to schedule a quick call to discuss your options? "
-            f"Reply STOP to opt out."
+            f"Would you like to schedule a quick call to discuss your options?"
         ),
         "appointment_missed": (
             f"Hi {first_name}, we missed you at your scheduled consultation. "
-            f"No worries — would you like to reschedule? Reply with a time that works. "
-            f"Reply STOP to opt out."
+            f"No worries — would you like to reschedule? Reply with a time that works."
         ),
         "rate_drop": (
             f"Hi {first_name}, rates just dropped! This could lower your payment. "
-            f"Want a quick savings estimate? Reply YES or call us. Reply STOP to opt out."
+            f"Want a quick savings estimate? Reply YES or call us."
         ),
         "document_needed": (
             f"Hi {first_name}, we need a few documents to keep your loan moving. "
-            f"Check your email for details, or reply here for help. Reply STOP to opt out."
+            f"Check your email for details, or reply here for help."
         ),
         "stale_7d": (
             f"Hi {first_name}, just checking in on your mortgage search. "
-            f"We're here whenever you're ready. Any questions? Reply STOP to opt out."
+            f"We're here whenever you're ready. Any questions?"
         ),
         "stale_30d": (
             f"Hi {first_name}, it's been a while since we connected. "
-            f"Rates have changed — want a fresh look at your options? Reply STOP to opt out."
+            f"Rates have changed — want a fresh look at your options?"
         ),
         "qualification_complete": (
             f"Hi {first_name}, great news — your qualification info is complete! "
-            f"Let's set up a time to review your options. Reply STOP to opt out."
+            f"Let's set up a time to review your options."
         ),
     }
 
     return bodies.get(trigger_event, (
         f"Hi {first_name}, your loan officer has an update for you. "
-        f"Reply here or give us a call. Reply STOP to opt out."
+        f"Reply here or give us a call."
     ))
 
 

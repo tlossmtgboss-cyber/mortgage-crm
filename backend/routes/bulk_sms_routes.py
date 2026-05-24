@@ -7,7 +7,6 @@ bulk SMS campaigns against lead segments built from smart filters.
 Compliance:
 - TCPA quiet hours (8 AM - 9 PM in recipient's local timezone)
 - SMS opt-out / DNC check before every send
-- Mandatory "Reply STOP to opt out" footer on all messages
 - Rate limited to 1 msg/sec for 10DLC throughput compliance
 - Tenant isolation on all queries
 """
@@ -44,7 +43,6 @@ TELNYX_MESSAGING_PROFILE_ID = os.getenv(
 )
 TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
 
-OPT_OUT_FOOTER = "\n\nReply STOP to opt out."
 QUIET_HOURS_START = time(21, 0)  # 9 PM local
 QUIET_HOURS_END = time(8, 0)    # 8 AM local
 
@@ -104,11 +102,9 @@ class CampaignCreateRequest(BaseModel):
     @field_validator("message_template")
     @classmethod
     def validate_message_length(cls, v: str) -> str:
-        # Account for the opt-out footer we append
-        if len(v) + len(OPT_OUT_FOOTER) > 1600:
+        if len(v) > 1600:
             raise ValueError(
-                f"Message template is too long ({len(v)} chars). "
-                f"Max is {1600 - len(OPT_OUT_FOOTER)} chars (opt-out footer is auto-appended)."
+                f"Message template is too long ({len(v)} chars). Max is 1600 chars."
             )
         return v
 
@@ -123,14 +119,13 @@ class CampaignPreviewRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 def render_template(template: str, lead: dict) -> str:
-    """Replace {{field}} placeholders with lead data, then append opt-out footer."""
+    """Replace {{field}} placeholders with lead data."""
     def _replace(match):
         key = match.group(1).strip()
         value = lead.get(key)
         return str(value) if value is not None else ""
 
-    rendered = re.sub(r"\{\{([^}]+)\}\}", _replace, template)
-    return rendered + OPT_OUT_FOOTER
+    return re.sub(r"\{\{([^}]+)\}\}", _replace, template)
 
 
 # ---------------------------------------------------------------------------

@@ -180,8 +180,7 @@ class SchedulingConversationService:
             f"{lo_name} would like to schedule a call{context_line}. "
             f"Here are some available times:\n\n"
             f"{slots_text}\n\n"
-            f"Which works for you? Or suggest another time. "
-            f"Reply STOP to opt out."
+            f"Which works for you? Or suggest another time."
         )
 
         # Send SMS via Telnyx

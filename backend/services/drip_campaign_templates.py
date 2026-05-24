@@ -10,7 +10,7 @@ PURCHASE_LEAD_SEQUENCE = {
             "frequency": "daily",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "immediate_intro",
-                 "content": "Hi {first_name}, thanks for your mortgage inquiry! I'm {lo_name} with {company}. What type of home are you looking for? Reply anytime. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, thanks for your mortgage inquiry! I'm {lo_name} with {company}. What type of home are you looking for? Reply anytime."},
                 {"day": 0, "delay_min": 15, "channel": "sms", "template": "vm_followup",
                  "condition": "voicemail_left",
                  "content": "Just left you a voicemail, {first_name}. Feel free to text me here — happy to answer any mortgage questions!"},
@@ -81,7 +81,7 @@ REFINANCE_LEAD_SEQUENCE = {
             "frequency": "daily",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "refi_intro",
-                 "content": "Hi {first_name}, thanks for your refinance inquiry! I'm {lo_name}. I can run a quick savings analysis for you — what's your current rate? Reply STOP to opt out."},
+                 "content": "Hi {first_name}, thanks for your refinance inquiry! I'm {lo_name}. I can run a quick savings analysis for you — what's your current rate?"},
                 {"day": 1, "channel": "email", "template": "refi_savings_intro", "content": None},
                 {"day": 3, "channel": "sms", "template": "refi_follow",
                  "content": "Hi {first_name}, did you get a chance to see my email about your refi options? I can show you potential monthly savings in minutes."},
@@ -217,7 +217,7 @@ HELOC_LEAD_SEQUENCE = {
             "frequency": "daily",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "heloc_intro",
-                 "content": "Hi {first_name}, thanks for your HELOC inquiry! I'm {lo_name}. I can give you a quick estimate of your available equity. What's your property address? Reply STOP to opt out."},
+                 "content": "Hi {first_name}, thanks for your HELOC inquiry! I'm {lo_name}. I can give you a quick estimate of your available equity. What's your property address?"},
                 {"day": 1, "channel": "email", "template": "heloc_vs_cashout", "content": None},
                 {"day": 3, "channel": "sms", "template": "heloc_uses",
                  "content": "Did you know a HELOC can be used for home improvements, debt consolidation, or even investment? Let's explore your options."},
@@ -253,7 +253,7 @@ FHA_LEAD_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "fha_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}! FHA loans are a great option for first-time buyers — as low as 3.5% down. Want to see what you qualify for? Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}! FHA loans are a great option for first-time buyers — as low as 3.5% down. Want to see what you qualify for?"},
                 {"day": 1, "channel": "email", "template": "fha_basics_guide", "content": None},
                 {"day": 3, "channel": "sms", "template": "fha_down_payment",
                  "content": "Quick tip: Many first-time buyers use down payment assistance programs with FHA loans. I can check what's available in your area."},
@@ -277,7 +277,7 @@ VA_LEAD_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "va_intro",
-                 "content": "Hi {first_name}, thank you for your service! I'm {lo_name}. VA loans offer incredible benefits — $0 down, no PMI. Want to learn more? Reply STOP to opt out."},
+                 "content": "Hi {first_name}, thank you for your service! I'm {lo_name}. VA loans offer incredible benefits — $0 down, no PMI. Want to learn more?"},
                 {"day": 1, "channel": "email", "template": "va_benefits_guide", "content": None},
                 {"day": 3, "channel": "sms", "template": "va_no_pmi",
                  "content": "One of the best VA benefits: no private mortgage insurance, even with $0 down. That can save you $200+/month compared to conventional."},
@@ -439,7 +439,7 @@ JUMBO_LEAD_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "jumbo_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. For homes above the conforming limit, jumbo loans offer competitive rates with flexible terms. Let's discuss your options. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. For homes above the conforming limit, jumbo loans offer competitive rates with flexible terms. Let's discuss your options."},
                 {"day": 1, "channel": "email", "template": "jumbo_guide", "content": None},
                 {"day": 5, "channel": "email", "template": "jumbo_asset_based", "content": None},
                 {"day": 10, "channel": "sms", "template": "jumbo_portfolio",
@@ -460,7 +460,7 @@ USDA_LEAD_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "usda_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. If you're buying in an eligible area, USDA loans offer $0 down and low rates! Want me to check eligibility for your area? Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. If you're buying in an eligible area, USDA loans offer $0 down and low rates! Want me to check eligibility for your area?"},
                 {"day": 1, "channel": "email", "template": "usda_eligibility_guide", "content": None},
                 {"day": 5, "channel": "email", "template": "usda_income_limits", "content": None},
                 {"day": 10, "channel": "sms", "template": "usda_preapproval_cta",
@@ -485,7 +485,7 @@ INVESTMENT_PROPERTY_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "investment_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. Investment property financing is my specialty — whether it's your 1st rental or your 10th. Let's discuss your strategy. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. Investment property financing is my specialty — whether it's your 1st rental or your 10th. Let's discuss your strategy."},
                 {"day": 1, "channel": "email", "template": "investment_financing_guide", "content": None},
                 {"day": 4, "channel": "sms", "template": "investment_down_payment",
                  "content": "Investment tip: Down payment requirements vary from 15-25% depending on property type and occupancy. Want me to run scenarios for your deal?"},
@@ -524,7 +524,7 @@ SECOND_HOME_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "second_home_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. A second home is a great investment in your lifestyle! I can walk you through financing options. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. A second home is a great investment in your lifestyle! I can walk you through financing options."},
                 {"day": 1, "channel": "email", "template": "second_home_financing_guide", "content": None},
                 {"day": 4, "channel": "sms", "template": "second_home_rates",
                  "content": "Good news — second home rates are often close to primary residence rates, with as little as 10% down. Want to see what you qualify for?"},
@@ -548,7 +548,7 @@ CONSTRUCTION_LOAN_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "construction_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. Building your dream home? Construction loans work differently from traditional mortgages — I can walk you through it. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. Building your dream home? Construction loans work differently from traditional mortgages — I can walk you through it."},
                 {"day": 1, "channel": "email", "template": "construction_loan_guide", "content": None},
                 {"day": 4, "channel": "sms", "template": "construction_one_close",
                  "content": "Pro tip: A one-time-close construction loan saves you from two closings and two sets of fees. Ask me how it works!"},
@@ -584,7 +584,7 @@ RENOVATION_203K_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "renovation_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. Looking to buy a fixer-upper? An FHA 203(k) loan lets you finance the purchase AND renovations in one mortgage. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. Looking to buy a fixer-upper? An FHA 203(k) loan lets you finance the purchase AND renovations in one mortgage."},
                 {"day": 1, "channel": "email", "template": "renovation_203k_guide", "content": None},
                 {"day": 4, "channel": "sms", "template": "renovation_limited_vs_standard",
                  "content": "FHA 203(k) comes in two flavors: Limited (up to $35k in repairs) and Standard (major renovations). I can help you figure out which fits your project."},
@@ -608,7 +608,7 @@ REVERSE_MORTGAGE_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "reverse_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. A reverse mortgage can turn your home equity into tax-free income — with no monthly payments required. Want to learn more? Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. A reverse mortgage can turn your home equity into tax-free income — with no monthly payments required. Want to learn more?"},
                 {"day": 2, "channel": "email", "template": "reverse_hecm_basics", "content": None},
                 {"day": 5, "channel": "sms", "template": "reverse_myths",
                  "content": "Common myth: \"The bank takes your home.\" Not true — you keep the title and can stay as long as you want. Let me clear up any other concerns."},
@@ -646,7 +646,7 @@ ITIN_LOAN_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "itin_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. Homeownership is possible with an ITIN — no SSN required. I specialize in helping ITIN holders get approved. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. Homeownership is possible with an ITIN — no SSN required. I specialize in helping ITIN holders get approved."},
                 {"day": 1, "channel": "email", "template": "itin_loan_guide", "content": None},
                 {"day": 4, "channel": "sms", "template": "itin_documentation",
                  "content": "ITIN loans accept alternative credit history like rent, utilities, and insurance payments. I can help you build your file. Want to get started?"},
@@ -670,7 +670,7 @@ NON_QM_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "nonqm_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. Self-employed or non-traditional income? I have loan programs that use bank statements instead of tax returns. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. Self-employed or non-traditional income? I have loan programs that use bank statements instead of tax returns."},
                 {"day": 1, "channel": "email", "template": "nonqm_program_guide", "content": None},
                 {"day": 4, "channel": "sms", "template": "nonqm_bank_statement",
                  "content": "Bank statement loans use 12-24 months of deposits to qualify — no tax returns needed. Great for business owners, freelancers, and gig workers."},
@@ -1039,7 +1039,7 @@ FIRST_TIME_BUYER_EDUCATION_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "ftb_welcome",
-                 "content": "Hi {first_name}, I'm {lo_name}! Buying your first home is exciting. I'm going to walk you through the entire process step by step. Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}! Buying your first home is exciting. I'm going to walk you through the entire process step by step."},
                 {"day": 1, "channel": "email", "template": "ftb_buying_process_overview", "content": None},
                 {"day": 4, "channel": "sms", "template": "ftb_credit_tip",
                  "content": "First-time buyer tip #1: Check your credit score before you start. Even small improvements can lower your rate and save you thousands. Want me to review your credit?"},
@@ -1346,7 +1346,7 @@ RELOCATION_SEQUENCE = {
             "frequency": "every few days",
             "steps": [
                 {"day": 0, "delay_min": 0, "channel": "sms", "template": "relocation_intro",
-                 "content": "Hi {first_name}, I'm {lo_name}. Relocating can be stressful — I specialize in helping relocation buyers close quickly and smoothly. Let me take the mortgage piece off your plate! Reply STOP to opt out."},
+                 "content": "Hi {first_name}, I'm {lo_name}. Relocating can be stressful — I specialize in helping relocation buyers close quickly and smoothly. Let me take the mortgage piece off your plate!"},
                 {"day": 1, "channel": "email", "template": "relocation_guide", "content": None},
                 {"day": 4, "channel": "sms", "template": "relocation_remote_process",
                  "content": "Good news: the entire mortgage process can be done remotely! Digital application, e-signatures, and virtual closings available. No need to fly back and forth."},

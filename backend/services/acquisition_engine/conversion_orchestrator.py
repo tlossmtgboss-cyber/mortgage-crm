@@ -315,7 +315,7 @@ class ConversionOrchestrator:
                 from integrations.sms_service import get_sms_client
 
                 sms_client = get_sms_client(db=self.db)
-                message = f"Hi {lead_info.get('first_name', 'there')}! Thanks for your interest. I'll be in touch shortly to discuss your options. Reply STOP to opt out."
+                message = f"Hi {lead_info.get('first_name', 'there')}! Thanks for your interest. I'll be in touch shortly to discuss your options."
 
                 if lead_info.get("phone"):
                     send_result = sms_client.send_sms(

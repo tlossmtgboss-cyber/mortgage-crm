@@ -15,37 +15,37 @@ logger = logging.getLogger(__name__)
 BUILTIN_TEMPLATES = {
     "welcome": {
         "name": "Welcome New Lead",
-        "body": "Hi {{first_name}}, thanks for your interest in Perennia AI Mortgage! I'm {{agent_name}}, your dedicated loan officer. Ready to help you get the best rate. Reply STOP to opt out.",
+        "body": "Hi {{first_name}}, thanks for your interest in Perennia AI Mortgage! I'm {{agent_name}}, your dedicated loan officer. Ready to help you get the best rate.",
         "variables": ["first_name", "agent_name"],
         "category": "nurture",
     },
     "rate_update": {
         "name": "Rate Update Alert",
-        "body": "Hi {{first_name}}, great news! 30-yr fixed rates moved to {{rate}}% today. Based on your {{loan_amount}} target, your est. payment is {{monthly_payment}}/mo. Want to lock in? Reply YES or call {{agent_phone}}. Reply STOP to opt out.",
+        "body": "Hi {{first_name}}, great news! 30-yr fixed rates moved to {{rate}}% today. Based on your {{loan_amount}} target, your est. payment is {{monthly_payment}}/mo. Want to lock in? Reply YES or call {{agent_phone}}.",
         "variables": ["first_name", "rate", "loan_amount", "monthly_payment", "agent_phone"],
         "category": "rate_alert",
     },
     "follow_up": {
         "name": "Follow Up",
-        "body": "Hi {{first_name}}, just checking in on your home purchase plans. I have some great options for you at {{property_address}}. Shall we set up a quick 15-min call? - {{agent_name}}, {{agent_phone}}. Reply STOP to opt out.",
+        "body": "Hi {{first_name}}, just checking in on your home purchase plans. I have some great options for you at {{property_address}}. Shall we set up a quick 15-min call? - {{agent_name}}, {{agent_phone}}.",
         "variables": ["first_name", "property_address", "agent_name", "agent_phone"],
         "category": "follow_up",
     },
     "pre_approval": {
         "name": "Pre-Approval Ready",
-        "body": "Great news {{first_name}}! Your pre-approval for {{approval_amount}} is ready. Valid through {{expiry_date}}. Log in to download: {{portal_link}}. Questions? Call {{agent_phone}}. Reply STOP to opt out.",
+        "body": "Great news {{first_name}}! Your pre-approval for {{approval_amount}} is ready. Valid through {{expiry_date}}. Log in to download: {{portal_link}}. Questions? Call {{agent_phone}}.",
         "variables": ["first_name", "approval_amount", "expiry_date", "portal_link", "agent_phone"],
         "category": "milestone",
     },
     "closing_reminder": {
         "name": "Closing Day Reminder",
-        "body": "Reminder {{first_name}}: Your closing is {{closing_date}} at {{closing_time}} at {{closing_address}}. Bring your ID and certified funds for {{cash_to_close}}. Questions? {{agent_phone}}. Reply STOP to opt out.",
+        "body": "Reminder {{first_name}}: Your closing is {{closing_date}} at {{closing_time}} at {{closing_address}}. Bring your ID and certified funds for {{cash_to_close}}. Questions? {{agent_phone}}.",
         "variables": ["first_name", "closing_date", "closing_time", "closing_address", "cash_to_close", "agent_phone"],
         "category": "milestone",
     },
     "document_request": {
         "name": "Document Request",
-        "body": "Hi {{first_name}}, we need {{document_name}} to move your loan forward. Please upload at {{portal_link}} by {{due_date}}. Need help? Reply or call {{agent_phone}}. Reply STOP to opt out.",
+        "body": "Hi {{first_name}}, we need {{document_name}} to move your loan forward. Please upload at {{portal_link}} by {{due_date}}. Need help? Reply or call {{agent_phone}}.",
         "variables": ["first_name", "document_name", "portal_link", "due_date", "agent_phone"],
         "category": "documents",
     },

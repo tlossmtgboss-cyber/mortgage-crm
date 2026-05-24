@@ -218,7 +218,7 @@ Best regards,
 }
 
 SMS_TEMPLATES = {
-    "welcome": "Hi {first_name}, thanks for speaking with {company_name} about your mortgage! We'll be in touch soon with next steps. Reply STOP to opt out.",
+    "welcome": "Hi {first_name}, thanks for speaking with {company_name} about your mortgage! We'll be in touch soon with next steps.",
     "document_reminder": "Hi {first_name}, friendly reminder: we're still waiting on some documents for your mortgage application. Check your email or call us to discuss.",
     "appointment_reminder": "Reminder: Your {appointment_type} is tomorrow at {appointment_time}. Reply YES to confirm or call us to reschedule.",
 }

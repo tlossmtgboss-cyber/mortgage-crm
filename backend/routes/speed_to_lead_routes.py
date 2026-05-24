@@ -233,8 +233,7 @@ async def _execute_speed_to_lead(
                 from_number = os.getenv("TELNYX_FROM_NUMBER", "")
                 sms_body = (
                     f"Hi {lead.first_name or 'there'}! Thanks for your interest in mortgage options. "
-                    f"A loan officer will be reaching out shortly. "
-                    f"Reply STOP to opt out."
+                    f"A loan officer will be reaching out shortly."
                 )
                 await _send_sms(to=lead.phone, from_=from_number, body=sms_body)
                 _log_stl_event(db, lead_id, org_id, "sms_sent", {"phone": lead.phone[-4:]})

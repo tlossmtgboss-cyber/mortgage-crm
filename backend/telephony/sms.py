@@ -5,8 +5,7 @@ Every SMS in the system MUST flow through ``send_sms_verified()`` (or its
 backward-compatible alias ``send_sms()``).  This guarantees:
 
 1. TCPA / DNC compliance gate (fail-closed by default)
-2. STOP opt-out footer on every message
-3. Audit-trail logging when compliance is bypassed
+2. Audit-trail logging when compliance is bypassed
 
 The telnyx v2 Python SDK (v4.x) uses a client-based API::
 
@@ -28,11 +27,6 @@ from typing import Any, Dict, List, Optional
 from telephony.phone_utils import normalize_phone as _normalize_phone
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# TCPA / CTIA opt-out footer — appended to every outbound SMS
-# ---------------------------------------------------------------------------
-OPT_OUT_FOOTER = "\n\nReply STOP to opt out"
 
 # ---------------------------------------------------------------------------
 # Module-level lazy singleton for the Telnyx client
@@ -88,7 +82,6 @@ def _send_sms_raw(
 
     This function:
     - Does NOT run compliance checks
-    - DOES append the STOP footer
     - DOES call the Telnyx SDK
 
     Returns ``{"id": "<message_id>", "status": "sent"}``.
@@ -96,10 +89,6 @@ def _send_sms_raw(
     client = _get_client(api_key)
     if client is None:
         raise RuntimeError("Telnyx client not available — check TELNYX_API_KEY")
-
-    # TCPA/CTIA: append opt-out footer if not already present
-    if OPT_OUT_FOOTER.strip().lower() not in text.lower():
-        text = text.rstrip() + OPT_OUT_FOOTER
 
     kwargs: Dict[str, Any] = {
         "to": to,
@@ -144,10 +133,6 @@ async def _send_sms_raw_async(
     key = (api_key or os.getenv("TELNYX_API_KEY", "")).strip()
     if not key:
         raise RuntimeError("Telnyx API key not available — check TELNYX_API_KEY")
-
-    # TCPA/CTIA: append opt-out footer if not already present
-    if OPT_OUT_FOOTER.strip().lower() not in text.lower():
-        text = text.rstrip() + OPT_OUT_FOOTER
 
     payload: Dict[str, Any] = {
         "to": to,
@@ -247,9 +232,8 @@ def send_sms_verified(
     Steps:
     1. Normalize phone number
     2. Run compliance gate (check_sms_compliance) — fail-closed
-    3. Append STOP footer if not present  (handled by _send_sms_raw)
-    4. Call the actual Telnyx send
-    5. Return result with message_id for tracking
+    3. Call the actual Telnyx send
+    4. Return result with message_id for tracking
 
     Parameters
     ----------

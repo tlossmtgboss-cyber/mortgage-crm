@@ -1115,8 +1115,7 @@ class NotificationService:
 
         message = (
             f"Hi {borrower_name}! Your mortgage application has been received. "
-            f"{lo_name} will review it within 24 hours and be in touch. "
-            f"Reply STOP to opt out."
+            f"{lo_name} will review it within 24 hours and be in touch."
         )
 
         return self.send_sms(borrower_phone, message)

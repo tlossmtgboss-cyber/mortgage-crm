@@ -189,7 +189,7 @@ DEFAULT_REMINDER_TEMPLATES = [
         "subject_template": None,
         "body_template": (
             "Reminder: Your {appointment_type} with {lo_name} is in 1 hour "
-            "at {time}. {join_url} Reply STOP to opt out."
+            "at {time}. {join_url}"
         ),
         "is_active": True,
     },
@@ -200,7 +200,7 @@ DEFAULT_REMINDER_TEMPLATES = [
         "subject_template": None,
         "body_template": (
             "Starting soon! Your {appointment_type} with {lo_name} begins in "
-            "15 minutes at {time}. {join_url} Reply STOP to opt out."
+            "15 minutes at {time}. {join_url}"
         ),
         "is_active": True,
     },

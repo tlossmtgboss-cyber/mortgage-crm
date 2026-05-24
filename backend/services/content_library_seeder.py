@@ -1509,7 +1509,7 @@ _TEMPLATES: List[Dict[str, Any]] = [
         "body_text": (
             "Hi {{first_name}}, this is {{loan_officer_name}} at {{company_name}}! "
             "Just a reminder about our call tomorrow. Looking forward to chatting about your "
-            "home financing options. Reply STOP to opt out."
+            "home financing options."
         ),
         "merge_fields": ["{{first_name}}", "{{loan_officer_name}}", "{{company_name}}"],
         "tags": ["appointment", "reminder", "sms"],
@@ -1525,7 +1525,7 @@ _TEMPLATES: List[Dict[str, Any]] = [
         "body_text": (
             "Hi {{first_name}}, {{loan_officer_name}} here. Quick reminder: we still need "
             "a few documents to keep your loan on track. Please check your email or upload "
-            "here: {{portal_link}} — Reply STOP to opt out."
+            "here: {{portal_link}} —"
         ),
         "merge_fields": ["{{first_name}}", "{{loan_officer_name}}", "{{portal_link}}"],
         "tags": ["documents", "action_required", "sms"],
@@ -1541,7 +1541,7 @@ _TEMPLATES: List[Dict[str, Any]] = [
         "body_text": (
             "Hi {{first_name}}! {{loan_officer_name}} at {{company_name}}. Rates dropped "
             "significantly today — this could be a great time to lock! Can we talk? "
-            "Call/text me at {{loan_officer_phone}}. Reply STOP to opt out."
+            "Call/text me at {{loan_officer_phone}}."
         ),
         "merge_fields": ["{{first_name}}", "{{loan_officer_name}}", "{{company_name}}", "{{loan_officer_phone}}"],
         "tags": ["rate_alert", "urgent", "sms"],
@@ -1573,7 +1573,7 @@ _TEMPLATES: List[Dict[str, Any]] = [
         "body_text": (
             "Hi {{first_name}}, {{loan_officer_name}} here! Hope you're loving the new home. "
             "If you know anyone buying or refinancing, I'd love an intro — I'll take great "
-            "care of them! Reply STOP to opt out."
+            "care of them!"
         ),
         "merge_fields": ["{{first_name}}", "{{loan_officer_name}}", "{{loan_officer_phone}}"],
         "tags": ["referral", "post_close", "sms"],

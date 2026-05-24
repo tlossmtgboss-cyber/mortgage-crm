@@ -139,7 +139,7 @@ class RefinanceOutreachService:
             f"Current rate: {current_rate:.3f}%\n"
             f"Available rate: {new_rate:.3f}%\n"
             f"Annual savings: ${annual_savings:,.0f}\n\n"
-            f"{self.lo_name} will call you shortly to discuss. Reply STOP to opt out."
+            f"{self.lo_name} will call you shortly to discuss."
         )
 
         return message

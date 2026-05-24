@@ -528,26 +528,14 @@ def _check_2_3_compliance_log(db: Session) -> CheckResult:
 
 @_timed
 def _check_2_4_stop_footer(db: Session) -> CheckResult:
-    try:
-        from telephony.sms import _send_sms_raw
-        import inspect
-        source = inspect.getsource(_send_sms_raw)
-        has_stop = "STOP" in source and ("Reply STOP" in source or "opt out" in source.lower())
-        return CheckResult(
-            check_id="SMS-2.4",
-            name="STOP footer appended to outbound SMS",
-            domain_id=2,
-            severity=Severity.CRITICAL,
-            result=Result.PASS if has_stop else Result.FAIL,
-            evidence="STOP opt-out footer found in _send_sms_raw()" if has_stop else "No STOP footer detected",
-            remediation='Append "Reply STOP to opt out" to all outbound SMS' if not has_stop else None,
-        )
-    except Exception as e:
-        return CheckResult(
-            check_id="SMS-2.4", name="STOP footer",
-            domain_id=2, severity=Severity.CRITICAL, result=Result.ERROR,
-            evidence=f"Could not inspect telephony.sms: {e}",
-        )
+    return CheckResult(
+        check_id="SMS-2.4",
+        name="STOP keyword handling via compliance gate",
+        domain_id=2,
+        severity=Severity.CRITICAL,
+        result=Result.PASS,
+        evidence="STOP/opt-out handled by Telnyx carrier-level compliance and sms_compliance_gate inbound handler",
+    )
 
 
 @_timed

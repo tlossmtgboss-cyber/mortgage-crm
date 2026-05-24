@@ -209,8 +209,7 @@ class TaskExecutor:
             f"Great news! The pre-approval letter for {borrower['full_name']} "
             f"({amount_fmt}) is ready. Valid through {expiry_date}. "
             f"Download here: {portal_link} "
-            f"— {lo.get('full_name', '')} | {lo.get('phone', '')}. "
-            f"Reply STOP to opt out."
+            f"— {lo.get('full_name', '')} | {lo.get('phone', '')}"
         )
 
         # TCPA/DNC compliance check before sending SMS

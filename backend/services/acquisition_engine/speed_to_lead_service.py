@@ -114,8 +114,7 @@ class SpeedToLeadService:
     DEFAULT_SMS_TEMPLATES = {
         "hot_lead": (
             "Hi {first_name}! Thank you for your interest in a mortgage. "
-            "I'm {lo_name}, your dedicated loan officer. I'll be reaching out shortly. "
-            "Reply STOP to opt out."
+            "I'm {lo_name}, your dedicated loan officer. I'll be reaching out shortly."
         ),
         "meeting_booked": (
             "Hi {first_name}! Your consultation is confirmed for {meeting_time}. "

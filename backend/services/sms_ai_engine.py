@@ -807,8 +807,6 @@ def _build_system_prompt(
     is_first_message = len([m for m in history if m.get("role") == "assistant"]) == 0
 
     first_msg_rule = ""
-    if is_first_message:
-        first_msg_rule = '\n- This is your FIRST response in this conversation. Include "Reply STOP to opt out" at the end.'
 
     prompt = f"""You are {ai_name}, a mortgage assistant{company_line}{nmls_line}.
 You are texting {borrower_name} about their {loan_purpose} mortgage inquiry.

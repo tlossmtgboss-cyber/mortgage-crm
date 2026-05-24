@@ -244,7 +244,7 @@ class LeadWorkflowEngine:
                 "template": "welcome_new_lead",
                 "data": {
                     "to": sc.lead_phone,
-                    "message": f"Hi {first_name}! Thanks for reaching out about your mortgage needs. {sc.loan_officer_name} will contact you within 1 hour. Reply STOP to opt out."
+                    "message": f"Hi {first_name}! Thanks for reaching out about your mortgage needs. {sc.loan_officer_name} will contact you within 1 hour."
                 },
                 "priority": "high"
             })

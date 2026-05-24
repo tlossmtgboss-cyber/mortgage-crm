@@ -675,7 +675,7 @@ async def send_sms_verification(
 
             sms_message = (
                 f"Hi {user_name}, your Perennia AI verification code is: {token.token}. "
-                f"This code expires in 10 minutes. Reply STOP to opt out."
+                f"This code expires in 10 minutes."
             )
 
             sms_result = notification_service.send_sms(
