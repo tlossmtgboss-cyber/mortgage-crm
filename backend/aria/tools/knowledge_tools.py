@@ -39,8 +39,9 @@ class KnowledgeTools:
 
             from database import SessionLocal
 
-            db = SessionLocal()
+            db = None
             try:
+                db = SessionLocal()
                 service = GuidelineSearchService(db=db)
                 agencies = [agency] if agency else None
                 result = await service.search(
@@ -53,9 +54,10 @@ class KnowledgeTools:
                 result["rag_enabled"] = True
                 return result
             finally:
-                db.close()
+                if db:
+                    db.close()
         except Exception as e:
-            logger.warning("RAG search failed, falling back to Claude: %s", e)
+            logger.warning("RAG search failed, falling back to Claude: %s", e, exc_info=True)
             return await self._fallback_guideline_answer(question)
 
     async def _fallback_guideline_answer(self, question: str) -> dict:

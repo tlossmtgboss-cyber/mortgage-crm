@@ -14,10 +14,11 @@ import io
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Query, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import text, or_, and_
+from sqlalchemy import text, or_, or_ as _or, and_, Column, String, Integer, DateTime, Text, JSON
+from sqlalchemy.sql import func
 
-from pydantic import BaseModel as PydanticBaseModel
-from database import get_db
+from pydantic import BaseModel as PydanticBaseModel, Field
+from database import get_db, Base
 from sqlalchemy.exc import SQLAlchemyError
 from models.call_monitoring_models import (
     UnderwritingGuideline,
@@ -42,6 +43,14 @@ def _get_current_user():
     from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
+
+def _require_admin(current_user) -> None:
+    """Raise 403 if user is not admin."""
+    role = current_user.role if hasattr(current_user, 'role') else current_user.get('role')
+    if role not in ('admin', 'site_admin', 'platform_admin', 'owner', 'system'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
 router = APIRouter(
     prefix="/api/v1/underwriting-guidelines", tags=["Underwriting Guidelines"],
     dependencies=[Depends(_get_current_user())],
@@ -53,18 +62,40 @@ router = APIRouter(
 
 class GuidelineSearchBody(PydanticBaseModel):
     """Request body for RAG-powered guideline search."""
-    query: str
-    agencies: Optional[List[str]] = None
-    loan_program: Optional[str] = None
-    category: Optional[str] = None
-    top_k: int = 8
+    query: str = Field(..., min_length=2, max_length=2000)
+    agencies: Optional[List[str]] = Field(None, max_length=50)
+    loan_program: Optional[str] = Field(None, max_length=50)
+    category: Optional[str] = Field(None, max_length=100)
+    top_k: int = Field(8, ge=1, le=100)
 
 
 class SavedQueryBody(PydanticBaseModel):
     """Request body for saving a guideline query."""
-    name: str
-    query: str
+    name: str = Field(..., min_length=1, max_length=200)
+    query: str = Field(..., min_length=2, max_length=2000)
     filters: Optional[dict] = None
+
+
+# ---------------------------------------------------------------------------
+# SavedGuidelineQuery — lightweight persistence model for library queries
+# ---------------------------------------------------------------------------
+
+class SavedGuidelineQuery(Base):
+    __tablename__ = "saved_guideline_queries"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    organization_id = Column(Integer, nullable=True, index=True)
+    user_id = Column(Integer, nullable=True)
+    name = Column(String(200), nullable=False)
+    query = Column(Text, nullable=False)
+    filters = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+try:
+    from database import engine as _engine
+    SavedGuidelineQuery.__table__.create(_engine, checkfirst=True)
+except Exception:
+    pass
 
 
 # Storage configuration
@@ -92,6 +123,7 @@ async def upload_guideline(
     expiration_date: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # Comma-separated
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """
     Upload a guideline document (PDF, TXT, DOCX).
@@ -99,6 +131,7 @@ async def upload_guideline(
     The document will be processed in the background to extract text
     and key points that the AI can reference.
     """
+    _require_admin(current_user)
     # Validate file extension
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSIONS:
@@ -234,9 +267,13 @@ async def list_guidelines(
     limit: int = Query(50, le=100),
     offset: int = Query(0),
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """List all guidelines with optional filters."""
-    query = db.query(UnderwritingGuideline)
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
+    query = db.query(UnderwritingGuideline).filter(
+        _or(UnderwritingGuideline.organization_id == None, UnderwritingGuideline.organization_id == org_id)
+    )
 
     if guideline_type:
         query = query.filter(UnderwritingGuideline.guideline_type == guideline_type)
@@ -275,6 +312,7 @@ async def list_guidelines(
 async def search_guidelines_rag(
     body: GuidelineSearchBody,
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """
     RAG-powered guideline search using semantic embeddings.
@@ -284,9 +322,10 @@ async def search_guidelines_rag(
     """
     from services.guideline_search_service import GuidelineSearchService
     service = GuidelineSearchService(db=db)
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
     return await service.search(
         query=body.query,
-        tenant_id=1,
+        tenant_id=org_id,
         agencies=body.agencies,
         loan_program=body.loan_program,
         category=body.category,
@@ -306,28 +345,51 @@ async def chart_catalog():
 async def compare_guidelines(
     topic: str,
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Get comparison chart data for a specific guideline topic across agencies."""
     from services.guideline_chart_service import GuidelineChartService
     service = GuidelineChartService(db=db)
-    return await service.get_comparison(topic, tenant_id=1)
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
+    return await service.get_comparison(topic, tenant_id=org_id)
 
 
 @router.post("/library")
 async def save_query(
     body: SavedQueryBody,
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Save a guideline search query for later reuse."""
-    return {"saved": True, "name": body.name, "query": body.query}
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
+    user_id = current_user.id if hasattr(current_user, 'id') else current_user.get('id')
+    saved = SavedGuidelineQuery(
+        organization_id=org_id,
+        user_id=user_id,
+        name=body.name,
+        query=body.query,
+        filters=body.filters,
+    )
+    db.add(saved)
+    db.commit()
+    db.refresh(saved)
+    return {"saved": True, "id": saved.id, "name": saved.name, "query": saved.query}
 
 
 @router.get("/library")
 async def list_saved_queries(
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
-    """List saved guideline search queries."""
-    return {"queries": []}
+    """List saved guideline search queries for the user's organization."""
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
+    queries = db.query(SavedGuidelineQuery).filter(
+        SavedGuidelineQuery.organization_id == org_id,
+    ).order_by(SavedGuidelineQuery.created_at.desc()).limit(50).all()
+    return {"queries": [
+        {"id": q.id, "name": q.name, "query": q.query, "filters": q.filters, "created_at": str(q.created_at)}
+        for q in queries
+    ]}
 
 
 @router.get("/stats")
@@ -385,8 +447,10 @@ async def update_guideline(
     guideline_id: str,
     request: GuidelineUpdateRequest,
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Update guideline metadata."""
+    _require_admin(current_user)
     guideline = db.query(UnderwritingGuideline).filter(
         UnderwritingGuideline.id == guideline_id
     ).first()
@@ -423,8 +487,10 @@ async def update_guideline(
 async def delete_guideline(
     guideline_id: str,
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Delete a guideline."""
+    _require_admin(current_user)
     guideline = db.query(UnderwritingGuideline).filter(
         UnderwritingGuideline.id == guideline_id
     ).first()
@@ -454,8 +520,10 @@ async def reprocess_guideline(
     guideline_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Reprocess a guideline to re-extract text and generate new summary/key points."""
+    _require_admin(current_user)
     guideline = db.query(UnderwritingGuideline).filter(
         UnderwritingGuideline.id == guideline_id
     ).first()
