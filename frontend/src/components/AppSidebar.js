@@ -8,7 +8,7 @@ import './AppSidebar.css';
 
 const SECTION_MAP = {
   pipeline: ['dashboard', 'leads', 'activeLoans', 'portfolio', 'rateMonitor'],
-  workflow: ['tasks', 'smsTasks', 'reconciliation', 'smartDocs', 'marketing', 'calendar'],
+  workflow: ['tasks', 'workflowFlowchart', 'smartDocs', 'marketing', 'calendar'],
   intelligence: ['briefing', 'scorecard', 'goalTracker', 'partners', 'aiUnderwriter', 'market', 'profitability'],
   aiAgents: ['missionControl', 'agentDashboard', 'agentGym', 'opsManager', 'usageIntelligence'],
 };
@@ -27,8 +27,7 @@ const ICONS = {
   portfolio: '★',
   rateMonitor: '↗',
   tasks: '✓',
-  smsTasks: '✉',
-  reconciliation: '⇄',
+  workflowFlowchart: '⬡',
   smartDocs: '☰',
   marketing: '★',
   calendar: '☷',
@@ -50,8 +49,6 @@ const BADGE_CLASSES = {
   leads: 'green',
   activeLoans: 'primary',
   tasks: 'red',
-  smsTasks: 'amber',
-  reconciliation: 'red',
   smartDocs: 'amber',
 };
 

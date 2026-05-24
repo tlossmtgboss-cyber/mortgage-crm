@@ -78,6 +78,12 @@ export const NAVIGATION_ITEMS = {
     label: 'Calendar',
     module: 'base'
   },
+  workflowFlowchart: {
+    path: '/workflow',
+    label: 'Workflow',
+    matchPaths: ['/workflow'],
+    module: 'base'
+  },
   briefing: {
     path: '/briefing',
     label: 'Morning Briefing',
@@ -364,6 +370,7 @@ export const ROLE_NAVIGATION = {
     'rateMonitor',          // Rate Monitor for refinance opportunities
     'closedLoans',          // Closed loans access
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
@@ -394,6 +401,7 @@ export const ROLE_NAVIGATION = {
     'portfolio',
     'rateMonitor',          // Rate Monitor for refinance opportunities
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
@@ -421,6 +429,7 @@ export const ROLE_NAVIGATION = {
     'portfolio',
     'rateMonitor',          // Rate Monitor for refinance opportunities
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'marketing',            // Marketing page includes Voice & Call Center tools
     'calendar',
@@ -440,6 +449,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedClients',  // Portfolio with "Closed Clients" label
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'calendar',
     'briefing',       // Morning Briefing page
@@ -453,6 +463,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedClients',  // Portfolio with "Closed Clients" label
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'calendar',
     'briefing',       // Morning Briefing page
@@ -464,6 +475,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',  // Portfolio with "Closed Loans" label
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'calendar',
     'briefing',     // Morning Briefing page
@@ -475,6 +487,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'calendar',
     'briefing',     // Morning Briefing page
@@ -486,6 +499,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'calendar',
     'briefing',     // Morning Briefing page
@@ -499,6 +513,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',
     'tasks',
+    'workflowFlowchart',   // Visual workflow flowchart builder
     'smartDocs',
     'marketing',
     'calendar',

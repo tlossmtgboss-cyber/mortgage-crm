@@ -211,9 +211,8 @@ const AriaTestPage = lazyRetry(() => import('../pages/AriaTestPage'));
 const WorkflowLayout = lazyRetry(() => import('../pages/workflow/WorkflowLayout'));
 const WorkflowFlowchart = lazyRetry(() => import('../pages/workflow/WorkflowFlowchart'));
 const WorkflowSettings = lazyRetry(() => import('../pages/workflow/WorkflowSettings'));
-const WorkflowDashboard = lazyRetry(() => import('../pages/WorkflowDashboard'));
-const WorkflowStagePage = lazyRetry(() => import('../pages/WorkflowStagePage'));
-const WorkflowStatusDetail = lazyRetry(() => import('../pages/WorkflowStatusDetail'));
+// Old workflow pages replaced by new flowchart system at /workflow
+// WorkflowDashboard, WorkflowStagePage, WorkflowStatusDetail removed
 const MarketDashboard = lazyRetry(() => import('../pages/MarketDashboard'));
 const MorningCheckin = lazyRetry(() => import('../pages/MorningCheckin'));
 const PartnerROIDashboard = lazyRetry(() => import('../pages/PartnerROIDashboard'));
