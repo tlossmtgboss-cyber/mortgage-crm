@@ -8,6 +8,7 @@ that the AI Underwriter agent can reference.
 import os
 import logging
 import re
+import hashlib
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import uuid
@@ -17,6 +18,13 @@ from sqlalchemy import text, or_, and_
 import anthropic
 
 logger = logging.getLogger(__name__)
+
+# tiktoken for accurate token counting (used by chunking functions)
+try:
+    import tiktoken
+    _enc = tiktoken.get_encoding("cl100k_base")
+except ImportError:
+    _enc = None
 
 # Claude configuration
 CLAUDE_MODEL = os.getenv("GUIDELINES_MODEL", "claude-sonnet-4-20250514")
@@ -750,3 +758,119 @@ Include specific guideline citations where possible."""
             ],
             "confidence": 0.3
         }
+
+
+# =============================================================================
+# TEXT CHUNKING FOR EMBEDDING PIPELINE
+# =============================================================================
+
+
+def _count_tokens(text: str) -> int:
+    """Count tokens using tiktoken cl100k_base, falling back to word count."""
+    if _enc is not None:
+        return len(_enc.encode(text))
+    # Rough fallback: ~0.75 words per token (overestimate to stay safe)
+    return int(len(text.split()) * 1.33)
+
+
+def compute_chunk_hash(content: str) -> str:
+    """Return the SHA-256 hex digest of *content* (64 hex chars)."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def chunk_text_with_overlap(
+    text: str,
+    max_tokens: int = 500,
+    overlap_tokens: int = 50,
+    section_number: str = "",
+    section_title: str = "",
+) -> List[Dict[str, Any]]:
+    """Split *text* into ~max_tokens chunks with paragraph-boundary overlap.
+
+    Each returned dict contains:
+        content, section_number, section_title, token_count, chunk_hash
+
+    Section numbers get a ``.N`` suffix (e.g. ``"3.1"`` becomes ``"3.1.0"``,
+    ``"3.1.1"``, etc.).  A short text that fits in a single chunk gets
+    suffix ``.0``.
+    """
+    text = text.strip()
+    if not text:
+        return []
+
+    total_tokens = _count_tokens(text)
+
+    # --- fast path: text fits in a single chunk ---
+    if total_tokens <= max_tokens:
+        return [
+            {
+                "content": text,
+                "section_number": f"{section_number}.0" if section_number else "0",
+                "section_title": section_title,
+                "token_count": total_tokens,
+                "chunk_hash": compute_chunk_hash(text),
+            }
+        ]
+
+    # --- split into paragraphs ---
+    paragraphs = re.split(r"\n\n+", text)
+    # If we got very few paragraphs, try single-newline split
+    if len(paragraphs) <= 1:
+        paragraphs = re.split(r"\n+", text)
+    # Last resort: split on sentence boundaries
+    if len(paragraphs) <= 1:
+        paragraphs = re.split(r"(?<=[.!?])\s+", text)
+
+    chunks: List[Dict[str, Any]] = []
+    current_paras: List[str] = []
+    current_tokens = 0
+    chunk_index = 0
+    overlap_paras: List[str] = []  # paragraphs carried from previous chunk
+
+    def _flush_chunk(paras: List[str]) -> None:
+        nonlocal chunk_index
+        content = "\n\n".join(paras).strip()
+        if not content:
+            return
+        token_count = _count_tokens(content)
+        chunks.append(
+            {
+                "content": content,
+                "section_number": (
+                    f"{section_number}.{chunk_index}" if section_number else str(chunk_index)
+                ),
+                "section_title": section_title,
+                "token_count": token_count,
+                "chunk_hash": compute_chunk_hash(content),
+            }
+        )
+        chunk_index += 1
+
+    for para in paragraphs:
+        para_tokens = _count_tokens(para)
+
+        # If adding this paragraph exceeds the limit and we already have content
+        if current_tokens + para_tokens > max_tokens and current_paras:
+            _flush_chunk(current_paras)
+
+            # Build overlap from tail of current_paras
+            overlap_paras = []
+            overlap_tok = 0
+            for p in reversed(current_paras):
+                p_tok = _count_tokens(p)
+                if overlap_tok + p_tok > overlap_tokens:
+                    break
+                overlap_paras.insert(0, p)
+                overlap_tok += p_tok
+
+            current_paras = list(overlap_paras)
+            current_tokens = sum(_count_tokens(p) for p in current_paras)
+
+        current_paras.append(para)
+        current_tokens += para_tokens
+
+    # Flush remaining content
+    if current_paras:
+        _flush_chunk(current_paras)
+
+    return chunks
