@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { guidelinesAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import { usePermissions } from '../contexts/PermissionContext';
+import { sanitizeHTML } from '../utils/sanitize';
 import './GuidelineSearch.css';
 
 const SOURCE_GROUPS = [
@@ -59,6 +60,7 @@ function GuidelineSearch() {
   const [result, setResult] = useState(null);
   const [comparisonData, setComparisonData] = useState(null);
   const textareaRef = useRef(null);
+  const debounceRef = useRef(null);
 
   const toggleSource = useCallback((sourceId) => {
     setSelectedSources((prev) => {
@@ -94,12 +96,25 @@ function GuidelineSearch() {
     }
   }, [query, selectedSources]);
 
+  const debouncedSearch = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      handleSearch();
+    }, 300);
+  }, [handleSearch]);
+
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSearch();
+      debouncedSearch();
     }
-  }, [handleSearch]);
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   const handleSavedQuery = useCallback((q) => {
     setQuery(q);
@@ -190,6 +205,7 @@ function GuidelineSearch() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={3}
+              aria-label="Search guidelines"
             />
             <div className="gs-search-actions">
               <button
@@ -215,22 +231,28 @@ function GuidelineSearch() {
         {result && !isSearching && (
           <div className="gs-results">
             {/* Tabs */}
-            <div className="gs-tabs">
+            <div className="gs-tabs" role="tablist" aria-label="Search results">
               <button
                 className={`gs-tab ${activeTab === 'answer' ? 'active' : ''}`}
                 onClick={() => setActiveTab('answer')}
+                role="tab"
+                aria-selected={activeTab === 'answer'}
               >
                 Answer
               </button>
               <button
                 className={`gs-tab ${activeTab === 'citations' ? 'active' : ''}`}
                 onClick={() => setActiveTab('citations')}
+                role="tab"
+                aria-selected={activeTab === 'citations'}
               >
                 Citations ({result.citations?.length || 0})
               </button>
               <button
                 className={`gs-tab ${activeTab === 'sources' ? 'active' : ''}`}
                 onClick={() => setActiveTab('sources')}
+                role="tab"
+                aria-selected={activeTab === 'sources'}
               >
                 Sources ({result.sources?.length || 0})
               </button>
@@ -238,11 +260,20 @@ function GuidelineSearch() {
                 <button
                   className={`gs-tab ${activeTab === 'comparison' ? 'active' : ''}`}
                   onClick={() => setActiveTab('comparison')}
+                  role="tab"
+                  aria-selected={activeTab === 'comparison'}
                 >
                   Comparison
                 </button>
               )}
             </div>
+
+            {!result.answer && (!result.citations || result.citations.length === 0) && (
+              <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>
+                <p style={{ fontSize: 16, marginBottom: 8 }}>No matching guidelines found</p>
+                <p style={{ fontSize: 13 }}>Try broadening your search or selecting different sources</p>
+              </div>
+            )}
 
             {/* Answer Tab */}
             {activeTab === 'answer' && (
@@ -360,6 +391,9 @@ function GuidelineSearch() {
 function formatAnswer(rawAnswer) {
   if (!rawAnswer) return '';
   let html = rawAnswer
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n\n/g, '<br/><br/>')
     .replace(/\n/g, '<br/>');
@@ -369,7 +403,10 @@ function formatAnswer(rawAnswer) {
     '<span class="gs-citation-pill">[$1]</span>'
   );
 
-  return html;
+  return sanitizeHTML(html, {
+    allowedTags: ['strong', 'br', 'span', 'table', 'tr', 'td', 'th', 'thead', 'tbody'],
+    allowedAttr: ['class'],
+  });
 }
 
 export default GuidelineSearch;
