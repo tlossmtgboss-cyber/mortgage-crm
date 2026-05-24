@@ -433,6 +433,13 @@ def run_all_startup_migrations(engine: Any) -> None:
     except Exception as e:
         logger.warning(f"Guideline updates tables migration: {e}")
 
+    try:
+        from migrations.add_guideline_vector_columns import run_migration as _run_guideline_vector
+        _run_guideline_vector(engine)
+        logger.info("Guideline vector columns migration complete")
+    except Exception as e:
+        logger.warning("Guideline vector columns migration skipped: %s", e)
+
     # --- Billing & Subscriptions ---
     try:
         from migrations.add_accounting_tables import run_migration as _run_accounting
