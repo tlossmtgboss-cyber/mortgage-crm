@@ -118,8 +118,9 @@ class ShadowEvaluator:
             WHERE event_type = 'staging_review'
               AND details->>'audit_sample' = 'true'
               AND created_at > NOW() - interval '7 days'
+              AND (:tenant_id IS NULL OR organization_id = :tenant_id)
         """)
-        row = self._db.execute(sql).fetchone()
+        row = self._db.execute(sql, {"tenant_id": tenant_id}).fetchone()
         total = (row.approved or 0) + (row.rejected or 0)
         precision = row.approved / total if total > 0 else 1.0
 
