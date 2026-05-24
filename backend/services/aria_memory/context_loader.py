@@ -255,23 +255,28 @@ class AriaContextLoader:
 
     def _load_last_interaction(self, borrower_id: int, tenant_id: int) -> Optional[str]:
         sql = text("""
-            SELECT summary, started_at FROM agent_conversations
-            WHERE user_id = :user_id
+            SELECT source_call_id, MIN(created_at) AS call_date,
+                   COUNT(*) AS fact_count,
+                   string_agg(DISTINCT topic, ', ' ORDER BY topic) AS topics
+            FROM agent_memories
+            WHERE borrower_id = :borrower_id
               AND organization_id = :tenant_id
-              AND summary IS NOT NULL
-            ORDER BY started_at DESC
+              AND superseded_by IS NULL
+              AND source_call_id IS NOT NULL
+            GROUP BY source_call_id
+            ORDER BY MIN(created_at) DESC
             LIMIT 1
         """)
         row = self._db.execute(sql, {
-            "user_id": borrower_id, "tenant_id": tenant_id,
+            "borrower_id": borrower_id, "tenant_id": tenant_id,
         }).fetchone()
 
-        if not row or not row.summary:
+        if not row or not row.call_date:
             return None
 
-        date_str = f"{row.started_at.month}/{row.started_at.strftime('%d')}" if row.started_at else "recently"
-        summary = row.summary[:150]
-        return f"Spoke {date_str} -- {summary}"[:200]
+        date_str = f"{row.call_date.month}/{row.call_date.strftime('%d')}"
+        topics = row.topics[:100] if row.topics else "general"
+        return f"Spoke {date_str} -- {row.fact_count} items noted ({topics})"[:200]
 
     def _load_conditions(self, loan_id: Optional[int]) -> list[str]:
         if not loan_id:

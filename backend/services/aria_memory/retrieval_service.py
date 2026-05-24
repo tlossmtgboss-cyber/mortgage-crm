@@ -82,6 +82,8 @@ class AriaRetrievalService:
         where_clauses = ["am.organization_id = :org_id"]
         params: Dict[str, Any] = {"org_id": tenant_id, "top_k": top_k, "min_relevance": MIN_RELEVANCE_THRESHOLD}
 
+        where_clauses.append("(am.expires_at IS NULL OR am.expires_at > NOW())")
+
         if scope == "memory":
             if borrower_id is None:
                 return RetrievalResult(facts=[], no_results=True)
@@ -112,6 +114,7 @@ class AriaRetrievalService:
                 am.confidence,
                 am.memory_type,
                 am.last_verified_at,
+                am.created_at,
                 1 - (am.embedding <=> CAST(:embedding AS vector)) AS relevance_score
             FROM agent_memories am
             WHERE {where_sql}
