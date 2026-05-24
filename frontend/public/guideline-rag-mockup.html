@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perennia AI — Guideline Intelligence</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        perennia: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d' },
+        slate: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' }
+      }
+    }
+  }
+}
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body { font-family: 'Inter', sans-serif; }
+  .nav-active { border-bottom: 3px solid #16a34a; color: #166534; font-weight: 600; }
+  .nav-inactive { border-bottom: 3px solid transparent; color: #64748b; }
+  .nav-inactive:hover { color: #334155; border-color: #e2e8f0; }
+  .fade-in { animation: fadeIn 0.25s ease-in; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .upload-zone { border: 2px dashed #cbd5e1; transition: all 0.2s; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: #16a34a; background: #f0fdf4; }
+  .chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 500; }
+  .typing-dot { animation: blink 1.4s infinite both; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+  .progress-bar { transition: width 0.8s ease-in-out; }
+  .card-hover { transition: all 0.15s; }
+  .card-hover:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .sidebar-item { padding: 5px 8px; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: #f1f5f9; }
+  .sidebar-link { color: #475569; font-size: 13px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  textarea:focus, input:focus, select:focus { outline: none; }
+  .source-checkbox { accent-color: #16a34a; }
+  .result-tab { padding: 8px 16px; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; color: #64748b; }
+  .result-tab:hover { color: #334155; }
+  .result-tab-active { border-bottom-color: #1e293b; color: #1e293b; font-weight: 500; }
+  .cite-inline { font-size: 11px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; text-decoration: none; }
+  .cite-inline:hover { background: #e2e8f0; color: #334155; }
+  .cite-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; cursor: pointer; transition: all 0.15s; display: flex; align-items: flex-start; gap: 8px; }
+  .cite-card:hover { border-color: #cbd5e1; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .source-row { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; cursor: pointer; transition: all 0.15s; }
+  .source-row:hover { border-color: #cbd5e1; background: #fafafa; }
+  .comparison-table th { background: #0ea5e9; color: white; padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px; }
+  .comparison-table td { padding: 12px 16px; vertical-align: top; font-size: 13px; border-bottom: 1px solid #e2e8f0; }
+  .comparison-table tr:nth-child(even) td { background: #f8fafc; }
+  .comparison-table a { color: #0ea5e9; text-decoration: underline; }
+</style>
+</head>
+<body class="bg-white min-h-screen">
+
+<!-- Top Nav -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+  <div class="max-w-[1400px] mx-auto px-6">
+    <div class="flex items-center justify-between h-14">
+      <div class="flex items-center gap-1.5">
+        <div class="w-7 h-7 bg-perennia-600 rounded-lg flex items-center justify-center"><span class="text-white font-bold text-xs">P</span></div>
+        <span class="font-semibold text-slate-800">Perennia</span>
+        <span class="text-perennia-600 font-semibold">AI</span>
+      </div>
+      <div class="flex gap-0">
+        <button onclick="switchView('search')" id="nav-search" class="px-5 py-4 text-sm nav-active transition-all cursor-pointer">Guideline Search</button>
+        <button onclick="switchView('chat')" id="nav-chat" class="px-5 py-4 text-sm nav-inactive transition-all cursor-pointer">Aria Chat</button>
+        <button onclick="switchView('admin')" id="nav-admin" class="px-5 py-4 text-sm nav-inactive transition-all cursor-pointer">Admin</button>
+      </div>
+      <button class="text-xs text-perennia-600 border border-perennia-200 rounded-full px-3 py-1 hover:bg-perennia-50 flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        How to use AI?
+      </button>
+    </div>
+  </div>
+</header>
+
+
+<!-- ================================================================== -->
+<!-- SEARCH VIEW                                                         -->
+<!-- ================================================================== -->
+<div id="view-search" style="height:calc(100vh - 57px); display:flex;">
+
+  <!-- Sidebar -->
+  <aside class="w-56 border-r border-slate-200 bg-white flex-shrink-0 overflow-y-auto" id="sidebar">
+    <div class="p-4">
+      <h3 class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Search Options</h3>
+      <div class="text-sm font-medium text-slate-700 mb-2">Sources</div>
+      <div class="space-y-0.5 mb-5" id="sourceCheckboxes">
+        <!-- Populated by JS -->
+      </div>
+      <hr class="border-slate-200 mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-medium text-slate-700">Library</span>
+        <button class="text-slate-400 hover:text-perennia-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg></button>
+      </div>
+      <div class="space-y-0" id="libraryItems">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </aside>
+
+  <!-- Collapse toggle -->
+  <button onclick="toggleSidebar()" class="w-5 flex-shrink-0 flex items-center justify-center border-r border-slate-200 bg-white hover:bg-slate-50 cursor-pointer">
+    <svg class="w-3.5 h-3.5 text-slate-400" id="collapseIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7"/></svg>
+  </button>
+
+  <!-- Main content -->
+  <main class="flex-1 overflow-y-auto flex flex-col" id="mainContent">
+
+    <!-- ====== EMPTY STATE ====== -->
+    <div id="emptyState" class="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full px-6">
+      <div class="w-14 h-14 bg-perennia-100 rounded-2xl flex items-center justify-center mb-4">
+        <svg class="w-7 h-7 text-perennia-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/></svg>
+      </div>
+      <h1 class="text-2xl font-semibold text-slate-800 mb-1">guideline<span class="text-perennia-600">search</span> <span class="text-perennia-500 font-normal">AI</span></h1>
+      <p class="text-sm text-slate-500 text-center max-w-md leading-relaxed mt-2 mb-6">Ask anything about mortgage guidelines from Fannie Mae, Freddie Mac, FHA, VA, USDA, Non-QM, and more. I can help you understand requirements, regulations, and best practices.</p>
+      <div class="w-full max-w-xl mb-3">
+        <div class="relative border border-slate-300 rounded-xl overflow-hidden focus-within:border-perennia-400 focus-within:shadow-sm">
+          <textarea id="searchInput" rows="3" placeholder="Ask about mortgage guidelines..." class="w-full px-4 pt-3 pb-8 text-sm text-slate-700 resize-none border-none" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSearch()}"></textarea>
+          <button onclick="doSearch()" class="absolute bottom-2.5 right-2.5 w-8 h-8 bg-perennia-600 hover:bg-perennia-700 text-white rounded-lg flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+        <p class="text-xs text-slate-400 text-center mt-2">Press Enter to send, Shift+Enter for new line</p>
+      </div>
+      <div class="flex items-center gap-2 text-sm text-slate-500 mt-1">
+        <span class="text-amber-400 text-base">💡</span>
+        <span>Tip: Use the search options in the top left to narrow down your search results</span>
+      </div>
+    </div>
+
+    <!-- ====== RESULTS STATE ====== -->
+    <div id="resultsState" class="hidden fade-in max-w-3xl mx-auto w-full px-6 pt-6 pb-24">
+
+      <!-- Question -->
+      <h2 class="text-xl font-semibold text-slate-800 mb-4" id="questionTitle"></h2>
+
+      <!-- Answer / Citations / Sources tabs -->
+      <div class="flex gap-0 border-b border-slate-200 mb-5">
+        <button onclick="switchResultTab('answer')" id="rtab-answer" class="result-tab result-tab-active">Answer</button>
+        <button onclick="switchResultTab('citations')" id="rtab-citations" class="result-tab">Citations</button>
+        <button onclick="switchResultTab('sources')" id="rtab-sources" class="result-tab">Sources</button>
+      </div>
+
+      <!-- ---- ANSWER TAB ---- -->
+      <div id="panel-answer" class="fade-in">
+        <div class="prose prose-sm max-w-none text-slate-700 leading-relaxed">
+          <p>The minimum credit score for an FHA loan is <strong>500</strong>, which limits the borrower to a maximum 90% Loan-to-Value (LTV) ratio, while a score of <strong>580 or higher</strong> is required to be eligible for maximum financing.
+            <span class="cite-inline" onclick="switchResultTab('citations')">FHA Single Family Hous... p.204 ↗</span>
+            <span class="cite-inline" onclick="switchResultTab('citations')">FHA Single Family Hous... p.176 ↗</span>
+          </p>
+
+          <!-- Table -->
+          <table class="w-full mt-4 mb-4 border border-slate-200 rounded-lg overflow-hidden text-sm">
+            <thead>
+              <tr class="bg-slate-50">
+                <th class="text-left px-4 py-2.5 text-slate-600 font-semibold border-b">Minimum Decision Credit Score</th>
+                <th class="text-left px-4 py-2.5 text-slate-600 font-semibold border-b">Maximum LTV / Financing Eligibility</th>
+                <th class="text-left px-4 py-2.5 text-slate-600 font-semibold border-b">Citation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="px-4 py-3 border-b border-slate-100 font-medium">580 and above</td>
+                <td class="px-4 py-3 border-b border-slate-100">Eligible for maximum financing (up to 97.75% for eligible refinances)</td>
+                <td class="px-4 py-3 border-b border-slate-100">
+                  <div class="space-y-1">
+                    <span class="cite-inline">FHA Single Family Hous... p.204 ↗</span><br>
+                    <span class="cite-inline">FHA Single Family Hous... p.438 ↗</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 border-b border-slate-100 font-medium">500 to 579</td>
+                <td class="px-4 py-3 border-b border-slate-100">Limited to a maximum LTV of 90%</td>
+                <td class="px-4 py-3 border-b border-slate-100">
+                  <div class="space-y-1">
+                    <span class="cite-inline">FHA Single Family Hous... p.204 ↗</span><br>
+                    <span class="cite-inline">FHA Single Family Hous... p.438 ↗</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">Below 500</td>
+                <td class="px-4 py-3">Not eligible for FHA-insured financing</td>
+                <td class="px-4 py-3"><span class="cite-inline">FHA Single Family Hous... p.176 ↗</span></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3 class="text-base font-semibold text-slate-800 mt-6 mb-2">FHA TOTAL / Automated Underwriting</h3>
+          <ul class="list-disc ml-5 space-y-2 text-sm">
+            <li>To receive an Accept recommendation through FHA TOTAL scorecard, at least one of the occupying borrowers must have a credit score.
+              <span class="cite-inline" onclick="switchResultTab('citations')">Minimum Credit Score Al... ↗</span>
+            </li>
+          </ul>
+
+          <h3 class="text-base font-semibold text-slate-800 mt-6 mb-2">FHA Manual Underwriting</h3>
+          <ul class="list-disc ml-5 space-y-2 text-sm">
+            <li>Borrowers with no credit score who do not receive a TOTAL approval must be manually underwritten using non-traditional credit procedures.
+              <span class="cite-inline">Minimum Credit Score Al... ↗</span>
+            </li>
+            <li>If a non-occupying co-borrower has no credit score, their income may not be counted for qualifying purposes.
+              <span class="cite-inline">Minimum Credit Score Al... ↗</span>
+            </li>
+          </ul>
+
+          <!-- Company overlay callout -->
+          <div class="mt-5 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs font-semibold text-amber-700">Company Overlay</span>
+            </div>
+            <p class="text-sm text-amber-800">Your company requires a minimum credit score of <strong>640</strong> for FHA loans — higher than the agency floor of 580. Borrowers between 580-639 would need an overlay exception approved by management.</p>
+            <span class="cite-inline mt-1 inline-block" style="background: #fef3c7; color: #92400e;">CMG Overlay v3.2 §2.1 ↗</span>
+          </div>
+
+          <div class="mt-6 mb-4">
+            <p class="text-sm font-medium text-slate-700 mb-2">To provide more specific guidance:</p>
+            <ul class="list-disc ml-5 space-y-1 text-sm text-slate-600">
+              <li>What is your borrower's current credit score and target down payment?</li>
+              <li>Are you looking to purchase a new home or refinance an existing mortgage?</li>
+            </ul>
+          </div>
+
+          <p class="text-xs text-slate-400 italic mt-6 leading-relaxed">The information provided is based on an AI interpretation of the guidelines from agency handbooks, resources, and matrices, along with proprietary charts and resources. AI serves as a tool to narrow your research, but it should always be verified with the agency resource, investor, or underwriter.</p>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="flex items-center gap-3 mt-4 pt-3 border-t border-slate-100">
+          <button class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-50" title="Copy">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </button>
+          <button class="text-slate-400 hover:text-green-600 p-1.5 rounded-lg hover:bg-slate-50" title="Helpful">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017a2 2 0 01-.632-.103l-2.46-.82A2 2 0 017.5 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5a2 2 0 001.6-.8l3.9-5.2"/></svg>
+          </button>
+          <button class="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-50" title="Not helpful">
+            <svg class="w-4 h-4 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017a2 2 0 01-.632-.103l-2.46-.82A2 2 0 017.5 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5a2 2 0 001.6-.8l3.9-5.2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ---- CITATIONS TAB ---- -->
+      <div id="panel-citations" class="hidden fade-in">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="cite-card">
+            <div class="flex items-center justify-center w-7 h-7 bg-slate-100 rounded-lg flex-shrink-0 text-xs font-bold text-slate-500">1</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-slate-700 truncate">FHA Single Family Housing Policy Handbook</div>
+              <div class="text-xs text-slate-400">Loan-to-Value Limitations Based on Bo... — p.204</div>
+            </div>
+            <button class="text-slate-300 hover:text-slate-500 flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button>
+          </div>
+          <div class="cite-card">
+            <div class="flex items-center justify-center w-7 h-7 bg-slate-100 rounded-lg flex-shrink-0 text-xs font-bold text-slate-500">2</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-slate-700 truncate">FHA Single Family Housing Policy Handbook</div>
+              <div class="text-xs text-slate-400">Origination/Processing — p.176</div>
+            </div>
+            <button class="text-slate-300 hover:text-slate-500 flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button>
+          </div>
+          <div class="cite-card">
+            <div class="flex items-center justify-center w-7 h-7 bg-slate-100 rounded-lg flex-shrink-0 text-xs font-bold text-slate-500">3</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-slate-700 truncate">FHA Single Family Housing Policy Handbook</div>
+              <div class="text-xs text-slate-400">(A) Loan-to-Value Ratios for Refinance... — p.438</div>
+            </div>
+            <button class="text-slate-300 hover:text-slate-500 flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button>
+          </div>
+          <div class="cite-card">
+            <div class="flex items-center justify-center w-7 h-7 bg-slate-100 rounded-lg flex-shrink-0 text-xs font-bold text-slate-500">4</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-slate-700 truncate">Minimum Credit Score All Agency Comp...</div>
+              <div class="text-xs text-slate-400">Minimum Credit Score Chart</div>
+            </div>
+            <button class="text-slate-300 hover:text-slate-500 flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button>
+          </div>
+          <div class="cite-card border-amber-200">
+            <div class="flex items-center justify-center w-7 h-7 bg-amber-50 rounded-lg flex-shrink-0 text-xs font-bold text-amber-600">5</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-amber-700 truncate">CMG Financial — Company Overlay</div>
+              <div class="text-xs text-amber-500">Credit Score Requirements — §2.1</div>
+            </div>
+            <button class="text-amber-300 hover:text-amber-500 flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- SOURCES TAB ---- -->
+      <div id="panel-sources" class="hidden fade-in">
+        <p class="text-sm text-slate-500 mb-3">Sources (3)</p>
+        <div class="space-y-3">
+          <div class="source-row" onclick="showComparison()">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <div>
+                  <div class="text-sm font-medium text-slate-800">Minimum Credit Score All Agency Comparison Chart with Investor Overlays</div>
+                  <div class="text-xs text-slate-400">Document from my.mortgageguidelines.com</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">9 citations</span>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="source-row">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <div>
+                  <div class="text-sm font-medium text-slate-800">FHA Single Family Housing Policy Handbook</div>
+                  <div class="text-xs text-slate-400">Document from www.hud.gov</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">11 citations</span>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="source-row border-amber-200">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <div>
+                  <div class="text-sm font-medium text-amber-700">CMG Financial — Company Overlay v3.2</div>
+                  <div class="text-xs text-amber-400">Company overlay document</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-amber-400">3 citations</span>
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Follow-up input (always visible in results) -->
+      <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 py-3 z-40">
+        <div class="max-w-3xl mx-auto px-6">
+          <div class="relative border border-slate-300 rounded-xl overflow-hidden focus-within:border-perennia-400">
+            <textarea rows="2" placeholder="Ask a follow up..." class="w-full px-4 pt-3 pb-8 text-sm text-slate-700 resize-none border-none" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();}"></textarea>
+            <button class="absolute bottom-2.5 right-2.5 w-8 h-8 bg-perennia-600 hover:bg-perennia-700 text-white rounded-lg flex items-center justify-center">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          <p class="text-xs text-slate-400 text-center mt-1">Press Enter to send, Shift+Enter for new line</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== COMPARISON CHART STATE ====== -->
+    <div id="comparisonState" class="hidden fade-in max-w-5xl mx-auto w-full px-6 pt-6 pb-12">
+      <!-- Nav breadcrumbs -->
+      <div class="flex items-center gap-2 text-sm mb-6">
+        <button onclick="hideComparison()" class="text-perennia-600 hover:underline flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          Back to results
+        </button>
+      </div>
+
+      <!-- Chart navigation pills -->
+      <div class="flex items-center gap-2 justify-end mb-4 text-xs">
+        <span class="text-slate-400 mr-1">Jump to:</span>
+        <button class="px-3 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200">Guideline References</button>
+        <button class="px-3 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200">Agency Updates</button>
+        <button class="px-3 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200">Marketing</button>
+        <button class="px-3 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200">Training Center</button>
+        <button class="px-3 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200">AIME</button>
+        <button class="px-3 py-1 rounded-md bg-red-100 text-red-700 hover:bg-red-200">Ask The Experts</button>
+      </div>
+
+      <h1 class="text-2xl font-bold text-slate-800 mb-1">Minimum Credit Score</h1>
+      <p class="text-sm text-slate-500 mb-4">All Agency Comparison Chart with Investor Overlays</p>
+
+      <!-- Chart type toggle -->
+      <div class="flex gap-2 mb-6">
+        <button class="px-4 py-2 rounded-lg bg-perennia-600 text-white text-sm font-medium">Minimum Credit Score Chart</button>
+        <button class="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200">Lender Overlay Chart</button>
+      </div>
+
+      <!-- Explanation text -->
+      <div class="bg-slate-50 rounded-xl p-4 mb-6 text-sm text-slate-600 leading-relaxed">
+        <p>Although the agencies publish their minimum credit score as low as 500 (FHA) or 620 (Fannie), it is best practice to check with the lender or investor to ensure that you also meet their requirements, which are often different (and higher) than the agency minimum.</p>
+        <p class="mt-2">As of April 22, 2024, Freddie Mac issued bulletin 2024-3 announcing new Credit Score Models, and Fannie Mae also announced new models with a Casefile Score of 612 and FHA Score of 615, which are for both purchase and streamline refinances. The standard FICO model remains in effect for lenders not yet in the pilot programs. Check with your lender or investor to determine which credit score model is used.</p>
+      </div>
+
+      <!-- Minimum Credit Score Comparison Table -->
+      <h3 class="text-base font-semibold text-slate-800 mb-3">Minimum Credit Score Chart</h3>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 mb-8">
+        <table class="comparison-table w-full">
+          <thead>
+            <tr>
+              <th style="width: 140px;">Agency</th>
+              <th>Guidelines</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-semibold text-slate-800 align-top">
+                <div>Fannie Mae</div>
+                <div class="text-xs text-blue-500 font-normal mt-1">
+                  <a href="#" class="hover:underline">B3-5.1-01</a><br>
+                  <a href="#" class="hover:underline">DU Guidelines</a>
+                </div>
+              </td>
+              <td>
+                <p>Minimum credit score requirement for manually underwritten loans is <strong>620</strong> for fixed-rate, and <strong>640</strong> for ARMs.</p>
+                <p class="mt-2">For DU recommendations, the minimum representative credit score is <strong>620</strong>. For HomeReady mortgages, <strong>620</strong> applies with ≤ 97% LTV for fixed-rate loans.</p>
+                <ul class="list-disc ml-5 mt-2 space-y-1 text-sm">
+                  <li>Desktop Underwriter (DU): <strong>620</strong></li>
+                  <li>The reference score for > 1 score on borrower: <strong>middle score</strong></li>
+                  <li>Multiple borrowers: <strong>lowest of all representative scores</strong></li>
+                  <li>HomeReady: <strong>620</strong>, up to 97% LTV (fixed only)</li>
+                </ul>
+                <div class="mt-3 p-3 bg-blue-50 rounded-lg text-sm">
+                  <strong>DU Validation Service & Desktop Originator:</strong>
+                  <ul class="list-disc ml-5 mt-1 space-y-1">
+                    <li>The minimum credit score is <strong>620</strong> when DU finds an "Approve" or "Approve/Ineligible" recommendation</li>
+                    <li>Tradeline verification is automated through Fannie Mae's partnership with credit providers</li>
+                    <li>If an "Approve/Ineligible" is received, the loan may be resubmitted once conditions are cleared to see if it converts to "Approve"</li>
+                  </ul>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-semibold text-slate-800 align-top">
+                <div>Freddie Mac</div>
+                <div class="text-xs text-blue-500 font-normal mt-1">
+                  <a href="#" class="hover:underline">Guide Section 5201</a><br>
+                  <a href="#" class="hover:underline">LP Guidelines</a>
+                </div>
+              </td>
+              <td>
+                <p>Freddie Mac sets the minimum credit score for its purchase programs. The minimum indicator score is <strong>620</strong> for Loan Prospector (LP). Manual underwriting and Freddie Mac also require <strong>620</strong>.</p>
+                <ul class="list-disc ml-5 mt-2 space-y-1 text-sm">
+                  <li>The Mortgage Indicator Score is the <strong>middle of 3 scores</strong> or <strong>lower of 2</strong></li>
+                  <li>The Minimum Mortgage Indicator score for an LP Primary Residence: <strong>620</strong></li>
+                  <li>For Mortgages on investment properties requiring manual underwriting: <strong>620</strong></li>
+                  <li>For Mortgage secured by a Manufactured Home: <strong>620</strong></li>
+                </ul>
+                <p class="mt-2">Additional Freddie Mac credit considerations:</p>
+                <ul class="list-disc ml-5 mt-1 space-y-1 text-sm">
+                  <li>If neither borrower has a credit score, manual underwriting is required (traditional credit evaluation or alternative credit)</li>
+                  <li>A Borrower must not have had a delinquent, or deficient (in terms of a short sale or deed-in-lieu) Freddie Mac Mortgage, or have been foreclosed upon by Freddie Mac</li>
+                  <li>Freddie Mac recommends the lender check the Borrower's credit report to confirm the Mortgage the Borrower is seeking to refinance is current (at least 12 months on-time payments required for no-cash-out)</li>
+                </ul>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-semibold text-slate-800 align-top">
+                <div>FHA</div>
+                <div class="text-xs text-red-500 font-normal mt-1">
+                  <a href="#" class="hover:underline">4000.1 II.A</a><br>
+                  <a href="#" class="hover:underline">TOTAL Scorecard</a>
+                </div>
+              </td>
+              <td>
+                <p>The Borrower is not eligible if the FHA required Minimum Decision Credit Score (MDCS) is less than <strong>500</strong>.</p>
+                <ul class="list-disc ml-5 mt-2 space-y-1 text-sm">
+                  <li>Credit <strong>580+</strong>: up to <strong>96.5% LTV</strong> for purchases, eligible for maximum financing</li>
+                  <li>Credit <strong>500-579</strong>: maximum <strong>90% LTV</strong> for purchase</li>
+                  <li>If borrower has no FICO: must be manually underwritten using non-traditional credit</li>
+                </ul>
+                <p class="mt-2 text-sm"><a href="#" class="text-blue-500 hover:underline">FHA Financing/Credit Requirements Chart</a></p>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-semibold text-slate-800 align-top">
+                <div>VA</div>
+                <div class="text-xs text-purple-500 font-normal mt-1">
+                  <a href="#" class="hover:underline">26-7 Ch.4</a>
+                </div>
+              </td>
+              <td>
+                <p>Although VA establishes no minimum FICO credit score requirement, most lenders set a minimum of <strong>620</strong>. Lenders evaluate the Borrower's overall credit history with particular attention to the most recent 12 months.</p>
+                <ul class="list-disc ml-5 mt-2 space-y-1 text-sm">
+                  <li>VA strongly encourages lenders to use a <strong>620</strong> FICO as a guideline</li>
+                  <li>If a lender denies a VA loan below 620, the applicant has no recourse — this is a lender overlay, not a VA requirement</li>
+                </ul>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-semibold text-slate-800 align-top">
+                <div>USDA</div>
+                <div class="text-xs text-green-600 font-normal mt-1">
+                  <a href="#" class="hover:underline">USDA HB-1-3555</a>
+                </div>
+              </td>
+              <td>
+                <p>GUS (Guaranteed Underwriting System) requires a minimum FICO of <strong>640</strong> for automated approval. Borrowers below 640 may be manually underwritten. USDA sets <strong>no absolute minimum</strong>, but the automated system has a floor.</p>
+                <ul class="list-disc ml-5 mt-2 space-y-1 text-sm">
+                  <li>GUS Accept with <strong>640+</strong>: streamlined documentation</li>
+                  <li>Below <strong>640</strong>: manual underwriting with alternative credit history required</li>
+                </ul>
+              </td>
+            </tr>
+            <tr class="bg-amber-50/50">
+              <td class="font-semibold text-amber-700 align-top">
+                <div>Company Overlay</div>
+                <div class="text-xs text-amber-500 font-normal mt-1">
+                  CMG v3.2 §2.1
+                </div>
+              </td>
+              <td class="text-amber-800">
+                <p>Company minimum across all programs:</p>
+                <ul class="list-disc ml-5 mt-2 space-y-1 text-sm">
+                  <li>Conventional (Fannie/Freddie): <strong>640</strong> (overlay above agency 620)</li>
+                  <li>FHA: <strong>640</strong> (overlay above agency 580)</li>
+                  <li>VA: <strong>620</strong> (matches most lender practice)</li>
+                  <li>USDA: <strong>640</strong> (matches GUS automated floor)</li>
+                  <li>Non-QM Bank Statement: <strong>660</strong></li>
+                  <li>Non-QM DSCR: <strong>680</strong></li>
+                </ul>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<!-- ================================================================== -->
+<!-- ARIA CHAT VIEW                                                      -->
+<!-- ================================================================== -->
+<div id="view-chat" class="hidden" style="height:calc(100vh - 57px);">
+  <div class="max-w-3xl mx-auto px-6 py-6 h-full">
+    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden h-full flex flex-col">
+      <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-3 bg-slate-50">
+        <div class="w-8 h-8 bg-perennia-600 rounded-full flex items-center justify-center"><span class="text-white font-bold text-xs">A</span></div>
+        <div><div class="font-medium text-slate-800 text-sm">Aria</div><div class="text-xs text-green-500 flex items-center gap-1"><div class="w-1.5 h-1.5 bg-green-400 rounded-full"></div>Online · Guideline RAG active</div></div>
+        <div class="ml-auto flex items-center gap-2"><span class="chip bg-green-50 text-green-700 text-[10px]">12 guidelines</span><span class="chip bg-blue-50 text-blue-700 text-[10px]">3,847 chunks</span></div>
+      </div>
+      <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4" id="chatMessages">
+        <div class="text-center"><span class="text-[10px] text-slate-300 bg-slate-50 px-3 py-1 rounded-full">Borrower: James Chen · FHA Purchase · Credit 645 · DTI 42%</span></div>
+
+        <!-- Silent context injection -->
+        <div class="flex gap-3">
+          <div class="w-7 h-7 bg-perennia-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1"><span class="text-white font-bold text-[10px]">A</span></div>
+          <div class="bg-slate-50 rounded-xl rounded-tl-sm px-4 py-3 max-w-[85%]">
+            <p class="text-sm text-slate-700 leading-relaxed">Good news — James qualifies for FHA. His 645 clears the 580 minimum for 3.5% down, and 42% DTI is under the 43% manual UW cap.</p>
+            <p class="text-sm text-slate-700 leading-relaxed mt-2">However, your <span class="text-amber-600 font-medium">company overlay requires 640 minimum</span> — he's close but clears it. Watch for score drops before closing.</p>
+            <div class="mt-2 text-[10px] text-slate-400">Context from guidelines · silently injected</div>
+          </div>
+        </div>
+
+        <div class="flex gap-3 justify-end">
+          <div class="bg-perennia-600 text-white rounded-xl rounded-tr-sm px-4 py-3 max-w-[85%]"><p class="text-sm">What's the FHA DTI limit? I thought it was 50% with compensating factors</p></div>
+        </div>
+
+        <div class="flex gap-3">
+          <div class="w-7 h-7 bg-perennia-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1"><span class="text-white font-bold text-[10px]">A</span></div>
+          <div class="bg-slate-50 rounded-xl rounded-tl-sm px-4 py-3 max-w-[85%]">
+            <p class="text-sm text-slate-700">You're right — it depends on the underwriting path:</p>
+            <div class="mt-3 space-y-2">
+              <div class="bg-white rounded-lg border border-slate-200 p-3">
+                <div class="flex items-center gap-2 mb-1"><span class="chip bg-red-50 text-red-700 text-[10px]">FHA 4000.1 II.A.5.d</span><span class="text-xs font-medium text-slate-700">Manual UW</span></div>
+                <p class="text-xs text-slate-600">Max <strong>31%/43%</strong>. Up to <strong>40%/50%</strong> with 2+ compensating factors.</p>
+              </div>
+              <div class="bg-white rounded-lg border border-slate-200 p-3">
+                <div class="flex items-center gap-2 mb-1"><span class="chip bg-red-50 text-red-700 text-[10px]">FHA 4000.1 II.A.5.a</span><span class="text-xs font-medium text-slate-700">TOTAL (AUS)</span></div>
+                <p class="text-xs text-slate-600">No fixed cap. Approvals at <strong>55%+</strong> with strong factors.</p>
+              </div>
+              <div class="bg-white rounded-lg border border-amber-200 border-l-4 border-l-amber-400 p-3">
+                <div class="flex items-center gap-2 mb-1"><span class="chip bg-amber-50 text-amber-700 text-[10px]">Overlay §4.2</span><span class="text-xs font-medium text-amber-700">Overlay</span></div>
+                <p class="text-xs text-slate-600">Company caps manual UW at <strong>45%</strong>, AUS at <strong>50%</strong>. James at 42% is within both.</p>
+              </div>
+            </div>
+            <p class="text-sm text-slate-700 mt-3">James at 42% — good under all scenarios.</p>
+            <div class="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400">3 sources · 0.94 confidence</div>
+          </div>
+        </div>
+      </div>
+      <div class="px-5 py-3 border-t border-slate-100 bg-white">
+        <div class="flex items-center gap-3">
+          <input type="text" id="chatInput" placeholder="Ask Aria..." class="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-perennia-200 focus:border-perennia-400" onkeydown="if(event.key==='Enter')sendChat()">
+          <button onclick="sendChat()" class="bg-perennia-600 text-white rounded-xl px-4 py-2.5 text-sm font-medium hover:bg-perennia-700">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================================================================== -->
+<!-- ADMIN VIEW                                                          -->
+<!-- ================================================================== -->
+<div id="view-admin" class="hidden">
+  <div class="max-w-7xl mx-auto px-6 py-6">
+    <div class="grid grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-2xl font-bold text-slate-800">12</div><div class="text-sm text-slate-500">Active Guidelines</div></div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-2xl font-bold text-perennia-600">3,847</div><div class="text-sm text-slate-500">Total Chunks</div></div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-2xl font-bold text-slate-800">98.2%</div><div class="text-sm text-slate-500">Embedded</div></div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4"><div class="text-2xl font-bold text-amber-500">2</div><div class="text-sm text-slate-500">Pending Updates</div></div>
+    </div>
+    <div class="grid grid-cols-3 gap-6">
+      <div class="col-span-1">
+        <div class="bg-white rounded-xl border border-slate-200 p-5">
+          <h3 class="font-semibold text-slate-800 mb-4">Upload Guideline</h3>
+          <div class="upload-zone rounded-xl p-8 text-center mb-4" ondrop="event.preventDefault()" ondragover="event.preventDefault()">
+            <svg class="w-10 h-10 mx-auto text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            <p class="text-sm text-slate-500">Drag PDF, DOCX, or TXT</p>
+            <p class="text-xs text-slate-400">or click to browse</p>
+          </div>
+          <div class="space-y-3">
+            <div><label class="block text-xs font-medium text-slate-600 mb-1">Type</label><select class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"><option>Agency</option><option>Company Overlay</option><option>Investor Overlay</option><option>Non-QM</option><option>DPA</option><option>Construction</option><option>Renovation</option><option>Reverse Mortgage</option><option>AIO</option></select></div>
+            <div><label class="block text-xs font-medium text-slate-600 mb-1">Program</label><select class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"><option>All</option><option>Conventional</option><option>FHA</option><option>VA</option><option>USDA</option><option>Non-QM</option><option>Jumbo</option></select></div>
+            <button onclick="simulateUpload()" class="w-full bg-perennia-600 text-white rounded-lg px-4 py-2.5 text-sm font-medium hover:bg-perennia-700">Upload & Process</button>
+          </div>
+          <div id="uploadProgress" class="mt-4 hidden">
+            <div class="flex justify-between mb-1"><span class="text-xs font-medium text-slate-600" id="uploadText">Extracting...</span><span class="text-xs text-slate-400" id="uploadPct">0%</span></div>
+            <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-perennia-500 h-2 rounded-full progress-bar" id="uploadBar" style="width:0%"></div></div>
+            <div class="mt-1 text-xs text-slate-400" id="uploadDetail"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-span-2">
+        <div class="bg-white rounded-xl border border-slate-200">
+          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-semibold text-slate-800">Active Guidelines</h3>
+            <input type="text" placeholder="Search..." class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-48">
+          </div>
+          <div class="divide-y divide-slate-100">
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs">FM</div><div><div class="text-sm font-medium text-slate-800">Fannie Mae Selling Guide</div><div class="text-xs text-slate-400">v2026.1 · 1,247 chunks · 100%</div></div></div><span class="chip bg-blue-50 text-blue-700">Agency</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs">FrM</div><div><div class="text-sm font-medium text-slate-800">Freddie Mac Seller/Servicer Guide</div><div class="text-xs text-slate-400">v2026.1 · 1,100 chunks · 100%</div></div></div><span class="chip bg-blue-50 text-blue-700">Agency</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-red-50 rounded-lg flex items-center justify-center text-red-600 font-bold text-xs">FHA</div><div><div class="text-sm font-medium text-slate-800">FHA 4000.1 Handbook</div><div class="text-xs text-slate-400">4000.1 · 892 chunks · 100%</div></div></div><span class="chip bg-blue-50 text-blue-700">Agency</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 font-bold text-xs">VA</div><div><div class="text-sm font-medium text-slate-800">VA Lender's Handbook 26-7</div><div class="text-xs text-slate-400">Ch.4 · 634 chunks · 100%</div></div></div><span class="chip bg-blue-50 text-blue-700">Agency</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center text-green-600 font-bold text-xs">USD</div><div><div class="text-sm font-medium text-slate-800">USDA HB-1-3555</div><div class="text-xs text-slate-400">2026 · 478 chunks · 100%</div></div></div><span class="chip bg-blue-50 text-blue-700">Agency</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 font-bold text-xs">NQ</div><div><div class="text-sm font-medium text-slate-800">Non-QM Underwriting Guidelines</div><div class="text-xs text-slate-400">v2.1 · 312 chunks · 100%</div></div></div><span class="chip bg-indigo-50 text-indigo-700">Non-QM</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 font-bold text-xs">CO</div><div><div class="text-sm font-medium text-slate-800">CMG Financial — Company Overlay</div><div class="text-xs text-slate-400">v3.2 · 156 chunks · 100%</div></div></div><span class="chip bg-amber-50 text-amber-700">Company</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center text-green-600 font-bold text-xs">DPA</div><div><div class="text-sm font-medium text-slate-800">Down Payment Assistance Programs</div><div class="text-xs text-slate-400">Multi-state · 245 chunks · 100%</div></div></div><span class="chip bg-green-50 text-green-700">DPA</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 font-bold text-xs">203k</div><div><div class="text-sm font-medium text-slate-800">Renovation Loans (203k / HomeStyle)</div><div class="text-xs text-slate-400">v1.0 · 380 chunks · 100%</div></div></div><span class="chip bg-teal-50 text-teal-700">Renovation</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-cyan-50 rounded-lg flex items-center justify-center text-cyan-600 font-bold text-xs">CON</div><div><div class="text-sm font-medium text-slate-800">Construction Loan Guidelines</div><div class="text-xs text-slate-400">v2.0 · 198 chunks · 100%</div></div></div><span class="chip bg-cyan-50 text-cyan-700">Construction</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-rose-50 rounded-lg flex items-center justify-center text-rose-600 font-bold text-xs">REV</div><div><div class="text-sm font-medium text-slate-800">HECM Reverse Mortgage Guidelines</div><div class="text-xs text-slate-400">FHA · 267 chunks · 100%</div></div></div><span class="chip bg-rose-50 text-rose-700">Reverse</span></div>
+            <div class="px-5 py-3.5 flex items-center justify-between card-hover"><div class="flex items-center gap-3"><div class="w-9 h-9 bg-violet-50 rounded-lg flex items-center justify-center text-violet-600 font-bold text-xs">AIO</div><div><div class="text-sm font-medium text-slate-800">All-In-One (AIO) First Lien HELOC</div><div class="text-xs text-slate-400">v1.2 · 134 chunks · 100%</div></div></div><span class="chip bg-violet-50 text-violet-700">AIO</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+const SOURCES = ['Fannie Mae','Freddie Mac','FHA','VA','USDA','Non-QM','AIO','Down Payment Assistance','Construction Loans','Renovation Loans','Reverse Mortgage'];
+const LIBRARY = [
+  'whats the minimum credit score for FHA',
+  'my client is buying an investment property',
+  'the current LTV is 90.91 for a conventional loan',
+  'Part time to Full time',
+  'am I able to use active military income if',
+  'paying down a car payment down to 10 months',
+  'buying a house from family with FHA financing',
+  'is a great aunt considered family when it comes to identity of interest',
+  'gift funds for investment purchase',
+  'chapter 7 bankruptcy conventional guidelines',
+  'How do I calculate income for people that are self employed',
+  'what visa is acceptable for FHA financing',
+  'Does interest credit, otherwise known as simple interest, count',
+  'can unmarried borrowers be on the same loan',
+  'if my self employed borrower owns two businesses',
+  'I have a client from Germany that has worked in the US for 2 years',
+  'do I need to order tax transcripts for VA loans',
+  'I have a borrower that makes $110,000 but',
+  'I just reviewed the 2023 tax returns of our borrower',
+  'do I need a history of writing off depreciation',
+  'how can I remove the request for reserves',
+  'what are the FHA downgrade items we need to check',
+  'are business credit reports needed on a FHA loan',
+  'do I need a balance sheet for self employed borrowers',
+  'what is the eligibility for union workers that',
+  'FHA starting a payment plan with the IRS',
+  'non occupant borrower investment property',
+  'can you have a non occupying co borrower',
+  'positive rental history'
+];
+
+// Build sidebar
+const srcEl = document.getElementById('sourceCheckboxes');
+SOURCES.forEach(s => {
+  const div = document.createElement('label');
+  div.className = 'flex items-center gap-2 cursor-pointer sidebar-item';
+  div.innerHTML = `<input type="checkbox" checked class="source-checkbox rounded w-3.5 h-3.5"><span class="text-sm text-slate-700">${s}</span>`;
+  srcEl.appendChild(div);
+});
+const libEl = document.getElementById('libraryItems');
+LIBRARY.forEach(q => {
+  const div = document.createElement('div');
+  div.className = 'sidebar-item';
+  div.onclick = () => { document.getElementById('searchInput').value = q; };
+  div.innerHTML = `<div class="sidebar-link">${q}</div>`;
+  libEl.appendChild(div);
+});
+
+function switchView(v) {
+  ['search','chat','admin'].forEach(t => {
+    document.getElementById(`view-${t}`).classList.toggle('hidden', t !== v);
+    document.getElementById(`nav-${t}`).className = t === v ? 'px-5 py-4 text-sm nav-active transition-all cursor-pointer' : 'px-5 py-4 text-sm nav-inactive transition-all cursor-pointer';
+  });
+}
+
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  s.classList.toggle('hidden');
+  document.getElementById('collapseIcon').style.transform = s.classList.contains('hidden') ? 'rotate(180deg)' : '';
+}
+
+function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  document.getElementById('questionTitle').textContent = q;
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('resultsState').classList.remove('hidden');
+  document.getElementById('comparisonState').classList.add('hidden');
+  switchResultTab('answer');
+}
+
+function switchResultTab(tab) {
+  ['answer','citations','sources'].forEach(t => {
+    document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
+    document.getElementById(`rtab-${t}`).className = t === tab ? 'result-tab result-tab-active' : 'result-tab';
+  });
+}
+
+function showComparison() {
+  document.getElementById('resultsState').classList.add('hidden');
+  document.getElementById('comparisonState').classList.remove('hidden');
+}
+function hideComparison() {
+  document.getElementById('comparisonState').classList.add('hidden');
+  document.getElementById('resultsState').classList.remove('hidden');
+}
+
+function simulateUpload() {
+  const p = document.getElementById('uploadProgress'); p.classList.remove('hidden');
+  const bar = document.getElementById('uploadBar'), txt = document.getElementById('uploadText'), pct = document.getElementById('uploadPct'), det = document.getElementById('uploadDetail');
+  txt.classList.remove('text-green-600');
+  [{w:'15%',t:'Extracting text...',d:'247 pages',p:'15%'},{w:'35%',t:'AI analysis...',d:'Key points, rules',p:'35%'},{w:'60%',t:'Chunking...',d:'~500 token chunks',p:'60%'},{w:'85%',t:'Embedding...',d:'text-embedding-3-small',p:'85%'},{w:'100%',t:'Complete!',d:'156 chunks indexed',p:'100%'}].forEach((s,i) => {
+    setTimeout(() => { bar.style.width=s.w; txt.textContent=s.t; pct.textContent=s.p; det.textContent=s.d; if(i===4)txt.classList.add('text-green-600'); }, (i+1)*1000);
+  });
+}
+
+function sendChat() {
+  const input = document.getElementById('chatInput'), msg = input.value.trim();
+  if (!msg) return;
+  const c = document.getElementById('chatMessages');
+  const u = document.createElement('div'); u.className = 'flex gap-3 justify-end fade-in';
+  u.innerHTML = `<div class="bg-perennia-600 text-white rounded-xl rounded-tr-sm px-4 py-3 max-w-[85%]"><p class="text-sm">${msg}</p></div>`;
+  c.appendChild(u); input.value = '';
+  const t = document.createElement('div'); t.className = 'flex gap-3 fade-in';
+  t.innerHTML = `<div class="w-7 h-7 bg-perennia-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1"><span class="text-white font-bold text-[10px]">A</span></div><div class="bg-slate-50 rounded-xl rounded-tl-sm px-4 py-3"><div class="flex gap-1.5 py-1"><div class="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div><div class="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div><div class="w-2 h-2 bg-slate-400 rounded-full typing-dot"></div></div><div class="text-[10px] text-slate-400 mt-1">Searching guidelines...</div></div>`;
+  c.appendChild(t); c.scrollTop = c.scrollHeight;
+  setTimeout(() => { t.remove(); const r = document.createElement('div'); r.className='flex gap-3 fade-in'; r.innerHTML=`<div class="w-7 h-7 bg-perennia-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1"><span class="text-white font-bold text-[10px]">A</span></div><div class="bg-slate-50 rounded-xl rounded-tl-sm px-4 py-3 max-w-[85%]"><p class="text-sm text-slate-700">Found relevant guidance across your indexed guidelines. In the real system, this would be a RAG-backed answer with citations.</p><div class="mt-2 text-[10px] text-slate-400">3 sources · 0.88 confidence</div></div>`; c.appendChild(r); c.scrollTop=c.scrollHeight; }, 2000);
+}
+</script>
+</body>
+</html>
