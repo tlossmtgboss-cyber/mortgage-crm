@@ -26,6 +26,11 @@ from sqlalchemy.sql import func
 
 from pydantic import BaseModel, Field
 
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
+
 # Try to import Base from the project
 try:
     from database import Base
@@ -822,6 +827,11 @@ class UnderwritingGuideline(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # Embedding pipeline status
+    embedding_status = Column(String(20), default="pending")
+    chunk_count = Column(Integer, default=0)
+    overlay_priority = Column(Integer, default=4)
+
 
 class GuidelineSection(Base):
     """
@@ -851,8 +861,11 @@ class GuidelineSection(Base):
     category = Column(String(50))  # credit, income, assets, etc.
     topics = Column(ARRAY(Text), default=[])  # Specific topics covered
 
-    # For vector search (future enhancement)
-    content_embedding = Column(ARRAY(Float))  # Vector embedding for semantic search
+    # Vector embedding for semantic search
+    content_embedding = Column(Vector(1536) if Vector is not None else Text, nullable=True)
+    embedding_model = Column(String(50), default="text-embedding-3-small")
+    token_count = Column(Integer, nullable=True)
+    chunk_hash = Column(String(64), nullable=True)
 
     # Position in document
     page_number = Column(Integer)

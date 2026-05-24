@@ -18,6 +18,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
+
 # Import Base from the db module
 from db import Base
 
@@ -184,6 +189,11 @@ class AIKnowledgeBase(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Vector embedding for semantic search
+    content_embedding = Column(Vector(1536) if Vector is not None else Text, nullable=True)
+    embedding_model = Column(String(50), nullable=True)
+    chunk_hash = Column(String(64), nullable=True)
 
     # Relationships
     creator = relationship("User", backref="knowledge_entries")
