@@ -15,9 +15,6 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, List
-from anthropic import Anthropic
-
-from ..anthropic_client import get_anthropic_client
 from services.llm_gateway import llm_gateway
 from ..state import (
     AgentState,
@@ -220,6 +217,10 @@ def _get_role_context(role: str) -> str:
 # PII patterns for masking before LLM context injection (GLBA compliance)
 _SSN_PATTERN = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
 _FULL_PHONE_PATTERN = re.compile(r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?(\d{4})\b')
+_EMAIL_PATTERN = re.compile(
+    r'\b([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.(?!png|jpg|jpeg|gif|svg|webp)[a-zA-Z]{2,})\b',
+    re.IGNORECASE,
+)
 
 # Keys whose values should be fully redacted (case-insensitive match)
 _REDACT_KEYS = frozenset({
@@ -229,10 +230,14 @@ _REDACT_KEYS = frozenset({
     'password', 'secret', 'token',
 })
 
-# Keys whose values should be partially masked (show last 4)
+# Keys whose values should be partially masked (show last 4 for phones, domain for emails)
 _MASK_KEYS = frozenset({
     'phone', 'phone_number', 'mobile', 'cell', 'fax',
     'borrower_phone', 'co_borrower_phone',
+})
+_EMAIL_KEYS = frozenset({
+    'email', 'borrower_email', 'co_borrower_email', 'lead_email',
+    'loan_borrower_email', 'contact_email',
 })
 
 
@@ -261,12 +266,23 @@ def _mask_pii_value(key: str, value: Any) -> Any:
             return f"***-***-{digits[-4:]}"
         return value
 
+    # Mask email keys (show ***@domain.com)
+    if key_lower in _EMAIL_KEYS:
+        m = _EMAIL_PATTERN.match(value.strip())
+        if m:
+            return f"***@{m.group(2)}"
+        return value
+
     # Pattern-based masking for values (SSNs embedded in text)
     value = _SSN_PATTERN.sub("[REDACTED-SSN]", value)
 
-    # Also mask phone numbers found in any string value (GLBA compliance)
+    # Mask phone numbers found in any string value (GLBA compliance)
     if _FULL_PHONE_PATTERN.search(value):
         value = _FULL_PHONE_PATTERN.sub(r"***-***-\1", value)
+
+    # Mask emails found inline in free text
+    if _EMAIL_PATTERN.search(value):
+        value = _EMAIL_PATTERN.sub(r"***@\2", value)
 
     return value
 
@@ -458,12 +474,20 @@ DO NOT use a canned/scripted response. Be natural and human."""
             intent_guidance = f"{intent_guidance}\n\n{_EMAIL_COMPOSE_GUIDANCE}" if intent_guidance else _EMAIL_COMPOSE_GUIDANCE
 
         # Build the system prompt
-        now_str = datetime.now(timezone.utc).strftime("%A, %B %d, %Y at %I:%M %p UTC")
+        try:
+            from zoneinfo import ZoneInfo
+            eastern = ZoneInfo("America/New_York")
+        except ImportError:
+            import pytz
+            eastern = pytz.timezone("America/New_York")
+        now_str = datetime.now(eastern).strftime("%A, %B %d, %Y at %I:%M %p ET")
         system_prompt = UNIFIED_SYSTEM_PROMPT.format(intent_guidance=intent_guidance, current_date=now_str)
 
         # Inject user memories into system prompt for personalization
         memory_context = state.get("memory_context", "")
         if memory_context:
+            if len(memory_context) > 2000:
+                memory_context = memory_context[:2000].rsplit('\n', 1)[0]
             system_prompt += "\n\n## User Context & Preferences\nThe following are remembered facts and preferences about this user. Use them to personalize your response where relevant:\n" + memory_context
 
         # Build user context (wrap user input with markers to prevent prompt injection)
@@ -477,9 +501,10 @@ DO NOT use a canned/scripted response. Be natural and human."""
         # This allows the AI to answer "send them an email" or "what stage is this at?"
         active_entity_data = state.get("active_entity_data")
         if active_entity_data:
+            masked_entity = _mask_gathered_data(active_entity_data)
             context_parts.append("")
             context_parts.append("=== ACTIVE CRM CONTEXT (the lead/loan the user is currently viewing) ===")
-            for key, value in active_entity_data.items():
+            for key, value in masked_entity.items():
                 if value is not None:
                     context_parts.append(f"  {key}: {value}")
             context_parts.append("=== END ACTIVE CRM CONTEXT ===")
@@ -558,7 +583,7 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         # Rough token budget check (4 chars ~ 1 token)
         estimated_input_tokens = (len(str(system_prompt)) + len(str(context))) // 4
-        model_context_window = 200000 if "claude-3" in model or "claude-sonnet" in model or "claude-haiku" in model else 100000
+        model_context_window = 200000 if model.startswith("claude-") else 100000
         if estimated_input_tokens > model_context_window * 0.9:
             # Truncate context to fit
             max_context_chars = int(model_context_window * 0.7 * 4)
@@ -635,10 +660,11 @@ DO NOT use a canned/scripted response. Be natural and human."""
         elif len(gathered_data) > 2:
             response_type = "structured"
 
-        # Calculate confidence based on data quality and response length
-        confidence = 0.85 if data_quality == "complete" else 0.6
-        if len(response_text) > 500:
-            confidence = min(confidence + 0.1, 0.95)
+        # Confidence based on data quality and tool success rate
+        _quality_scores = {"complete": 0.9, "partial": 0.65, "insufficient": 0.35, "not_needed": 0.8}
+        confidence = _quality_scores.get(data_quality, 0.5)
+        if errors:
+            confidence = max(confidence - 0.15, 0.2)
 
         # Extract insights from response
         insights = []

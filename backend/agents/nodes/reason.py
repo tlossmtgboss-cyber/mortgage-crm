@@ -1,9 +1,15 @@
 """
-Reasoning Engine Node
+Reasoning Engine Node (DEPRECATED)
 
-This node analyzes the gathered data to generate insights, recommendations,
-and a coherent understanding of the user's situation.
+Superseded by reason_and_respond.py which combines reasoning + response
+in a single LLM call. This file is retained only for backward-compatible
+imports — it is NOT wired into the orchestrator graph.
 """
+import warnings
+warnings.warn(
+    "agents.nodes.reason is deprecated — use reason_and_respond instead",
+    DeprecationWarning, stacklevel=2,
+)
 
 import json
 import logging

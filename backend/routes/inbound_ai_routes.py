@@ -13,6 +13,7 @@ When an inbound call arrives on an LO's number:
 Prefix: /api/v1/telephony
 """
 
+import asyncio
 import os
 import json
 import hmac
@@ -491,9 +492,17 @@ async def _get_or_create_vapi_assistant(
             f"Thank you for calling {company}. "
             f"{lo} will be in touch. Have a great day!"
         ),
+        "transcriber": {
+            "provider": "deepgram",
+            "model": "nova-2",
+            "language": "en",
+            "endpointing": 700,
+        },
         "serverUrl": webhook_url,
         "silenceTimeoutSeconds": 30,
         "maxDurationSeconds": 300,
+        "responseDelaySeconds": 1.0,
+        "numWordsToInterruptAssistant": 4,
         "voicemailDetection": {
             "provider": "vapi",
             "beepMaxAwaitSeconds": 25,
@@ -857,7 +866,8 @@ async def inbound_call_webhook(
     config = _get_inbound_config(db, org_id)
     ring_timeout = config.get("lo_ring_timeout", DEFAULT_LO_RING_TIMEOUT)
     ai_enabled = config.get("ai_answering_enabled", True)
-    company_name = config.get("company_name") or lo_info.get("org_name") or "The Tim Loss Team"
+    from services.company_name_resolver import resolve_company_name
+    company_name = config.get("company_name") or lo_info.get("org_name") or resolve_company_name(db, org_id)
 
     # Step 3: Check availability
     lo_available = _is_lo_available(db, lo_user_id)
@@ -951,11 +961,78 @@ async def _transfer_to_vapi(
 
     Creates a Vapi outbound call to the caller's number, then hangs up
     the Telnyx leg so Vapi takes over the conversation.
+
+    Performs DNC compliance check before placing the outbound call.
+    If the caller's number is on the DNC list, the transfer is blocked
+    and a graceful fallback message is played instead.
     """
     org_id = lo_info.get("organization_id") if lo_info else None
     lo_name = lo_info.get("full_name", "your loan officer") if lo_info else "your loan officer"
     company = lo_info.get("org_name", "our team") if lo_info else "our team"
     lo_user_id = lo_info.get("user_id") if lo_info else None
+
+    # -----------------------------------------------------------------------
+    # TCPA Compliance: DNC check before outbound call to caller's number
+    # -----------------------------------------------------------------------
+    try:
+        from telephony.compliance import ComplianceChecker
+
+        checker = ComplianceChecker(db, organization_id=org_id)
+        is_dnc, dnc_reason = checker.check_dnc(from_number)
+
+        if is_dnc:
+            logger.warning(
+                "Inbound transfer BLOCKED by DNC: phone=***%s org=%s reason=%s",
+                from_number[-4:] if from_number else "?", org_id, dnc_reason,
+            )
+            # Don't place outbound call -- take a message instead
+            await _telnyx_post(f"/calls/{call_control_id}/actions/speak", {
+                "payload": (
+                    f"Thank you for calling. {lo_name} will need to return your call directly. "
+                    "Please leave your name and a brief message after the tone, "
+                    "and someone will get back to you as soon as possible."
+                ),
+                "voice": "female",
+                "language": "en-US",
+            })
+            # Log as activity for the LO
+            _log_lead_activity(
+                db, from_number, org_id,
+                "DNC Block - Inbound Transfer",
+                f"Inbound call transfer to Vapi AI blocked: caller number is on DNC list. "
+                f"Reason: {dnc_reason}. Fallback message played.",
+            )
+            if lo_user_id:
+                _create_task_for_lo(
+                    db,
+                    lo_user_id=lo_user_id,
+                    organization_id=org_id,
+                    title="Missed call - DNC listed caller",
+                    description=(
+                        f"An inbound caller (***{from_number[-4:] if from_number else '?'}) "
+                        f"could not be transferred to AI because their number is on the "
+                        f"Do Not Call list. Please return their call directly.\n"
+                        f"DNC reason: {dnc_reason}"
+                    ),
+                    priority="high",
+                )
+            return
+        else:
+            logger.info(
+                "DNC check passed for inbound transfer: phone=***%s org=%s",
+                from_number[-4:] if from_number else "?", org_id,
+            )
+    except ImportError:
+        logger.warning(
+            "ComplianceChecker not available for inbound DNC check -- "
+            "proceeding with transfer (degraded compliance)"
+        )
+    except Exception as e:
+        # Compliance check failure should NOT block the call flow.
+        # Log and proceed -- the caller already initiated the call.
+        logger.error(
+            "DNC compliance check failed for inbound transfer (non-fatal): %s", e
+        )
 
     # Get or create assistant
     assistant_id = None
@@ -1045,11 +1122,26 @@ async def _transfer_to_vapi(
                 assistant_id, vapi_call_id,
                 "enriched" if (caller_context and caller_context.get("has_context")) else "generic",
             )
-            # Hang up the Telnyx leg
-            await _telnyx_post(
-                f"/calls/{call_control_id}/actions/hangup",
-                {"cause": "normal_clearing"},
-            )
+            # Hang up the Telnyx leg — retry once on failure to avoid dangling calls
+            for attempt in range(2):
+                try:
+                    await _telnyx_post(
+                        f"/calls/{call_control_id}/actions/hangup",
+                        {"cause": "normal_clearing"},
+                    )
+                    break
+                except Exception as hangup_err:
+                    if attempt == 0:
+                        logger.warning(
+                            "Telnyx hangup attempt 1 failed for %s, retrying in 1s: %s",
+                            call_control_id[:16], hangup_err,
+                        )
+                        await asyncio.sleep(1)
+                    else:
+                        logger.error(
+                            "Failed to hangup Telnyx leg %s after Vapi transfer (both attempts failed): %s",
+                            call_control_id, hangup_err,
+                        )
         else:
             logger.error("Vapi call creation failed: %s", vapi_result)
             # Fallback message
@@ -1241,22 +1333,35 @@ async def vapi_inbound_webhook(
                 org_id = resolved["organization_id"]
                 lo_user_id = lo_user_id or resolved.get("user_id")
 
+        # Back up payload BEFORE DB write -- protects transcript on SQL failure
+        import pathlib as _pl
+        _backup_call_id = vapi_call_id or "unknown_inbound"
+        try:
+            _bkdir = _pl.Path("webhook_backups")
+            _bkdir.mkdir(parents=True, exist_ok=True)
+            _bkpath = _bkdir / f"{_backup_call_id}.json"
+            _bkpath.write_text(json.dumps(payload, default=str), encoding="utf-8")
+            logger.debug("Webhook payload backed up to %s", _bkpath)
+        except Exception as _bke:
+            logger.error("Failed to back up inbound webhook payload: %s", _bke)
+
         # Upsert into vapi_calls
         _rec_status = "available" if recording_url else "none"
         _tx_status = "completed" if transcript else "none"
+        _db_write_ok = False
         try:
             db.execute(text("""
                 INSERT INTO vapi_calls (
                     vapi_call_id, phone_number, direction, status,
                     transcript, summary, recording_url, stereo_recording_url,
                     recording_status, transcript_status,
-                    duration, organization_id, call_metadata,
+                    duration, organization_id, loan_officer_id, call_metadata,
                     started_at, ended_at, created_at
                 ) VALUES (
                     :call_id, :phone, 'inbound', 'completed',
                     :transcript, :summary, :recording_url, :stereo_recording_url,
                     :recording_status, :transcript_status,
-                    :duration, :org_id, :metadata,
+                    :duration, :org_id, :lo_user_id, :metadata,
                     :started, :ended, NOW()
                 )
                 ON CONFLICT (vapi_call_id)
@@ -1269,6 +1374,7 @@ async def vapi_inbound_webhook(
                     recording_status = EXCLUDED.recording_status,
                     transcript_status = EXCLUDED.transcript_status,
                     duration = EXCLUDED.duration,
+                    loan_officer_id = COALESCE(EXCLUDED.loan_officer_id, vapi_calls.loan_officer_id),
                     ended_at = EXCLUDED.ended_at,
                     updated_at = NOW()
             """), {
@@ -1282,17 +1388,33 @@ async def vapi_inbound_webhook(
                 "transcript_status": _tx_status,
                 "duration": duration,
                 "org_id": org_id,
+                "lo_user_id": lo_user_id,
                 "metadata": json.dumps(call_metadata),
                 "started": call_data.get("startedAt"),
                 "ended": call_data.get("endedAt"),
             })
             db.commit()
+            _db_write_ok = True
         except Exception as e:
-            logger.warning("Failed to log end-of-call report: %s", e)
+            logger.warning(
+                "Failed to log end-of-call report: %s "
+                "(backup retained at webhook_backups/%s.json for manual recovery)",
+                e, _backup_call_id,
+            )
             try:
                 db.rollback()
             except Exception:
                 pass
+
+        # Clean up backup file if DB write succeeded
+        if _db_write_ok:
+            try:
+                _bkpath_cleanup = _pl.Path("webhook_backups") / f"{_backup_call_id}.json"
+                if _bkpath_cleanup.exists():
+                    _bkpath_cleanup.unlink()
+                    logger.debug("Backup cleaned up after successful persist: %s", _bkpath_cleanup)
+            except Exception as _cle:
+                logger.warning("Could not clean up backup file: %s", _cle)
 
         # Log activity
         activity_content = f"AI Inbound Call Summary:\n{summary or 'No summary available.'}"
@@ -1304,6 +1426,52 @@ async def vapi_inbound_webhook(
             "AI Inbound Call",
             activity_content,
         )
+
+        # Log compliance audit entry for the completed call
+        try:
+            from telephony.compliance import ComplianceChecker
+
+            checker = ComplianceChecker(db, organization_id=org_id)
+            # Resolve lead_id for the audit trail
+            _audit_lead_id = None
+            if customer_phone:
+                _phone_clean = _normalize_phone(customer_phone)
+                if _phone_clean and len(_phone_clean) >= 10:
+                    _lead_row = db.execute(text("""
+                        SELECT id FROM leads
+                        WHERE phone LIKE :phone_pattern
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    """), {"phone_pattern": f"%{_phone_clean}"}).fetchone()
+                    if _lead_row:
+                        _audit_lead_id = _lead_row.id
+
+            checker._log_decision(
+                decision_type="inbound_ai_call_completed",
+                phone_number=customer_phone or "",
+                decision="logged",
+                reason=f"AI inbound call completed: duration={duration}s, ended={ended_reason}",
+                lead_id=_audit_lead_id,
+                user_id=lo_user_id,
+                details={
+                    "vapi_call_id": vapi_call_id,
+                    "direction": "inbound",
+                    "duration": duration,
+                    "ended_reason": ended_reason,
+                    "had_transcript": bool(transcript),
+                    "had_recording": bool(recording_url),
+                    "source": "inbound_transfer",
+                },
+            )
+            db.commit()
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("Compliance audit log for inbound call failed (non-fatal): %s", e)
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         # Call intelligence integration
         try:
@@ -1352,6 +1520,10 @@ async def vapi_inbound_webhook(
         if default_aid:
             return {"assistantId": default_aid}
 
+        # Resolve company name for fallback assistant prompt
+        from services.company_name_resolver import resolve_company_name as _rcn
+        _fallback_company = _rcn(db, org_id)
+
         return {
             "assistant": {
                 "name": "Aria - Default Inbound",
@@ -1362,7 +1534,7 @@ async def vapi_inbound_webhook(
                         {
                             "role": "system",
                             "content": (
-                                "You are Aria, an AI assistant for The Tim Loss Team. "
+                                f"You are Aria, an AI assistant for {_fallback_company}. "
                                 "You're a mortgage loan officer's virtual receptionist.\n\n"
                                 "Your role:\n"
                                 "- Greet callers warmly and professionally\n"
@@ -1385,8 +1557,16 @@ async def vapi_inbound_webhook(
                 "firstMessage": (
                     "Hi, thanks for calling! This is Aria. How can I help you today?"
                 ),
+                "transcriber": {
+                    "provider": "deepgram",
+                    "model": "nova-2",
+                    "language": "en",
+                    "endpointing": 700,
+                },
                 "silenceTimeoutSeconds": 30,
                 "maxDurationSeconds": 300,
+                "responseDelaySeconds": 1.0,
+                "numWordsToInterruptAssistant": 4,
             }
         }
 

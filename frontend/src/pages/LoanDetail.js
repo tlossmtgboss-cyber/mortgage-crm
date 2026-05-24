@@ -2942,6 +2942,8 @@ function LoanDetail() {
         <VoicemailDrop
           phoneNumber={loan.borrower_phone}
           recipientName={loan.borrower_name || loan.borrower}
+          leadId={loan.lead_id}
+          loanId={loan.id}
           onClose={() => setShowVoicemailDrop(false)}
         />
       )}

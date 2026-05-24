@@ -228,19 +228,34 @@ def create_initial_state(
     )
 
 
+_MUTABLE_STATE_KEYS = frozenset({
+    "gathered_data", "tool_calls", "query_entities", "extracted_entities",
+    "insights", "recommendations", "reasoning_chain",
+    "deferred_actions", "actions_requested", "actions_executed", "actions_pending",
+    "errors", "node_trace", "missing_data", "required_tools", "intent_agents",
+    "follow_up_suggestions", "active_entity_data",
+    "conversation_history", "user_memories", "user_context",
+    "cached_data", "verification_report", "quality_score",
+})
+
 def update_state(state: AgentState, updates: dict) -> AgentState:
     """
     Update state with new values, creating a new state object.
-
-    Args:
-        state: Current state
-        updates: Dictionary of updates to apply
-
-    Returns:
-        AgentState: New state with updates applied
+    Deep-copies mutable fields to prevent shared-reference mutation;
+    skips deep-copy for immutable scalars and strings.
     """
-    new_state = copy.deepcopy(dict(state))
-    new_state.update(updates)
+    new_state = {}
+    for k, v in state.items():
+        if k in updates:
+            uv = updates[k]
+            new_state[k] = copy.deepcopy(uv) if isinstance(uv, (dict, list)) else uv
+        elif k in _MUTABLE_STATE_KEYS and isinstance(v, (dict, list)):
+            new_state[k] = copy.deepcopy(v)
+        else:
+            new_state[k] = v
+    for k, v in updates.items():
+        if k not in new_state:
+            new_state[k] = copy.deepcopy(v) if isinstance(v, (dict, list)) else v
     return AgentState(**new_state)
 
 

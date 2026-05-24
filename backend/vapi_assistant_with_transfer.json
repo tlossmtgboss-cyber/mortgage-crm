@@ -281,11 +281,19 @@
     "provider": "cartesia",
     "voiceId": "b7d50908-b17c-442d-ad8d-810c63997ed9"
   },
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-2",
+    "language": "en",
+    "endpointing": 700
+  },
   "firstMessage": "Thank you for calling The Tim Loss Team. This is Aria, your AI receptionist. How may I help you today?",
   "endCallMessage": "Thank you for calling. Have a great day!",
   "recordingEnabled": true,
   "silenceTimeoutSeconds": 30,
   "maxDurationSeconds": 1800,
+  "responseDelaySeconds": 1.0,
+  "numWordsToInterruptAssistant": 4,
   "backgroundSound": "office",
   "serverUrl": "https://app.perenniaai.com/api/vapi/webhook",
   "serverUrlSecret": ""

@@ -48,6 +48,93 @@ def _resolve_org_id_from_assistant(db: Session, data: dict) -> Optional[int]:
     )
     return None
 
+def _resolve_default_owner(db: Session, org_id: Optional[int]) -> int:
+    """Find the default lead owner for an organization.
+
+    Looks for the first active loan_officer, then admin, in the org.
+    Falls back to user id 1 if nothing is found.
+    """
+    if org_id:
+        try:
+            from database.models import User
+            # Prefer an active loan officer in the org
+            owner = db.query(User).filter(
+                User.organization_id == org_id,
+                User.is_active == True,
+                User.role == "loan_officer",
+            ).first()
+            if owner:
+                return owner.id
+            # Fall back to any active admin in the org
+            owner = db.query(User).filter(
+                User.organization_id == org_id,
+                User.is_active == True,
+                User.role.in_(["admin", "site_admin"]),
+            ).first()
+            if owner:
+                return owner.id
+            # Fall back to any active user in the org
+            owner = db.query(User).filter(
+                User.organization_id == org_id,
+                User.is_active == True,
+            ).first()
+            if owner:
+                return owner.id
+        except Exception as e:
+            logger.warning("Failed to resolve default owner for org %s: %s", org_id, e)
+    return 1  # Last resort fallback
+
+
+def _create_transfer_failure_callback(
+    db: Session,
+    caller_name: str,
+    caller_phone: str,
+    target_role: str,
+    reason: str,
+    failure_detail: str,
+    target_user_id: int,
+    org_id: Optional[int],
+) -> Optional[int]:
+    """Create a high-priority callback task when a call transfer fails.
+
+    Returns the task id on success, or None if task creation fails.
+    """
+    try:
+        from database.models import Task
+        task = Task(
+            title=f"Callback needed: {caller_name or 'Unknown caller'}",
+            description=(
+                f"Transfer to {target_role} failed.\n"
+                f"Caller phone: {caller_phone}\n"
+                f"Reason for call: {reason}\n"
+                f"Failure detail: {failure_detail}\n\n"
+                f"Please call back within 15 minutes."
+            ),
+            status="pending",
+            priority="high",
+            due_date=datetime.now(timezone.utc) + timedelta(minutes=15),
+            owner_id=target_user_id,
+            organization_id=org_id,
+            related_contact_name=caller_name,
+            related_type="transfer_failure",
+        )
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+        logger.info(
+            "Created transfer-failure callback task %s for %s (org=%s)",
+            task.id, target_role, org_id,
+        )
+        return task.id
+    except Exception as e:
+        logger.error("Failed to create transfer-failure callback task: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None
+
+
 # Backward compatibility alias — existing routes may reference verify_vapi_request
 verify_vapi_request = require_vapi_webhook
 
@@ -177,28 +264,39 @@ async def vapi_webhook(
         if message_type == "assistant-request":
             return _build_assistant_response(db, message)
 
-        # Idempotency check — deduplicate retried webhooks
+        # Idempotency check — deduplicate retried webhooks.
+        # The key is set immediately on first receipt. If the background task
+        # fails, the key is cleared so Vapi's retry will be accepted.
         call_id = (
             message.get("call", {}).get("id")
             or payload.get("call", {}).get("id")
         )
+        idem_event_key = None
         if call_id:
             from middleware.webhook_idempotency import is_duplicate_webhook
-            if is_duplicate_webhook("vapi", f"{message_type}:{call_id}"):
+            idem_event_key = f"{message_type}:{call_id}"
+            if is_duplicate_webhook("vapi", idem_event_key):
                 logger.info("Vapi webhook duplicate: type=%s call=%s", message_type, call_id)
                 return JSONResponse(status_code=200, content={"status": "duplicate"})
 
-        background_tasks.add_task(process_webhook_background, payload)
+        background_tasks.add_task(process_webhook_background, payload, idem_event_key)
 
         return JSONResponse(
             status_code=200,
             content={"status": "received"}
         )
 
-    except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
+    except json.JSONDecodeError as e:
+        # Malformed payload — not retryable
+        logger.warning("Webhook received malformed JSON: %s", e)
         return JSONResponse(
             status_code=200,
+            content={"status": "error", "message": "Malformed payload"}
+        )
+    except Exception as e:
+        logger.exception("Webhook processing error (will return 500 for Vapi retry): %s", e)
+        return JSONResponse(
+            status_code=500,
             content={"status": "error", "message": "Webhook processing error"}
         )
 
@@ -262,15 +360,15 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
                 "provider": "deepgram",
                 "model": "nova-2",
                 "language": "en",
-                "endpointing": 255,
+                "endpointing": 700,
             },
             "endCallMessage": "Thank you for calling. Have a great day!",
             "recordingEnabled": True,
             "silenceTimeoutSeconds": 30,
             "maxDurationSeconds": 1800,
-            "responseDelaySeconds": 0.4,
+            "responseDelaySeconds": 1.0,
             "llmRequestDelaySeconds": 0.1,
-            "numWordsToInterruptAssistant": 2,
+            "numWordsToInterruptAssistant": 4,
             "serverUrl": f"{server_base}/api/vapi/webhook",
         }
     }
@@ -416,103 +514,119 @@ _ARIA_RECEPTIONIST_PROMPT_BODY = (
     "Conversation style: one question at a time, natural, patient, no jargon."
 )
 
-_ARIA_RECEPTIONIST_PROMPT = (
-    "You are Aria, the AI receptionist for The Tim Loss Team mortgage company.\n\n"
-    + _ARIA_RECEPTIONIST_PROMPT_BODY
-)
+def _build_receptionist_prompt(company_name: str = "our team") -> str:
+    """Build the full receptionist system prompt with the org's company name."""
+    return (
+        f"You are Aria, the AI receptionist for {company_name} mortgage company.\n\n"
+        + _ARIA_RECEPTIONIST_PROMPT_BODY
+    )
+
+# Legacy constant — kept for backward compatibility but uses generic fallback
+_ARIA_RECEPTIONIST_PROMPT = _build_receptionist_prompt()
 
 
-async def process_webhook_background(payload: Dict[str, Any]):
+def _backup_webhook_payload(call_id: str, payload: Dict[str, Any]) -> str:
+    """
+    Save raw webhook payload to a fallback file before attempting DB writes.
+
+    If the DB write fails, the backup file remains for manual recovery of
+    transcripts and call data. Returns the backup file path.
+    """
+    import pathlib
+
+    backup_dir = pathlib.Path("webhook_backups")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / f"{call_id}.json"
+    try:
+        backup_path.write_text(json.dumps(payload, default=str), encoding="utf-8")
+        logger.debug("Webhook payload backed up to %s", backup_path)
+    except Exception as e:
+        logger.error("Failed to back up webhook payload for %s: %s", call_id, e)
+    return str(backup_path)
+
+
+def _cleanup_webhook_backup(call_id: str) -> None:
+    """Remove the backup file after a successful DB persist."""
+    import pathlib
+
+    backup_path = pathlib.Path("webhook_backups") / f"{call_id}.json"
+    try:
+        if backup_path.exists():
+            backup_path.unlink()
+            logger.debug("Backup cleaned up after successful persist: %s", backup_path)
+    except Exception as e:
+        logger.warning("Could not clean up backup file %s: %s", backup_path, e)
+
+
+def _clear_idempotency_key(provider: str, event_key: str) -> None:
+    """
+    Clear an idempotency key so the webhook can be retried.
+
+    Called when a background task fails AFTER the key was set on receipt.
+    Without this, Vapi's automatic retry would be rejected as a duplicate
+    even though the first attempt never completed.
+    """
+    import time as _time
+    import threading as _threading
+
+    full_key = f"webhook:idem:{provider}:{event_key}"
+
+    # Try Redis first
+    try:
+        from services.redis_service import get_redis_client
+        redis = get_redis_client()
+        if redis is not None:
+            redis.delete(full_key)
+            logger.info("Idempotency key cleared for retry: %s", full_key[:80])
+            return
+    except Exception:
+        pass
+
+    # In-memory fallback
+    from middleware.webhook_idempotency import _seen_events, _seen_lock
+    with _seen_lock:
+        _seen_events.pop(full_key, None)
+    logger.info("Idempotency key cleared (memory) for retry: %s", full_key[:80])
+
+
+async def process_webhook_background(
+    payload: Dict[str, Any],
+    idem_event_key: Optional[str] = None,
+):
     """Process webhook in background task - creates its own db session"""
     from database import SessionLocal
+
+    # Extract call_id for backup identification
+    message = payload.get("message", {})
+    call_id = (
+        message.get("call", {}).get("id")
+        or payload.get("call", {}).get("id")
+        or "unknown"
+    )
+
+    # Back up payload BEFORE any DB operations -- protects transcript on SQL failure
+    _backup_webhook_payload(call_id, payload)
+
     db = SessionLocal()
     try:
         integration = VapiCRMIntegration(db)
         await integration.process_call_webhook(payload)
         db.commit()
         logger.info("Webhook processed successfully")
+        # DB write succeeded -- clean up backup
+        _cleanup_webhook_backup(call_id)
     except Exception as e:
         db.rollback()
-        logger.error(f"Background webhook processing error: {str(e)}")
+        logger.error(
+            "Background webhook processing error: %s "
+            "(backup retained at webhook_backups/%s.json for manual recovery)",
+            str(e), call_id,
+        )
+        # Clear the idempotency key so Vapi's retry will be accepted
+        if idem_event_key:
+            _clear_idempotency_key("vapi", idem_event_key)
     finally:
         db.close()
-
-
-@router.post("/webhook/assistant-request")
-async def assistant_request_webhook(
-    request: Request,
-    db: Session = Depends(get_db),
-    _: bool = Depends(verify_vapi_request)
-):
-    """
-    Handle assistant-request webhook
-    Used to provide dynamic assistant configuration per call
-    """
-    try:
-        payload = await request.json()
-        call_data = payload.get("message", {}).get("call", {})
-        phone_number = call_data.get("phoneNumber")
-
-        logger.info("Assistant request received for inbound call")
-
-        # Customize assistant behavior based on caller
-        try:
-            from database.models import Lead
-            # TENANT-001: Scope phone lookup to the organization associated with
-            # the Vapi assistant (derived from the call's assistant metadata).
-            org_id = None
-            assistant_id = call_data.get("assistantId")
-            if assistant_id:
-                assistant = db.query(VapiAssistant).filter(VapiAssistant.assistant_id == assistant_id).first()
-                if assistant:
-                    org_id = getattr(assistant, 'organization_id', None)
-            query = db.query(Lead).filter(Lead.phone == phone_number)
-            if org_id:
-                query = query.filter(Lead.organization_id == org_id)
-            lead = query.first()
-
-            if lead:
-                # Existing customer
-                return {
-                    "assistant": {
-                        "firstMessage": f"Hello {lead.first_name}! Thanks for calling back. How can I help you today?",
-                        "model": {
-                            "messages": [{
-                                "role": "system",
-                                "content": f"You are speaking with {lead.first_name} {lead.last_name}, an existing customer. Be warm and personalized."
-                            }]
-                        }
-                    }
-                }
-        except Exception as e:
-            logger.warning(f"Could not fetch lead data: {e}")
-
-        # New caller — resolve org name dynamically
-        org_name = "our office"
-        try:
-            org_id = _resolve_org_id_from_assistant(db, data)
-            if org_id:
-                from sqlalchemy import text as _text
-                row = db.execute(_text("SELECT name FROM organizations WHERE id = :oid"), {"oid": org_id}).fetchone()
-                if row and row[0]:
-                    org_name = row[0]
-        except Exception:
-            pass
-        return {
-            "assistant": {
-                "firstMessage": f"Hello! Thank you for calling {org_name}. I'm your AI assistant. How can I help you today?",
-                "model": {
-                    "messages": [{
-                        "role": "system",
-                        "content": "You are a professional mortgage company receptionist. Be welcoming and gather their information politely."
-                    }]
-                }
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"Assistant request error: {str(e)}")
-        return JSONResponse(status_code=200, content={})
 
 
 # ============================================================================
@@ -776,7 +890,14 @@ async def create_task_function(
                 # Log error but don't fail the task creation
                 logger.error(f"Error sending urgent task SMS: {sms_error}")
 
-        response_message = "I've notified them immediately. They'll call you back shortly." if sms_sent and priority == "high" else "Task created successfully"
+        # Build response message that accurately reflects what happened
+        if priority == "high" and sms_sent:
+            response_message = "I've notified them immediately. They'll call you back shortly."
+        elif priority == "high" and not sms_sent:
+            # High priority but SMS failed — don't claim they were notified
+            response_message = "I've created an urgent callback request. They'll see it and call you back as soon as possible."
+        else:
+            response_message = "Task created successfully"
 
         return {
             "success": True,
@@ -799,20 +920,27 @@ async def schedule_appointment_function(
     _: bool = Depends(verify_vapi_request)
 ):
     """
-    Schedule an appointment/meeting
-    Called by Vapi when customer requests appointment
+    Schedule an appointment/meeting with REAL calendar availability checking.
+    Uses vapi_scheduling_service.book_appointment() for conflict-free booking
+    with SELECT FOR UPDATE double-booking prevention, then pushes to Outlook
+    via .ics invite (best-effort).
     """
     try:
-        from database.enums import ActivityType
-        from database.models import Activity, Lead, Task
+        from database.models import Lead
         from sqlalchemy import or_
-        from datetime import datetime, timezone
+        from datetime import datetime, timezone, timedelta
+        import pytz
 
         data = await request.json()
         phone = data.get("phone_number")
         appointment_type = data.get("type", "Meeting")  # Meeting, Call, etc.
         appointment_time_str = data.get("appointment_time")
         notes = data.get("notes", "")
+        duration_minutes = data.get("duration_minutes", 30)
+        caller_name = data.get("caller_name", "")
+        caller_email = data.get("caller_email")
+        hold_id = data.get("hold_id")  # If slot was held during conversation
+        vapi_call_id = data.get("call_id") or data.get("vapi_call_id")
 
         if not phone:
             return {"success": False, "error": "Phone number required"}
@@ -836,99 +964,245 @@ async def schedule_appointment_function(
         if not lead:
             return {"success": False, "error": "Lead not found"}
 
-        # Parse appointment time
+        # Resolve the LO user_id from lead ownership
+        assigned_user_id = lead.owner_id
+        if not assigned_user_id:
+            assigned_user_id = _resolve_default_owner(db, org_id)
+
+        # Parse appointment time with timezone awareness
         appointment_time = None
         if appointment_time_str:
             try:
-                appointment_time = datetime.fromisoformat(appointment_time_str.replace('Z', '+00:00'))
-            except (ValueError, TypeError):
-                pass  # Leave appointment_time as None if parsing fails
+                appointment_time = datetime.fromisoformat(
+                    appointment_time_str.replace('Z', '+00:00')
+                )
+                # Ensure timezone-aware (default to Eastern per user preference)
+                if appointment_time.tzinfo is None:
+                    try:
+                        from services.appointment_creation_service import _get_user_timezone
+                        user_tz_str = _get_user_timezone(db, assigned_user_id, org_id or 0)
+                        user_tz = pytz.timezone(user_tz_str)
+                    except Exception:
+                        user_tz = pytz.timezone("America/New_York")
+                    appointment_time = user_tz.localize(appointment_time)
+                # Convert to UTC for storage
+                appointment_time = appointment_time.astimezone(pytz.UTC)
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse appointment time '{appointment_time_str}': {e}")
 
-        # Map appointment type to ActivityType
-        activity_type_map = {
-            "meeting": ActivityType.MEETING,
-            "call": ActivityType.CALL,
-            "email": ActivityType.EMAIL,
-        }
+        if not appointment_time:
+            return {"success": False, "error": "Valid appointment time is required"}
 
-        activity_type = activity_type_map.get(appointment_type.lower(), ActivityType.MEETING)
+        # --- Attempt real booking via vapi_scheduling_service ---
+        booking_result = None
+        appointment_id = None
+        used_real_booking = False
 
-        # Create activity
-        content = f"Appointment scheduled via AI call"
-        if notes:
-            content += f": {notes}"
-        if appointment_time:
-            content += f" at {appointment_time.strftime('%Y-%m-%d %H:%M %Z')}"
+        try:
+            from services.vapi_scheduling_service import book_appointment, confirm_booking
 
-        activity = Activity(
-            type=activity_type,
-            content=content,
-            lead_id=lead.id,
-            user_id=lead.owner_id,
-            user_metadata={
-                "scheduled_time": appointment_time.isoformat() if appointment_time else None,
-                "appointment_type": appointment_type,
-                "source": "vapi_ai_call"
+            # If a hold_id was provided, convert it to a confirmed appointment
+            if hold_id:
+                booking_result = confirm_booking(
+                    db=db,
+                    hold_id=hold_id,
+                    org_id=org_id or 0,
+                    attendee_name=caller_name or lead.name or "",
+                    attendee_email=caller_email or lead.email,
+                    attendee_phone=phone,
+                    notes=notes,
+                    vapi_call_id=vapi_call_id,
+                )
+            else:
+                # Map appointment type to meeting type for the scheduler
+                meeting_type_map = {
+                    "meeting": "discovery_call",
+                    "call": "discovery_call",
+                    "consultation": "pre_approval_review",
+                    "review": "document_review",
+                    "pre-approval": "pre_approval_review",
+                    "closing": "closing_prep",
+                    "rate lock": "rate_lock_discussion",
+                }
+                meeting_type_str = meeting_type_map.get(
+                    appointment_type.lower(), "discovery_call"
+                )
+
+                booking_result = book_appointment(
+                    db=db,
+                    org_id=org_id or 0,
+                    assigned_user_id=assigned_user_id,
+                    start_time=appointment_time,
+                    duration_minutes=duration_minutes,
+                    attendee_name=caller_name or lead.name or "",
+                    attendee_email=caller_email or lead.email,
+                    attendee_phone=phone,
+                    meeting_type_str=meeting_type_str,
+                    notes=notes,
+                    lead_id=lead.id,
+                    vapi_call_id=vapi_call_id,
+                )
+
+            appointment_id = booking_result.get("appointment_id")
+            used_real_booking = True
+            logger.info(
+                f"Vapi appointment booked via scheduling service: "
+                f"appointment_id={appointment_id}, user={assigned_user_id}"
+            )
+
+        except ValueError as conflict_err:
+            # Conflict detected (double-booking, slot no longer available)
+            logger.warning(f"Appointment conflict: {conflict_err}")
+            return {
+                "success": False,
+                "error": str(conflict_err),
+                "conflict": True,
+                "message": str(conflict_err),
             }
-        )
 
-        db.add(activity)
+        except Exception as svc_err:
+            # Scheduling service unavailable -- fall back to Activity + Task
+            logger.warning(
+                f"vapi_scheduling_service unavailable, falling back to "
+                f"Activity+Task: {svc_err}"
+            )
 
-        # Also create a task for the appointment
-        task = Task(
-            title=f"{appointment_type}: {lead.name}",
-            description=content,
-            status="pending",
-            priority="high",
-            due_date=appointment_time,
-            lead_id=lead.id,
-            owner_id=lead.owner_id,
-            related_contact_name=lead.name,
-            related_type="appointment"
-        )
+        # --- Fallback: create Activity + Task if real booking failed ---
+        activity_id = None
+        task_id = None
 
-        db.add(task)
+        if not used_real_booking:
+            from database.enums import ActivityType
+            from database.models import Activity, Task
 
-        # Log appointment to AI Receptionist Dashboard
-        from ai_receptionist_dashboard_models import AIReceptionistActivity
-        import uuid as uuid_lib
-
-        appointment_activity = AIReceptionistActivity(
-            id=str(uuid_lib.uuid4()),
-            timestamp=appointment_time or datetime.now(timezone.utc),
-            client_phone=phone,
-            client_name=lead.name if lead else None,
-            action_type='appointment_booked',
-            channel='voice',
-            message_in=f"Appointment request: {appointment_type}",
-            message_out=f"Scheduled {appointment_type} for {appointment_time.strftime('%Y-%m-%d %H:%M') if appointment_time else 'TBD'}",
-            confidence_score=0.95,
-            outcome_status='success',
-            extra_data={
-                'appointment_type': appointment_type,
-                'scheduled_time': appointment_time.isoformat() if appointment_time else None,
-                'task_id': task.id,
-                'activity_id': activity.id,
-                'notes': notes
+            activity_type_map = {
+                "meeting": ActivityType.MEETING,
+                "call": ActivityType.CALL,
+                "email": ActivityType.EMAIL,
             }
-        )
-        db.add(appointment_activity)
+            activity_type = activity_type_map.get(
+                appointment_type.lower(), ActivityType.MEETING
+            )
+
+            content = "Appointment scheduled via AI call"
+            if notes:
+                content += f": {notes}"
+            if appointment_time:
+                content += f" at {appointment_time.strftime('%Y-%m-%d %I:%M %p %Z')}"
+
+            activity = Activity(
+                type=activity_type,
+                content=content,
+                lead_id=lead.id,
+                user_id=assigned_user_id,
+                user_metadata={
+                    "scheduled_time": appointment_time.isoformat(),
+                    "appointment_type": appointment_type,
+                    "source": "vapi_ai_call",
+                    "fallback": True,
+                }
+            )
+            db.add(activity)
+
+            task = Task(
+                title=f"{appointment_type}: {lead.name}",
+                description=content,
+                status="pending",
+                priority="high",
+                due_date=appointment_time,
+                lead_id=lead.id,
+                owner_id=assigned_user_id,
+                related_contact_name=lead.name,
+                related_type="appointment"
+            )
+            db.add(task)
+            db.flush()
+            activity_id = activity.id
+            task_id = task.id
+
+        # --- Log to AI Receptionist Dashboard ---
+        try:
+            from ai_receptionist_dashboard_models import AIReceptionistActivity
+            import uuid as uuid_lib
+
+            display_time = appointment_time.strftime('%Y-%m-%d %I:%M %p') if appointment_time else 'TBD'
+            dashboard_activity = AIReceptionistActivity(
+                id=str(uuid_lib.uuid4()),
+                timestamp=appointment_time or datetime.now(timezone.utc),
+                client_phone=phone,
+                client_name=lead.name if lead else None,
+                action_type='appointment_booked',
+                channel='voice',
+                message_in=f"Appointment request: {appointment_type}",
+                message_out=f"Scheduled {appointment_type} for {display_time}",
+                confidence_score=0.95,
+                outcome_status='success',
+                extra_data={
+                    'appointment_type': appointment_type,
+                    'scheduled_time': appointment_time.isoformat() if appointment_time else None,
+                    'appointment_id': appointment_id,
+                    'task_id': task_id,
+                    'activity_id': activity_id,
+                    'notes': notes,
+                    'used_real_booking': used_real_booking,
+                }
+            )
+            db.add(dashboard_activity)
+        except Exception as dash_err:
+            logger.warning(f"Failed to log receptionist dashboard activity: {dash_err}")
 
         db.commit()
-        db.refresh(activity)
-        db.refresh(task)
-        db.refresh(appointment_activity)
 
-        return {
+        # --- Best-effort: push to Outlook calendar via .ics ---
+        if used_real_booking and appointment_id:
+            try:
+                outlook_email = os.environ.get("OUTLOOK_SYNC_EMAIL", "")
+                if outlook_email:
+                    from services.outlook_calendar_sync import push_appointment_to_outlook
+                    # Fetch the appointment ORM object for the sync
+                    from services.vapi_scheduling_service import _get_models
+                    models = _get_models()
+                    AppointmentModel = models.get('Appointment') if models else None
+                    if AppointmentModel:
+                        appt_obj = db.query(AppointmentModel).filter(
+                            AppointmentModel.id == appointment_id
+                        ).first()
+                        if appt_obj:
+                            sync_result = await push_appointment_to_outlook(
+                                db, appt_obj, outlook_email
+                            )
+                            if not sync_result.get("success"):
+                                logger.debug(
+                                    "Outlook .ics sync skipped: %s",
+                                    sync_result.get("error", "")
+                                )
+            except Exception as outlook_err:
+                logger.debug(f"Outlook calendar sync error (non-fatal): {outlook_err}")
+
+        # Build response
+        response = {
             "success": True,
             "message": "Appointment scheduled successfully",
-            "activity_id": activity.id,
-            "task_id": task.id,
-            "appointment_time": appointment_time.isoformat() if appointment_time else None
+            "appointment_time": appointment_time.isoformat() if appointment_time else None,
+            "used_real_booking": used_real_booking,
         }
+        if used_real_booking and booking_result:
+            response.update({
+                "appointment_id": booking_result.get("appointment_id"),
+                "display_date": booking_result.get("display_date"),
+                "display_time": booking_result.get("display_time"),
+                "assigned_to": booking_result.get("assigned_to"),
+            })
+        else:
+            response.update({
+                "activity_id": activity_id,
+                "task_id": task_id,
+            })
+
+        return response
 
     except Exception as e:
-        logger.error(f"Error in schedule_appointment_function: {e}")
+        logger.error(f"Error in schedule_appointment_function: {e}", exc_info=True)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -940,54 +1214,229 @@ async def available_time_slots_function(
     _: bool = Depends(verify_vapi_request)
 ):
     """
-    Get available appointment time slots.
-    Route name matches tool definition: get_available_time_slots → get-available-time-slots
-    Vapi sends POST with JSON body containing function call args.
+    Get available appointment time slots by querying REAL calendar availability.
+    Uses vapi_scheduling_service.get_available_slots_for_vapi() which checks:
+    - Working hours from SchedulerConfig
+    - Blocked times (PTO, holidays)
+    - Existing booked/tentative appointments (with buffer)
+    - Cross-source calendar conflicts (Outlook, Salesforce, CalendarEvent)
+    - Lunch break enforcement
+    - Minimum notice period
+    - Existing soft holds
+    Falls back to 9-5 weekday generation only if the scheduling service is unavailable.
     """
     try:
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timezone, timedelta, date as date_type
+        import pytz
 
         data = {}
         try:
             data = await request.json()
         except Exception:
             pass
-        date = data.get("date")
 
-        if date:
+        date_str = data.get("date")
+        phone = data.get("phone_number")
+        duration_minutes = data.get("duration_minutes", 30)
+        num_days = data.get("num_days", 5)
+
+        org_id = _resolve_org_id_from_assistant(db, data)
+
+        # Resolve the target LO user_id from phone/lead if available
+        target_user_id = None
+        if phone:
             try:
-                target_date = datetime.fromisoformat(date.replace('Z', '+00:00')).date()
-            except (ValueError, TypeError):
-                target_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()
+                from database.models import Lead
+                from sqlalchemy import or_
+                phone_clean = ''.join(filter(str.isdigit, phone))
+                query = db.query(Lead).filter(
+                    or_(
+                        Lead.phone == phone,
+                        Lead.phone.contains(phone_clean[-10:])
+                    )
+                )
+                if org_id:
+                    query = query.filter(Lead.organization_id == org_id)
+                lead = query.first()
+                if lead and lead.owner_id:
+                    target_user_id = lead.owner_id
+            except Exception as e:
+                logger.debug(f"Lead lookup for slot generation failed: {e}")
+
+        # Resolve user timezone for display
+        user_tz_str = "America/New_York"  # Default per user preference
+        if target_user_id:
+            try:
+                from services.appointment_creation_service import _get_user_timezone
+                user_tz_str = _get_user_timezone(db, target_user_id, org_id or 0)
+            except Exception:
+                pass
+        try:
+            user_tz = pytz.timezone(user_tz_str)
+        except Exception:
+            user_tz = pytz.timezone("America/New_York")
+
+        # Parse the target date in the user's timezone
+        now_local = datetime.now(user_tz)
+        if date_str:
+            try:
+                # Try natural language first via scheduling service
+                from services.vapi_scheduling_service import parse_date_reference
+                target_date, _ = parse_date_reference(date_str)
+            except (ImportError, Exception):
+                try:
+                    target_date = datetime.fromisoformat(
+                        date_str.replace('Z', '+00:00')
+                    ).date()
+                except (ValueError, TypeError):
+                    target_date = (now_local + timedelta(days=1)).date()
         else:
-            target_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()
+            target_date = (now_local + timedelta(days=1)).date()
 
+        # Ensure target_date is not in the past
+        if target_date < now_local.date():
+            target_date = now_local.date()
+
+        # --- Attempt real availability check via vapi_scheduling_service ---
         slots = []
-        for day_offset in range(7):
-            check_date = target_date + timedelta(days=day_offset)
-            if check_date.weekday() >= 5:
-                continue
-            for hour in range(9, 17):
-                slot_time = datetime.combine(
-                    check_date,
-                    datetime.min.time().replace(hour=hour)
-                ).replace(tzinfo=timezone.utc)
+        used_real_availability = False
+        voice_summary = None
 
-                if slot_time > datetime.now(timezone.utc):
+        try:
+            from services.vapi_scheduling_service import (
+                get_available_slots_for_vapi,
+                format_slots_for_voice,
+            )
+
+            raw_slots = get_available_slots_for_vapi(
+                db=db,
+                org_id=org_id or 0,
+                target_date=target_date,
+                duration_minutes=duration_minutes,
+                user_id=target_user_id,
+                num_days=num_days,
+            )
+
+            if raw_slots:
+                used_real_availability = True
+                # Convert to the format expected by Vapi
+                for s in raw_slots:
+                    slot_start = datetime.fromisoformat(s["start"])
+                    # Convert to user's local timezone for display
+                    if slot_start.tzinfo is None:
+                        slot_start_utc = pytz.UTC.localize(slot_start)
+                    else:
+                        slot_start_utc = slot_start.astimezone(pytz.UTC)
+                    slot_local = slot_start_utc.astimezone(user_tz)
+
                     slots.append({
-                        "time": slot_time.isoformat(),
-                        "display": slot_time.strftime("%A, %B %d at %I:%M %p"),
-                        "available": True
+                        "time": slot_start_utc.isoformat(),
+                        "display": slot_local.strftime("%A, %B %-d at %-I:%M %p %Z"),
+                        "available": True,
+                        "user_id": s.get("user_id"),
+                        "date": s.get("date"),
+                        "display_time": s.get("display_time"),
+                        "display_date": s.get("display_date"),
                     })
+
+                # Generate voice-friendly summary
+                voice_summary = format_slots_for_voice(raw_slots, max_slots=6)
+            else:
+                logger.info(
+                    f"No available slots from scheduling service for "
+                    f"org={org_id}, date={target_date}, user={target_user_id}"
+                )
+
+        except Exception as svc_err:
+            logger.warning(
+                f"vapi_scheduling_service unavailable for slot generation, "
+                f"falling back to hardcoded slots: {svc_err}"
+            )
+
+        # --- Fallback: generate 9-5 weekday slots with basic conflict check ---
+        if not used_real_availability:
+            now_utc = datetime.now(timezone.utc)
+
+            for day_offset in range(num_days + 2):  # extra days to cover weekends
+                check_date = target_date + timedelta(days=day_offset)
+                if check_date.weekday() >= 5:  # Skip weekends
+                    continue
+                if len(slots) >= 20:
+                    break
+
+                # Query existing appointments for this day to exclude busy times
+                busy_times = []
+                try:
+                    from sqlalchemy import text as sql_text
+                    day_start = datetime.combine(check_date, datetime.min.time())
+                    day_end = day_start + timedelta(days=1)
+                    # Check activities table for existing appointments
+                    rows = db.execute(
+                        sql_text("""
+                            SELECT scheduled_start, scheduled_end
+                            FROM scheduler_appointments
+                            WHERE assigned_user_id = :uid
+                              AND organization_id = :org_id
+                              AND status NOT IN ('cancelled', 'no_show')
+                              AND scheduled_start >= :day_start
+                              AND scheduled_start < :day_end
+                        """),
+                        {
+                            "uid": target_user_id or _resolve_default_owner(db, org_id),
+                            "org_id": org_id or 0,
+                            "day_start": day_start,
+                            "day_end": day_end,
+                        }
+                    ).fetchall()
+                    busy_times = [(r[0], r[1]) for r in rows if r[0] and r[1]]
+                except Exception as e:
+                    logger.debug(f"Fallback busy-time query failed: {e}")
+
+                for hour in range(9, 17):
+                    for minute in [0, 30]:
+                        # Build slot in user's timezone, then convert to UTC
+                        slot_local = user_tz.localize(
+                            datetime.combine(
+                                check_date,
+                                datetime.min.time().replace(hour=hour, minute=minute)
+                            )
+                        )
+                        slot_utc = slot_local.astimezone(pytz.UTC)
+
+                        if slot_utc <= now_utc:
+                            continue
+
+                        # Check against known busy times
+                        slot_end_utc = slot_utc + timedelta(minutes=duration_minutes)
+                        is_busy = any(
+                            slot_utc < bt[1] and slot_end_utc > bt[0]
+                            for bt in busy_times
+                        )
+                        if is_busy:
+                            continue
+
+                        slots.append({
+                            "time": slot_utc.isoformat(),
+                            "display": slot_local.strftime(
+                                "%A, %B %-d at %-I:%M %p %Z"
+                            ),
+                            "available": True,
+                        })
+
+            voice_summary = None
 
         return {
             "success": True,
             "date": target_date.isoformat(),
-            "slots": slots[:20]
+            "timezone": user_tz_str,
+            "slots": slots[:20],
+            "total_available": len(slots),
+            "real_availability": used_real_availability,
+            "voice_summary": voice_summary if used_real_availability else None,
         }
 
     except Exception as e:
-        logger.error(f"Error in available_time_slots_function: {e}")
+        logger.error(f"Error in available_time_slots_function: {e}", exc_info=True)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -1002,7 +1451,7 @@ async def submit_preapproval_application_function(
     Called by Vapi when customer wants to apply for pre-approval
     """
     try:
-        from database.models import Lead, Task
+        from database.models import Lead, Task, User
         from sqlalchemy import or_
         from datetime import datetime, timezone
 
@@ -1018,6 +1467,9 @@ async def submit_preapproval_application_function(
             return {"success": False, "error": "Phone, first name, and last name are required"}
 
         org_id = _resolve_org_id_from_assistant(db, data)
+
+        # Resolve default owner for the org
+        default_owner_id = _resolve_default_owner(db, org_id)
 
         # Clean phone number
         phone_clean = ''.join(filter(str.isdigit, phone))
@@ -1043,7 +1495,8 @@ async def submit_preapproval_application_function(
                 phone=phone,
                 source="AI Phone Call",
                 stage="Application Started",
-                owner_id=1  # Default to first user
+                owner_id=default_owner_id,
+                organization_id=org_id,
             )
             db.add(lead)
             db.flush()
@@ -1179,6 +1632,9 @@ async def schedule_calendly_appointment_function(
             query = query.filter(Lead.organization_id == org_id)
         lead = query.first()
 
+        # Resolve default owner for the org
+        default_owner_id = _resolve_default_owner(db, org_id)
+
         if not lead and name:
             # Create new lead
             parts = name.split(' ', 1)
@@ -1193,7 +1649,8 @@ async def schedule_calendly_appointment_function(
                 phone=phone,
                 source="AI Phone Call",
                 stage="Prospect",
-                owner_id=1
+                owner_id=default_owner_id,
+                organization_id=org_id,
             )
             db.add(lead)
             db.flush()
@@ -1201,9 +1658,9 @@ async def schedule_calendly_appointment_function(
             from services.client_file_service import ensure_client_file
             ensure_client_file(db, lead)
 
-        # Calendly link (configured via environment variable)
-        import os
-        calendly_link = os.getenv("CALENDLY_LINK", "https://calendly.com/timloss/discovery-call")
+        # Calendly/scheduling link (resolved per-org, then env var, then None)
+        from services.company_name_resolver import resolve_scheduling_link
+        calendly_link = resolve_scheduling_link(db, org_id) or os.getenv("CALENDLY_LINK", "")
 
         # Send SMS with Calendly link
         sms_sent = False
@@ -1232,9 +1689,16 @@ async def schedule_calendly_appointment_function(
             db.add(activity)
             db.commit()
 
-        # Build response message based on SMS status
+        # Build response message that accurately reflects what happened
         if sms_sent:
-            response_message = f"Perfect! I just sent you a text with the booking link. You'll receive it in just a moment. Is there anything else I can help you with?"
+            response_message = "Perfect! I just sent you a text with the booking link. You'll receive it in just a moment. Is there anything else I can help you with?"
+        elif sms_result and sms_result.get("error"):
+            # SMS was attempted but failed or was blocked — do NOT tell the caller it was sent
+            sms_error_reason = sms_result.get("error", "")
+            logger.warning("Calendly SMS not sent to %s: %s", mask_phone(phone), sms_error_reason)
+            # Spell out the link verbally instead
+            calendly_link_spoken = calendly_link.replace("https://", "").replace("http://", "")
+            response_message = f"I wasn't able to send a text right now. You can book directly at {calendly_link_spoken}. Would you like me to repeat that?"
         else:
             response_message = f"I'd love to help you schedule a discovery call. Here's the link: {calendly_link}. You can book a time that works best for you. Would you like me to repeat that?"
 
@@ -1371,16 +1835,29 @@ async def transfer_to_production_assistant_function(
         if result["success"]:
             return {
                 "success": True,
-                "message": f"Transferring you to our Production Assistant now. Please hold.",
+                "message": "Transferring you to our Production Assistant now. Please hold.",
                 "transferred_to": "Production Assistant",
                 **result
             }
         else:
+            # Transfer failed — create a callback task so the caller isn't left hanging
+            callback_task = _create_transfer_failure_callback(
+                db=db,
+                caller_name=caller_name,
+                caller_phone=caller_phone,
+                target_role="Production Assistant",
+                reason=reason,
+                failure_detail=result.get("reason", "unknown"),
+                target_user_id=pa.user_id,
+                org_id=org_id,
+            )
+            pa_name = getattr(pa, "name", None) or "the Production Assistant"
             return {
                 "success": False,
                 "error": result.get("reason"),
-                "message": "I'm sorry, the Production Assistant is currently unavailable. Let me create a callback task for you.",
-                "fallback_action": result.get("fallback_action")
+                "message": f"I wasn't able to connect you right now, but I've created an urgent callback request. {pa_name} will call you back within 15 minutes.",
+                "fallback_action": result.get("fallback_action"),
+                "callback_task_created": callback_task is not None,
             }
 
     except Exception as e:
@@ -1470,16 +1947,28 @@ async def transfer_to_loan_officer_function(
         if result["success"]:
             return {
                 "success": True,
-                "message": f"Transferring you to the Loan Officer now. Please hold.",
+                "message": "Transferring you to the Loan Officer now. Please hold.",
                 "transferred_to": "Loan Officer",
                 **result
             }
         else:
+            # Transfer failed — create an urgent callback task
+            callback_task = _create_transfer_failure_callback(
+                db=db,
+                caller_name=caller_name,
+                caller_phone=caller_phone,
+                target_role="Loan Officer",
+                reason=urgency_reason,
+                failure_detail=result.get("reason", "unknown"),
+                target_user_id=lo.user_id,
+                org_id=org_id,
+            )
             return {
                 "success": False,
                 "error": result.get("reason"),
-                "message": "The Loan Officer is currently unavailable. Let me take your information and have them call you back as soon as possible.",
-                "fallback_action": "create_urgent_task"
+                "message": "I wasn't able to connect you right now, but I've created an urgent callback request. The Loan Officer will call you back within 15 minutes.",
+                "fallback_action": "create_urgent_task",
+                "callback_task_created": callback_task is not None,
             }
 
     except Exception as e:
@@ -1567,16 +2056,29 @@ async def transfer_to_processor_function(
         if result["success"]:
             return {
                 "success": True,
-                "message": f"Transferring you to our Processor now. Please hold.",
+                "message": "Transferring you to our Processor now. Please hold.",
                 "transferred_to": "Processor",
                 **result
             }
         else:
+            # Transfer failed — create a callback task
+            callback_task = _create_transfer_failure_callback(
+                db=db,
+                caller_name=caller_name,
+                caller_phone=caller_phone,
+                target_role="Processor",
+                reason=reason,
+                failure_detail=result.get("reason", "unknown"),
+                target_user_id=processor.user_id,
+                org_id=org_id,
+            )
+            processor_name = getattr(processor, "name", None) or "our Processor"
             return {
                 "success": False,
                 "error": result.get("reason"),
-                "message": "The Processor is currently unavailable. Let me create a callback task for you.",
-                "fallback_action": result.get("fallback_action")
+                "message": f"I wasn't able to connect you right now, but I've created an urgent callback request. {processor_name} will call you back within 15 minutes.",
+                "fallback_action": result.get("fallback_action"),
+                "callback_task_created": callback_task is not None,
             }
 
     except Exception as e:
@@ -2187,7 +2689,7 @@ async def diagnose_vapi_assistant(admin: Any = Depends(verify_admin_access), ful
 
 @router.post("/diagnostic/fix-greeting")
 async def fix_vapi_greeting(
-    greeting: str = "Hello! Thank you for calling The Tim Loss Team. I'm Aria, your AI assistant. How can I help you today?",
+    greeting: str = "Hello! Thank you for calling. I'm Aria, your AI assistant. How can I help you today?",
     admin: Any = Depends(verify_admin_access)
 ):
     """
@@ -2558,9 +3060,9 @@ async def get_recent_vapi_calls(limit: int = 10, admin: Any = Depends(verify_adm
 @router.post("/migrate")
 async def run_vapi_migration(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_flexible)
+    admin: Any = Depends(verify_admin_access),
 ):
-    """Run Vapi database migration to create tables"""
+    """Run Vapi database migration to create tables. Requires admin access."""
     from sqlalchemy import text
 
     sql_commands = [
@@ -2870,13 +3372,27 @@ async def get_sms_config(
 ):
     """Get AI Receptionist SMS configuration."""
     import os
+    from services.company_name_resolver import (
+        resolve_company_name, resolve_scheduling_link, resolve_lo_name,
+    )
+
+    org_id = (
+        current_user.get("organization_id")
+        if isinstance(current_user, dict)
+        else getattr(current_user, "organization_id", None)
+    )
+    user_id = (
+        current_user.get("id")
+        if isinstance(current_user, dict)
+        else getattr(current_user, "id", None)
+    )
 
     return {
         "enabled": bool(os.getenv("TELNYX_API_KEY")),
         "post_call_sms_enabled": os.getenv("ENABLE_POST_CALL_SMS", "true").lower() == "true",
-        "calendly_link": os.getenv("CALENDLY_LINK", "https://calendly.com/timloss/discovery-call"),
-        "business_name": os.getenv("BUSINESS_NAME", "CMG Home Loans"),
-        "lo_name": os.getenv("LO_NAME", "Tim"),
+        "calendly_link": resolve_scheduling_link(db, org_id) or "",
+        "business_name": resolve_company_name(db, org_id),
+        "lo_name": resolve_lo_name(db, user_id),
         "webhook_url": "/api/vapi/webhook/sms"
     }
 
@@ -2896,6 +3412,7 @@ async def send_sms_calendly_link_function(
     try:
         from vapi_service import AIReceptionistSMSService
         from services.sms_compliance import check_sms_consent
+        from services.company_name_resolver import resolve_scheduling_link
 
         data = await request.json()
         phone_number = data.get("phone_number")
@@ -2908,6 +3425,15 @@ async def send_sms_calendly_link_function(
                 "message": "I don't have your phone number. Could you provide it?"
             }
 
+        # Resolve org-specific scheduling link
+        org_id = _resolve_org_id_from_assistant(db, data)
+        scheduling_link = resolve_scheduling_link(db, org_id)
+        verbal_fallback = (
+            f"I can give you the link verbally instead. It's {scheduling_link}. Would you like me to repeat that?"
+            if scheduling_link
+            else "Let me take your information and have someone follow up with the booking link."
+        )
+
         # TCPA compliance gate — check DNC, consent, and contact hours
         can_send, reason = check_sms_consent(phone_number, db=db)
         if not can_send:
@@ -2915,7 +3441,7 @@ async def send_sms_calendly_link_function(
             return {
                 "success": False,
                 "error": f"Compliance block: {reason}",
-                "message": "I'm unable to send a text to that number right now. Let me give you the link verbally instead. You can book a time at calendly dot com slash timloss slash discovery-call. Would you like me to repeat that?"
+                "message": f"I'm unable to send a text to that number right now. {verbal_fallback}"
             }
 
         sms_service = AIReceptionistSMSService(db)
@@ -2933,7 +3459,7 @@ async def send_sms_calendly_link_function(
             return {
                 "success": False,
                 "error": result.get("error"),
-                "message": "I'm having trouble sending the text right now. Let me give you the link verbally instead. You can book a time at calendly dot com slash timloss slash discovery-call. Would you like me to repeat that?"
+                "message": f"I'm having trouble sending the text right now. {verbal_fallback}"
             }
 
     except Exception as e:

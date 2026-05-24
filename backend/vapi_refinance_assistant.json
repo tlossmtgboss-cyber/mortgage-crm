@@ -22,7 +22,8 @@
   "transcriber": {
     "provider": "deepgram",
     "model": "nova-2",
-    "language": "en-US"
+    "language": "en-US",
+    "endpointing": 700
   },
   "endCallMessage": "Thank you so much for your time today. I'll send you a text with all the details. Have a wonderful day!",
   "endCallPhrases": [

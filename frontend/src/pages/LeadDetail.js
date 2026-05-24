@@ -1666,7 +1666,7 @@ function LeadDetail() {
       {/* Recording Modal */}
       {lead && <RecordingModal isOpen={showRecordingModal} onClose={() => setShowRecordingModal(false)} lead={lead} />}
       {/* Voicemail Drop */}
-      {lead && showVoicemailDrop && <VoicemailDrop phoneNumber={lead.phone} recipientName={lead.name} onClose={() => setShowVoicemailDrop(false)} />}
+      {lead && showVoicemailDrop && <VoicemailDrop phoneNumber={lead.phone} recipientName={lead.name} leadId={lead.id} onClose={() => setShowVoicemailDrop(false)} />}
       {/* Escalation Modal */}
       {lead && <EscalationModal isOpen={showEscalationModal} onClose={() => setShowEscalationModal(false)} lead={lead} />}
       {/* Create Task Modal */}

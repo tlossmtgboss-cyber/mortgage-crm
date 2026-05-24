@@ -135,7 +135,7 @@ class DeepgramSTTClient:
             "smart_format": "true",
             "punctuate": "true",
             "interim_results": "true",
-            "endpointing": "300",  # 300ms silence triggers end of speech
+            "endpointing": "700",
             "vad_events": "true",
         }
 
@@ -580,8 +580,14 @@ class MobileVoiceSession:
         # Start idle timeout background check
         self._idle_check_task = asyncio.create_task(self._idle_timeout_loop())
 
-        # Play greeting - keep it casual and short
-        greeting = "Hey! What's up?"
+        # Play greeting — personalize with the LO's name
+        first_name = ""
+        if self.user_obj:
+            first_name = getattr(self.user_obj, "first_name", "") or ""
+        if first_name:
+            greeting = f"Hey {first_name}, Aria here. What can I help you with?"
+        else:
+            greeting = "Hey, Aria here. What can I help you with?"
         await self._speak(greeting)
 
     async def _idle_timeout_loop(self):
@@ -789,63 +795,102 @@ class MobileVoiceSession:
         logger.info(f"[MobileVoiceSession] Session {self.session_id} closed")
 
     async def _persist_session(self):
-        """Save call session data to voice_call_sessions table."""
+        """Save call session data to voice_call_sessions table.
+        Falls back to a local JSON file if the DB commit fails, so transcripts
+        are never silently lost."""
+        ended_at = datetime.now(timezone.utc)
+        started_at = (
+            self.voice_agent.conversation_history[0].get("timestamp")
+            if self.voice_agent.conversation_history
+            else ended_at
+        )
+        if isinstance(started_at, str):
+            started_at = datetime.fromisoformat(started_at)
+
+        # Calculate duration
+        duration = int((ended_at - (self._session_started_at or ended_at)).total_seconds())
+
+        # Determine outcome based on tool usage
+        tools = self.voice_agent.tools_executed
+        if tools:
+            outcome = "action_taken"
+        elif len(self.voice_agent.conversation_history) > 2:
+            outcome = "info_provided"
+        elif len(self.voice_agent.conversation_history) <= 2:
+            outcome = "abandoned"
+        else:
+            outcome = "completed"
+
+        # Determine TTS provider name
+        tts_provider_name = None
+        if self.tts_client:
+            tts_provider_name = type(self.tts_client).__name__.replace("TTSClient", "").replace("Client", "").lower()
+
+        # Build session data dict (used for both DB insert and fallback file)
+        session_data = {
+            "session_id": self.session_id,
+            "organization_id": getattr(self.user_obj, "organization_id", None),
+            "user_id": getattr(self.user_obj, "id", 0),
+            "direction": "inbound",
+            "status": "completed" if len(self.voice_agent.conversation_history) > 1 else "abandoned",
+            "voice_mode": "websocket",
+            "started_at": (self._session_started_at or ended_at).isoformat(),
+            "ended_at": ended_at.isoformat(),
+            "duration_seconds": max(duration, 0),
+            "tools_executed": tools if tools else None,
+            "tool_count": len(tools),
+            "transcript": self.voice_agent.conversation_history or None,
+            "message_count": len(self.voice_agent.conversation_history),
+            "stt_provider": "deepgram" if DEEPGRAM_API_KEY else "web_speech_api",
+            "tts_provider": tts_provider_name,
+            "tts_voice_id": getattr(self.tts_client, "voice_id", None) if self.tts_client else None,
+            "outcome": outcome,
+        }
+
         try:
             from database.models.voice_call_session import VoiceCallSession
 
-            ended_at = datetime.now(timezone.utc)
-            started_at = self.voice_agent.conversation_history[0].get("timestamp") if self.voice_agent.conversation_history else ended_at
-            if isinstance(started_at, str):
-                started_at = datetime.fromisoformat(started_at)
-
-            # Calculate duration
-            duration = int((ended_at - (self._session_started_at or ended_at)).total_seconds())
-
-            # Determine outcome based on tool usage
-            tools = self.voice_agent.tools_executed
-            if tools:
-                outcome = "action_taken"
-            elif len(self.voice_agent.conversation_history) > 2:
-                outcome = "info_provided"
-            elif len(self.voice_agent.conversation_history) <= 2:
-                outcome = "abandoned"
-            else:
-                outcome = "completed"
-
-            # Determine TTS provider name
-            tts_provider_name = None
-            if self.tts_client:
-                tts_provider_name = type(self.tts_client).__name__.replace("TTSClient", "").replace("Client", "").lower()
-
             session_record = VoiceCallSession(
                 session_uuid=self.session_id,
-                organization_id=getattr(self.user_obj, "organization_id", None),
-                user_id=getattr(self.user_obj, "id", 0),
-                direction="inbound",
-                status="completed" if len(self.voice_agent.conversation_history) > 1 else "abandoned",
-                voice_mode="websocket",
+                organization_id=session_data["organization_id"],
+                user_id=session_data["user_id"],
+                direction=session_data["direction"],
+                status=session_data["status"],
+                voice_mode=session_data["voice_mode"],
                 started_at=self._session_started_at or ended_at,
                 ended_at=ended_at,
-                duration_seconds=max(duration, 0),
-                tools_executed=tools if tools else None,
-                tool_count=len(tools),
-                transcript=self.voice_agent.conversation_history or None,
-                message_count=len(self.voice_agent.conversation_history),
-                stt_provider="deepgram" if DEEPGRAM_API_KEY else "web_speech_api",
-                tts_provider=tts_provider_name,
-                tts_voice_id=getattr(self.tts_client, "voice_id", None) if self.tts_client else None,
-                outcome=outcome,
+                duration_seconds=session_data["duration_seconds"],
+                tools_executed=session_data["tools_executed"],
+                tool_count=session_data["tool_count"],
+                transcript=session_data["transcript"],
+                message_count=session_data["message_count"],
+                stt_provider=session_data["stt_provider"],
+                tts_provider=session_data["tts_provider"],
+                tts_voice_id=session_data["tts_voice_id"],
+                outcome=session_data["outcome"],
             )
             self.db.add(session_record)
             self.db.commit()
             logger.info(f"[MobileVoiceSession] Persisted session {self.session_id} ({duration}s, {len(self.voice_agent.conversation_history)} messages)")
 
         except Exception as e:
-            logger.error(f"[MobileVoiceSession] Failed to persist session: {e}")
+            logger.error(f"[MobileVoiceSession] Failed to persist session to DB: {e}")
             try:
                 self.db.rollback()
             except Exception:
                 pass
+
+            # Fallback: write session data to a local JSON file so the
+            # transcript is never silently lost
+            try:
+                backup_dir = os.path.join(os.path.dirname(__file__), "session_backups")
+                os.makedirs(backup_dir, exist_ok=True)
+                backup_path = os.path.join(backup_dir, f"{self.session_id}.json")
+                with open(backup_path, "w") as f:
+                    json.dump(session_data, f, default=str)
+                logger.info(f"[MobileVoiceSession] Session backed up to {backup_path}")
+            except Exception as e2:
+                logger.error(f"[MobileVoiceSession] Failed to backup session to file: {e2}")
 
 
 # =============================================================================

@@ -1,9 +1,15 @@
 """
-Response Generator Node
+Response Generator Node (DEPRECATED)
 
-This node generates the final user-facing response by synthesizing
-analysis, insights, recommendations, and action results.
+Superseded by reason_and_respond.py which combines reasoning + response
+in a single LLM call. This file is retained only for backward-compatible
+imports — it is NOT wired into the orchestrator graph.
 """
+import warnings
+warnings.warn(
+    "agents.nodes.respond is deprecated — use reason_and_respond instead",
+    DeprecationWarning, stacklevel=2,
+)
 
 import json
 import logging

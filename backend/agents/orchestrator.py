@@ -165,39 +165,8 @@ def _is_retryable(error: Exception) -> bool:
     ])
 
 
-# Intent to scoped tools mapping (matches analyze.py)
-INTENT_TO_SCOPED_TOOLS = {
-    # Fast response intents (use Haiku, minimal tools)
-    "greeting": [],  # No tools needed for greetings
-    "simple": ["get_daily_priorities"],  # Minimal tools for simple queries
-    # Standard intents (use Sonnet, appropriate tools)
-    "priorities": ["get_daily_priorities", "get_tasks", "get_pipeline"],
-    "tasks": ["get_tasks", "create_task", "bulk_create_tasks", "get_daily_priorities", "get_task_queue", "update_task_status", "assign_task", "get_task_templates", "bulk_update_tasks", "execute_workflow", "get_workflow_status", "get_daily_call_list"],
-    "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
-    "top_leads": ["get_top_leads", "score_lead", "suggest_followup", "get_lead_details"],
-    "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
-    "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Q3 vs Q4, period comparisons
-    "rates": ["get_current_rates", "recommend_lock_strategy", "compare_rate_scenarios", "monitor_float_position", "get_market_events", "calculate_lock_cost", "get_extension_pricing", "analyze_rate_trends", "get_rate_lock_advisory", "get_pipeline"],
-    "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
-    "email": ["get_emails_needing_response", "send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner"],
-    "schedule": ["get_availability", "book_appointment", "reschedule_appointment", "cancel_appointment", "get_upcoming_appointments", "send_appointment_reminder", "sync_external_calendar", "optimize_schedule"],
-    "documents": ["get_missing_documents", "get_loan_conditions", "track_document_request", "send_document_reminder", "check_document_expiration", "get_third_party_status", "get_document_timeline", "escalate_issue", "search_loans", "get_smart_doc_status", "check_document_freshness", "get_document_decisions", "get_needs_list", "check_document_sla", "get_screenshot_flags", "get_document_extraction", "track_portal_activity", "get_followup_campaign_status", "get_policy_events"],
-    "compliance": ["check_trid_compliance", "check_respa_compliance", "check_fair_lending", "get_state_requirements", "audit_loan_file", "get_disclosure_timeline", "check_tolerance_violations", "get_compliance_history", "search_loans"],
-    "sla": ["check_sla_status", "get_sla_dashboard", "get_sla_alerts", "calculate_stage_sla", "get_sla_report", "project_sla_breach", "escalate_sla_breach", "get_pipeline", "get_pipeline_metrics"],
-    "reports": ["generate_pipeline_report", "generate_production_report", "get_report_templates", "schedule_report", "export_report", "get_dashboard_metrics", "get_performance_by_period", "compare_periods", "get_pipeline_metrics", "get_pipeline"],
-    "coaching": ["get_lo_metrics", "compare_to_peers", "identify_training_needs", "generate_coaching_plan", "track_improvement", "get_best_practices", "get_performance_trends", "set_performance_goals", "get_performance_by_period", "compare_periods", "get_data_availability", "get_pipeline_metrics"],
-    "customer": ["get_customer_360", "map_relationships", "calculate_ltv", "assess_churn_risk", "find_opportunities", "get_interaction_history", "get_referral_network", "search_leads", "search_loans"],
-    "video": ["schedule_video_meeting", "get_meeting_recordings", "analyze_meeting", "send_async_video", "get_video_analytics", "extract_meeting_action_items", "generate_meeting_summary", "get_participant_insights"],
-    "integrations": ["sync_los_data", "check_integration_status", "trigger_credit_pull", "submit_to_aus", "order_appraisal", "order_title", "get_pricing_engine_quote", "send_for_esign"],
-    "billing": ["get_subscription_status", "get_plans", "change_plan", "get_billing_history", "update_payment_method", "get_usage_metrics", "manage_addons", "pause_subscription"],
-    "onboarding": ["get_onboarding_status", "get_checklist", "complete_step", "start_guided_tour", "get_training_resources", "get_setup_wizard", "request_support", "track_progress"],
-    "notifications": ["send_notification", "get_pending_notifications", "get_notification_templates", "schedule_notification", "get_delivery_status", "update_preferences", "get_preferences", "batch_send"],
-    "profit": ["calculate_loan_profitability", "analyze_margins_by_segment", "forecast_revenue", "compare_lo_profitability", "optimize_pricing", "get_cost_breakdown", "calculate_pull_through_impact", "get_profitability_trends"],
-    "operations": ["get_pipeline_metrics", "get_loan_aging_report", "get_bottleneck_analysis", "check_sla_status", "get_sla_dashboard", "escalate_sla_breach", "get_lo_pipeline_breakdown", "get_compliance_history"],
-    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "bulk_create_tasks", "send_email", "suggest_followup"],
-    "content_marketing": ["get_pipeline_metrics", "search_leads", "draft_message"],
-    "general": ["get_daily_priorities", "get_pipeline", "get_tasks"],
-}
+# Single source of truth lives in intent_router.py
+from .intent_router import INTENT_TO_SCOPED_TOOLS  # noqa: F401
 
 
 async def create_orchestrator(
@@ -768,6 +737,8 @@ async def run_orchestrator(
         # AUDIT LOGGING — structured compliance trail with token tracking
         # ================================================================
         total_tokens_used = 0
+        tokens_input = 0
+        tokens_output = 0
         try:
             # Extract actual token usage from the LLM response stored in state
             tokens_input = final_state.get("tokens_input", 0)
@@ -811,8 +782,8 @@ async def run_orchestrator(
             logger.warning(f"Failed to log AI audit: {audit_err}")
 
         # Add token usage to performance metrics
-        response["performance"]["tokens_input"] = tokens_input if 'tokens_input' in dir() else 0
-        response["performance"]["tokens_output"] = tokens_output if 'tokens_output' in dir() else 0
+        response["performance"]["tokens_input"] = tokens_input
+        response["performance"]["tokens_output"] = tokens_output
         response["performance"]["tokens_total"] = total_tokens_used
 
         # Post-call circuit breaker re-check: update state after recording usage

@@ -269,6 +269,7 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
             async def _knowledge_graph_sync_job():
                 from db import SessionLocal
                 from database.models.core import Organization
+                from sqlalchemy import text
                 lookup_db = SessionLocal()
                 try:
                     org_ids = [r[0] for r in lookup_db.query(Organization.id).filter(Organization.is_active == True).all()]
@@ -280,6 +281,7 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
                 for oid in org_ids:
                     org_db = SessionLocal()
                     try:
+                        org_db.execute(text("SET LOCAL app.current_tenant = :t"), {"t": str(oid)})
                         from services.knowledge_graph import KnowledgeGraphSyncService
                         svc = KnowledgeGraphSyncService(org_db, oid)
                         result = svc.sync_all()

@@ -49,6 +49,11 @@ class VapiCall(Base):
 
     # CRM Integration
     lead_id = Column(Integer, ForeignKey('leads.id'), nullable=True)
+    loan_officer_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+
+    # Recording persistence
+    recording_local_path = Column(String(512), nullable=True)
+    recording_downloaded_at = Column(DateTime(timezone=True), nullable=True)
 
     # Call Intelligence
     ci_processed = Column(Boolean, default=False)
@@ -211,7 +216,7 @@ class StaffAvailability(Base):
 
 
 def ensure_vapi_ci_columns(db) -> None:
-    """Add Call Intelligence columns to vapi_calls if they don't exist.
+    """Add Call Intelligence and LO tracking columns to vapi_calls if they don't exist.
 
     Safe to call on every startup — uses IF NOT EXISTS.
     """
@@ -219,6 +224,9 @@ def ensure_vapi_ci_columns(db) -> None:
         ("ci_processed", "BOOLEAN DEFAULT FALSE"),
         ("ci_extractions_count", "INTEGER DEFAULT 0"),
         ("ci_tasks_created", "INTEGER DEFAULT 0"),
+        ("loan_officer_id", "INTEGER REFERENCES users(id)"),
+        ("recording_local_path", "VARCHAR(512)"),
+        ("recording_downloaded_at", "TIMESTAMPTZ"),
     ]
     for col_name, col_def in _cols:
         try:

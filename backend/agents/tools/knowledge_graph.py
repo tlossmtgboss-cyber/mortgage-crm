@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 @mortgage_tool(
     name="graph_get_entity_context",
-    description="Get all relationships and context for a CRM entity (lead, loan, user, referral_partner). Returns the entity's properties and grouped relationships — perfect for understanding who's connected to what.",
+    description="Get all relationships and context for a CRM entity (lead, loan, user, referral_partner, mum_client, contact, branch). Returns the entity's properties and grouped relationships — perfect for understanding who's connected to what.",
     agent_roles=["pipeline_analyst", "lead_nurturer", "sales", "manager", "compliance_checker", "team_coach", "receptionist"],
     risk_level="low",
     examples=[

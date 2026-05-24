@@ -100,16 +100,22 @@ elif USE_PGBOUNCER:
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
     # Railway has ~20 max connections. With numReplicas=1 in railway.toml,
-    # pool_size=3 + max_overflow=2 = 5 connections per process.
-    # During rolling deploys (2 containers briefly): 2 × 5 = 10 + advisory = 11 total.
-    # pool_recycle=120 aggressively reclaims idle connections.
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=2, max=5)")
+    # pool_size=15 + max_overflow=10 = 25 connections per process.
+    # This supports ~50 concurrent webhook requests (Aria voice calls each
+    # need a DB session). During rolling deploys (2 containers briefly) this
+    # could exceed Railway's limit, but the old pool of 5 caused immediate
+    # pool exhaustion under any realistic voice load. The startup cleanup
+    # (cleanup_idle_connections) terminates stale connections from the
+    # previous container, keeping total connections within the ~20 limit
+    # under steady-state single-replica operation.
+    # pool_recycle=1800 recycles connections every 30 min to avoid stale TCP.
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=15, max_overflow=10, max=25)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_size=3,
-        max_overflow=2,
-        pool_recycle=120,             # Recycle connections every 2min to prevent buildup
+        pool_size=15,
+        max_overflow=10,
+        pool_recycle=1800,            # Recycle connections every 30min to prevent stale TCP
         pool_timeout=10,              # Wait max 10s for a connection
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         pool_reset_on_return='rollback',  # Clean connections before reuse

@@ -55,13 +55,18 @@ class KnowledgeGraphSyncService:
 
     def _sync_users(self, since: datetime | None = None) -> None:
         from database.models.core import User
+        from database.models.knowledge_graph import KnowledgeGraphNode
 
         q = self.db.query(User).filter(
             User.organization_id == self.organization_id,
             User.is_active == True,
         )
+        if since:
+            q = q.filter(User.updated_at >= since)
 
         users = q.all()
+        if not users:
+            return
 
         # Pass 1: upsert all user nodes so manager references resolve
         user_nodes: dict[int, Any] = {}
@@ -78,12 +83,28 @@ class KnowledgeGraphSyncService:
             user_nodes[user.id] = node
             self._stats["nodes_upserted"] += 1
 
+        # Pre-fetch existing user nodes for manager/branch edge resolution
+        # (needed when `since` filters out the manager's own record)
+        needed_mgr_ids = {str(u.manager_id) for u in users if u.manager_id and u.manager_id not in user_nodes}
+        mgr_cache: dict[str, KnowledgeGraphNode] = {}
+        if needed_mgr_ids:
+            for n in (
+                self.db.query(KnowledgeGraphNode)
+                .filter(
+                    KnowledgeGraphNode.organization_id == self.organization_id,
+                    KnowledgeGraphNode.node_type == "user",
+                    KnowledgeGraphNode.entity_id.in_(needed_mgr_ids),
+                )
+                .all()
+            ):
+                mgr_cache[n.entity_id] = n
+
         # Pass 2: create edges (manager nodes now guaranteed to exist)
         for user in users:
             node = user_nodes[user.id]
 
             if user.manager_id:
-                mgr_node = user_nodes.get(user.manager_id) or self.graph.get_node("user", str(user.manager_id))
+                mgr_node = user_nodes.get(user.manager_id) or mgr_cache.get(str(user.manager_id))
                 if mgr_node:
                     self.graph.upsert_edge(mgr_node.id, node.id, "manages")
                     self._stats["edges_upserted"] += 1
@@ -96,6 +117,7 @@ class KnowledgeGraphSyncService:
 
     def _sync_leads(self, since: datetime | None = None) -> None:
         from database.models.lead_loan import Lead
+        from database.models.knowledge_graph import KnowledgeGraphNode
 
         q = self.db.query(Lead).filter(
             Lead.organization_id == self.organization_id,
@@ -104,7 +126,29 @@ class KnowledgeGraphSyncService:
         if since:
             q = q.filter(Lead.updated_at >= since)
 
-        for lead in q.all():
+        leads = q.all()
+        if not leads:
+            return
+
+        owner_eids = {str(l.owner_id) for l in leads if l.owner_id}
+        rp_eids = {str(l.referral_partner_id) for l in leads if l.referral_partner_id}
+
+        node_cache: dict[tuple[str, str], KnowledgeGraphNode] = {}
+        for ntype, eids in [("user", owner_eids), ("referral_partner", rp_eids)]:
+            if not eids:
+                continue
+            for n in (
+                self.db.query(KnowledgeGraphNode)
+                .filter(
+                    KnowledgeGraphNode.organization_id == self.organization_id,
+                    KnowledgeGraphNode.node_type == ntype,
+                    KnowledgeGraphNode.entity_id.in_(eids),
+                )
+                .all()
+            ):
+                node_cache[(n.node_type, n.entity_id)] = n
+
+        for lead in leads:
             label = lead.name or f"Lead #{lead.id}"
             props = {
                 "email": lead.email,
@@ -119,13 +163,13 @@ class KnowledgeGraphSyncService:
             self._stats["nodes_upserted"] += 1
 
             if lead.owner_id:
-                owner_node = self.graph.get_node("user", str(lead.owner_id))
+                owner_node = node_cache.get(("user", str(lead.owner_id)))
                 if owner_node:
                     self.graph.upsert_edge(owner_node.id, node.id, "owns_lead")
                     self._stats["edges_upserted"] += 1
 
             if lead.referral_partner_id:
-                rp_node = self.graph.get_node("referral_partner", str(lead.referral_partner_id))
+                rp_node = node_cache.get(("referral_partner", str(lead.referral_partner_id)))
                 if rp_node:
                     self.graph.upsert_edge(rp_node.id, node.id, "referred")
                     self._stats["edges_upserted"] += 1
@@ -142,6 +186,7 @@ class KnowledgeGraphSyncService:
 
     def _sync_loans(self, since: datetime | None = None) -> None:
         from database.models.lead_loan import Lead, Loan
+        from database.models.knowledge_graph import KnowledgeGraphNode
 
         q = self.db.query(Loan).filter(
             Loan.organization_id == self.organization_id,
@@ -151,6 +196,8 @@ class KnowledgeGraphSyncService:
             q = q.filter(Loan.updated_at >= since)
 
         loans = q.all()
+        if not loans:
+            return
 
         loan_numbers = [l.loan_number for l in loans if l.loan_number]
         lead_by_loan_number: dict[str, int] = {}
@@ -165,6 +212,24 @@ class KnowledgeGraphSyncService:
                 .all()
             )
             lead_by_loan_number = {ln: lid for ln, lid in leads_with_ln}
+
+        user_eids = {str(l.loan_officer_id) for l in loans if l.loan_officer_id}
+        lead_eids = {str(lid) for lid in lead_by_loan_number.values()}
+
+        node_cache: dict[tuple[str, str], KnowledgeGraphNode] = {}
+        for ntype, eids in [("user", user_eids), ("lead", lead_eids)]:
+            if not eids:
+                continue
+            for n in (
+                self.db.query(KnowledgeGraphNode)
+                .filter(
+                    KnowledgeGraphNode.organization_id == self.organization_id,
+                    KnowledgeGraphNode.node_type == ntype,
+                    KnowledgeGraphNode.entity_id.in_(eids),
+                )
+                .all()
+            ):
+                node_cache[(n.node_type, n.entity_id)] = n
 
         for loan in loans:
             label = _loan_label(loan)
@@ -181,7 +246,7 @@ class KnowledgeGraphSyncService:
             self._stats["nodes_upserted"] += 1
 
             if loan.loan_officer_id:
-                lo_node = self.graph.get_node("user", str(loan.loan_officer_id))
+                lo_node = node_cache.get(("user", str(loan.loan_officer_id)))
                 if lo_node:
                     self.graph.upsert_edge(lo_node.id, node.id, "officers_loan")
                     self._stats["edges_upserted"] += 1
@@ -189,13 +254,14 @@ class KnowledgeGraphSyncService:
             if loan.loan_number:
                 lead_id = lead_by_loan_number.get(loan.loan_number)
                 if lead_id:
-                    lead_node = self.graph.get_node("lead", str(lead_id))
+                    lead_node = node_cache.get(("lead", str(lead_id)))
                     if lead_node:
                         self.graph.upsert_edge(lead_node.id, node.id, "has_loan")
                         self._stats["edges_upserted"] += 1
 
     def _sync_referral_partners(self, since: datetime | None = None) -> None:
         from database.models.referral import ReferralPartner
+        from database.models.knowledge_graph import KnowledgeGraphNode
 
         q = self.db.query(ReferralPartner).filter(
             ReferralPartner.organization_id == self.organization_id,
@@ -205,7 +271,25 @@ class KnowledgeGraphSyncService:
         elif since:
             q = q.filter(ReferralPartner.created_at >= since)
 
-        for rp in q.all():
+        partners = q.all()
+        if not partners:
+            return
+
+        owner_eids = {str(rp.owner_id) for rp in partners if rp.owner_id}
+        owner_cache: dict[str, KnowledgeGraphNode] = {}
+        if owner_eids:
+            for n in (
+                self.db.query(KnowledgeGraphNode)
+                .filter(
+                    KnowledgeGraphNode.organization_id == self.organization_id,
+                    KnowledgeGraphNode.node_type == "user",
+                    KnowledgeGraphNode.entity_id.in_(owner_eids),
+                )
+                .all()
+            ):
+                owner_cache[n.entity_id] = n
+
+        for rp in partners:
             label = rp.name or rp.business_name or f"Partner #{rp.id}"
             props = {
                 "company": rp.company or rp.business_name,
@@ -222,7 +306,7 @@ class KnowledgeGraphSyncService:
             self._stats["nodes_upserted"] += 1
 
             if rp.owner_id:
-                owner_node = self.graph.get_node("user", str(rp.owner_id))
+                owner_node = owner_cache.get(str(rp.owner_id))
                 if owner_node:
                     self.graph.upsert_edge(owner_node.id, node.id, "works_with", weight=_rp_weight(rp))
                     self._stats["edges_upserted"] += 1
@@ -295,6 +379,7 @@ class KnowledgeGraphSyncService:
 
     def _sync_mum_clients(self, since: datetime | None = None) -> None:
         from database.models.referral import MUMClient
+        from database.models.knowledge_graph import KnowledgeGraphNode
 
         q = self.db.query(MUMClient).filter(
             MUMClient.organization_id == self.organization_id,
@@ -304,7 +389,25 @@ class KnowledgeGraphSyncService:
         elif since:
             q = q.filter(MUMClient.created_at >= since)
 
-        for mc in q.all():
+        clients = q.all()
+        if not clients:
+            return
+
+        user_eids = {str(mc.user_id) for mc in clients if mc.user_id}
+        user_cache: dict[str, KnowledgeGraphNode] = {}
+        if user_eids:
+            for n in (
+                self.db.query(KnowledgeGraphNode)
+                .filter(
+                    KnowledgeGraphNode.organization_id == self.organization_id,
+                    KnowledgeGraphNode.node_type == "user",
+                    KnowledgeGraphNode.entity_id.in_(user_eids),
+                )
+                .all()
+            ):
+                user_cache[n.entity_id] = n
+
+        for mc in clients:
             label = mc.client_name or f"MUM #{mc.id}"
             props = {
                 "loan_number": mc.loan_number,
@@ -318,7 +421,7 @@ class KnowledgeGraphSyncService:
             self._stats["nodes_upserted"] += 1
 
             if mc.user_id:
-                user_node = self.graph.get_node("user", str(mc.user_id))
+                user_node = user_cache.get(str(mc.user_id))
                 if user_node:
                     self.graph.upsert_edge(user_node.id, node.id, "manages_mum")
                     self._stats["edges_upserted"] += 1
@@ -411,14 +514,14 @@ class KnowledgeGraphSyncService:
         from database.models.knowledge_graph import KnowledgeGraphEdge, KnowledgeGraphNode
         from database.models.lead_loan import Lead, Loan
         from database.models.core import User
-        from database.models.referral import MUMClient, ReferralPartner
+        from database.models.referral import LoanTeamMember, MUMClient, ReferralPartner
 
         org = self.organization_id
         stale_count = 0
 
         revalidate_types = [
             "owns_lead", "officers_loan", "referred", "works_with", "manages",
-            "in_branch", "manages_mum",
+            "in_branch", "manages_mum", "has_loan", "team_member_on", "co_applicant",
         ]
 
         edges = (
@@ -440,7 +543,10 @@ class KnowledgeGraphSyncService:
 
         nodes = (
             self.db.query(KnowledgeGraphNode)
-            .filter(KnowledgeGraphNode.id.in_(node_ids))
+            .filter(
+                KnowledgeGraphNode.id.in_(node_ids),
+                KnowledgeGraphNode.organization_id == org,
+            )
             .all()
         )
         node_map = {n.id: n for n in nodes}
@@ -451,14 +557,32 @@ class KnowledgeGraphSyncService:
         rp_ids = _safe_int_set(n.entity_id for n in nodes if n.node_type == "referral_partner")
 
         lead_fks = {}
+        lead_co_applicants: set[int] = set()
         if lead_ids:
-            for l in self.db.query(Lead.id, Lead.owner_id, Lead.referral_partner_id).filter(Lead.id.in_(lead_ids), Lead.deleted_at == None).all():
-                lead_fks[l.id] = (str(l.owner_id) if l.owner_id else None, str(l.referral_partner_id) if l.referral_partner_id else None)
+            for l in self.db.query(Lead.id, Lead.owner_id, Lead.referral_partner_id, Lead.loan_number, Lead.co_applicant_email).filter(Lead.id.in_(lead_ids), Lead.deleted_at == None).all():
+                lead_fks[l.id] = (str(l.owner_id) if l.owner_id else None, str(l.referral_partner_id) if l.referral_partner_id else None, l.loan_number)
+                if l.co_applicant_email:
+                    lead_co_applicants.add(l.id)
 
         loan_fks = {}
         if loan_ids:
-            for l in self.db.query(Loan.id, Loan.loan_officer_id).filter(Loan.id.in_(loan_ids), Loan.deleted_at == None).all():
-                loan_fks[l.id] = str(l.loan_officer_id) if l.loan_officer_id else None
+            for l in self.db.query(Loan.id, Loan.loan_officer_id, Loan.loan_number).filter(Loan.id.in_(loan_ids), Loan.deleted_at == None).all():
+                loan_fks[l.id] = (str(l.loan_officer_id) if l.loan_officer_id else None, l.loan_number)
+
+        live_team_edges: set[tuple[str, int]] = set()
+        if loan_ids:
+            for m in (
+                self.db.query(LoanTeamMember.loan_id, LoanTeamMember.user_id, LoanTeamMember.referral_partner_id, LoanTeamMember.id)
+                .join(Loan, LoanTeamMember.loan_id == Loan.id)
+                .filter(Loan.organization_id == org, LoanTeamMember.loan_id.in_(loan_ids))
+                .all()
+            ):
+                if m.user_id:
+                    live_team_edges.add((str(m.user_id), m.loan_id))
+                elif m.referral_partner_id:
+                    live_team_edges.add((str(m.referral_partner_id), m.loan_id))
+                else:
+                    live_team_edges.add((f"ltm_{m.id}", m.loan_id))
 
         user_fks = {}
         if user_ids:
@@ -500,7 +624,7 @@ class KnowledgeGraphSyncService:
                 valid = fk is not None and fk[0] == src.entity_id
             elif rt == "officers_loan":
                 fk = loan_fks.get(tgt_eid)
-                valid = fk is not None and fk == src.entity_id
+                valid = fk is not None and fk[0] == src.entity_id
             elif rt == "referred":
                 fk = lead_fks.get(tgt_eid)
                 valid = fk is not None and fk[1] == src.entity_id
@@ -520,6 +644,24 @@ class KnowledgeGraphSyncService:
             elif rt == "manages_mum":
                 fk = mum_fks.get(tgt_eid)
                 valid = fk is not None and fk == src.entity_id
+            elif rt == "has_loan":
+                try:
+                    src_lead_eid = int(src.entity_id) if src.node_type == "lead" else None
+                except (ValueError, TypeError):
+                    src_lead_eid = None
+                src_lead_fk = lead_fks.get(src_lead_eid) if src_lead_eid is not None else None
+                tgt_loan_fk = loan_fks.get(tgt_eid)
+                valid = (src_lead_fk is not None and tgt_loan_fk is not None
+                         and src_lead_fk[2] and tgt_loan_fk[1]
+                         and src_lead_fk[2] == tgt_loan_fk[1])
+            elif rt == "team_member_on":
+                valid = (src.entity_id, tgt_eid) in live_team_edges
+            elif rt == "co_applicant":
+                try:
+                    src_lead_id = int(src.entity_id)
+                except (ValueError, TypeError):
+                    continue
+                valid = src_lead_id in lead_co_applicants
 
             if not valid:
                 self.db.delete(edge)
@@ -580,10 +722,11 @@ class KnowledgeGraphSyncService:
         edge_exists = (
             self.db.query(KnowledgeGraphEdge.id)
             .filter(
+                KnowledgeGraphEdge.organization_id == org,
                 or_(
                     KnowledgeGraphEdge.source_node_id == KnowledgeGraphNode.id,
                     KnowledgeGraphEdge.target_node_id == KnowledgeGraphNode.id,
-                )
+                ),
             )
             .correlate(KnowledgeGraphNode)
             .exists()

@@ -56,8 +56,9 @@ class KnowledgeGraphService:
         row = result.fetchone()
         pk = row[0]
         node = self.db.query(KnowledgeGraphNode).get(pk)
-        if node:
-            self.db.refresh(node)
+        if not node:
+            raise RuntimeError(f"upsert_node: row {pk} vanished after INSERT for {node_type}/{entity_id}")
+        self.db.refresh(node)
         return node
 
     def get_node(self, node_type: str, entity_id: str) -> KnowledgeGraphNode | None:
@@ -179,8 +180,9 @@ class KnowledgeGraphService:
         row = result.fetchone()
         pk = row[0]
         edge = self.db.query(KnowledgeGraphEdge).get(pk)
-        if edge:
-            self.db.refresh(edge)
+        if not edge:
+            raise RuntimeError(f"upsert_edge: row {pk} vanished after INSERT for {relationship_type}")
+        self.db.refresh(edge)
         return edge
 
     def count_edges(self, relationship_type: str | None = None) -> int:
@@ -326,7 +328,10 @@ class KnowledgeGraphService:
         if all_node_ids:
             nodes = (
                 self.db.query(KnowledgeGraphNode)
-                .filter(KnowledgeGraphNode.id.in_(all_node_ids))
+                .filter(
+                    KnowledgeGraphNode.id.in_(all_node_ids),
+                    KnowledgeGraphNode.organization_id == self.organization_id,
+                )
                 .all()
             )
             node_map = {n.id: _node_dict(n) for n in nodes}
@@ -339,7 +344,10 @@ class KnowledgeGraphService:
             rel_types = row[1]
             path = []
             for i, nid in enumerate(path_node_ids):
-                step = {"node": node_map.get(nid, {"id": nid})}
+                node_data = node_map.get(nid)
+                if not node_data:
+                    continue
+                step = {"node": node_data}
                 if i < len(rel_types):
                     step["relationship"] = rel_types[i]
                 path.append(step)
@@ -357,6 +365,8 @@ class KnowledgeGraphService:
         max_nodes: int = 100,
     ) -> dict[str, Any]:
         """Return the N-hop neighborhood of a node as {nodes, edges}."""
+        depth = min(depth, 3)
+        max_nodes = min(max_nodes, 500)
         sql = text("""
             WITH RECURSIVE reachable AS (
                 SELECT
@@ -382,6 +392,7 @@ class KnowledgeGraphService:
                       WHEN e.source_node_id = r.node_id THEN e.target_node_id
                       ELSE e.source_node_id
                   END = ANY(r.visited))
+                  AND array_length(r.visited, 1) < :max_nodes
             )
             SELECT DISTINCT node_id FROM reachable LIMIT :max_nodes
         """)
@@ -397,7 +408,10 @@ class KnowledgeGraphService:
 
         nodes = (
             self.db.query(KnowledgeGraphNode)
-            .filter(KnowledgeGraphNode.id.in_(node_ids))
+            .filter(
+                KnowledgeGraphNode.id.in_(node_ids),
+                KnowledgeGraphNode.organization_id == self.organization_id,
+            )
             .all()
         )
         edges = (

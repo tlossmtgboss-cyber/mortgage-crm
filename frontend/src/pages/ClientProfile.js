@@ -2601,6 +2601,7 @@ function ClientProfile() {
         <VoicemailDrop
           phoneNumber={client.borrower_phone || client.phone}
           recipientName={getDisplayName(client)}
+          leadId={client.lead_id || client.id}
           onClose={() => setShowVoicemailDrop(false)}
         />
       )}

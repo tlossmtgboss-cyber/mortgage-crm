@@ -8,7 +8,7 @@ rate limiting, and multi-agent collision prevention via soft locks.
 from datetime import datetime, time, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -680,7 +680,13 @@ class ComplianceChecker:
 
     def check_rate_limit(self, agent_id: int) -> Tuple[bool, Optional[str]]:
         """
-        Check if agent has exceeded daily call limit
+        Check if agent has exceeded daily call limit.
+
+        Uses SELECT ... FOR UPDATE to lock the matching call_logs rows so
+        concurrent transactions block until this check + the caller's
+        subsequent INSERT complete. Without this, two concurrent calls
+        could both read count=199 (limit 200), both pass, and both insert
+        — exceeding the TCPA-critical daily limit.
 
         Args:
             agent_id: Agent/User ID
@@ -704,6 +710,8 @@ class ComplianceChecker:
         max_calls = settings.max_calls_per_day or 100
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
+        # Atomic rate-limit check: FOR UPDATE locks matching rows so concurrent
+        # transactions serialize through this critical section.
         rate_query = self.db.query(func.count(CallLog.id)).filter(
             and_(
                 CallLog.agent_id == agent_id,
@@ -712,6 +720,7 @@ class ComplianceChecker:
         )
         if self.organization_id:
             rate_query = rate_query.filter(CallLog.organization_id == self.organization_id)
+        rate_query = rate_query.with_for_update()
         calls_today = rate_query.scalar() or 0
 
         if calls_today >= max_calls:
@@ -810,7 +819,16 @@ class ComplianceChecker:
         lock_duration_seconds: int = 300
     ) -> bool:
         """
-        Acquire a soft lock for a phone number
+        Atomically acquire a soft lock for a phone number.
+
+        Uses a two-step atomic approach:
+        1. DELETE any expired locks for this phone+org (cleanup).
+        2. INSERT ... ON CONFLICT DO NOTHING against the unique constraint
+           (contact_phone, organization_id). If another agent holds a
+           non-expired lock, the INSERT is a no-op and we return False.
+
+        This prevents the race where two concurrent agents both see "no lock"
+        and both acquire it (the old check-then-insert pattern).
 
         Args:
             phone_number: Phone number to lock
@@ -827,47 +845,68 @@ class ComplianceChecker:
             return False
 
         digits = self._normalize_phone(phone_number)
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(seconds=lock_duration_seconds)
 
         try:
-            # Check if already locked by someone else
-            is_locked, _ = self.check_soft_lock(digits, agent_id)
-            if is_locked:
-                return False
-
-            # Remove any existing lock for this number (scoped to org)
+            # Step 1: Clean up expired locks for this phone+org atomically.
+            # This also removes our own prior lock (e.g., updating call_sid).
             delete_query = self.db.query(ActiveCall).filter(
                 ActiveCall.contact_phone == digits
             )
             if self.organization_id:
                 delete_query = delete_query.filter(ActiveCall.organization_id == self.organization_id)
-            delete_query.delete()
-
-            # Create new lock
-            now = datetime.now(timezone.utc)
-            lock = ActiveCall(
-                contact_phone=digits,
-                agent_id=agent_id,
-                call_sid=call_sid,
-                locked_at=now,
-                expires_at=now + timedelta(seconds=lock_duration_seconds),
-                organization_id=self.organization_id,
+            # Only delete expired locks OR locks held by the same agent
+            # (agent re-acquiring with a new call_sid).
+            delete_query = delete_query.filter(
+                (ActiveCall.expires_at <= now) | (ActiveCall.agent_id == agent_id)
             )
-            self.db.add(lock)
-            self.db.commit()
+            delete_query.delete(synchronize_session='fetch')
 
-            self._log_decision(
-                decision_type="soft_lock",
-                phone_number=digits,
-                decision="acquired",
-                reason=f"Lock acquired for {lock_duration_seconds}s",
-                user_id=agent_id,
-                details={
+            # Step 2: Atomic INSERT ... ON CONFLICT DO NOTHING.
+            # If another non-expired lock exists for a different agent,
+            # the unique constraint (contact_phone, organization_id) fires
+            # and the INSERT silently does nothing.
+            org_id_val = self.organization_id if self.organization_id else None
+            result = self.db.execute(
+                text("""
+                    INSERT INTO active_calls
+                        (contact_phone, agent_id, call_sid, locked_at, expires_at, organization_id)
+                    VALUES
+                        (:phone, :agent_id, :call_sid, :locked_at, :expires_at, :org_id)
+                    ON CONFLICT (contact_phone, organization_id) DO NOTHING
+                """),
+                {
+                    "phone": digits,
+                    "agent_id": agent_id,
                     "call_sid": call_sid,
-                    "lock_duration_seconds": lock_duration_seconds,
+                    "locked_at": now,
+                    "expires_at": expires_at,
+                    "org_id": org_id_val,
                 },
             )
-            logger.info(f"Acquired soft lock for {digits} by agent {agent_id}")
-            return True
+            self.db.commit()
+
+            # rowcount == 1 means we inserted; 0 means conflict (another agent holds it)
+            acquired = result.rowcount > 0
+
+            if acquired:
+                self._log_decision(
+                    decision_type="soft_lock",
+                    phone_number=digits,
+                    decision="acquired",
+                    reason=f"Lock acquired for {lock_duration_seconds}s",
+                    user_id=agent_id,
+                    details={
+                        "call_sid": call_sid,
+                        "lock_duration_seconds": lock_duration_seconds,
+                    },
+                )
+                logger.info(f"Acquired soft lock for {digits} by agent {agent_id}")
+            else:
+                logger.info(f"Soft lock NOT acquired for {digits} by agent {agent_id} — held by another agent")
+
+            return acquired
 
         except Exception as e:
             logger.error(f"Error acquiring soft lock: {e}")

@@ -50,128 +50,12 @@ TCPA_CALL_END = dt_time(21, 0)
 # Allowed delivery methods for voicemail drops
 ALLOWED_DELIVERY_METHODS = {"vapi_ai", "slybroadcast", "drop_cowboy", "direct", "ringless"}
 
-# US area code to timezone mapping (covers major area codes)
-# Falls back to America/New_York if unknown
-AREA_CODE_TIMEZONE = {
-    # Eastern Time
-    "201": "America/New_York", "202": "America/New_York", "203": "America/New_York",
-    "207": "America/New_York", "212": "America/New_York", "215": "America/New_York",
-    "216": "America/New_York", "229": "America/New_York", "231": "America/New_York",
-    "234": "America/New_York", "239": "America/New_York", "240": "America/New_York",
-    "248": "America/New_York", "252": "America/New_York",
-    "267": "America/New_York", "269": "America/New_York", "272": "America/New_York",
-    "276": "America/New_York", "278": "America/New_York", "301": "America/New_York",
-    "302": "America/New_York", "304": "America/New_York", "305": "America/New_York",
-    "313": "America/New_York", "315": "America/New_York", "321": "America/New_York",
-    "330": "America/New_York", "336": "America/New_York", "339": "America/New_York",
-    "347": "America/New_York", "351": "America/New_York", "352": "America/New_York",
-    "386": "America/New_York", "401": "America/New_York", "404": "America/New_York",
-    "407": "America/New_York", "410": "America/New_York", "412": "America/New_York",
-    "413": "America/New_York", "419": "America/New_York",
-    "440": "America/New_York", "443": "America/New_York", "470": "America/New_York",
-    "475": "America/New_York", "478": "America/New_York", "484": "America/New_York",
-    "502": "America/New_York", "508": "America/New_York", "513": "America/New_York",
-    "516": "America/New_York", "517": "America/New_York", "518": "America/New_York",
-    "540": "America/New_York", "551": "America/New_York", "561": "America/New_York",
-    "567": "America/New_York", "570": "America/New_York", "571": "America/New_York",
-    "585": "America/New_York", "586": "America/New_York",
-    "603": "America/New_York", "607": "America/New_York", "609": "America/New_York",
-    "610": "America/New_York", "614": "America/New_York", "616": "America/New_York",
-    "617": "America/New_York", "631": "America/New_York", "646": "America/New_York",
-    "678": "America/New_York", "681": "America/New_York",
-    "689": "America/New_York", "704": "America/New_York", "706": "America/New_York",
-    "716": "America/New_York", "717": "America/New_York", "718": "America/New_York",
-    "724": "America/New_York", "727": "America/New_York", "732": "America/New_York",
-    "740": "America/New_York", "754": "America/New_York", "757": "America/New_York",
-    "762": "America/New_York", "770": "America/New_York",
-    "772": "America/New_York", "774": "America/New_York", "781": "America/New_York",
-    "786": "America/New_York", "803": "America/New_York", "804": "America/New_York",
-    "810": "America/New_York", "813": "America/New_York", "828": "America/New_York",
-    "843": "America/New_York", "845": "America/New_York", "848": "America/New_York",
-    "856": "America/New_York", "857": "America/New_York", "860": "America/New_York",
-    "862": "America/New_York", "863": "America/New_York", "864": "America/New_York",
-    "878": "America/New_York", "904": "America/New_York", "908": "America/New_York",
-    "910": "America/New_York", "912": "America/New_York", "914": "America/New_York",
-    "917": "America/New_York", "919": "America/New_York",
-    "929": "America/New_York", "937": "America/New_York",
-    "941": "America/New_York", "954": "America/New_York",
-    "973": "America/New_York", "978": "America/New_York", "980": "America/New_York",
-    # Central Time
-    "205": "America/Chicago", "210": "America/Chicago", "214": "America/Chicago",
-    "217": "America/Chicago", "218": "America/Chicago", "219": "America/Chicago",
-    "224": "America/Chicago", "225": "America/Chicago", "228": "America/Chicago",
-    "254": "America/Chicago", "256": "America/Chicago", "260": "America/Chicago",
-    "262": "America/Chicago", "281": "America/Chicago", "309": "America/Chicago",
-    "312": "America/Chicago", "314": "America/Chicago", "316": "America/Chicago",
-    "317": "America/Chicago", "318": "America/Chicago", "319": "America/Chicago",
-    "320": "America/Chicago", "325": "America/Chicago", "331": "America/Chicago",
-    "334": "America/Chicago", "337": "America/Chicago", "346": "America/Chicago",
-    "361": "America/Chicago", "380": "America/Chicago", "402": "America/Chicago",
-    "405": "America/Chicago", "409": "America/Chicago", "417": "America/Chicago",
-    "430": "America/Chicago", "432": "America/Chicago", "469": "America/Chicago",
-    "479": "America/Chicago", "501": "America/Chicago", "504": "America/Chicago",
-    "507": "America/Chicago", "512": "America/Chicago", "515": "America/Chicago",
-    "531": "America/Chicago", "534": "America/Chicago",
-    "539": "America/Chicago", "563": "America/Chicago", "573": "America/Chicago",
-    "580": "America/Chicago", "608": "America/Chicago", "612": "America/Chicago",
-    "615": "America/Chicago", "618": "America/Chicago", "620": "America/Chicago",
-    "630": "America/Chicago", "636": "America/Chicago", "641": "America/Chicago",
-    "660": "America/Chicago", "662": "America/Chicago", "682": "America/Chicago",
-    "701": "America/Chicago", "708": "America/Chicago", "712": "America/Chicago",
-    "713": "America/Chicago", "715": "America/Chicago",
-    "726": "America/Chicago", "731": "America/Chicago", "737": "America/Chicago",
-    "743": "America/Chicago", "769": "America/Chicago", "773": "America/Chicago",
-    "779": "America/Chicago", "785": "America/Chicago", "806": "America/Chicago",
-    "812": "America/Chicago", "815": "America/Chicago", "816": "America/Chicago",
-    "817": "America/Chicago", "830": "America/Chicago", "832": "America/Chicago",
-    "847": "America/Chicago", "850": "America/Chicago", "870": "America/Chicago",
-    "872": "America/Chicago", "901": "America/Chicago", "903": "America/Chicago",
-    "913": "America/Chicago", "918": "America/Chicago", "936": "America/Chicago",
-    "938": "America/Chicago", "940": "America/Chicago", "945": "America/Chicago",
-    "947": "America/Chicago", "956": "America/Chicago", "972": "America/Chicago",
-    "979": "America/Chicago",
-    # Corrected: these were previously in Eastern but are Central Time
-    "251": "America/Chicago", "414": "America/Chicago", "601": "America/Chicago",
-    "651": "America/Chicago", "763": "America/Chicago", "920": "America/Chicago",
-    "931": "America/Chicago",
-    # Mountain Time
-    "303": "America/Denver", "307": "America/Denver", "385": "America/Denver",
-    "406": "America/Denver", "435": "America/Denver", "505": "America/Denver",
-    "575": "America/Denver", "602": "America/Phoenix", "623": "America/Phoenix",
-    "720": "America/Denver", "801": "America/Denver", "928": "America/Phoenix",
-    "970": "America/Denver", "480": "America/Phoenix",
-    # Corrected: these were previously in Central but are Mountain Time
-    "520": "America/Phoenix", "719": "America/Denver",
-    # Pacific Time
-    "206": "America/Los_Angeles", "208": "America/Los_Angeles",
-    "209": "America/Los_Angeles", "213": "America/Los_Angeles",
-    "253": "America/Los_Angeles", "310": "America/Los_Angeles",
-    "323": "America/Los_Angeles", "341": "America/Los_Angeles",
-    "360": "America/Los_Angeles", "369": "America/Los_Angeles",
-    "408": "America/Los_Angeles", "415": "America/Los_Angeles",
-    "424": "America/Los_Angeles", "425": "America/Los_Angeles",
-    "442": "America/Los_Angeles", "458": "America/Los_Angeles",
-    "503": "America/Los_Angeles", "509": "America/Los_Angeles",
-    "510": "America/Los_Angeles", "530": "America/Los_Angeles",
-    "541": "America/Los_Angeles", "559": "America/Los_Angeles",
-    "562": "America/Los_Angeles", "564": "America/Los_Angeles",
-    "619": "America/Los_Angeles", "626": "America/Los_Angeles",
-    "628": "America/Los_Angeles", "650": "America/Los_Angeles",
-    "657": "America/Los_Angeles", "661": "America/Los_Angeles",
-    "669": "America/Los_Angeles", "702": "America/Los_Angeles",
-    "707": "America/Los_Angeles", "714": "America/Los_Angeles",
-    "725": "America/Los_Angeles", "747": "America/Los_Angeles",
-    "760": "America/Los_Angeles", "775": "America/Los_Angeles",
-    "805": "America/Los_Angeles", "818": "America/Los_Angeles",
-    "831": "America/Los_Angeles", "858": "America/Los_Angeles",
-    "909": "America/Los_Angeles", "916": "America/Los_Angeles",
-    "925": "America/Los_Angeles", "935": "America/Los_Angeles",
-    "949": "America/Los_Angeles", "951": "America/Los_Angeles",
-    "971": "America/Los_Angeles",
-    # Alaska / Hawaii
-    "907": "America/Anchorage",
-    "808": "Pacific/Honolulu",
-}
+# Maximum contacts resolved per campaign dispatch
+MAX_CAMPAIGN_CONTACTS = 1000
+
+# Maximum message length (OpenAI TTS truncates at 4096 chars)
+MAX_MESSAGE_LENGTH = 4096
+
 
 
 # =============================================================================
@@ -227,22 +111,6 @@ def _normalize_phone(phone_number: str) -> str:
     return digits
 
 
-def _get_area_code(phone_number: str) -> Optional[str]:
-    """Extract 3-digit area code from phone number."""
-    digits = _normalize_phone(phone_number)
-    if len(digits) >= 10:
-        return digits[:3]
-    return None
-
-
-def _get_recipient_timezone(phone_number: str) -> str:
-    """Infer timezone from phone area code. Falls back to America/New_York."""
-    area_code = _get_area_code(phone_number)
-    if area_code:
-        return AREA_CODE_TIMEZONE.get(area_code, "America/New_York")
-    return "America/New_York"
-
-
 def check_calling_hours(phone_number: str) -> Tuple[bool, str]:
     """
     Check if current time is within TCPA calling hours (8am-9pm)
@@ -255,7 +123,8 @@ def check_calling_hours(phone_number: str) -> Tuple[bool, str]:
     except ImportError:
         from backports.zoneinfo import ZoneInfo
 
-    tz_name = _get_recipient_timezone(phone_number)
+    from telephony.compliance import resolve_recipient_timezone
+    tz_name = resolve_recipient_timezone(phone_number)
     try:
         tz = ZoneInfo(tz_name)
     except Exception as e:
@@ -366,14 +235,18 @@ def check_consent(lead_id: Optional[int], db: Session, organization_id: Optional
     Returns (has_consent, message).
     """
     if not lead_id:
-        # No lead associated — treated as manual outreach by LO
+        # No lead associated — treated as manual outreach by LO.
+        # Log for audit: manual dials bypass consent checks intentionally.
+        logger.warning(
+            "Voicemail drop initiated without lead_id — consent checks bypassed "
+            "(LO-initiated manual outreach)"
+        )
         return True, ""
 
     try:
-        from database.models.borrower import BorrowerProfile
         import main
 
-        # Check if the lead has an opt-out flag
+        # Look up the lead (with tenant isolation if org provided)
         Lead = main.Lead
         lead_query = db.query(Lead).filter(Lead.id == lead_id)
         if organization_id is not None:
@@ -382,37 +255,93 @@ def check_consent(lead_id: Optional[int], db: Session, organization_id: Optional
         if not lead:
             return False, "Lead not found — denying voicemail drop (fail-closed)"
 
-        # Check if lead has a matching BorrowerProfile with consent fields
-        # BorrowerProfile doesn't have a phone column — match on email
-        if lead.email:
-            borrower = db.query(BorrowerProfile).filter(
-                BorrowerProfile.email == lead.email
-            ).first()
+        # -----------------------------------------------------------------
+        # Layer 1: ChannelPreference.call_consent (FCC 1:1 consent gate)
+        # This is the primary consent check, consistent with the dialer's
+        # ComplianceChecker.check_call_consent().
+        # -----------------------------------------------------------------
+        try:
+            from database.models.communication import ChannelPreference
 
-            if borrower:
-                # Check if consent has been revoked
-                if borrower.consent_revoked_at is not None:
-                    return False, "Contact has revoked communication consent"
+            pref_query = db.query(ChannelPreference).filter(
+                ChannelPreference.lead_id == lead_id
+            )
+            if organization_id is not None:
+                pref_query = pref_query.filter(
+                    ChannelPreference.organization_id == organization_id
+                )
+            pref = pref_query.first()
 
-                if borrower.communication_consent is False:
-                    return False, "Contact has opted out of communications"
-
-                if borrower.marketing_consent is False:
-                    # Allow transactional (loan status, doc requests) but warn about marketing
-                    logger.info(
-                        f"Lead {lead_id}: marketing_consent=False — "
-                        "allowing transactional voicemail, blocking marketing"
+            if pref:
+                if pref.do_not_call:
+                    return False, "Contact is on channel-level Do Not Call list"
+                if not pref.call_consent:
+                    return False, (
+                        "Contact has not granted call consent per FCC "
+                        "one-to-one consent rules"
                     )
+            else:
+                # No ChannelPreference record — fail closed for compliance
+                logger.warning(
+                    "Lead %s: no ChannelPreference record, blocking voicemail "
+                    "(fail-closed)", lead_id
+                )
+                return False, (
+                    "No channel preference record found — call consent "
+                    "not verified"
+                )
+        except ImportError:
+            logger.warning(
+                "ChannelPreference model not available for consent check"
+            )
+        except Exception as e:
+            logger.error(
+                "ChannelPreference consent check failed for lead %s: %s",
+                lead_id, e
+            )
+            return False, "Consent verification unavailable — cannot proceed"
 
-                # FCC one-to-one consent: warn if consent_given_to is missing
-                if not getattr(borrower, 'consent_given_to', None):
-                    logger.info(
-                        f"Lead {lead_id}: consent_given_to not recorded — "
-                        "FCC one-to-one consent rule may not be satisfied"
-                    )
+        # -----------------------------------------------------------------
+        # Layer 2: BorrowerProfile consent (belt-and-suspenders)
+        # Even if ChannelPreference says OK, a revoked BorrowerProfile
+        # consent still blocks.
+        # -----------------------------------------------------------------
+        try:
+            from database.models.borrower import BorrowerProfile
+
+            # BorrowerProfile doesn't have a phone column — match on email
+            if lead.email:
+                borrower = db.query(BorrowerProfile).filter(
+                    BorrowerProfile.email == lead.email
+                ).first()
+
+                if borrower:
+                    if borrower.consent_revoked_at is not None:
+                        return False, "Contact has revoked communication consent"
+
+                    if borrower.communication_consent is False:
+                        return False, "Contact has opted out of communications"
+
+                    if borrower.marketing_consent is False:
+                        logger.info(
+                            "Lead %s: marketing_consent=False — "
+                            "allowing transactional voicemail, blocking marketing",
+                            lead_id
+                        )
+
+                    if not getattr(borrower, 'consent_given_to', None):
+                        logger.warning(
+                            "Lead %s: consent_given_to not recorded — "
+                            "FCC one-to-one consent rule may not be satisfied",
+                            lead_id
+                        )
+        except ImportError:
+            logger.warning(
+                "BorrowerProfile model not available for consent check"
+            )
 
     except ImportError:
-        logger.warning("BorrowerProfile model not available for consent check")
+        logger.warning("Lead model not available for consent check")
     except Exception as e:
         logger.error("Consent check failed for lead %s: %s", lead_id, e)
         return False, "Consent verification unavailable — cannot proceed"
@@ -811,8 +740,24 @@ async def create_voicemail_drop(
         if not phone_number:
             raise HTTPException(status_code=400, detail="Phone number is required")
 
+        phone_digits = re.sub(r'\D', '', phone_number)
+        if len(phone_digits) == 11 and phone_digits.startswith('1'):
+            phone_digits = phone_digits[1:]
+        if len(phone_digits) != 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid phone number. Please provide a 10-digit US phone number."
+            )
+
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
+
+        message = message.strip()
+        if len(message) > MAX_MESSAGE_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message too long ({len(message)} chars). Maximum: {MAX_MESSAGE_LENGTH}"
+            )
 
         # --- TCPA Compliance Checks ---
         org_id = getattr(current_user, 'organization_id', None)
@@ -1000,6 +945,7 @@ async def create_voicemail_drop(
                         voicemail_drop_id=voicemail_drop.id,
                         voice=voice_id or "nova",
                         voice_speed=float(voice_speed or 1.0),
+                        organization_id=org_id,
                     )
 
                     voicemail_drop.rvm_session_id = rvm_result.get("session_id")
@@ -1262,6 +1208,10 @@ async def create_voicemail_template(
         if not message_text:
             raise HTTPException(status_code=400, detail="Message text is required")
 
+        message_text = message_text.strip()
+        if len(message_text) > MAX_MESSAGE_LENGTH:
+            raise HTTPException(status_code=400, detail=f"Template message too long. Maximum: {MAX_MESSAGE_LENGTH} characters")
+
         template = VoicemailTemplate(
             user_id=current_user.id,
             organization_id=getattr(current_user, 'organization_id', None),
@@ -1476,6 +1426,7 @@ async def send_voicemail_ringless(
     voicemail_drop_id: int = None,
     voice: str = "nova",
     voice_speed: float = 1.0,
+    organization_id=None,
 ) -> dict:
     """
     Send voicemail via ringless voicemail (RVM) provider.
@@ -1520,13 +1471,14 @@ async def send_voicemail_ringless(
             voice=voice,
             speed=voice_speed,
             voicemail_drop_id=voicemail_drop_id,
+            organization_id=organization_id,
         )
-        audio_url = _get_public_audio_url(filename)
+        audio_url = _get_public_audio_url(filename, organization_id=organization_id)
         logger.info(f"Auto-generated TTS audio for RVM drop {voicemail_drop_id}: {audio_url}")
     else:
         # Validate pre-recorded audio duration if file is local
         # Slybroadcast API requires audio > 5 seconds
-        _validate_audio_url_duration(audio_url)
+        _validate_audio_url_duration(audio_url, organization_id=organization_id)
 
     clean_number = ''.join(filter(str.isdigit, phone_number))
     if len(clean_number) == 10:
@@ -1552,6 +1504,18 @@ async def send_voicemail_ringless(
         if base_url and not base_url.startswith("http"):
             base_url = f"https://{base_url}"
         dispo_url = f"{base_url}/api/v1/voicemail/webhook/rvm" if base_url else ""
+
+        # Sign the webhook URL so we can verify callbacks are genuine
+        webhook_secret = os.getenv("RVM_WEBHOOK_SECRET", "")
+        if webhook_secret and dispo_url and voicemail_drop_id:
+            import hashlib
+            import hmac as _hmac
+            sig = _hmac.new(
+                webhook_secret.encode(),
+                str(voicemail_drop_id).encode(),
+                hashlib.sha256
+            ).hexdigest()[:32]
+            dispo_url = f"{dispo_url}?sig={sig}&drop_id={voicemail_drop_id}"
 
         # NOTE: Do NOT pre-encode the audio_url — httpx form POST already
         # application/x-www-form-urlencoded-encodes all values.  Pre-encoding
@@ -1626,6 +1590,24 @@ async def send_voicemail_ringless(
                 detail="Drop Cowboy credentials not configured. Set DROPCOWBOY_TEAM_ID and DROPCOWBOY_SECRET."
             )
 
+        # Build signed webhook URL for Drop Cowboy callbacks
+        dc_base_url = os.getenv("API_BASE_URL", os.getenv("RAILWAY_PUBLIC_DOMAIN", ""))
+        if dc_base_url and not dc_base_url.startswith("http"):
+            dc_base_url = f"https://{dc_base_url}"
+        dc_webhook_url = ""
+        if dc_base_url and voicemail_drop_id:
+            dc_webhook_url = f"{dc_base_url}/api/v1/voicemail/webhook/rvm"
+            webhook_secret = os.getenv("RVM_WEBHOOK_SECRET", "")
+            if webhook_secret:
+                import hashlib
+                import hmac as _hmac
+                sig = _hmac.new(
+                    webhook_secret.encode(),
+                    str(voicemail_drop_id).encode(),
+                    hashlib.sha256
+                ).hexdigest()[:32]
+                dc_webhook_url = f"{dc_webhook_url}?sig={sig}&drop_id={voicemail_drop_id}"
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             payload = {
                 "phone_number": clean_number,
@@ -1636,6 +1618,8 @@ async def send_voicemail_ringless(
             }
             if voicemail_drop_id:
                 payload["foreign_id"] = str(voicemail_drop_id)
+            if dc_webhook_url:
+                payload["webhook_url"] = dc_webhook_url
 
             response = await client.post(
                 "https://api.dropcowboy.com/v1/rvm",
@@ -1815,12 +1799,13 @@ async def serve_voicemail_audio(
 # Public Audio Serving (for RVM providers that fetch audio via URL)
 # =============================================================================
 
-def _get_public_audio_url(filename: str) -> str:
+def _get_public_audio_url(filename: str, organization_id=None) -> str:
     """Generate a signed public URL for an audio file.
 
     RVM providers like Slybroadcast need to download the audio from a
-    publicly-accessible URL (no Bearer auth).  We sign the filename with
-    an HMAC so that only URLs we generate are valid.
+    publicly-accessible URL (no Bearer auth).  We sign the combination of
+    org_id and filename with an HMAC so that only URLs we generate are valid,
+    and an attacker cannot swap the org_id to access another tenant's files.
     """
     import hashlib
     import hmac
@@ -1828,8 +1813,11 @@ def _get_public_audio_url(filename: str) -> str:
     secret = os.getenv("SECRET_KEY", "")
     if not secret:
         raise HTTPException(status_code=500, detail="Server configuration error")
+
+    org_id = str(organization_id) if organization_id else "default"
+    signed_path = f"{org_id}/{filename}"
     token = hmac.new(
-        secret.encode(), filename.encode(), hashlib.sha256
+        secret.encode(), signed_path.encode(), hashlib.sha256
     ).hexdigest()[:32]
 
     base_url = os.getenv(
@@ -1843,35 +1831,41 @@ def _get_public_audio_url(filename: str) -> str:
     if not base_url:
         base_url = "https://localhost:8000"
 
-    return f"{base_url}/api/v1/voicemail/audio/public/{token}/{filename}"
+    return f"{base_url}/api/v1/voicemail/audio/public/{token}/{org_id}/{filename}"
 
 
-@router.get("/audio/public/{token}/{filename}")
+@router.get("/audio/public/{token}/{org_id}/{filename}")
 async def serve_public_voicemail_audio(
     token: str,
+    org_id: str,
     filename: str,
 ):
     """Serve voicemail audio without auth, validated by HMAC token.
 
     Used by RVM providers (Slybroadcast, Drop Cowboy) to fetch audio files.
+    The HMAC token covers both org_id and filename to prevent cross-tenant
+    access by tampering with the org_id path segment.
     """
     import hashlib
     import hmac
 
-    # Validate HMAC token
+    # Validate HMAC token — must cover both org_id and filename
     secret = os.getenv("SECRET_KEY", "")
     if not secret:
         raise HTTPException(status_code=500, detail="Server configuration error")
+    signed_path = f"{org_id}/{filename}"
     expected = hmac.new(
-        secret.encode(), filename.encode(), hashlib.sha256
+        secret.encode(), signed_path.encode(), hashlib.sha256
     ).hexdigest()[:32]
 
     if not hmac.compare_digest(token, expected):
         raise HTTPException(status_code=403, detail="Invalid token")
 
     safe_name = os.path.basename(filename)
+    # Sanitize org_id to prevent directory traversal
+    safe_org_id = re.sub(r"[^a-zA-Z0-9_]", "", org_id) or "default"
     upload_dir = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio"
+        os.path.dirname(os.path.dirname(__file__)), "uploads", f"org_{safe_org_id}", "voicemail_audio"
     )
     file_path = os.path.join(upload_dir, safe_name)
 
@@ -1896,10 +1890,11 @@ async def _generate_audio_from_text(
     voice: str = "nova",
     speed: float = 1.0,
     voicemail_drop_id: int = None,
+    organization_id=None,
 ) -> str:
     """Generate MP3 audio from text using OpenAI TTS.
 
-    Saves to uploads/voicemail_audio/ and returns the filename.
+    Saves to uploads/org_{org_id}/voicemail_audio/ and returns the filename.
     """
     import httpx
 
@@ -1934,9 +1929,10 @@ async def _generate_audio_from_text(
             logger.error(f"OpenAI TTS error {response.status_code}: {response.text[:500]}")
             raise HTTPException(status_code=500, detail="TTS audio generation failed")
 
-        # Save to disk
+        # Save to disk — tenant-isolated directory
+        org_dir = f"org_{organization_id}" if organization_id else "org_default"
         upload_dir = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio"
+            os.path.dirname(os.path.dirname(__file__)), "uploads", org_dir, "voicemail_audio"
         )
         os.makedirs(upload_dir, exist_ok=True)
 
@@ -1982,16 +1978,18 @@ def _estimate_audio_duration_seconds(mp3_data: bytes) -> float:
         return len(mp3_data) / bitrate_bytes_per_sec
 
 
-def _validate_audio_url_duration(audio_url: str) -> None:
+def _validate_audio_url_duration(audio_url: str, organization_id=None) -> None:
     """Validate that a pre-recorded audio URL points to audio >= 5 seconds.
 
-    Checks local files directly. For remote URLs, attempts a HEAD request
-    to estimate duration from Content-Length. Logs a warning if unable to
-    validate (does not block — TTS-generated audio is already validated).
+    Checks local files directly, looking in the org-namespaced directory.
+    For remote URLs, attempts a HEAD request to estimate duration from
+    Content-Length. Logs a warning if unable to validate (does not block —
+    TTS-generated audio is already validated).
     """
     MIN_DURATION = 5.0
     # Check if audio_url points to a local file served by the app
-    upload_dir = os.path.join(os.path.dirname(__file__), "..", "uploads", "voicemail_audio")
+    org_dir = f"org_{organization_id}" if organization_id else "org_default"
+    upload_dir = os.path.join(os.path.dirname(__file__), "..", "uploads", org_dir, "voicemail_audio")
     if not audio_url:
         return
     # Extract filename from URL path
@@ -2498,7 +2496,14 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
         if contact_filter.get("source"):
             query = query.filter(Lead.source == contact_filter["source"])
 
-        contacts = query.limit(1000).all()
+        total_matching = query.count()
+        contacts = query.limit(MAX_CAMPAIGN_CONTACTS).all()
+
+        if total_matching > MAX_CAMPAIGN_CONTACTS:
+            logger.warning(
+                f"Campaign {campaign_id}: {total_matching} contacts match filter, "
+                f"capped at {MAX_CAMPAIGN_CONTACTS}. Remaining contacts will not be processed."
+            )
 
         created_count = 0
         skipped_count = 0
@@ -2556,10 +2561,10 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
             db.add(drop)
             created_count += 1
 
-        campaign.total_contacts = created_count + skipped_count
+        campaign.total_contacts = total_matching
         db.commit()
 
-        logger.info(f"Campaign {campaign_id}: {created_count} drops created, {skipped_count} skipped")
+        logger.info(f"Campaign {campaign_id}: {created_count} drops created, {skipped_count} skipped (total matching: {total_matching})")
 
         if created_count == 0:
             campaign.status = "completed"
@@ -2596,6 +2601,7 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
                     voicemail_drop_id=drop_id,
                     voice=voice_id or "nova",
                     voice_speed=float(voice_speed or 1.0),
+                    organization_id=campaign_org_id,
                 )
             else:
                 return await send_voicemail_via_vapi(
@@ -2848,7 +2854,7 @@ async def cancel_campaign(
     cancelled_count = db.query(VoicemailDrop).filter(
         VoicemailDrop.campaign_id == campaign_id,
         VoicemailDrop.status.in_(["pending", "queued"]),
-    ).update({"status": "failed", "error_message": "Campaign cancelled"}, synchronize_session=False)
+    ).update({"status": "cancelled", "error_message": "Campaign cancelled"}, synchronize_session=False)
 
     campaign.status = "cancelled"
     campaign.completed_at = datetime.now(timezone.utc)
@@ -2941,6 +2947,8 @@ async def revoke_consent(
 
         # --- Auth check: staff session OR signed revocation token ---
         is_authenticated = False
+        staff_user = None
+        token_payload = None
 
         # Try staff auth (bearer token)
         try:
@@ -2973,6 +2981,13 @@ async def revoke_consent(
         if not phone_number and not email:
             raise HTTPException(status_code=400, detail="phone_number or email is required")
 
+        # Derive organization_id for tenant-scoped DNC entry
+        org_id = None
+        if staff_user:
+            org_id = getattr(staff_user, 'organization_id', None)
+        elif token_payload:
+            org_id = token_payload.get("organization_id")
+
         # Validate method
         valid_methods = {"web_form", "sms_stop", "email", "phone", "verbal"}
         if method not in valid_methods:
@@ -2980,28 +2995,59 @@ async def revoke_consent(
 
         revoked_count = 0
 
-        # 1. Add to internal DNC list
+        # 1. Add to internal DNC list (scoped to organization)
         if phone_number:
             from database.models.dialer import ContactDNCStatus
             digits = _normalize_phone(phone_number)
 
-            existing = db.query(ContactDNCStatus).filter(
+            dnc_filters = [
                 or_(
                     ContactDNCStatus.phone_number == phone_number,
                     ContactDNCStatus.phone_number == digits,
                     ContactDNCStatus.phone_number == f"+1{digits}",
                 )
-            ).first()
+            ]
+            if org_id is not None:
+                dnc_filters.append(ContactDNCStatus.organization_id == org_id)
+            else:
+                dnc_filters.append(ContactDNCStatus.organization_id == None)
+
+            existing = db.query(ContactDNCStatus).filter(*dnc_filters).first()
 
             if not existing:
                 dnc_entry = ContactDNCStatus(
                     phone_number=f"+1{digits}" if len(digits) == 10 else digits,
                     reason=f"Consent revoked via {method}",
                     source="consent_revocation",
+                    organization_id=org_id,
                 )
                 db.add(dnc_entry)
 
-        # 2. Update BorrowerProfile consent fields
+        # 2. Update ChannelPreference (defense-in-depth with DNC)
+        if phone_number:
+            try:
+                from database.models.communication import ChannelPreference
+                import main
+                Lead = main.Lead
+                lead_query = db.query(Lead).filter(
+                    Lead.phone.ilike(f"%{digits[-10:]}")
+                )
+                if org_id is not None:
+                    lead_query = lead_query.filter(Lead.organization_id == org_id)
+                leads = lead_query.all()
+                for lead in leads:
+                    pref = db.query(ChannelPreference).filter(
+                        ChannelPreference.lead_id == lead.id
+                    ).first()
+                    if pref:
+                        pref.call_consent = False
+                        pref.do_not_call = True
+            except ImportError:
+                logger.debug("ChannelPreference model not available for consent revocation")
+            except Exception as e:
+                logger.error("Failed to update ChannelPreference during consent revocation: %s", e)
+
+        # 3. Update BorrowerProfile consent fields
         try:
             from database.models.borrower import BorrowerProfile
             filters = []
@@ -3020,17 +3066,22 @@ async def revoke_consent(
         except ImportError:
             logger.debug("BorrowerProfile not available for consent revocation")
 
-        # 3. Cancel any queued voicemail drops for this number
+        # 4. Cancel any queued voicemail drops for this number (tenant-scoped)
         if phone_number:
             VoicemailDrop = get_voicemail_drop_model()
             digits = _normalize_phone(phone_number)
-            cancelled = db.query(VoicemailDrop).filter(
+            cancel_filters = [
                 VoicemailDrop.status.in_(["queued", "pending"]),
                 or_(
                     VoicemailDrop.phone_number == phone_number,
                     VoicemailDrop.phone_number == digits,
                     VoicemailDrop.phone_number == f"+1{digits}",
                 ),
+            ]
+            if org_id is not None:
+                cancel_filters.append(VoicemailDrop.organization_id == org_id)
+            cancelled = db.query(VoicemailDrop).filter(
+                *cancel_filters
             ).update(
                 {"status": "cancelled", "error_message": f"Consent revoked via {method}"},
                 synchronize_session=False,
@@ -3094,13 +3145,38 @@ async def rvm_webhook(
     Drop Cowboy: sends JSON with foreign_id for correlation.
       Format: {"foreign_id": "123", "status": "delivered", ...}
 
-    This endpoint requires no auth — providers can't send Bearer tokens.
-    Validation is done via session_id / foreign_id matching existing records.
+    Auth: if RVM_WEBHOOK_SECRET is set, validates HMAC signature from
+    query params (?sig=...&drop_id=...) appended when the webhook URL was
+    built in send_voicemail_ringless(). If the secret is not set, callbacks
+    are accepted without signature (backward compatibility).
     """
     VoicemailDrop = get_voicemail_drop_model()
     VoicemailEvent = get_voicemail_event_model()
 
     try:
+        # --- Webhook signature validation ---
+        webhook_secret = os.getenv("RVM_WEBHOOK_SECRET", "")
+        if webhook_secret:
+            import hashlib
+            import hmac as _hmac
+
+            sig = request.query_params.get("sig", "")
+            drop_id_param = request.query_params.get("drop_id", "")
+            if sig and drop_id_param:
+                expected_sig = _hmac.new(
+                    webhook_secret.encode(),
+                    drop_id_param.encode(),
+                    hashlib.sha256
+                ).hexdigest()[:32]
+                if not _hmac.compare_digest(sig, expected_sig):
+                    logger.warning(
+                        "RVM webhook: invalid signature (drop_id=%s)", drop_id_param
+                    )
+                    return Response(content="OK", media_type="text/plain")
+            elif not sig:
+                logger.warning("RVM webhook: no signature provided, rejecting")
+                return Response(content="OK", media_type="text/plain")
+
         content_type = request.headers.get("content-type", "")
 
         # --- Slybroadcast: form POST with 'var' field ---

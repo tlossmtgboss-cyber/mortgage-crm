@@ -9,6 +9,7 @@ Includes Redis caching for 2-3x speedup on repeat queries.
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any, Callable, Dict, Optional
 from datetime import datetime
@@ -437,7 +438,6 @@ def determine_tool_arguments(
         # Try to extract email from user message if not in entities
         if not email:
             user_message = state.get("user_message", "")
-            import re
             email_match = re.search(r'[\w\.\-\+]+@[\w\.\-]+\.\w+', user_message)
             if email_match:
                 email = email_match.group()
@@ -465,7 +465,6 @@ def determine_tool_arguments(
     elif tool_name == "get_top_leads":
         # Extract limit from query (e.g., "top 3 leads" -> limit=3)
         user_message = state.get("user_message", "").lower()
-        import re
         match = re.search(r"top\s*(\d+)", user_message)
         if match:
             args["limit"] = int(match.group(1))
@@ -476,7 +475,6 @@ def determine_tool_arguments(
     elif tool_name == "get_stale_leads":
         # Extract days threshold from query (e.g., "not contacted in 7 days" -> 7)
         user_message = state.get("user_message", "").lower()
-        import re
         match = re.search(r"(\d+)\s*days?", user_message)
         if match:
             args["days_threshold"] = int(match.group(1))
@@ -594,7 +592,7 @@ def _fetch_active_entity_data(
                    FROM leads l
                    LEFT JOIN users lo ON l.assigned_to = lo.id
                    LEFT JOIN email_signatures es ON es.user_id = lo.id
-                   WHERE l.id = :lead_id""",
+                   WHERE l.id = :lead_id AND l.organization_id = :_org_id""",
                 {"lead_id": active_lead_id}
             )
             if lead:
@@ -626,7 +624,7 @@ def _fetch_active_entity_data(
                    FROM loans ln
                    LEFT JOIN users lo ON ln.loan_officer_id = lo.id
                    LEFT JOIN email_signatures es ON es.user_id = lo.id
-                   WHERE ln.id = :loan_id""",
+                   WHERE ln.id = :loan_id AND ln.organization_id = :_org_id""",
                 {"loan_id": active_loan_id}
             )
             if loan:
@@ -880,56 +878,9 @@ async def gather_data(
 
 
 def format_gathered_data_for_llm(state: AgentState) -> str:
-    """
-    Format gathered data into a string suitable for LLM processing.
-
-    PII is masked before formatting to prevent sensitive data (SSNs,
-    account numbers, full phone numbers) from being sent to the LLM API.
-
-    Args:
-        state: Agent state with gathered_data populated
-
-    Returns:
-        Formatted string of all gathered data
-    """
-    gathered_data = state.get("gathered_data", {})
-    if not gathered_data:
-        return "No data was gathered."
-
-    # Mask PII before formatting (import from reason_and_respond to avoid duplication)
-    try:
-        from .reason_and_respond import _mask_gathered_data
-        masked_data = _mask_gathered_data(gathered_data)
-    except ImportError:
-        masked_data = gathered_data
-
-    sections = []
-
-    for tool_name, data in masked_data.items():
-        section = f"=== {tool_name.upper().replace('_', ' ')} ===\n"
-
-        if isinstance(data, dict):
-            for key, value in data.items():
-                if isinstance(value, list):
-                    section += f"\n{key}:\n"
-                    for item in value[:10]:  # Limit items for context
-                        if isinstance(item, dict):
-                            item_str = ", ".join(f"{k}: {v}" for k, v in item.items())
-                            section += f"  - {item_str}\n"
-                        else:
-                            section += f"  - {item}\n"
-                elif isinstance(value, dict):
-                    section += f"\n{key}:\n"
-                    for k, v in value.items():
-                        section += f"  {k}: {v}\n"
-                else:
-                    section += f"{key}: {value}\n"
-        else:
-            section += str(data)
-
-        sections.append(section)
-
-    return "\n\n".join(sections)
+    """Format gathered data for LLM. Delegates to reason_and_respond's implementation."""
+    from .reason_and_respond import format_gathered_data_for_llm as _format
+    return _format(state.get("gathered_data", {}))
 
 
 # =============================================================================

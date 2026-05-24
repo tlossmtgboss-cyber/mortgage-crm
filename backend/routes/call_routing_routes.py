@@ -30,37 +30,90 @@ def get_current_user_flexible():
 
 
 # ============================================================================
-# VAPI ASSISTANT IDS - Configure these for your assistants
+# VAPI ASSISTANT IDS - Hardcoded defaults (used as fallback when DB lookup fails)
 # ============================================================================
-ASSISTANT_CONFIG = {
+_DEFAULT_ASSISTANT_CONFIG = {
     "receptionist": {
-        "id": "120e239e-4d19-4e43-ad92-1f8b07d08c8c",  # Aria
+        "id": "120e239e-4d19-4e43-ad92-1f8b07d08c8c",
         "name": "Aria (Receptionist)",
         "description": "Handles unrecognized callers and general inquiries",
-        "stages": []  # Fallback for unknown callers
+        "stages": []
     },
     "lead": {
-        "id": "3e5af9cd-2ba7-4f45-bd93-5320179b2fc4",  # Production Assistant 1
+        "id": "3e5af9cd-2ba7-4f45-bd93-5320179b2fc4",
         "name": "Lead Assistant",
         "description": "Handles leads in early stages",
         "stages": ["new", "attempted_contact", "prospect", "application", "pre_qualified", "pre_approved"]
     },
     "active_loan": {
-        "id": "08fa09ed-5bb2-4e3a-8c67-26ffb966bc84",  # Production Assistant 2
+        "id": "08fa09ed-5bb2-4e3a-8c67-26ffb966bc84",
         "name": "Active Loan Assistant",
         "description": "Handles borrowers with active loans",
         "stages": ["processing", "submitted_to_uw", "approved", "conditional_approval", "clear_to_close", "docs_out", "docs_back"]
     },
     "mum": {
-        "id": "faf78118-6808-4742-b63e-af8f7affd3cd",  # MUM Concierge
+        "id": "faf78118-6808-4742-b63e-af8f7affd3cd",
         "name": "MUM Concierge",
         "description": "Handles past clients in MUM program",
         "stages": ["active", "paid_off", "refinance_opportunity"]
     }
 }
 
+# Backward compat: ASSISTANT_CONFIG still exposed for imports
+ASSISTANT_CONFIG = _DEFAULT_ASSISTANT_CONFIG
+
 PHONE_NUMBER_ID = "6adaf897-34d7-42d5-bc34-f1a17162a453"
 VAPI_API_KEY = os.getenv("VAPI_API_KEY", "")
+
+
+def _get_assistant_config(db: Session, org_id: Optional[int] = None) -> Dict[str, Dict[str, Any]]:
+    """
+    Resolve assistant configuration from DB (vapi_assistants table), falling
+    back to the hardcoded defaults for any assistant type not found.
+
+    The vapi_assistants.name is matched against known assistant type keywords:
+    - Names containing 'receptionist' -> "receptionist"
+    - Names containing 'lead' -> "lead"
+    - Names containing 'active' or 'loan' -> "active_loan"
+    - Names containing 'mum' or 'concierge' -> "mum"
+    """
+    import copy
+    config = copy.deepcopy(_DEFAULT_ASSISTANT_CONFIG)
+
+    if not org_id:
+        return config
+
+    try:
+        rows = db.execute(text("""
+            SELECT vapi_assistant_id, name, description
+            FROM vapi_assistants
+            WHERE organization_id = :org_id
+              AND is_active = true
+        """), {"org_id": org_id}).fetchall()
+
+        for row in rows:
+            name_lower = (row.name or "").lower()
+            assistant_type = None
+            if "receptionist" in name_lower:
+                assistant_type = "receptionist"
+            elif "lead" in name_lower:
+                assistant_type = "lead"
+            elif "active" in name_lower or "loan" in name_lower:
+                assistant_type = "active_loan"
+            elif "mum" in name_lower or "concierge" in name_lower:
+                assistant_type = "mum"
+
+            if assistant_type and row.vapi_assistant_id:
+                config[assistant_type]["id"] = row.vapi_assistant_id
+                if row.name:
+                    config[assistant_type]["name"] = row.name
+                if row.description:
+                    config[assistant_type]["description"] = row.description
+
+    except Exception as e:
+        logger.warning("Failed to load assistant config from DB for org %s: %s", org_id, e)
+
+    return config
 
 
 # ============================================================================
@@ -115,9 +168,24 @@ def _ensure_routing_table(db: Session):
                 assistant_id VARCHAR(255),
                 assistant_name VARCHAR(255),
                 organization_id INTEGER,
+                dnc_status VARCHAR(20),
+                consent_status VARCHAR(20),
+                compliance_details JSONB,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         """))
+        # Add compliance columns if table already exists without them
+        for col, col_type in [
+            ("dnc_status", "VARCHAR(20)"),
+            ("consent_status", "VARCHAR(20)"),
+            ("compliance_details", "JSONB"),
+        ]:
+            try:
+                db.execute(text(
+                    f"ALTER TABLE call_routing_logs ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                ))
+            except Exception:
+                pass
         db.commit()
         _routing_table_ensured = True
     except Exception as e:
@@ -147,15 +215,19 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
     org_id is optional: when provided (e.g. from authenticated endpoints), queries
     are scoped to that organization. When omitted (e.g. from Vapi webhook), all
     organizations are searched.
+
+    Assistant IDs are resolved from the vapi_assistants table for the org,
+    falling back to hardcoded defaults.
     """
+    assistant_config = _get_assistant_config(db, org_id)
     phone_clean = normalize_phone(phone)
 
     if not phone_clean or len(phone_clean) < 10:
         return {
             "found": False,
             "caller_type": "unknown",
-            "assistant_id": ASSISTANT_CONFIG["receptionist"]["id"],
-            "assistant_name": ASSISTANT_CONFIG["receptionist"]["name"]
+            "assistant_id": assistant_config["receptionist"]["id"],
+            "assistant_name": assistant_config["receptionist"]["name"]
         }
 
     org_filter = "AND organization_id = :org_id" if org_id else ""
@@ -181,8 +253,8 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
                 "caller_type": "mum",
                 "caller_name": f"{mum_result.first_name} {mum_result.last_name}".strip(),
                 "stage": mum_result.status,
-                "assistant_id": ASSISTANT_CONFIG["mum"]["id"],
-                "assistant_name": ASSISTANT_CONFIG["mum"]["name"],
+                "assistant_id": assistant_config["mum"]["id"],
+                "assistant_name": assistant_config["mum"]["name"],
                 "context": {
                     "mum_client_id": mum_result.id,
                     "loan_id": mum_result.loan_id
@@ -212,8 +284,8 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
                 "caller_type": "active_loan",
                 "caller_name": loan_result.borrower_name,
                 "stage": loan_result.stage,
-                "assistant_id": ASSISTANT_CONFIG["active_loan"]["id"],
-                "assistant_name": ASSISTANT_CONFIG["active_loan"]["name"],
+                "assistant_id": assistant_config["active_loan"]["id"],
+                "assistant_name": assistant_config["active_loan"]["name"],
                 "context": {
                     "loan_id": loan_result.id,
                     "loan_number": loan_result.loan_number,
@@ -244,8 +316,8 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
                 "caller_type": "lead",
                 "caller_name": caller_name,
                 "stage": lead_result.stage,
-                "assistant_id": ASSISTANT_CONFIG["lead"]["id"],
-                "assistant_name": ASSISTANT_CONFIG["lead"]["name"],
+                "assistant_id": assistant_config["lead"]["id"],
+                "assistant_name": assistant_config["lead"]["name"],
                 "context": {
                     "lead_id": lead_result.id,
                     "loan_type": lead_result.loan_type,
@@ -259,8 +331,8 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
     return {
         "found": False,
         "caller_type": "unknown",
-        "assistant_id": ASSISTANT_CONFIG["receptionist"]["id"],
-        "assistant_name": ASSISTANT_CONFIG["receptionist"]["name"]
+        "assistant_id": assistant_config["receptionist"]["id"],
+        "assistant_name": assistant_config["receptionist"]["name"]
     }
 
 
@@ -303,13 +375,64 @@ async def route_inbound_call(
 
             logger.info(f"Routing decision: {result['caller_type']} -> {result['assistant_name']}")
 
+            # ---------------------------------------------------------------
+            # Compliance checks for the inbound caller's number
+            # These are advisory for inbound (caller initiated) but logged
+            # for audit trail. DNC status is relevant if the system later
+            # places an outbound call back to this number.
+            # ---------------------------------------------------------------
+            dnc_status = "unknown"
+            consent_status = "unknown"
+            compliance_details = {}
+            routing_org_id = result.get("context", {}).get("organization_id")
+
+            try:
+                from telephony.compliance import ComplianceChecker
+
+                checker = ComplianceChecker(db, organization_id=routing_org_id)
+
+                # DNC check
+                is_dnc, dnc_reason = checker.check_dnc(phone_number)
+                dnc_status = "flagged" if is_dnc else "clear"
+                compliance_details["dnc_checked"] = True
+                if is_dnc:
+                    compliance_details["dnc_reason"] = dnc_reason
+                    logger.info(
+                        "Inbound caller on DNC list: phone=***%s reason=%s",
+                        phone_number[-4:] if phone_number else "?", dnc_reason,
+                    )
+
+                # Consent check (if we found a lead/contact)
+                lead_id = result.get("context", {}).get("lead_id") or result.get("context", {}).get("mum_client_id")
+                if lead_id and routing_org_id:
+                    has_consent, consent_reason = checker.check_call_consent(
+                        phone_number, contact_id=lead_id,
+                    )
+                    consent_status = "granted" if has_consent else "missing"
+                    compliance_details["consent_checked"] = True
+                    if not has_consent:
+                        compliance_details["consent_reason"] = consent_reason
+                elif result["caller_type"] == "unknown":
+                    consent_status = "no_contact"
+                    compliance_details["consent_checked"] = False
+                    compliance_details["consent_reason"] = "No CRM contact found"
+
+            except ImportError:
+                logger.debug("ComplianceChecker not available for routing log")
+                compliance_details["compliance_available"] = False
+            except Exception as comp_err:
+                logger.debug("Compliance check in routing failed (non-fatal): %s", comp_err)
+                compliance_details["compliance_error"] = str(comp_err)[:200]
+
             # Log the routing decision (ensure table exists on first call)
             _ensure_routing_table(db)
             try:
                 db.execute(text("""
                     INSERT INTO call_routing_logs
-                    (phone_number, caller_type, caller_name, stage, assistant_id, assistant_name, organization_id, created_at)
-                    VALUES (:phone, :caller_type, :caller_name, :stage, :assistant_id, :assistant_name, :organization_id, :created_at)
+                    (phone_number, caller_type, caller_name, stage, assistant_id, assistant_name,
+                     organization_id, dnc_status, consent_status, compliance_details, created_at)
+                    VALUES (:phone, :caller_type, :caller_name, :stage, :assistant_id, :assistant_name,
+                            :organization_id, :dnc_status, :consent_status, :compliance_details, :created_at)
                 """), {
                     "phone": phone_number,
                     "caller_type": result["caller_type"],
@@ -317,8 +440,11 @@ async def route_inbound_call(
                     "stage": result.get("stage"),
                     "assistant_id": result["assistant_id"],
                     "assistant_name": result["assistant_name"],
-                    "organization_id": result.get("context", {}).get("organization_id"),
-                    "created_at": datetime.now(timezone.utc)
+                    "organization_id": routing_org_id,
+                    "dnc_status": dnc_status,
+                    "consent_status": consent_status,
+                    "compliance_details": json.dumps(compliance_details),
+                    "created_at": datetime.now(timezone.utc),
                 })
                 db.commit()
             except Exception as log_err:
@@ -343,8 +469,12 @@ async def route_inbound_call(
                 context_lines.append(f"Property: {ctx['property']}.")
             caller_context = " ".join(context_lines)
 
+            # Resolve org-specific company name for system prompt
+            from services.company_name_resolver import resolve_company_name
+            company_name = resolve_company_name(db, routing_org_id)
+
             system_prompt = (
-                "You are Aria, an AI assistant for The Tim Loss Team at CMG Home Loans. "
+                f"You are Aria, an AI assistant for {company_name}. "
                 "You're a mortgage loan officer's virtual receptionist.\n\n"
             )
             if caller_type == "mum":
@@ -379,7 +509,7 @@ async def route_inbound_call(
                 "- Always confirm the caller's name and best callback number before ending"
             )
 
-            first_msg = f"Hi{', ' + caller_name.split()[0] if caller_name else ''}! This is Aria with The Tim Loss Team. How can I help you today?"
+            first_msg = f"Hi{', ' + caller_name.split()[0] if caller_name else ''}! This is Aria with {company_name}. How can I help you today?"
 
             return {
                 "assistant": {
@@ -390,9 +520,17 @@ async def route_inbound_call(
                         "messages": [{"role": "system", "content": system_prompt}],
                     },
                     "voice": {"provider": "deepgram", "voiceId": "asteria"},
+                    "transcriber": {
+                        "provider": "deepgram",
+                        "model": "nova-2",
+                        "language": "en",
+                        "endpointing": 700,
+                    },
                     "firstMessage": first_msg,
                     "silenceTimeoutSeconds": 30,
                     "maxDurationSeconds": 600,
+                    "responseDelaySeconds": 1.0,
+                    "numWordsToInterruptAssistant": 4,
                 }
             }
 
@@ -401,6 +539,8 @@ async def route_inbound_call(
 
     except SQLAlchemyError as e:
         logger.error(f"Call routing error: {e}")
+        # Fallback uses env-var company name since DB is unavailable
+        _fallback_company = os.getenv("COMPANY_NAME", "our team")
         return {
             "assistant": {
                 "name": "Aria - Fallback",
@@ -408,15 +548,23 @@ async def route_inbound_call(
                     "provider": "openai",
                     "model": "gpt-4o",
                     "messages": [{"role": "system", "content": (
-                        "You are Aria, an AI assistant for The Tim Loss Team. "
+                        f"You are Aria, an AI assistant for {_fallback_company}. "
                         "Greet the caller, offer to take a message or schedule a callback. "
                         "Be concise — this is a phone call."
                     )}],
                 },
                 "voice": {"provider": "deepgram", "voiceId": "asteria"},
-                "firstMessage": "Hi, this is Aria with The Tim Loss Team. How can I help you today?",
+                "transcriber": {
+                    "provider": "deepgram",
+                    "model": "nova-2",
+                    "language": "en",
+                    "endpointing": 700,
+                },
+                "firstMessage": f"Hi, this is Aria with {_fallback_company}. How can I help you today?",
                 "silenceTimeoutSeconds": 30,
                 "maxDurationSeconds": 300,
+                "responseDelaySeconds": 1.0,
+                "numWordsToInterruptAssistant": 4,
             }
         }
 
@@ -431,8 +579,9 @@ async def get_routing_config(
     current_user = Depends(get_current_user_flexible)
 ):
     """Get current call routing configuration"""
+    org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
     return {
-        "assistants": ASSISTANT_CONFIG,
+        "assistants": _get_assistant_config(db, org_id),
         "phone_number_id": PHONE_NUMBER_ID,
         "webhook_url": f"{os.getenv('API_URL') or os.getenv('RAILWAY_PUBLIC_DOMAIN') or 'https://api.perenniaai.com'}/api/v1/call-routing/webhook/route-call",
         "routing_enabled": True
@@ -457,19 +606,22 @@ async def test_caller_lookup(
 
 @router.get("/assistants")
 async def list_assistants(
+    db: Session = Depends(get_db),
     current_user = Depends(get_current_user_flexible)
 ):
     """List all configured assistants"""
+    org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
+    resolved_config = _get_assistant_config(db, org_id)
     return {
         "assistants": [
             {
                 "type": key,
-                "id": config["id"],
-                "name": config["name"],
-                "description": config["description"],
-                "stages": config.get("stages", [])
+                "id": cfg["id"],
+                "name": cfg["name"],
+                "description": cfg["description"],
+                "stages": cfg.get("stages", [])
             }
-            for key, config in ASSISTANT_CONFIG.items()
+            for key, cfg in resolved_config.items()
         ]
     }
 
@@ -485,7 +637,8 @@ async def get_routing_logs(
         org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
         logs = db.execute(text("""
             SELECT id, phone_number, caller_type, caller_name, stage,
-                   assistant_id, assistant_name, created_at
+                   assistant_id, assistant_name, dnc_status, consent_status,
+                   compliance_details, created_at
             FROM call_routing_logs
             WHERE organization_id = :org_id
             ORDER BY created_at DESC
@@ -501,6 +654,9 @@ async def get_routing_logs(
                     "caller_name": log.caller_name,
                     "stage": log.stage,
                     "assistant_name": log.assistant_name,
+                    "dnc_status": getattr(log, "dnc_status", None),
+                    "consent_status": getattr(log, "consent_status", None),
+                    "compliance_details": getattr(log, "compliance_details", None),
                     "created_at": log.created_at.isoformat() if log.created_at else None
                 }
                 for log in logs
@@ -587,10 +743,22 @@ async def run_routing_migration(
             )
         """))
 
-        # Add organization_id column if table already exists without it
+        # Add columns if table already exists without them
         db.execute(text("""
             ALTER TABLE call_routing_logs
             ADD COLUMN IF NOT EXISTS organization_id INTEGER
+        """))
+        db.execute(text("""
+            ALTER TABLE call_routing_logs
+            ADD COLUMN IF NOT EXISTS dnc_status VARCHAR(20)
+        """))
+        db.execute(text("""
+            ALTER TABLE call_routing_logs
+            ADD COLUMN IF NOT EXISTS consent_status VARCHAR(20)
+        """))
+        db.execute(text("""
+            ALTER TABLE call_routing_logs
+            ADD COLUMN IF NOT EXISTS compliance_details JSONB
         """))
 
         db.execute(text("""

@@ -2965,6 +2965,7 @@ function MumClientDetail() {
         <VoicemailDrop
           phoneNumber={client.phone}
           recipientName={client.name}
+          leadId={client.id}
           onClose={() => setShowVoicemailDrop(false)}
         />
       )}

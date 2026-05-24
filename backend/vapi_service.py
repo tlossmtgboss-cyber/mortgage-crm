@@ -582,6 +582,59 @@ Or reply with your question and I'll get back to you!"""
             # Don't fail the main operation
 
 
+async def _download_recording(vapi_call_id: str, recording_url: str, org_id: int = None) -> None:
+    """
+    Download a Vapi recording to local storage before the URL expires.
+
+    Vapi recording URLs expire after 30-90 days. Mortgage call recordings
+    must be retained for years (compliance). This function downloads the
+    audio file and updates the VapiCall record with the local path.
+
+    Runs as a background task -- failures are logged but never crash the caller.
+    """
+    from database import SessionLocal
+    import pathlib
+
+    recordings_dir = pathlib.Path("recordings") / str(org_id or "default")
+    local_path = recordings_dir / f"{vapi_call_id}.wav"
+
+    try:
+        recordings_dir.mkdir(parents=True, exist_ok=True)
+
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+            resp = await client.get(recording_url)
+            resp.raise_for_status()
+
+            # Write synchronously -- recording files are typically small enough
+            local_path.write_bytes(resp.content)
+
+        logger.info(
+            "Recording downloaded: call=%s path=%s size=%d bytes",
+            vapi_call_id, local_path, len(resp.content),
+        )
+
+        # Update the DB record with the local path
+        db = SessionLocal()
+        try:
+            db.query(VapiCall).filter(
+                VapiCall.vapi_call_id == vapi_call_id
+            ).update({
+                "recording_local_path": str(local_path),
+                "recording_downloaded_at": datetime.now(timezone.utc),
+                "recording_status": "downloaded",
+            })
+            db.commit()
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(
+            "Recording download failed: call=%s url=%s error=%s "
+            "(remote URL still stored as fallback)",
+            vapi_call_id, recording_url[:80], e,
+        )
+
+
 class VapiService:
     """Service for Vapi AI API interactions"""
 
@@ -826,6 +879,15 @@ class VapiCRMIntegration:
 
         self.db.commit()
         self.db.refresh(vapi_call)
+
+        # Download recording to local storage before Vapi URL expires (background)
+        if vapi_call.recording_url and not vapi_call.recording_local_path:
+            import asyncio
+            asyncio.ensure_future(_download_recording(
+                vapi_call_id=vapi_call.vapi_call_id,
+                recording_url=vapi_call.recording_url,
+                org_id=getattr(vapi_call, "organization_id", None),
+            ))
 
         # Process through Call Intelligence if enabled and transcript available
         if CALL_INTELLIGENCE_ENABLED and handle_vapi_call_ended and vapi_call.transcript:
@@ -1288,17 +1350,30 @@ class VapiCRMIntegration:
             if not lead or not lead.phone:
                 raise ValueError("Lead not found or has no phone number")
 
-            # Create call via Vapi API
-            call_response = await self.vapi.create_phone_call(
-                assistant_id=assistant_id,
-                customer_number=lead.phone,
-                customer_name=f"{lead.first_name} {lead.last_name}",
-                metadata={"lead_id": lead_id, "purpose": purpose}
-            )
+            # Create call via Vapi API first — only persist record on success
+            try:
+                call_response = await self.vapi.create_phone_call(
+                    assistant_id=assistant_id,
+                    customer_number=lead.phone,
+                    customer_name=f"{lead.first_name} {lead.last_name}",
+                    metadata={"lead_id": lead_id, "purpose": purpose}
+                )
+            except Exception as api_err:
+                logger.error("Vapi API call failed for lead %s: %s", lead_id, api_err)
+                raise
 
-            # Create call record
+            # Validate the API response before creating a DB record
+            vapi_call_id = call_response.get("id")
+            if not vapi_call_id:
+                logger.error(
+                    "Vapi API returned no call ID for lead %s: %s",
+                    lead_id, call_response,
+                )
+                raise ValueError("Vapi API returned no call ID")
+
+            # Create call record only after API success + valid ID
             vapi_call = VapiCall(
-                vapi_call_id=call_response.get("id"),
+                vapi_call_id=vapi_call_id,
                 phone_number=lead.phone,
                 caller_name=f"{lead.first_name} {lead.last_name}",
                 direction="outbound",

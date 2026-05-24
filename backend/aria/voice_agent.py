@@ -1394,13 +1394,18 @@ class AriaVoiceAgent(Agent):
 
     # ─── Speech Handler & Speculative Pre-fetch ──────────────────────
 
+    _CHECKPOINT_INTERVAL = 5  # Flush transcript checkpoint every N lines
+
     def _register_speech_handler(self) -> None:
-        """Register speculative pre-fetch + transcript accumulation on user speech."""
+        """Register speculative pre-fetch + transcript accumulation on user speech,
+        plus agent speech capture via conversation_item_added."""
+
         @self.session.on("user_input_transcribed")
         def _on_transcribed(event):
             text = event.transcript
             if event.is_final:
                 self._transcript_lines.append(f"CALLER: {text}")
+                self._maybe_flush_checkpoint()
             if len(text.split()) < 3:
                 return
             turn_id = f"turn_{hash(text)}"
@@ -1421,6 +1426,52 @@ class AriaVoiceAgent(Agent):
                             "top_k": 3,
                         }))
                     break
+
+        # Capture Aria's own spoken responses so the transcript includes both sides
+        @self.session.on("conversation_item_added")
+        def _on_conversation_item(event):
+            try:
+                from livekit.agents.llm import ChatMessage
+                if not isinstance(event.item, ChatMessage):
+                    return
+                if event.item.role == "assistant":
+                    text = event.item.text_content
+                    if text and text.strip():
+                        self._transcript_lines.append(f"ARIA: {text.strip()}")
+                        self._maybe_flush_checkpoint()
+            except Exception as e:
+                logger.debug("[AriaVoice] conversation_item_added handler error: %s", e)
+
+    def _maybe_flush_checkpoint(self) -> None:
+        """Flush a transcript checkpoint every N lines to guard against crash data loss."""
+        if len(self._transcript_lines) % self._CHECKPOINT_INTERVAL != 0:
+            return
+        asyncio.create_task(self._flush_transcript_checkpoint())
+
+    async def _flush_transcript_checkpoint(self) -> None:
+        """Send current transcript buffer to the backend as a checkpoint.
+        If the process crashes, at most CHECKPOINT_INTERVAL lines are lost."""
+        try:
+            await call_backend_tool_safe(
+                "/internal/aria/call/checkpoint",
+                {
+                    "call_session_id": self._session_data.get(
+                        "call_session_id", f"aria_{id(self)}"
+                    ),
+                    "mode": self._mode,
+                    "organization_id": self._session_data.get("organization_id"),
+                    "user_id": self._session_data.get("user_id"),
+                    "partial_transcript": "\n".join(self._transcript_lines),
+                    "line_count": len(self._transcript_lines),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            logger.debug(
+                "[AriaVoice] Transcript checkpoint flushed (%d lines)",
+                len(self._transcript_lines),
+            )
+        except Exception as e:
+            logger.warning("[AriaVoice] Transcript checkpoint failed: %s", e)
 
     # ─── Memory Context Helpers ──────────────────────────────────────
 
