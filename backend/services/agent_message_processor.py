@@ -263,18 +263,10 @@ def process_pending_messages(batch_size: int = 50) -> Dict[str, int]:
             text("""
                 SELECT
                     id, from_agent_id, to_agent_id,
-                    message_type, subject, context, payload, priority
+                    message_type, subject, context, payload
                 FROM ai_agent_messages
-                WHERE status = 'pending'
-                ORDER BY
-                    CASE priority
-                        WHEN 'urgent' THEN 1
-                        WHEN 'high'   THEN 2
-                        WHEN 'normal' THEN 3
-                        WHEN 'low'    THEN 4
-                        ELSE 5
-                    END,
-                    created_at ASC
+                WHERE is_read = FALSE
+                ORDER BY created_at ASC
                 LIMIT :limit
             """),
             {"limit": batch_size},
@@ -361,7 +353,7 @@ def _mark_processed(session, message_id: str) -> None:
     try:
         session.execute(
             text(
-                "UPDATE ai_agent_messages SET status = 'processed' "
+                "UPDATE ai_agent_messages SET is_read = TRUE, read_at = NOW() "
                 "WHERE id = :mid"
             ),
             {"mid": message_id},
@@ -375,7 +367,7 @@ def _mark_failed(session, message_id: str, error: str) -> None:
     try:
         session.execute(
             text(
-                "UPDATE ai_agent_messages SET status = 'failed' "
+                "UPDATE ai_agent_messages SET is_read = TRUE, read_at = NOW() "
                 "WHERE id = :mid"
             ),
             {"mid": message_id},

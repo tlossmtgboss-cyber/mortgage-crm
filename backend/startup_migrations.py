@@ -1315,6 +1315,26 @@ def _run_critical_schema_migrations():
         except Exception:
             db.rollback()
 
+        # --- Create workflow_task_alerts if missing ---
+        try:
+            db.execute(sa_text("""
+                CREATE TABLE IF NOT EXISTS workflow_task_alerts (
+                    id SERIAL PRIMARY KEY,
+                    task_instance_id INTEGER REFERENCES workflow_task_instances(id) ON DELETE CASCADE,
+                    alert_type VARCHAR(100) NOT NULL,
+                    severity VARCHAR(20) NOT NULL DEFAULT 'medium',
+                    message TEXT,
+                    acknowledged BOOLEAN DEFAULT FALSE,
+                    acknowledged_by INTEGER REFERENCES users(id),
+                    acknowledged_at TIMESTAMPTZ,
+                    organization_id INTEGER,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
             logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")
