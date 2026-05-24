@@ -3,9 +3,11 @@ AI Task Automation API Routes
 Handles AI authorization, training, audit logs, costs, and performance metrics
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import Optional, List
+import sqlalchemy.exc
+from typing import Optional, List, Literal
 from datetime import datetime, timedelta
 import json
 import logging
@@ -23,6 +25,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai-automation"])
 logger = logging.getLogger(__name__)
+
+
+class TrainingInstructionRequest(BaseModel):
+    instruction: str = Field(min_length=1, max_length=10000)
+    task_context: dict = {}
+    scope: Literal['task_type', 'global', 'borrower'] = 'task_type'
 
 security = HTTPBearer(auto_error=False)
 
@@ -944,7 +952,7 @@ async def delegate_task_to_ai(
 
 @router.post("/training/instruction")
 async def submit_training_instruction(
-    instruction_data: dict,
+    instruction_data: TrainingInstructionRequest,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -969,12 +977,12 @@ async def submit_training_instruction(
         except Exception:
             pass
 
-    instruction = instruction_data.get("instruction", "").strip()
-    task_context = instruction_data.get("task_context", {})
+    instruction = instruction_data.instruction.strip()
+    task_context = instruction_data.task_context
     task_type = task_context.get("task_type", "general")
     borrower_name = task_context.get("borrower_name", "")
     task_title = task_context.get("task_title", "")
-    scope = instruction_data.get("scope", "task_type")
+    scope = instruction_data.scope
 
     if not instruction:
         raise HTTPException(status_code=400, detail="Instruction text is required")
@@ -1064,13 +1072,19 @@ This instruction is now part of my training for your workflow. I'll use it to im
         logger.warning(f"Could not log training instruction: {e}")
         db.rollback()
 
-    return {
+    response = {
         "status": "success",
         "acknowledgment": acknowledgment + application_response,
         "instruction_recorded": True,
         "applied_to": task_type,
         "instruction_id": str(instruction_record.id) if instruction_record else None
     }
+
+    if instruction_record is None:
+        response["instruction_recorded"] = False
+        response["warning"] = "Instruction acknowledged but could not be persisted"
+
+    return response
 
 
 # ============================================
@@ -1096,8 +1110,7 @@ async def get_training_instructions(
         )
         if org_id:
             query = query.filter(
-                (AITrainingInstruction.organization_id == org_id) |
-                (AITrainingInstruction.organization_id.is_(None))
+                AITrainingInstruction.organization_id == org_id
             )
         if task_type:
             query = query.filter(
@@ -1120,9 +1133,12 @@ async def get_training_instructions(
             ],
             "count": len(instructions),
         }
-    except Exception as e:
+    except sqlalchemy.exc.DBAPIError as e:
         logger.warning(f"Could not retrieve training instructions: {e}")
         return {"instructions": [], "count": 0}
+    except Exception as e:
+        logger.error(f"Unexpected error retrieving training instructions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve training instructions")
 
 
 # ============================================
@@ -1152,7 +1168,7 @@ async def regenerate_message(
         task_type = request_data.get("task_type", "general")
         rows = db.execute(text("""
             SELECT instruction_text FROM ai_training_instructions
-            WHERE user_id = :uid AND task_type = :tt AND status = 'active'
+            WHERE user_id = :uid AND task_type = :tt AND is_active = true
             ORDER BY created_at DESC LIMIT 5
         """), {"uid": user_id, "tt": task_type}).fetchall()
         stored_instructions = [r.instruction_text for r in rows]

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { aiAPI, API_BASE_URL } from '../../services/api';
 import { sanitizeHTML } from '../../utils/sanitize';
@@ -422,6 +422,10 @@ const TaskDetailPanel = ({
   statusOptions = DEFAULT_STATUS_OPTIONS
 }) => {
   const navigate = useNavigate();
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Local state
   const [editingMessage, setEditingMessage] = useState(false);
@@ -462,10 +466,16 @@ const TaskDetailPanel = ({
   // Fetch stored training instructions for this task type
   useEffect(() => {
     if (!task) return;
+    let cancelled = false;
     const taskType = task.source || task.workflow_name || 'general';
     aiAPI.getTrainingInstructions(taskType)
-      .then((data) => setStoredInstructions(data.instructions || []))
-      .catch(() => setStoredInstructions([]));
+      .then((data) => {
+        if (!cancelled) setStoredInstructions(data.instructions || []);
+      })
+      .catch(() => {
+        if (!cancelled) setStoredInstructions([]);
+      });
+    return () => { cancelled = true; };
   }, [task?.id]);
 
   // Regenerate message when communication method changes (but not when editing)
@@ -561,7 +571,9 @@ const TaskDetailPanel = ({
       setAiInstructions('');
       // Refresh stored instructions so the new one appears immediately
       aiAPI.getTrainingInstructions(taskType)
-        .then((data) => setStoredInstructions(data.instructions || []))
+        .then((data) => {
+          if (mountedRef.current) setStoredInstructions(data.instructions || []);
+        })
         .catch(() => {});
     } catch (error) {
       console.error('Failed to send instruction:', error);
