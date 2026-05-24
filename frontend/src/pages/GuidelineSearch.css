@@ -1,18 +1,22 @@
 .guideline-search-page {
   display: flex;
-  height: calc(100vh - 64px);
+  min-height: 100vh;
   background: #f8fafc;
 }
 
-/* Left Sidebar */
+/* Left Sidebar — pinned next to AppSidebar */
 .gs-sidebar {
+  position: fixed;
+  left: 240px;
+  top: 0;
+  bottom: 0;
   width: 280px;
   background: white;
   border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
   overflow-y: auto;
+  z-index: 40;
 }
 
 .gs-sidebar-header {
@@ -37,11 +41,11 @@
 }
 
 .gs-source-group-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: #475569;
   margin-bottom: 8px;
 }
 
@@ -60,8 +64,9 @@
 }
 
 .gs-source-item label {
-  font-size: 13px;
-  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
   cursor: pointer;
   user-select: none;
 }
@@ -73,16 +78,17 @@
 
 .gs-library-title {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: #475569;
   margin-bottom: 8px;
 }
 
 .gs-library-item {
-  font-size: 13px;
-  color: #3b82f6;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2563eb;
   padding: 4px 0;
   cursor: pointer;
 }
@@ -91,8 +97,9 @@
   text-decoration: underline;
 }
 
-/* Main Content */
+/* Main Content — offset for both AppSidebar (240px) + gs-sidebar (240px) */
 .gs-main {
+  margin-left: 240px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -501,10 +508,18 @@
   color: #16a34a;
 }
 
+/* Override MainLayout padding when guideline search is active */
+.app-main:has(.guideline-search-page) {
+  padding: 0 !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .gs-sidebar {
     display: none;
+  }
+  .gs-main {
+    margin-left: 0;
   }
   .gs-search-area {
     padding: 24px 20px 16px;
