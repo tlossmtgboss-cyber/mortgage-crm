@@ -4199,6 +4199,27 @@ export const builderApplicationsAPI = {
   },
 };
 
+export const guidelinesAPI = {
+  search: (query, filters = {}) =>
+    api.post('/api/v1/underwriting-guidelines/search/rag', { query, ...filters }),
+  compare: (topic) =>
+    api.get(`/api/v1/underwriting-guidelines/compare/${topic}`),
+  stats: () =>
+    api.get('/api/v1/underwriting-guidelines/stats'),
+  list: (params = {}) =>
+    api.get('/api/v1/underwriting-guidelines', { params }),
+  upload: (formData) =>
+    api.post('/api/v1/underwriting-guidelines/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  chartCatalog: () =>
+    api.get('/api/v1/underwriting-guidelines/compare/catalog'),
+  saveQuery: (name, query, filters) =>
+    api.post('/api/v1/underwriting-guidelines/library', { name, query, filters }),
+  listSavedQueries: () =>
+    api.get('/api/v1/underwriting-guidelines/library'),
+};
+
 export function isApiError(err) {
   return err && err.error === true && typeof err.status === 'number';
 }

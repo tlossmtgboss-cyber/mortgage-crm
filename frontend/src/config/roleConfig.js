@@ -109,7 +109,12 @@ export const NAVIGATION_ITEMS = {
   aiUnderwriter: {
     path: '/ai-underwriter',
     label: 'AI Underwriter',
-    module: 'ai_assistant'  // Premium: AI Assistant module
+    module: 'ai_assistant'
+  },
+  guidelineSearch: {
+    path: '/guideline-search',
+    label: 'Guideline Search',
+    module: 'ai_assistant'
   },
   market: {
     path: '/market',
@@ -378,7 +383,7 @@ export const ROLE_NAVIGATION = {
     'scorecard',            // Scorecard
     'goalTracker',          // Goal Tracker for production goals
     'partners',
-    'aiUnderwriter',
+    'aiUnderwriter', 'guidelineSearch',
     'market',
     'profitability',
     'usageIntelligence',    // Owner-only: Usage costs & pricing
@@ -409,7 +414,7 @@ export const ROLE_NAVIGATION = {
     'scorecard',
     'goalTracker',          // Goal Tracker for production goals
     'partners',
-    'aiUnderwriter',
+    'aiUnderwriter', 'guidelineSearch',
     'market',
     'profitability',
     'opsManager',           // Ops Manager: Pipeline health & impediments
@@ -437,7 +442,7 @@ export const ROLE_NAVIGATION = {
     'scorecard',            // Scorecard for performance tracking
     'goalTracker',          // Goal Tracker for production goals
     'partners',
-    'aiUnderwriter',
+    'aiUnderwriter', 'guidelineSearch',
     'market',
     'profitability',
   ],
@@ -453,7 +458,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'calendar',
     'briefing',       // Morning Briefing page
-    'aiUnderwriter'
+    'aiUnderwriter', 'guidelineSearch'
   ],
 
   // Concierge - Same permissions as Production Assistant
@@ -467,7 +472,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'calendar',
     'briefing',       // Morning Briefing page
-    'aiUnderwriter'
+    'aiUnderwriter', 'guidelineSearch'
   ],
 
   // Processor - Operations role, NO dashboard
@@ -479,7 +484,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'calendar',
     'briefing',     // Morning Briefing page
-    'aiUnderwriter'
+    'aiUnderwriter', 'guidelineSearch'
   ],
 
   // Underwriter - Operations role, NO dashboard
@@ -491,7 +496,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'calendar',
     'briefing',     // Morning Briefing page
-    'aiUnderwriter'
+    'aiUnderwriter', 'guidelineSearch'
   ],
 
   // Closer - Operations role, NO dashboard
@@ -503,7 +508,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'calendar',
     'briefing',     // Morning Briefing page
-    'aiUnderwriter'
+    'aiUnderwriter', 'guidelineSearch'
   ],
 
   // Manager - Management navigation
@@ -520,7 +525,7 @@ export const ROLE_NAVIGATION = {
     'briefing',         // Morning Briefing page
     'scorecard',        // Scorecard for performance tracking
     'goalTracker',      // Goal Tracker for production goals
-    'aiUnderwriter',
+    'aiUnderwriter', 'guidelineSearch',
     'market',
   ],
 
@@ -934,11 +939,12 @@ export const MASTER_ADMIN_NAVIGATION = [
     key: 'operations',
     label: 'Operations',
     path: '/smart-docs',
-    matchPaths: ['/smart-docs', '/closed-loans', '/ai-underwriter', '/ops-manager'],
+    matchPaths: ['/smart-docs', '/closed-loans', '/ai-underwriter', '/guideline-search', '/ops-manager'],
     children: [
       { path: '/smart-docs', label: 'Smart Docs', icon: 'fa-file-alt', badgeKey: 'smartDocs', badgeClass: 'urgent' },
       { path: '/closed-loans', label: 'Closed Loans', icon: 'fa-check-circle' },
       { path: '/ai-underwriter', label: 'AI Underwriter', icon: 'fa-robot' },
+      { path: '/guideline-search', label: 'Guideline Search', icon: 'fa-book-open' },
       { path: '/ops-manager', label: 'Ops Manager', icon: 'fa-clipboard-check' },
     ]
   },
