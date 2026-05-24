@@ -199,19 +199,31 @@ def check_dnc_status(phone_number: str, db: Session, organization_id: Optional[i
     # Normalize DNC entries to digits-only for reliable matching.
     # Uses SQL to strip non-digits so format variations (dashes, parens, +1) all match.
     suffix_param = f"%{digits[-10:]}" if len(digits) >= 10 else f"%{digits}"
-    if organization_id is not None:
-        dnc = db.execute(text("""
-            SELECT id, reason FROM contact_dnc_status
-            WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
-              AND organization_id = :org_id
-            LIMIT 1
-        """), {"suffix": suffix_param, "org_id": organization_id}).fetchone()
-    else:
-        dnc = db.execute(text("""
-            SELECT id, reason FROM contact_dnc_status
-            WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
-            LIMIT 1
-        """), {"suffix": suffix_param}).fetchone()
+    try:
+        if organization_id is not None:
+            dnc = db.execute(text("""
+                SELECT id, reason FROM contact_dnc_status
+                WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
+                  AND organization_id = :org_id
+                LIMIT 1
+            """), {"suffix": suffix_param, "org_id": organization_id}).fetchone()
+        else:
+            dnc = db.execute(text("""
+                SELECT id, reason FROM contact_dnc_status
+                WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
+                LIMIT 1
+            """), {"suffix": suffix_param}).fetchone()
+    except Exception as e:
+        if "organization_id" in str(e):
+            db.rollback()
+            logger.warning("contact_dnc_status missing organization_id column, falling back")
+            dnc = db.execute(text("""
+                SELECT id, reason FROM contact_dnc_status
+                WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
+                LIMIT 1
+            """), {"suffix": suffix_param}).fetchone()
+        else:
+            raise
 
     if dnc:
         return True, f"Phone number is on Do Not Call list (reason: {dnc[1] or 'N/A'})"
@@ -780,21 +792,33 @@ async def create_voicemail_drop(
             raise HTTPException(status_code=429, detail=rate_msg)
 
         # --- Idempotency: prevent duplicate drops within 60 seconds ---
-        if org_id is not None:
-            recent_dup = db.execute(text("""
-                SELECT id FROM voicemail_drops
-                WHERE user_id = :uid AND phone_number = :phone
-                  AND organization_id = :org_id
-                  AND created_at > NOW() - INTERVAL '60 seconds'
-                LIMIT 1
-            """), {"uid": current_user.id, "phone": phone_number, "org_id": org_id}).fetchone()
-        else:
-            recent_dup = db.execute(text("""
-                SELECT id FROM voicemail_drops
-                WHERE user_id = :uid AND phone_number = :phone
-                  AND created_at > NOW() - INTERVAL '60 seconds'
-                LIMIT 1
-            """), {"uid": current_user.id, "phone": phone_number}).fetchone()
+        try:
+            if org_id is not None:
+                recent_dup = db.execute(text("""
+                    SELECT id FROM voicemail_drops
+                    WHERE user_id = :uid AND phone_number = :phone
+                      AND organization_id = :org_id
+                      AND created_at > NOW() - INTERVAL '60 seconds'
+                    LIMIT 1
+                """), {"uid": current_user.id, "phone": phone_number, "org_id": org_id}).fetchone()
+            else:
+                recent_dup = db.execute(text("""
+                    SELECT id FROM voicemail_drops
+                    WHERE user_id = :uid AND phone_number = :phone
+                      AND created_at > NOW() - INTERVAL '60 seconds'
+                    LIMIT 1
+                """), {"uid": current_user.id, "phone": phone_number}).fetchone()
+        except Exception as e:
+            if "organization_id" in str(e):
+                db.rollback()
+                recent_dup = db.execute(text("""
+                    SELECT id FROM voicemail_drops
+                    WHERE user_id = :uid AND phone_number = :phone
+                      AND created_at > NOW() - INTERVAL '60 seconds'
+                    LIMIT 1
+                """), {"uid": current_user.id, "phone": phone_number}).fetchone()
+            else:
+                raise
         if recent_dup:
             raise HTTPException(
                 status_code=409,
@@ -839,9 +863,9 @@ async def create_voicemail_drop(
                 db.flush()
 
         # Create voicemail drop record
-        voicemail_drop = VoicemailDrop(
+        drop_kwargs = dict(
             user_id=current_user.id,
-            organization_id=getattr(current_user, 'organization_id', None),
+            organization_id=org_id,
             lead_id=lead_id,
             loan_id=loan_id,
             template_id=template_id,
@@ -849,10 +873,21 @@ async def create_voicemail_drop(
             phone_number=phone_number,
             message_text=message,
             delivery_method=delivery_method,
-            status='pending'
+            status='pending',
         )
+        voicemail_drop = VoicemailDrop(**drop_kwargs)
         db.add(voicemail_drop)
-        db.commit()
+        try:
+            db.commit()
+        except Exception as e:
+            if "organization_id" in str(e):
+                db.rollback()
+                drop_kwargs.pop("organization_id", None)
+                voicemail_drop = VoicemailDrop(**drop_kwargs)
+                db.add(voicemail_drop)
+                db.commit()
+            else:
+                raise
         db.refresh(voicemail_drop)
 
         # Create event
