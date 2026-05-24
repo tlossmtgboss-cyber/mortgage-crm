@@ -14,37 +14,77 @@ from anthropic import AsyncAnthropic
 logger = logging.getLogger(__name__)
 client = AsyncAnthropic()
 
+try:
+    from services.guideline_search_service import GuidelineSearchService
+except ImportError:
+    GuidelineSearchService = None  # type: ignore[assignment,misc]
+
 
 class KnowledgeTools:
 
-    async def answer_guideline_question(self, question: str) -> Dict:
+    async def search_guidelines_rag(
+        self,
+        question: str,
+        loan_program: str = None,
+        agency: str = None,
+        include_overlays: bool = True,
+    ) -> dict:
         """
-        Answer a mortgage guideline question using Claude with built-in
-        mortgage knowledge. In production, this would layer in RAG from
-        a guideline vector store.
+        Search mortgage underwriting guidelines using RAG.
+        Returns AI-synthesized answer with citations from indexed guideline documents.
         """
-        prompt = f"""You are a mortgage guidelines expert. Answer this question accurately and concisely.
-If you're not sure about a specific limit or threshold, say so rather than guessing.
-Always specify which loan program (FHA, VA, Conventional, USDA) the answer applies to.
+        try:
+            if GuidelineSearchService is None:
+                raise ImportError("GuidelineSearchService not available")
 
-Question: {question}
+            from database import SessionLocal
 
-Provide your answer in 2-4 sentences. Include specific numbers, limits, or thresholds where applicable.
-"""
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
-        )
+            db = SessionLocal()
+            try:
+                service = GuidelineSearchService(db=db)
+                agencies = [agency] if agency else None
+                result = await service.search(
+                    query=question,
+                    tenant_id=1,
+                    agencies=agencies,
+                    loan_program=loan_program,
+                    top_k=8,
+                )
+                result["rag_enabled"] = True
+                return result
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning("RAG search failed, falling back to Claude: %s", e)
+            return await self._fallback_guideline_answer(question)
 
-        answer_text = response.content[0].text.strip()
-        return {
-            "text": answer_text,
-            "sources": ["Mortgage industry guidelines"],
-            "confidence": None,
-            "rag_enabled": False,
-            "disclaimer": "Response based on general AI knowledge. Not sourced from official mortgage guidelines. Verify with compliance team before acting.",
-        }
+    async def _fallback_guideline_answer(self, question: str) -> dict:
+        """Fallback to Claude training data when RAG is unavailable."""
+        try:
+            response = await client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1000,
+                system="You are a mortgage underwriting guidelines expert. Answer based on your training data. Add a disclaimer that the answer is from general knowledge, not from indexed official guidelines.",
+                messages=[{"role": "user", "content": question}],
+            )
+            return {
+                "answer": response.content[0].text,
+                "citations": [],
+                "sources": [],
+                "confidence": None,
+                "rag_enabled": False,
+                "disclaimer": "Answer based on general knowledge. Not sourced from indexed official guidelines.",
+                "query": question,
+            }
+        except Exception:
+            return {
+                "answer": "I was unable to search the guidelines at this time. Please try again.",
+                "citations": [],
+                "sources": [],
+                "confidence": None,
+                "rag_enabled": False,
+                "query": question,
+            }
 
     async def run_income_analysis(self, loan_id: int, org_id: str) -> Dict:
         """
@@ -65,7 +105,6 @@ Provide your answer in 2-4 sentences. Include specific numbers, limits, or thres
         except Exception as e:
             logger.warning(f"Income service not available, using AI analysis: {e}")
 
-        # Fallback: return placeholder indicating manual review needed
         return {
             "qualifying_income": None,
             "income_sources": [],
