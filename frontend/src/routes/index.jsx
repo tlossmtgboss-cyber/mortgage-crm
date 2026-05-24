@@ -139,6 +139,7 @@ const PartnerDashboardPortal = lazyRetry(() => import('../pages/PartnerDashboard
 const PartnerClientDetail = lazyRetry(() => import('../pages/PartnerClientDetail'));
 const AIUnderwriter = lazyRetry(() => import('../pages/AIUnderwriter'));
 const GuidelineSearch = lazyRetry(() => import('../pages/GuidelineSearch'));
+const GuidelineAdmin = lazyRetry(() => import('../pages/GuidelineAdmin'));
 const GoalTracker = lazyRetry(() => import('../pages/GoalTracker'));
 const Coach = lazyRetry(() => import('../pages/Coach'));
 // ReconciliationCenter removed — merged into unified Tasks page
@@ -773,6 +774,7 @@ export function getRoutes(layoutProps, options = {}) {
     // AI & Tools
     <Route key="/ai-underwriter" path="/ai-underwriter" element={withMainLayout(AIUnderwriter)} />,
     <Route key="/guideline-search" path="/guideline-search" element={withMainLayout(GuidelineSearch)} />,
+    <Route key="/guideline-admin" path="/guideline-admin" element={withMainLayout(GuidelineAdmin)} />,
     <Route key="/goal-tracker" path="/goal-tracker" element={withMainLayout(GoalTracker)} />,
     <Route key="/coach" path="/coach" element={withMainLayout(Coach)} />,
     <Route key="/reconciliation" path="/reconciliation" element={<Navigate to="/tasks" replace />} />,
