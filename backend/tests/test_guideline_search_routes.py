@@ -26,8 +26,13 @@ def client():
     from database import get_db
 
     mock_db = MagicMock()
-    mock_db.query.return_value.filter.return_value.count.return_value = 0
-    mock_db.query.return_value.count.return_value = 0
+    mock_query = MagicMock()
+    mock_query.filter.return_value = mock_query
+    mock_query.join.return_value = mock_query
+    mock_query.count.return_value = 0
+    mock_query.all.return_value = []
+    mock_query.first.return_value = None
+    mock_db.query.return_value = mock_query
 
     def override_get_db():
         yield mock_db
