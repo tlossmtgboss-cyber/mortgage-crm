@@ -874,3 +874,73 @@ def chunk_text_with_overlap(
         _flush_chunk(current_paras)
 
     return chunks
+
+
+# =============================================================================
+# EMBEDDING GENERATION
+# =============================================================================
+
+
+async def embed_guideline_sections(guideline_id: str, db) -> int:
+    """
+    Generate embeddings for all sections of a guideline that need them.
+    Skips sections where chunk_hash matches (content unchanged).
+    Returns count of sections embedded.
+    """
+    from models.call_monitoring_models import UnderwritingGuideline, GuidelineSection
+    from services.aria_memory.embedding_service import generate_embedding_async
+
+    sections = db.query(GuidelineSection).filter(
+        GuidelineSection.guideline_id == guideline_id
+    ).all()
+
+    if not sections:
+        logger.info(f"No sections found for guideline {guideline_id}")
+        return 0
+
+    embedded_count = 0
+    batch_size = 20
+
+    for i in range(0, len(sections), batch_size):
+        batch = sections[i:i + batch_size]
+
+        for section in batch:
+            content = section.content or ""
+            if not content.strip():
+                continue
+
+            new_hash = compute_chunk_hash(content)
+
+            # Skip if content unchanged and embedding already exists
+            if section.chunk_hash == new_hash and section.content_embedding is not None:
+                continue
+
+            embedding = await generate_embedding_async(content)
+            if embedding is None:
+                logger.warning(
+                    f"Embedding failed for section {section.id} of guideline {guideline_id}"
+                )
+                continue
+
+            section.content_embedding = embedding
+            section.chunk_hash = new_hash
+            section.token_count = _count_tokens(content)
+            section.embedding_model = "text-embedding-3-small"
+            embedded_count += 1
+
+        db.flush()
+
+    # Update parent guideline with embedding status
+    guideline = db.query(UnderwritingGuideline).filter(
+        UnderwritingGuideline.id == guideline_id
+    ).first()
+    if guideline:
+        guideline.embedding_status = "complete"
+        guideline.chunk_count = len(sections)
+
+    db.commit()
+
+    logger.info(
+        f"Embedded {embedded_count}/{len(sections)} sections for guideline {guideline_id}"
+    )
+    return embedded_count

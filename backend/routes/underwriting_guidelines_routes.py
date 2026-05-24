@@ -149,6 +149,9 @@ async def upload_guideline(
         file_ext
     )
 
+    # Generate embeddings after processing completes
+    background_tasks.add_task(_embed_after_processing, str(guideline.id))
+
     logger.info(f"Guideline uploaded: {guideline.id} - {name}")
 
     return _to_guideline_response(guideline)
@@ -636,3 +639,62 @@ async def process_guideline_document(guideline_id: str, file_path: str, file_ext
     """Background task to process uploaded guideline document."""
     from services.call_monitoring.guidelines_service import process_guideline
     await process_guideline(guideline_id, file_path, file_ext)
+
+
+async def _embed_after_processing(guideline_id: str):
+    """
+    Poll until guideline processing is complete, then generate embeddings.
+    Waits up to 5 minutes (60 iterations x 5 seconds).
+    """
+    import asyncio
+    from database import get_db as _get_db
+    from services.call_monitoring.guidelines_service import embed_guideline_sections
+
+    max_iterations = 60
+    poll_interval = 5  # seconds
+
+    for _ in range(max_iterations):
+        db = next(_get_db())
+        try:
+            guideline = db.query(UnderwritingGuideline).filter(
+                UnderwritingGuideline.id == guideline_id
+            ).first()
+
+            if not guideline:
+                logger.error(f"Guideline {guideline_id} not found for embedding")
+                return
+
+            if guideline.is_processed:
+                # Mark as processing embeddings
+                guideline.embedding_status = "processing"
+                db.commit()
+                break
+        finally:
+            db.close()
+
+        await asyncio.sleep(poll_interval)
+    else:
+        logger.warning(
+            f"Guideline {guideline_id} not processed after {max_iterations * poll_interval}s, "
+            "skipping embedding"
+        )
+        return
+
+    # Generate embeddings
+    db = next(_get_db())
+    try:
+        count = await embed_guideline_sections(guideline_id, db)
+        logger.info(f"Embedded {count} sections for guideline {guideline_id}")
+    except Exception as e:
+        logger.error(f"Embedding failed for guideline {guideline_id}: {e}")
+        try:
+            guideline = db.query(UnderwritingGuideline).filter(
+                UnderwritingGuideline.id == guideline_id
+            ).first()
+            if guideline:
+                guideline.embedding_status = "failed"
+                db.commit()
+        except Exception as e2:
+            logger.error(f"Failed to update embedding_status: {e2}")
+    finally:
+        db.close()
