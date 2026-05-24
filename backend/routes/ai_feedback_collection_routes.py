@@ -185,24 +185,34 @@ async def submit_feedback(
             f"type={feedback_type}, session={body.session_id}"
         )
 
-        # If negative feedback, trigger learning service in background (non-blocking)
+        # If negative feedback, save as memory and trigger learning synchronously.
+        # Failures here are logged but do not block the feedback response (it was already saved).
         if body.rating == "negative" and body.user_question and body.ai_response:
-            _trigger_learning_from_feedback(
-                session_id=body.session_id,
-                question=body.user_question,
-                response=body.ai_response,
-                feedback_text=body.feedback_text,
-                feedback_type=feedback_type,
-            )
+            try:
+                _save_feedback_as_memory(
+                    db=db,
+                    feedback_log=entry,
+                    current_user=current_user,
+                    feedback_text=body.feedback_text,
+                    category=category,
+                )
+            except Exception as mem_err:
+                logger.warning(
+                    f"Failed to save feedback as memory for feedback_id={entry.id}: {mem_err}"
+                )
 
-            # Also save as a DIRECTIVE memory so future conversations can retrieve it
-            _save_feedback_as_memory(
-                db=db,
-                feedback_log=entry,
-                current_user=current_user,
-                feedback_text=body.feedback_text,
-                category=category,
-            )
+            try:
+                _trigger_learning_from_feedback(
+                    session_id=body.session_id,
+                    question=body.user_question,
+                    response=body.ai_response,
+                    feedback_text=body.feedback_text,
+                    feedback_type=feedback_type,
+                )
+            except Exception as learn_err:
+                logger.warning(
+                    f"Failed to trigger learning from feedback for session={body.session_id}: {learn_err}"
+                )
 
         return {
             "success": True,
@@ -349,31 +359,22 @@ def _trigger_learning_from_feedback(
 ) -> None:
     """
     Feed negative feedback into ConversationAILearningService as a correction.
-    Runs in a fire-and-forget background thread; never blocks the HTTP response.
-    Failures are logged but never propagated.
+    Runs synchronously within the request. Raises on failure so the caller can log it.
     """
-    import threading
-
-    def _run_learning():
-        try:
-            from services.conversation_ai_learning_service import conversation_ai_learning_service
-
-            conversation_ai_learning_service.add_correction(
-                original_query=question,
-                incorrect_response=response,
-                correct_response=feedback_text or "(user indicated this was wrong)",
-                explanation=f"User feedback type: {feedback_type}",
-                source_conversation_id=session_id,
-            )
-            logger.info(f"Learning correction added from feedback for session {session_id}")
-        except Exception as e:
-            logger.warning(f"Failed to trigger learning from feedback: {e}")
-
     try:
-        thread = threading.Thread(target=_run_learning, daemon=True)
-        thread.start()
-    except Exception as e:
-        logger.warning(f"Failed to start learning thread: {e}")
+        from services.conversation_ai_learning_service import conversation_ai_learning_service
+    except ImportError as e:
+        logger.error(f"Cannot import conversation_ai_learning_service: {e}")
+        return
+
+    conversation_ai_learning_service.add_correction(
+        original_query=question,
+        incorrect_response=response,
+        correct_response=feedback_text or "(user indicated this was wrong)",
+        explanation=f"User feedback type: {feedback_type}",
+        source_conversation_id=session_id,
+    )
+    logger.info(f"Learning correction added from feedback for session {session_id}")
 
 
 def _save_feedback_as_memory(
@@ -387,30 +388,27 @@ def _save_feedback_as_memory(
     Save negative feedback as a DIRECTIVE-type AgentMemory so the analyze node
     can retrieve it in future conversations and avoid repeating the same mistake.
 
-    Failures are logged but never propagated.
+    Raises on DB errors so the caller can handle and log the failure.
     """
-    try:
-        from database.models.agent_memory import AgentMemory, MemoryType
+    from database.models.agent_memory import AgentMemory, MemoryType
 
-        memory = AgentMemory(
-            user_id=current_user.id,
-            organization_id=getattr(current_user, "organization_id", None),
-            memory_type=MemoryType.DIRECTIVE,
-            key=f"feedback_correction_{feedback_log.id}",
-            value=(
-                f"User reported issue with AI response: "
-                f"{feedback_text or 'negative feedback'}. "
-                f"Category: {category}. Avoid similar responses."
-            ),
-            confidence=0.8,
-            agent_role="user_feedback",
-        )
-        db.add(memory)
-        db.commit()
-        logger.info(f"Feedback memory saved: key=feedback_correction_{feedback_log.id}")
-    except Exception as mem_err:
-        logger.warning(f"Failed to save feedback as memory: {mem_err}")
-        try:
-            db.rollback()
-        except Exception:
-            pass
+    memory_key = f"feedback_correction_{feedback_log.id}"
+
+    memory = AgentMemory(
+        user_id=current_user.id,
+        organization_id=getattr(current_user, "organization_id", None),
+        memory_type=MemoryType.DIRECTIVE,
+        key=memory_key,
+        value=(
+            f"User reported issue with AI response: "
+            f"{feedback_text or 'negative feedback'}. "
+            f"Category: {category}. Avoid similar responses."
+        ),
+        confidence=0.8,
+        agent_role="user_feedback",
+    )
+    db.add(memory)
+    db.commit()
+    logger.info(
+        f"Feedback memory saved: memory_type=DIRECTIVE, key={memory_key}"
+    )

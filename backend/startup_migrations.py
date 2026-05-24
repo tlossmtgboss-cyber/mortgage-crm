@@ -288,6 +288,12 @@ def run_all_startup_migrations(engine: Any) -> None:
         logger.warning(f"Agent memory tables migration: {e}")
 
     try:
+        from migrations.add_training_instructions_table import run_migration as _run_training_instr
+        _run_training_instr()
+    except Exception as e:
+        logger.warning(f"Training instructions table migration: {e}")
+
+    try:
         from migrations.add_morning_briefings import run_migration as _run_briefings
         _run_briefings()
     except Exception as e:

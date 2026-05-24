@@ -1094,6 +1094,23 @@
   color: #92400e;
 }
 
+.task-detail-panel .guidance-learned {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.task-detail-panel .learned-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-detail-panel .learned-meta {
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+}
+
 .task-detail-panel .talking-points-list {
   margin: 0;
   padding-left: 18px;

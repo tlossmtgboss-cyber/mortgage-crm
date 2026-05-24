@@ -945,46 +945,57 @@ async def delegate_task_to_ai(
 @router.post("/training/instruction")
 async def submit_training_instruction(
     instruction_data: dict,
-    current_user= Depends(get_current_user),
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Submit a training instruction to teach AI how to handle specific scenarios.
     The AI will acknowledge the instruction and explain how it will apply it.
     """
-    user_id = int_to_uuid(current_user.id)
-    company_id = get_company_id_for_user(current_user)
+    from database.models.training_instruction import AITrainingInstruction
+
+    user_id = current_user.id
+    # Get organization_id from user (if available via full ORM user)
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id is None:
+        # Fallback: query organization_id from users table
+        try:
+            result = db.execute(
+                text("SELECT organization_id FROM users WHERE id = :uid"),
+                {"uid": user_id}
+            ).fetchone()
+            if result:
+                org_id = result[0]
+        except Exception:
+            pass
 
     instruction = instruction_data.get("instruction", "").strip()
     task_context = instruction_data.get("task_context", {})
     task_type = task_context.get("task_type", "general")
     borrower_name = task_context.get("borrower_name", "")
     task_title = task_context.get("task_title", "")
+    scope = instruction_data.get("scope", "task_type")
 
     if not instruction:
         raise HTTPException(status_code=400, detail="Instruction text is required")
 
-    # Store the training instruction in the database
+    # Store the training instruction via ORM
+    instruction_record = None
     try:
-        db.execute(text("""
-            INSERT INTO ai_training_instructions (
-                user_id, company_id, instruction_text, task_type,
-                task_context, created_at, status
-            )
-            VALUES (
-                :user_id, :company_id, :instruction, :task_type,
-                :task_context, NOW(), 'active'
-            )
-        """), {
-            "user_id": user_id,
-            "company_id": company_id,
-            "instruction": instruction,
-            "task_type": task_type,
-            "task_context": json.dumps(task_context)
-        })
+        instruction_record = AITrainingInstruction(
+            user_id=user_id,
+            organization_id=org_id,
+            instruction_text=instruction,
+            task_type=task_type,
+            task_context=task_context,
+            scope=scope,
+            is_active=True,
+            applied_count=0,
+        )
+        db.add(instruction_record)
         db.commit()
+        db.refresh(instruction_record)
     except Exception as e:
-        # Table might not exist yet, log but continue
         logger.warning(f"Could not store training instruction: {e}")
         db.rollback()
 
@@ -1029,6 +1040,7 @@ This instruction is now part of my training for your workflow. I'll use it to im
 
     # Log to audit
     try:
+        company_id = get_company_id_for_user(current_user)
         db.execute(text("""
             INSERT INTO ai_audit_log (
                 user_id, company_id, action_type, action_details,
@@ -1039,7 +1051,7 @@ This instruction is now part of my training for your workflow. I'll use it to im
                 :details, 'success', NOW()
             )
         """), {
-            "user_id": user_id,
+            "user_id": int_to_uuid(user_id),
             "company_id": company_id,
             "details": json.dumps({
                 "instruction": instruction,
@@ -1056,8 +1068,61 @@ This instruction is now part of my training for your workflow. I'll use it to im
         "status": "success",
         "acknowledgment": acknowledgment + application_response,
         "instruction_recorded": True,
-        "applied_to": task_type
+        "applied_to": task_type,
+        "instruction_id": str(instruction_record.id) if instruction_record else None
     }
+
+
+# ============================================
+# AI TRAINING INSTRUCTIONS RETRIEVAL
+# ============================================
+
+@router.get("/training/instructions")
+async def get_training_instructions(
+    task_type: str = None,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve stored training instructions for a given task type."""
+    from database.models.training_instruction import AITrainingInstruction
+
+    user_id = current_user.id
+    org_id = getattr(current_user, 'organization_id', None)
+
+    try:
+        query = db.query(AITrainingInstruction).filter(
+            AITrainingInstruction.user_id == user_id,
+            AITrainingInstruction.is_active == True,
+        )
+        if org_id:
+            query = query.filter(
+                (AITrainingInstruction.organization_id == org_id) |
+                (AITrainingInstruction.organization_id.is_(None))
+            )
+        if task_type:
+            query = query.filter(
+                (AITrainingInstruction.task_type == task_type) |
+                (AITrainingInstruction.scope == 'global')
+            )
+        instructions = query.order_by(AITrainingInstruction.created_at.desc()).limit(50).all()
+
+        return {
+            "instructions": [
+                {
+                    "id": str(inst.id),
+                    "instruction_text": inst.instruction_text,
+                    "task_type": inst.task_type,
+                    "scope": inst.scope,
+                    "applied_count": inst.applied_count,
+                    "created_at": inst.created_at.isoformat() if inst.created_at else None,
+                }
+                for inst in instructions
+            ],
+            "count": len(instructions),
+        }
+    except Exception as e:
+        logger.warning(f"Could not retrieve training instructions: {e}")
+        return {"instructions": [], "count": 0}
 
 
 # ============================================

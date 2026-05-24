@@ -912,6 +912,125 @@ async def run_orchestrator(
         logger.info(f"[ORCHESTRATOR] ========================================")
 
         response["request_id"] = request_id
+
+        # ================================================================
+        # POST-CONVERSATION MEMORY SAVE
+        # Non-blocking: fires and forgets so memory failures never delay response
+        # ================================================================
+        if db_session and resolved_org_id is not None:
+            try:
+                async def _save_post_conversation_memory():
+                    """Extract key facts and save conversation memory after response."""
+                    try:
+                        from services.agent_memory_service import (
+                            save_conversation_summary,
+                            save_memory,
+                            is_memory_enabled,
+                        )
+
+                        # Determine the primary agent role from intent routing
+                        agent_role = (
+                            intent_agents[0] if intent_agents else "pipeline_analyst"
+                        )
+
+                        # Skip if memory is not enabled for this role
+                        if not is_memory_enabled(agent_role):
+                            return
+
+                        response_text = response.get("response", "")
+                        if not response_text or len(response_text) < 10:
+                            return
+
+                        # Build a concise summary from message + response
+                        summary = (
+                            f"User asked: {message[:200]}"
+                            f"{'...' if len(message) > 200 else ''}\n"
+                            f"Agent responded about: {intent} "
+                            f"(confidence={intent_confidence:.2f})"
+                        )
+
+                        # Save the conversation summary
+                        conv_id = save_conversation_summary(
+                            db=db_session,
+                            user_id=int(user_id) if isinstance(user_id, str) and user_id.isdigit() else user_id,
+                            org_id=resolved_org_id,
+                            agent_role=agent_role,
+                            messages=[
+                                {"role": "user", "content": message},
+                                {"role": "assistant", "content": response_text[:1000]},
+                            ],
+                            summary=summary,
+                            key_points=[intent, f"tools_used:{tool_count}"],
+                        )
+
+                        # Detect user corrections/preferences/directives in the message
+                        # Simple heuristic: look for preference/directive signal phrases
+                        _uid = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else user_id
+                        _preference_signals = [
+                            "i prefer", "i like", "i want", "always ",
+                            "never ", "don't ", "do not ", "stop ",
+                            "from now on", "remember that", "keep in mind",
+                        ]
+                        _directive_signals = [
+                            "always ", "never ", "from now on",
+                            "make sure", "don't ever", "stop doing",
+                            "remember to", "going forward",
+                        ]
+
+                        msg_lower = message.lower()
+
+                        # Save as PREFERENCE if preference language detected
+                        if any(sig in msg_lower for sig in _preference_signals):
+                            save_memory(
+                                db=db_session,
+                                user_id=_uid,
+                                org_id=resolved_org_id,
+                                key=f"user_preference_{intent}_{int(datetime.now(timezone.utc).timestamp())}",
+                                value=message[:500],
+                                memory_type="preference",
+                                agent_role=agent_role,
+                                confidence=0.8,
+                                conversation_id=conv_id,
+                            )
+
+                        # Save as DIRECTIVE if directive language detected
+                        if any(sig in msg_lower for sig in _directive_signals):
+                            save_memory(
+                                db=db_session,
+                                user_id=_uid,
+                                org_id=resolved_org_id,
+                                key=f"user_directive_{intent}_{int(datetime.now(timezone.utc).timestamp())}",
+                                value=message[:500],
+                                memory_type="directive",
+                                agent_role=agent_role,
+                                confidence=0.9,
+                                conversation_id=conv_id,
+                            )
+
+                        # Commit memory writes (they use flush, need explicit commit)
+                        db_session.commit()
+                        logger.info(
+                            "[MEMORY] Post-conversation save complete for user=%s role=%s conv_id=%s",
+                            user_id, agent_role, conv_id,
+                        )
+                    except Exception as mem_err:
+                        logger.warning(
+                            "[MEMORY] Post-conversation memory save failed (non-fatal): %s",
+                            mem_err,
+                        )
+                        try:
+                            db_session.rollback()
+                        except Exception:
+                            pass
+
+                # Fire as background task — never blocks the response
+                asyncio.create_task(_save_post_conversation_memory())
+                logger.debug("[ORCHESTRATOR] Post-conversation memory save task dispatched")
+            except Exception as mem_setup_err:
+                logger.warning(
+                    "[MEMORY] Failed to dispatch memory save task: %s", mem_setup_err
+                )
+
         clear_request_id()
 
         return response

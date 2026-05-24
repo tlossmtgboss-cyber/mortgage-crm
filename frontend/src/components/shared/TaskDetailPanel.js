@@ -437,6 +437,8 @@ const TaskDetailPanel = ({
   // SLA task state
   const [slaMilestoneDate, setSlaMilestoneDate] = useState('');
   const [completingSla, setCompletingSla] = useState(false);
+  // Stored training instructions
+  const [storedInstructions, setStoredInstructions] = useState([]);
 
   // Reset state when task changes
   useEffect(() => {
@@ -455,6 +457,15 @@ const TaskDetailPanel = ({
       setSlaMilestoneDate(task.milestone_date ? task.milestone_date.split('T')[0] : '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id]);
+
+  // Fetch stored training instructions for this task type
+  useEffect(() => {
+    if (!task) return;
+    const taskType = task.source || task.workflow_name || 'general';
+    aiAPI.getTrainingInstructions(taskType)
+      .then((data) => setStoredInstructions(data.instructions || []))
+      .catch(() => setStoredInstructions([]));
   }, [task?.id]);
 
   // Regenerate message when communication method changes (but not when editing)
@@ -536,10 +547,11 @@ const TaskDetailPanel = ({
     if (!aiInstructions.trim()) return;
     setSendingInstruction(true);
     try {
+      const taskType = task.source || 'general';
       const response = await aiAPI.submitTrainingInstruction(
         aiInstructions,
         {
-          task_type: task.source || 'general',
+          task_type: taskType,
           borrower_name: task.borrower || '',
           task_title: task.title || '',
           stage: task.stage || ''
@@ -547,6 +559,10 @@ const TaskDetailPanel = ({
       );
       setAiAcknowledgment(response.acknowledgment);
       setAiInstructions('');
+      // Refresh stored instructions so the new one appears immediately
+      aiAPI.getTrainingInstructions(taskType)
+        .then((data) => setStoredInstructions(data.instructions || []))
+        .catch(() => {});
     } catch (error) {
       console.error('Failed to send instruction:', error);
       setAiAcknowledgment('Failed to send instruction. Please try again.');
@@ -867,6 +883,27 @@ const TaskDetailPanel = ({
                         <span>Pro Tip</span>
                       </div>
                       <p className="guidance-text tip-text">{guidance.tips}</p>
+                    </div>
+                  )}
+
+                  {/* Stored Training Instructions */}
+                  {storedInstructions.length > 0 && (
+                    <div className="guidance-section guidance-learned">
+                      <div className="guidance-label">
+                        <span className="guidance-icon">🧠</span>
+                        <span>Your Instructions ({storedInstructions.length})</span>
+                      </div>
+                      <ul className="talking-points-list learned-list">
+                        {storedInstructions.slice(0, 5).map((inst) => (
+                          <li key={inst.id} className="learned-item">
+                            {inst.instruction_text}
+                            <span className="learned-meta">
+                              {inst.scope === 'global' ? 'All tasks' : inst.task_type}
+                              {inst.applied_count > 0 && ` · Applied ${inst.applied_count}x`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>

@@ -722,6 +722,27 @@ from .rate_watch import (
 # Knowledge Graph models (entity relationship graph over CRM data)
 from .knowledge_graph import KnowledgeGraphNode, KnowledgeGraphEdge
 
+# Agent memory models (persistent memory system for AI agents)
+from .agent_memory import AgentConversation, AgentMemory, AgentContext
+
+# Agent feedback models (user ratings on AI responses)
+from .agent_feedback import AgentFeedback, AgentFeedbackSummary
+
+# AI learning system models (training examples, patterns, prompt optimizations)
+from .learning_example import LearningExample, LearningPattern, PromptOptimization
+
+# Memory staging queue (consolidation pipeline review)
+from .memory_staging import MemoryStaging
+
+# Memory audit events (unified audit log for memory operations)
+from .memory_audit import MemoryAuditEvent
+
+# AI Training Instruction (agent-created, may not exist yet)
+try:
+    from .training_instruction import AITrainingInstruction
+except ImportError:
+    pass
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1498,4 +1519,39 @@ __all__ = [
     # =====================
     "KnowledgeGraphNode",
     "KnowledgeGraphEdge",
+
+    # =====================
+    # Agent Memory
+    # =====================
+    "AgentConversation",
+    "AgentMemory",
+    "AgentContext",
+
+    # =====================
+    # Agent Feedback
+    # =====================
+    "AgentFeedback",
+    "AgentFeedbackSummary",
+
+    # =====================
+    # AI Learning System
+    # =====================
+    "LearningExample",
+    "LearningPattern",
+    "PromptOptimization",
+
+    # =====================
+    # Memory Staging
+    # =====================
+    "MemoryStaging",
+
+    # =====================
+    # Memory Audit
+    # =====================
+    "MemoryAuditEvent",
+
+    # =====================
+    # AI Training Instruction
+    # =====================
+    "AITrainingInstruction",
 ]

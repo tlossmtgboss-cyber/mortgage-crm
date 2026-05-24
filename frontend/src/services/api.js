@@ -1262,6 +1262,11 @@ export const aiAPI = {
     });
     return response.data;
   },
+  getTrainingInstructions: async (taskType) => {
+    const params = taskType ? { task_type: taskType } : {};
+    const response = await api.get('/api/v1/ai/training/instructions', { params });
+    return response.data;
+  },
   // Inline thumbs-up/down feedback on individual AI responses
   submitInlineFeedback: async ({ sessionId, messageId, rating, userQuestion, aiResponse }) => {
     const response = await api.post('/api/v1/ai/feedback', {
