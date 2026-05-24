@@ -510,17 +510,629 @@ memory_type = "guideline_insight"
 
   <!-- Comparison Charts -->
   <section id="comparison" class="mb-12">
-    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Comparison Charts</h2>
-    <p class="text-sm mb-3">Pre-built comparison topics extracted from <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">structured_rules</code>:</p>
-    <div class="grid grid-cols-3 gap-3">
-      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Minimum Credit Score</div>
-      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Maximum DTI Ratios</div>
-      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Maximum LTV</div>
-      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Reserve Requirements</div>
-      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Bankruptcy Wait Periods</div>
-      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Down Payment Requirements</div>
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Comparison Charts (25 Categories)</h2>
+
+    <!-- Program Columns -->
+    <div class="bg-slate-50 rounded-xl p-5 mb-6">
+      <h3 class="text-sm font-semibold text-slate-800 mb-3">Supported Program Columns</h3>
+      <div class="flex flex-wrap gap-2 mb-2">
+        <span class="text-xs font-medium text-slate-500 uppercase tracking-wider w-full mb-1">Agency</span>
+        <span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Fannie Mae (Conv)</span>
+        <span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">Freddie Mac</span>
+        <span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">FHA</span>
+        <span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">VA</span>
+        <span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">USDA</span>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-2">
+        <span class="text-xs font-medium text-slate-500 uppercase tracking-wider w-full mb-1">Non-QM</span>
+        <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">DSCR</span>
+        <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">Bank Statement</span>
+        <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">Asset Depletion</span>
+        <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">P&amp;L Only</span>
+        <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">1099</span>
+        <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">Foreign National</span>
+        <span class="px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">ITIN</span>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <span class="text-xs font-medium text-slate-500 uppercase tracking-wider w-full mb-1">Specialty</span>
+        <span class="px-2.5 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Jumbo</span>
+        <span class="px-2.5 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">HELOC</span>
+        <span class="px-2.5 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Construction</span>
+        <span class="px-2.5 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Renovation</span>
+        <span class="px-2.5 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">Portfolio</span>
+      </div>
     </div>
-    <p class="text-xs text-slate-400 mt-3">Generated from <code class="bg-slate-100 px-1 rounded text-xs">UnderwritingGuideline.structured_rules</code> JSON across all active guidelines. Cached and regenerated on re-ingestion. Company overlay row always highlighted amber.</p>
+
+    <!-- Chart Grid - 25 Categories -->
+    <div class="space-y-4">
+
+      <!-- 1. Program Eligibility -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden" open>
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+          <span class="font-semibold text-slate-800">Program Eligibility Matrix</span>
+          <span class="ml-auto text-xs text-slate-400">Master Chart</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">The top-level "master chart" &mdash; first thing an LO checks. 15 rows across all program columns.</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead><tr class="bg-slate-200"><th class="px-3 py-2 text-left">Row</th><th class="px-3 py-2 text-left">Description</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Min FICO</td><td class="px-3 py-1.5 text-slate-500">Minimum credit score by program</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Max DTI</td><td class="px-3 py-1.5 text-slate-500">Maximum debt-to-income ratio</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Min Down Payment</td><td class="px-3 py-1.5 text-slate-500">Minimum borrower contribution</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Max Loan Amount</td><td class="px-3 py-1.5 text-slate-500">Conforming/high-balance/jumbo limits</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Occupancy Allowed</td><td class="px-3 py-1.5 text-slate-500">Primary, second home, investment</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Gift Funds Allowed</td><td class="px-3 py-1.5 text-slate-500">Yes/no and restrictions</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Reserve Requirements</td><td class="px-3 py-1.5 text-slate-500">Months of PITIA</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Bankruptcy Waiting Period</td><td class="px-3 py-1.5 text-slate-500">Ch 7 / Ch 13 seasoning</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Foreclosure Waiting Period</td><td class="px-3 py-1.5 text-slate-500">Years from completion</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Collections Allowed</td><td class="px-3 py-1.5 text-slate-500">Outstanding collection rules</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Manual UW Allowed</td><td class="px-3 py-1.5 text-slate-500">Programs permitting manual underwrite</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Non-Occ Co-Borrower</td><td class="px-3 py-1.5 text-slate-500">Eligibility and restrictions</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Self-Employment</td><td class="px-3 py-1.5 text-slate-500">Yes and doc requirements</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">ITIN Allowed</td><td class="px-3 py-1.5 text-slate-500">Program-specific ITIN rules</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Foreign National</td><td class="px-3 py-1.5 text-slate-500">Visa/residency requirements</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <!-- 2. Credit Score -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+          <span class="font-semibold text-slate-800">Credit Score Matrix</span>
+          <span class="ml-auto text-xs text-red-500 font-medium">AI Pre-Underwriting</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Critical for AI pre-underwriting decisions. 9 rows.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Min FICO Purchase</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Min FICO Cash-Out</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Max LTV by Score</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Mortgage Lates Allowed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">BK Waiting Period</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Foreclosure Waiting Period</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Collection Rules</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Charge-Off Rules</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Disputed Accounts</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 3. DTI -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+          <span class="font-semibold text-slate-800">DTI Matrix</span>
+          <span class="ml-auto text-xs text-amber-600 font-medium">Most-Used</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">One of the most-used charts &mdash; drives loan sizing. 8 rows.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Max AUS DTI</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Max Manual DTI</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Comp Factors Required</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Residual Income?</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Housing Ratio</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Total Ratio</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Stretch Ratio</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Comp Factor Thresholds</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 4. Down Payment / LTV -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
+          <span class="font-semibold text-slate-800">Down Payment / LTV Matrix</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Rows by property type with overlay sub-dimensions (FICO, occupancy, loan amount, reserves, self-employed).</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Primary SFR</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Condo</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">2 Unit</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">3-4 Unit</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Investment</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Second Home</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 5. Occupancy -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">5</span>
+          <span class="font-semibold text-slate-800">Occupancy Matrix</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Primary</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Second Home</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Investment</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Multi-Unit Primary</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Non-Occ Co-Borrower</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 6. Property Type -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">6</span>
+          <span class="font-semibold text-slate-800">Property Type Matrix</span>
+          <span class="ml-auto text-xs text-red-500 font-medium">AI Eligibility</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Critical for AI eligibility logic &mdash; many edge cases.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Condo</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Manufactured</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Modular</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Mixed Use</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Rural</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Log Cabin</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Barndominium</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Unique Property</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 7. Self-Employment -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-orange-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">7</span>
+          <span class="font-semibold text-slate-800">Self-Employment Matrix</span>
+          <span class="ml-auto text-xs text-amber-600 font-medium">High Complexity</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">One of the most important charts &mdash; high complexity, frequent LO questions. 8 main rows + 9 entity sub-charts.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs mb-3">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Years Required</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">1 Year Allowed?</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Declining Income</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Business Losses</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Addbacks Allowed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">YTD P&amp;L Allowed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">CPA Letter Allowed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Business Funds Allowed</span>
+          </div>
+          <p class="text-xs text-slate-500 mb-2 font-medium">Sub-charts by entity type:</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Schedule C</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">S Corp</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Partnership</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Corporation</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">K-1</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">1120S</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">1065</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">1120</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Sole Proprietor</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 8. Income Type -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-orange-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">8</span>
+          <span class="font-semibold text-slate-800">Income Type Matrix</span>
+          <span class="ml-auto text-xs text-amber-600 font-medium">Foundational</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Foundational &mdash; every income type has unique rules. 13 income types, each broken down into 6 sub-dimensions.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs mb-3">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">OT</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Bonus</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Commission</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">RSU</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Restricted Stock</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Rental Income</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Boarder Income</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Child Support</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Alimony</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Social Security</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Retirement</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Trust Income</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Foreign Income</span>
+          </div>
+          <p class="text-xs text-slate-500 mb-2 font-medium">Each income type sub-dimensions:</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Seasoning</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Continuance</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Averaging</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Documentation</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Declining Trends</span>
+            <span class="px-2 py-1 bg-orange-50 border border-orange-200 rounded text-orange-700">Gross-Up Rules</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 9. Asset Documentation -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">9</span>
+          <span class="font-semibold text-slate-800">Asset Documentation Matrix</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <div class="flex flex-wrap gap-1.5 text-xs mb-3">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Checking</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Savings</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Stocks</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Crypto</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Gift Funds</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Retirement</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Business Funds</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Cash on Hand</span>
+          </div>
+          <p class="text-xs text-slate-500 font-medium">Sub-dimensions: Sourcing rules, large deposit rules, liquidation rules, vested percentage rules</p>
+        </div>
+      </details>
+
+      <!-- 10. Reserve Requirements -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">10</span>
+          <span class="font-semibold text-slate-800">Reserve Requirement Matrix</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Columns: Conv, Jumbo, Non-QM</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Primary</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Investment</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">2-4 Units</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Multiple Financed Properties</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">High Balance</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 11. Gift Funds -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">11</span>
+          <span class="font-semibold text-slate-800">Gift Fund Matrix</span>
+          <span class="ml-auto text-xs text-amber-600 font-medium">High Ops Value</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Family Allowed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Fianc&eacute; Allowed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Employer Allowed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Sweat Equity</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Gift of Equity</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Min Borrower Contribution</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 12. Credit Event Waiting Periods -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">12</span>
+          <span class="font-semibold text-slate-800">Credit Event Waiting Period Matrix</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Chapter 7</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Chapter 13</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Foreclosure</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Short Sale</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Deed in Lieu</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 13. Condo -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-red-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">13</span>
+          <span class="font-semibold text-slate-800">Condo Matrix</span>
+          <span class="ml-auto text-xs text-red-500 font-medium">Critical</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Condo rules trip up deals constantly.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Limited Review</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Full Review</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Non-Warrantable</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Florida Condo Restrictions</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Investor Concentration</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 14. Manual Underwrite -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">14</span>
+          <span class="font-semibold text-slate-800">Manual Underwrite Matrix</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Columns: FHA Manual, USDA Manual, VA Manual</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Max DTI</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Comp Factors</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Rental History</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Residual Income</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Payment Shock Rules</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 15. AUS Findings -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-green-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">15</span>
+          <span class="font-semibold text-slate-800">AUS Findings Comparison</span>
+          <span class="ml-auto text-xs text-green-600 font-medium">AI Gold</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Maps system outputs to human actions. Columns: Meaning, Typical Conditions, Risk Level, Human Escalation.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Approve/Eligible</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Refer/Eligible</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Refer/Caution</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Accept</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Ineligible</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 16. Investor Overlay -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-green-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">16</span>
+          <span class="font-semibold text-slate-800">Investor Overlay Matrix</span>
+          <span class="ml-auto text-xs text-green-600 font-medium">Pricing Engine</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Where the platform becomes a pricing/routing engine. Dynamic columns per investor.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs mb-3">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Min FICO</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Max DTI</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Condo Rules</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Self-Employment</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Reserve Overlay</span>
+          </div>
+          <p class="text-xs text-slate-500 font-medium">Powers: Pricing engine &bull; Investor routing engine &bull; Underwriting match engine</p>
+        </div>
+      </details>
+
+      <!-- 17. Document Requirements -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-purple-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">17</span>
+          <span class="font-semibold text-slate-800">Document Requirement Matrix</span>
+          <span class="ml-auto text-xs text-purple-600 font-medium">Smart Docs</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Ties directly into Smart Docs engine.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">W2 Borrower</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Self-Employed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Rental Income</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Divorce</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">VA</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Gift Funds</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Large Deposits</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Retirement Income</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 18. Condition Library -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-purple-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">18</span>
+          <span class="font-semibold text-slate-800">Condition Library Matrix</span>
+          <span class="ml-auto text-xs text-amber-600 font-medium">Massive Value</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Powers AI condition prediction, borrower prep, processor workflow, SLA automation.</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead><tr class="bg-slate-200"><th class="px-3 py-2 text-left">Trigger</th><th class="px-3 py-2 text-left">Likely Condition</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Inquiry on credit</td><td class="px-3 py-1.5 text-slate-500">LOX inquiry</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Large deposit</td><td class="px-3 py-1.5 text-slate-500">Source/document deposit</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Child support</td><td class="px-3 py-1.5 text-slate-500">Divorce decree</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">RSU income</td><td class="px-3 py-1.5 text-slate-500">Vesting schedule</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">SE declining income</td><td class="px-3 py-1.5 text-slate-500">CPA letter</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Undisclosed debt</td><td class="px-3 py-1.5 text-slate-500">Credit supplement</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <!-- 19. Appraisal Requirements -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">19</span>
+          <span class="font-semibold text-slate-800">Appraisal Requirement Matrix</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Full Appraisal</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">PIW/ACE</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Field Review</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Second Appraisal</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 20. Escrow / Insurance / Tax -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">20</span>
+          <span class="font-semibold text-slate-800">Escrow / Insurance / Tax Matrix</span>
+          <span class="ml-auto text-xs text-slate-400">Coastal Markets</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Especially useful for coastal markets like Charleston.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Escrows Required</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Flood Insurance</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Wind Coverage</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Hurricane Deductible Limits</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 21. Non-QM -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-purple-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">21</span>
+          <span class="font-semibold text-slate-800">Non-QM Matrix</span>
+          <span class="ml-auto text-xs text-purple-600 font-medium">Separate Paradigm</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Separate treatment &mdash; different underwriting paradigm. Columns: DSCR, Bank Statement, Asset Depletion, 1099, Foreign National.</p>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Min FICO</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Max LTV</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Reserves</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Income Method</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Ownership Seasoning</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- 22. AI Risk Flags -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-red-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">22</span>
+          <span class="font-semibold text-slate-800">AI Risk Flag Matrix</span>
+          <span class="ml-auto text-xs text-red-500 font-medium">Differentiator</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Platform differentiator &mdash; Aria-specific risk detection.</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead><tr class="bg-slate-200"><th class="px-3 py-2 text-left">Trigger</th><th class="px-3 py-2 text-left">Severity</th><th class="px-3 py-2 text-left">Action</th><th class="px-3 py-2 text-left">Human?</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Declining income</td><td class="px-3 py-1.5"><span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-xs">High</span></td><td class="px-3 py-1.5 text-slate-500">Request YTD P&amp;L</td><td class="px-3 py-1.5">Yes</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">NSF activity</td><td class="px-3 py-1.5"><span class="px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs">Medium</span></td><td class="px-3 py-1.5 text-slate-500">Request explanation</td><td class="px-3 py-1.5">Maybe</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Undisclosed mortgage</td><td class="px-3 py-1.5"><span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-xs">High</span></td><td class="px-3 py-1.5 text-slate-500">Recalculate DTI</td><td class="px-3 py-1.5">Yes</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Occupancy mismatch</td><td class="px-3 py-1.5"><span class="px-1.5 py-0.5 bg-red-100 text-red-800 rounded text-xs">Critical</span></td><td class="px-3 py-1.5 text-slate-500">Escalate fraud review</td><td class="px-3 py-1.5">Yes</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <!-- 23. Borrower Strategy -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-green-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">23</span>
+          <span class="font-semibold text-slate-800">Borrower Strategy Comparison</span>
+          <span class="ml-auto text-xs text-green-600 font-medium">Beats Every LOS</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Financial coaching &mdash; Aria calculates and presents optimal strategy. Aligns with borrower confidence manifesto.</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead><tr class="bg-slate-200"><th class="px-3 py-2 text-left">Strategy</th><th class="px-3 py-2 text-left">Monthly Payment</th><th class="px-3 py-2 text-left">Cash Remaining</th><th class="px-3 py-2 text-left">Total Interest</th><th class="px-3 py-2 text-left">Net Worth Impact</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">5% Down</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">20% Down</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">Buy Points</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td></tr>
+                <tr class="border-t border-slate-200 bg-white"><td class="px-3 py-1.5 font-medium">Keep Cash Invested</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td></tr>
+                <tr class="border-t border-slate-200"><td class="px-3 py-1.5 font-medium">ARM vs Fixed</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td><td class="px-3 py-1.5 text-slate-400">&mdash;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <!-- 24. Underwriter Decision Trees -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-green-600 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">24</span>
+          <span class="font-semibold text-slate-800">Underwriter Decision Tree Charts</span>
+          <span class="ml-auto text-xs text-green-600 font-medium">AI Orchestration</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">Visual decision maps: If X &rarr; ask Y &rarr; request Z &rarr; condition triggered.</p>
+          <div class="arch-diagram text-xs" style="font-size: 11px; line-height: 1.8;">Self-employed?
+  &rarr; yes &rarr; Declining income?
+    &rarr; yes &rarr; Liquidity strong?
+      &rarr; yes &rarr; Compensating factor
+      &rarr; no  &rarr; High risk</div>
+          <p class="text-xs text-slate-500 mt-3 font-medium">Powers: AI orchestration logic &bull; Conversational intake &bull; Condition prediction</p>
+        </div>
+      </details>
+
+      <!-- 25. Edge Cases -->
+      <details class="border border-slate-200 rounded-xl overflow-hidden">
+        <summary class="bg-white px-5 py-3 cursor-pointer flex items-center gap-3 hover:bg-slate-50">
+          <span class="w-7 h-7 bg-slate-700 text-white rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0">25</span>
+          <span class="font-semibold text-slate-800">Loan Scenario Edge-Case Charts</span>
+          <span class="ml-auto text-xs text-slate-500 font-medium">Enterprise Value</span>
+        </summary>
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200">
+          <p class="text-sm text-slate-600 mb-3">The long tail that separates experts from novices. Each edge case gets its own comparison across eligible programs.</p>
+          <div class="grid grid-cols-3 gap-1.5 text-xs">
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Departing residence</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Retained REO</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Conversion of primary</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Unreimbursed expenses</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Restricted stock</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Trust ownership</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Vested assets</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Bridge loans</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Delayed financing</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Inherited property</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Rent-back occupancy</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Power of attorney</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Non-arm's-length</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Identity of interest</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Multiple financed</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Texas cash-out</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Flip transactions</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Leasehold properties</span>
+            <span class="px-2 py-1 bg-white border border-slate-200 rounded">Community property</span>
+          </div>
+        </div>
+      </details>
+
+    </div>
+
+    <!-- Data Model -->
+    <div class="mt-6 bg-slate-50 rounded-xl p-5">
+      <h3 class="text-sm font-semibold text-slate-800 mb-3">Data Model for Charts</h3>
+      <p class="text-xs text-slate-600 mb-3">Charts generated from <code class="bg-slate-200 px-1.5 py-0.5 rounded text-xs">structured_rules</code> JSON stored on each <code class="bg-slate-200 px-1.5 py-0.5 rounded text-xs">UnderwritingGuideline</code> record. A <code class="bg-slate-200 px-1.5 py-0.5 rounded text-xs">GuidelineChartService</code> aggregates across all active guidelines, merging agency data with company overlays.</p>
+      <pre class="bg-slate-800 text-green-300 rounded-lg p-4 text-xs overflow-x-auto"><code>structured_rules = {
+  "chart_data": {
+    "program_eligibility": { "min_fico": "620", "max_dti": "50%", ... },
+    "credit_score": { "min_purchase": "620", "min_cashout": "640", ... },
+    "dti": { "max_aus": "50%", "max_manual": "45%", ... },
+    "ltv": { "primary_sfr": "97%", "condo": "95%", ... },
+    ...
+  }
+}</code></pre>
+      <div class="mt-3 flex gap-4 text-xs text-slate-500">
+        <span><strong>Cache:</strong> Redis, 1-hour TTL</span>
+        <span><strong>Regenerated:</strong> On guideline re-ingestion</span>
+        <span><strong>Overlay:</strong> Always amber-highlighted</span>
+      </div>
+    </div>
+
+    <!-- Chart Rendering -->
+    <div class="mt-4 bg-slate-50 rounded-xl p-5">
+      <h3 class="text-sm font-semibold text-slate-800 mb-3">Chart Rendering</h3>
+      <div class="space-y-2 text-xs text-slate-600">
+        <div class="flex items-start gap-2"><span class="font-semibold text-slate-700 w-24 flex-shrink-0">Search UI</span><span>Pre-built comparison tables rendered client-side from cached JSON</span></div>
+        <div class="flex items-start gap-2"><span class="font-semibold text-slate-700 w-24 flex-shrink-0">Aria Chat</span><span>Charts rendered as formatted markdown tables in cited responses</span></div>
+        <div class="flex items-start gap-2"><span class="font-semibold text-slate-700 w-24 flex-shrink-0">Admin</span><span>Chart completeness tracker &mdash; shows populated vs empty cells per program</span></div>
+      </div>
+    </div>
   </section>
 
   <!-- Testing -->

@@ -459,15 +459,368 @@ New page in the React SPA at `/guideline-search` matching the approved mockup:
 
 ## Comparison Charts
 
-Pre-built comparison topics extracted from `structured_rules`:
-- Minimum Credit Score
-- Maximum DTI Ratios
-- Maximum LTV
-- Reserve Requirements
-- Bankruptcy/Foreclosure Waiting Periods
-- Down Payment Requirements
+### Program Columns
 
-Generated from `UnderwritingGuideline.structured_rules` JSON across all active guidelines. Cached and regenerated when guidelines are re-ingested.
+All comparison charts support these program types as columns:
+
+**Agency:** Fannie Mae (Conv), Freddie Mac, FHA, VA, USDA
+**Non-QM:** DSCR, Bank Statement, Asset Depletion, P&L Only, 1099, Foreign National, ITIN
+**Specialty:** Jumbo, HELOC, Construction, Renovation, Portfolio
+
+Charts are generated from `UnderwritingGuideline.structured_rules` JSON across all active guidelines. Cached and regenerated when guidelines are re-ingested.
+
+### Chart Catalog (25 Categories)
+
+#### 1. Program Eligibility Matrix (Master Chart)
+The top-level "master chart" — first thing an LO checks.
+
+| Row | Description |
+|-----|-------------|
+| Min FICO | Minimum credit score by program |
+| Max DTI | Maximum debt-to-income ratio |
+| Min Down Payment | Minimum borrower contribution |
+| Max Loan Amount | Conforming/high-balance/jumbo limits |
+| Occupancy Allowed | Primary, second home, investment |
+| Gift Funds Allowed | Yes/no and restrictions |
+| Reserve Requirements | Months of PITIA |
+| Bankruptcy Waiting Period | Ch 7 / Ch 13 seasoning |
+| Foreclosure Waiting Period | Years from completion |
+| Collections Allowed | Outstanding collection rules |
+| Manual UW Allowed | Programs permitting manual underwrite |
+| Non-Occupant Co-Borrower | Eligibility and restrictions |
+| Self-Employment Allowed | Yes and doc requirements |
+| ITIN Allowed | Program-specific ITIN rules |
+| Foreign National Allowed | Visa/residency requirements |
+
+#### 2. Credit Score Matrix
+Critical for AI pre-underwriting decisions.
+
+| Row | Description |
+|-----|-------------|
+| Min FICO Purchase | Score floors by transaction type |
+| Min FICO Cash-Out | Higher floors for cash-out refi |
+| Max LTV by Score | LTV tiers keyed to credit score |
+| Mortgage Lates Allowed | 30/60/90/120-day late tolerances |
+| BK Waiting Period | Score-dependent BK seasoning |
+| Foreclosure Waiting Period | Score-dependent FC seasoning |
+| Collection Rules | Collection account treatment by score |
+| Charge-Off Rules | Charge-off treatment |
+| Disputed Accounts | Disputed tradeline handling |
+
+#### 3. DTI Matrix
+One of the most-used charts — drives loan sizing.
+
+| Row | Description |
+|-----|-------------|
+| Max AUS DTI | Automated underwriting system limits |
+| Max Manual DTI | Manual underwrite limits |
+| Comp Factors Required | Compensating factor thresholds |
+| Residual Income? | Whether residual income analysis applies |
+| Housing Ratio | Front-end ratio limits |
+| Total Ratio | Back-end ratio limits |
+| Stretch Ratio | Maximum with strong compensating factors |
+| Comp Factor Thresholds | Specific factors that allow stretch |
+
+#### 4. Down Payment / LTV Matrix
+Rows by property type, with overlay sub-dimensions.
+
+| Row | Description |
+|-----|-------------|
+| Primary SFR | Single-family residence |
+| Condo | Warrantable and non-warrantable |
+| 2 Unit | Duplex |
+| 3-4 Unit | Triplex/quadplex |
+| Investment | Non-owner-occupied |
+| Second Home | Vacation/seasonal |
+
+**Overlay sub-dimensions:** FICO, occupancy, loan amount, reserves, self-employed status.
+
+#### 5. Occupancy Matrix
+
+| Row | Description |
+|-----|-------------|
+| Primary | Owner-occupied principal residence |
+| Second Home | Distance/use requirements |
+| Investment | Max financed properties |
+| Multi-Unit Primary | Owner lives in one unit |
+| Non-Occupant Co-Borrower | Eligibility by occupancy type |
+
+#### 6. Property Type Matrix
+Critical for AI eligibility logic — many edge cases here.
+
+| Row | Description |
+|-----|-------------|
+| Condo | Warrantable/non-warrantable/project review |
+| Manufactured | Foundation/title requirements |
+| Modular | Distinction from manufactured |
+| Mixed Use | Commercial % limits |
+| Rural | USDA eligibility, VA rural |
+| Log Cabin | Appraisal/comp issues |
+| Barndominium | Eligibility by agency |
+| Unique Property | Non-traditional structures |
+
+#### 7. Self-Employment Matrix
+One of the most important charts — high complexity, frequent LO questions.
+
+| Row | Description |
+|-----|-------------|
+| Years Required | Minimum business history |
+| 1 Year Allowed? | Programs permitting 1-year history |
+| Declining Income | Treatment of year-over-year decline |
+| Business Losses | When losses offset personal income |
+| Addbacks Allowed | Depreciation, depletion, amortization |
+| YTD P&L Allowed | Interim income documentation |
+| CPA Letter Allowed | When CPA verification suffices |
+| Business Funds Allowed | Using business accounts for closing |
+
+**Sub-charts by entity type:** Schedule C, S Corp, Partnership, Corporation, K-1, 1120S, 1065, 1120, Sole Proprietor.
+
+#### 8. Income Type Matrix
+Foundational — every income type has unique rules.
+
+| Row | Description |
+|-----|-------------|
+| OT / Bonus / Commission | Variable income averaging |
+| RSU / Restricted Stock | Vesting schedules, valuation |
+| Rental Income | Schedule E, lease, Fannie form |
+| Boarder Income | FHA/VA specific rules |
+| Child Support / Alimony | Court order, continuance |
+| Social Security / Retirement | Grossing up, continuance |
+| Trust Income | Trust document requirements |
+| Foreign Income | Currency, verification, continuance |
+
+**Each income type breaks down into:** Seasoning requirements, continuance likelihood, averaging method, documentation required, declining trend treatment, gross-up rules.
+
+#### 9. Asset Documentation Matrix
+
+| Row | Description |
+|-----|-------------|
+| Checking / Savings | Statement requirements |
+| Stocks / Bonds | Liquidation rules |
+| Crypto | Treatment by agency |
+| Gift Funds | Donor requirements, seasoning |
+| Retirement | Vested % rules, penalty adjustment |
+| Business Funds | When usable for closing |
+| Cash on Hand | FHA-specific rules |
+
+**Sub-dimensions:** Sourcing rules, large deposit rules, liquidation rules, vested percentage rules.
+
+#### 10. Reserve Requirement Matrix
+Columns: Conv, Jumbo, Non-QM.
+
+| Row | Description |
+|-----|-------------|
+| Primary | Months PITIA |
+| Investment | Higher reserve requirements |
+| 2-4 Units | Multi-unit reserves |
+| Multiple Financed Properties | Incremental reserves per property |
+| High Balance | Additional reserve tiers |
+
+#### 11. Gift Fund Matrix
+High operational value — common LO question.
+
+| Row | Description |
+|-----|-------------|
+| Family Allowed | Relationship requirements |
+| Fiancé Allowed | Agency-specific rules |
+| Employer Allowed | Program eligibility |
+| Sweat Equity | When equity counts as down payment |
+| Gift of Equity | Related-party purchase rules |
+| Min Borrower Contribution | Own funds required before gifts |
+
+#### 12. Credit Event Waiting Period Matrix
+
+| Row | Description |
+|-----|-------------|
+| Chapter 7 | Discharge to application |
+| Chapter 13 | Dismissal/discharge seasoning |
+| Foreclosure | Completion date seasoning |
+| Short Sale | Settlement date seasoning |
+| Deed in Lieu | Transfer date seasoning |
+
+#### 13. Condo Matrix
+Critical — condo rules trip up deals constantly.
+
+| Row | Description |
+|-----|-------------|
+| Limited Review | When available, requirements |
+| Full Review | Project review checklist |
+| Non-Warrantable | Which programs allow |
+| Florida Condo Restrictions | Post-Surfside legislation |
+| Investor Concentration | Max % investor-owned units |
+
+#### 14. Manual Underwrite Matrix
+Columns: FHA Manual, USDA Manual, VA Manual.
+
+| Row | Description |
+|-----|-------------|
+| Max DTI | Manual UW DTI limits |
+| Comp Factors | Required compensating factors |
+| Rental History | VOR requirements |
+| Residual Income | Calculation method |
+| Payment Shock Rules | Max payment increase % |
+
+#### 15. AUS Findings Comparison
+AI gold — maps system outputs to human actions.
+
+| Row | Description |
+|-----|-------------|
+| Approve/Eligible | DU approval, conditions expected |
+| Refer/Eligible | Manual review possible |
+| Refer/Caution | Higher risk, limited options |
+| Accept | LP acceptance finding |
+| Ineligible | System rejection, alternative paths |
+
+Columns: Meaning, Typical Conditions, Risk Level, Human Escalation Required.
+
+#### 16. Investor Overlay Matrix
+Where the platform becomes a pricing/routing engine.
+
+| Row | Description |
+|-----|-------------|
+| Min FICO | Investor-specific floors |
+| Max DTI | Investor-specific caps |
+| Condo Rules | Investor condo restrictions |
+| Self-Employment | Investor SE requirements |
+| Reserve Overlay | Additional reserve requirements |
+
+Columns: Per-investor (dynamic — populated from company overlay guidelines).
+
+**Powers:** Pricing engine, investor routing engine, underwriting match engine.
+
+#### 17. Document Requirement Matrix
+Ties directly into Smart Docs engine.
+
+| Scenario | Required Docs |
+|----------|---------------|
+| W2 Borrower | Pay stubs, W2s, tax returns |
+| Self-Employed | Tax returns, P&L, business license |
+| Rental Income | Schedule E, leases, mortgage statements |
+| Divorce | Decree, property settlement |
+| VA | DD-214, COE |
+| Gift Funds | Gift letter, donor statements |
+| Large Deposits | Source documentation |
+| Retirement Income | Award letter, statements |
+
+#### 18. Condition Library Matrix
+Massive value — powers AI condition prediction.
+
+| Trigger | Likely Condition |
+|---------|-----------------|
+| Inquiry on credit | LOX inquiry |
+| Large deposit | Source/document deposit |
+| Child support | Divorce decree |
+| RSU income | Vesting schedule |
+| SE declining income | CPA letter |
+| Undisclosed debt | Credit supplement |
+
+**Powers:** AI conditions prediction, borrower prep, processor workflow, SLA automation.
+
+#### 19. Appraisal Requirement Matrix
+
+| Row | Description |
+|-----|-------------|
+| Full Appraisal | When required |
+| PIW/ACE | Appraisal waiver eligibility |
+| Field Review | When triggered |
+| Second Appraisal | Value dispute/high LTV |
+
+#### 20. Escrow / Insurance / Tax Matrix
+Especially useful for coastal markets like Charleston.
+
+| Row | Description |
+|-----|-------------|
+| Escrows Required | Mandatory vs optional by program |
+| Flood Insurance | FEMA zone requirements |
+| Wind Coverage | Coastal property requirements |
+| Hurricane Deductible Limits | Max deductible % |
+
+#### 21. Non-QM Matrix
+Separate treatment — different underwriting paradigm.
+
+Columns: DSCR, Bank Statement, Asset Depletion, 1099, Foreign National.
+
+| Row | Description |
+|-----|-------------|
+| Min FICO | Non-QM score floors |
+| Max LTV | Non-QM LTV limits |
+| Reserves | Months required |
+| Income Method | How income is calculated |
+| Ownership Seasoning | Property ownership requirements |
+
+#### 22. AI Risk Flag Matrix
+Platform differentiator — Aria-specific risk detection.
+
+| Trigger | Risk Severity | Suggested Action | Human Review Required |
+|---------|--------------|------------------|----------------------|
+| Declining income | High | Request YTD P&L | Yes |
+| NSF activity | Medium | Request explanation | Maybe |
+| Undisclosed mortgage | High | Recalculate DTI | Yes |
+| Occupancy mismatch | Critical | Escalate fraud review | Yes |
+
+#### 23. Borrower Strategy Comparison Charts
+Where Aria beats every LOS — financial coaching.
+
+| Strategy | Monthly Payment | Cash Remaining | Total Interest | Net Worth Impact |
+|----------|----------------|----------------|----------------|-----------------|
+| 5% Down | | | | |
+| 20% Down | | | | |
+| Buy Points | | | | |
+| Keep Cash Invested | | | | |
+| ARM vs Fixed | | | | |
+
+Aligns with borrower confidence manifesto — Aria calculates and presents optimal strategy.
+
+#### 24. Underwriter Decision Tree Charts
+Visual decision maps: If X → ask Y → request Z → condition triggered.
+
+Example flow:
+```
+Self-employed? → yes →
+  Declining income? → yes →
+    Liquidity strong? →
+      yes → compensating factor
+      no → high risk
+```
+
+**Powers:** AI orchestration logic, conversational intake logic, condition prediction logic.
+
+#### 25. Loan Scenario Edge-Case Charts
+Enterprise-value edge cases — the long tail that separates experts from novices.
+
+Categories:
+- Departing residence / retained REO / conversion of primary
+- Unreimbursed expenses / restricted stock / trust ownership
+- Vested assets / bridge loans / delayed financing
+- Inherited property / rent-back occupancy
+- Power of attorney / non-arm's-length transactions
+- Identity of interest / multiple financed properties
+- Texas cash-out / flip transactions
+- Leasehold properties / community property states
+
+### Data Model for Charts
+
+Charts are generated from `structured_rules` JSON stored on each `UnderwritingGuideline` record. The `structured_rules` field uses a standardized schema:
+
+```python
+structured_rules = {
+    "chart_data": {
+        "program_eligibility": { "min_fico": "620", "max_dti": "50%", ... },
+        "credit_score": { "min_purchase": "620", "min_cashout": "640", ... },
+        "dti": { "max_aus": "50%", "max_manual": "45%", ... },
+        "ltv": { "primary_sfr": "97%", "condo": "95%", ... },
+        ...
+    }
+}
+```
+
+A `GuidelineChartService` aggregates `structured_rules` across all active guidelines for a given organization, merging agency data with company overlays. Charts are cached in Redis (1-hour TTL) and regenerated when any guideline is re-ingested.
+
+### Chart Rendering
+
+- **Search UI:** Pre-built comparison tables rendered client-side from cached JSON
+- **Aria Chat:** Charts rendered as formatted markdown tables in cited responses
+- **Admin Dashboard:** Chart completeness tracker — shows which cells are populated vs empty per program
 
 ## Testing
 
