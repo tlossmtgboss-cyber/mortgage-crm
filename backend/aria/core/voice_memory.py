@@ -11,13 +11,59 @@ Preferences are lightweight key-value pairs, not full conversation history.
 
 import json
 import logging
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("aria.voice_memory")
 
-# In-memory fallback when Redis isn't available
-_memory_fallback: Dict[str, Dict[str, Any]] = {}
+
+class _BoundedDict(OrderedDict):
+    """LRU dict with max size to prevent memory leaks."""
+
+    def __init__(self, max_size: int = 500):
+        super().__init__()
+        self._max_size = max_size
+
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        while len(self) > self._max_size:
+            self.popitem(last=False)
+
+
+# In-memory fallback when Redis isn't available (bounded to prevent leaks)
+_memory_fallback: Dict[str, Dict[str, Any]] = _BoundedDict(max_size=500)
+
+# Lazy table creation flag
+_table_checked = False
+
+
+def _ensure_table() -> None:
+    """Create voice_preferences table if it doesn't exist (idempotent)."""
+    global _table_checked
+    if _table_checked:
+        return
+    try:
+        from db import engine
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS voice_preferences ("
+                "cache_key VARCHAR(255) PRIMARY KEY, "
+                "preferences JSONB NOT NULL DEFAULT '{}', "
+                "updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_voice_prefs_updated "
+                "ON voice_preferences (updated_at)"
+            ))
+        _table_checked = True
+    except Exception as e:
+        logger.debug("voice_preferences table check failed: %s", e)
+        _table_checked = True  # Don't retry on failure
+
 
 # Keys for voice preferences
 PREF_GREETING_STYLE = "greeting_style"       # formal, casual, first_name_only
@@ -230,8 +276,52 @@ class VoiceMemory:
         """Save preferences to Redis or memory."""
         self._save_raw(self._key(user_id), prefs)
 
+    def _pg_save(self, key: str, data: Dict[str, Any]) -> None:
+        """Write-through to PostgreSQL for durability."""
+        try:
+            _ensure_table()
+            from db import SessionLocal
+            db = SessionLocal()
+            try:
+                from sqlalchemy import text
+                db.execute(text(
+                    "INSERT INTO voice_preferences (cache_key, preferences, updated_at) "
+                    "VALUES (:key, :data, NOW()) "
+                    "ON CONFLICT (cache_key) DO UPDATE SET preferences = :data, updated_at = NOW()"
+                ), {"key": key, "data": json.dumps(data, default=str)})
+                db.commit()
+            except Exception as e:
+                logger.debug("PG write-through failed for %s: %s", key, e)
+                db.rollback()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug("PG write-through unavailable: %s", e)
+
+    def _pg_load(self, key: str) -> Optional[Dict[str, Any]]:
+        """Load from PostgreSQL fallback."""
+        try:
+            _ensure_table()
+            from db import SessionLocal
+            db = SessionLocal()
+            try:
+                from sqlalchemy import text
+                row = db.execute(text(
+                    "SELECT preferences FROM voice_preferences WHERE cache_key = :key"
+                ), {"key": key}).fetchone()
+                if row and row[0]:
+                    return json.loads(row[0]) if isinstance(row[0], str) else row[0]
+            except Exception as e:
+                logger.debug("PG load failed for %s: %s", key, e)
+            finally:
+                db.close()
+        except Exception:
+            pass
+        return None
+
     def _load_raw(self, key: str) -> Optional[Dict[str, Any]]:
-        """Load data from Redis or memory fallback."""
+        """Load data from Redis, PostgreSQL backup, or memory fallback."""
+        # Try Redis first
         redis = _get_redis()
         if redis:
             try:
@@ -241,16 +331,31 @@ class VoiceMemory:
             except Exception as e:
                 logger.debug("Redis load failed for %s: %s", key, e)
 
+        # Try PostgreSQL backup
+        pg_data = self._pg_load(key)
+        if pg_data is not None:
+            # Warm Redis cache back up
+            if redis:
+                try:
+                    redis.setex(key, self.REDIS_TTL, json.dumps(pg_data, default=str))
+                except Exception:
+                    pass
+            return pg_data
+
+        # In-memory fallback (last resort)
         return _memory_fallback.get(key)
 
     def _save_raw(self, key: str, data: Dict[str, Any]) -> None:
-        """Save data to Redis or memory fallback."""
+        """Save data to Redis (primary), PostgreSQL (durable backup), and memory (fallback)."""
         redis = _get_redis()
         if redis:
             try:
                 redis.setex(key, self.REDIS_TTL, json.dumps(data, default=str))
-                return
             except Exception as e:
                 logger.debug("Redis save failed for %s: %s", key, e)
 
+        # PostgreSQL write-through for durability (after Redis)
+        self._pg_save(key, data)
+
+        # Always update in-memory fallback
         _memory_fallback[key] = data

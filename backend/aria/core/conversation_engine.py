@@ -19,6 +19,8 @@ import asyncio
 import json
 import logging
 import re
+import threading
+import time as _time_module
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Annotated
@@ -38,12 +40,127 @@ from aria.tasks.task_executor import TaskExecutor
 
 logger = logging.getLogger(__name__)
 
-# ─── LLM ─────────────────────────────────────────────────────────────────────
-llm = ChatAnthropic(
-    model="claude-sonnet-4-6",
-    temperature=0.3,
-    max_tokens=1024,
-)
+
+# ─── Fire-and-forget task safety ───────────────────────────────────────────
+def _log_task_error(task: asyncio.Task, label: str = "background"):
+    """Callback for fire-and-forget tasks to log exceptions."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        logger.warning(f"Background task '{label}' failed: {exc}")
+
+
+def _create_tracked_task(coro, label: str = "background"):
+    """Create an asyncio task with error logging."""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(lambda t: _log_task_error(t, label))
+    return task
+
+
+# ─── Circuit Breaker ────────────────────────────────────────────────────────
+# Modeled after backend/agents/orchestrator.py CircuitBreaker.
+# Prevents cascading failures when Anthropic is down by fast-failing
+# instead of letting every Aria message block until timeout.
+
+class _CircuitState(str, Enum):
+    CLOSED = "closed"          # Normal operation
+    OPEN = "open"              # Failing — reject immediately
+    HALF_OPEN = "half_open"    # Testing recovery — allow one probe
+
+class _AriaCircuitBreaker:
+    """
+    Thread-safe circuit breaker for Aria LLM calls.
+
+    State transitions:
+        CLOSED    -> OPEN:      after failure_threshold consecutive failures
+        OPEN      -> HALF_OPEN: after cooldown_seconds elapse
+        HALF_OPEN -> CLOSED:    if probe request succeeds
+        HALF_OPEN -> OPEN:      if probe request fails
+    """
+
+    def __init__(self, failure_threshold: int = 5, cooldown_seconds: float = 30.0):
+        self.failure_threshold = failure_threshold
+        self.cooldown_seconds = cooldown_seconds
+        self._state = _CircuitState.CLOSED
+        self._consecutive_failures = 0
+        self._last_failure_time: float = 0.0
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> _CircuitState:
+        with self._lock:
+            if self._state == _CircuitState.OPEN:
+                elapsed = _time_module.monotonic() - self._last_failure_time
+                if elapsed >= self.cooldown_seconds:
+                    self._state = _CircuitState.HALF_OPEN
+                    logger.warning(
+                        "[ARIA-CIRCUIT-BREAKER] OPEN -> HALF_OPEN "
+                        "(cooldown %.1fs elapsed)", self.cooldown_seconds
+                    )
+            return self._state
+
+    def allow_request(self) -> bool:
+        """Return True if the request should be allowed through."""
+        current = self.state  # triggers OPEN->HALF_OPEN check
+        if current == _CircuitState.CLOSED:
+            return True
+        if current == _CircuitState.HALF_OPEN:
+            return True  # Allow one probe request
+        return False  # OPEN — reject
+
+    def record_success(self) -> None:
+        """Reset failure count and close circuit."""
+        with self._lock:
+            prev = self._state
+            self._consecutive_failures = 0
+            self._state = _CircuitState.CLOSED
+            if prev != _CircuitState.CLOSED:
+                logger.warning(
+                    "[ARIA-CIRCUIT-BREAKER] %s -> CLOSED (success)", prev.value
+                )
+
+    def record_failure(self) -> None:
+        """Increment failure counter, potentially open circuit."""
+        with self._lock:
+            self._consecutive_failures += 1
+            self._last_failure_time = _time_module.monotonic()
+
+            if self._state == _CircuitState.HALF_OPEN:
+                self._state = _CircuitState.OPEN
+                logger.warning(
+                    "[ARIA-CIRCUIT-BREAKER] HALF_OPEN -> OPEN (probe request failed)"
+                )
+            elif (
+                self._state == _CircuitState.CLOSED
+                and self._consecutive_failures >= self.failure_threshold
+            ):
+                self._state = _CircuitState.OPEN
+                logger.warning(
+                    "[ARIA-CIRCUIT-BREAKER] CLOSED -> OPEN "
+                    "(%d consecutive failures)", self._consecutive_failures
+                )
+
+
+_circuit_breaker = _AriaCircuitBreaker(failure_threshold=5, cooldown_seconds=30.0)
+
+# Request timeout for individual LLM calls (seconds)
+_LLM_TIMEOUT = 30.0
+
+
+# ─── LLM (lazy-initialized) ─────────────────────────────────────────────────
+_llm = None
+
+def _get_llm():
+    """Lazy-initialize the LLM client on first use."""
+    global _llm
+    if _llm is None:
+        _llm = ChatAnthropic(
+            model="claude-sonnet-4-6",
+            temperature=0.3,
+            max_tokens=1024,
+        )
+    return _llm
 
 # ─── State ────────────────────────────────────────────────────────────────────
 class DialoguePhase(str, Enum):
@@ -346,10 +463,24 @@ Respond ONLY with valid JSON in this exact format:
 }}
 """
 
-    response = await llm.ainvoke([
-        SystemMessage(content="You are a precise NLU system. Respond only with the JSON object."),
-        HumanMessage(content=extraction_prompt)
-    ])
+    # Circuit breaker: fast-fail if LLM is unavailable
+    if not _circuit_breaker.allow_request():
+        logger.warning("[ARIA-NLU] Circuit breaker OPEN — skipping NLU extraction")
+        return {"phase": DialoguePhase.CHITCHAT, "intent": None, "slots": {}}
+
+    try:
+        response = await asyncio.wait_for(
+            _get_llm().ainvoke([
+                SystemMessage(content="You are a precise NLU system. Respond only with the JSON object."),
+                HumanMessage(content=extraction_prompt)
+            ]),
+            timeout=_LLM_TIMEOUT,
+        )
+        _circuit_breaker.record_success()
+    except Exception as e:
+        _circuit_breaker.record_failure()
+        logger.error("Aria NLU LLM call failed: %s", e, exc_info=True)
+        return {"phase": DialoguePhase.CHITCHAT, "intent": None, "slots": {}}
 
     try:
         extracted = json.loads(response.content.strip())
@@ -412,10 +543,32 @@ If there are obvious choices from the context (e.g. only one matching borrower),
 present them as options. Keep it brief and warm.
 """
 
-    response = await llm.ainvoke([
-        SystemMessage(content="You are Aria, a warm and direct AI mortgage assistant."),
-        HumanMessage(content=question_prompt)
-    ])
+    # Circuit breaker: fast-fail if LLM is unavailable
+    if not _circuit_breaker.allow_request():
+        logger.warning("[ARIA-SLOT-FILL] Circuit breaker OPEN — returning degraded response")
+        return {
+            "phase": DialoguePhase.SLOT_FILLING,
+            "current_slot_question": "I need a moment — can you try that again?",
+            "messages": [AIMessage(content="I need a moment — can you try that again?")],
+        }
+
+    try:
+        response = await asyncio.wait_for(
+            _get_llm().ainvoke([
+                SystemMessage(content="You are Aria, a warm and direct AI mortgage assistant."),
+                HumanMessage(content=question_prompt)
+            ]),
+            timeout=_LLM_TIMEOUT,
+        )
+        _circuit_breaker.record_success()
+    except Exception as e:
+        _circuit_breaker.record_failure()
+        logger.error("Aria slot-fill LLM call failed: %s", e, exc_info=True)
+        return {
+            "phase": DialoguePhase.SLOT_FILLING,
+            "current_slot_question": "I need a moment — can you try that again?",
+            "messages": [AIMessage(content="I need a moment — can you try that again?")],
+        }
 
     question = response.content.strip()
 
@@ -446,16 +599,29 @@ Extract the value for the slot "{slot_name}" ({slot_spec.description}).
 Respond ONLY with JSON: {{"value": "extracted_value_or_null", "confident": true_or_false}}
 """
 
-    response = await llm.ainvoke([
-        SystemMessage(content="Extract the slot value. JSON only."),
-        HumanMessage(content=extraction_prompt)
-    ])
-
-    try:
-        parsed = json.loads(response.content.strip())
-        value = parsed.get("value")
-    except Exception:
+    # Circuit breaker: fast-fail if LLM is unavailable
+    if not _circuit_breaker.allow_request():
+        logger.warning("[ARIA-SLOT-ANSWER] Circuit breaker OPEN — cannot extract slot value")
         value = None
+    else:
+        try:
+            response = await asyncio.wait_for(
+                _get_llm().ainvoke([
+                    SystemMessage(content="Extract the slot value. JSON only."),
+                    HumanMessage(content=extraction_prompt)
+                ]),
+                timeout=_LLM_TIMEOUT,
+            )
+            _circuit_breaker.record_success()
+            try:
+                parsed = json.loads(response.content.strip())
+                value = parsed.get("value")
+            except json.JSONDecodeError:
+                value = None
+        except Exception as e:
+            _circuit_breaker.record_failure()
+            logger.error("Aria slot-answer LLM call failed: %s", e, exc_info=True)
+            value = None
 
     updated_slots = {**state["slots"]}
     if value:
@@ -504,10 +670,34 @@ Write a brief, human-like confirmation message that:
 Keep it conversational and under 100 words unless showing a document preview.
 """
 
-    response = await llm.ainvoke([
-        SystemMessage(content="You are Aria. Write a natural confirmation message."),
-        HumanMessage(content=preview_prompt)
-    ])
+    # Circuit breaker: fast-fail if LLM is unavailable
+    if not _circuit_breaker.allow_request():
+        logger.warning("[ARIA-CONFIRM] Circuit breaker OPEN — returning degraded response")
+        fallback = "I'm having trouble connecting right now. Try again in a moment."
+        return {
+            "phase": DialoguePhase.CONFIRMING,
+            "confirmation_preview": fallback,
+            "messages": [AIMessage(content=fallback)],
+        }
+
+    try:
+        response = await asyncio.wait_for(
+            _get_llm().ainvoke([
+                SystemMessage(content="You are Aria. Write a natural confirmation message."),
+                HumanMessage(content=preview_prompt)
+            ]),
+            timeout=_LLM_TIMEOUT,
+        )
+        _circuit_breaker.record_success()
+    except Exception as e:
+        _circuit_breaker.record_failure()
+        logger.error("Aria confirmation LLM call failed: %s", e, exc_info=True)
+        fallback = "I'm having trouble connecting right now. Try again in a moment."
+        return {
+            "phase": DialoguePhase.CONFIRMING,
+            "confirmation_preview": fallback,
+            "messages": [AIMessage(content=fallback)],
+        }
 
     confirmation = response.content.strip()
 
@@ -533,14 +723,15 @@ async def execute_node(state: AriaState) -> AriaState:
         try:
             borrower_name = state["slots"].get("borrower_name") or state["slots"].get("contact_name")
             if borrower_name and state.get("user_id"):
-                asyncio.create_task(
+                _create_tracked_task(
                     _record_borrower_context(
                         state["user_id"],
                         borrower_name,
                         state.get("intent", "unknown"),
                         state["slots"],
                         org_id=state.get("org_id"),
-                    )
+                    ),
+                    "borrower_context",
                 )
         except Exception:
             pass  # Never break execution flow
@@ -568,8 +759,9 @@ async def response_node(state: AriaState) -> AriaState:
             None,
         )
         if last_human and state.get("user_id"):
-            asyncio.create_task(
-                _extract_and_save_preferences(state["user_id"], last_human, org_id=state.get("org_id"))
+            _create_tracked_task(
+                _extract_and_save_preferences(state["user_id"], last_human, org_id=state.get("org_id")),
+                "preference_extraction",
             )
     except Exception:
         pass  # Never break response flow
@@ -586,10 +778,41 @@ async def response_node(state: AriaState) -> AriaState:
             voice_preferences=state.get("voice_preferences"),
         )
 
-        response = await llm.ainvoke([
-            SystemMessage(content=system),
-            *state["messages"],
-        ])
+        # Circuit breaker: fast-fail if LLM is unavailable
+        if not _circuit_breaker.allow_request():
+            logger.warning("[ARIA-RESPONSE] Circuit breaker OPEN — returning degraded chitchat response")
+            degraded = "I'm having trouble connecting right now. Try again in a moment."
+            return {
+                "messages": [AIMessage(content=degraded)],
+                "phase": DialoguePhase.RESPONDING,
+                "intent": None, "slots": {}, "missing_slots": [],
+                "current_slot_question": None, "mode": None,
+                "task_result": None, "confirmation_preview": None,
+                "error": None, "iteration_count": 0,
+            }
+
+        try:
+            response = await asyncio.wait_for(
+                _get_llm().ainvoke([
+                    SystemMessage(content=system),
+                    *state["messages"],
+                ]),
+                timeout=_LLM_TIMEOUT,
+            )
+            _circuit_breaker.record_success()
+        except Exception as e:
+            _circuit_breaker.record_failure()
+            logger.error("Aria chitchat LLM call failed: %s", e, exc_info=True)
+            degraded = "I'm having trouble connecting right now. Try again in a moment."
+            return {
+                "messages": [AIMessage(content=degraded)],
+                "phase": DialoguePhase.RESPONDING,
+                "intent": None, "slots": {}, "missing_slots": [],
+                "current_slot_question": None, "mode": None,
+                "task_result": None, "confirmation_preview": None,
+                "error": None, "iteration_count": 0,
+            }
+
         return {
             "messages": [AIMessage(content=response.content)],
             "phase": DialoguePhase.RESPONDING,
@@ -635,10 +858,40 @@ Write a brief, warm completion message that:
 - Uses a checkmark or similar natural signal of completion
 """
 
-    response = await llm.ainvoke([
-        SystemMessage(content="You are Aria. Write a natural task completion message."),
-        HumanMessage(content=completion_prompt)
-    ])
+    # Circuit breaker: fast-fail if LLM is unavailable
+    if not _circuit_breaker.allow_request():
+        logger.warning("[ARIA-RESPONSE] Circuit breaker OPEN — returning degraded completion response")
+        degraded = "I'm having trouble connecting right now. Try again in a moment."
+        return {
+            "messages": [AIMessage(content=degraded)],
+            "phase": DialoguePhase.RESPONDING,
+            "intent": None, "slots": {}, "missing_slots": [],
+            "current_slot_question": None, "mode": None,
+            "task_result": None, "confirmation_preview": None,
+            "error": None, "iteration_count": 0,
+        }
+
+    try:
+        response = await asyncio.wait_for(
+            _get_llm().ainvoke([
+                SystemMessage(content="You are Aria. Write a natural task completion message."),
+                HumanMessage(content=completion_prompt)
+            ]),
+            timeout=_LLM_TIMEOUT,
+        )
+        _circuit_breaker.record_success()
+    except Exception as e:
+        _circuit_breaker.record_failure()
+        logger.error("Aria completion LLM call failed: %s", e, exc_info=True)
+        degraded = "I'm having trouble connecting right now. Try again in a moment."
+        return {
+            "messages": [AIMessage(content=degraded)],
+            "phase": DialoguePhase.RESPONDING,
+            "intent": None, "slots": {}, "missing_slots": [],
+            "current_slot_question": None, "mode": None,
+            "task_result": None, "confirmation_preview": None,
+            "error": None, "iteration_count": 0,
+        }
 
     return {
         "messages": [AIMessage(content=response.content)],
@@ -698,7 +951,8 @@ async def query_mode_node(state: AriaState) -> AriaState:
 
         tool_results = []
         for block in tool_blocks:
-            result = execute_query_tool(
+            result = await asyncio.to_thread(
+                execute_query_tool,
                 block.name, org_id=org_id, user_id=user_id, **block.input
             )
             tool_results.append({
@@ -725,8 +979,9 @@ async def query_mode_node(state: AriaState) -> AriaState:
     # Fire-and-forget: record which metrics the user asked about
     try:
         if question and state.get("user_id"):
-            asyncio.create_task(
-                _record_metric_queries(state["user_id"], question, org_id=state.get("org_id"))
+            _create_tracked_task(
+                _record_metric_queries(state["user_id"], question, org_id=state.get("org_id")),
+                "metric_queries",
             )
     except Exception:
         pass  # Never break query flow
