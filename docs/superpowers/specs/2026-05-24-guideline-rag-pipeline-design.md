@@ -293,6 +293,128 @@ Two modes based on query intent:
 - Company overlay callout (amber highlight) when conflict exists
 - Confidence score and disclaimer
 
+## Knowledge & Memory Integration
+
+Guidelines are not a standalone corpus — they need to be a first-class part of Aria's knowledge architecture, cross-referenced with borrower memory and unified with the existing AI Knowledge Base.
+
+### Context Loading Priority
+
+When Aria assembles context for a conversation, load in this order (each layer builds on the previous):
+
+```
+1. Borrower Identity        — name, contact info, relationship to LO
+2. Active Loan State         — loan_program, stage, amount, property
+3. Guideline Context (NEW)   — top 3 relevant chunks for this loan_program
+4. Borrower Preferences      — communication preferences, timezone, language
+5. Episodic Facts            — recent conversation facts from agent_memories
+6. Cross-Reference Alerts    — guideline thresholds vs borrower facts (NEW)
+7. Last Interaction Summary  — what happened on the last call
+```
+
+Guidelines load at position 3 (after loan state, before borrower details) because the loan program determines which guidelines are relevant. Cross-reference alerts at position 6 are derived from combining positions 3 and 5.
+
+Total context budget: ~600-800 tokens for guideline context (guideline chunks are pre-summarized to fit). Same budget discipline as borrower memory — never exceed the context window.
+
+### Memory-to-Guideline Cross-Referencing
+
+When loading borrower facts from `agent_memories`, detect financial facts and automatically cross-reference against guideline thresholds:
+
+```python
+# In AriaContextLoader, after loading borrower facts and guideline context
+async def cross_reference_facts_with_guidelines(
+    borrower_facts: list[RetrievedFact],
+    loan_program: str,
+    guidelines: list[GuidelineResult],
+) -> list[CrossReferenceAlert]:
+    """
+    Detects borrower facts that have guideline implications.
+    
+    Examples:
+    - Fact: "credit score 645" + FHA guideline min 580 → "Eligible (65 points above minimum)"
+    - Fact: "credit score 645" + Company overlay min 640 → "Warning: only 5 points above overlay minimum"
+    - Fact: "DTI 42%" + FHA manual UW max 43% → "Within limit but near threshold"
+    - Fact: "Ch7 BK discharged 2023" + FHA wait 2yr → "Eligible as of 2025"
+    
+    Returns alerts sorted by urgency (near-threshold first).
+    """
+```
+
+Cross-reference rules engine:
+- **Credit score** → check against min score for loan_program (agency + overlay)
+- **DTI ratio** → check against max DTI (manual UW vs AUS)
+- **LTV** → check against max LTV for property type + occupancy
+- **Derogatory events** (BK, foreclosure, short sale) → check waiting periods
+- **Reserves** → check against minimum for property type
+
+Alerts are injected into context at position 6 and formatted as:
+```
+⚠ GUIDELINE ALERT: Borrower credit score (645) is only 5 points above your company overlay minimum (640) for FHA. Agency minimum is 580.
+```
+
+### AI Knowledge Base Unification
+
+The existing `AIKnowledgeBase` table stores manual knowledge entries (loan products, compliance notes, sales scripts, company policies) but has no embeddings. Unify it with the guideline retrieval pipeline:
+
+**Schema addition to `AIKnowledgeBase`:**
+```python
+content_embedding = Column(Vector(1536))  # NEW — same as GuidelineSection
+embedding_model = Column(String(50))
+chunk_hash = Column(String(64))
+```
+
+**Unified retrieval in `retrieval_service.py`:**
+```python
+# scope="knowledge" — searches BOTH guideline_sections AND ai_knowledge_base
+async def _retrieve_knowledge(self, query_embedding, filters):
+    """
+    Unified vector search across:
+    1. guideline_sections (agency guidelines, overlays)
+    2. ai_knowledge_base (company policies, loan products, compliance notes)
+    
+    Results merged and ranked by similarity.
+    Source type included in response so UI can differentiate.
+    """
+```
+
+**Embedding on upload:** When a knowledge base entry is created/updated via the existing `/api/v1/ai/knowledge-base` routes, generate and store the embedding. For entries longer than 500 tokens, chunk them (same as guidelines).
+
+**Categories that benefit most from vector search:**
+- `loan_products` — "What are our jumbo options?" → retrieves product sheets
+- `compliance` — "What's our TRID timeline?" → retrieves compliance policies
+- `company_policies` — "What's our lock extension policy?" → retrieves internal docs
+- `underwriting` — Already covered by guidelines, but company-specific notes go here
+
+### Guideline-Derived Insight Storage
+
+When Aria combines borrower data with guideline rules and derives a new insight, store it as a special memory type for future conversations:
+
+```python
+# New memory_type value for agent_memories
+memory_type = "guideline_insight"  # joins existing: fact, preference, context, insight, directive
+```
+
+**What gets stored:**
+- Cross-reference results: "Borrower is 5 points above FHA overlay minimum (645 vs 640)"
+- Eligibility determinations: "Eligible for FHA, VA. Not yet eligible for conventional (1yr remaining on BK wait)"
+- Overlay conflicts identified: "Company overlay requires 640 vs agency 580 for FHA"
+
+**Guardrails (per existing memory architecture):**
+1. **Tagged as derived**: `source_type="guideline_cross_reference"` — not a verified fact from the borrower
+2. **Auto-expires**: `expires_at` set to 30 days — financial data changes, don't let stale insights persist
+3. **Superseded on re-calculation**: If borrower facts update (new credit pull, stage change), old insights are superseded
+4. **Not used for compliance decisions**: Disclaimer attached — these are AI-derived, not official determinations
+5. **Audit logged**: Every derived insight logged with source guideline, source fact, and derivation logic
+
+**When insights are created:**
+- After each call where financial facts are discussed
+- When a loan stage changes (triggers re-evaluation against stage-specific guidelines)
+- On guideline re-ingestion (existing insights may be stale if rules changed)
+
+**When insights are recalled:**
+- At the start of the next conversation with this borrower
+- Injected at context position 6 (cross-reference alerts) alongside live cross-references
+- Stale insights (>30 days) are recalculated rather than recalled
+
 ## Search UI
 
 ### Frontend Route

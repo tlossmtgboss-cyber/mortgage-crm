@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guideline RAG Pipeline — Design Spec</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body { font-family: 'Inter', sans-serif; }
+  pre, code { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+  .toc a { color: #475569; text-decoration: none; }
+  .toc a:hover { color: #16a34a; }
+  .arch-diagram { background: #0f172a; color: #e2e8f0; padding: 24px; border-radius: 12px; overflow-x: auto; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.6; white-space: pre; }
+</style>
+</head>
+<body class="bg-white text-slate-700">
+
+<!-- Header -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+  <div class="max-w-4xl mx-auto px-8 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center"><span class="text-white font-bold text-sm">P</span></div>
+      <span class="font-semibold text-slate-800 text-lg">Design Spec</span>
+    </div>
+    <div class="flex items-center gap-4 text-sm text-slate-400">
+      <span>2026-05-24</span>
+      <span class="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">Approved</span>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-4xl mx-auto px-8 py-10">
+
+  <!-- Title -->
+  <h1 class="text-3xl font-bold text-slate-900 mb-2">Guideline RAG Pipeline</h1>
+  <p class="text-slate-500 mb-2">Full-path guideline retrieval-augmented generation for Aria AI and the LO-facing search UI</p>
+  <p class="text-sm text-slate-400 mb-8">Mockup: <a href="/guideline-rag-mockup.html" class="text-green-600 hover:underline">guideline-rag-mockup.html</a></p>
+
+  <!-- TOC -->
+  <nav class="toc bg-slate-50 rounded-xl p-6 mb-10">
+    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Contents</h3>
+    <ol class="space-y-1 text-sm list-decimal list-inside">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#decisions">Design Decisions</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#schema">Schema Changes</a></li>
+      <li><a href="#ingestion">Ingestion Pipeline</a></li>
+      <li><a href="#retrieval">Retrieval &amp; Search</a></li>
+      <li><a href="#aria">Aria Integration</a></li>
+      <li><a href="#knowledge">Knowledge &amp; Memory Integration</a></li>
+      <li><a href="#search-ui">Search UI</a></li>
+      <li><a href="#comparison">Comparison Charts</a></li>
+      <li><a href="#testing">Testing</a></li>
+      <li><a href="#performance">Performance</a></li>
+    </ol>
+  </nav>
+
+  <!-- Overview -->
+  <section id="overview" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Overview</h2>
+    <p class="leading-relaxed">Build a full guideline RAG pipeline so Aria and the LO-facing search UI can answer mortgage guideline questions backed by actual indexed guideline documents &mdash; not just Claude's training data. The system ingests PDFs from all major agencies (<strong>Fannie Mae, Freddie Mac, FHA, VA, USDA</strong>) plus specialty programs (<strong>Non-QM, AIO, DPA, Construction, Renovation, Reverse Mortgage</strong>), chunks them into ~500-token sections, embeds them with pgvector, and serves them through vector search with citations.</p>
+  </section>
+
+  <!-- Design Decisions -->
+  <section id="decisions" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Design Decisions</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+        <thead><tr class="bg-slate-50">
+          <th class="text-left px-4 py-3 font-semibold text-slate-700 border-b">Decision</th>
+          <th class="text-left px-4 py-3 font-semibold text-slate-700 border-b">Choice</th>
+          <th class="text-left px-4 py-3 font-semibold text-slate-700 border-b">Rationale</th>
+        </tr></thead>
+        <tbody>
+          <tr class="border-b border-slate-100"><td class="px-4 py-3 font-medium">Storage</td><td class="px-4 py-3">Enhance existing <code class="bg-slate-100 px-1 rounded text-xs">GuidelineSection</code> table</td><td class="px-4 py-3 text-slate-500">Already has section splitting, AI analysis, keyword search. Just needs pgvector + better chunking.</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-3 font-medium">Ingestion</td><td class="px-4 py-3">Manual upload + automated scraping</td><td class="px-4 py-3 text-slate-500">Company overlays uploaded manually, agency updates scraped on schedule.</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-3 font-medium">Retrieval UX</td><td class="px-4 py-3">Silent injection + cited answers</td><td class="px-4 py-3 text-slate-500">Aria silently uses guidelines for routine context; provides citations when LO explicitly asks.</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-3 font-medium">Overlay handling</td><td class="px-4 py-3">Show both, flag difference</td><td class="px-4 py-3 text-slate-500">Always present both agency guideline and company overlay, highlighted so LO sees conflicts.</td></tr>
+          <tr><td class="px-4 py-3 font-medium">Embedding model</td><td class="px-4 py-3">text-embedding-3-small (1536 dims)</td><td class="px-4 py-3 text-slate-500">Already used for borrower memory in <code class="bg-slate-100 px-1 rounded text-xs">embedding_service.py</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Architecture</h2>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Existing Infrastructure (Reused)</h3>
+    <div class="overflow-x-auto mb-6">
+      <table class="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+        <thead><tr class="bg-slate-50">
+          <th class="text-left px-4 py-3 font-semibold text-slate-700 border-b">Component</th>
+          <th class="text-left px-4 py-3 font-semibold text-slate-700 border-b">File</th>
+          <th class="text-left px-4 py-3 font-semibold text-slate-700 border-b">What It Does</th>
+        </tr></thead>
+        <tbody class="text-xs">
+          <tr class="border-b border-slate-100"><td class="px-4 py-2.5 font-medium"><code>UnderwritingGuideline</code></td><td class="px-4 py-2.5 text-slate-500">call_monitoring_models.py:753</td><td class="px-4 py-2.5">Guideline metadata, full text, key_points, structured_rules</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-2.5 font-medium"><code>GuidelineSection</code></td><td class="px-4 py-2.5 text-slate-500">call_monitoring_models.py:826</td><td class="px-4 py-2.5">Sections with content, section_number, topics. Has <code>content_embedding ARRAY(Float)</code></td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-2.5 font-medium"><code>guidelines_service.py</code></td><td class="px-4 py-2.5 text-slate-500">services/call_monitoring/</td><td class="px-4 py-2.5">Text extraction, AI analysis, section splitting, keyword search, Q&A</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-2.5 font-medium"><code>retrieval_service.py</code></td><td class="px-4 py-2.5 text-slate-500">services/aria_memory/</td><td class="px-4 py-2.5">pgvector cosine search, Redis cache, audit logging. Has <code>scope="guideline"</code> stub</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-2.5 font-medium"><code>embedding_service.py</code></td><td class="px-4 py-2.5 text-slate-500">services/aria_memory/</td><td class="px-4 py-2.5">text-embedding-3-small, sync/async, PII scrubbing</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-2.5 font-medium"><code>AriaContextLoader</code></td><td class="px-4 py-2.5 text-slate-500">services/aria_memory/context_loader.py</td><td class="px-4 py-2.5">Loads borrower context. No guideline context yet.</td></tr>
+          <tr class="border-b border-slate-100"><td class="px-4 py-2.5 font-medium"><code>knowledge_tools.py</code></td><td class="px-4 py-2.5 text-slate-500">aria/tools/</td><td class="px-4 py-2.5"><code>answer_guideline_question()</code> &mdash; falls back to Claude training data</td></tr>
+          <tr><td class="px-4 py-2.5 font-medium"><code>aria_prompts.py</code></td><td class="px-4 py-2.5 text-slate-500">aria/agents/</td><td class="px-4 py-2.5">System prompts with <code>{memory_context}</code>. No guideline placeholder.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Data Flow</h3>
+    <div class="arch-diagram">                    +---------------------------+
+                    |    Admin Upload UI         |
+                    |  (existing KB routes)      |
+                    +-----------+---------------+
+                                | PDF/DOCX
+                                v
+                    +---------------------------+
+                    |  guidelines_service.py     |
+                    |  -------------------------  |
+                    |  extract_text()           |  &lt;-- existing
+                    |  analyze_content()        |  &lt;-- existing
+                    |  split_into_sections()    |  &lt;-- improved chunking
+                    |  embed_sections()         |  &lt;-- NEW
+                    |  store_with_vectors()     |  &lt;-- NEW
+                    +-----------+---------------+
+                                | chunks + embeddings
+                                v
+              +-------------------------------------+
+              |   guideline_sections table           |
+              |   ---------------------------        |
+              |   content_embedding Vector(1536)     |  &lt;-- converted
+              |   + HNSW index                       |  &lt;-- NEW
+              |   embedding_model, token_count       |  &lt;-- NEW
+              |   chunk_hash                         |  &lt;-- NEW
+              +-----------+------------+------------+
+                          |            |            |
+          +---------------+    +-------+------+  +--+-------------+
+          v                    v              v  v                v
+   +-----------+    +----------------+    +---------------+
+   | Search UI |    | Aria Tools     |    | Aria Prompt   |
+   | (Answer/  |    | (RAG search,   |    | Injection     |
+   |  Citations|    |  comparison,   |    | ({guideline   |
+   |  /Sources)|    |  overlay check)|    |  _context})   |
+   +-----------+    +----------------+    +---------------+</div>
+  </section>
+
+  <!-- Schema Changes -->
+  <section id="schema" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Schema Changes</h2>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">GuidelineSection &mdash; Modified Columns</h3>
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-4"><code># Convert existing column
+content_embedding = Column(Vector(1536))  # was ARRAY(Float)
+
+# New columns
+embedding_model = Column(String(50), default="text-embedding-3-small")
+token_count = Column(Integer)
+chunk_hash = Column(String(64))  # SHA-256 of content for dedup</code></pre>
+
+    <p class="text-sm font-medium text-slate-700 mb-2">New HNSW index:</p>
+    <pre class="bg-slate-900 text-blue-400 rounded-xl p-5 text-sm overflow-x-auto mb-6"><code>CREATE INDEX idx_guideline_sections_embedding
+ON guideline_sections USING hnsw (content_embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);</code></pre>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">UnderwritingGuideline &mdash; New Columns</h3>
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-4"><code>embedding_status = Column(String(20), default="pending")  # pending/processing/complete/failed
+chunk_count = Column(Integer, default=0)
+overlay_priority = Column(Integer, default=4)  # 1=company, 2=investor, 3=state, 4=agency</code></pre>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Migration</h3>
+    <p class="leading-relaxed">Inline migration at startup (same pattern as existing <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">checkfirst=True</code> + <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">ALTER TABLE ADD COLUMN IF NOT EXISTS</code>):</p>
+    <ol class="list-decimal list-inside mt-2 space-y-1 text-sm">
+      <li>Convert <code class="bg-slate-100 px-1 rounded text-xs">content_embedding</code> from <code class="bg-slate-100 px-1 rounded text-xs">real[]</code> to <code class="bg-slate-100 px-1 rounded text-xs">vector(1536)</code></li>
+      <li>Add HNSW index</li>
+      <li>Add new columns with defaults</li>
+    </ol>
+  </section>
+
+  <!-- Ingestion -->
+  <section id="ingestion" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Ingestion Pipeline</h2>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Improved Chunking</h3>
+    <p class="mb-3">Extends existing <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">split_into_sections()</code> in guidelines_service.py:</p>
+    <ol class="list-decimal list-inside space-y-2 text-sm mb-6">
+      <li><strong>Target ~500 tokens</strong> (~2000 chars) per chunk instead of the current 2000-char fallback</li>
+      <li><strong>Sub-section splitting</strong>: If a structural section exceeds 500 tokens, split on paragraph boundaries</li>
+      <li><strong>50-token overlap</strong> between consecutive chunks for context continuity</li>
+      <li><strong>Preserve metadata</strong>: Sub-chunks inherit <code class="bg-slate-100 px-1 rounded text-xs">section_number</code>, <code class="bg-slate-100 px-1 rounded text-xs">section_title</code>, get suffix (e.g., <code class="bg-slate-100 px-1 rounded text-xs">B3-3.1-07.1</code>)</li>
+      <li><strong>Token counting</strong>: Use tiktoken (<code class="bg-slate-100 px-1 rounded text-xs">cl100k_base</code>) for accurate counts</li>
+    </ol>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Embedding Generation</h3>
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-6"><code>async def embed_guideline_sections(guideline_id: str):
+    """Generate embeddings for all sections of a guideline."""
+    # 1. Load all sections for this guideline
+    # 2. Filter to sections where chunk_hash changed or embedding is NULL
+    # 3. Batch embed using embedding_service.generate_embedding_async()
+    # 4. Update content_embedding, embedding_model, token_count
+    # 5. Update guideline.embedding_status and chunk_count</code></pre>
+    <p class="text-sm text-slate-500 mb-6">Batch processing: 20 sections at a time to avoid OpenAI rate limits. <code class="bg-slate-100 px-1 rounded text-xs">asyncio.gather</code> for parallelism within each batch.</p>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Content Hash Dedup</h3>
+    <p class="mb-2 text-sm">On re-ingestion (guideline update):</p>
+    <ol class="list-decimal list-inside space-y-1 text-sm mb-6">
+      <li>Compute SHA-256 hash of each chunk's content</li>
+      <li>Compare against existing <code class="bg-slate-100 px-1 rounded text-xs">chunk_hash</code> values</li>
+      <li>Only re-embed chunks where hash changed</li>
+      <li>Delete chunks that no longer exist in new version</li>
+      <li>Track version via <code class="bg-slate-100 px-1 rounded text-xs">UnderwritingGuideline.version</code></li>
+    </ol>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Automated Scraping</h3>
+    <p class="text-sm leading-relaxed">Extend existing scrapers (<code class="bg-slate-100 px-1 rounded text-xs">guideline_updates_scraper.py</code>, <code class="bg-slate-100 px-1 rounded text-xs">mortgage_guidelines_scraper.py</code>). When a new update is detected, download the full document (not just the summary), feed through the same pipeline. Content hash dedup prevents duplicate embedding.</p>
+  </section>
+
+  <!-- Retrieval -->
+  <section id="retrieval" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Retrieval &amp; Search</h2>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Extending retrieval_service.py</h3>
+    <p class="text-sm mb-3">Implement the existing <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">scope="guideline"</code> stub in <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">retrieve()</code>:</p>
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-6"><code>async def _retrieve_guidelines(self, query_embedding, filters):
+    """
+    Vector search over guideline_sections table.
+
+    Filters applied BEFORE vector search:
+    - agency/source (from UnderwritingGuideline.guideline_type)
+    - loan_program
+    - category
+    - is_active
+    - organization_id (for company overlays) OR NULL (for agency)
+
+    Returns: List[GuidelineResult] with:
+    - content, section_number, section_title, page_number
+    - guideline_name, guideline_type, loan_program
+    - similarity_score, overlay_priority
+    """</code></pre>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Hybrid Scoring</h3>
+    <div class="grid grid-cols-2 gap-4 mb-6">
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-sm font-semibold text-slate-700 mb-1">Primary</div>
+        <p class="text-xs text-slate-500">pgvector cosine similarity (threshold: 0.3)</p>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-sm font-semibold text-slate-700 mb-1">Boost</div>
+        <p class="text-xs text-slate-500">Query terms in section_title or topics add score bonus</p>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-sm font-semibold text-slate-700 mb-1">Overlay Ordering</div>
+        <p class="text-xs text-slate-500">Company first (priority 1), then agency (priority 4)</p>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-sm font-semibold text-slate-700 mb-1">Top-k</div>
+        <p class="text-xs text-slate-500">Default 5, configurable per tool</p>
+      </div>
+    </div>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Caching</h3>
+    <p class="text-sm">Redis pattern: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">aria:cache:guideline:{query_hash}:{filter_hash}</code> &mdash; TTL 300s. Invalidate on guideline re-ingestion.</p>
+  </section>
+
+  <!-- Aria Integration -->
+  <section id="aria" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Aria Integration</h2>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">New Tools</h3>
+    <div class="space-y-4 mb-6">
+      <div class="bg-green-50 border border-green-200 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-2"><code class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-sm font-medium">search_guidelines_rag</code><span class="text-xs text-green-600">compliance_checker, loan_processor, manager, receptionist</span></div>
+        <p class="text-sm text-slate-600 mb-2">Search mortgage underwriting guidelines by question. Returns cited answers from indexed documents.</p>
+        <div class="text-xs text-slate-500"><strong>Params:</strong> query, loan_program?, agency?, include_overlays?</div>
+        <div class="text-xs text-slate-500"><strong>Returns:</strong> answer, citations[], sources[], confidence</div>
+      </div>
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-2"><code class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-sm font-medium">compare_across_agencies</code><span class="text-xs text-blue-600">compliance_checker, loan_processor, manager</span></div>
+        <p class="text-sm text-slate-600 mb-2">Compare a guideline topic across all agencies and overlays. Returns comparison table.</p>
+        <div class="text-xs text-slate-500"><strong>Params:</strong> topic (e.g., "minimum credit score", "DTI limits")</div>
+        <div class="text-xs text-slate-500"><strong>Returns:</strong> topic, comparison[], overlay_conflicts[]</div>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-2"><code class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-sm font-medium">check_overlay_conflict</code><span class="text-xs text-amber-600">compliance_checker, loan_processor</span></div>
+        <p class="text-sm text-slate-600 mb-2">Check if company overlay differs from agency guideline for a specific rule.</p>
+        <div class="text-xs text-slate-500"><strong>Params:</strong> rule_type, loan_program</div>
+        <div class="text-xs text-slate-500"><strong>Returns:</strong> has_conflict, agency_rule, overlay_rule, effective_rule</div>
+      </div>
+    </div>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Prompt Injection</h3>
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-4"><code># Extend AriaContextLoader.load_context()
+if loan and loan.loan_program:
+    guideline_chunks = await retrieval_service.retrieve(
+        scope="guideline",
+        query=f"{loan.loan_program} eligibility requirements",
+        filters={"loan_program": loan.loan_program},
+        top_k=3,
+    )
+    context.guideline_context = format_guideline_context(guideline_chunks)</code></pre>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Answer Modes</h3>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-slate-50 rounded-xl p-5">
+        <div class="text-sm font-semibold text-slate-700 mb-2">Silent Injection</div>
+        <p class="text-xs text-slate-500 mb-2">Routine conversation &mdash; Aria references guideline rules naturally without explicit citations.</p>
+        <div class="bg-white rounded-lg border border-slate-200 p-3 text-xs text-slate-600 italic">"His 645 clears the 580 minimum for 3.5% down"</div>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-5">
+        <div class="text-sm font-semibold text-slate-700 mb-2">Cited Answer</div>
+        <p class="text-xs text-slate-500 mb-2">Explicit guideline question &mdash; structured response with inline citations.</p>
+        <div class="bg-white rounded-lg border border-slate-200 p-3 text-xs text-slate-600 italic">"Per <span class="bg-red-50 text-red-700 px-1 rounded">FHA 4000.1 p.204</span>, the minimum is 500..."</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Knowledge & Memory Integration -->
+  <section id="knowledge" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Knowledge &amp; Memory Integration</h2>
+    <p class="text-sm text-slate-600 mb-6 leading-relaxed">Guidelines are not a standalone corpus &mdash; they need to be a first-class part of Aria's knowledge architecture, cross-referenced with borrower memory and unified with the existing AI Knowledge Base.</p>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Context Loading Priority</h3>
+    <p class="text-sm mb-3">When Aria assembles context for a conversation, load in this order:</p>
+    <div class="space-y-2 mb-6">
+      <div class="flex items-center gap-3"><span class="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">1</span><div class="text-sm"><strong>Borrower Identity</strong> <span class="text-slate-400">&mdash; name, contact info, relationship to LO</span></div></div>
+      <div class="flex items-center gap-3"><span class="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">2</span><div class="text-sm"><strong>Active Loan State</strong> <span class="text-slate-400">&mdash; loan_program, stage, amount, property</span></div></div>
+      <div class="flex items-center gap-3"><span class="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center text-xs font-bold text-green-700 flex-shrink-0">3</span><div class="text-sm"><strong class="text-green-700">Guideline Context (NEW)</strong> <span class="text-slate-400">&mdash; top 3 relevant chunks for this loan_program</span></div></div>
+      <div class="flex items-center gap-3"><span class="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">4</span><div class="text-sm"><strong>Borrower Preferences</strong> <span class="text-slate-400">&mdash; communication, timezone, language</span></div></div>
+      <div class="flex items-center gap-3"><span class="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">5</span><div class="text-sm"><strong>Episodic Facts</strong> <span class="text-slate-400">&mdash; recent conversation facts from agent_memories</span></div></div>
+      <div class="flex items-center gap-3"><span class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-xs font-bold text-amber-700 flex-shrink-0">6</span><div class="text-sm"><strong class="text-amber-700">Cross-Reference Alerts (NEW)</strong> <span class="text-slate-400">&mdash; guideline thresholds vs borrower facts</span></div></div>
+      <div class="flex items-center gap-3"><span class="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0">7</span><div class="text-sm"><strong>Last Interaction Summary</strong> <span class="text-slate-400">&mdash; what happened on the last call</span></div></div>
+    </div>
+    <p class="text-xs text-slate-400 mb-8">Budget: ~600-800 tokens for guideline context. Same discipline as borrower memory &mdash; never exceed context window.</p>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Memory-to-Guideline Cross-Referencing</h3>
+    <p class="text-sm mb-3">When loading borrower facts, detect financial facts and auto-cross-reference against guideline thresholds:</p>
+
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+        <div class="text-xs font-semibold text-green-700 mb-1">Credit Score Match</div>
+        <p class="text-xs text-slate-600">Fact: "credit score 645" + FHA min 580</p>
+        <p class="text-xs text-green-700 font-medium mt-1">&rarr; "Eligible (65 points above minimum)"</p>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div class="text-xs font-semibold text-amber-700 mb-1">Near Threshold</div>
+        <p class="text-xs text-slate-600">Fact: "credit score 645" + Overlay min 640</p>
+        <p class="text-xs text-amber-700 font-medium mt-1">&rarr; "Warning: only 5 points above overlay"</p>
+      </div>
+      <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+        <div class="text-xs font-semibold text-green-700 mb-1">DTI Check</div>
+        <p class="text-xs text-slate-600">Fact: "DTI 42%" + FHA manual max 43%</p>
+        <p class="text-xs text-green-700 font-medium mt-1">&rarr; "Within limit but near threshold"</p>
+      </div>
+      <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+        <div class="text-xs font-semibold text-green-700 mb-1">Wait Period</div>
+        <p class="text-xs text-slate-600">Fact: "Ch7 BK discharged 2023" + FHA 2yr wait</p>
+        <p class="text-xs text-green-700 font-medium mt-1">&rarr; "Eligible as of 2025"</p>
+      </div>
+    </div>
+
+    <p class="text-sm mb-2 font-medium">Cross-reference rules engine checks:</p>
+    <div class="grid grid-cols-5 gap-2 mb-6">
+      <div class="bg-slate-50 rounded-lg p-2 text-center text-xs font-medium text-slate-600">Credit Score</div>
+      <div class="bg-slate-50 rounded-lg p-2 text-center text-xs font-medium text-slate-600">DTI Ratio</div>
+      <div class="bg-slate-50 rounded-lg p-2 text-center text-xs font-medium text-slate-600">LTV</div>
+      <div class="bg-slate-50 rounded-lg p-2 text-center text-xs font-medium text-slate-600">Derogatory Events</div>
+      <div class="bg-slate-50 rounded-lg p-2 text-center text-xs font-medium text-slate-600">Reserves</div>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 text-sm">
+      <p class="font-medium text-amber-800 mb-1">Alert format injected at position 6:</p>
+      <p class="text-amber-700 text-xs font-mono">&#9888; GUIDELINE ALERT: Borrower credit score (645) is only 5 points above your company overlay minimum (640) for FHA. Agency minimum is 580.</p>
+    </div>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">AI Knowledge Base Unification</h3>
+    <p class="text-sm mb-3">Existing <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">AIKnowledgeBase</code> stores manual entries (loan products, compliance, sales scripts) but has no embeddings. Unify with guideline retrieval:</p>
+
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-4"><code># Add to AIKnowledgeBase model
+content_embedding = Column(Vector(1536))   # same as GuidelineSection
+embedding_model = Column(String(50))
+chunk_hash = Column(String(64))</code></pre>
+
+    <p class="text-sm mb-2 font-medium">Unified retrieval scope:</p>
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-4"><code># scope="knowledge" — searches BOTH tables
+async def _retrieve_knowledge(self, query_embedding, filters):
+    """
+    Unified vector search across:
+    1. guideline_sections (agency guidelines, overlays)
+    2. ai_knowledge_base (company policies, loan products, compliance)
+
+    Results merged and ranked by similarity.
+    Source type included so UI can differentiate.
+    """</code></pre>
+
+    <p class="text-sm mb-2 font-medium">Categories that benefit most:</p>
+    <div class="grid grid-cols-4 gap-2 mb-8">
+      <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-700">loan_products</div><div class="text-[10px] text-slate-400">"What jumbo options do we have?"</div></div>
+      <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-700">compliance</div><div class="text-[10px] text-slate-400">"What's our TRID timeline?"</div></div>
+      <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-700">company_policies</div><div class="text-[10px] text-slate-400">"Lock extension policy?"</div></div>
+      <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs font-semibold text-slate-700">underwriting</div><div class="text-[10px] text-slate-400">Company-specific notes</div></div>
+    </div>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Guideline-Derived Insight Storage</h3>
+    <p class="text-sm mb-3">When Aria combines borrower data + guideline rules, store derived insights as a special memory type:</p>
+
+    <pre class="bg-slate-900 text-green-400 rounded-xl p-5 text-sm overflow-x-auto mb-4"><code># New memory_type for agent_memories
+memory_type = "guideline_insight"
+# Joins existing: fact, preference, context, insight, directive</code></pre>
+
+    <p class="text-sm mb-2 font-medium">What gets stored:</p>
+    <ul class="text-sm space-y-1 list-disc list-inside mb-4 text-slate-600">
+      <li>Cross-reference results: "Borrower is 5 points above FHA overlay minimum (645 vs 640)"</li>
+      <li>Eligibility determinations: "Eligible for FHA, VA. Not yet eligible for conventional (1yr BK wait)"</li>
+      <li>Overlay conflicts: "Company overlay requires 640 vs agency 580 for FHA"</li>
+    </ul>
+
+    <p class="text-sm mb-2 font-medium">Guardrails (per existing memory architecture):</p>
+    <div class="space-y-2 mb-4">
+      <div class="flex items-start gap-2"><div class="w-5 h-5 bg-red-100 rounded flex items-center justify-center flex-shrink-0 mt-0.5 text-red-600 text-[10px] font-bold">!</div><div class="text-sm"><strong>Tagged as derived:</strong> <code class="bg-slate-100 px-1 rounded text-xs">source_type="guideline_cross_reference"</code> &mdash; not a verified borrower fact</div></div>
+      <div class="flex items-start gap-2"><div class="w-5 h-5 bg-red-100 rounded flex items-center justify-center flex-shrink-0 mt-0.5 text-red-600 text-[10px] font-bold">!</div><div class="text-sm"><strong>Auto-expires:</strong> <code class="bg-slate-100 px-1 rounded text-xs">expires_at</code> = 30 days &mdash; financial data changes</div></div>
+      <div class="flex items-start gap-2"><div class="w-5 h-5 bg-red-100 rounded flex items-center justify-center flex-shrink-0 mt-0.5 text-red-600 text-[10px] font-bold">!</div><div class="text-sm"><strong>Superseded on re-calc:</strong> If borrower facts update, old insights are superseded</div></div>
+      <div class="flex items-start gap-2"><div class="w-5 h-5 bg-red-100 rounded flex items-center justify-center flex-shrink-0 mt-0.5 text-red-600 text-[10px] font-bold">!</div><div class="text-sm"><strong>Not for compliance:</strong> Disclaimer &mdash; AI-derived, not official determinations</div></div>
+      <div class="flex items-start gap-2"><div class="w-5 h-5 bg-red-100 rounded flex items-center justify-center flex-shrink-0 mt-0.5 text-red-600 text-[10px] font-bold">!</div><div class="text-sm"><strong>Audit logged:</strong> Source guideline, source fact, and derivation logic</div></div>
+    </div>
+
+    <p class="text-sm mb-2 font-medium">Lifecycle:</p>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-xs font-semibold text-slate-700 mb-1">Created when</div>
+        <ul class="text-[10px] text-slate-500 space-y-1 list-disc list-inside">
+          <li>After call with financial facts</li>
+          <li>Loan stage change</li>
+          <li>Guideline re-ingestion</li>
+        </ul>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-xs font-semibold text-slate-700 mb-1">Recalled when</div>
+        <ul class="text-[10px] text-slate-500 space-y-1 list-disc list-inside">
+          <li>Next conversation with borrower</li>
+          <li>Injected at context position 6</li>
+          <li>Stale (&gt;30d) = recalculated</li>
+        </ul>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-xs font-semibold text-slate-700 mb-1">Invalidated when</div>
+        <ul class="text-[10px] text-slate-500 space-y-1 list-disc list-inside">
+          <li>Borrower facts change</li>
+          <li>Guideline updated</li>
+          <li>30-day TTL expires</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search UI -->
+  <section id="search-ui" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Search UI</h2>
+
+    <p class="text-sm mb-4">New React page at <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">/guideline-search</code> matching the <a href="/guideline-rag-mockup.html" class="text-green-600 hover:underline">approved mockup</a>.</p>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Components</h3>
+    <div class="space-y-2 mb-6 text-sm">
+      <div class="flex items-center gap-3"><code class="bg-slate-100 px-2 py-0.5 rounded text-xs w-48 flex-shrink-0">GuidelineSearchPage</code><span class="text-slate-500">Main layout: sidebar + content area</span></div>
+      <div class="flex items-center gap-3"><code class="bg-slate-100 px-2 py-0.5 rounded text-xs w-48 flex-shrink-0">SourceCheckboxes</code><span class="text-slate-500">Fannie, Freddie, FHA, VA, USDA, Non-QM, AIO, DPA, Construction, Renovation, Reverse</span></div>
+      <div class="flex items-center gap-3"><code class="bg-slate-100 px-2 py-0.5 rounded text-xs w-48 flex-shrink-0">QueryLibrary</code><span class="text-slate-500">Saved queries per user (localStorage)</span></div>
+      <div class="flex items-center gap-3"><code class="bg-slate-100 px-2 py-0.5 rounded text-xs w-48 flex-shrink-0">SearchResults</code><span class="text-slate-500">Tabbed: Answer / Citations / Sources</span></div>
+      <div class="flex items-center gap-3"><code class="bg-slate-100 px-2 py-0.5 rounded text-xs w-48 flex-shrink-0">ComparisonChart</code><span class="text-slate-500">Agency comparison table, triggered from Sources</span></div>
+    </div>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">API Endpoints (new)</h3>
+    <div class="space-y-2 text-sm mb-6">
+      <div class="flex items-center gap-3"><code class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">POST</code><code class="text-xs">/api/v1/guidelines/search</code><span class="text-slate-500 text-xs">&mdash; vector search, returns answer + citations + sources</span></div>
+      <div class="flex items-center gap-3"><code class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">GET</code><code class="text-xs">/api/v1/guidelines/compare/{topic}</code><span class="text-slate-500 text-xs">&mdash; comparison chart data</span></div>
+      <div class="flex items-center gap-3"><code class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">POST</code><code class="text-xs">/api/v1/guidelines/library</code><span class="text-slate-500 text-xs">&mdash; save/list user queries</span></div>
+    </div>
+
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Tab Details</h3>
+    <div class="grid grid-cols-3 gap-4">
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-sm font-semibold text-slate-700 mb-2">Answer</div>
+        <ul class="text-xs text-slate-500 space-y-1 list-disc list-inside">
+          <li>AI-synthesized answer</li>
+          <li>Inline citation pills</li>
+          <li>Comparison tables</li>
+          <li>Amber overlay callout</li>
+          <li>Follow-up suggestions</li>
+          <li>Disclaimer footer</li>
+          <li>Copy / vote actions</li>
+        </ul>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-sm font-semibold text-slate-700 mb-2">Citations</div>
+        <ul class="text-xs text-slate-500 space-y-1 list-disc list-inside">
+          <li>2-column numbered cards</li>
+          <li>Document + section + page</li>
+          <li>Link-out icon</li>
+          <li>Amber for overlays</li>
+        </ul>
+      </div>
+      <div class="bg-slate-50 rounded-xl p-4">
+        <div class="text-sm font-semibold text-slate-700 mb-2">Sources</div>
+        <ul class="text-xs text-slate-500 space-y-1 list-disc list-inside">
+          <li>Document list + citation count</li>
+          <li>Click opens comparison chart</li>
+          <li>Link to original source URL</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Charts -->
+  <section id="comparison" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Comparison Charts</h2>
+    <p class="text-sm mb-3">Pre-built comparison topics extracted from <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">structured_rules</code>:</p>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Minimum Credit Score</div>
+      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Maximum DTI Ratios</div>
+      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Maximum LTV</div>
+      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Reserve Requirements</div>
+      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Bankruptcy Wait Periods</div>
+      <div class="bg-slate-50 rounded-lg p-3 text-sm text-center font-medium text-slate-700">Down Payment Requirements</div>
+    </div>
+    <p class="text-xs text-slate-400 mt-3">Generated from <code class="bg-slate-100 px-1 rounded text-xs">UnderwritingGuideline.structured_rules</code> JSON across all active guidelines. Cached and regenerated on re-ingestion. Company overlay row always highlighted amber.</p>
+  </section>
+
+  <!-- Testing -->
+  <section id="testing" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Testing</h2>
+    <ul class="space-y-2 text-sm">
+      <li class="flex items-start gap-2"><span class="w-5 h-5 bg-slate-100 rounded flex items-center justify-center flex-shrink-0 text-xs mt-0.5">1</span>Unit tests for improved chunking (token count accuracy, overlap, section inheritance)</li>
+      <li class="flex items-start gap-2"><span class="w-5 h-5 bg-slate-100 rounded flex items-center justify-center flex-shrink-0 text-xs mt-0.5">2</span>Unit tests for vector search query construction and filtering</li>
+      <li class="flex items-start gap-2"><span class="w-5 h-5 bg-slate-100 rounded flex items-center justify-center flex-shrink-0 text-xs mt-0.5">3</span>Integration test: upload small PDF &rarr; verify chunks created with embeddings</li>
+      <li class="flex items-start gap-2"><span class="w-5 h-5 bg-slate-100 rounded flex items-center justify-center flex-shrink-0 text-xs mt-0.5">4</span>Integration test: search query &rarr; verify relevant chunks returned with citations</li>
+      <li class="flex items-start gap-2"><span class="w-5 h-5 bg-slate-100 rounded flex items-center justify-center flex-shrink-0 text-xs mt-0.5">5</span>Integration test: overlay conflict detection returns correct comparison</li>
+    </ul>
+  </section>
+
+  <!-- Performance -->
+  <section id="performance" class="mb-12">
+    <h2 class="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-200">Performance Considerations</h2>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-slate-50 rounded-xl p-4"><div class="text-sm font-semibold text-slate-700 mb-1">HNSW Index</div><p class="text-xs text-slate-500">m=16, ef_construction=64 &mdash; balances recall vs build time</p></div>
+      <div class="bg-slate-50 rounded-xl p-4"><div class="text-sm font-semibold text-slate-700 mb-1">Batch Embedding</div><p class="text-xs text-slate-500">20 sections/batch &mdash; avoids OpenAI rate limits</p></div>
+      <div class="bg-slate-50 rounded-xl p-4"><div class="text-sm font-semibold text-slate-700 mb-1">Redis Cache</div><p class="text-xs text-slate-500">300s TTL for repeated guideline queries</p></div>
+      <div class="bg-slate-50 rounded-xl p-4"><div class="text-sm font-semibold text-slate-700 mb-1">Content Hash Dedup</div><p class="text-xs text-slate-500">Only re-embed changed chunks on re-ingestion</p></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Footer -->
+<footer class="border-t border-slate-200 py-6 text-center text-xs text-slate-400">
+  Perennia AI &mdash; Guideline RAG Pipeline Design Spec &mdash; May 24, 2026
+</footer>
+
+</body>
+</html>
