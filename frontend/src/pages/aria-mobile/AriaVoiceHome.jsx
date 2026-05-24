@@ -679,18 +679,6 @@ export default function AriaVoiceHome() {
 
       {/* Top bar */}
       <div className="avh-top-bar">
-        <button
-          className={`avh-ci-button ${ciPanelOpen ? 'avh-ci-button--active' : ''}`}
-          onClick={() => setCiPanelOpen(true)}
-          type="button"
-          aria-label={ciPanelOpen ? 'Call Intelligence active' : 'Open Call Intelligence'}
-        >
-          <span className="avh-ci-icon">
-            <span className={`avh-ci-icon-dot ${ciPanelOpen ? 'avh-ci-icon-dot--active' : ''}`} />
-          </span>
-          {ciPanelOpen ? 'CI Active' : 'Call Intelligence'}
-        </button>
-
         {/* LiveKit indicator */}
         {lkAvailable && (
           <span className={`avh-lk-badge ${lkConnected ? 'avh-lk-badge--active' : ''}`}>
@@ -698,6 +686,29 @@ export default function AriaVoiceHome() {
           </span>
         )}
       </div>
+
+      {/* Call Intelligence action bar — full width, prominent */}
+      <button
+        className={`avh-ci-action-bar ${ciPanelOpen ? 'avh-ci-action-bar--active' : ''}`}
+        onClick={() => setCiPanelOpen((prev) => !prev)}
+        type="button"
+        aria-label={ciPanelOpen ? 'Close Call Intelligence panel' : 'Open Call Intelligence'}
+        aria-expanded={ciPanelOpen}
+      >
+        <span className="avh-ci-action-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" fill="#7EB8F7" opacity="0.9" />
+            <path d="M9 21v1c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9z" fill="#7EB8F7" opacity="0.6" />
+          </svg>
+          <span className={`avh-ci-action-dot ${ciPanelOpen ? 'avh-ci-action-dot--active' : ''}`} />
+        </span>
+        <span className="avh-ci-action-label">
+          {ciPanelOpen ? 'Call Intelligence Active' : 'Activate Call Intelligence'}
+        </span>
+        <svg className="avh-ci-action-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(126,184,247,0.6)" strokeWidth="2" strokeLinecap="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
 
       {ciPanelOpen && (
         <CallIntelligenceSlidePanel onClose={() => setCiPanelOpen(false)} />

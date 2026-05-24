@@ -13,13 +13,14 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
 import { CallIntelligenceApi } from '../../services/callIntelligenceApi';
 import { useCallIntelligence } from '../../hooks/useCallIntelligence';
 import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
 import { getCurrentUserId } from '../../utils/auth';
+import api from '../../services/api';
 
 import NoteTakerCard from '../../components/callIntelligence/NoteTakerCard';
 import JrLoanOfficerCard from '../../components/callIntelligence/JrLoanOfficerCard';
@@ -116,9 +117,121 @@ function formatDuration(s) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// ── Inline Borrower Search ──────────────────────────────────
+function BorrowerSearch({ onSelect }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef(null);
+
+  const doSearch = useCallback(async (q) => {
+    if (!q || q.length < 2) { setResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await api.post('/api/v1/leads/search', { query: q, limit: 8 });
+      setResults(res.data?.leads || res.data || []);
+    } catch {
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const handleChange = useCallback((e) => {
+    const val = e.target.value;
+    setQuery(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => doSearch(val), 300);
+  }, [doSearch]);
+
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
+  return (
+    <div className="mci-borrower-search">
+      <label className="mci-search-label" htmlFor="mci-borrower-q">Select a borrower</label>
+      <div className="mci-search-input-wrap">
+        <svg className="mci-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round">
+          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          id="mci-borrower-q"
+          className="mci-search-input"
+          type="search"
+          placeholder="Search by name, phone, or email..."
+          value={query}
+          onChange={handleChange}
+          autoComplete="off"
+        />
+        {searching && <span className="mci-search-spinner" />}
+      </div>
+      {results.length > 0 && (
+        <ul className="mci-search-results" role="listbox">
+          {results.map((lead) => {
+            const name = `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || lead.name || 'Unknown';
+            const phone = lead.phone || lead.mobile_phone || '';
+            const email = lead.email || '';
+            return (
+              <li key={lead.id} className="mci-search-result" role="option">
+                <button
+                  className="mci-search-result-btn"
+                  type="button"
+                  onClick={() => {
+                    onSelect({ name, phone, email, leadId: lead.id });
+                    setQuery('');
+                    setResults([]);
+                  }}
+                >
+                  <span className="mci-search-result-name">{name}</span>
+                  <span className="mci-search-result-meta">
+                    {phone && <span>{phone}</span>}
+                    {phone && email && <span> &middot; </span>}
+                    {email && <span>{email}</span>}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {query.length >= 2 && !searching && results.length === 0 && (
+        <p className="mci-search-empty">No borrowers found</p>
+      )}
+    </div>
+  );
+}
+
 // ── Component ────────────────────────────────────────────────
-export default function MobileCallIntel({ borrowerContext }) {
+export default function MobileCallIntel({ borrowerContext: borrowerContextProp }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Borrower state: prop > URL params > user search
+  const [selectedBorrower, setSelectedBorrower] = useState(null);
+
+  // Resolve borrower from URL query params on mount
+  useEffect(() => {
+    const leadId = searchParams.get('leadId');
+    if (!leadId || borrowerContextProp || selectedBorrower) return;
+    (async () => {
+      try {
+        const res = await api.get(`/api/v1/leads/${leadId}`);
+        const lead = res.data;
+        if (lead) {
+          const name = `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || lead.name || '';
+          setSelectedBorrower({
+            name,
+            phone: lead.phone || lead.mobile_phone || '',
+            email: lead.email || '',
+            leadId: lead.id,
+          });
+        }
+      } catch {
+        toast.error('Could not load borrower from link');
+      }
+    })();
+  }, [searchParams, borrowerContextProp, selectedBorrower]);
+
+  const borrowerContext = borrowerContextProp || selectedBorrower;
 
   const [sessionId, setSessionId] = useState(null);
   const [callActive, setCallActive] = useState(false);
@@ -327,8 +440,31 @@ export default function MobileCallIntel({ borrowerContext }) {
           />
         </div>
       ) : (
-        /* Idle -- show explainer + start button */
+        /* Idle -- show borrower search + explainer + start button */
         <div className="mci-idle-body">
+          {/* Borrower search / selection */}
+          {!borrowerContext ? (
+            <BorrowerSearch onSelect={setSelectedBorrower} />
+          ) : (
+            <div className="mci-selected-borrower">
+              <div className="mci-selected-borrower-info">
+                <span className="mci-selected-borrower-name">{borrowerContext.name}</span>
+                <span className="mci-selected-borrower-meta">
+                  {borrowerContext.phone}{borrowerContext.phone && borrowerContext.email ? ' · ' : ''}{borrowerContext.email}
+                </span>
+              </div>
+              {!borrowerContextProp && (
+                <button
+                  className="mci-change-borrower-btn"
+                  type="button"
+                  onClick={() => setSelectedBorrower(null)}
+                >
+                  Change
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="mci-agent-list">
             {AGENTS.map((agent) => (
               <div key={agent.name} className="mci-agent-row">
@@ -345,9 +481,9 @@ export default function MobileCallIntel({ borrowerContext }) {
           </div>
 
           <button
-            className={`mci-start-btn ${startingCall ? 'mci-start-btn--disabled' : ''}`}
+            className={`mci-start-btn ${startingCall || !borrowerContext ? 'mci-start-btn--disabled' : ''}`}
             onClick={handleStartCall}
-            disabled={startingCall}
+            disabled={startingCall || !borrowerContext}
             type="button"
           >
             {startingCall ? (
@@ -355,13 +491,17 @@ export default function MobileCallIntel({ borrowerContext }) {
             ) : (
               <>
                 <span className="mci-start-btn-dot" />
-                <span className="mci-start-btn-text">Start Call with Intelligence</span>
+                <span className="mci-start-btn-text">
+                  {borrowerContext ? 'Start Call with Intelligence' : 'Select a borrower first'}
+                </span>
               </>
             )}
           </button>
 
           <p className="mci-start-hint">
-            All 4 agents activate the moment your call connects
+            {borrowerContext
+              ? 'All 4 agents activate the moment your call connects'
+              : 'Search for a borrower above to get started'}
           </p>
         </div>
       )}

@@ -53,69 +53,104 @@
   flex-shrink: 0;
 }
 
-.avh-ci-button {
-  display: inline-flex;
+/* --------------------------------------------------------------------------
+   Call Intelligence action bar — full width, high visibility
+   -------------------------------------------------------------------------- */
+
+.avh-ci-action-bar {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid rgba(var(--avh-accent-rgb), 0.25);
-  background: rgba(var(--avh-accent-rgb), 0.1);
+  gap: 10px;
+  margin: 0 16px 8px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--avh-accent-rgb), 0.2);
+  background: rgba(var(--avh-accent-rgb), 0.08);
   color: var(--avh-accent);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   font-family: var(--avh-font-body);
-  letter-spacing: 0.02em;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   outline: none;
-  transition: background 0.2s ease, transform 0.15s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+  min-height: 52px;
+  flex-shrink: 0;
 }
 
-.avh-ci-button:active {
-  transform: scale(0.95);
-  background: rgba(var(--avh-accent-rgb), 0.18);
+.avh-ci-action-bar:active {
+  transform: scale(0.98);
+  background: rgba(var(--avh-accent-rgb), 0.15);
 }
 
-.avh-ci-icon {
+.avh-ci-action-bar:focus-visible {
+  box-shadow: 0 0 0 2px var(--avh-accent);
+}
+
+.avh-ci-action-icon {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(var(--avh-accent-rgb), 0.15);
+  flex-shrink: 0;
+}
+
+.avh-ci-action-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: rgba(var(--avh-accent-rgb), 0.25);
+  background: rgba(255, 255, 255, 0.3);
+  border: 2px solid var(--avh-bg);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
-.avh-ci-icon-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--avh-accent);
-  transition: box-shadow 0.3s ease;
-}
-
-/* Active state — agents are listening */
-.avh-ci-button--active {
-  border-color: rgba(52, 211, 153, 0.5);
-  background: rgba(52, 211, 153, 0.15);
-  color: #34d399;
-}
-
-.avh-ci-icon-dot--active {
+.avh-ci-action-dot--active {
   background: #34d399;
-  box-shadow: 0 0 6px 2px rgba(52, 211, 153, 0.6);
+  box-shadow: 0 0 6px 2px rgba(52, 211, 153, 0.5);
   animation: avh-ci-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes avh-ci-pulse {
-  0%, 100% { box-shadow: 0 0 6px 2px rgba(52, 211, 153, 0.6); }
-  50% { box-shadow: 0 0 10px 4px rgba(52, 211, 153, 0.3); }
+  0%, 100% { box-shadow: 0 0 6px 2px rgba(52, 211, 153, 0.5); }
+  50% { box-shadow: 0 0 10px 4px rgba(52, 211, 153, 0.25); }
 }
 
-.avh-ci-button--starting {
-  opacity: 0.6;
-  cursor: wait;
+.avh-ci-action-label {
+  flex: 1;
+  text-align: left;
+}
+
+.avh-ci-action-chevron {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.2s ease;
+}
+
+/* Active state — CI is running */
+.avh-ci-action-bar--active {
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.1);
+  color: #34d399;
+}
+
+.avh-ci-action-bar--active .avh-ci-action-icon {
+  background: rgba(52, 211, 153, 0.15);
+}
+
+.avh-ci-action-bar--active .avh-ci-action-icon svg path {
+  fill: #34d399;
+}
+
+.avh-ci-action-bar--active .avh-ci-action-chevron {
+  transform: rotate(90deg);
+  stroke: rgba(52, 211, 153, 0.6);
 }
 
 /* --------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 // each agent's events into a unified state object.
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useCallback, useReducer } from 'react';
+import { useEffect, useRef, useCallback, useReducer, useState } from 'react';
 
 // ── Initial State (inlined from types) ───────────────────────
 export const INITIAL_STATE = {
@@ -160,26 +160,82 @@ function reducer(state, action) {
   }
 }
 
+// ── Connection status ────────────────────────────────────────
+export const CONNECTION_STATUS = {
+  IDLE: 'idle',
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  RECONNECTING: 'reconnecting',
+  DISCONNECTED: 'disconnected',
+};
+
+const PING_INTERVAL_MS = 30000;
+const PONG_TIMEOUT_MS = 10000;
+const MAX_BACKOFF_MS = 30000;
+const MAX_FAILURES_BEFORE_WARNING = 3;
+
 // ── Hook ──────────────────────────────────────────────────────
 export function useCallIntelligence(wsUrl) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const [connectionStatus, setConnectionStatus] = useState(CONNECTION_STATUS.IDLE);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
+  const pingTimer = useRef(null);
+  const pongTimer = useRef(null);
   const shouldReconnect = useRef(true);
+  const attemptCount = useRef(0);
+
+  const clearAllTimers = useCallback(() => {
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    if (pingTimer.current) clearInterval(pingTimer.current);
+    if (pongTimer.current) clearTimeout(pongTimer.current);
+  }, []);
+
+  const startPingPong = useCallback(() => {
+    clearTimeout(pongTimer.current);
+    clearInterval(pingTimer.current);
+
+    pingTimer.current = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({ type: 'ping' }));
+        } catch { /* send failed, onclose will fire */ }
+
+        pongTimer.current = setTimeout(() => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.close();
+          }
+        }, PONG_TIMEOUT_MS);
+      }
+    }, PING_INTERVAL_MS);
+  }, []);
 
   const connect = useCallback(() => {
-    if (!wsUrl || wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!wsUrl) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
+
+    setConnectionStatus(
+      attemptCount.current > 0 ? CONNECTION_STATUS.RECONNECTING : CONNECTION_STATUS.CONNECTING
+    );
 
     wsRef.current = new WebSocket(wsUrl);
 
     wsRef.current.onopen = () => {
+      attemptCount.current = 0;
       dispatch({ type: 'SET_CONNECTED', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
+      setConnectionStatus(CONNECTION_STATUS.CONNECTED);
+      startPingPong();
     };
 
     wsRef.current.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.type === 'pong') {
+          clearTimeout(pongTimer.current);
+          return;
+        }
         handleAgentMessage(msg, dispatch);
       } catch {
         console.warn('[CallIntelligence] Malformed WS message', event.data);
@@ -187,21 +243,34 @@ export function useCallIntelligence(wsUrl) {
     };
 
     wsRef.current.onerror = () => {
-      dispatch({ type: 'SET_ERROR', payload: 'Connection error \u2014 retrying\u2026' });
+      dispatch({ type: 'SET_ERROR', payload: 'Connection error — retrying...' });
     };
 
     wsRef.current.onclose = () => {
       dispatch({ type: 'SET_CONNECTED', payload: false });
-      // Auto-reconnect after 3s if call is still active
+      clearInterval(pingTimer.current);
+      clearTimeout(pongTimer.current);
+
       if (shouldReconnect.current && wsUrl) {
-        reconnectTimer.current = setTimeout(connect, 3000);
+        attemptCount.current += 1;
+        const delay = Math.min(1000 * Math.pow(2, attemptCount.current - 1), MAX_BACKOFF_MS);
+
+        if (attemptCount.current >= MAX_FAILURES_BEFORE_WARNING) {
+          dispatch({ type: 'SET_ERROR', payload: 'Connection unstable — check your network' });
+        }
+
+        setConnectionStatus(CONNECTION_STATUS.RECONNECTING);
+        reconnectTimer.current = setTimeout(connect, delay);
+      } else {
+        setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
       }
     };
-  }, [wsUrl]);
+  }, [wsUrl, startPingPong]);
 
   useEffect(() => {
     if (!wsUrl) return;
     shouldReconnect.current = true;
+    attemptCount.current = 0;
     connect();
 
     return () => {
@@ -211,18 +280,20 @@ export function useCallIntelligence(wsUrl) {
 
   const disconnect = useCallback(() => {
     shouldReconnect.current = false;
-    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    clearAllTimers();
     wsRef.current?.close();
     wsRef.current = null;
     dispatch({ type: 'SET_CONNECTED', payload: false });
-  }, []);
+    setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
+  }, [clearAllTimers]);
 
   const reset = useCallback(() => {
     disconnect();
     dispatch({ type: 'RESET' });
+    setConnectionStatus(CONNECTION_STATUS.IDLE);
   }, [disconnect]);
 
-  return { state, disconnect, reset };
+  return { state, disconnect, reset, connectionStatus };
 }
 
 // ── Agent message router ──────────────────────────────────────

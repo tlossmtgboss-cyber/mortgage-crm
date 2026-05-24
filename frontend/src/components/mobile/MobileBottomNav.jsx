@@ -66,6 +66,12 @@ const SPEED_DIAL_ACTIONS = [
     color: '#f59e0b',
   },
   {
+    key: 'call-intel',
+    label: 'Call Intel',
+    path: '/mobile-ci',
+    color: '#7EB8F7',
+  },
+  {
     key: 'new-task',
     label: 'New Task',
     path: '/tasks?action=new',
@@ -210,6 +216,15 @@ function MakeCallIcon() {
   );
 }
 
+function CallIntelIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" fill="white" opacity="0.9" stroke="none" />
+      <path d="M9 21v1c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9z" fill="white" opacity="0.7" stroke="none" />
+    </svg>
+  );
+}
+
 function NewTaskIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -232,6 +247,7 @@ const SPEED_DIAL_ICONS = {
   'add-lead': AddLeadIcon,
   'upload-doc': UploadDocIcon,
   'make-call': MakeCallIcon,
+  'call-intel': CallIntelIcon,
   'new-task': NewTaskIcon,
   'notifications': NotificationsIcon,
 };
