@@ -921,6 +921,11 @@ async def run_orchestrator(
             try:
                 async def _save_post_conversation_memory():
                     """Extract key facts and save conversation memory after response."""
+                    # Issue 1 fix: Create a fresh DB session — the FastAPI Depends(get_db)
+                    # session is closed after the response is sent, so background tasks
+                    # must use their own session.
+                    from db import SessionLocal
+                    local_db = SessionLocal()
                     try:
                         from services.agent_memory_service import (
                             save_conversation_summary,
@@ -951,7 +956,7 @@ async def run_orchestrator(
 
                         # Save the conversation summary
                         conv_id = save_conversation_summary(
-                            db=db_session,
+                            db=local_db,
                             user_id=int(user_id) if isinstance(user_id, str) and user_id.isdigit() else user_id,
                             org_id=resolved_org_id,
                             agent_role=agent_role,
@@ -964,7 +969,9 @@ async def run_orchestrator(
                         )
 
                         # Detect user corrections/preferences/directives in the message
-                        # Simple heuristic: look for preference/directive signal phrases
+                        # Issue 3 fix: Require at least TWO signal phrases, or message
+                        # must be short (under 200 chars) to avoid false positives on
+                        # normal conversation like "I like the interest rates today".
                         _uid = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else user_id
                         _preference_signals = [
                             "i prefer", "i like", "i want", "always ",
@@ -979,56 +986,77 @@ async def run_orchestrator(
 
                         msg_lower = message.lower()
 
+                        # Count how many signal phrases match
+                        _pref_hits = sum(1 for sig in _preference_signals if sig in msg_lower)
+                        _dir_hits = sum(1 for sig in _directive_signals if sig in msg_lower)
+
+                        # Only trigger if 2+ signals match, OR message is short (a pure directive)
+                        _is_short_message = len(message) < 200
+
+                        # Issue 4 fix: Use microsecond granularity to avoid key collisions
+                        _ts_key = int(datetime.now(timezone.utc).timestamp() * 1000000)
+
                         # Save as PREFERENCE if preference language detected
-                        if any(sig in msg_lower for sig in _preference_signals):
+                        if _pref_hits >= 2 or (_pref_hits >= 1 and _is_short_message):
                             save_memory(
-                                db=db_session,
+                                db=local_db,
                                 user_id=_uid,
                                 org_id=resolved_org_id,
-                                key=f"user_preference_{intent}_{int(datetime.now(timezone.utc).timestamp())}",
+                                key=f"user_preference_{intent}_{_ts_key}",
                                 value=message[:500],
                                 memory_type="preference",
                                 agent_role=agent_role,
-                                confidence=0.8,
+                                confidence=0.5,
                                 conversation_id=conv_id,
                             )
 
                         # Save as DIRECTIVE if directive language detected
-                        if any(sig in msg_lower for sig in _directive_signals):
+                        if _dir_hits >= 2 or (_dir_hits >= 1 and _is_short_message):
                             save_memory(
-                                db=db_session,
+                                db=local_db,
                                 user_id=_uid,
                                 org_id=resolved_org_id,
-                                key=f"user_directive_{intent}_{int(datetime.now(timezone.utc).timestamp())}",
+                                key=f"user_directive_{intent}_{_ts_key}",
                                 value=message[:500],
                                 memory_type="directive",
                                 agent_role=agent_role,
-                                confidence=0.9,
+                                confidence=0.6,
                                 conversation_id=conv_id,
                             )
 
                         # Commit memory writes (they use flush, need explicit commit)
-                        db_session.commit()
+                        local_db.commit()
                         logger.info(
                             "[MEMORY] Post-conversation save complete for user=%s role=%s conv_id=%s",
                             user_id, agent_role, conv_id,
                         )
                     except Exception as mem_err:
-                        logger.warning(
-                            "[MEMORY] Post-conversation memory save failed (non-fatal): %s",
+                        # Issue 5 fix: Use logger.error with exc_info for full stack trace
+                        logger.error(
+                            "[MEMORY] Post-conversation save failed: %s",
                             mem_err,
+                            exc_info=True,
                         )
                         try:
-                            db_session.rollback()
-                        except Exception:
-                            pass
+                            local_db.rollback()
+                        except Exception as rollback_err:
+                            logger.error("[MEMORY] Rollback also failed: %s", rollback_err)
+                    finally:
+                        local_db.close()
 
-                # Fire as background task — never blocks the response
-                asyncio.create_task(_save_post_conversation_memory())
+                # Issue 2 fix: Store task reference to prevent garbage collection,
+                # and add a done callback to surface any unhandled exceptions.
+                _task = asyncio.create_task(_save_post_conversation_memory())
+                _task.add_done_callback(
+                    lambda t: logger.error("[MEMORY] Task failed: %s", t.exception())
+                    if t.exception() else None
+                )
                 logger.debug("[ORCHESTRATOR] Post-conversation memory save task dispatched")
             except Exception as mem_setup_err:
-                logger.warning(
-                    "[MEMORY] Failed to dispatch memory save task: %s", mem_setup_err
+                # Issue 5 fix: Use logger.error with exc_info instead of logger.warning
+                logger.error(
+                    "[MEMORY] Failed to dispatch memory save task: %s", mem_setup_err,
+                    exc_info=True,
                 )
 
         clear_request_id()

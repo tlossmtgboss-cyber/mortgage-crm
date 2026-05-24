@@ -74,6 +74,21 @@ class AriaContextLoader:
                     f"{urgent_count} urgent task{'s' if urgent_count != 1 else ''}."
                 )
 
+                # Knowledge graph: get key relationship context
+                kg_context = ""
+                try:
+                    from services.knowledge_graph.graph_service import KnowledgeGraphService
+                    kg = KnowledgeGraphService(db, org_id)
+
+                    # Top referral partners (contact nodes with referral edges)
+                    referral_nodes = kg.search_nodes("", node_type="referral_partner", limit=5)
+                    if referral_nodes:
+                        kg_context = "Key relationships:\n" + "\n".join(
+                            f"- {n.label} ({n.properties.get('role', 'partner')})" for n in referral_nodes
+                        )
+                except Exception as e:
+                    logger.debug(f"Knowledge graph context load failed: {e}")
+
                 return {
                     "user_name": user_name,
                     "org_name": "",
@@ -81,6 +96,7 @@ class AriaContextLoader:
                     "recent_contacts": recent_list,
                     "active_loan_count": active_count,
                     "urgent_task_count": urgent_count,
+                    "knowledge_graph_context": kg_context,
                 }
             except Exception as e:
                 logger.error(f"Context load failed: {e}")
@@ -89,6 +105,41 @@ class AriaContextLoader:
             finally:
                 db.close()
         return await _run_sync(_query)
+
+    async def load_with_memory(self, user_id: str, query: str = None, org_id: int = None) -> Dict[str, Any]:
+        """Load pipeline context + relevant memory facts for enriched Aria responses."""
+        context = await self.load_full(user_id)
+
+        if not query or not org_id:
+            return context
+
+        try:
+            from services.aria_memory.retrieval_service import AriaRetrievalService
+
+            db = SessionLocal()
+            try:
+                service = AriaRetrievalService(db)
+                # Try memory scope first (works when borrower context is available)
+                result = await service.retrieve(
+                    scope="memory", query=query, tenant_id=org_id, top_k=3,
+                    borrower_id=None,
+                )
+                # If no results (likely because no borrower_id), try guideline scope
+                if result.no_results:
+                    result = await service.retrieve(
+                        scope="guideline", query=query, tenant_id=org_id, top_k=3,
+                    )
+                if result and result.facts:
+                    memory_lines = [f"- {f.text} ({f.freshness})" for f in result.facts[:3]]
+                    context["memory_context"] = "Relevant past context:\n" + "\n".join(memory_lines)
+            except Exception as e:
+                logger.debug(f"Memory retrieval failed: {e}")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Memory service unavailable: {e}")
+
+        return context
 
     async def load_for_slot(
         self, user_id: str, slot, slots_so_far: Dict,

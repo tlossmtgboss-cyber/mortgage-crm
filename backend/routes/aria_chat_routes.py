@@ -96,15 +96,15 @@ def _get_aria_graph():
     return get_aria_graph()
 
 
-def _get_voice_memory():
+def _get_voice_memory(org_id: str = None):
     from aria.core.voice_memory import VoiceMemory
-    return VoiceMemory()
+    return VoiceMemory(organization_id=org_id)
 
 
-async def _load_voice_preferences(user_id: str) -> dict:
+async def _load_voice_preferences(user_id: str, org_id: str = None) -> dict:
     """Load VoiceMemory preferences off the event loop. Returns {} on failure."""
     try:
-        vm = _get_voice_memory()
+        vm = _get_voice_memory(org_id=org_id)
         prefs = await asyncio.to_thread(vm.get_all_preferences, user_id)
         return prefs or {}
     except Exception as e:
@@ -112,10 +112,10 @@ async def _load_voice_preferences(user_id: str) -> dict:
         return {}
 
 
-async def _record_voice_interaction(user_id: str, intent: str = "session_start"):
+async def _record_voice_interaction(user_id: str, intent: str = "session_start", org_id: str = None):
     """Record an interaction pattern in VoiceMemory without blocking."""
     try:
-        vm = _get_voice_memory()
+        vm = _get_voice_memory(org_id=org_id)
         from datetime import datetime, timezone
         hour = datetime.now(timezone.utc).hour
         if hour < 6:
@@ -129,6 +129,38 @@ async def _record_voice_interaction(user_id: str, intent: str = "session_start")
         await asyncio.to_thread(vm.record_interaction_pattern, user_id, intent, tod)
     except Exception as e:
         logger.warning(f"VoiceMemory interaction record failed for user {user_id}: {e}")
+
+
+async def _record_conversation_outcome(user_id: str, agent_id: str, intent: str, task_result: dict, success: bool):
+    """Record conversation outcome as an AgentContextEvent for the learning pipeline."""
+    try:
+        def _write():
+            from db import SessionLocal
+            from database.models.agent_context import AgentContextEvent
+            from datetime import datetime, timezone
+            db = SessionLocal()
+            try:
+                event = AgentContextEvent(
+                    agent_id=agent_id,
+                    user_id=int(user_id),
+                    event_type="conversation_outcome",
+                    original_output={
+                        "intent": intent,
+                        "success": success,
+                        "has_result": bool(task_result),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                db.add(event)
+                db.commit()
+            except Exception as e:
+                logger.debug(f"Outcome recording failed: {e}")
+                db.rollback()
+            finally:
+                db.close()
+        await asyncio.to_thread(_write)
+    except Exception as e:
+        logger.debug(f"Outcome recording error: {e}")
 
 
 def _verify_ws_token(token: str):
@@ -248,7 +280,8 @@ async def aria_websocket(
     resolved_name = user.full_name or context.get("user_name", "")
 
     # Load voice preferences (non-blocking, graceful fallback to {})
-    voice_prefs = await _load_voice_preferences(uid)
+    user_org_id = str(user.org_id) if user.org_id else None
+    voice_prefs = await _load_voice_preferences(uid, org_id=user_org_id)
 
     state = await session_store.get_or_create(
         session_id=session_id,
@@ -263,11 +296,11 @@ async def aria_websocket(
 
     # Use preferred_name from memory for greeting if available
     greeting_name = voice_prefs.get("preferred_name") or resolved_name
-    greeting = _build_greeting(greeting_name, context)
+    greeting = _build_greeting(greeting_name, context, voice_prefs.get("greeting_style", "casual"))
     await websocket.send_json({"type": "greeting", "content": greeting})
 
     # Record session start interaction (fire-and-forget)
-    asyncio.create_task(_record_voice_interaction(uid, "session_start"))
+    asyncio.create_task(_record_voice_interaction(uid, "session_start", org_id=user_org_id))
 
     # Start heartbeat background task (ping every 30s)
     heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))
@@ -337,6 +370,22 @@ async def aria_websocket(
                 await websocket.send_json({"type": "typing"})
                 state = await _run_graph_step(state, websocket)
 
+                # Record actual intent pattern for learning (fire-and-forget)
+                resolved_intent = state.get("intent")
+                if resolved_intent:
+                    asyncio.create_task(_record_voice_interaction(uid, resolved_intent, org_id=user_org_id))
+
+                # Only record outcome when a task actually completed (not during slot-filling)
+                task_result = state.get("task_result")
+                if task_result is not None:
+                    asyncio.create_task(_record_conversation_outcome(
+                        user_id=uid,
+                        agent_id="aria",
+                        intent=resolved_intent or "unknown",
+                        task_result=task_result,
+                        success=not bool(state.get("error")),
+                    ))
+
                 if state.get("phase") == "confirming" and state.get("confirmation_preview"):
                     await websocket.send_json({
                         "type": "confirmation_required",
@@ -349,7 +398,7 @@ async def aria_websocket(
         logger.info(f"Aria WS disconnected: user={user.user_id} session={session_id}")
         await session_store.save(session_id, state)
         # Record session end (non-blocking, best-effort)
-        asyncio.create_task(_record_voice_interaction(uid, "session_end"))
+        asyncio.create_task(_record_voice_interaction(uid, "session_end", org_id=user_org_id))
     except Exception as e:
         logger.error(f"Aria WS error: {e}", exc_info=True)
         try:
@@ -408,12 +457,22 @@ async def _run_graph_step(state, websocket: WebSocket):
     return new_state
 
 
-def _build_greeting(user_name: str, context: Dict[str, Any]) -> str:
+def _build_greeting(user_name: str, context: Dict[str, Any], greeting_style: str = "casual") -> str:
     first_name = user_name.split()[0] if user_name else "there"
     active_loans = context.get("active_loan_count", 0)
     urgent_tasks = context.get("urgent_task_count", 0)
 
-    greeting = f"Hey {first_name}! "
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    hour = datetime.now(ZoneInfo("America/New_York")).hour
+
+    if greeting_style == "formal":
+        time_greeting = "Good morning" if hour < 12 else "Good afternoon" if hour < 17 else "Good evening"
+        greeting = f"{time_greeting}, {first_name}. "
+    elif greeting_style == "first_name_only":
+        greeting = f"{first_name}, "
+    else:
+        greeting = f"Hey {first_name}! "
 
     if urgent_tasks > 0:
         greeting += f"You've got {urgent_tasks} urgent task{'s' if urgent_tasks > 1 else ''} and "
@@ -453,10 +512,11 @@ async def aria_greeting(
             user_name = ctx_name
 
     # Use preferred_name from VoiceMemory if available
-    voice_prefs = await _load_voice_preferences(uid)
+    greeting_org_id = str(getattr(current_user, "organization_id", "")) or None
+    voice_prefs = await _load_voice_preferences(uid, org_id=greeting_org_id)
     greeting_name = voice_prefs.get("preferred_name") or user_name
 
-    return {"greeting": _build_greeting(greeting_name, context)}
+    return {"greeting": _build_greeting(greeting_name, context, voice_prefs.get("greeting_style", "casual"))}
 
 
 # ─── REST fallback ────────────────────────────────────────────────────────────
@@ -485,18 +545,44 @@ async def aria_chat_rest(
         user_email=getattr(current_user, "email", ""),
     )
 
+    # Load voice preferences for REST path (matching WebSocket behavior)
+    rest_org_id = str(getattr(current_user, "organization_id", "")) or None
+    voice_prefs = await _load_voice_preferences(str(current_user.id), org_id=rest_org_id)
+    state["voice_preferences"] = voice_prefs
+
     state = {**state, "messages": state.get("messages", []) + [HumanMessage(content=req.message)]}
     new_state = await aria_graph.ainvoke(state)
     await session_store.save(sid, new_state)
 
+    # Record actual intent pattern for learning (fire-and-forget)
+    resolved_intent = new_state.get("intent")
+    if resolved_intent:
+        asyncio.create_task(_record_voice_interaction(str(current_user.id), resolved_intent, org_id=rest_org_id))
+
+    # Only record outcome when a task actually completed (not during slot-filling)
+    task_result = new_state.get("task_result")
+    if task_result is not None:
+        asyncio.create_task(_record_conversation_outcome(
+            user_id=str(current_user.id),
+            agent_id="aria",
+            intent=resolved_intent or "unknown",
+            task_result=task_result,
+            success=not bool(new_state.get("error")),
+        ))
+
     ai_messages = [m for m in new_state.get("messages", []) if isinstance(m, AIMessage)]
     response_text = ai_messages[-1].content if ai_messages else "Sorry, I couldn't process that."
+
+    phase_val = new_state.get("phase")
+    requires_confirmation = (
+        getattr(phase_val, "value", phase_val) == "confirming"
+    )
 
     return {
         "session_id": sid,
         "response": response_text,
         "phase": new_state.get("phase"),
-        "requires_confirmation": str(new_state.get("phase")) == "confirming",
+        "requires_confirmation": requires_confirmation,
         "confirmation_preview": new_state.get("confirmation_preview"),
         "task_result": new_state.get("task_result"),
     }

@@ -47,10 +47,14 @@ class VoiceMemory:
         self._org_id = organization_id
 
     def _key(self, user_id: str) -> str:
+        if self._org_id:
+            return f"{self.REDIS_PREFIX}{self._org_id}:{user_id}"
         return f"{self.REDIS_PREFIX}{user_id}"
 
     def _borrower_key(self, user_id: str, borrower_name: str) -> str:
         safe_name = borrower_name.lower().replace(" ", "_")[:50]
+        if self._org_id:
+            return f"{self.REDIS_PREFIX}{self._org_id}:{user_id}:borrower:{safe_name}"
         return f"{self.REDIS_PREFIX}{user_id}:borrower:{safe_name}"
 
     # ─── Preference Storage ──────────────────────────────────────────

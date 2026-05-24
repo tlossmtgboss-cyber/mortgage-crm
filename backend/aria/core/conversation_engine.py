@@ -15,9 +15,12 @@ Architecture:
     → Response Node (generate natural language reply)
 """
 
+import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Annotated
 from enum import Enum
 
@@ -87,10 +90,13 @@ def build_aria_system_prompt(
     context: Dict[str, Any],
     voice_preferences: Optional[Dict[str, Any]] = None,
 ) -> str:
-    now = datetime.now(timezone.utc).strftime("%A, %B %d, %Y at %I:%M %p UTC")
+    eastern = ZoneInfo("America/New_York")
+    now = datetime.now(eastern).strftime("%A, %B %d, %Y at %I:%M %p ET")
 
     pipeline_summary = context.get("pipeline_summary", "No active loans loaded.")
     recent_contacts  = context.get("recent_contacts", "No recent contacts.")
+    kg_context       = context.get("knowledge_graph_context", "")
+    memory_context   = context.get("memory_context", "")
     user_name        = context.get("user_name", "the loan officer")
     user_email       = context.get("user_email", "")
     org_name         = context.get("org_name", "your company")
@@ -158,6 +164,12 @@ If the user name is unknown, use "Hey there" instead.
 ## Recent contacts
 {recent_contacts}
 
+## Key relationships
+{kg_context if kg_context else "No relationship data loaded."}
+
+## Relevant past context
+{memory_context if memory_context else ""}
+
 ## How to handle task requests
 When a user asks you to DO something:
 1. Identify what's needed (the "slots") — borrower, amount, recipient, etc.
@@ -172,6 +184,130 @@ When a user asks you to DO something:
 - Thorough but concise for document previews
 - Celebratory but brief for task completion ("Done — sent to Sarah at 2:34 PM ✓")
 """
+
+
+# ─── Voice Memory write helpers (fire-and-forget) ───────────────────────────
+
+# Compiled once at module level for performance
+_PREFERRED_NAME_RE = re.compile(
+    r"(?:call me|i go by|my name is|it'?s)\s+([A-Z][a-z]{1,20})",
+    re.IGNORECASE,
+)
+_SHORT_KEYWORDS = {"short", "brief", "concise", "quick", "less"}
+_LONG_KEYWORDS = {"detail", "details", "more info", "in depth", "thorough", "elaborate"}
+_CONCISE_KEYWORDS = {"just the numbers", "top line", "bottom line", "headlines only"}
+_DETAILED_KEYWORDS = {"break it down", "full detail", "walk me through", "deep dive"}
+_FORMAL_KEYWORDS = {"more formal", "formal please", "professionally"}
+_SKIP_PLEASANTRIES = {"don't need the pleasantries", "skip the small talk", "skip pleasantries", "get to the point", "straight to business"}
+
+_METRIC_KEYWORDS = {
+    "pipeline": "pipeline",
+    "close rate": "close_rate",
+    "closing rate": "close_rate",
+    "volume": "volume",
+    "pull through": "pull_through",
+    "pull-through": "pull_through",
+    "lock": "rate_locks",
+    "locks": "rate_locks",
+    "units": "units",
+    "revenue": "revenue",
+    "average loan": "avg_loan_size",
+    "turn time": "turn_time",
+    "cycle time": "cycle_time",
+    "funded": "funded",
+    "applications": "applications",
+}
+
+
+async def _extract_and_save_preferences(user_id: str, message: str, org_id: str = None) -> None:
+    """Scan a user message for preference signals and persist via VoiceMemory.
+
+    Runs as a fire-and-forget task — failures are logged, never raised.
+    """
+    try:
+        from aria.core.voice_memory import VoiceMemory
+
+        prefs_to_save: List[tuple] = []
+        msg_lower = message.lower()
+
+        # Preferred name
+        m = _PREFERRED_NAME_RE.search(message)
+        if m:
+            prefs_to_save.append(("preferred_name", m.group(1).strip()))
+
+        # Response length
+        if any(kw in msg_lower for kw in _SHORT_KEYWORDS):
+            prefs_to_save.append(("response_length", "short"))
+        elif any(kw in msg_lower for kw in _LONG_KEYWORDS):
+            prefs_to_save.append(("response_length", "long"))
+
+        # Briefing depth
+        if any(kw in msg_lower for kw in _CONCISE_KEYWORDS):
+            prefs_to_save.append(("briefing_depth", "concise"))
+        elif any(kw in msg_lower for kw in _DETAILED_KEYWORDS):
+            prefs_to_save.append(("briefing_depth", "detailed"))
+
+        # Greeting style
+        if any(kw in msg_lower for kw in _SKIP_PLEASANTRIES):
+            prefs_to_save.append(("greeting_style", "first_name_only"))
+        elif any(kw in msg_lower for kw in _FORMAL_KEYWORDS):
+            prefs_to_save.append(("greeting_style", "formal"))
+
+        if not prefs_to_save:
+            return
+
+        vm = VoiceMemory(organization_id=org_id)
+        for key, value in prefs_to_save:
+            await asyncio.to_thread(vm.remember_preference, user_id, key, value)
+            logger.debug("VoiceMemory: saved %s=%s for user %s", key, value, user_id)
+
+    except Exception as e:
+        logger.warning("VoiceMemory preference extraction failed: %s", e, exc_info=True)
+
+
+async def _record_borrower_context(user_id: str, borrower_name: str, intent: str, slots: Dict[str, Any], org_id: str = None) -> None:
+    """Record borrower interaction context after a successful task execution."""
+    try:
+        from aria.core.voice_memory import VoiceMemory
+
+        context_parts = [f"Executed '{intent}'"]
+        # Include relevant slot values for context (exclude borrower_name itself)
+        for k, v in slots.items():
+            if k not in ("borrower_name", "contact_name") and v is not None:
+                context_parts.append(f"{k}: {v}")
+        context = "; ".join(context_parts)
+
+        vm = VoiceMemory(organization_id=org_id)
+        await asyncio.to_thread(vm.remember_borrower_context, user_id, borrower_name, context)
+        logger.debug("VoiceMemory: recorded borrower context for %s (user %s)", borrower_name, user_id)
+
+    except Exception as e:
+        logger.warning("VoiceMemory borrower context recording failed: %s", e, exc_info=True)
+
+
+async def _record_metric_queries(user_id: str, message: str, org_id: str = None) -> None:
+    """Detect metric references in a query and record them via VoiceMemory."""
+    try:
+        from aria.core.voice_memory import VoiceMemory
+
+        msg_lower = message.lower()
+        matched_metrics = [
+            metric_name
+            for keyword, metric_name in _METRIC_KEYWORDS.items()
+            if keyword in msg_lower
+        ]
+
+        if not matched_metrics:
+            return
+
+        vm = VoiceMemory(organization_id=org_id)
+        # Deduplicate in case multiple keywords map to the same metric
+        for metric in set(matched_metrics):
+            await asyncio.to_thread(vm.record_metric_query, user_id, metric)
+            logger.debug("VoiceMemory: recorded metric query '%s' for user %s", metric, user_id)
+
+    except Exception as e:
+        logger.warning("VoiceMemory metric query recording failed: %s", e, exc_info=True)
 
 
 # ─── Graph nodes ─────────────────────────────────────────────────────────────
@@ -392,6 +528,23 @@ async def execute_node(state: AriaState) -> AriaState:
             user_id=state["user_id"],
             org_id=state["org_id"],
         )
+
+        # Fire-and-forget: record borrower context if task involved a borrower
+        try:
+            borrower_name = state["slots"].get("borrower_name") or state["slots"].get("contact_name")
+            if borrower_name and state.get("user_id"):
+                asyncio.create_task(
+                    _record_borrower_context(
+                        state["user_id"],
+                        borrower_name,
+                        state.get("intent", "unknown"),
+                        state["slots"],
+                        org_id=state.get("org_id"),
+                    )
+                )
+        except Exception:
+            pass  # Never break execution flow
+
         return {
             "task_result": result,
             "phase": DialoguePhase.RESPONDING,
@@ -408,9 +561,24 @@ async def execute_node(state: AriaState) -> AriaState:
 
 async def response_node(state: AriaState) -> AriaState:
     """Generate Aria's final response."""
+    # Fire-and-forget: extract preference signals from the last user message
+    try:
+        last_human = next(
+            (m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
+            None,
+        )
+        if last_human and state.get("user_id"):
+            asyncio.create_task(
+                _extract_and_save_preferences(state["user_id"], last_human, org_id=state.get("org_id"))
+            )
+    except Exception:
+        pass  # Never break response flow
+
     if state["phase"] == DialoguePhase.CHITCHAT:
         context_loader = AriaContextLoader()
-        context = await context_loader.load_full(state["user_id"])
+        last_msg = state["messages"][-1].content if state["messages"] else ""
+        org_id = int(state["org_id"]) if state.get("org_id") else None
+        context = await context_loader.load_with_memory(state["user_id"], query=last_msg, org_id=org_id)
         if state.get("user_email"):
             context["user_email"] = state["user_email"]
         system = build_aria_system_prompt(
@@ -422,11 +590,37 @@ async def response_node(state: AriaState) -> AriaState:
             SystemMessage(content=system),
             *state["messages"],
         ])
-        return {"messages": [AIMessage(content=response.content)]}
+        return {
+            "messages": [AIMessage(content=response.content)],
+            "phase": DialoguePhase.RESPONDING,
+            # Reset for next turn
+            "intent": None,
+            "slots": {},
+            "missing_slots": [],
+            "current_slot_question": None,
+            "mode": None,
+            "task_result": None,
+            "confirmation_preview": None,
+            "error": None,
+            "iteration_count": 0,
+        }
 
     if state.get("error"):
         error_response = f"I ran into an issue with that: {state['error']}. Want me to try again?"
-        return {"messages": [AIMessage(content=error_response)]}
+        return {
+            "messages": [AIMessage(content=error_response)],
+            "phase": DialoguePhase.RESPONDING,
+            # Reset for next turn
+            "intent": None,
+            "slots": {},
+            "missing_slots": [],
+            "current_slot_question": None,
+            "mode": None,
+            "task_result": None,
+            "confirmation_preview": None,
+            "error": None,
+            "iteration_count": 0,
+        }
 
     result = state.get("task_result", {})
     intent = IntentRegistry.get().get_intent(state["intent"])
@@ -449,6 +643,16 @@ Write a brief, warm completion message that:
     return {
         "messages": [AIMessage(content=response.content)],
         "phase": DialoguePhase.RESPONDING,
+        # Reset for next turn
+        "intent": None,
+        "slots": {},
+        "missing_slots": [],
+        "current_slot_question": None,
+        "mode": None,
+        "task_result": None,
+        "confirmation_preview": None,
+        "error": None,
+        "iteration_count": 0,
     }
 
 
@@ -467,7 +671,8 @@ async def query_mode_node(state: AriaState) -> AriaState:
     client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
     context_loader = AriaContextLoader()
-    context = await context_loader.load_full(user_id)
+    query_org_id = int(org_id) if org_id else None
+    context = await context_loader.load_with_memory(user_id, query=question, org_id=query_org_id)
     if state.get("user_email"):
         context["user_email"] = state["user_email"]
     system = build_aria_system_prompt(
@@ -517,6 +722,15 @@ async def query_mode_node(state: AriaState) -> AriaState:
     text_blocks = [b.text for b in response.content if hasattr(b, "text")]
     answer = "\n".join(text_blocks) or "I couldn't find that information."
 
+    # Fire-and-forget: record which metrics the user asked about
+    try:
+        if question and state.get("user_id"):
+            asyncio.create_task(
+                _record_metric_queries(state["user_id"], question, org_id=state.get("org_id"))
+            )
+    except Exception:
+        pass  # Never break query flow
+
     return {
         "messages": [AIMessage(content=answer)],
         "phase": DialoguePhase.RESPONDING,
@@ -525,24 +739,35 @@ async def query_mode_node(state: AriaState) -> AriaState:
 
 # ─── Entry router nodes ──────────────────────────────────────────────────────
 
-MAX_SLOT_ITERATIONS = 15
+MAX_SLOT_ITERATIONS = 6
 
 
 async def dispatch_node(state: AriaState) -> dict:
-    """Entry point for each turn. Checks iteration limit."""
+    """Entry point for each turn. Checks iteration limit and truncates message history."""
+    updates: dict = {}
+
+    # Truncate message history to prevent exceeding LLM context window.
+    # Keep the first 2 messages (system context) and the last 20 messages.
+    msgs = state.get("messages", [])
+    if len(msgs) > 30:
+        truncated = msgs[:2] + msgs[-20:]
+        updates["messages"] = truncated
+
     count = state.get("iteration_count", 0)
     if count >= MAX_SLOT_ITERATIONS:
-        return {
+        updates.update({
             "phase": DialoguePhase.RESPONDING,
             "error": "I seem to be going in circles. Let me start fresh — what would you like to do?",
-        }
+        })
+        return updates
 
     if not state.get("intent") and not state.get("mode"):
         last_message = state["messages"][-1].content if state["messages"] else ""
         mode = await classify_mode(last_message)
-        return {"mode": mode.value}
+        updates["mode"] = mode.value
+        return updates
 
-    return {}
+    return updates
 
 
 async def check_confirm_node(state: AriaState) -> dict:

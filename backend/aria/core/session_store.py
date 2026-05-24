@@ -94,6 +94,7 @@ class AriaSessionStore:
             "missing_slots": state.get("missing_slots", []),
             "current_slot_question": state.get("current_slot_question"),
             "phase": str(state.get("phase", "")),
+            "mode": state.get("mode"),
             "task_result": state.get("task_result"),
             "confirmation_preview": state.get("confirmation_preview"),
             "user_id": state.get("user_id", ""),
