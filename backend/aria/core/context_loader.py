@@ -27,18 +27,16 @@ class AriaContextLoader:
         def _query():
             db = SessionLocal()
             try:
-                # Get user info
-                user_row = db.execute(text(
-                    "SELECT first_name, last_name, organization_id FROM users WHERE id = :uid"
-                ), {"uid": user_id}).fetchone()
+                from database.models.core import User
+                user_obj = db.query(User).filter(User.id == int(user_id)).first()
 
-                if not user_row:
+                if not user_obj:
                     return {"user_name": "there", "org_name": "", "pipeline_summary": "", "recent_contacts": ""}
 
-                org_id = user_row[2]
+                org_id = user_obj.organization_id
                 if org_id:
                     db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
-                user_name = f"{user_row[0] or ''} {user_row[1] or ''}".strip()
+                user_name = user_obj.full_name or ""
 
                 # Active loan count
                 active_count = db.execute(text(

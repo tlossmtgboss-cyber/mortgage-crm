@@ -435,7 +435,9 @@ async def aria_greeting(
 ):
     """Return a personalized Aria greeting for REST clients (mobile chat)."""
     uid = str(current_user.id)
-    user_name = getattr(current_user, "full_name", "") or ""
+    user_name = getattr(current_user, "full_name", None) or ""
+    if not user_name:
+        user_name = getattr(current_user, "first_name", None) or ""
 
     try:
         from aria.core.context_loader import AriaContextLoader
@@ -446,7 +448,9 @@ async def aria_greeting(
         context = {"active_loan_count": 0, "urgent_task_count": 0}
 
     if not user_name:
-        user_name = context.get("user_name", "")
+        ctx_name = context.get("user_name", "")
+        if ctx_name and not ctx_name.startswith("gAAAAA"):
+            user_name = ctx_name
 
     # Use preferred_name from VoiceMemory if available
     voice_prefs = await _load_voice_preferences(uid)

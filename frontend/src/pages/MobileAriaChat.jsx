@@ -531,23 +531,26 @@ export default function MobileAriaChat() {
     return () => clearTimeout(t);
   }, []);
 
-  // Fetch personalized greeting from Aria on first load or after clearing chat
+  // Fetch personalized greeting on every mount (fresh context) and after clearing chat
   useEffect(() => {
-    if (initialLoad || messages.length > 0) return;
+    if (initialLoad) return;
     let cancelled = false;
     api.get('/api/v1/aria/greeting')
       .then(res => {
         if (cancelled || !res.data?.greeting) return;
-        setMessages(prev => {
-          if (prev.length > 0) return prev;
-          return [{
+        const greetingMsg = {
           id: newId(),
           role: 'aria',
           text: res.data.greeting,
           timestamp: new Date().toISOString(),
           actions: [],
           suggestions: [],
-        }];
+          isGreeting: true,
+        };
+        setMessages(prev => {
+          if (prev.length === 0) return [greetingMsg];
+          if (prev[0]?.isGreeting) return [greetingMsg, ...prev.slice(1)];
+          return [greetingMsg, ...prev];
         });
       })
       .catch(err => {
