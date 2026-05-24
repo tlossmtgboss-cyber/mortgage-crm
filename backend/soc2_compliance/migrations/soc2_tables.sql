@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS soc2_audit_log (
     user_id         INTEGER REFERENCES users(id) ON DELETE SET NULL,
     user_email      VARCHAR(255),
     user_role       VARCHAR(100),
-    tenant_id       UUID,  -- Multi-tenant isolation
+    tenant_id       VARCHAR(50),  -- Multi-tenant isolation (org ID as string)
     
     -- What
     action          VARCHAR(50) NOT NULL,  -- AuditAction enum
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS soc2_access_event (
     -- Who
     user_id             INTEGER REFERENCES users(id) ON DELETE SET NULL,
     attempted_email     VARCHAR(255),
-    tenant_id           UUID,
+    tenant_id           VARCHAR(50),
     
     -- What
     event_type          VARCHAR(50) NOT NULL,  -- login, logout, login_failed, mfa_challenge, etc.
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS soc2_security_incident (
     -- People
     reported_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
     assigned_to     INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    tenant_id       UUID,
+    tenant_id       VARCHAR(50),
     
     -- Impact
     affected_systems    TEXT[],
@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS soc2_change_record (
     requested_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
     approved_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
     implemented_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    tenant_id       UUID,
+    tenant_id       VARCHAR(50),
     
     -- Details
     affected_systems    TEXT[],
@@ -316,7 +316,7 @@ CREATE INDEX idx_compliance_check_category ON soc2_compliance_check(check_catego
 CREATE TABLE IF NOT EXISTS soc2_active_session (
     id              VARCHAR(255) PRIMARY KEY,
     user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    tenant_id       UUID,
+    tenant_id       VARCHAR(50),
     
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_activity   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -346,7 +346,7 @@ CREATE TABLE IF NOT EXISTS soc2_api_key_registry (
     name            VARCHAR(255) NOT NULL,
     description     TEXT,
     created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    tenant_id       UUID,
+    tenant_id       VARCHAR(50),
     
     -- Key info (store hash, never plaintext)
     key_hash        VARCHAR(255) NOT NULL,

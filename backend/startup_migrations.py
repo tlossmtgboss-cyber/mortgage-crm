@@ -1289,6 +1289,32 @@ def _run_critical_schema_migrations():
         except Exception:
             db.rollback()
 
+        # --- Convert SOC2 tables tenant_id from UUID to VARCHAR(50) ---
+        # Organization IDs are integers, not UUIDs
+        for soc2_table in [
+            "soc2_audit_log", "soc2_auth_events", "soc2_security_incident",
+            "soc2_data_access_log", "soc2_change_management",
+        ]:
+            try:
+                db.execute(sa_text(f"""
+                    ALTER TABLE {soc2_table}
+                    ALTER COLUMN tenant_id TYPE VARCHAR(50)
+                    USING tenant_id::text
+                """))
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        # --- Add organization_id to ai_colleague_actions if missing ---
+        try:
+            db.execute(sa_text("""
+                ALTER TABLE ai_colleague_actions
+                ADD COLUMN IF NOT EXISTS organization_id INTEGER
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
             logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")
