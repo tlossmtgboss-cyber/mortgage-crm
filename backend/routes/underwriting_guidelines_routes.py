@@ -395,20 +395,30 @@ async def list_saved_queries(
 @router.get("/stats")
 async def guideline_stats(
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Get guideline ingestion and embedding statistics."""
-    total_guidelines = db.query(UnderwritingGuideline).filter(
-        UnderwritingGuideline.is_active == True
-    ).count()
-    total_sections = db.query(GuidelineSection).count()
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
+    org_filter = [
+        UnderwritingGuideline.is_active == True,
+        _or(UnderwritingGuideline.organization_id == None, UnderwritingGuideline.organization_id == org_id),
+    ]
+    total_guidelines = db.query(UnderwritingGuideline).filter(*org_filter).count()
+
+    section_ids = db.query(GuidelineSection.id).join(
+        UnderwritingGuideline, GuidelineSection.guideline_id == UnderwritingGuideline.id
+    ).filter(*org_filter)
+    total_sections = section_ids.count()
     embedded_sections = db.query(GuidelineSection).filter(
-        GuidelineSection.content_embedding.isnot(None)
+        GuidelineSection.id.in_(section_ids),
+        GuidelineSection.content_embedding.isnot(None),
     ).count()
 
     by_status = {}
     for status in ["pending", "processing", "complete", "failed"]:
         count = db.query(UnderwritingGuideline).filter(
-            UnderwritingGuideline.embedding_status == status
+            UnderwritingGuideline.embedding_status == status,
+            _or(UnderwritingGuideline.organization_id == None, UnderwritingGuideline.organization_id == org_id),
         ).count()
         if count > 0:
             by_status[status] = count
@@ -430,10 +440,13 @@ async def guideline_stats(
 async def get_guideline(
     guideline_id: str,
     db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Get detailed guideline by ID including full text and structured rules."""
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
     guideline = db.query(UnderwritingGuideline).filter(
-        UnderwritingGuideline.id == guideline_id
+        UnderwritingGuideline.id == guideline_id,
+        _or(UnderwritingGuideline.organization_id == None, UnderwritingGuideline.organization_id == org_id),
     ).first()
 
     if not guideline:
@@ -451,8 +464,10 @@ async def update_guideline(
 ):
     """Update guideline metadata."""
     _require_admin(current_user)
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
     guideline = db.query(UnderwritingGuideline).filter(
-        UnderwritingGuideline.id == guideline_id
+        UnderwritingGuideline.id == guideline_id,
+        _or(UnderwritingGuideline.organization_id == None, UnderwritingGuideline.organization_id == org_id),
     ).first()
 
     if not guideline:
@@ -491,8 +506,10 @@ async def delete_guideline(
 ):
     """Delete a guideline."""
     _require_admin(current_user)
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
     guideline = db.query(UnderwritingGuideline).filter(
-        UnderwritingGuideline.id == guideline_id
+        UnderwritingGuideline.id == guideline_id,
+        _or(UnderwritingGuideline.organization_id == None, UnderwritingGuideline.organization_id == org_id),
     ).first()
 
     if not guideline:

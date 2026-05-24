@@ -91,12 +91,14 @@ class GuidelineChartService:
         # --- Query guidelines ---
         from models.call_monitoring_models import UnderwritingGuideline
 
+        from sqlalchemy import or_ as _or
+
         guidelines = (
             self._db.query(UnderwritingGuideline)
             .filter(
                 UnderwritingGuideline.is_active.is_(True),
                 UnderwritingGuideline.structured_rules.isnot(None),
-                UnderwritingGuideline.organization_id == str(tenant_id),
+                _or(UnderwritingGuideline.organization_id == None, UnderwritingGuideline.organization_id == tenant_id),
             )
             .all()
         )

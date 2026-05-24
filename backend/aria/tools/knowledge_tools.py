@@ -28,6 +28,7 @@ class KnowledgeTools:
         loan_program: str = None,
         agency: str = None,
         include_overlays: bool = True,
+        tenant_id: int = None,
     ) -> dict:
         """
         Search mortgage underwriting guidelines using RAG.
@@ -46,7 +47,7 @@ class KnowledgeTools:
                 agencies = [agency] if agency else None
                 result = await service.search(
                     query=question,
-                    tenant_id=1,
+                    tenant_id=tenant_id,
                     agencies=agencies,
                     loan_program=loan_program,
                     top_k=8,
