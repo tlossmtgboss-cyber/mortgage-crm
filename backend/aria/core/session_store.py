@@ -80,6 +80,7 @@ class AriaSessionStore:
             "user_name": user_name,
             "user_email": user_email,
             "user_role": user_role,
+            "voice_preferences": None,  # Set by caller from VoiceMemory; not persisted
             "iteration_count": 0,
             "error": None,
         }

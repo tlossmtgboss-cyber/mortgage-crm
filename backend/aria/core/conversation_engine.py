@@ -74,13 +74,19 @@ class AriaState(TypedDict):
     user_role: str
     mode: Optional[str]
 
+    # Voice memory preferences (loaded at session start, NOT persisted in session store)
+    voice_preferences: Optional[Dict[str, Any]]
+
     # Operational
     iteration_count: int
     error: Optional[str]
 
 
 # ─── System prompt for Aria ───────────────────────────────────────────────────
-def build_aria_system_prompt(context: Dict[str, Any]) -> str:
+def build_aria_system_prompt(
+    context: Dict[str, Any],
+    voice_preferences: Optional[Dict[str, Any]] = None,
+) -> str:
     now = datetime.now(timezone.utc).strftime("%A, %B %d, %Y at %I:%M %p UTC")
 
     pipeline_summary = context.get("pipeline_summary", "No active loans loaded.")
@@ -92,6 +98,31 @@ def build_aria_system_prompt(context: Dict[str, Any]) -> str:
     user_identity = f"You work exclusively with {user_name} at {org_name}."
     if user_email:
         user_identity += f"\nTheir email address is {user_email}."
+
+    # Build voice-preference instructions if available
+    style_instructions = ""
+    if voice_preferences:
+        parts = []
+        preferred_name = voice_preferences.get("preferred_name")
+        if preferred_name:
+            parts.append(f"- Address them as \"{preferred_name}\"")
+        response_length = voice_preferences.get("response_length")
+        if response_length == "short":
+            parts.append("- Keep responses very brief — bullet points over paragraphs")
+        elif response_length == "long":
+            parts.append("- Give thorough, detailed responses — they prefer depth")
+        briefing_depth = voice_preferences.get("briefing_depth")
+        if briefing_depth == "concise":
+            parts.append("- For pipeline updates, give only top-line numbers")
+        elif briefing_depth == "detailed":
+            parts.append("- For pipeline updates, include per-loan breakdowns")
+        greeting_style = voice_preferences.get("greeting_style")
+        if greeting_style == "formal":
+            parts.append("- Use formal tone (e.g. 'Good morning' not 'Hey')")
+        elif greeting_style == "first_name_only":
+            parts.append("- Skip pleasantries — jump straight to business")
+        if parts:
+            style_instructions = "\n## User style preferences (from past interactions)\n" + "\n".join(parts) + "\n"
 
     return f"""You are Aria, the AI assistant built into Perennia — a mortgage CRM platform.
 {user_identity}
@@ -105,7 +136,7 @@ Today is {now}.
   you mention it naturally without being preachy
 - You confirm before doing anything irreversible (sending emails, updating records)
 - You ask ONE question at a time when gathering information — never fire a list of questions
-
+{style_instructions}
 ## Greeting
 When starting a new conversation, greet the LO by first name: "Hey {user_name}, what can I help you with?"
 If the user name is unknown, use "Hey there" instead.
@@ -382,7 +413,10 @@ async def response_node(state: AriaState) -> AriaState:
         context = await context_loader.load_full(state["user_id"])
         if state.get("user_email"):
             context["user_email"] = state["user_email"]
-        system = build_aria_system_prompt(context)
+        system = build_aria_system_prompt(
+            context,
+            voice_preferences=state.get("voice_preferences"),
+        )
 
         response = await llm.ainvoke([
             SystemMessage(content=system),
@@ -436,7 +470,10 @@ async def query_mode_node(state: AriaState) -> AriaState:
     context = await context_loader.load_full(user_id)
     if state.get("user_email"):
         context["user_email"] = state["user_email"]
-    system = build_aria_system_prompt(context)
+    system = build_aria_system_prompt(
+        context,
+        voice_preferences=state.get("voice_preferences"),
+    )
 
     messages = [{"role": "user", "content": question}]
 

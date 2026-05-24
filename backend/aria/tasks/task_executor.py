@@ -579,8 +579,8 @@ class TaskExecutor:
         }
 
     async def _guideline_question(self, slots, user_id, org_id) -> Dict:
-        answer = await self.know.answer_guideline_question(slots["question"])
-        return {"answer": answer["text"], "sources": answer.get("sources", []),
+        answer = await self.know.search_guidelines_rag(slots["question"])
+        return {"answer": answer["answer"], "sources": answer.get("sources", []),
                 "confidence": answer.get("confidence")}
 
     async def _pipeline_report(self, slots, user_id, org_id) -> Dict:

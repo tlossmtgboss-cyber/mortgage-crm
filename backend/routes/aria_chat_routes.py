@@ -96,6 +96,41 @@ def _get_aria_graph():
     return get_aria_graph()
 
 
+def _get_voice_memory():
+    from aria.core.voice_memory import VoiceMemory
+    return VoiceMemory()
+
+
+async def _load_voice_preferences(user_id: str) -> dict:
+    """Load VoiceMemory preferences off the event loop. Returns {} on failure."""
+    try:
+        vm = _get_voice_memory()
+        prefs = await asyncio.to_thread(vm.get_all_preferences, user_id)
+        return prefs or {}
+    except Exception as e:
+        logger.warning(f"VoiceMemory load failed for user {user_id}, using defaults: {e}")
+        return {}
+
+
+async def _record_voice_interaction(user_id: str, intent: str = "session_start"):
+    """Record an interaction pattern in VoiceMemory without blocking."""
+    try:
+        vm = _get_voice_memory()
+        from datetime import datetime, timezone
+        hour = datetime.now(timezone.utc).hour
+        if hour < 6:
+            tod = "early_morning"
+        elif hour < 12:
+            tod = "morning"
+        elif hour < 17:
+            tod = "afternoon"
+        else:
+            tod = "evening"
+        await asyncio.to_thread(vm.record_interaction_pattern, user_id, intent, tod)
+    except Exception as e:
+        logger.warning(f"VoiceMemory interaction record failed for user {user_id}: {e}")
+
+
 def _verify_ws_token(token: str):
     """Verify JWT and extract claims. DB enrichment happens in _enrich_ws_user."""
     try:
@@ -212,6 +247,9 @@ async def aria_websocket(
     # Use DB-resolved full_name; fall back to context loader's user_name
     resolved_name = user.full_name or context.get("user_name", "")
 
+    # Load voice preferences (non-blocking, graceful fallback to {})
+    voice_prefs = await _load_voice_preferences(uid)
+
     state = await session_store.get_or_create(
         session_id=session_id,
         user_id=uid,
@@ -220,9 +258,16 @@ async def aria_websocket(
         user_role=user.role,
         user_email=getattr(user, "email", ""),
     )
+    # Attach voice preferences to state so they flow through the graph
+    state["voice_preferences"] = voice_prefs
 
-    greeting = _build_greeting(resolved_name, context)
+    # Use preferred_name from memory for greeting if available
+    greeting_name = voice_prefs.get("preferred_name") or resolved_name
+    greeting = _build_greeting(greeting_name, context)
     await websocket.send_json({"type": "greeting", "content": greeting})
+
+    # Record session start interaction (fire-and-forget)
+    asyncio.create_task(_record_voice_interaction(uid, "session_start"))
 
     # Start heartbeat background task (ping every 30s)
     heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))
@@ -303,6 +348,8 @@ async def aria_websocket(
     except WebSocketDisconnect:
         logger.info(f"Aria WS disconnected: user={user.user_id} session={session_id}")
         await session_store.save(session_id, state)
+        # Record session end (non-blocking, best-effort)
+        asyncio.create_task(_record_voice_interaction(uid, "session_end"))
     except Exception as e:
         logger.error(f"Aria WS error: {e}", exc_info=True)
         try:
@@ -377,6 +424,35 @@ def _build_greeting(user_name: str, context: Dict[str, Any]) -> str:
         greeting += "What can I help you with today?"
 
     return greeting
+
+
+# ─── REST greeting ────────────────────────────────────────────────────────────
+
+
+@router.get("/greeting")
+async def aria_greeting(
+    current_user=Depends(get_current_user),
+):
+    """Return a personalized Aria greeting for REST clients (mobile chat)."""
+    uid = str(current_user.id)
+    user_name = getattr(current_user, "full_name", "") or ""
+
+    try:
+        from aria.core.context_loader import AriaContextLoader
+        context_loader = AriaContextLoader()
+        context = await asyncio.wait_for(context_loader.load_full(uid), timeout=10.0)
+    except Exception as e:
+        logger.warning(f"Greeting context load failed for user {uid}: {e}")
+        context = {"active_loan_count": 0, "urgent_task_count": 0}
+
+    if not user_name:
+        user_name = context.get("user_name", "")
+
+    # Use preferred_name from VoiceMemory if available
+    voice_prefs = await _load_voice_preferences(uid)
+    greeting_name = voice_prefs.get("preferred_name") or user_name
+
+    return {"greeting": _build_greeting(greeting_name, context)}
 
 
 # ─── REST fallback ────────────────────────────────────────────────────────────

@@ -248,9 +248,9 @@ INTENT_TO_SCOPED_TOOLS: Dict[str, List[str]] = {
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
     "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],
     "rates": ["get_current_rates", "recommend_lock_strategy", "compare_rate_scenarios", "monitor_float_position", "get_market_events", "calculate_lock_cost", "get_extension_pricing", "analyze_rate_trends", "get_rate_lock_advisory", "get_pipeline"],
-    "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
-    "email": ["get_emails_needing_response", "send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner"],
-    "schedule": ["get_availability", "book_appointment", "reschedule_appointment", "cancel_appointment", "get_upcoming_appointments", "send_appointment_reminder", "sync_external_calendar", "optimize_schedule"],
+    "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads", "find_contact_phone", "find_contact_email"],
+    "email": ["get_emails_needing_response", "send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner", "find_contact_email", "find_contact_phone", "send_sms_message", "send_notification"],
+    "schedule": ["get_availability", "book_appointment", "reschedule_appointment", "cancel_appointment", "get_upcoming_appointments", "send_appointment_reminder", "sync_external_calendar", "optimize_schedule", "find_contact_phone", "find_contact_email"],
     "documents": ["get_missing_documents", "get_loan_conditions", "track_document_request", "send_document_reminder", "check_document_expiration", "get_third_party_status", "get_document_timeline", "escalate_issue", "search_loans", "get_smart_doc_status", "check_document_freshness", "get_document_decisions", "get_needs_list", "check_document_sla", "get_screenshot_flags", "get_document_extraction", "track_portal_activity", "get_followup_campaign_status", "get_policy_events"],
     "compliance": ["check_trid_compliance", "check_respa_compliance", "check_fair_lending", "get_state_requirements", "audit_loan_file", "get_disclosure_timeline", "check_tolerance_violations", "get_compliance_history", "search_loans"],
     "sla": ["check_sla_status", "get_sla_dashboard", "get_sla_alerts", "calculate_stage_sla", "get_sla_report", "project_sla_breach", "escalate_sla_breach", "get_pipeline", "get_pipeline_metrics"],
@@ -264,7 +264,7 @@ INTENT_TO_SCOPED_TOOLS: Dict[str, List[str]] = {
     "notifications": ["send_notification", "get_pending_notifications", "get_notification_templates", "schedule_notification", "get_delivery_status", "update_preferences", "get_preferences", "batch_send"],
     "profit": ["calculate_loan_profitability", "analyze_margins_by_segment", "forecast_revenue", "compare_lo_profitability", "optimize_pricing", "get_cost_breakdown", "calculate_pull_through_impact", "get_profitability_trends"],
     "operations": ["get_pipeline_metrics", "get_loan_aging_report", "get_bottleneck_analysis", "check_sla_status", "get_sla_dashboard", "escalate_sla_breach", "get_lo_pipeline_breakdown", "get_compliance_history"],
-    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "bulk_create_tasks", "send_email", "suggest_followup"],
+    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "bulk_create_tasks", "send_email", "suggest_followup", "find_contact_phone", "find_contact_email", "send_sms_message", "click_to_dial", "make_call", "call_contact", "send_notification", "get_availability", "book_appointment", "reschedule_appointment", "get_upcoming_appointments", "send_appointment_reminder"],
     "content_marketing": ["get_pipeline_metrics", "search_leads", "draft_message"],
     "general": ["get_daily_priorities", "get_pipeline", "get_tasks"],
 }
@@ -392,6 +392,11 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"(send|draft|compose|write) .{1,50} (an? )?(email|message)",
         r"(email|message|write to|send to) [A-Z][a-z]+ [A-Z][a-z]+",  # email John Smith
         r"(send|email) (it|this|that) to",
+        # SMS/text message patterns
+        r"\b(text|sms)\b.{0,30}\b(to|send)\b",
+        r"\b(send|shoot) (a |an? )?(text|sms)\b",
+        r"\btext [A-Z][a-z]+",  # text Phil, text John Smith
+        r"\b(message|msg) [A-Z][a-z]+",  # message Phil
         # General email patterns
         r"\bemail\b",
         r"email (template|thread)",

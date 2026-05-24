@@ -478,6 +478,7 @@ export default function MobileAriaChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [greetingSeq, setGreetingSeq] = useState(0);
 
   // Feedback state — keyed by message ID, value is "positive" or "negative"
   const [feedbackState, setFeedbackState] = useState(() => loadFeedbackState());
@@ -529,6 +530,31 @@ export default function MobileAriaChat() {
     const t = setTimeout(() => setInitialLoad(false), 400);
     return () => clearTimeout(t);
   }, []);
+
+  // Fetch personalized greeting from Aria on first load or after clearing chat
+  useEffect(() => {
+    if (initialLoad || messages.length > 0) return;
+    let cancelled = false;
+    api.get('/api/v1/aria/greeting')
+      .then(res => {
+        if (cancelled || !res.data?.greeting) return;
+        setMessages(prev => {
+          if (prev.length > 0) return prev;
+          return [{
+          id: newId(),
+          role: 'aria',
+          text: res.data.greeting,
+          timestamp: new Date().toISOString(),
+          actions: [],
+          suggestions: [],
+        }];
+        });
+      })
+      .catch(err => {
+        if (!cancelled) console.warn('[MobileAriaChat] Greeting fetch failed:', err?.message);
+      });
+    return () => { cancelled = true; };
+  }, [initialLoad, greetingSeq]);
 
   // Persist messages to localStorage whenever they change
   useEffect(() => {
@@ -752,6 +778,7 @@ export default function MobileAriaChat() {
   const handleClearChat = useCallback(() => {
     setMessages([]);
     setFeedbackState({});
+    setGreetingSeq(s => s + 1);
     const newSession = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     setSessionId(newSession);
     try {
