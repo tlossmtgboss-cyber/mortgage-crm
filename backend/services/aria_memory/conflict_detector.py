@@ -496,6 +496,13 @@ def apply_confidence_decay(
     elapsed_ms = int((time.monotonic() - start_ms) * 1000)
     total = tier1_count + tier2_count
 
+    batch_limit_hit = len(tier1_memories) >= 10000 or len(tier2_memories) >= 10000
+    if batch_limit_hit:
+        logger.warning(
+            "Confidence decay batch limit hit (tier1=%d, tier2=%d) — re-run to process remaining",
+            len(tier1_memories), len(tier2_memories),
+        )
+
     if total > 0:
         logger.info(
             "Confidence decay applied: %d memories (tier1=%d, tier2=%d) in %dms%s",
@@ -508,4 +515,5 @@ def apply_confidence_decay(
         "tier2_decayed_180d": tier2_count,
         "total_decayed": total,
         "elapsed_ms": elapsed_ms,
+        "batch_limit_hit": batch_limit_hit,
     }

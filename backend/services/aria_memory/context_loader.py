@@ -63,7 +63,7 @@ class AriaContextLoader:
     def __init__(self, db: Session):
         self._db = db
 
-    async def load_context(self, req: ContextLoadRequest) -> BorrowerContext:
+    def load_context(self, req: ContextLoadRequest) -> BorrowerContext:
         lead = self._get_lead(req.borrower_id, req.tenant_id)
         if lead is None:
             return BorrowerContext(

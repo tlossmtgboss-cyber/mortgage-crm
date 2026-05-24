@@ -75,7 +75,7 @@ async def load_context(
 
     from services.aria_memory.context_loader import AriaContextLoader, ContextLoadRequest
     loader = AriaContextLoader(db)
-    ctx = await loader.load_context(ContextLoadRequest(
+    ctx = loader.load_context(ContextLoadRequest(
         borrower_id=req.borrower_id,
         tenant_id=req.tenant_id,
         call_trigger=req.call_trigger,

@@ -26,6 +26,28 @@ logger = logging.getLogger("aria.admin.staging")
 
 router = APIRouter(prefix="/admin/memory-staging", tags=["Memory Staging Admin"])
 
+_last_cleanup_ts: float = 0.0
+_CLEANUP_INTERVAL = 3600  # seconds
+
+
+def _maybe_cleanup_old_staging(db: Session, tenant_id: int) -> None:
+    global _last_cleanup_ts
+    import time
+    now = time.monotonic()
+    if now - _last_cleanup_ts < _CLEANUP_INTERVAL:
+        return
+    _last_cleanup_ts = now
+    try:
+        from database.models.memory_staging import MemoryStaging
+        cleanup_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        db.query(MemoryStaging).filter(
+            MemoryStaging.organization_id == tenant_id,
+            MemoryStaging.status.in_(["approved", "rejected"]),
+            MemoryStaging.created_at < cleanup_cutoff,
+        ).delete(synchronize_session='fetch')
+    except Exception:
+        logger.warning("Staging cleanup failed")
+
 
 class RejectRequest(BaseModel):
     reason: Optional[str] = None
@@ -66,12 +88,7 @@ async def list_staging(
 
     from database.models.memory_staging import MemoryStaging
 
-    cleanup_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
-    db.query(MemoryStaging).filter(
-        MemoryStaging.organization_id == tenant_id,
-        MemoryStaging.status.in_(["approved", "rejected"]),
-        MemoryStaging.created_at < cleanup_cutoff,
-    ).delete(synchronize_session='fetch')
+    _maybe_cleanup_old_staging(db, tenant_id)
 
     query = db.query(MemoryStaging).filter(MemoryStaging.organization_id == tenant_id)
 
