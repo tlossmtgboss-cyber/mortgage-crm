@@ -121,6 +121,7 @@ class AriaContextLoader:
               AND organization_id = :tenant_id
               AND memory_type = 'preference'
               AND superseded_by IS NULL
+              AND (expires_at IS NULL OR expires_at > NOW())
               AND fact_key IS NOT NULL
             ORDER BY last_verified_at DESC NULLS LAST
             LIMIT :max_prefs
@@ -221,6 +222,7 @@ class AriaContextLoader:
             WHERE borrower_id = :borrower_id
               AND organization_id = :tenant_id
               AND superseded_by IS NULL
+              AND (expires_at IS NULL OR expires_at > NOW())
               AND topic IN ({placeholders})
               AND last_verified_at > NOW() - interval '90 days'
             ORDER BY

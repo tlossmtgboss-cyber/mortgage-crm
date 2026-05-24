@@ -48,9 +48,10 @@ class ShadowEvaluator:
         call_ids = set(r.source_call_id for r in reviewed)
         calls_reviewed = len(call_ids)
 
-        approved = sum(1 for r in reviewed if r.review_action in ("approved", "edited"))
+        approved = sum(1 for r in reviewed if r.review_action == "approved")
+        edited = sum(1 for r in reviewed if r.review_action == "edited")
         rejected = sum(1 for r in reviewed if r.review_action == "rejected")
-        total = approved + rejected
+        total = approved + edited + rejected
 
         precision = approved / total if total > 0 else 0.0
 
@@ -80,6 +81,10 @@ class ShadowEvaluator:
         return {
             "calls_reviewed": calls_reviewed,
             "precision": round(precision, 4),
+            "precision_with_edits": round((approved + edited) / total, 4) if total > 0 else 0.0,
+            "approved": approved,
+            "edited": edited,
+            "rejected": rejected,
             "recall": round(recall, 4),
             "exclusion_violations": exclusion_violations,
             "exit_ready": exit_ready,

@@ -77,7 +77,7 @@ class ExclusionChecker:
         keywords = []
         for word in pattern.lower().replace(",", " ").split():
             word = word.strip(".:;()\"'")
-            if len(word) >= 4 and word not in (
+            if len(word) >= 3 and word not in (
                 "such", "that", "this", "with", "from", "about",
                 "route", "instead", "inferences", "explicitly",
                 "without", "statement", "described", "borrower",
