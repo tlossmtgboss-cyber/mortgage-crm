@@ -454,6 +454,7 @@ def apply_confidence_decay(
             AgentMemory.last_verified_at >= cutoff_180,
             AgentMemory.confidence > DECAY_90_DAY_MULTIPLIER,  # Idempotent: skip if already decayed to/below 0.9
         )
+        .limit(10000)
         .all()
     )
 
@@ -473,6 +474,7 @@ def apply_confidence_decay(
             AgentMemory.last_verified_at < cutoff_180,
             AgentMemory.confidence > DECAY_180_DAY_MULTIPLIER,  # Idempotent: skip if already decayed to/below 0.7
         )
+        .limit(10000)
         .all()
     )
 

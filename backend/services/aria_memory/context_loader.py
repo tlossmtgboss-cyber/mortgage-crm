@@ -257,7 +257,7 @@ class AriaContextLoader:
         sql = text("""
             SELECT source_call_id, MIN(created_at) AS call_date,
                    COUNT(*) AS fact_count,
-                   string_agg(DISTINCT topic, ', ' ORDER BY topic) AS topics
+                   string_agg(topic, ', ' ORDER BY topic) AS topics
             FROM agent_memories
             WHERE borrower_id = :borrower_id
               AND organization_id = :tenant_id

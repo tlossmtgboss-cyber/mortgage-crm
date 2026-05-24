@@ -83,13 +83,13 @@ class AriaRetrievalService:
         params: Dict[str, Any] = {"org_id": tenant_id, "top_k": top_k, "min_relevance": MIN_RELEVANCE_THRESHOLD}
 
         where_clauses.append("(am.expires_at IS NULL OR am.expires_at > NOW())")
+        where_clauses.append("am.superseded_by IS NULL")
 
         if scope == "memory":
             if borrower_id is None:
                 return RetrievalResult(facts=[], no_results=True)
             where_clauses.append("am.borrower_id = :borrower_id")
             params["borrower_id"] = borrower_id
-            where_clauses.append("am.superseded_by IS NULL")
 
         if topic:
             where_clauses.append("am.topic = :topic")

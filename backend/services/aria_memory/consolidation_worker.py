@@ -38,7 +38,7 @@ class ConsolidationWorker:
         transcript: str,
         call_metadata: dict,
     ) -> dict:
-        if self._check_idempotency(call_session_id):
+        if self._check_idempotency(call_session_id, tenant_id):
             logger.info("Call %s already processed, skipping", call_session_id)
             return {"status": "skipped", "reason": "already_processed"}
 
@@ -78,13 +78,15 @@ class ConsolidationWorker:
 
         return {"status": "complete", "extracted": len(items), "staged": staged_count}
 
-    def _check_idempotency(self, source_call_id: str) -> bool:
+    def _check_idempotency(self, source_call_id: str, tenant_id: int) -> bool:
         sql = text("""
             SELECT id FROM memory_audit_events
-            WHERE source_call_id = :call_id AND event_type = 'extraction'
+            WHERE source_call_id = :call_id
+              AND event_type = 'extraction'
+              AND organization_id = :org_id
             LIMIT 1
         """)
-        row = self._db.execute(sql, {"call_id": source_call_id}).fetchone()
+        row = self._db.execute(sql, {"call_id": source_call_id, "org_id": tenant_id}).fetchone()
         return row is not None
 
     async def _extract_facts(self, transcript: str, tenant_id: int) -> list[dict]:
@@ -308,6 +310,14 @@ TRANSCRIPT:
             "Auto-committed memory %d (confidence=%.2f, embedding=%s)",
             memory.id, item.get("confidence", 0), "yes" if embedding else "no",
         )
+
+        if self._redis and borrower_id:
+            try:
+                from services.aria_memory.retrieval_service import AriaRetrievalService
+                svc = AriaRetrievalService(db=self._db, redis=self._redis)
+                svc.invalidate_cache("memory", tenant_id, borrower_id)
+            except Exception:
+                logger.warning("Cache invalidation failed after auto-commit")
 
     def _route_non_memory(
         self, item: dict, tenant_id: int, borrower_id: int, source_call_id: str
