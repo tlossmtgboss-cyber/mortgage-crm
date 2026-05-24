@@ -295,7 +295,7 @@ class WorkflowAIExecutor:
             " wti.id, wti.task_name, wti.task_type,"
             " wti.lead_id, wti.loan_id, wti.assigned_user_id,"
             " wti.scheduled_date,"
-            " wac.confidence_score, wac.recommendation,"
+            " wac.confidence_score, wac.decision,"
             " COALESCE(l.first_name || ' ' || l.last_name, lo.borrower_name) as contact_name,"
             " COALESCE(l.phone, lo.borrower_phone) as contact_phone,"
             " COALESCE(l.email, lo.borrower_email) as contact_email"

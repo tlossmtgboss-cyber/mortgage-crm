@@ -1278,6 +1278,17 @@ def _run_critical_schema_migrations():
             except Exception:
                 db.rollback()
 
+        # --- Convert health_status from enum to VARCHAR (same pattern as leads.stage) ---
+        try:
+            db.execute(sa_text("""
+                ALTER TABLE workflow_task_instances
+                ALTER COLUMN health_status TYPE VARCHAR(50)
+                USING health_status::text
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
             logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")

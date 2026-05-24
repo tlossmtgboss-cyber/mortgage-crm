@@ -263,7 +263,7 @@ def process_pending_messages(batch_size: int = 50) -> Dict[str, int]:
             text("""
                 SELECT
                     id, from_agent_id, to_agent_id,
-                    message_type, subject, content, payload, priority
+                    message_type, subject, context, payload, priority
                 FROM ai_agent_messages
                 WHERE status = 'pending'
                 ORDER BY
