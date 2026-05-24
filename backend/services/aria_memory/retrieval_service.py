@@ -135,7 +135,7 @@ class AriaRetrievalService:
             mem_type = row.memory_type
             if hasattr(mem_type, "value"):
                 mem_type = mem_type.value
-            # DB enum stores UPPERCASE, Pydantic models use lowercase — normalize at boundary
+            # Normalize enum value to lowercase for Pydantic model validation
             mem_type = mem_type.lower() if isinstance(mem_type, str) else mem_type
 
             facts.append(RetrievedFact(

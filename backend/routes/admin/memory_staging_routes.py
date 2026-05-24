@@ -222,9 +222,9 @@ async def approve_item(
         embedding=embedding,
         embedding_model="text-embedding-3-small" if embedding else None,
     )
-    db.add(memory)
     try:
         db.begin_nested()  # SAVEPOINT
+        db.add(memory)
         db.flush()
     except IntegrityError:
         db.rollback()  # rolls back to SAVEPOINT only

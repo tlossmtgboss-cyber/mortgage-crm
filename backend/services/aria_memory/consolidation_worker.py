@@ -273,12 +273,12 @@ TRANSCRIPT:
             embedding=embedding,
             embedding_model=EMBEDDING_MODEL if embedding else None,
         )
-        self._db.add(memory)
         try:
             self._db.begin_nested()  # SAVEPOINT
+            self._db.add(memory)
             self._db.flush()
         except IntegrityError:
-            self._db.rollback()  # rolls back to SAVEPOINT only
+            self._db.rollback()  # rolls back to SAVEPOINT, memory removed from session
             logger.info("Auto-commit dedup: duplicate detected for call %s, refreshing existing", source_call_id)
             existing = self._db.query(AgentMemory).filter(
                 AgentMemory.borrower_id == borrower_id,

@@ -119,7 +119,7 @@ class AriaContextLoader:
             SELECT key, value FROM agent_memories
             WHERE borrower_id = :borrower_id
               AND organization_id = :tenant_id
-              AND memory_type = 'PREFERENCE'
+              AND memory_type = 'preference'
               AND superseded_by IS NULL
               AND fact_key IS NOT NULL
             ORDER BY last_verified_at DESC NULLS LAST
