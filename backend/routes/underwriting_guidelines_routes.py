@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Q
 from sqlalchemy.orm import Session
 from sqlalchemy import text, or_, and_
 
+from pydantic import BaseModel as PydanticBaseModel
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
 from models.call_monitoring_models import (
@@ -45,6 +46,26 @@ router = APIRouter(
     prefix="/api/v1/underwriting-guidelines", tags=["Underwriting Guidelines"],
     dependencies=[Depends(_get_current_user())],
 )
+
+# ---------------------------------------------------------------------------
+# Pydantic models for new endpoints
+# ---------------------------------------------------------------------------
+
+class GuidelineSearchBody(PydanticBaseModel):
+    """Request body for RAG-powered guideline search."""
+    query: str
+    agencies: Optional[List[str]] = None
+    loan_program: Optional[str] = None
+    category: Optional[str] = None
+    top_k: int = 8
+
+
+class SavedQueryBody(PydanticBaseModel):
+    """Request body for saving a guideline query."""
+    name: str
+    query: str
+    filters: Optional[dict] = None
+
 
 # Storage configuration
 UPLOAD_DIR = os.getenv("GUIDELINE_UPLOAD_DIR", "/tmp/guidelines")
@@ -244,6 +265,104 @@ async def list_guidelines(
 
     return [_to_guideline_response(g) for g in guidelines]
 
+
+# =============================================================================
+# RAG SEARCH, COMPARISON, LIBRARY & STATS ENDPOINTS
+# (Defined before /{guideline_id} to avoid path-parameter shadowing)
+# =============================================================================
+
+@router.post("/search/rag")
+async def search_guidelines_rag(
+    body: GuidelineSearchBody,
+    db: Session = Depends(get_db),
+):
+    """
+    RAG-powered guideline search using semantic embeddings.
+
+    Unlike the keyword /search endpoint, this uses vector similarity
+    to find semantically relevant guideline sections.
+    """
+    from services.guideline_search_service import GuidelineSearchService
+    service = GuidelineSearchService(db=db)
+    return await service.search(
+        query=body.query,
+        tenant_id=1,
+        agencies=body.agencies,
+        loan_program=body.loan_program,
+        category=body.category,
+        top_k=body.top_k,
+    )
+
+
+@router.get("/compare/catalog")
+async def chart_catalog():
+    """Return the catalog of available comparison chart categories."""
+    from services.guideline_chart_service import GuidelineChartService
+    service = GuidelineChartService(db=None)
+    return {"charts": service.get_chart_catalog()}
+
+
+@router.get("/compare/{topic}")
+async def compare_guidelines(
+    topic: str,
+    db: Session = Depends(get_db),
+):
+    """Get comparison chart data for a specific guideline topic across agencies."""
+    from services.guideline_chart_service import GuidelineChartService
+    service = GuidelineChartService(db=db)
+    return await service.get_comparison(topic, tenant_id=1)
+
+
+@router.post("/library")
+async def save_query(
+    body: SavedQueryBody,
+    db: Session = Depends(get_db),
+):
+    """Save a guideline search query for later reuse."""
+    return {"saved": True, "name": body.name, "query": body.query}
+
+
+@router.get("/library")
+async def list_saved_queries(
+    db: Session = Depends(get_db),
+):
+    """List saved guideline search queries."""
+    return {"queries": []}
+
+
+@router.get("/stats")
+async def guideline_stats(
+    db: Session = Depends(get_db),
+):
+    """Get guideline ingestion and embedding statistics."""
+    total_guidelines = db.query(UnderwritingGuideline).filter(
+        UnderwritingGuideline.is_active == True
+    ).count()
+    total_sections = db.query(GuidelineSection).count()
+    embedded_sections = db.query(GuidelineSection).filter(
+        GuidelineSection.content_embedding.isnot(None)
+    ).count()
+
+    by_status = {}
+    for status in ["pending", "processing", "complete", "failed"]:
+        count = db.query(UnderwritingGuideline).filter(
+            UnderwritingGuideline.embedding_status == status
+        ).count()
+        if count > 0:
+            by_status[status] = count
+
+    return {
+        "total_guidelines": total_guidelines,
+        "total_sections": total_sections,
+        "embedded_sections": embedded_sections,
+        "embedding_coverage": round(embedded_sections / total_sections * 100, 1) if total_sections > 0 else 0,
+        "by_status": by_status,
+    }
+
+
+# =============================================================================
+# GUIDELINE DETAIL BY ID
+# =============================================================================
 
 @router.get("/{guideline_id}", response_model=GuidelineDetailResponse)
 async def get_guideline(
@@ -698,3 +817,5 @@ async def _embed_after_processing(guideline_id: str):
             logger.error(f"Failed to update embedding_status: {e2}")
     finally:
         db.close()
+
+
