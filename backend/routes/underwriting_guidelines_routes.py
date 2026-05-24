@@ -495,6 +495,12 @@ async def update_guideline(
     db.commit()
     db.refresh(guideline)
 
+    try:
+        from services.aria_memory.retrieval_service import AriaRetrievalService
+        AriaRetrievalService.invalidate_guideline_cache(org_id)
+    except Exception:
+        pass
+
     return _to_guideline_response(guideline)
 
 
@@ -528,6 +534,12 @@ async def delete_guideline(
     # Delete guideline
     db.delete(guideline)
     db.commit()
+
+    try:
+        from services.aria_memory.retrieval_service import AriaRetrievalService
+        AriaRetrievalService.invalidate_guideline_cache(org_id)
+    except Exception:
+        pass
 
     return {"message": "Guideline deleted", "id": guideline_id}
 

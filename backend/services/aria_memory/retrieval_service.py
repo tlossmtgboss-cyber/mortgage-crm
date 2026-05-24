@@ -258,7 +258,7 @@ class AriaRetrievalService:
             filter_parts.append("c:" + category)
         filter_hash = hashlib.sha256("|".join(filter_parts).encode()).hexdigest()[:16] if filter_parts else "none"
         query_hash = hashlib.sha256(query.lower().strip().encode()).hexdigest()[:24]
-        cache_key = f"aria:cache:guideline:{tenant_id}:{filter_hash}:{query_hash}"
+        cache_key = f"aria:cache:guideline:v2:{tenant_id}:{filter_hash}:{query_hash}"
 
         cached = self._cache_get_guidelines(cache_key)
         if cached is not None:
@@ -299,23 +299,25 @@ class AriaRetrievalService:
         where_sql = " AND ".join(where_clauses)
 
         sql = text(f"""
-            SELECT
-                gs.content AS content,
-                gs.section_number,
-                gs.section_title,
-                ug.name AS guideline_name,
-                ug.guideline_type,
-                ug.loan_program,
-                gs.page_number,
-                gs.category,
-                ug.overlay_priority,
-                1 - (gs.content_embedding <=> CAST(:embedding AS vector)) AS relevance_score
-            FROM guideline_sections gs
-            JOIN underwriting_guidelines ug ON ug.id = gs.guideline_id
-            WHERE {where_sql}
-              AND 1 - (gs.content_embedding <=> CAST(:embedding AS vector)) > :min_relevance
-            ORDER BY ug.overlay_priority ASC,
-                     gs.content_embedding <=> CAST(:embedding AS vector) ASC
+            WITH scored AS (
+                SELECT
+                    gs.content AS content,
+                    gs.section_number,
+                    gs.section_title,
+                    ug.name AS guideline_name,
+                    ug.guideline_type,
+                    ug.loan_program,
+                    gs.page_number,
+                    gs.category,
+                    ug.overlay_priority,
+                    1 - (gs.content_embedding <=> CAST(:embedding AS vector)) AS relevance_score
+                FROM guideline_sections gs
+                JOIN underwriting_guidelines ug ON ug.id = gs.guideline_id
+                WHERE {where_sql}
+            )
+            SELECT * FROM scored
+            WHERE relevance_score > :min_relevance
+            ORDER BY overlay_priority ASC, relevance_score DESC
             LIMIT :top_k
         """)
 
@@ -419,6 +421,20 @@ class AriaRetrievalService:
                 self._redis.delete(*keys)
         except Exception:
             logger.warning("Redis cache invalidation failed")
+
+    @staticmethod
+    def invalidate_guideline_cache(tenant_id: int, redis_client=None) -> int:
+        """Invalidate all cached guideline search results for an org."""
+        if redis_client is None:
+            return 0
+        try:
+            pattern = f"aria:cache:guideline:v2:{tenant_id}:*"
+            keys = redis_client.keys(pattern)
+            if keys:
+                return redis_client.delete(*keys)
+            return 0
+        except Exception:
+            return 0
 
     def _log_audit_event(self, **kwargs) -> None:
         try:
