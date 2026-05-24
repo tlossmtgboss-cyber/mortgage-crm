@@ -2128,6 +2128,24 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Agent memory unique indexes migration note: {e}")
 
+        # Voicemail tables: add organization_id for multi-tenant isolation
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE;
+                    CREATE INDEX IF NOT EXISTS ix_voicemail_drops_organization_id ON voicemail_drops(organization_id);
+                    ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE;
+                    CREATE INDEX IF NOT EXISTS ix_voicemail_templates_organization_id ON voicemail_templates(organization_id);
+                    ALTER TABLE voicemail_campaigns ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE;
+                    CREATE INDEX IF NOT EXISTS ix_voicemail_campaigns_organization_id ON voicemail_campaigns(organization_id);
+                    ALTER TABLE contact_dnc_status ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id);
+                    CREATE INDEX IF NOT EXISTS ix_contact_dnc_status_organization_id ON contact_dnc_status(organization_id);
+                """))
+                conn.commit()
+                logger.info("Voicemail + DNC organization_id columns ready")
+        except Exception as e:
+            logger.warning(f"Voicemail organization_id migration note: {e}")
+
         # Ensure tloss@cmgfi.com has full admin permissions
         try:
             with _engine.connect() as conn:
