@@ -2141,6 +2141,11 @@ def init_db():
                     ALTER TABLE contact_dnc_status ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id);
                     CREATE INDEX IF NOT EXISTS ix_contact_dnc_status_organization_id ON contact_dnc_status(organization_id);
                 """))
+                conn.execute(text("""
+                    ALTER TABLE voicemail_drops ALTER COLUMN contact_name TYPE TEXT;
+                    ALTER TABLE voicemail_drops ALTER COLUMN phone_number TYPE TEXT;
+                    ALTER TABLE voicemail_drops ALTER COLUMN contact_email TYPE TEXT;
+                """))
                 conn.commit()
                 logger.info("Voicemail + DNC organization_id columns ready")
         except Exception as e:
