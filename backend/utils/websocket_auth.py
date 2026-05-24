@@ -16,7 +16,6 @@ from dataclasses import dataclass
 
 from fastapi import WebSocket
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -117,30 +116,23 @@ def decode_jwt_token(token: str) -> Optional[dict]:
 def lookup_user_by_email(db: Session, email: str) -> Optional[AuthenticatedUser]:
     """
     Look up user in database by email.
+    Uses ORM query to properly decrypt EncryptedString columns (first_name, last_name).
 
     Returns:
         AuthenticatedUser or None if not found
     """
     try:
-        result = db.execute(
-            text("""
-                SELECT id, email, first_name, last_name, role, organization_id
-                FROM users
-                WHERE email = :email
-                LIMIT 1
-            """),
-            {"email": email}
-        )
-        row = result.fetchone()
+        from database.models import User
+        user = db.query(User).filter(User.email == email).first()
 
-        if row:
+        if user:
             return AuthenticatedUser(
-                id=row[0],
-                email=row[1],
-                first_name=row[2] or email.split("@")[0],
-                last_name=row[3] or "",
-                role=row[4],
-                organization_id=row[5]
+                id=user.id,
+                email=user.email,
+                first_name=user.first_name or email.split("@")[0],
+                last_name=user.last_name or "",
+                role=user.role,
+                organization_id=getattr(user, "organization_id", None)
             )
 
         logger.warning(f"[WebSocketAuth] User not found for email: {email}")
@@ -154,30 +146,23 @@ def lookup_user_by_email(db: Session, email: str) -> Optional[AuthenticatedUser]
 def lookup_user_by_id(db: Session, user_id: int) -> Optional[AuthenticatedUser]:
     """
     Look up user in database by ID.
+    Uses ORM query to properly decrypt EncryptedString columns (first_name, last_name).
 
     Returns:
         AuthenticatedUser or None if not found
     """
     try:
-        result = db.execute(
-            text("""
-                SELECT id, email, first_name, last_name, role, organization_id
-                FROM users
-                WHERE id = :user_id
-                LIMIT 1
-            """),
-            {"user_id": user_id}
-        )
-        row = result.fetchone()
+        from database.models import User
+        user = db.query(User).filter(User.id == user_id).first()
 
-        if row:
+        if user:
             return AuthenticatedUser(
-                id=row[0],
-                email=row[1],
-                first_name=row[2] or row[1].split("@")[0],
-                last_name=row[3] or "",
-                role=row[4],
-                organization_id=row[5]
+                id=user.id,
+                email=user.email,
+                first_name=user.first_name or user.email.split("@")[0],
+                last_name=user.last_name or "",
+                role=user.role,
+                organization_id=getattr(user, "organization_id", None)
             )
 
         logger.warning(f"[WebSocketAuth] User not found for ID: {user_id}")

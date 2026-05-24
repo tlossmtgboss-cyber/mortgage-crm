@@ -580,11 +580,22 @@ class MobileVoiceSession:
         # Start idle timeout background check
         self._idle_check_task = asyncio.create_task(self._idle_timeout_loop())
 
-        # Play greeting — personalize with the LO's name
+        # Play greeting — personalize with the logged-in user's name
+        # Must query via ORM to decrypt EncryptedString columns (raw SQL returns ciphertext)
         first_name = ""
-        if self.user_obj:
-            first_name = getattr(self.user_obj, "first_name", "") or ""
-        if first_name:
+        try:
+            from database.models import User
+            user_email = getattr(self.user_obj, "email", None) or self.user_id
+            if user_email:
+                orm_user = self.db.query(User).filter(User.email == user_email).first()
+                if orm_user:
+                    first_name = (orm_user.first_name or "").strip()
+                    logger.info(f"[MobileVoiceSession] Greeting user: first_name='{first_name}' for {user_email}")
+                else:
+                    logger.warning(f"[MobileVoiceSession] No User record for {user_email}")
+        except Exception as e:
+            logger.error(f"[MobileVoiceSession] Error looking up user name: {e}")
+        if first_name and not first_name.startswith("gAAAAA"):
             greeting = f"Hey {first_name}, Aria here. What can I help you with?"
         else:
             greeting = "Hey, Aria here. What can I help you with?"
