@@ -221,13 +221,24 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
 
     try:
         from database.models import Lead
-        query = db.query(Lead).filter(Lead.phone == customer_phone)
+        # Flexible phone matching — strip to last 10 digits to handle format differences
+        cleaned = ''.join(filter(str.isdigit, customer_phone or ""))
+        if len(cleaned) >= 10:
+            cleaned = cleaned[-10:]
+        query = db.query(Lead).filter(Lead.phone.ilike(f"%{cleaned}")) if cleaned else db.query(Lead).filter(Lead.phone == customer_phone)
         if org_id:
             query = query.filter(Lead.organization_id == org_id)
         lead = query.first()
         if lead:
             first_message = f"Hello {lead.first_name}! Thanks for calling back. How can I help you today?"
-            system_content += f"\n\nCALLER CONTEXT: You are speaking with {lead.first_name} {lead.last_name}, an existing customer."
+            caller_ctx = f"\n\nCALLER CONTEXT: You are speaking with {lead.first_name} {lead.last_name}, an existing customer."
+            if lead.email:
+                caller_ctx += f"\nTheir email address is {lead.email}."
+            if lead.phone:
+                caller_ctx += f"\nTheir phone number is {lead.phone}."
+            if lead.stage:
+                caller_ctx += f"\nCurrent stage: {lead.stage}."
+            system_content += caller_ctx
     except Exception as e:
         logger.warning(f"Could not fetch lead data for assistant-request: {e}")
 
@@ -1261,8 +1272,20 @@ async def identify_caller_function(
         if not phone:
             return {"success": False, "error": "Phone number required"}
 
+        # Resolve org_id from the Vapi call metadata for tenant scoping
+        call_data = data.get("call", {})
+        org_id = None
+        assistant_id = call_data.get("assistantId")
+        if assistant_id:
+            try:
+                assistant = db.query(VapiAssistant).filter(VapiAssistant.assistant_id == assistant_id).first()
+                if assistant:
+                    org_id = getattr(assistant, 'organization_id', None)
+            except Exception:
+                pass
+
         integration = VapiCRMIntegration(db)
-        result = await integration.identify_caller(phone)
+        result = await integration.identify_caller(phone, org_id=org_id)
 
         return {
             "success": True,

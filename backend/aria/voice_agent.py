@@ -212,8 +212,16 @@ class AriaVoiceAgent(Agent):
                 + "\n\n" + proactive_context
             )
 
+        lo_first = ""
+        fn = self._session_data.get("full_name", "")
+        if fn:
+            lo_first = fn.split()[0]
+
         greetings = {
             "lo_assistant": (
+                f"Greet the loan officer by name. "
+                f"Say something like 'Hey {lo_first}, Aria here. What can I help you with?'"
+                if lo_first else
                 "Greet the loan officer briefly. "
                 "Say something like 'Hey, Aria here. What can I help you with?'"
             ),
@@ -1634,6 +1642,7 @@ async def aria_voice_session(ctx: agents.JobContext):
         context = {
             "user_id": metadata.get("user_id"),
             "organization_id": metadata.get("org_id") or metadata.get("organization_id"),
+            "full_name": metadata.get("full_name", ""),
             "email": metadata.get("email", ""),
             "company_name": company_name,
         }

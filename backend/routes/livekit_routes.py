@@ -127,6 +127,7 @@ async def create_voice_token(
         metadata = {
             "user_id": str(user_id),
             "org_id": str(org_id or ""),
+            "full_name": getattr(current_user, "full_name", ""),
             "email": getattr(current_user, "email", ""),
             "company_name": company_name,
             "agent": AGENT_NAME,

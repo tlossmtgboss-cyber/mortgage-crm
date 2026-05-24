@@ -97,7 +97,7 @@ def _get_aria_graph():
 
 
 def _verify_ws_token(token: str):
-    """Verify a JWT token for WebSocket auth (no Depends available in WS)."""
+    """Verify JWT and extract claims. DB enrichment happens in _enrich_ws_user."""
     try:
         from auth.tokens import verify_access_token
         payload = verify_access_token(token)
@@ -105,18 +105,55 @@ def _verify_ws_token(token: str):
             return None
 
         class _User:
-            def __init__(self, p):
-                self.id = p.get("sub") or p.get("user_id")
-                self.user_id = self.id
-                self.org_id = p.get("tenant_id") or p.get("org_id") or p.get("organization_id", "")
-                self.full_name = p.get("name", "")
-                self.role = p.get("role", "user")
-                self.organization_id = self.org_id
+            pass
 
-        return _User(payload)
+        u = _User()
+        u.id = payload.get("user_id") or payload.get("sub", "")
+        u.user_id = u.id
+        u.org_id = str(payload.get("tenant_id") or payload.get("org_id") or payload.get("organization_id", ""))
+        u.organization_id = u.org_id
+        u.full_name = ""
+        u.email = payload.get("sub", "")
+        u.role = "user"
+        return u
     except Exception as e:
         logger.warning(f"WS token verification failed: {e}")
         return None
+
+
+async def _enrich_ws_user(user):
+    """Look up the real User row in a thread to avoid blocking the event loop."""
+    def _db_lookup():
+        from db import SessionLocal
+        from database.models import User as UserModel
+        db = SessionLocal()
+        try:
+            row = db.query(UserModel).filter(UserModel.email == user.email).first() if user.email else None
+            if row:
+                return {
+                    "full_name": row.full_name or "",
+                    "email": row.email or user.email,
+                    "role": getattr(row, "role", "user") or "user",
+                    "id": row.id,
+                    "org_id": str(getattr(row, "organization_id", "") or ""),
+                }
+        finally:
+            db.close()
+        return None
+
+    try:
+        result = await asyncio.wait_for(asyncio.to_thread(_db_lookup), timeout=5.0)
+        if result:
+            user.full_name = result["full_name"]
+            user.email = result["email"]
+            user.role = result["role"]
+            user.id = result["id"]
+            user.user_id = result["id"]
+            if not user.org_id:
+                user.org_id = result["org_id"]
+                user.organization_id = result["org_id"]
+    except Exception as e:
+        logger.warning(f"WS user DB enrichment failed, using JWT claims: {e}")
 
 
 @router.websocket("/ws")
@@ -147,12 +184,14 @@ async def aria_websocket(
 
     user = _verify_ws_token(token)
     if not user:
-        # If we haven't accepted yet (legacy path with token in URL), close cleanly
         try:
             await websocket.close(code=4001)
         except RuntimeError:
             pass
         return
+
+    # Enrich user with DB data (full_name, email) without blocking event loop
+    await _enrich_ws_user(user)
 
     # Accept if not already accepted (legacy path with token in URL)
     if websocket.query_params.get("token"):
@@ -161,15 +200,7 @@ async def aria_websocket(
     session_store = _get_session_store()
     uid = str(user.user_id)
 
-    state = await session_store.get_or_create(
-        session_id=session_id,
-        user_id=uid,
-        org_id=str(user.org_id),
-        user_name=user.full_name,
-        user_role=user.role,
-    )
-
-    # Send greeting
+    # Load pipeline context (also returns user_name from DB as fallback)
     try:
         from aria.core.context_loader import AriaContextLoader
         context_loader = AriaContextLoader()
@@ -177,7 +208,20 @@ async def aria_websocket(
     except Exception as e:
         logger.warning(f"Context load failed for user {uid}: {e}")
         context = {"active_loan_count": 0, "urgent_task_count": 0}
-    greeting = _build_greeting(user.full_name, context)
+
+    # Use DB-resolved full_name; fall back to context loader's user_name
+    resolved_name = user.full_name or context.get("user_name", "")
+
+    state = await session_store.get_or_create(
+        session_id=session_id,
+        user_id=uid,
+        org_id=str(user.org_id),
+        user_name=resolved_name,
+        user_role=user.role,
+        user_email=getattr(user, "email", ""),
+    )
+
+    greeting = _build_greeting(resolved_name, context)
     await websocket.send_json({"type": "greeting", "content": greeting})
 
     # Start heartbeat background task (ping every 30s)
@@ -358,6 +402,7 @@ async def aria_chat_rest(
         org_id=str(getattr(current_user, "organization_id", "")),
         user_name=getattr(current_user, "full_name", ""),
         user_role=getattr(current_user, "role", "user"),
+        user_email=getattr(current_user, "email", ""),
     )
 
     state = {**state, "messages": state.get("messages", []) + [HumanMessage(content=req.message)]}

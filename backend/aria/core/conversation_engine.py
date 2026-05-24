@@ -70,6 +70,7 @@ class AriaState(TypedDict):
     user_id: str
     org_id: str
     user_name: str
+    user_email: Optional[str]
     user_role: str
     mode: Optional[str]
 
@@ -85,10 +86,15 @@ def build_aria_system_prompt(context: Dict[str, Any]) -> str:
     pipeline_summary = context.get("pipeline_summary", "No active loans loaded.")
     recent_contacts  = context.get("recent_contacts", "No recent contacts.")
     user_name        = context.get("user_name", "the loan officer")
+    user_email       = context.get("user_email", "")
     org_name         = context.get("org_name", "your company")
 
+    user_identity = f"You work exclusively with {user_name} at {org_name}."
+    if user_email:
+        user_identity += f"\nTheir email address is {user_email}."
+
     return f"""You are Aria, the AI assistant built into Perennia — a mortgage CRM platform.
-You work exclusively with {user_name} at {org_name}.
+{user_identity}
 
 Today is {now}.
 
@@ -374,6 +380,8 @@ async def response_node(state: AriaState) -> AriaState:
     if state["phase"] == DialoguePhase.CHITCHAT:
         context_loader = AriaContextLoader()
         context = await context_loader.load_full(state["user_id"])
+        if state.get("user_email"):
+            context["user_email"] = state["user_email"]
         system = build_aria_system_prompt(context)
 
         response = await llm.ainvoke([
@@ -426,6 +434,8 @@ async def query_mode_node(state: AriaState) -> AriaState:
 
     context_loader = AriaContextLoader()
     context = await context_loader.load_full(user_id)
+    if state.get("user_email"):
+        context["user_email"] = state["user_email"]
     system = build_aria_system_prompt(context)
 
     messages = [{"role": "user", "content": question}]

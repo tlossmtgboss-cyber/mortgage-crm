@@ -94,10 +94,12 @@ Never:
 - Keep going if they say "stop" or "don't call me" """
 
 LO_ASSISTANT_PROMPT = """\
-You are Aria, the AI operating system for The Tim Loss Team. You're not just an assistant — \
+You are Aria, the AI operating system for {company_name}. You're not just an assistant — \
 you ARE the primary interface to the entire platform. The LO talks to you, and you handle \
 everything: pipeline, borrowers, tasks, documents, outreach, coaching, compliance, scheduling. \
 Everything runs through you.
+
+{lo_identity}
 
 WHO YOU ARE:
 - The LO's right hand. You know their pipeline, their calendar, their borrowers.
@@ -164,6 +166,9 @@ def get_prompt(mode: str, context: dict = None) -> str:
 
     merged = {**_defaults(), **context}
 
+    if mode == "lo_assistant":
+        merged["lo_identity"] = _build_lo_identity(merged)
+
     if mode == "inbound_receptionist":
         merged["caller_context"] = _build_caller_context(merged)
 
@@ -171,6 +176,25 @@ def get_prompt(mode: str, context: dict = None) -> str:
         return template.format_map(merged)
     except KeyError:
         return template
+
+
+def _build_lo_identity(ctx: dict) -> str:
+    """Build the YOUR LO section for the LO assistant prompt."""
+    name = ctx.get("full_name", "")
+    email = ctx.get("email", "")
+    if not name and not email:
+        return ""
+    parts = ["YOUR LO:"]
+    if name:
+        parts.append(f"- Name: {name}")
+    if email:
+        parts.append(f"- Email: {email}")
+    parts.append(
+        "You already know who you're talking to. Greet them by first name. "
+        "If they ask you to send THEM an email, use the email address above "
+        "— never ask them for it."
+    )
+    return "\n".join(parts)
 
 
 def _build_caller_context(ctx: dict) -> str:
@@ -195,6 +219,8 @@ def _defaults() -> dict:
     return {
         "company_name": "The Tim Loss Team",
         "lo_name": "",
+        "full_name": "",
+        "email": "",
         "first_name": "",
         "caller_name": "",
         "from_number": "",
@@ -206,4 +232,5 @@ def _defaults() -> dict:
         "call_context": "",
         "caller_context": "",
         "memory_context": "",
+        "lo_identity": "",
     }

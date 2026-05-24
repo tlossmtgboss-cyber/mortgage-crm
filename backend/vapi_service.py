@@ -1317,7 +1317,7 @@ class VapiCRMIntegration:
             logger.error(f"Error creating outbound call: {e}")
             raise
 
-    async def identify_caller(self, phone_number: str) -> Dict[str, Any]:
+    async def identify_caller(self, phone_number: str, org_id: int = None) -> Dict[str, Any]:
         """
         Comprehensive caller identification and routing recommendation
         Returns: caller type, loan status, assigned team members, routing suggestion
@@ -1331,10 +1331,13 @@ class VapiCRMIntegration:
             if len(cleaned_phone) >= 10:
                 cleaned_phone = cleaned_phone[-10:]  # Last 10 digits
 
-            # 1. Check for existing lead
-            lead = self.db.query(Lead).filter(
+            # 1. Check for existing lead (scoped to org if available)
+            query = self.db.query(Lead).filter(
                 Lead.phone.ilike(f"%{cleaned_phone}")
-            ).first()
+            )
+            if org_id:
+                query = query.filter(Lead.organization_id == org_id)
+            lead = query.first()
 
             # 2. Check for active loans (if you have a Loan model)
             # For now, we'll check lead stage
@@ -1370,6 +1373,8 @@ class VapiCRMIntegration:
                     "caller_type": caller_type,
                     "lead_id": lead.id,
                     "lead_name": lead.name,
+                    "lead_email": lead.email or "",
+                    "lead_phone": lead.phone or "",
                     "lead_stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage),
                     "lead_source": lead.source,
                     "assigned_owner_id": lead.owner_id,

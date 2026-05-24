@@ -59,6 +59,7 @@ class AriaSessionStore:
         self, session_id: str,
         user_id: str, org_id: str,
         user_name: str, user_role: str,
+        user_email: str = "",
     ) -> Dict[str, Any]:
         """Load existing session or create a new one."""
         existing = await self._load(session_id)
@@ -77,6 +78,7 @@ class AriaSessionStore:
             "user_id": user_id,
             "org_id": org_id,
             "user_name": user_name,
+            "user_email": user_email,
             "user_role": user_role,
             "iteration_count": 0,
             "error": None,
@@ -96,6 +98,7 @@ class AriaSessionStore:
             "user_id": state.get("user_id", ""),
             "org_id": state.get("org_id", ""),
             "user_name": state.get("user_name", ""),
+            "user_email": state.get("user_email", ""),
             "user_role": state.get("user_role", ""),
             "iteration_count": state.get("iteration_count", 0),
             "error": state.get("error"),
