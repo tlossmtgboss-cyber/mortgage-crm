@@ -272,7 +272,7 @@ async def generate_sms_response(
 def detect_borrower_tone(messages: List[Dict]) -> str:
     """Analyze the last few borrower messages to detect communication tone.
 
-    Returns one of: friendly, professional, skeptical, frustrated, brief, detailed
+    Returns one of: hostile, friendly, professional, skeptical, frustrated, brief, detailed
     """
     if not messages:
         return "professional"
@@ -283,6 +283,16 @@ def detect_borrower_tone(messages: List[Dict]) -> str:
 
     combined = " ".join(texts).lower()
     avg_len = sum(len(t) for t in texts) / len(texts)
+
+    # ── Hostile signals (rude, crude, abusive — stronger than frustrated) ──
+    hostile_words = [
+        "fuck", "shit", "damn", "ass", "bitch", "idiot", "stupid",
+        "dumb", "moron", "trash", "garbage", "suck", "pathetic",
+        "incompetent", "useless", "joke", "clown",
+    ]
+    hostile_count = sum(1 for w in hostile_words if w in combined)
+    if hostile_count >= 1:
+        return "hostile"
 
     # ── Frustrated signals ────────────────────────────────────────
     frustration_words = [
@@ -792,10 +802,11 @@ def _build_system_prompt(
 
     # Tone instruction
     tone_instructions = {
-        "friendly": "Match their friendly, upbeat energy. Use exclamation points sparingly. Be warm.",
-        "professional": "Keep it professional but approachable. Clear and informative.",
-        "skeptical": "Be extra transparent and reassuring. Acknowledge their concerns directly. No hard sell.",
-        "frustrated": "Be empathetic and patient. Acknowledge their frustration. Offer concrete help or a human connection.",
+        "friendly": "Match their friendly, upbeat energy. Be warm and fun — throw in a little humor if it fits.",
+        "professional": "Keep it professional but approachable. Clear, informative, with a touch of personality.",
+        "skeptical": "Be extra transparent and reassuring. Acknowledge their concerns directly. No hard sell. Let your competence speak.",
+        "frustrated": "Be empathetic but not robotic about it. Vary your empathy — 'That's rough' or 'Yeah, that's not okay' instead of 'I understand your frustration' on repeat. Offer concrete help or a human connection.",
+        "hostile": "Stay classy. Don't match their energy, don't lecture. Be helpful and unbothered. Kill them with kindness and competence. If they won't engage, offer to have their LO reach out when they're ready.",
         "brief": "Keep your response very short — they prefer brevity. One sentence if possible.",
         "detailed": "They like detail — feel free to use the full 300 character limit with helpful information.",
     }
@@ -812,10 +823,18 @@ def _build_system_prompt(
 You are texting {borrower_name} about their {loan_purpose} mortgage inquiry.
 Your personality: {personality}
 
+WHO YOU ARE IN TEXT:
+You're warm, witty, and real. You text like a smart friend who happens to know mortgages — \
+not like a corporate chatbot. You use humor naturally (never forced), you're quick on your feet, \
+and you make people feel like they're talking to someone who actually cares. \
+If someone is rude or crude over text, you stay classy — don't match their energy, \
+don't get passive-aggressive. Just stay helpful, unbothered, and professional. \
+If they keep being hostile, offer to have {lo_name} reach out directly.
+
 RULES:
 - Keep responses under 160 characters when possible (SMS-friendly)
 - For detailed questions, you may use up to 300 characters max
-- Sound natural and human — use contractions, casual language
+- Sound natural and human — use contractions, casual language, and personality
 - Never send the exact same response you've sent before in this conversation
 - Never quote specific interest rates, APRs, or percentage numbers
 - Never ask about race, religion, sex, national origin, marital status, age (ECOA)
