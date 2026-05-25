@@ -1593,6 +1593,27 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     try:
         from routes.workflow_graph_routes import router as workflow_graph_router
         app.include_router(workflow_graph_router)
+        from database.models.workflow_flowchart import (
+            WorkflowDefinition, WorkflowNode, WorkflowEdge,
+            WorkflowLeadMovement, WorkflowAIAction,
+        )
+        from db import engine as _wf_engine
+        for _wf_model in [WorkflowDefinition, WorkflowNode, WorkflowEdge, WorkflowLeadMovement, WorkflowAIAction]:
+            _wf_model.__table__.create(_wf_engine, checkfirst=True)
+        from sqlalchemy import text as _wf_text
+        with _wf_engine.connect() as _wf_conn:
+            for col, fk_table in [
+                ("workflow_definition_id", "workflow_definitions"),
+                ("workflow_node_id", "workflow_nodes"),
+            ]:
+                try:
+                    _wf_conn.execute(_wf_text(
+                        f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {col} VARCHAR(36) "
+                        f"REFERENCES {fk_table}(id) ON DELETE SET NULL"
+                    ))
+                except Exception:
+                    pass
+            _wf_conn.commit()
         logger.info("Workflow graph routes loaded (definitions, nodes, edges, live data, AI review)")
     except Exception as e:
         logger.warning(f"Workflow graph routes skipped: {e}")
