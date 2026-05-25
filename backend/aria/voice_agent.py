@@ -215,6 +215,24 @@ class AriaVoiceAgent(Agent):
         lo_first = ""
         fn = self._session_data.get("full_name", "")
         if not fn or not fn.strip():
+            user_id = self._session_data.get("user_id")
+            org_id = self._session_data.get("organization_id")
+            if user_id:
+                try:
+                    profile = await call_backend_tool_safe(
+                        "/internal/aria/user-profile",
+                        {"user_id": int(user_id), "organization_id": int(org_id) if org_id else None},
+                    )
+                    if profile.get("found") and profile.get("display_name"):
+                        fn = profile["display_name"]
+                        self._session_data["full_name"] = fn
+                        if self._mode == "lo_assistant":
+                            from agents.aria_prompts import get_prompt
+                            updated_prompt = get_prompt(self._mode, self._session_data) + self.INJECTION_DEFENSE
+                            await self.update_instructions(updated_prompt)
+                except Exception as e:
+                    logger.debug("[AriaVoice] Profile lookup failed (non-fatal): %s", e)
+        if not fn or not fn.strip():
             email = self._session_data.get("email", "") or ""
             fn = email.split("@")[0].replace(".", " ").title() if email else ""
         if fn and fn.strip():

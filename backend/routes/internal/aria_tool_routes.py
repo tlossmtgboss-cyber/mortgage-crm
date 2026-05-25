@@ -1142,3 +1142,48 @@ async def update_loan_endpoint(
         "updated": True,
         "fields_updated": updated_fields,
     }
+
+
+# ─── User Profile Endpoint ────────────────────────────────────────────────
+
+class UserProfileRequest(BaseModel):
+    user_id: int
+    organization_id: Optional[int] = None
+
+
+@router.post("/user-profile")
+async def get_user_profile(
+    req: UserProfileRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Return the display name and email for a user. Called by voice agent at session start."""
+    _verify_internal_key(request)
+    from database.models import User
+
+    query = db.query(User).filter(User.id == req.user_id)
+    if req.organization_id:
+        query = query.filter(User.organization_id == req.organization_id)
+    user = query.first()
+
+    if not user:
+        return {"found": False, "display_name": "", "email": ""}
+
+    display_name = ""
+    if user.first_name and user.last_name:
+        display_name = f"{user.first_name} {user.last_name}"
+    elif user.first_name:
+        display_name = user.first_name
+    elif user.last_name:
+        display_name = user.last_name
+
+    if not display_name:
+        display_name = (user.email or "").split("@")[0].replace(".", " ").title()
+
+    return {
+        "found": True,
+        "display_name": display_name,
+        "first_name": user.first_name or "",
+        "last_name": user.last_name or "",
+        "email": user.email or "",
+    }
