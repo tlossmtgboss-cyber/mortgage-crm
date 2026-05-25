@@ -270,6 +270,18 @@ async def lead_lookup(
     if not lead:
         return {"lead": None}
 
+    _log_audit(
+        db,
+        change_type="VOICE_LEAD_ACCESS",
+        entity_type="lead",
+        entity_id=lead.id,
+        before={},
+        after={"accessed_fields": ["first_name", "last_name", "phone", "email", "credit_score"]},
+        organization_id=req.organization_id,
+        user_id=None,
+        reason="aria_voice_agent_lead_lookup",
+    )
+
     return {
         "lead": {
             "id": lead.id,
@@ -303,6 +315,18 @@ async def lead_info(
     lead = q.first()
     if not lead:
         return {"error": f"Lead {req.lead_id} not found"}
+
+    _log_audit(
+        db,
+        change_type="VOICE_LEAD_ACCESS",
+        entity_type="lead",
+        entity_id=lead.id,
+        before={},
+        after={"accessed_fields": ["first_name", "last_name", "phone", "email", "credit_score", "annual_income", "monthly_debts", "employer_name"]},
+        organization_id=req.organization_id,
+        user_id=None,
+        reason="aria_voice_agent_lead_info",
+    )
 
     def _num(val):
         return float(val) if val is not None else None
@@ -375,6 +399,18 @@ async def loan_status(
     if not loan:
         return {"spoken_summary": "I couldn't find an active loan on file for that borrower."}
 
+    _log_audit(
+        db,
+        change_type="VOICE_LEAD_ACCESS",
+        entity_type="loan",
+        entity_id=loan.id,
+        before={},
+        after={"accessed_fields": ["stage", "loan_type", "loan_amount"]},
+        organization_id=req.organization_id,
+        user_id=None,
+        reason="aria_voice_agent_loan_status",
+    )
+
     stage = getattr(loan, "stage", "unknown")
     loan_type = getattr(loan, "loan_type", "")
     amount = getattr(loan, "loan_amount", "")
@@ -426,7 +462,7 @@ async def execute_tool(
             return {"result": result.to_dict()}
         return {"result": result}
     except Exception as e:
-        logger.error(f"Tool {req.tool_name} failed: {e}")
+        logger.error("Tool %s failed: %s", req.tool_name, type(e).__name__)
         return {"error": str(e)}
 
 
@@ -459,6 +495,18 @@ async def lo_info(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return {"error": f"User {user_id} not found"}
+
+    _log_audit(
+        db,
+        change_type="VOICE_PROFILE_ACCESS",
+        entity_type="user",
+        entity_id=user.id,
+        before={},
+        after={"accessed_fields": ["first_name", "last_name", "phone", "email"]},
+        organization_id=req.organization_id,
+        user_id=req.user_id or req.lead_id,
+        reason="aria_voice_agent_lo_info",
+    )
 
     return {
         "id": user.id,
@@ -917,6 +965,18 @@ async def loan_info(
     if not loan:
         return {"error": "Loan not found"}
 
+    _log_audit(
+        db,
+        change_type="VOICE_LEAD_ACCESS",
+        entity_type="loan",
+        entity_id=loan.id,
+        before={},
+        after={"accessed_fields": ["borrower_name", "borrower_email", "borrower_phone", "amount", "rate", "stage"]},
+        organization_id=req.organization_id,
+        user_id=None,
+        reason="aria_voice_agent_loan_info",
+    )
+
     def _num(val):
         return float(val) if val is not None else None
 
@@ -1164,10 +1224,23 @@ async def get_user_profile(
     query = db.query(User).filter(User.id == req.user_id)
     if req.organization_id:
         query = query.filter(User.organization_id == req.organization_id)
+    else:
+        logger.warning("[aria-internal] user-profile called without organization_id for user_id=%s", req.user_id)
     user = query.first()
 
     if not user:
         return {"found": False, "display_name": "", "email": ""}
+
+    _log_audit(
+        db,
+        change_type="VOICE_PROFILE_ACCESS",
+        entity_type="user",
+        entity_id=user.id,
+        before={},
+        after={"accessed_fields": ["display_name", "first_name", "last_name", "email"]},
+        organization_id=req.organization_id,
+        user_id=req.user_id,
+    )
 
     display_name = ""
     if user.first_name and user.last_name:

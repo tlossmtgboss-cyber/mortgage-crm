@@ -57,7 +57,7 @@ class AIReceptionistSMSService:
                 from integrations.sms_service import get_sms_client
                 self._sms_client = get_sms_client(db=self.db)
             except Exception as e:
-                logger.error(f"Failed to initialize SMS client: {e}")
+                logger.error("Failed to initialize SMS client: %s", type(e).__name__)
                 return None
         return self._sms_client
 
@@ -95,7 +95,7 @@ class AIReceptionistSMSService:
                 logger.warning("Post-call followup SMS blocked by compliance for %s: %s", phone_number[-4:], reason)
                 return {"success": False, "error": f"Compliance block: {reason}"}
         except Exception as e:
-            logger.error("SMS compliance check failed for %s: %s — blocking send (fail-closed)", phone_number[-4:], e)
+            logger.error("SMS compliance check failed for ...%s: %s — blocking send (fail-closed)", phone_number[-4:], type(e).__name__)
             return {"success": False, "error": "Compliance check unavailable"}
 
         client = self._get_sms_client()
@@ -148,7 +148,7 @@ Or just reply to this text with any questions!
                     message_sid=message_sid
                 )
 
-                logger.info(f"Post-call SMS sent. SID: {message_sid}")
+                logger.info("Post-call SMS sent successfully")
                 return {
                     "success": True,
                     "message_sid": message_sid,
@@ -158,7 +158,7 @@ Or just reply to this text with any questions!
                 return {"success": False, "error": "Failed to send SMS"}
 
         except Exception as e:
-            logger.error(f"Error sending post-call SMS: {e}")
+            logger.error("Error sending post-call SMS: %s", type(e).__name__)
             return {"success": False, "error": "Internal server error"}
 
     async def send_calendly_link(
@@ -186,7 +186,7 @@ Or just reply to this text with any questions!
                 logger.warning("Calendly SMS blocked by compliance for %s: %s", phone_number[-4:], reason)
                 return {"success": False, "error": f"Compliance block: {reason}"}
         except Exception as e:
-            logger.error("SMS compliance check failed for %s: %s — blocking send (fail-closed)", phone_number[-4:], e)
+            logger.error("SMS compliance check failed for ...%s: %s — blocking send (fail-closed)", phone_number[-4:], type(e).__name__)
             return {"success": False, "error": "Compliance check unavailable"}
 
         client = self._get_sms_client()
@@ -226,7 +226,7 @@ Pick a time that works best for you!
                     message_sid=message_sid
                 )
 
-                logger.info(f"Calendly link SMS sent. SID: {message_sid}")
+                logger.info("Calendly link SMS sent successfully")
                 return {
                     "success": True,
                     "message_sid": message_sid,
@@ -236,7 +236,7 @@ Pick a time that works best for you!
                 return {"success": False, "error": "Failed to send SMS"}
 
         except Exception as e:
-            logger.error(f"Error sending Calendly SMS: {e}")
+            logger.error("Error sending Calendly SMS: %s", type(e).__name__)
             return {"success": False, "error": "Internal server error"}
 
     async def send_appointment_confirmation(
@@ -304,7 +304,7 @@ We'll call you at this number at the scheduled time.
                 return {"success": False, "error": "Failed to send SMS"}
 
         except Exception as e:
-            logger.error(f"Error sending appointment confirmation SMS: {e}")
+            logger.error("Error sending appointment confirmation SMS: %s", type(e).__name__)
             return {"success": False, "error": "Internal server error"}
 
     async def handle_inbound_sms(
@@ -383,7 +383,7 @@ We'll call you at this number at the scheduled time.
             }
 
         except Exception as e:
-            logger.error(f"Error handling inbound SMS: {e}")
+            logger.error("Error handling inbound SMS: %s", type(e).__name__)
             return {"success": False, "error": "Internal server error"}
 
     async def _find_lead_by_phone(self, phone_number: str):
@@ -406,7 +406,7 @@ We'll call you at this number at the scheduled time.
 
             return lead
         except Exception as e:
-            logger.error(f"Error finding lead: {e}")
+            logger.error("Error finding lead: %s", type(e).__name__)
             return None
 
     async def _analyze_sms_intent(
@@ -578,7 +578,7 @@ Or reply with your question and I'll get back to you!"""
             self.db.add(activity)
             self.db.commit()
         except Exception as e:
-            logger.error(f"Error logging SMS activity: {e}")
+            logger.error("Error logging SMS activity: %s", type(e).__name__)
             # Don't fail the main operation
 
 
@@ -994,7 +994,7 @@ class VapiCRMIntegration:
             )
 
         except Exception as e:
-            logger.error(f"Error syncing voicemail drop status: {e}", exc_info=True)
+            logger.error("Error syncing voicemail drop status: %s", type(e).__name__, exc_info=True)
             # Don't raise — this shouldn't block the main webhook processing
 
     async def _send_post_call_sms(self, vapi_call: VapiCall, call_data: Dict[str, Any]) -> None:
@@ -1095,7 +1095,7 @@ class VapiCRMIntegration:
 
         except Exception as e:
             # Don't fail the whole process if SMS fails
-            logger.error(f"Error sending post-call SMS: {e}")
+            logger.error("Error sending post-call SMS: %s", type(e).__name__)
 
     async def _process_call_intelligence(self, vapi_call: VapiCall, call_data: Dict[str, Any]) -> None:
         """
@@ -1112,7 +1112,7 @@ class VapiCRMIntegration:
         Then runs Application Engine audit if loan_id is associated.
         """
         try:
-            logger.info(f"Processing call {vapi_call.vapi_call_id} through Call Intelligence")
+            logger.info("Processing call %s through Call Intelligence", vapi_call.vapi_call_id)
 
             # Build call_data format expected by integration
             vapi_format_data = {
@@ -1136,9 +1136,10 @@ class VapiCRMIntegration:
 
             if ci_result.get("success"):
                 logger.info(
-                    f"Call Intelligence processed {vapi_call.vapi_call_id}: "
-                    f"{ci_result.get('extractions_count', 0)} extractions, "
-                    f"{ci_result.get('tasks_created', 0)} tasks created"
+                    "Call Intelligence processed %s: %d extractions, %d tasks created",
+                    vapi_call.vapi_call_id,
+                    ci_result.get('extractions_count', 0),
+                    ci_result.get('tasks_created', 0),
                 )
 
                 # Update VapiCall with CI processing status
@@ -1148,13 +1149,14 @@ class VapiCRMIntegration:
                 self.db.commit()
             else:
                 logger.warning(
-                    f"Call Intelligence processing failed for {vapi_call.vapi_call_id}: "
-                    f"{ci_result.get('error', 'Unknown error')}"
+                    "Call Intelligence processing failed for %s: %s",
+                    vapi_call.vapi_call_id,
+                    ci_result.get('error', 'Unknown error'),
                 )
 
         except Exception as e:
             # Don't fail the whole process if CI fails
-            logger.exception(f"Call Intelligence error for {vapi_call.vapi_call_id}: {e}")
+            logger.exception("Call Intelligence error for %s: %s", vapi_call.vapi_call_id, type(e).__name__)
 
     async def _process_status_update(self, data: Dict[str, Any]) -> Optional[VapiCall]:
         """Process real-time status updates"""
@@ -1229,7 +1231,7 @@ class VapiCRMIntegration:
                 self.db.add(lead_activity)
 
         except Exception as e:
-            logger.error(f"Error creating/updating lead: {e}")
+            logger.error("Error creating/updating lead: %s", type(e).__name__)
 
     async def _extract_action_items(self, vapi_call: VapiCall, call_data: Dict) -> None:
         """Extract action items from call analysis"""
@@ -1311,10 +1313,10 @@ class VapiCRMIntegration:
             )
             self.db.add(activity)
 
-            logger.info(f"Logged call {vapi_call.vapi_call_id} to dashboard")
+            logger.info("Logged call %s to dashboard", vapi_call.vapi_call_id)
 
         except Exception as e:
-            logger.error(f"Error logging to dashboard: {e}")
+            logger.error("Error logging to dashboard: %s", type(e).__name__)
             # Don't fail the whole process if dashboard logging fails
 
     def _extract_sentiment(self, analysis: Dict) -> str:
@@ -1333,7 +1335,7 @@ class VapiCRMIntegration:
         try:
             return datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
         except Exception as e:
-            logger.warning(f"Error parsing datetime string '{dt_string}': {e}")
+            logger.warning("Error parsing datetime string: %s", type(e).__name__)
             return None
 
     async def create_outbound_call(
@@ -1389,7 +1391,7 @@ class VapiCRMIntegration:
             return vapi_call
 
         except Exception as e:
-            logger.error(f"Error creating outbound call: {e}")
+            logger.error("Error creating outbound call: %s", type(e).__name__)
             raise
 
     async def identify_caller(self, phone_number: str, org_id: int = None) -> Dict[str, Any]:
@@ -1408,12 +1410,14 @@ class VapiCRMIntegration:
 
             # 1. Check for existing lead (scoped to org if available)
             from sqlalchemy import func
-            query = self.db.query(Lead).filter(
-                func.regexp_replace(Lead.phone, '[^0-9]', '', 'g').like(f"%{cleaned_phone}")
-            )
-            if org_id:
-                query = query.filter(Lead.organization_id == org_id)
-            lead = query.first()
+            lead = None
+            if cleaned_phone and len(cleaned_phone) >= 10:
+                cleaned_phone = cleaned_phone[-10:]
+                phone_digits = func.right(func.regexp_replace(Lead.phone, '[^0-9]', '', 'g'), 10)
+                query = self.db.query(Lead).filter(phone_digits == cleaned_phone)
+                if org_id:
+                    query = query.filter(Lead.organization_id == org_id)
+                lead = query.first()
 
             # 2. Check for active loans (if you have a Loan model)
             # For now, we'll check lead stage
@@ -1468,7 +1472,7 @@ class VapiCRMIntegration:
                 }
 
         except Exception as e:
-            logger.error(f"Error identifying caller: {e}")
+            logger.error("Error identifying caller: %s", type(e).__name__)
             return {
                 "found": False,
                 "error": "Internal server error",
@@ -1593,7 +1597,7 @@ Status: {whisper_data.get('caller_type', 'Unknown')}.
                 routing_log.transfer_error = str(transfer_error)
                 self.db.commit()
 
-                logger.error(f"Transfer failed: {transfer_error}")
+                logger.error("Transfer failed: %s", type(transfer_error).__name__)
                 return {
                     "success": False,
                     "reason": "transfer_failed",
@@ -1602,7 +1606,7 @@ Status: {whisper_data.get('caller_type', 'Unknown')}.
                 }
 
         except Exception as e:
-            logger.error(f"Error in transfer_call_with_whisper: {e}")
+            logger.error("Error in transfer_call_with_whisper: %s", type(e).__name__)
             self.db.rollback()
             return {
                 "success": False,

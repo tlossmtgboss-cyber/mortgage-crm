@@ -241,7 +241,9 @@ def _build_lo_identity(ctx: dict) -> str:
         return ""
     parts = ["YOUR LO:"]
     if name:
-        parts.append(f"- Name: {name}")
+        import re
+        safe_name = re.sub(r'[\x00-\x1f\x7f\[\]]', '', name)[:100]
+        parts.append(f"- Name: {safe_name}")
     if email:
         parts.append(f"- Email: {email}")
     parts.append(
@@ -255,7 +257,9 @@ def _build_lo_identity(ctx: dict) -> str:
 def _build_caller_context(ctx: dict) -> str:
     """Build the caller context section injected into the receptionist prompt."""
     if ctx.get("is_existing_client") and ctx.get("caller_name"):
-        parts = [f"KNOWN CALLER: {ctx['caller_name']}"]
+        import re
+        safe_name = re.sub(r'[\x00-\x1f\x7f\[\]]', '', ctx['caller_name'])[:100]
+        parts = [f"KNOWN CALLER: {safe_name}"]
         if ctx.get("lead_id"):
             parts.append(f"Lead ID: {ctx['lead_id']}")
         if ctx.get("stage"):

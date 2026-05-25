@@ -27,6 +27,7 @@ if _aria_dir not in sys.path or sys.path[0] != _aria_dir:
 import json
 import logging
 import asyncio
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -177,7 +178,7 @@ class AriaVoiceAgent(Agent):
             is_existing = self._session_data.get("is_existing_client", False)
             biz = self._session_data.get("company_name", "The Tim Loss Team")
             if is_existing and caller_name:
-                first = caller_name.split()[0]
+                first = re.sub(r'[\x00-\x1f\x7f\[\]]', '', caller_name.split()[0])[:50]
                 greeting = (
                     f"Greet the caller by name — you already know who they are. "
                     f"Say something like 'Hi {first}, thanks for calling {biz}, "
@@ -231,12 +232,12 @@ class AriaVoiceAgent(Agent):
                             updated_prompt = get_prompt(self._mode, self._session_data) + self.INJECTION_DEFENSE
                             await self.update_instructions(updated_prompt)
                 except Exception as e:
-                    logger.debug("[AriaVoice] Profile lookup failed (non-fatal): %s", e)
+                    logger.debug("[AriaVoice] Profile lookup failed (non-fatal): %s", type(e).__name__)
         if not fn or not fn.strip():
             email = self._session_data.get("email", "") or ""
             fn = email.split("@")[0].replace(".", " ").title() if email else ""
         if fn and fn.strip():
-            lo_first = fn.strip().split()[0]
+            lo_first = re.sub(r'[\x00-\x1f\x7f\[\]]', '', fn.strip().split()[0])[:50]
 
         greetings = {
             "lo_assistant": (
@@ -1178,7 +1179,7 @@ class AriaVoiceAgent(Agent):
                     )
                 )
             except Exception as e:
-                logger.error(f"SIP transfer failed: {e}")
+                logger.error("SIP transfer failed: %s", type(e).__name__)
                 return (
                     f"I wasn't able to connect the call — the transfer failed. "
                     f"{lo.get('full_name', 'Your loan officer')} can be reached at "
@@ -1689,9 +1690,9 @@ async def aria_voice_session(ctx: agents.JobContext):
         _fn = metadata.get("from_number", "")
         logger.info(
             "[AriaVoice] Inbound receptionist mode: "
-            "from=...%s caller=%s existing=%s",
+            "from=...%s caller_known=%s existing=%s",
             _fn[-4:] if _fn else "unknown",
-            caller_name or "NEW", is_existing,
+            bool(caller_name), is_existing,
         )
     elif trigger == "outbound_call":
         mode = "outbound_followup"

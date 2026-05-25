@@ -190,10 +190,10 @@ async def verify_admin_access(
                         finally:
                             db.close()
             except Exception as e:
-                logger.warning(f"JWT decode failed: {e}")
+                logger.warning("JWT decode failed: %s", type(e).__name__)
 
         except Exception as e:
-            logger.warning(f"Admin auth check failed: {e}")
+            logger.warning("Admin auth check failed: %s", type(e).__name__)
 
     raise HTTPException(
         status_code=403,
@@ -301,6 +301,19 @@ async def vapi_webhook(
         )
 
 
+def _sanitize_name_for_prompt(name: str) -> str:
+    """Strip control chars, newlines, and prompt injection patterns from names before embedding in prompts."""
+    if not name:
+        return ""
+    import re
+    name = re.sub(r'[\x00-\x1f\x7f]', '', name)  # strip control chars including newlines
+    name = re.sub(r'\[.*?\]', '', name)  # strip bracketed instructions
+    name = name.strip()
+    if len(name) > 50:
+        name = name[:50]
+    return name
+
+
 def _build_assistant_response(db: Session, message: dict) -> dict:
     """Build a full assistant config response for Vapi assistant-request."""
     call_data = message.get("call", {})
@@ -320,17 +333,25 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
     try:
         from database.models import Lead
         from sqlalchemy import func
-        # Flexible phone matching — strip to last 10 digits to handle format differences
         cleaned = ''.join(filter(str.isdigit, customer_phone or ""))
         if len(cleaned) >= 10:
             cleaned = cleaned[-10:]
-        query = db.query(Lead).filter(func.regexp_replace(Lead.phone, '[^0-9]', '', 'g').like(f"%{cleaned}")) if cleaned else db.query(Lead).filter(Lead.phone == customer_phone)
-        if org_id:
-            query = query.filter(Lead.organization_id == org_id)
-        lead = query.first()
+
+        lead = None
+        if cleaned and org_id:
+            phone_digits = func.right(func.regexp_replace(Lead.phone, '[^0-9]', '', 'g'), 10)
+            query = db.query(Lead).filter(
+                phone_digits == cleaned,
+                Lead.organization_id == org_id,
+            )
+            lead = query.first()
         if lead:
-            display_first = lead.first_name or (lead.name.split()[0] if lead.name else "there")
-            display_last = lead.last_name or (lead.name.split()[-1] if lead.name and " " in lead.name else "")
+            raw_first = lead.first_name or (lead.name.split()[0] if lead.name else "there")
+            raw_last = lead.last_name or (lead.name.split()[-1] if lead.name and " " in lead.name else "")
+            display_first = _sanitize_name_for_prompt(raw_first)
+            display_last = _sanitize_name_for_prompt(raw_last)
+            if not display_first:
+                display_first = "there"
             first_message = f"Hello {display_first}! Thanks for calling back. How can I help you today?"
             caller_ctx = f"\n\nCALLER CONTEXT: You are speaking with {display_first} {display_last}, an existing customer.".rstrip()
             if lead.email:
@@ -341,7 +362,7 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
                 caller_ctx += f"\nCurrent stage: {lead.stage}."
             system_content += caller_ctx
     except Exception as e:
-        logger.warning(f"Could not fetch lead data for assistant-request: {e}")
+        logger.warning("Could not fetch lead data for assistant-request: %s", type(e).__name__)
 
     server_base = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
 
@@ -698,7 +719,7 @@ async def get_lead_info_function(
         }
 
     except Exception as e:
-        logger.error(f"Error in get_lead_info_function: {e}")
+        logger.error("Error in get_lead_info_function: %s", type(e).__name__)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -783,7 +804,7 @@ async def update_lead_status_function(
         }
 
     except Exception as e:
-        logger.error(f"Error in update_lead_status_function: {e}")
+        logger.error("Error in update_lead_status_function: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -891,7 +912,7 @@ async def create_task_function(
                             logger.warning(f"Failed to send urgent task SMS: {send_result.get('error')}")
             except Exception as sms_error:
                 # Log error but don't fail the task creation
-                logger.error(f"Error sending urgent task SMS: {sms_error}")
+                logger.error("Error sending urgent task SMS: %s", type(sms_error).__name__)
 
         # Build response message that accurately reflects what happened
         if priority == "high" and sms_sent:
@@ -911,7 +932,7 @@ async def create_task_function(
         }
 
     except Exception as e:
-        logger.error(f"Error in create_task_function: {e}")
+        logger.error("Error in create_task_function: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -991,7 +1012,7 @@ async def schedule_appointment_function(
                 # Convert to UTC for storage
                 appointment_time = appointment_time.astimezone(pytz.UTC)
             except (ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse appointment time '{appointment_time_str}': {e}")
+                logger.warning("Failed to parse appointment time: %s", type(e).__name__)
 
         if not appointment_time:
             return {"success": False, "error": "Valid appointment time is required"}
@@ -1055,7 +1076,7 @@ async def schedule_appointment_function(
 
         except ValueError as conflict_err:
             # Conflict detected (double-booking, slot no longer available)
-            logger.warning(f"Appointment conflict: {conflict_err}")
+            logger.warning("Appointment conflict detected")
             return {
                 "success": False,
                 "error": str(conflict_err),
@@ -1152,7 +1173,7 @@ async def schedule_appointment_function(
             )
             db.add(dashboard_activity)
         except Exception as dash_err:
-            logger.warning(f"Failed to log receptionist dashboard activity: {dash_err}")
+            logger.warning("Failed to log receptionist dashboard activity: %s", type(dash_err).__name__)
 
         db.commit()
 
@@ -1205,7 +1226,7 @@ async def schedule_appointment_function(
         return response
 
     except Exception as e:
-        logger.error(f"Error in schedule_appointment_function: {e}", exc_info=True)
+        logger.error("Error in schedule_appointment_function: %s", type(e).__name__, exc_info=True)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -1439,7 +1460,7 @@ async def available_time_slots_function(
         }
 
     except Exception as e:
-        logger.error(f"Error in available_time_slots_function: {e}", exc_info=True)
+        logger.error("Error in available_time_slots_function: %s", type(e).__name__, exc_info=True)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -1586,7 +1607,7 @@ async def submit_preapproval_application_function(
         }
 
     except Exception as e:
-        logger.error(f"Error in submit_preapproval_application_function: {e}")
+        logger.error("Error in submit_preapproval_application_function: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -1679,7 +1700,7 @@ async def schedule_calendly_appointment_function(
                 sms_sent = sms_result.get("success", False)
                 logger.info(f"Calendly SMS sent to {mask_phone(phone)}: {sms_sent}")
             except Exception as sms_error:
-                logger.error(f"Error sending Calendly SMS: {sms_error}")
+                logger.error("Error sending Calendly SMS: %s", type(sms_error).__name__)
 
         # Create activity
         if lead:
@@ -1713,7 +1734,7 @@ async def schedule_calendly_appointment_function(
         }
 
     except Exception as e:
-        logger.error(f"Error in schedule_calendly_appointment_function: {e}")
+        logger.error("Error in schedule_calendly_appointment_function: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -1760,7 +1781,7 @@ async def identify_caller_function(
         }
 
     except Exception as e:
-        logger.error(f"Error in identify_caller_function: {e}")
+        logger.error("Error in identify_caller_function: %s", type(e).__name__)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -1864,7 +1885,7 @@ async def transfer_to_production_assistant_function(
             }
 
     except Exception as e:
-        logger.error(f"Error in transfer_to_production_assistant_function: {e}")
+        logger.error("Error in transfer_to_production_assistant_function: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -1975,7 +1996,7 @@ async def transfer_to_loan_officer_function(
             }
 
     except Exception as e:
-        logger.error(f"Error in transfer_to_loan_officer_function: {e}")
+        logger.error("Error in transfer_to_loan_officer_function: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -2085,7 +2106,7 @@ async def transfer_to_processor_function(
             }
 
     except Exception as e:
-        logger.error(f"Error in transfer_to_processor_function: {e}")
+        logger.error("Error in transfer_to_processor_function: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -2134,7 +2155,7 @@ async def get_available_staff(
         }
 
     except Exception as e:
-        logger.error(f"Error getting available staff: {e}")
+        logger.error("Error getting available staff: %s", type(e).__name__)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -2177,7 +2198,7 @@ async def get_routing_log(
         }
 
     except Exception as e:
-        logger.error(f"Error getting routing log: {e}")
+        logger.error("Error getting routing log: %s", type(e).__name__)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -2247,7 +2268,7 @@ async def update_staff_availability(
         }
 
     except Exception as e:
-        logger.error(f"Error updating staff availability: {e}")
+        logger.error("Error updating staff availability: %s", type(e).__name__)
         db.rollback()
         return {"success": False, "error": "Internal server error"}
 
@@ -2376,7 +2397,7 @@ async def create_outbound_call(
     except ValueError as e:
         raise HTTPException(status_code=400, detail="Bad request")
     except Exception as e:
-        logger.error(f"Outbound call error: {str(e)}")
+        logger.error("Outbound call error: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to create call")
 
 
@@ -3212,7 +3233,7 @@ async def ai_receptionist_sms_webhook(
         message_body = form_data.get("Body", "")
         message_sid = form_data.get("MessageSid", "")
 
-        logger.info(f"AI Receptionist SMS webhook: {from_number} -> {to_number}: {message_body[:50]}...")
+        logger.info("AI Receptionist SMS webhook: from=...%s to=...%s", from_number[-4:] if from_number else "????", to_number[-4:] if to_number else "????")
 
         # Idempotency check — deduplicate retried SMS webhooks via MessageSid
         if message_sid:
@@ -3235,7 +3256,7 @@ async def ai_receptionist_sms_webhook(
         )
 
     except Exception as e:
-        logger.error(f"AI Receptionist SMS webhook error: {e}")
+        logger.error("AI Receptionist SMS webhook error: %s", type(e).__name__)
         return JSONResponse(status_code=200, content={"status": "error"})
 
 
@@ -3257,10 +3278,10 @@ async def process_ai_receptionist_sms(
             to_number=to_number
         )
 
-        logger.info(f"AI Receptionist SMS processed: {result}")
+        logger.info("AI Receptionist SMS processed: lead_found=%s", result.get("lead_found", False) if isinstance(result, dict) else "unknown")
 
     except Exception as e:
-        logger.error(f"Error processing AI Receptionist SMS: {e}")
+        logger.error("Error processing AI Receptionist SMS: %s", type(e).__name__)
 
 
 @router.post("/sms/send-calendly")
@@ -3298,7 +3319,7 @@ async def send_calendly_sms(
         return result
 
     except Exception as e:
-        logger.error(f"Error sending Calendly SMS: {e}")
+        logger.error("Error sending Calendly SMS: %s", type(e).__name__)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -3364,7 +3385,7 @@ async def send_followup_sms(
         return result
 
     except Exception as e:
-        logger.error(f"Error sending follow-up SMS: {e}")
+        logger.error("Error sending follow-up SMS: %s", type(e).__name__)
         return {"success": False, "error": "Internal server error"}
 
 
@@ -3466,7 +3487,7 @@ async def send_sms_calendly_link_function(
             }
 
     except Exception as e:
-        logger.error(f"Error in send_sms_calendly_link_function: {e}")
+        logger.error("Error in send_sms_calendly_link_function: %s", type(e).__name__)
         return {
             "success": False,
             "error": "Internal server error",
