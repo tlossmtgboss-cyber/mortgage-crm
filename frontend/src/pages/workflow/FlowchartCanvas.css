@@ -41,15 +41,23 @@
 
 .wf-node-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 6px;
+}
+
+.wf-node-icon {
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
 .wf-node-label {
   font-size: 12px;
   font-weight: 600;
   color: var(--bt-text-primary, #1A1F1B);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wf-node-label.light { color: white; }
@@ -57,17 +65,38 @@
 .wf-node-badge {
   font-size: 9px;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 10px;
   background: rgba(59, 130, 246, 0.12);
   color: #3b82f6;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.wf-node-meta {
+/* Type-specific summary line */
+.wf-node-summary {
   font-size: 10px;
   color: var(--bt-text-muted, #8B8A7E);
-  margin-top: 2px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-node-summary.light { color: rgba(255, 255, 255, 0.7); }
+
+/* Delay node — prominent duration */
+.wf-node-delay .wf-node-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: #B25F18;
+}
+
+/* Condition node — summary */
+.wf-node-condition .wf-node-summary {
+  font-size: 10px;
+  font-style: italic;
+  color: #B8924A;
 }
 
 .wf-node-footer {
@@ -88,6 +117,15 @@
   padding: 1px 5px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.04);
+}
+
+.wf-node-role {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(31, 61, 46, 0.08);
+  color: var(--bt-primary, #1F3D2E);
 }
 
 .wf-node-status {
@@ -125,6 +163,48 @@
   background: var(--bt-accent, #B8924A);
   border-color: var(--bt-accent, #B8924A);
   transform: scale(1.3);
+}
+
+/* Condition branch ports (Yes / No) */
+.wf-condition-ports {
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  pointer-events: none;
+}
+
+.wf-condition-ports .wf-port {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  margin-left: 0;
+  pointer-events: auto;
+}
+
+.wf-port-label {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.wf-port-label.yes { color: var(--bt-success, #2D7A52); }
+.wf-port-label.no { color: var(--bt-error, #9B2C2C); }
+
+.wf-port-yes:hover {
+  background: var(--bt-success, #2D7A52);
+  border-color: var(--bt-success, #2D7A52);
+}
+
+.wf-port-no:hover {
+  background: var(--bt-error, #9B2C2C);
+  border-color: var(--bt-error, #9B2C2C);
 }
 
 /* Empty state */

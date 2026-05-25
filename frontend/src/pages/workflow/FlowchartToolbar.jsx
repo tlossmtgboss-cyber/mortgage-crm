@@ -4,7 +4,8 @@ const NODE_TYPES = [
   { type: 'task', label: 'Task', icon: '☑' },
   { type: 'condition', label: 'Condition', icon: '◇' },
   { type: 'delay', label: 'Delay', icon: '⏱' },
-  { type: 'notification', label: 'Notification', icon: '✉' },
+  { type: 'notification', label: 'Notify', icon: '✉' },
+  { type: 'end', label: 'End', icon: '⏹' },
 ];
 
 export default function FlowchartToolbar({

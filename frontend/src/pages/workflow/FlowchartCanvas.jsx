@@ -12,13 +12,25 @@ const NODE_TYPES = {
 
 const CHANNEL_ICONS = { phone: '📞', text: '📱', voicemail_drop: '📩', text_process: '💬', email: '✉️', referral_partner: '🤝' };
 
-function getNodeSize(type) {
-  return type === 'condition' ? { w: 180, h: 70 } : { w: 220, h: 90 };
-}
+const ACTION_LABELS = {
+  send_sms: '📱 Send SMS',
+  send_email: '✉️ Send Email',
+  send_voicemail: '📩 Voicemail Drop',
+  create_task: '☑️ Create Task',
+  make_call: '📞 Make Call',
+  update_field: '✏️ Update Field',
+  change_stage: '📊 Change Stage',
+  assign_owner: '👤 Assign Owner',
+  add_note: '📝 Add Note',
+  add_tag: '🏷️ Add Tag',
+  start_workflow: '🔄 Start Workflow',
+  webhook: '🔗 Webhook',
+};
 
-function getNodeCenter(node) {
-  const { w, h } = getNodeSize(node.type);
-  return { x: node.x + w / 2, y: node.y + h / 2 };
+function getNodeSize(type) {
+  if (type === 'condition') return { w: 200, h: 80 };
+  if (type === 'delay') return { w: 200, h: 80 };
+  return { w: 220, h: 90 };
 }
 
 function getNodeBottom(node) {
@@ -35,6 +47,57 @@ function bezierPath(from, to) {
   const dy = to.y - from.y;
   const cp = Math.max(Math.abs(dy) * 0.5, 40);
   return `M${from.x},${from.y} C${from.x},${from.y + cp} ${to.x},${to.y - cp} ${to.x},${to.y}`;
+}
+
+function getDelaySummary(config) {
+  if (!config) return 'Not configured';
+  const dt = config.delay_type || 'fixed_duration';
+  if (dt === 'fixed_duration') {
+    const amt = config.duration?.amount || 1;
+    const unit = config.duration?.unit || 'days';
+    return `Wait ${amt} ${unit}`;
+  }
+  if (dt === 'until_time') {
+    const day = config.until_time?.day || 'any';
+    const time = config.until_time?.time || '09:00';
+    return day === 'any' ? `Until ${time}` : `Until ${day} ${time}`;
+  }
+  if (dt === 'until_date_field') {
+    const field = config.until_field?.field?.split('.').pop() || '?';
+    const offset = config.until_field?.offset || 0;
+    const dir = config.until_field?.direction || 'before';
+    return offset ? `${offset}d ${dir} ${field}` : `On ${field}`;
+  }
+  if (dt === 'until_event') {
+    const evt = config.until_event?.event || 'any_reply';
+    const labels = { any_reply: 'any reply', sms_reply: 'SMS reply', email_reply: 'email reply', call_answer: 'call', form_submit: 'form', doc_uploaded: 'doc upload' };
+    return `Until ${labels[evt] || evt}`;
+  }
+  return 'Wait...';
+}
+
+function getConditionSummary(config) {
+  if (!config?.conditions?.length) return 'No conditions set';
+  const c = config.conditions[0];
+  if (!c.field) return 'Not configured';
+  const field = c.field.split('.').pop().replace(/_/g, ' ');
+  const op = c.operator === 'equals' ? '=' : c.operator === 'not_equals' ? '≠' : c.operator === 'greater_than' ? '>' : c.operator === 'less_than' ? '<' : c.operator;
+  return `${field} ${op} ${c.value || '?'}`;
+}
+
+function getTriggerSummary(config) {
+  if (!config?.trigger_type) return 'Manual entry';
+  const tt = config.trigger_type;
+  if (tt === 'stage_change') return `Stage → ${config.trigger?.to_stage || '?'}`;
+  if (tt === 'new_lead') return config.trigger?.source_filter ? `New lead (${config.trigger.source_filter})` : 'New lead';
+  if (tt === 'field_change') return `${config.trigger?.field?.split('.').pop() || '?'} changes`;
+  if (tt === 'date_trigger') return `Date: ${config.trigger?.date_field?.split('.').pop() || '?'}`;
+  return 'Manual entry';
+}
+
+function getActionSummary(config) {
+  if (!config?.action_type) return '';
+  return ACTION_LABELS[config.action_type] || config.action_type;
 }
 
 export default function FlowchartCanvas({
@@ -118,7 +181,7 @@ export default function FlowchartCanvas({
           coords.y >= n.y && coords.y <= n.y + h;
       });
       if (target && onEdgeCreate) {
-        onEdgeCreate(edgeDraft.fromId, target.id);
+        onEdgeCreate(edgeDraft.fromId, target.id, edgeDraft.label);
       }
       setEdgeDraft(null);
     }
@@ -147,12 +210,12 @@ export default function FlowchartCanvas({
     onNodeSelect(nodeId);
   };
 
-  const handlePortMouseDown = (e, nodeId) => {
+  const handlePortMouseDown = (e, nodeId, label) => {
     e.stopPropagation();
     const node = nodes.find(n => n.id === nodeId);
     const bottom = getNodeBottom(node);
     const coords = canvasCoords(e.clientX, e.clientY);
-    setEdgeDraft({ fromId: nodeId, fromX: bottom.x, fromY: bottom.y, toX: coords.x, toY: coords.y });
+    setEdgeDraft({ fromId: nodeId, fromX: bottom.x, fromY: bottom.y, toX: coords.x, toY: coords.y, label });
   };
 
   const statusColor = (s) =>
@@ -184,25 +247,31 @@ export default function FlowchartCanvas({
             if (!fromNode || !toNode) return null;
             const from = getNodeBottom(fromNode);
             const to = getNodeTop(toNode);
+            const isFromCondition = fromNode.type === 'condition';
+            const edgeLabel = edge.label || '';
+            const labelColor = edgeLabel === 'Yes' ? 'var(--bt-success, #2D7A52)' : edgeLabel === 'No' ? 'var(--bt-error, #9B2C2C)' : 'var(--bt-text-muted, #8B8A7E)';
+            const strokeColor = edgeLabel === 'Yes' ? 'var(--bt-success, #2D7A52)' : edgeLabel === 'No' ? 'var(--bt-error, #9B2C2C)' : 'var(--bt-border-strong, #D8D0BD)';
+
             return (
               <g key={edge.id}>
                 <path
                   d={bezierPath(from, to)}
                   fill="none"
-                  stroke="var(--bt-border-strong, #D8D0BD)"
+                  stroke={strokeColor}
                   strokeWidth={2}
                   markerEnd="url(#arrowhead)"
                 />
-                {edge.label && (
+                {edgeLabel && (
                   <text
                     x={(from.x + to.x) / 2}
                     y={(from.y + to.y) / 2 - 8}
                     textAnchor="middle"
-                    fill="var(--bt-text-muted, #8B8A7E)"
+                    fill={labelColor}
                     fontSize={11}
+                    fontWeight={isFromCondition ? 700 : 400}
                     fontFamily="var(--bt-font-body, 'Inter', sans-serif)"
                   >
-                    {edge.label}
+                    {edgeLabel}
                   </text>
                 )}
               </g>
@@ -210,17 +279,31 @@ export default function FlowchartCanvas({
           })}
           {/* Draft edge while dragging */}
           {edgeDraft && (
-            <path
-              d={bezierPath(
-                { x: edgeDraft.fromX, y: edgeDraft.fromY },
-                { x: edgeDraft.toX, y: edgeDraft.toY }
+            <>
+              <path
+                d={bezierPath(
+                  { x: edgeDraft.fromX, y: edgeDraft.fromY },
+                  { x: edgeDraft.toX, y: edgeDraft.toY }
+                )}
+                fill="none"
+                stroke="var(--bt-accent, #B8924A)"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                markerEnd="url(#arrowhead)"
+              />
+              {edgeDraft.label && (
+                <text
+                  x={(edgeDraft.fromX + edgeDraft.toX) / 2}
+                  y={(edgeDraft.fromY + edgeDraft.toY) / 2 - 8}
+                  textAnchor="middle"
+                  fill="var(--bt-accent, #B8924A)"
+                  fontSize={11}
+                  fontWeight={700}
+                >
+                  {edgeDraft.label}
+                </text>
               )}
-              fill="none"
-              stroke="var(--bt-accent, #B8924A)"
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              markerEnd="url(#arrowhead)"
-            />
+            </>
           )}
         </svg>
 
@@ -244,6 +327,7 @@ export default function FlowchartCanvas({
           const isSelected = selectedId === node.id;
           const channels = node.channels || {};
           const activeChannels = Object.entries(channels).filter(([, v]) => v);
+          const isCondition = node.type === 'condition';
 
           return (
             <div
@@ -263,36 +347,77 @@ export default function FlowchartCanvas({
               )}
 
               <div className="wf-node-header">
+                <span className={`wf-node-icon`}>{typeConfig.icon}</span>
                 <span className={`wf-node-label ${node.type === 'start' || node.type === 'end' ? 'light' : ''}`}>
                   {node.label}
                 </span>
                 {node.lead_count > 0 && (
-                  <span className="wf-node-badge">{node.lead_count} leads</span>
+                  <span className="wf-node-badge">{node.lead_count}</span>
                 )}
               </div>
-              {node.type !== 'start' && node.type !== 'end' && (
+
+              {/* Type-specific summary */}
+              {node.type === 'start' && (
+                <div className="wf-node-summary light">{getTriggerSummary(node.config)}</div>
+              )}
+
+              {node.type === 'delay' && (
+                <div className="wf-node-summary">{getDelaySummary(node.config)}</div>
+              )}
+
+              {node.type === 'condition' && (
+                <div className="wf-node-summary">{getConditionSummary(node.config)}</div>
+              )}
+
+              {node.type === 'task' && (
                 <>
-                  <div className="wf-node-meta">
-                    {node.day_label}{node.time_of_day ? ` · ${node.time_of_day}` : ''}{node.role ? ` · ${node.role}` : ''}
-                  </div>
+                  <div className="wf-node-summary">{getActionSummary(node.config) || (node.day_label || '')}</div>
                   <div className="wf-node-footer">
                     <div className="wf-node-channels">
                       {activeChannels.map(([ch]) => (
                         <span key={ch} className="wf-node-channel">{CHANNEL_ICONS[ch]}</span>
                       ))}
                     </div>
+                    {node.role && <span className="wf-node-role">{node.role}</span>}
                     <span className="wf-node-status" style={{ background: statusColor(node.status) }} />
                   </div>
                 </>
               )}
 
-              {/* Output port (bottom) — drag to create edge */}
-              {node.type !== 'end' && (
+              {node.type === 'notification' && (
+                <div className="wf-node-summary">
+                  {node.config?.urgency === 'urgent' ? '🔴' : node.config?.urgency === 'high' ? '🟡' : ''}
+                  {' '}{node.config?.notify_type || 'in-app'} → {node.config?.recipient || 'owner'}
+                </div>
+              )}
+
+              {/* Output ports */}
+              {node.type !== 'end' && !isCondition && (
                 <div
                   className="wf-port wf-port-out"
                   onMouseDown={(e) => handlePortMouseDown(e, node.id)}
                   title="Drag to connect"
                 />
+              )}
+
+              {/* Condition nodes get Yes/No ports */}
+              {isCondition && (
+                <div className="wf-condition-ports">
+                  <div
+                    className="wf-port wf-port-out wf-port-yes"
+                    onMouseDown={(e) => handlePortMouseDown(e, node.id, 'Yes')}
+                    title="Yes — drag to connect"
+                  >
+                    <span className="wf-port-label yes">Y</span>
+                  </div>
+                  <div
+                    className="wf-port wf-port-out wf-port-no"
+                    onMouseDown={(e) => handlePortMouseDown(e, node.id, 'No')}
+                    title="No — drag to connect"
+                  >
+                    <span className="wf-port-label no">N</span>
+                  </div>
+                </div>
               )}
             </div>
           );

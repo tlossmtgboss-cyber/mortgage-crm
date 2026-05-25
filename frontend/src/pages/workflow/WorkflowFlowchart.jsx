@@ -87,9 +87,9 @@ export default function WorkflowFlowchart() {
     }
   };
 
-  const handleEdgeCreate = async (fromId, toId) => {
+  const handleEdgeCreate = async (fromId, toId, label) => {
     try {
-      await workflowGraphApi.addEdge(workflowKey, { from_node_id: fromId, to_node_id: toId });
+      await workflowGraphApi.addEdge(workflowKey, { from_node_id: fromId, to_node_id: toId, label: label || null });
       reloadGraph();
     } catch (err) {
       const msg = err?.response?.data?.detail || 'Failed to connect nodes';
