@@ -451,6 +451,16 @@ async def orchestrator_chat_stream(
                     entity_hint += f"loan_id={active_loan_id}"
                 data_context = (data_context or "") + entity_hint
 
+            # Inject user identity for voice mode so Aria knows who she's talking to
+            if voice_mode:
+                user_full_name = getattr(current_user, "full_name", "") or ""
+                if not user_full_name.strip():
+                    user_email = getattr(current_user, "email", "") or ""
+                    user_full_name = user_email.split("@")[0].replace(".", " ").title() if user_email else ""
+                if user_full_name.strip():
+                    voice_ctx = f"\n[VOICE MODE] You are Aria, speaking with {user_full_name.strip()}. Greet them by first name. Keep responses concise and conversational — no markdown, no bullet points."
+                    data_context = (data_context or "") + voice_ctx
+
             # Enforce AI concurrency limits (Enterprise Check 6.14)
             async with ai_concurrency_gate(org_id):
                 # Stream response through the agent

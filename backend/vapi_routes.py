@@ -319,17 +319,20 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
 
     try:
         from database.models import Lead
+        from sqlalchemy import func
         # Flexible phone matching — strip to last 10 digits to handle format differences
         cleaned = ''.join(filter(str.isdigit, customer_phone or ""))
         if len(cleaned) >= 10:
             cleaned = cleaned[-10:]
-        query = db.query(Lead).filter(Lead.phone.ilike(f"%{cleaned}")) if cleaned else db.query(Lead).filter(Lead.phone == customer_phone)
+        query = db.query(Lead).filter(func.regexp_replace(Lead.phone, '[^0-9]', '', 'g').like(f"%{cleaned}")) if cleaned else db.query(Lead).filter(Lead.phone == customer_phone)
         if org_id:
             query = query.filter(Lead.organization_id == org_id)
         lead = query.first()
         if lead:
-            first_message = f"Hello {lead.first_name}! Thanks for calling back. How can I help you today?"
-            caller_ctx = f"\n\nCALLER CONTEXT: You are speaking with {lead.first_name} {lead.last_name}, an existing customer."
+            display_first = lead.first_name or (lead.name.split()[0] if lead.name else "there")
+            display_last = lead.last_name or (lead.name.split()[-1] if lead.name and " " in lead.name else "")
+            first_message = f"Hello {display_first}! Thanks for calling back. How can I help you today?"
+            caller_ctx = f"\n\nCALLER CONTEXT: You are speaking with {display_first} {display_last}, an existing customer.".rstrip()
             if lead.email:
                 caller_ctx += f"\nTheir email address is {lead.email}."
             if lead.phone:

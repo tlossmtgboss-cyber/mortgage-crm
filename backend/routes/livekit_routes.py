@@ -103,10 +103,11 @@ async def create_voice_token(
             api_secret=LIVEKIT_API_SECRET,
         )
         token.with_identity(participant_identity)
-        token.with_name(
-            getattr(current_user, "full_name", None)
-            or getattr(current_user, "email", participant_identity)
-        )
+        user_full_name = getattr(current_user, "full_name", "") or ""
+        if not user_full_name.strip():
+            email = getattr(current_user, "email", "") or ""
+            user_full_name = email.split("@")[0].replace(".", " ").title() if email else ""
+        token.with_name(user_full_name or getattr(current_user, "email", participant_identity))
         token.with_grants(
             VideoGrants(
                 room_join=True,
@@ -127,7 +128,7 @@ async def create_voice_token(
         metadata = {
             "user_id": str(user_id),
             "org_id": str(org_id or ""),
-            "full_name": getattr(current_user, "full_name", ""),
+            "full_name": user_full_name,
             "email": getattr(current_user, "email", ""),
             "company_name": company_name,
             "agent": AGENT_NAME,

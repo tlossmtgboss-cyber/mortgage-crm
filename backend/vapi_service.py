@@ -1407,8 +1407,9 @@ class VapiCRMIntegration:
                 cleaned_phone = cleaned_phone[-10:]  # Last 10 digits
 
             # 1. Check for existing lead (scoped to org if available)
+            from sqlalchemy import func
             query = self.db.query(Lead).filter(
-                Lead.phone.ilike(f"%{cleaned_phone}")
+                func.regexp_replace(Lead.phone, '[^0-9]', '', 'g').like(f"%{cleaned_phone}")
             )
             if org_id:
                 query = query.filter(Lead.organization_id == org_id)
