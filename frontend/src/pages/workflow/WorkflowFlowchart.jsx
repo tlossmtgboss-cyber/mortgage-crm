@@ -39,12 +39,14 @@ export default function WorkflowFlowchart() {
     async function loadGraph() {
       try {
         const { data } = await workflowGraphApi.getGraph(workflowKey);
+        console.log('[Workflow] getGraph response:', workflowKey, data?.nodes?.length, 'nodes', data?.edges?.length, 'edges');
         if (!cancelled) {
           setGraph(data.definition);
           setNodes(data.nodes || []);
           setEdges(data.edges || []);
         }
-      } catch {
+      } catch (err) {
+        console.error('[Workflow] getGraph failed:', workflowKey, err?.response?.status, err?.message);
         if (!cancelled) {
           setGraph({ key: workflowKey, name: workflowKey });
           setNodes([]);

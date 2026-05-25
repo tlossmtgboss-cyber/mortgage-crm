@@ -80,14 +80,13 @@ export default function FlowchartCanvas({
   }, [pan, zoom]);
 
   const handleCanvasMouseDown = (e) => {
-    if (e.target === canvasRef.current || e.target.closest('.wf-canvas-svg')) {
-      if (placingNodeType) {
-        onPlaceNode(canvasCoords(e.clientX, e.clientY));
-        return;
-      }
-      panStart.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
-      onCanvasClick();
+    if (e.target.closest('.wf-node')) return;
+    if (placingNodeType) {
+      onPlaceNode(canvasCoords(e.clientX, e.clientY));
+      return;
     }
+    panStart.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
+    onCanvasClick();
   };
 
   const handleMouseMove = useCallback((e) => {
@@ -224,6 +223,19 @@ export default function FlowchartCanvas({
             />
           )}
         </svg>
+
+        {/* Empty state */}
+        {nodes.length === 0 && (
+          <div className="wf-empty-state">
+            <div className="wf-empty-icon">+</div>
+            <div className="wf-empty-title">No steps yet</div>
+            <div className="wf-empty-hint">
+              {placingNodeType
+                ? 'Click anywhere on the canvas to place the node'
+                : 'Click Task, Condition, Delay, or Notification above, then click here to add a step'}
+            </div>
+          </div>
+        )}
 
         {/* HTML nodes */}
         {nodes.map(node => {

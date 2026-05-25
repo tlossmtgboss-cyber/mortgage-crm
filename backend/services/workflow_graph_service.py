@@ -181,6 +181,19 @@ class WorkflowGraphService:
             WorkflowNode.workflow_definition_id == definition.id
         ).order_by(WorkflowNode.sort_order).all()
 
+        if not nodes:
+            start_node = WorkflowNode(
+                id=str(uuid.uuid4()),
+                workflow_definition_id=definition.id,
+                type="start",
+                label=f"Lead Enters {definition.name}",
+                x=380.0, y=30.0,
+                role="System", day_label="Trigger", sort_order=0,
+            )
+            self.db.add(start_node)
+            self.db.flush()
+            nodes = [start_node]
+
         edges = self.db.query(WorkflowEdge).filter(
             WorkflowEdge.workflow_definition_id == definition.id
         ).all()
