@@ -61,8 +61,7 @@ def _ensure_table() -> None:
             ))
         _table_checked = True
     except Exception as e:
-        logger.debug("voice_preferences table check failed: %s", e)
-        _table_checked = True  # Don't retry on failure
+        logger.warning("voice_preferences table check failed (will retry): %s", e)
 
 
 # Keys for voice preferences

@@ -921,6 +921,14 @@ async def query_mode_node(state: AriaState) -> AriaState:
     org_id = state["org_id"]
     user_id = state["user_id"]
 
+    # Circuit breaker: fast-fail if LLM is unavailable
+    if not _circuit_breaker.allow_request():
+        logger.warning("[ARIA-QUERY] Circuit breaker OPEN — returning fallback")
+        return {
+            "messages": [AIMessage(content="I'm having trouble connecting to my reasoning engine right now. Please try again in a moment.")],
+            "phase": DialoguePhase.RESPONDING,
+        }
+
     client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
     context_loader = AriaContextLoader()
@@ -935,14 +943,26 @@ async def query_mode_node(state: AriaState) -> AriaState:
 
     messages = [{"role": "user", "content": question}]
 
-    response = await client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        temperature=0.3,
-        system=system + "\n\nYou have access to CRM query tools. Use them to answer the LO's question. Chain multiple tools if needed. Be specific with numbers and names.",
-        messages=messages,
-        tools=QUERY_TOOL_DEFINITIONS,
-    )
+    try:
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=1024,
+                temperature=0.3,
+                system=system + "\n\nYou have access to CRM query tools. Use them to answer the LO's question. Chain multiple tools if needed. Be specific with numbers and names.",
+                messages=messages,
+                tools=QUERY_TOOL_DEFINITIONS,
+            ),
+            timeout=_LLM_TIMEOUT,
+        )
+        _circuit_breaker.record_success()
+    except Exception as e:
+        _circuit_breaker.record_failure()
+        logger.error("[ARIA-QUERY] Initial LLM call failed: %s", e, exc_info=True)
+        return {
+            "messages": [AIMessage(content="I ran into an issue looking that up. Could you try asking again?")],
+            "phase": DialoguePhase.RESPONDING,
+        }
 
     for _ in range(3):
         tool_blocks = [b for b in response.content if b.type == "tool_use"]
@@ -964,14 +984,26 @@ async def query_mode_node(state: AriaState) -> AriaState:
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results})
 
-        response = await client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            temperature=0.3,
-            system=system,
-            messages=messages,
-            tools=QUERY_TOOL_DEFINITIONS,
-        )
+        try:
+            response = await asyncio.wait_for(
+                client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=1024,
+                    temperature=0.3,
+                    system=system,
+                    messages=messages,
+                    tools=QUERY_TOOL_DEFINITIONS,
+                ),
+                timeout=_LLM_TIMEOUT,
+            )
+            _circuit_breaker.record_success()
+        except Exception as e:
+            _circuit_breaker.record_failure()
+            logger.error("[ARIA-QUERY] Tool-loop LLM call failed: %s", e, exc_info=True)
+            return {
+                "messages": [AIMessage(content="I found some data but lost my connection while analyzing it. Please try again.")],
+                "phase": DialoguePhase.RESPONDING,
+            }
 
     text_blocks = [b.text for b in response.content if hasattr(b, "text")]
     answer = "\n".join(text_blocks) or "I couldn't find that information."

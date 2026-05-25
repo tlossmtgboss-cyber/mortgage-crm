@@ -37,6 +37,8 @@ class AriaContextLoader:
                 if org_id:
                     db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
                 user_name = user_obj.full_name or ""
+                if user_name and user_name.startswith("gAAAAA"):
+                    user_name = ""
 
                 # Active loan count
                 active_count = db.execute(text(
@@ -145,6 +147,9 @@ class AriaContextLoader:
         self, user_id: str, slot, slots_so_far: Dict,
     ) -> str:
         """Load context relevant to a specific slot being asked about."""
+        if slot is None:
+            return "No additional context."
+
         def _query():
             db = SessionLocal()
             try:
@@ -199,5 +204,6 @@ class AriaContextLoader:
         self, user_id: str, intent, slots: Dict,
     ) -> str:
         """Build context for the confirmation preview."""
-        # Reuse slot context with whatever borrower info we have
-        return await self.load_for_slot(user_id, intent.required_slots[0] if intent.required_slots else None, slots)
+        if not intent or not getattr(intent, "required_slots", None):
+            return "No additional context."
+        return await self.load_for_slot(user_id, intent.required_slots[0], slots)

@@ -73,6 +73,7 @@ class AriaSessionStore:
             "missing_slots": [],
             "current_slot_question": None,
             "phase": "understanding",
+            "mode": None,
             "task_result": None,
             "confirmation_preview": None,
             "user_id": user_id,
@@ -80,7 +81,7 @@ class AriaSessionStore:
             "user_name": user_name,
             "user_email": user_email,
             "user_role": user_role,
-            "voice_preferences": None,  # Set by caller from VoiceMemory; not persisted
+            "voice_preferences": None,
             "iteration_count": 0,
             "error": None,
         }
