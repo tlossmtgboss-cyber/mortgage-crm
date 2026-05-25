@@ -602,6 +602,15 @@ def _register_mobile_routes(app, get_db, get_current_user):
     except Exception as e:
         logger.warning(f"Mobile voice routes not loaded: {e}")
 
+    # Mobile call intelligence routes (bridges callIntelligenceApi.js to call_monitoring)
+    try:
+        from routes.mobile_call_intelligence_routes import router as mobile_ci_router, set_dependencies as mobile_ci_set_deps
+        mobile_ci_set_deps(get_current_user)
+        app.include_router(mobile_ci_router, tags=["Mobile Call Intelligence"])
+        logger.info("Mobile call intelligence routes loaded")
+    except Exception as e:
+        logger.warning(f"Mobile call intelligence routes not loaded: {e}")
+
     # LiveKit voice routes
     try:
         from routes.livekit_routes import router as livekit_router

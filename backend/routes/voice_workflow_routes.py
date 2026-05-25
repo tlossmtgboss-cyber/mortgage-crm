@@ -174,9 +174,10 @@ async def voice_workflow_websocket(
         await websocket.close()
         return
 
-    try:
-        user_id = None
+    session = None
+    user_id = None
 
+    try:
         # If no token in URL, wait for first-message auth
         if not token:
             import asyncio as _asyncio
@@ -423,6 +424,28 @@ async def voice_workflow_websocket(
         import traceback
         logger.error(f"WebSocket connection error: {e}")
     finally:
+        # CQ-006: Clean up active session on WebSocket disconnect
+        if session and db:
+            try:
+                _cleanup_reason = "websocket_disconnect"
+                db.execute(text("""
+                    UPDATE voice_workflow_sessions
+                    SET is_active = FALSE,
+                        current_state = 'disconnected',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id AND is_active = TRUE
+                """), {"id": str(session.id)})
+                db.commit()
+                logger.info(
+                    "CQ-006 session cleanup: session_id=%s user_id=%s reason=%s prior_state=%s",
+                    session.id, user_id, _cleanup_reason, session.current_state,
+                )
+            except Exception as cleanup_err:
+                logger.error(
+                    "CQ-006 session cleanup failed: session_id=%s error=%s",
+                    session.id, cleanup_err,
+                )
+
         if db_gen:
             try:
                 next(db_gen)

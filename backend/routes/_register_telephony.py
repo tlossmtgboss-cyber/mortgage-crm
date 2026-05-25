@@ -296,6 +296,14 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Could not load Call Monitoring routes: {e}")
 
+    # Mobile Call Intelligence WebSocket (agent event streaming for mobile frontend)
+    try:
+        from routes.mobile_call_intelligence_ws import router as ci_ws_router
+        app.include_router(ci_ws_router, tags=["Mobile Call Intelligence WS"])
+        logger.info("Mobile Call Intelligence WebSocket routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Mobile Call Intelligence WS routes: {e}")
+
     # Include Recording Consent Gate routes
     try:
         from routes.recording_consent_routes import router as consent_router, set_dependencies as set_consent_deps

@@ -89,6 +89,101 @@ _INQUIRY_KEYWORDS = [
     "what are", "can you explain", "rates today", "qualify",
 ]
 
+# =============================================================================
+# INTAKE FIELD MAPPING — LLM field names → (entity_type, actual_db_column)
+#
+# The LLM produces dotted paths like "borrower.first_name" or flat names like
+# "loan_amount".  We must map these to real columns before writing.  Any field
+# NOT in this map is rejected to prevent SQL injection.
+# =============================================================================
+
+_INTAKE_FIELD_MAP: Dict[str, tuple] = {
+    # --- Identity ---
+    "borrower.first_name": ("lead", "first_name"),
+    "borrower.last_name": ("lead", "last_name"),
+    "borrower_name": ("loan", "borrower_name"),
+    "borrower.email": ("lead", "email"),
+    "borrower_email": ("loan", "borrower_email"),
+    "borrower.phone": ("lead", "phone"),
+    "borrower_phone": ("loan", "borrower_phone"),
+    "first_name": ("lead", "first_name"),
+    "last_name": ("lead", "last_name"),
+    "name": ("lead", "name"),
+    "email": ("lead", "email"),
+    "phone": ("lead", "phone"),
+
+    # --- Co-borrower ---
+    "coborrower.name": ("loan", "coborrower_name"),
+    "co_borrower.name": ("loan", "coborrower_name"),
+    "coborrower_name": ("loan", "coborrower_name"),
+    "co_borrower.email": ("loan", "co_borrower_email"),
+    "co_borrower.phone": ("loan", "co_borrower_phone"),
+    "co_applicant_name": ("lead", "co_applicant_name"),
+    "co_applicant_email": ("lead", "co_applicant_email"),
+    "co_applicant_phone": ("lead", "co_applicant_phone"),
+
+    # --- Property ---
+    "property.address": ("lead", "address"),
+    "property.street_address": ("lead", "address"),
+    "property_address": ("loan", "property_address"),
+    "property.city": ("lead", "city"),
+    "property.state": ("lead", "state"),
+    "property.zip": ("lead", "zip_code"),
+    "property.zip_code": ("lead", "zip_code"),
+    "property.type": ("lead", "property_type"),
+    "property_type": ("lead", "property_type"),
+    "property.value": ("lead", "property_value"),
+    "purchase_price": ("loan", "purchase_price"),
+    "property.purchase_price": ("loan", "purchase_price"),
+    "occupancy_type": ("loan", "occupancy_type"),
+    "address": ("lead", "address"),
+    "city": ("lead", "city"),
+    "state": ("lead", "state"),
+    "zip_code": ("lead", "zip_code"),
+
+    # --- Loan details ---
+    "loan.purpose": ("lead", "loan_purpose"),
+    "loan_purpose": ("lead", "loan_purpose"),
+    "loan.amount": ("lead", "loan_amount"),
+    "loan_amount": ("loan", "amount"),
+    "loan.type": ("lead", "loan_type"),
+    "loan_type": ("loan", "loan_type"),
+    "down_payment": ("lead", "down_payment"),
+    "loan.down_payment": ("lead", "down_payment"),
+    "rate": ("loan", "rate"),
+    "interest_rate": ("lead", "interest_rate"),
+    "loan.term": ("loan", "term"),
+    "loan_term": ("lead", "loan_term"),
+    "program": ("loan", "program"),
+    "rate_type": ("loan", "rate_type"),
+    "monthly_payment": ("loan", "monthly_payment"),
+
+    # --- Financial ---
+    "annual_income": ("lead", "annual_income"),
+    "borrower.annual_income": ("lead", "annual_income"),
+    "monthly_debts": ("lead", "monthly_debts"),
+    "borrower.monthly_debts": ("lead", "monthly_debts"),
+    "credit_score": ("lead", "credit_score"),
+    "borrower.credit_score": ("lead", "credit_score"),
+
+    # --- Employment ---
+    "employment_status": ("lead", "employment_status"),
+    "borrower.employment_status": ("lead", "employment_status"),
+    "employer_name": ("lead", "employer_name"),
+    "borrower.employer_name": ("lead", "employer_name"),
+
+    # --- Notes ---
+    "notes": ("lead", "notes"),
+}
+
+# Allowlists derived from the map for fast column validation
+_LOAN_COLUMNS_ALLOWED = frozenset(
+    col for etype, col in _INTAKE_FIELD_MAP.values() if etype == "loan"
+)
+_LEAD_COLUMNS_ALLOWED = frozenset(
+    col for etype, col in _INTAKE_FIELD_MAP.values() if etype == "lead"
+)
+
 
 def classify_call_type(transcript: str) -> str:
     """
@@ -1955,10 +2050,15 @@ class CallMonitoringOrchestrator:
         session: Dict,
         user_id: str,
     ) -> Optional[str]:
-        """Apply an intake field update."""
+        """Apply an intake field update.
+
+        Looks up the LLM-produced field_path in _INTAKE_FIELD_MAP to resolve
+        the real DB column.  Rejects unmapped fields to prevent SQL injection.
+        Only marks status='applied' when the UPDATE actually modifies a row.
+        """
         # Get the intake field update record
         ifu_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
-        ifu_params = {"artifact_id": artifact_id}
+        ifu_params: Dict[str, Any] = {"artifact_id": artifact_id}
         if self.organization_id:
             ifu_params["org_id"] = self.organization_id
         query = f"""
@@ -1971,41 +2071,116 @@ class CallMonitoringOrchestrator:
         if not field_update:
             return None
 
-        entity_type = field_update[1]
+        ifu_id = str(field_update[0])
+        entity_type = field_update[1]   # 'loan' or 'lead'
         entity_id = str(field_update[2])
-        field_path = field_update[3]
+        field_path = field_update[3]    # LLM-produced, e.g. "borrower.first_name"
         proposed_value = field_update[4]
 
-        # Apply the update to the entity
-        # This is simplified - real implementation would handle JSON paths properly
+        if not field_path:
+            logger.warning(
+                "intake_field_update %s has empty field_path — skipping", ifu_id,
+            )
+            return None
+
+        # --- Resolve field_path to a safe (target_entity, column) pair ---
+        mapping = _INTAKE_FIELD_MAP.get(field_path)
+
+        if mapping is None:
+            # Try normalising: lowercase, strip whitespace
+            normalised = field_path.strip().lower().replace(" ", "_")
+            mapping = _INTAKE_FIELD_MAP.get(normalised)
+
+        if mapping is None:
+            logger.warning(
+                "intake_field_update %s has unmapped field_path=%r — rejecting writeback",
+                ifu_id, field_path,
+            )
+            # Mark as rejected so it doesn't keep getting retried
+            self._mark_intake_field_status(ifu_id, "rejected", user_id)
+            return None
+
+        target_entity, column_name = mapping
+
+        # Double-check column is in the allowlist (belt-and-suspenders)
+        if target_entity == "loan" and column_name not in _LOAN_COLUMNS_ALLOWED:
+            logger.error(
+                "Column %r not in loan allowlist — possible map corruption", column_name,
+            )
+            self._mark_intake_field_status(ifu_id, "rejected", user_id)
+            return None
+        if target_entity == "lead" and column_name not in _LEAD_COLUMNS_ALLOWED:
+            logger.error(
+                "Column %r not in lead allowlist — possible map corruption", column_name,
+            )
+            self._mark_intake_field_status(ifu_id, "rejected", user_id)
+            return None
+
+        # If the map says "lead" but the intake record says "loan" (or vice-versa),
+        # use the entity_type from the intake record to pick the right table,
+        # but only if the column is valid for that table too.
+        if entity_type != target_entity:
+            # Check if the column also exists on the entity_type's allowlist
+            alt_allowed = (
+                _LOAN_COLUMNS_ALLOWED if entity_type == "loan" else _LEAD_COLUMNS_ALLOWED
+            )
+            if column_name in alt_allowed:
+                target_entity = entity_type
+            else:
+                logger.info(
+                    "intake_field_update %s: field_path=%r maps to %s.%s but record says entity_type=%s — "
+                    "using mapped target %s",
+                    ifu_id, field_path, target_entity, column_name, entity_type, target_entity,
+                )
+                # Use the entity_id from the record but write to the mapped table
+
+        # --- Build and execute parameterised UPDATE ---
+        table = "loans" if target_entity == "loan" else "leads"
+        # column_name is from our own frozen allowlist — safe for interpolation
         entity_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
-        entity_params = {"id": entity_id, "value": proposed_value}
+        entity_params: Dict[str, Any] = {"id": entity_id, "value": proposed_value}
         if self.organization_id:
             entity_params["org_id"] = self.organization_id
-        if entity_type == 'loan' and field_path:
-            query = f"""
-                UPDATE loans SET {field_path} = :value WHERE id = :id {entity_org_filter}
-            """
-            self.db.execute(text(query), entity_params)
-        elif entity_type == 'lead' and field_path:
-            query = f"""
-                UPDATE leads SET {field_path} = :value WHERE id = :id {entity_org_filter}
-            """
-            self.db.execute(text(query), entity_params)
 
-        # Update intake field status
-        ifu_update_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
-        ifu_update_params = {"id": str(field_update[0]), "user_id": user_id}
+        update_query = text(
+            f"UPDATE {table} SET {column_name} = :value "
+            f"WHERE id = :id {entity_org_filter}"
+        )
+        result = self.db.execute(update_query, entity_params)
+
+        if result.rowcount == 0:
+            logger.warning(
+                "intake_field_update %s: UPDATE %s SET %s matched 0 rows for entity_id=%s",
+                ifu_id, table, column_name, entity_id,
+            )
+            self._mark_intake_field_status(ifu_id, "failed", user_id)
+            return None
+
+        # Success — mark as applied
+        self._mark_intake_field_status(ifu_id, "applied", user_id)
+        logger.info(
+            "intake_field_update %s: applied %s.%s = %r for entity %s",
+            ifu_id, table, column_name, _redact_pii(str(proposed_value)[:80]), entity_id,
+        )
+        return ifu_id
+
+    def _mark_intake_field_status(
+        self, ifu_id: str, status: str, user_id: str,
+    ) -> None:
+        """Update the status of an intake_field_updates row."""
+        org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+        params: Dict[str, Any] = {
+            "id": ifu_id,
+            "status": status,
+            "user_id": user_id,
+        }
         if self.organization_id:
-            ifu_update_params["org_id"] = self.organization_id
-        query = f"""
-            UPDATE intake_field_updates
-            SET status = 'applied', applied_by = :user_id, applied_at = NOW()
-            WHERE id = :id {ifu_update_org_filter}
-        """
-        self.db.execute(text(query), ifu_update_params)
-
-        return str(field_update[0])
+            params["org_id"] = self.organization_id
+        self.db.execute(text(
+            f"UPDATE intake_field_updates "
+            f"SET status = :status, applied_by = :user_id, applied_at = NOW() "
+            f"WHERE id = :id {org_filter}"
+        ), params)
 
     async def _create_loan_condition(
         self,

@@ -33,7 +33,21 @@ router = APIRouter(prefix="/api/v1/calls", tags=["calls"])
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
-SUPPORTED_AUDIO_FORMATS = {"wav", "mp3", "flac", "m4a", "ogg", "webm", "mp4", "mpeg"}
+SUPPORTED_AUDIO_FORMATS = {"wav", "mp3", "flac", "m4a", "ogg", "webm"}
+
+# CR-004: Upload validation limits
+MAX_UPLOAD_SIZE_BYTES = 3_221_225_472  # 3 GB
+MAX_DURATION_SECONDS = 28_800  # 8 hours
+
+# Map of format -> acceptable MIME content-types
+AUDIO_CONTENT_TYPES = {
+    "wav": {"audio/wav", "audio/x-wav", "audio/wave"},
+    "mp3": {"audio/mpeg", "audio/mp3"},
+    "flac": {"audio/flac", "audio/x-flac"},
+    "m4a": {"audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac"},
+    "ogg": {"audio/ogg", "audio/vorbis"},
+    "webm": {"audio/webm", "video/webm"},
+}
 
 
 class CallProcessRequest(BaseModel):
@@ -88,14 +102,30 @@ async def process_call_recording(
     3. Create task with draft email
     """
     try:
-        # Validate audio format
+        # Validate audio format (CR-004)
         try:
             audio_fmt = request.validated_audio_format
         except ValueError as e:
-            return CallProcessResponse(success=False, error=str(e))
+            raise HTTPException(status_code=422, detail=str(e))
+
+        # Validate duration if provided (CR-004)
+        if request.duration is not None and request.duration > MAX_DURATION_SECONDS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Recording duration {request.duration}s exceeds maximum "
+                       f"of {MAX_DURATION_SECONDS}s (8 hours)",
+            )
 
         # Decode audio
         audio_data = base64.b64decode(request.audioBase64)
+
+        # Validate file size (CR-004)
+        if len(audio_data) > MAX_UPLOAD_SIZE_BYTES:
+            size_mb = len(audio_data) / (1024 * 1024)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Recording size {size_mb:.1f} MB exceeds maximum of 3 GB",
+            )
 
         # Save to temp file
         with tempfile.NamedTemporaryFile(
@@ -170,6 +200,8 @@ async def process_call_recording(
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    except HTTPException:
+        raise  # Let validation errors (413, 422) propagate with correct status codes
     except Exception as e:
         logger.error(f"Error processing call recording: {e}")
         return CallProcessResponse(
@@ -378,29 +410,64 @@ def create_followup_task(
 # ============================================================================
 
 _PLAYBACK_SECRET = os.getenv("SECRET_KEY", "")
-_PLAYBACK_TOKEN_TTL = 3600  # 1 hour
+_DEFAULT_PLAYBACK_TTL = 3600  # 1 hour
 
 
-def generate_signed_playback_url(recording_id: str, base_url: str = "") -> dict:
-    """Generate a time-limited signed URL for recording playback."""
-    expires_at = int(time.time()) + _PLAYBACK_TOKEN_TTL
+def generate_signed_recording_url(
+    recording_id: str,
+    expires_in: int = _DEFAULT_PLAYBACK_TTL,
+    base_url: str = "",
+) -> dict:
+    """
+    Generate a time-limited HMAC-signed URL for recording playback (CR-005).
+
+    Args:
+        recording_id: Unique identifier for the recording.
+        expires_in: Token lifetime in seconds (default 3600 = 1 hour).
+        base_url: Optional scheme+host prefix (e.g. "https://api.perenniaai.com").
+
+    Returns:
+        dict with ``url``, ``expires_at`` (ISO-8601), and ``ttl_seconds``.
+    """
+    expires_at = int(time.time()) + expires_in
     payload = f"{recording_id}:{expires_at}"
     signature = hmac.new(
         _PLAYBACK_SECRET.encode(), payload.encode(), hashlib.sha256
     ).hexdigest()
 
-    playback_path = f"/api/v1/calls/playback/{recording_id}?expires={expires_at}&sig={signature}"
+    playback_path = (
+        f"/api/v1/calls/playback/{recording_id}"
+        f"?expires={expires_at}&sig={signature}"
+    )
     url = f"{base_url}{playback_path}" if base_url else playback_path
 
     return {
         "url": url,
-        "expires_at": datetime.utcfromtimestamp(expires_at).isoformat() + "Z",
-        "ttl_seconds": _PLAYBACK_TOKEN_TTL,
+        "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat(),
+        "ttl_seconds": expires_in,
     }
 
 
-def _verify_playback_signature(recording_id: str, expires: int, sig: str) -> bool:
-    """Verify HMAC signature and expiration for playback URL."""
+# Backward-compatible alias
+generate_signed_playback_url = generate_signed_recording_url
+
+
+def verify_recording_url_token(
+    recording_id: str,
+    expires: int,
+    sig: str,
+) -> bool:
+    """
+    Verify HMAC signature and expiration for a recording playback token (CR-005).
+
+    Args:
+        recording_id: The recording identifier embedded in the URL.
+        expires: Unix timestamp when the token expires.
+        sig: The HMAC-SHA256 hex signature to verify.
+
+    Returns:
+        True if the signature is valid and the token has not expired.
+    """
     if int(time.time()) > expires:
         return False
     payload = f"{recording_id}:{expires}"
@@ -408,6 +475,10 @@ def _verify_playback_signature(recording_id: str, expires: int, sig: str) -> boo
         _PLAYBACK_SECRET.encode(), payload.encode(), hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(sig, expected)
+
+
+# Backward-compatible alias
+_verify_playback_signature = verify_recording_url_token
 
 
 @router.get("/playback/{recording_id}")
@@ -434,6 +505,7 @@ async def playback_recording(
 @router.post("/playback-url")
 async def create_playback_url(
     recording_id: str,
+    expires_in: int = Query(_DEFAULT_PLAYBACK_TTL, ge=60, le=86400),
     current_user: User = Depends(get_current_user),
 ):
     """Generate a signed, time-limited playback URL for a recording."""
@@ -441,7 +513,9 @@ async def create_playback_url(
     if base_url and not base_url.startswith("http"):
         base_url = f"https://{base_url}"
 
-    signed = generate_signed_playback_url(recording_id, base_url=base_url)
+    signed = generate_signed_recording_url(
+        recording_id, expires_in=expires_in, base_url=base_url,
+    )
     return {
         "success": True,
         "playback": signed,

@@ -15,12 +15,14 @@ Features:
 
 import os
 import json
+import time
 import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field, asdict
 from enum import Enum
+from collections import deque
 
 from anthropic import Anthropic
 
@@ -30,6 +32,7 @@ logger = logging.getLogger(__name__)
 WHISPER_LATENCY_TARGET_MS = 2000  # Max acceptable latency: trigger to delivery
 WHISPER_LATENCY_WARNING_MS = 1500  # Warn if latency exceeds this threshold
 WHISPER_PROCESSING_BUDGET_MS = 500  # Max time for local processing before LLM call
+LATENCY_WINDOW_SIZE = 200  # Rolling window size for latency tracking
 
 
 class WhisperType(str, Enum):
@@ -112,6 +115,104 @@ class TranscriptSegment:
     confidence: float = 1.0
 
 
+@dataclass
+class LatencyRecord:
+    """Single latency measurement for a whisper generation cycle."""
+    call_id: str
+    trigger_to_generated_ms: float
+    generated_to_delivered_ms: float
+    total_ms: float
+    whisper_count: int
+    recorded_at: float  # time.monotonic() value
+
+
+class WhisperLatencyTracker:
+    """Tracks whisper delivery latency with rolling statistics."""
+
+    def __init__(self, window_size: int = LATENCY_WINDOW_SIZE):
+        self._records: deque = deque(maxlen=window_size)
+        self._sla_violations: int = 0
+        self._sla_warnings: int = 0
+        self._total_measurements: int = 0
+
+    def record(self, record: LatencyRecord) -> None:
+        """Record a latency measurement, logging warnings/errors against SLA."""
+        self._records.append(record)
+        self._total_measurements += 1
+
+        if record.total_ms > WHISPER_LATENCY_TARGET_MS:
+            self._sla_violations += 1
+            logger.error(
+                "Whisper latency SLA VIOLATION: %.1fms (target %dms) "
+                "call=%s trigger_to_gen=%.1fms gen_to_deliver=%.1fms whispers=%d",
+                record.total_ms, WHISPER_LATENCY_TARGET_MS, record.call_id,
+                record.trigger_to_generated_ms, record.generated_to_delivered_ms,
+                record.whisper_count,
+            )
+        elif record.total_ms > WHISPER_LATENCY_WARNING_MS:
+            self._sla_warnings += 1
+            logger.warning(
+                "Whisper latency WARNING: %.1fms (warning %dms) "
+                "call=%s trigger_to_gen=%.1fms gen_to_deliver=%.1fms whispers=%d",
+                record.total_ms, WHISPER_LATENCY_WARNING_MS, record.call_id,
+                record.trigger_to_generated_ms, record.generated_to_delivered_ms,
+                record.whisper_count,
+            )
+
+    @property
+    def avg_total_ms(self) -> float:
+        """Running average total latency across the window."""
+        if not self._records:
+            return 0.0
+        return sum(r.total_ms for r in self._records) / len(self._records)
+
+    @property
+    def avg_generation_ms(self) -> float:
+        """Running average trigger-to-generated latency."""
+        if not self._records:
+            return 0.0
+        return sum(r.trigger_to_generated_ms for r in self._records) / len(self._records)
+
+    @property
+    def avg_delivery_ms(self) -> float:
+        """Running average generated-to-delivered latency."""
+        if not self._records:
+            return 0.0
+        return sum(r.generated_to_delivered_ms for r in self._records) / len(self._records)
+
+    @property
+    def p95_total_ms(self) -> float:
+        """95th percentile total latency."""
+        if not self._records:
+            return 0.0
+        sorted_vals = sorted(r.total_ms for r in self._records)
+        idx = int(len(sorted_vals) * 0.95)
+        return sorted_vals[min(idx, len(sorted_vals) - 1)]
+
+    @property
+    def sla_compliance_pct(self) -> float:
+        """Percentage of measurements within SLA target."""
+        if self._total_measurements == 0:
+            return 100.0
+        return ((self._total_measurements - self._sla_violations) / self._total_measurements) * 100.0
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Return full latency statistics snapshot."""
+        return {
+            "total_measurements": self._total_measurements,
+            "window_size": len(self._records),
+            "avg_total_ms": round(self.avg_total_ms, 1),
+            "avg_generation_ms": round(self.avg_generation_ms, 1),
+            "avg_delivery_ms": round(self.avg_delivery_ms, 1),
+            "p95_total_ms": round(self.p95_total_ms, 1),
+            "sla_target_ms": WHISPER_LATENCY_TARGET_MS,
+            "sla_warning_ms": WHISPER_LATENCY_WARNING_MS,
+            "sla_violations": self._sla_violations,
+            "sla_warnings": self._sla_warnings,
+            "sla_compliance_pct": round(self.sla_compliance_pct, 1),
+        }
+
+
 class LiveCallWhisperService:
     """Service for providing real-time AI whispers during calls."""
 
@@ -121,6 +222,7 @@ class LiveCallWhisperService:
         self.active_calls: Dict[str, CallContext] = {}
         self.call_transcripts: Dict[str, List[TranscriptSegment]] = {}
         self.call_whispers: Dict[str, List[Whisper]] = {}
+        self.latency_tracker = WhisperLatencyTracker()
 
         # Rate and product info for quick reference
         self.current_rates = {
@@ -178,7 +280,14 @@ class LiveCallWhisperService:
         text: str,
         confidence: float = 1.0,
     ) -> List[Whisper]:
-        """Process a new transcript segment and generate whispers."""
+        """Process a new transcript segment and generate whispers.
+
+        Instruments the full trigger-to-generation latency and returns
+        a `_generation_ended_at` attribute on the returned list so the
+        caller (route/WebSocket) can measure delivery time separately.
+        """
+        t_trigger = time.monotonic()
+
         if call_id not in self.active_calls:
             logger.warning(f"Call {call_id} not found")
             return []
@@ -237,7 +346,41 @@ class LiveCallWhisperService:
         # Store whispers
         self.call_whispers[call_id].extend(new_whispers)
 
-        return new_whispers
+        # Record generation latency — delivery timing is completed by the caller
+        t_generated = time.monotonic()
+        generation_ms = (t_generated - t_trigger) * 1000
+
+        if generation_ms > WHISPER_PROCESSING_BUDGET_MS and new_whispers:
+            logger.warning(
+                "Whisper generation exceeded processing budget: %.1fms (budget %dms) call=%s whispers=%d",
+                generation_ms, WHISPER_PROCESSING_BUDGET_MS, call_id, len(new_whispers),
+            )
+
+        # Attach timing metadata so the route layer can finalize the measurement
+        result = list(new_whispers)
+        result._trigger_monotonic = t_trigger  # type: ignore[attr-defined]
+        result._generated_monotonic = t_generated  # type: ignore[attr-defined]
+        return result
+
+    def record_delivery_latency(self, call_id: str, trigger_mono: float, generated_mono: float, whisper_count: int) -> None:
+        """Record final delivery latency after whispers have been sent to the client.
+
+        Called by route/WebSocket handlers after broadcasting whispers.
+        """
+        t_delivered = time.monotonic()
+        trigger_to_gen_ms = (generated_mono - trigger_mono) * 1000
+        gen_to_deliver_ms = (t_delivered - generated_mono) * 1000
+        total_ms = (t_delivered - trigger_mono) * 1000
+
+        record = LatencyRecord(
+            call_id=call_id,
+            trigger_to_generated_ms=trigger_to_gen_ms,
+            generated_to_delivered_ms=gen_to_deliver_ms,
+            total_ms=total_ms,
+            whisper_count=whisper_count,
+            recorded_at=t_delivered,
+        )
+        self.latency_tracker.record(record)
 
     async def get_ai_whisper(
         self,
@@ -245,6 +388,8 @@ class LiveCallWhisperService:
         prompt: str,
     ) -> Optional[Whisper]:
         """Get an AI-generated whisper based on a specific prompt."""
+        t_trigger = time.monotonic()
+
         if call_id not in self.active_calls:
             return None
 
@@ -290,6 +435,23 @@ Provide a brief, actionable suggestion:"""
             )
 
             self.call_whispers[call_id].append(whisper)
+
+            t_generated = time.monotonic()
+            generation_ms = (t_generated - t_trigger) * 1000
+            if generation_ms > WHISPER_LATENCY_TARGET_MS:
+                logger.error(
+                    "AI whisper generation alone exceeded SLA: %.1fms call=%s",
+                    generation_ms, call_id,
+                )
+            elif generation_ms > WHISPER_LATENCY_WARNING_MS:
+                logger.warning(
+                    "AI whisper generation approaching SLA limit: %.1fms call=%s",
+                    generation_ms, call_id,
+                )
+
+            # Attach timing metadata for delivery-layer measurement
+            whisper._trigger_monotonic = t_trigger  # type: ignore[attr-defined]
+            whisper._generated_monotonic = t_generated  # type: ignore[attr-defined]
             return whisper
 
         except Exception as e:
@@ -315,6 +477,7 @@ Provide a brief, actionable suggestion:"""
             "whispers_generated": len(whispers),
             "whispers_used": len([w for w in whispers if w.used]),
             "transcript_segments": len(transcript),
+            "latency": self.latency_tracker.get_stats(),
         }
 
         # Cleanup

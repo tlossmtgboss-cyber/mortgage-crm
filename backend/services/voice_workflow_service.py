@@ -821,6 +821,67 @@ View the letter here: {result.get('share_url')}
         return "I'm here to help you complete this task. Tell me what you'd like to do, or say 'cancel' to stop."
 
 
+    # =========================================================================
+    # STALE SESSION REAPER  (CQ-006)
+    # =========================================================================
+
+    def reap_stale_sessions(self, max_age_hours: int = 2) -> int:
+        """
+        Find active voice_workflow_sessions older than *max_age_hours* and
+        mark them as expired.  Returns the count of reaped sessions.
+
+        This is the safety net for sessions that survived a WebSocket
+        disconnect without proper cleanup (e.g. server crash, network
+        partition, or OOM kill).
+        """
+        result = self.db.execute(text("""
+            UPDATE voice_workflow_sessions
+            SET is_active = FALSE,
+                current_state = 'expired',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE is_active = TRUE
+              AND started_at < CURRENT_TIMESTAMP - MAKE_INTERVAL(hours => :max_age_hours)
+            RETURNING id, user_id, current_state
+        """), {"max_age_hours": max_age_hours})
+
+        reaped_rows = result.fetchall()
+        self.db.commit()
+
+        for row in reaped_rows:
+            logger.info(
+                "CQ-006 stale session reaped: session_id=%s user_id=%s prior_state=%s max_age_hours=%d",
+                row[0], row[1], row[2], max_age_hours,
+            )
+
+        return len(reaped_rows)
+
+    def reap_stale_queue_entries(self, max_age_minutes: int = 30) -> int:
+        """
+        Find queue_entries stuck in 'waiting' status longer than
+        *max_age_minutes* and mark them as abandoned.  Returns count.
+        """
+        result = self.db.execute(text("""
+            UPDATE queue_entries
+            SET status = 'abandoned',
+                actual_wait_seconds = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - entered_at))::int,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE status = 'waiting'
+              AND entered_at < CURRENT_TIMESTAMP - MAKE_INTERVAL(mins => :max_age_minutes)
+            RETURNING id, queue_id, call_sid
+        """), {"max_age_minutes": max_age_minutes})
+
+        reaped_rows = result.fetchall()
+        self.db.commit()
+
+        for row in reaped_rows:
+            logger.info(
+                "CQ-006 stale queue entry reaped: entry_id=%s queue_id=%s call_sid=%s max_age_minutes=%d",
+                row[0], row[1], row[2], max_age_minutes,
+            )
+
+        return len(reaped_rows)
+
+
 # Singleton instance
 _workflow_service: Optional[VoiceWorkflowService] = None
 

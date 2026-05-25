@@ -94,6 +94,61 @@ def expire_stale_voice_workflows(self):
     }
 
 
+@celery_app.task(
+    name="tasks.expire_voice_workflows.reap_orphaned_voice_sessions",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    acks_late=True,
+)
+def reap_orphaned_voice_sessions(self, max_age_hours: int = 2, max_queue_age_minutes: int = 30):
+    """
+    CQ-006: Reap orphaned voice_workflow_sessions and stale queue_entries.
+
+    Finds WebSocket voice workflow sessions that are still marked active
+    but have exceeded the maximum age (default 2 hours), and queue entries
+    stuck in 'waiting' beyond the timeout (default 30 minutes).
+
+    This is a safety net for sessions that survived a WebSocket disconnect
+    without proper cleanup (server crash, network partition, etc.).
+
+    Returns:
+        dict with reaped_sessions, reaped_queue_entries, and run metadata.
+    """
+    from db import SessionLocal
+    from services.voice_workflow_service import VoiceWorkflowService
+
+    logger.info(
+        "CQ-006 reaper starting: max_age_hours=%d max_queue_age_minutes=%d",
+        max_age_hours, max_queue_age_minutes,
+    )
+    start_time = datetime.now(timezone.utc)
+
+    session = SessionLocal()
+    try:
+        service = VoiceWorkflowService(session)
+
+        reaped_sessions = service.reap_stale_sessions(max_age_hours=max_age_hours)
+        reaped_queue = service.reap_stale_queue_entries(max_age_minutes=max_queue_age_minutes)
+
+        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+        logger.info(
+            "CQ-006 reaper complete in %.1fs: %d sessions expired, %d queue entries abandoned",
+            elapsed, reaped_sessions, reaped_queue,
+        )
+        return {
+            "reaped_sessions": reaped_sessions,
+            "reaped_queue_entries": reaped_queue,
+            "elapsed_seconds": round(elapsed, 2),
+            "run_at": start_time.isoformat(),
+        }
+    except Exception as e:
+        logger.exception(f"CQ-006 reaper failed: {e}")
+        raise self.retry(exc=e)
+    finally:
+        session.close()
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
@@ -101,3 +156,6 @@ if __name__ == "__main__":
     )
     result = expire_stale_voice_workflows()
     print(f"Expired {result['expired_count']} stale voice workflows")
+
+    result2 = reap_orphaned_voice_sessions()
+    print(f"Reaped {result2['reaped_sessions']} orphaned sessions, {result2['reaped_queue_entries']} stale queue entries")

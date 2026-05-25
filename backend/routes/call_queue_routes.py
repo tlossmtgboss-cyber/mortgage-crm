@@ -74,6 +74,12 @@ def get_telephony_provider():
     return _get_provider()
 
 
+# Service level: percentage of calls answered within this threshold (seconds)
+SERVICE_LEVEL_THRESHOLD_SECONDS = 60
+# Default average handle time when no historical data is available
+DEFAULT_AVG_HANDLE_TIME_SECONDS = 120
+
+
 # ============================================================================
 # MODELS
 # ============================================================================
@@ -131,6 +137,11 @@ class QueueStats(BaseModel):
     calls_waiting: int
     agents_available: int
     agents_on_call: int
+    calls_handled_today: int = 0
+    service_level_pct: float = 100.0
+    service_level_threshold_seconds: int = SERVICE_LEVEL_THRESHOLD_SECONDS
+    avg_wait_last_hour: float = 0.0
+    estimated_wait_seconds: int = 0
 
 
 # ============================================================================
@@ -540,68 +551,96 @@ async def remove_queue_member(
 # WAIT TIME ESTIMATION
 # ============================================================================
 
-def estimate_wait_time(db: Session, queue_id: int) -> int:
-    """
-    Estimate wait time based on:
-    1. Current position in queue
-    2. Historical average handle time
-    3. Number of available agents
+
+def _get_avg_handle_time(db: Session, queue_id: int) -> float:
+    """Get average handle time from recent completed calls for a queue.
+
+    Uses the last 50 connected calls to compute a rolling average.
+    Falls back to DEFAULT_AVG_HANDLE_TIME_SECONDS when no data is available.
     """
     try:
-        # Get queue settings
-        queue = db.execute(text("""
-            SELECT max_wait_time_seconds FROM call_queues WHERE id = :id
+        avg_handle = db.execute(text("""
+            SELECT AVG(actual_wait_seconds) as avg_wait
+            FROM (
+                SELECT actual_wait_seconds
+                FROM queue_entries
+                WHERE queue_id = :id
+                  AND status = 'connected'
+                  AND actual_wait_seconds IS NOT NULL
+                ORDER BY connected_at DESC
+                LIMIT 50
+            ) recent
         """), {"id": queue_id}).fetchone()
+        if avg_handle and avg_handle.avg_wait:
+            return float(avg_handle.avg_wait)
+    except Exception as e:
+        logger.error(f"Error fetching avg handle time for queue {queue_id}: {e}")
+    return float(DEFAULT_AVG_HANDLE_TIME_SECONDS)
 
-        # Get current queue size
-        waiting = db.execute(text("""
-            SELECT COUNT(*) as count FROM queue_entries
-            WHERE queue_id = :id AND status = 'waiting'
-        """), {"id": queue_id}).fetchone()
-        queue_size = waiting.count if waiting else 0
 
+def calc_estimated_wait(db: Session, queue_id: int, position: int) -> int:
+    """Calculate estimated wait time for a specific queue position.
+
+    Uses: historical average handle time * (position / agent_count).
+    This gives callers an honest wait estimate based on observed throughput.
+    """
+    try:
         # Get active member count
         members = db.execute(text("""
             SELECT COUNT(*) as count FROM queue_members
             WHERE queue_id = :id AND is_active = TRUE
         """), {"id": queue_id}).fetchone()
-        agent_count = members.count if members else 1
+        agent_count = max(members.count if members else 1, 1)
 
-        # Get average handle time from recent calls (last 50)
-        avg_handle = db.execute(text("""
-            SELECT AVG(actual_wait_seconds) as avg_wait
-            FROM queue_entries
-            WHERE queue_id = :id
-              AND status = 'connected'
-              AND actual_wait_seconds IS NOT NULL
-            ORDER BY connected_at DESC
-            LIMIT 50
-        """), {"id": queue_id}).fetchone()
+        avg_handle_time = _get_avg_handle_time(db, queue_id)
 
-        avg_handle_time = avg_handle.avg_wait if avg_handle and avg_handle.avg_wait else 120  # Default 2 min
-
-        # Calculate estimated wait
-        if agent_count > 0:
-            estimated = (queue_size / agent_count) * avg_handle_time
-        else:
-            estimated = queue_size * avg_handle_time
+        estimated = (position / agent_count) * avg_handle_time
 
         # Cap at max wait time
+        queue = db.execute(text("""
+            SELECT max_wait_time_seconds FROM call_queues WHERE id = :id
+        """), {"id": queue_id}).fetchone()
         if queue and queue.max_wait_time_seconds:
             estimated = min(estimated, queue.max_wait_time_seconds)
 
         return int(estimated)
 
     except Exception as e:
+        logger.error(f"Error in calc_estimated_wait for queue {queue_id} position {position}: {e}")
+        return DEFAULT_AVG_HANDLE_TIME_SECONDS * position
+
+
+def estimate_wait_time(db: Session, queue_id: int) -> int:
+    """Estimate wait time for the next caller joining the queue.
+
+    Wraps calc_estimated_wait using the current queue depth as position.
+    """
+    try:
+        waiting = db.execute(text("""
+            SELECT COUNT(*) as count FROM queue_entries
+            WHERE queue_id = :id AND status = 'waiting'
+        """), {"id": queue_id}).fetchone()
+        queue_size = waiting.count if waiting else 0
+        return calc_estimated_wait(db, queue_id, queue_size)
+
+    except Exception as e:
         logger.error(f"Error estimating wait time: {e}")
-        return 120  # Default 2 minutes
+        return DEFAULT_AVG_HANDLE_TIME_SECONDS
 
 
 @router.get("/stats")
 async def get_all_queue_stats(
     db: Session = Depends(get_db)
 ):
-    """Get aggregate statistics across all active queues (CQ-002)"""
+    """Get aggregate statistics across all active queues (CQ-002).
+
+    Returns:
+    - summary: total queues, calls waiting, agents available
+    - today: calls handled, connected, abandoned, avg/max wait, abandonment rate, service level
+    - last_hour: avg wait time over the last 60 minutes
+    - longest_current_wait: seconds the oldest waiting caller has been in queue
+    - queues: per-queue breakdown with estimated wait
+    """
     try:
         # Per-queue stats
         queues = db.execute(text("""
@@ -635,10 +674,42 @@ async def get_all_queue_stats(
                 AVG(actual_wait_seconds) as avg_wait_today,
                 MAX(actual_wait_seconds) as max_wait_today,
                 COUNT(CASE WHEN status = 'abandoned' THEN 1 END) as abandoned_today,
-                COUNT(CASE WHEN status = 'connected' THEN 1 END) as connected_today
+                COUNT(CASE WHEN status = 'connected' THEN 1 END) as connected_today,
+                COUNT(CASE WHEN status = 'connected'
+                           AND actual_wait_seconds IS NOT NULL
+                           AND actual_wait_seconds <= :sla_threshold THEN 1 END) as within_sla
             FROM queue_entries
             WHERE entered_at >= CURRENT_DATE
+        """), {"sla_threshold": SERVICE_LEVEL_THRESHOLD_SECONDS}).fetchone()
+
+        # Last-hour average wait
+        last_hour = db.execute(text("""
+            SELECT AVG(actual_wait_seconds) as avg_wait_1h
+            FROM queue_entries
+            WHERE entered_at >= (CURRENT_TIMESTAMP - INTERVAL '1 hour')
+              AND actual_wait_seconds IS NOT NULL
         """)).fetchone()
+
+        # Longest current wait across all queues
+        oldest_waiting = db.execute(text("""
+            SELECT MIN(entered_at) as oldest_entry
+            FROM queue_entries
+            WHERE status = 'waiting'
+        """)).fetchone()
+
+        longest_current_wait = 0
+        if oldest_waiting and oldest_waiting.oldest_entry:
+            oldest_dt = parse_datetime(oldest_waiting.oldest_entry)
+            if oldest_dt:
+                now = datetime.now(timezone.utc) if oldest_dt.tzinfo else datetime.now()
+                longest_current_wait = int((now - oldest_dt).total_seconds())
+
+        # Service level: % of answered calls within threshold
+        calls_answered = today.connected_today or 0
+        calls_within_sla = today.within_sla or 0
+        service_level_pct = round(
+            (calls_within_sla / max(calls_answered, 1)) * 100, 1
+        ) if calls_answered > 0 else 100.0
 
         queue_list = []
         for q in queues:
@@ -648,6 +719,7 @@ async def get_all_queue_stats(
                 "friendly_name": q.friendly_name,
                 "calls_waiting": q.calls_waiting or 0,
                 "agents_available": q.agents_available or 0,
+                "estimated_wait_seconds": estimate_wait_time(db, q.id),
             })
 
         return {
@@ -655,6 +727,7 @@ async def get_all_queue_stats(
                 "total_queues": agg.total_queues or 0,
                 "total_calls_waiting": agg.total_waiting or 0,
                 "total_agents_available": agg.total_agents or 0,
+                "longest_current_wait_seconds": longest_current_wait,
             },
             "today": {
                 "total_calls": today.calls_today or 0,
@@ -665,6 +738,11 @@ async def get_all_queue_stats(
                 "abandonment_rate": round(
                     (today.abandoned_today or 0) / max(today.calls_today or 1, 1) * 100, 1
                 ),
+                "service_level_pct": service_level_pct,
+                "service_level_threshold_seconds": SERVICE_LEVEL_THRESHOLD_SECONDS,
+            },
+            "last_hour": {
+                "avg_wait_seconds": int(last_hour.avg_wait_1h or 0) if last_hour else 0,
             },
             "queues": queue_list,
         }
@@ -679,7 +757,11 @@ async def get_queue_stats(
     queue_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get real-time queue statistics"""
+    """Get real-time queue statistics for a specific queue.
+
+    Includes current state, agent availability, today's performance,
+    last-hour average, and service level metrics.
+    """
     try:
         queue = db.execute(text("""
             SELECT id, name, friendly_name FROM call_queues WHERE id = :id
@@ -707,21 +789,43 @@ async def get_queue_stats(
             WHERE qm.queue_id = :id
         """), {"id": queue_id}).fetchone()
 
-        # Today's stats
+        # Today's stats with service level
         today_stats = db.execute(text("""
             SELECT
                 COUNT(*) as calls_today,
                 AVG(actual_wait_seconds) as avg_wait_today,
                 MAX(actual_wait_seconds) as max_wait_today,
-                COUNT(CASE WHEN status = 'abandoned' THEN 1 END) as abandoned_today
+                COUNT(CASE WHEN status = 'abandoned' THEN 1 END) as abandoned_today,
+                COUNT(CASE WHEN status = 'connected' THEN 1 END) as connected_today,
+                COUNT(CASE WHEN status = 'connected'
+                           AND actual_wait_seconds IS NOT NULL
+                           AND actual_wait_seconds <= :sla_threshold THEN 1 END) as within_sla
             FROM queue_entries
             WHERE queue_id = :id
               AND entered_at >= CURRENT_DATE
+        """), {"id": queue_id, "sla_threshold": SERVICE_LEVEL_THRESHOLD_SECONDS}).fetchone()
+
+        # Last-hour average wait for this queue
+        last_hour = db.execute(text("""
+            SELECT AVG(actual_wait_seconds) as avg_wait_1h
+            FROM queue_entries
+            WHERE queue_id = :id
+              AND entered_at >= (CURRENT_TIMESTAMP - INTERVAL '1 hour')
+              AND actual_wait_seconds IS NOT NULL
         """), {"id": queue_id}).fetchone()
 
         longest_wait = 0
         if entries.oldest_entry:
-            longest_wait = int((datetime.now(timezone.utc) - entries.oldest_entry.replace(tzinfo=timezone.utc)).total_seconds())
+            oldest_dt = parse_datetime(entries.oldest_entry)
+            if oldest_dt:
+                now_dt = datetime.now(timezone.utc) if oldest_dt.tzinfo else datetime.now()
+                longest_wait = int((now_dt - oldest_dt).total_seconds())
+
+        calls_answered = today_stats.connected_today or 0
+        calls_within_sla = today_stats.within_sla or 0
+        service_level_pct = round(
+            (calls_within_sla / max(calls_answered, 1)) * 100, 1
+        ) if calls_answered > 0 else 100.0
 
         return {
             "queue_id": queue.id,
@@ -731,19 +835,27 @@ async def get_queue_stats(
                 "calls_waiting": entries.total_waiting or 0,
                 "avg_wait_seconds": int(entries.avg_wait or 0),
                 "longest_wait_seconds": longest_wait,
-                "estimated_wait_seconds": estimate_wait_time(db, queue_id)
+                "estimated_wait_seconds": estimate_wait_time(db, queue_id),
             },
             "agents": {
                 "total": agents.total_agents or 0,
-                "available": agents.available_agents or 0
+                "available": agents.available_agents or 0,
             },
             "today": {
                 "total_calls": today_stats.calls_today or 0,
+                "connected": today_stats.connected_today or 0,
                 "avg_wait_seconds": int(today_stats.avg_wait_today or 0),
                 "max_wait_seconds": int(today_stats.max_wait_today or 0),
                 "abandoned": today_stats.abandoned_today or 0,
-                "abandonment_rate": round((today_stats.abandoned_today or 0) / max(today_stats.calls_today or 1, 1) * 100, 1)
-            }
+                "abandonment_rate": round(
+                    (today_stats.abandoned_today or 0) / max(today_stats.calls_today or 1, 1) * 100, 1
+                ),
+                "service_level_pct": service_level_pct,
+                "service_level_threshold_seconds": SERVICE_LEVEL_THRESHOLD_SECONDS,
+            },
+            "last_hour": {
+                "avg_wait_seconds": int(last_hour.avg_wait_1h or 0) if last_hour else 0,
+            },
         }
 
     except HTTPException:

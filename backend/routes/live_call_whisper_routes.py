@@ -208,6 +208,14 @@ async def websocket_endpoint(websocket: WebSocket, call_id: str):
                 )
                 # Broadcast new whispers
                 await manager.broadcast_whispers(call_id, whispers)
+                # Record delivery latency if whispers were generated
+                if whispers and hasattr(whispers, "_trigger_monotonic"):
+                    whisper_service.record_delivery_latency(
+                        call_id,
+                        whispers._trigger_monotonic,
+                        whispers._generated_monotonic,
+                        len(whispers),
+                    )
 
             elif msg_type == "dismiss":
                 # Dismiss a whisper
@@ -236,6 +244,13 @@ async def websocket_endpoint(websocket: WebSocket, call_id: str):
                     whisper = await whisper_service.get_ai_whisper(call_id, prompt)
                     if whisper:
                         await manager.broadcast_whisper(call_id, whisper)
+                        if hasattr(whisper, "_trigger_monotonic"):
+                            whisper_service.record_delivery_latency(
+                                call_id,
+                                whisper._trigger_monotonic,
+                                whisper._generated_monotonic,
+                                1,
+                            )
 
             elif msg_type == "ping":
                 # Keep-alive ping
@@ -308,6 +323,15 @@ async def process_transcript(
     # Also broadcast via WebSocket if connected
     await manager.broadcast_whispers(call_id, whispers)
 
+    # Record delivery latency after broadcast completes
+    if whispers and hasattr(whispers, "_trigger_monotonic"):
+        whisper_service.record_delivery_latency(
+            call_id,
+            whispers._trigger_monotonic,
+            whispers._generated_monotonic,
+            len(whispers),
+        )
+
     return [
         WhisperResponse(
             id=w.id,
@@ -368,6 +392,15 @@ async def ask_for_whisper(
 
     # Broadcast via WebSocket
     await manager.broadcast_whisper(call_id, whisper)
+
+    # Record delivery latency
+    if hasattr(whisper, "_trigger_monotonic"):
+        whisper_service.record_delivery_latency(
+            call_id,
+            whisper._trigger_monotonic,
+            whisper._generated_monotonic,
+            1,
+        )
 
     return WhisperResponse(
         id=whisper.id,
@@ -493,5 +526,23 @@ async def whisper_health():
         "status": "healthy",
         "service": "live-call-whisper",
         "active_calls": len(whisper_service.active_calls),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/latency-stats")
+async def whisper_latency_stats():
+    """Return whisper delivery latency statistics (WH-006 audit).
+
+    Tracks trigger-to-delivery latency against SLA targets:
+    - Target: {WHISPER_LATENCY_TARGET_MS}ms max
+    - Warning: {WHISPER_LATENCY_WARNING_MS}ms
+    """
+    from services.live_call_whisper_service import WHISPER_LATENCY_TARGET_MS, WHISPER_LATENCY_WARNING_MS
+    stats = whisper_service.latency_tracker.get_stats()
+    within_sla = stats["avg_total_ms"] <= WHISPER_LATENCY_TARGET_MS if stats["total_measurements"] > 0 else True
+    return {
+        "sla_status": "ok" if within_sla else "degraded",
+        "latency": stats,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

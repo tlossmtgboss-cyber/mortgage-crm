@@ -310,12 +310,80 @@ class CallIntelligenceIntegration:
         metadata = call_metadata or {}
 
         try:
+            # Load existing borrower/loan data so the LLM has CRM context
+            existing_data = {}
+            if loan_id and self.db:
+                try:
+                    loan_row = self.db.execute(text("""
+                        SELECT borrower_name, borrower_email, borrower_phone,
+                               loan_type, program, amount, purchase_price, down_payment,
+                               rate, term, property_address, property_type, stage,
+                               coborrower_name, credit_score
+                        FROM loans WHERE id = :loan_id AND organization_id = :org_id
+                    """), {"loan_id": loan_id, "org_id": organization_id}).fetchone()
+
+                    if loan_row:
+                        existing_data = {
+                            "borrower_name": loan_row[0],
+                            "borrower_email": loan_row[1],
+                            "borrower_phone": loan_row[2],
+                            "loan_type": loan_row[3],
+                            "program": loan_row[4],
+                            "loan_amount": float(loan_row[5]) if loan_row[5] else None,
+                            "purchase_price": float(loan_row[6]) if loan_row[6] else None,
+                            "down_payment": float(loan_row[7]) if loan_row[7] else None,
+                            "rate": float(loan_row[8]) if loan_row[8] else None,
+                            "term": loan_row[9],
+                            "property_address": loan_row[10],
+                            "property_type": loan_row[11],
+                            "stage": loan_row[12],
+                            "coborrower_name": loan_row[13],
+                            "credit_score": loan_row[14],
+                        }
+                        # Strip None values to keep LLM prompt clean
+                        existing_data = {k: v for k, v in existing_data.items() if v is not None}
+
+                    # Also load lead data if there's a connected lead
+                    lead_row = self.db.execute(text("""
+                        SELECT l.first_name, l.last_name, l.email, l.phone, l.credit_score,
+                               l.annual_income, l.property_type, l.loan_amount, l.loan_type,
+                               l.employer_name, l.employment_status, l.address, l.city, l.state, l.zip_code
+                        FROM leads l
+                        JOIN loans lo ON lo.lead_id = l.id
+                        WHERE lo.id = :loan_id AND l.organization_id = :org_id
+                    """), {"loan_id": loan_id, "org_id": organization_id}).fetchone()
+
+                    if lead_row:
+                        lead_data = {
+                            "lead_first_name": lead_row[0],
+                            "lead_last_name": lead_row[1],
+                            "lead_email": lead_row[2],
+                            "lead_phone": lead_row[3],
+                            "lead_credit_score": lead_row[4],
+                            "lead_annual_income": float(lead_row[5]) if lead_row[5] else None,
+                            "lead_property_type": lead_row[6],
+                            "lead_loan_amount": float(lead_row[7]) if lead_row[7] else None,
+                            "lead_loan_type": lead_row[8],
+                            "lead_employer_name": lead_row[9],
+                            "lead_employment_status": lead_row[10],
+                            "lead_address": lead_row[11],
+                            "lead_city": lead_row[12],
+                            "lead_state": lead_row[13],
+                            "lead_zip_code": lead_row[14],
+                        }
+                        existing_data.update({k: v for k, v in lead_data.items() if v is not None})
+
+                except Exception as e:
+                    logger.warning(f"Failed to load existing borrower data for call {call_id}: {e}")
+                    # Non-blocking — proceed with empty context rather than failing the call
+
             # Step 1: Run Call Intelligence extraction
             ci_request = CallIntelligenceRequest(
                 call_id=call_id,
                 loan_id=loan_id,
                 organization_id=organization_id,
                 transcript=transcript,
+                existing_borrower_data=existing_data,
             )
 
             ci_response = await self.ci_processor.process_transcript(ci_request)

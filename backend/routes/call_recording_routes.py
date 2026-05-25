@@ -4,14 +4,18 @@ Call Recording Retrieval Routes
 Provides endpoints to retrieve call recording metadata and URLs
 from both vapi_calls and call_logs tables.
 
+Recording URLs are never exposed directly — all responses use
+HMAC-signed, time-limited playback URLs (CR-005).
+
 Prefix: /api/v1/calls
 """
 
 import logging
+import os
 from typing import Optional, List
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -27,6 +31,76 @@ lead_recordings_router = APIRouter(prefix="/api/v1/leads", tags=["Call Recording
 
 
 # ---------------------------------------------------------------------------
+# CR-004: Upload validation constants
+# ---------------------------------------------------------------------------
+
+ALLOWED_UPLOAD_FORMATS = {"wav", "mp3", "flac", "m4a", "ogg", "webm"}
+ALLOWED_CONTENT_TYPES = {
+    "audio/wav", "audio/x-wav", "audio/wave",
+    "audio/mpeg", "audio/mp3",
+    "audio/flac", "audio/x-flac",
+    "audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac",
+    "audio/ogg", "audio/vorbis",
+    "audio/webm", "video/webm",
+}
+MAX_UPLOAD_SIZE_BYTES = 3_221_225_472  # 3 GB
+MAX_DURATION_SECONDS = 28_800  # 8 hours
+
+
+def _validate_recording_upload(filename: str, content_type: str, size: int) -> None:
+    """
+    Validate an uploaded recording file (CR-004).
+
+    Raises HTTPException(413) for size violations, HTTPException(422) for
+    format/content-type violations.
+    """
+    # Size check
+    if size > MAX_UPLOAD_SIZE_BYTES:
+        size_mb = size / (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"Recording size {size_mb:.1f} MB exceeds maximum of 3 GB",
+        )
+
+    # Extension check
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+    if ext not in ALLOWED_UPLOAD_FORMATS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unsupported file extension '.{ext}'. "
+                f"Allowed: {', '.join(sorted(ALLOWED_UPLOAD_FORMATS))}"
+            ),
+        )
+
+    # Content-type check
+    ct = (content_type or "").lower().split(";")[0].strip()
+    if ct and ct not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unsupported content type '{ct}'. "
+                f"Allowed types: {', '.join(sorted(ALLOWED_CONTENT_TYPES))}"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# CR-005: Signed playback URL helpers (delegates to api.routes.call_recording)
+# ---------------------------------------------------------------------------
+
+def _signed_url(recording_id: str) -> str:
+    """Return a signed playback URL path for a recording (1-hour TTL)."""
+    from api.routes.call_recording import generate_signed_recording_url
+
+    base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
+    if base_url and not base_url.startswith("http"):
+        base_url = f"https://{base_url}"
+    result = generate_signed_recording_url(recording_id, base_url=base_url)
+    return result["url"]
+
+
+# ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
 
@@ -35,8 +109,8 @@ class RecordingResponse(BaseModel):
     source: str  # 'vapi' or 'dialer'
     phone_number: Optional[str] = None
     direction: Optional[str] = None
-    recording_url: Optional[str] = None
-    stereo_recording_url: Optional[str] = None
+    recording_url: Optional[str] = None  # signed playback URL (CR-005)
+    stereo_recording_url: Optional[str] = None  # signed playback URL (CR-005)
     recording_status: Optional[str] = None
     transcript: Optional[str] = None
     transcript_status: Optional[str] = None
@@ -75,13 +149,14 @@ async def get_call_recording(
     """), {"cid": call_id, "org_id": org_id}).fetchone()
 
     if row:
+        vapi_call_id = row[0]
         return RecordingResponse(
-            call_id=row[0],
+            call_id=vapi_call_id,
             source="vapi",
             phone_number=row[1],
             direction=row[2],
-            recording_url=row[3],
-            stereo_recording_url=row[4],
+            recording_url=_signed_url(vapi_call_id) if row[3] else None,
+            stereo_recording_url=_signed_url(f"{vapi_call_id}-stereo") if row[4] else None,
             recording_status=row[5] or "none",
             transcript=row[6],
             transcript_status=row[7] or ("completed" if row[6] else "none"),
@@ -104,13 +179,14 @@ async def get_call_recording(
     """), {"cid": call_id, "org_id": org_id}).fetchone()
 
     if row:
+        dialer_call_id = row[0] or call_id
         return RecordingResponse(
-            call_id=row[0] or call_id,
+            call_id=dialer_call_id,
             source="dialer",
             phone_number=row[1],
             direction="outbound",
-            recording_url=row[2],
-            stereo_recording_url=row[3],
+            recording_url=_signed_url(dialer_call_id) if row[2] else None,
+            stereo_recording_url=_signed_url(f"{dialer_call_id}-stereo") if row[3] else None,
             recording_status=row[4] or "none",
             transcript=row[5],
             transcript_status=row[6] or ("completed" if row[5] else "none"),
@@ -160,13 +236,14 @@ async def list_lead_recordings(
     """), {"lead_id": lead_id, "org_id": org_id, "lim": limit}).fetchall()
 
     for row in vapi_rows:
+        vapi_call_id = row[0]
         results.append(RecordingResponse(
-            call_id=row[0],
+            call_id=vapi_call_id,
             source="vapi",
             phone_number=row[1],
             direction=row[2],
-            recording_url=row[3],
-            stereo_recording_url=row[4],
+            recording_url=_signed_url(vapi_call_id) if row[3] else None,
+            stereo_recording_url=_signed_url(f"{vapi_call_id}-stereo") if row[4] else None,
             recording_status=row[5] or "none",
             transcript=row[6],
             transcript_status=row[7] or ("completed" if row[6] else "none"),
@@ -191,13 +268,14 @@ async def list_lead_recordings(
     """), {"lead_id": lead_id, "org_id": org_id, "lim": limit}).fetchall()
 
     for row in dialer_rows:
+        dialer_call_id = row[0] or "unknown"
         results.append(RecordingResponse(
-            call_id=row[0] or "unknown",
+            call_id=dialer_call_id,
             source="dialer",
             phone_number=row[1],
             direction="outbound",
-            recording_url=row[2],
-            stereo_recording_url=row[3],
+            recording_url=_signed_url(dialer_call_id) if row[2] else None,
+            stereo_recording_url=_signed_url(f"{dialer_call_id}-stereo") if row[3] else None,
             recording_status=row[4] or "none",
             transcript=row[5],
             transcript_status=row[6] or ("completed" if row[5] else "none"),
@@ -337,3 +415,83 @@ async def stream_call_recording(
     except httpx.HTTPError as e:
         logger.error("Failed to stream recording %s: %s", call_id, e)
         raise HTTPException(status_code=502, detail="Could not fetch recording from provider")
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/calls/upload — Multipart file upload with CR-004 validation
+# ---------------------------------------------------------------------------
+
+@router.post("/upload", summary="Upload a call recording file")
+async def upload_call_recording(
+    file: UploadFile = File(...),
+    duration_seconds: Optional[int] = Query(None, ge=0, description="Recording duration in seconds"),
+    lead_id: Optional[int] = Query(None),
+    call_id: Optional[str] = Query(None, description="External call ID to associate"),
+    current_user=Depends(current_user_dep),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload a call recording file with validation (CR-004).
+
+    - Max size: 3 GB
+    - Max duration: 8 hours
+    - Allowed formats: wav, mp3, flac, m4a, ogg, webm
+    - Validates both file extension and content-type
+
+    Returns a signed playback URL for the stored recording.
+    """
+    filename = file.filename or ""
+    content_type = file.content_type or ""
+
+    # Read file content with streaming size check to reject early
+    chunks = []
+    total_size = 0
+    while True:
+        chunk = await file.read(1024 * 1024)  # 1 MB chunks
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Recording exceeds maximum size of 3 GB",
+            )
+        chunks.append(chunk)
+
+    # Validate format and content-type (size already checked above)
+    _validate_recording_upload(filename, content_type, total_size)
+
+    # Validate duration
+    if duration_seconds is not None and duration_seconds > MAX_DURATION_SECONDS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Recording duration {duration_seconds}s exceeds maximum of {MAX_DURATION_SECONDS}s (8 hours)",
+        )
+
+    # Store the recording (write to local uploads dir; in production this
+    # would go to S3 with a presigned URL — the storage backend is pluggable)
+    import uuid
+    recording_id = str(uuid.uuid4())
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "bin").lower()
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "recordings")
+    os.makedirs(upload_dir, exist_ok=True)
+    dest_path = os.path.join(upload_dir, f"{recording_id}.{ext}")
+
+    with open(dest_path, "wb") as f:
+        for chunk in chunks:
+            f.write(chunk)
+
+    logger.info(
+        "Recording uploaded: id=%s size=%d ext=%s user=%s",
+        recording_id, total_size, ext, getattr(current_user, "id", None),
+    )
+
+    signed = _signed_url(recording_id)
+
+    return {
+        "success": True,
+        "recording_id": recording_id,
+        "size_bytes": total_size,
+        "format": ext,
+        "playback_url": signed,
+    }

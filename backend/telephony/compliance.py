@@ -417,6 +417,223 @@ class ComplianceChecker:
             logger.debug(f"ConsentAuditLog write skipped: {e}")
 
     # =========================================================================
+    # DNC Sync Freshness (CC-004)
+    # =========================================================================
+
+    # Decision type used in ComplianceDecisionLog for DNC sync events
+    _DNC_SYNC_DECISION_TYPE = "dnc_sync"
+
+    # Maximum age (hours) before the DNC list is considered stale
+    DNC_FRESHNESS_THRESHOLD_HOURS = 24
+
+    def check_dnc_freshness(self) -> Tuple[bool, Optional[str]]:
+        """
+        Check whether the DNC list has been synchronized within the
+        freshness threshold (default 24 hours) per audit check CC-004.
+
+        Looks up the most recent 'dnc_sync' entry in ComplianceDecisionLog
+        for this organization. If no sync has ever been recorded, or the
+        last sync is older than DNC_FRESHNESS_THRESHOLD_HOURS, returns
+        a stale status.
+
+        Returns:
+            Tuple of (is_fresh, warning_message).
+            is_fresh=True means the DNC list was synced within threshold.
+            warning_message is None when fresh, descriptive string when stale.
+        """
+        try:
+            from database.models.compliance_log import ComplianceDecisionLog
+        except ImportError:
+            logger.error(
+                "Could not import ComplianceDecisionLog model — "
+                "cannot verify DNC sync freshness"
+            )
+            return False, "DNC freshness check unavailable (import failure)"
+
+        try:
+            query = self.db.query(ComplianceDecisionLog).filter(
+                ComplianceDecisionLog.decision_type == self._DNC_SYNC_DECISION_TYPE,
+                ComplianceDecisionLog.decision == "completed",
+            )
+            if self.organization_id:
+                query = query.filter(
+                    ComplianceDecisionLog.organization_id == self.organization_id
+                )
+            last_sync = query.order_by(
+                ComplianceDecisionLog.created_at.desc()
+            ).first()
+
+            if not last_sync:
+                msg = (
+                    "DNC list has never been synchronized for this organization. "
+                    "CC-004 requires DNC list sync within 24 hours."
+                )
+                logger.warning(msg)
+                self._log_decision(
+                    decision_type="dnc_freshness_check",
+                    phone_number="",
+                    decision="warning",
+                    reason=msg,
+                    details={"last_sync": None, "threshold_hours": self.DNC_FRESHNESS_THRESHOLD_HOURS},
+                )
+                return False, msg
+
+            now = datetime.now(timezone.utc)
+            sync_time = last_sync.created_at
+            if sync_time.tzinfo is None:
+                sync_time = sync_time.replace(tzinfo=timezone.utc)
+
+            age = now - sync_time
+            age_hours = age.total_seconds() / 3600
+
+            if age_hours > self.DNC_FRESHNESS_THRESHOLD_HOURS:
+                msg = (
+                    f"DNC list sync is {age_hours:.1f} hours old "
+                    f"(threshold: {self.DNC_FRESHNESS_THRESHOLD_HOURS}h). "
+                    f"CC-004 requires synchronization within 24 hours. "
+                    f"Last sync: {sync_time.isoformat()}"
+                )
+                logger.warning(msg)
+                self._log_decision(
+                    decision_type="dnc_freshness_check",
+                    phone_number="",
+                    decision="warning",
+                    reason=msg,
+                    details={
+                        "last_sync": sync_time.isoformat(),
+                        "age_hours": round(age_hours, 1),
+                        "threshold_hours": self.DNC_FRESHNESS_THRESHOLD_HOURS,
+                    },
+                )
+                return False, msg
+
+            logger.debug(
+                f"DNC list is fresh — last synced {age_hours:.1f}h ago "
+                f"(threshold: {self.DNC_FRESHNESS_THRESHOLD_HOURS}h)"
+            )
+            return True, None
+
+        except Exception as e:
+            logger.error(f"Error checking DNC freshness: {e}")
+            return False, f"DNC freshness check failed: {e}"
+
+    def sync_dnc_registry(
+        self,
+        actor_user_id: Optional[int] = None,
+        source: str = "scheduled",
+    ) -> Dict[str, Any]:
+        """
+        Record a DNC list synchronization event and mark stale entries
+        for re-verification.
+
+        This function:
+        1. Marks DNC entries older than the freshness threshold with a
+           'needs_reverification' flag in their reason field (if not
+           already marked).
+        2. Records the sync event in the immutable ComplianceDecisionLog.
+        3. Returns a summary of the sync operation.
+
+        This is NOT a full Federal DNC Registry API integration — it is a
+        freshness tracking mechanism that records when the org last validated
+        their DNC data, and flags entries that may need manual review.
+
+        Args:
+            actor_user_id: Optional user ID who triggered the sync.
+            source: How the sync was triggered ('scheduled', 'manual', 'startup').
+
+        Returns:
+            Dict with sync results: total_entries, stale_marked, sync_timestamp.
+        """
+        now = datetime.now(timezone.utc)
+        result = {
+            "sync_timestamp": now.isoformat(),
+            "organization_id": self.organization_id,
+            "source": source,
+            "total_entries": 0,
+            "stale_marked": 0,
+            "errors": [],
+        }
+
+        # Step 1: Count and mark stale DNC entries for re-verification
+        try:
+            from database.models import ContactDNCStatus
+        except ImportError:
+            result["errors"].append("Could not import ContactDNCStatus model")
+            logger.error("Could not import ContactDNCStatus — DNC sync incomplete")
+            return result
+
+        try:
+            # Count total entries for this org
+            count_query = self.db.query(func.count(ContactDNCStatus.id))
+            if self.organization_id:
+                count_query = count_query.filter(
+                    ContactDNCStatus.organization_id == self.organization_id
+                )
+            result["total_entries"] = count_query.scalar() or 0
+
+            # Find entries older than the freshness threshold that haven't
+            # already been flagged. We append a re-verification note to
+            # their reason rather than overwriting it.
+            stale_cutoff = now - timedelta(hours=self.DNC_FRESHNESS_THRESHOLD_HOURS)
+            stale_query = self.db.query(ContactDNCStatus).filter(
+                ContactDNCStatus.created_at < stale_cutoff,
+            )
+            if self.organization_id:
+                stale_query = stale_query.filter(
+                    ContactDNCStatus.organization_id == self.organization_id
+                )
+            # Only mark entries not already flagged
+            stale_query = stale_query.filter(
+                ~ContactDNCStatus.reason.ilike("%[NEEDS REVERIFICATION]%")
+            )
+            stale_entries = stale_query.all()
+
+            for entry in stale_entries:
+                existing_reason = entry.reason or ""
+                entry.reason = f"{existing_reason} [NEEDS REVERIFICATION {now.strftime('%Y-%m-%d')}]".strip()
+            result["stale_marked"] = len(stale_entries)
+
+            if stale_entries:
+                logger.info(
+                    f"DNC sync: marked {len(stale_entries)} stale entries "
+                    f"for re-verification (org={self.organization_id})"
+                )
+
+        except Exception as e:
+            logger.error(f"Error marking stale DNC entries: {e}")
+            result["errors"].append(f"Stale entry marking failed: {e}")
+
+        # Step 2: Record the sync event in the immutable audit log
+        self._log_decision(
+            decision_type=self._DNC_SYNC_DECISION_TYPE,
+            phone_number="",
+            decision="completed",
+            reason=f"DNC registry sync completed via {source}",
+            user_id=actor_user_id,
+            details={
+                "source": source,
+                "total_entries": result["total_entries"],
+                "stale_marked": result["stale_marked"],
+                "sync_timestamp": now.isoformat(),
+                "errors": result["errors"] if result["errors"] else None,
+            },
+        )
+
+        try:
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Error committing DNC sync: {e}")
+            self.db.rollback()
+            result["errors"].append(f"Commit failed: {e}")
+
+        logger.info(
+            f"DNC sync completed: {result['total_entries']} total entries, "
+            f"{result['stale_marked']} marked stale (org={self.organization_id}, "
+            f"source={source})"
+        )
+        return result
+
+    # =========================================================================
     # DNC Checks
     # =========================================================================
 
@@ -1187,6 +1404,14 @@ class ComplianceChecker:
             result["can_call"] = False
             result["issues"].append(f"On Do Not Call list: {dnc_reason}")
 
+        # Check DNC list freshness (CC-004: synced within 24 hours)
+        # This is a warning, not a blocker — the DNC check itself already
+        # blocks numbers that are on the list. Freshness tells the org
+        # their list data may be outdated.
+        is_fresh, freshness_msg = self.check_dnc_freshness()
+        if not is_fresh:
+            result["warnings"].append(freshness_msg)
+
         # Check calling hours
         within_hours, hours_msg = self.check_calling_hours(phone_number)
         if not within_hours:
@@ -1223,3 +1448,50 @@ class ComplianceChecker:
         if len(digits) == 11 and digits.startswith('1'):
             digits = digits[1:]
         return digits
+
+
+# =============================================================================
+# Module-Level Convenience Functions
+# =============================================================================
+
+
+def sync_dnc_for_org(
+    db: Session,
+    organization_id: int,
+    actor_user_id: Optional[int] = None,
+    source: str = "scheduled",
+) -> Dict[str, Any]:
+    """
+    Convenience function to run a DNC sync for a specific organization.
+
+    Intended to be called from scheduled tasks, startup hooks, or admin
+    routes without needing to instantiate ComplianceChecker directly.
+
+    Args:
+        db: SQLAlchemy session.
+        organization_id: Organization to sync DNC list for.
+        actor_user_id: Optional user ID who triggered the sync.
+        source: How the sync was triggered ('scheduled', 'manual', 'startup').
+
+    Returns:
+        Dict with sync results from ComplianceChecker.sync_dnc_registry().
+    """
+    checker = ComplianceChecker(db, organization_id=organization_id)
+    return checker.sync_dnc_registry(
+        actor_user_id=actor_user_id,
+        source=source,
+    )
+
+
+def check_dnc_freshness_for_org(
+    db: Session,
+    organization_id: int,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Convenience function to check DNC freshness for a specific organization.
+
+    Returns:
+        Tuple of (is_fresh, warning_message).
+    """
+    checker = ComplianceChecker(db, organization_id=organization_id)
+    return checker.check_dnc_freshness()

@@ -76,6 +76,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.morning_briefing_tasks",
             "tasks.data_retention_tasks",
             "tasks.learning_tasks",
+            "tasks.expire_voice_workflows",
         ],
     )
 
@@ -335,6 +336,14 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute="0", hour="*/6"),  # Every 6 hours
         "options": {"queue": "default"},
         "kwargs": {"success_rate_threshold": 75.0},
+    },
+
+    # CQ-006: Reap orphaned voice workflow sessions and stale queue entries
+    "reap-orphaned-voice-sessions": {
+        "task": "tasks.expire_voice_workflows.reap_orphaned_voice_sessions",
+        "schedule": crontab(minute="*/15"),  # Every 15 minutes
+        "options": {"queue": "default"},
+        "kwargs": {"max_age_hours": 2, "max_queue_age_minutes": 30},
     },
 }
 
