@@ -21,7 +21,7 @@ from services.workflow_graph_service import WorkflowGraphService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/workflow", tags=["Workflow Flowchart"])
+router = APIRouter(prefix="/api/v1/workflow-builder", tags=["Workflow Flowchart"])
 
 _tables_verified = False
 
