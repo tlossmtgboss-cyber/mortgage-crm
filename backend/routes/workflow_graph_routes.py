@@ -12,15 +12,49 @@ import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 
-from db import get_db
+from db import get_db, engine
 from auth.dependencies import get_current_user
 from services.workflow_graph_service import WorkflowGraphService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/workflow", tags=["Workflow Flowchart"])
+
+_tables_verified = False
+
+
+def _ensure_tables():
+    """Create workflow flowchart tables if they don't exist yet."""
+    global _tables_verified
+    if _tables_verified:
+        return
+    try:
+        from database.models.workflow_flowchart import (
+            WorkflowDefinition, WorkflowNode, WorkflowEdge,
+            WorkflowLeadMovement, WorkflowAIAction,
+        )
+        for model in [WorkflowDefinition, WorkflowNode, WorkflowEdge, WorkflowLeadMovement, WorkflowAIAction]:
+            model.__table__.create(engine, checkfirst=True)
+        with engine.connect() as conn:
+            for col, fk_table in [
+                ("workflow_definition_id", "workflow_definitions"),
+                ("workflow_node_id", "workflow_nodes"),
+            ]:
+                try:
+                    conn.execute(text(
+                        f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {col} VARCHAR(36) "
+                        f"REFERENCES {fk_table}(id) ON DELETE SET NULL"
+                    ))
+                except Exception:
+                    pass
+            conn.commit()
+        _tables_verified = True
+        logger.info("Workflow flowchart tables verified/created")
+    except Exception as e:
+        logger.error(f"Failed to ensure workflow tables: {e}")
 
 
 # ── Pydantic Schemas ───────────────────────────────────────────────
@@ -98,6 +132,7 @@ async def list_definitions(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
+    _ensure_tables()
     try:
         svc = _get_service(db, user)
         return {"workflows": svc.list_definitions(include_inactive)}
@@ -112,10 +147,18 @@ async def create_definition(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    definition = svc.create_definition(body.key, body.name, body.color)
-    db.commit()
-    return {"id": definition.id, "key": definition.key, "name": definition.name}
+    _ensure_tables()
+    try:
+        svc = _get_service(db, user)
+        definition = svc.create_definition(body.key, body.name, body.color)
+        db.commit()
+        return {"id": definition.id, "key": definition.key, "name": definition.name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create workflow definition: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create workflow: {e}")
 
 
 @router.put("/definitions/{definition_id}")
@@ -125,12 +168,19 @@ async def update_definition(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    definition = svc.update_definition(definition_id, **body.model_dump(exclude_none=True))
-    if not definition:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    db.commit()
-    return {"id": definition.id, "name": definition.name}
+    try:
+        svc = _get_service(db, user)
+        definition = svc.update_definition(definition_id, **body.model_dump(exclude_none=True))
+        if not definition:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        db.commit()
+        return {"id": definition.id, "name": definition.name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update workflow definition: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update workflow: {e}")
 
 
 @router.delete("/definitions/{definition_id}")
@@ -139,11 +189,18 @@ async def delete_definition(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    if not svc.delete_definition(definition_id):
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    db.commit()
-    return {"deleted": True}
+    try:
+        svc = _get_service(db, user)
+        if not svc.delete_definition(definition_id):
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        db.commit()
+        return {"deleted": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete workflow definition: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete workflow: {e}")
 
 
 @router.put("/definitions/reorder")
@@ -152,10 +209,17 @@ async def reorder_definitions(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    svc.reorder_definitions(body.ordered_ids)
-    db.commit()
-    return {"reordered": True}
+    try:
+        svc = _get_service(db, user)
+        svc.reorder_definitions(body.ordered_ids)
+        db.commit()
+        return {"reordered": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to reorder workflows: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to reorder workflows: {e}")
 
 
 # ── Graph ──────────────────────────────────────────────────────────
@@ -186,12 +250,19 @@ async def add_node(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    node = svc.add_node(workflow_key, body.model_dump())
-    if not node:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    db.commit()
-    return {"id": node.id, "label": node.label}
+    try:
+        svc = _get_service(db, user)
+        node = svc.add_node(workflow_key, body.model_dump())
+        if not node:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        db.commit()
+        return {"id": node.id, "label": node.label}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add node: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to add node: {e}")
 
 
 @router.put("/{workflow_key}/nodes/{node_id}")
@@ -202,12 +273,19 @@ async def update_node(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    node = svc.update_node(node_id, body.model_dump(exclude_none=True))
-    if not node:
-        raise HTTPException(status_code=404, detail="Node not found")
-    db.commit()
-    return {"id": node.id, "label": node.label}
+    try:
+        svc = _get_service(db, user)
+        node = svc.update_node(node_id, body.model_dump(exclude_none=True))
+        if not node:
+            raise HTTPException(status_code=404, detail="Node not found")
+        db.commit()
+        return {"id": node.id, "label": node.label}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update node: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update node: {e}")
 
 
 @router.delete("/{workflow_key}/nodes/{node_id}")
@@ -217,11 +295,18 @@ async def delete_node(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    if not svc.delete_node(node_id):
-        raise HTTPException(status_code=404, detail="Node not found")
-    db.commit()
-    return {"deleted": True}
+    try:
+        svc = _get_service(db, user)
+        if not svc.delete_node(node_id):
+            raise HTTPException(status_code=404, detail="Node not found")
+        db.commit()
+        return {"deleted": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete node: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete node: {e}")
 
 
 @router.put("/{workflow_key}/nodes/positions")
@@ -231,10 +316,17 @@ async def bulk_update_positions(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    svc.bulk_update_positions([p.model_dump() for p in body.positions])
-    db.commit()
-    return {"updated": len(body.positions)}
+    try:
+        svc = _get_service(db, user)
+        svc.bulk_update_positions([p.model_dump() for p in body.positions])
+        db.commit()
+        return {"updated": len(body.positions)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update positions: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update positions: {e}")
 
 
 # ── Edges ──────────────────────────────────────────────────────────
@@ -246,12 +338,19 @@ async def add_edge(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    edge = svc.add_edge(workflow_key, body.from_node_id, body.to_node_id, body.label)
-    if not edge:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    db.commit()
-    return {"id": edge.id}
+    try:
+        svc = _get_service(db, user)
+        edge = svc.add_edge(workflow_key, body.from_node_id, body.to_node_id, body.label)
+        if not edge:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        db.commit()
+        return {"id": edge.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add edge: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to add edge: {e}")
 
 
 @router.delete("/{workflow_key}/edges/{edge_id}")
@@ -261,11 +360,18 @@ async def delete_edge(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    svc = _get_service(db, user)
-    if not svc.delete_edge(edge_id):
-        raise HTTPException(status_code=404, detail="Edge not found")
-    db.commit()
-    return {"deleted": True}
+    try:
+        svc = _get_service(db, user)
+        if not svc.delete_edge(edge_id):
+            raise HTTPException(status_code=404, detail="Edge not found")
+        db.commit()
+        return {"deleted": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete edge: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete edge: {e}")
 
 
 # ── Live Data ──────────────────────────────────────────────────────

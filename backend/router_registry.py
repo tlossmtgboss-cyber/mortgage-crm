@@ -1593,6 +1593,12 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     try:
         from routes.workflow_graph_routes import router as workflow_graph_router
         app.include_router(workflow_graph_router)
+        logger.info("Workflow graph routes loaded (definitions, nodes, edges, live data, AI review)")
+    except Exception as e:
+        logger.warning(f"Workflow graph routes skipped: {e}")
+
+    # Workflow graph tables (separate from route registration so route loads even if table creation fails)
+    try:
         from database.models.workflow_flowchart import (
             WorkflowDefinition, WorkflowNode, WorkflowEdge,
             WorkflowLeadMovement, WorkflowAIAction,
@@ -1614,9 +1620,9 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
                 except Exception:
                     pass
             _wf_conn.commit()
-        logger.info("Workflow graph routes loaded (definitions, nodes, edges, live data, AI review)")
+        logger.info("Workflow graph tables verified/created")
     except Exception as e:
-        logger.warning(f"Workflow graph routes skipped: {e}")
+        logger.warning(f"Workflow graph table creation deferred: {e}")
 
 
 def _register_late_routes(app, get_db, get_current_user, engine, SessionLocal):

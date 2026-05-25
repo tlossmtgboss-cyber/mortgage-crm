@@ -18,7 +18,8 @@ export default function WorkflowSidebar({ workflows, onRefresh }) {
       onRefresh();
       toast.success(`Workflow "${newName.trim()}" created`);
     } catch (err) {
-      toast.error('Failed to create workflow');
+      const msg = err?.response?.data?.detail || 'Failed to create workflow';
+      toast.error(msg);
     }
   };
 
