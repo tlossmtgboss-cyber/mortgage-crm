@@ -135,9 +135,12 @@ async def list_definitions(
     _ensure_tables()
     try:
         svc = _get_service(db, user)
-        return {"workflows": svc.list_definitions(include_inactive)}
+        workflows = svc.list_definitions(include_inactive)
+        db.commit()
+        return {"workflows": workflows}
     except Exception as e:
         logger.error(f"Failed to list workflow definitions: {e}")
+        db.rollback()
         return {"workflows": []}
 
 

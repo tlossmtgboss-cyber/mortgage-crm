@@ -20,12 +20,52 @@ from database.models.lead_loan import Lead
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_WORKFLOWS = [
+    {"key": "prospect", "name": "Prospect", "color": "#22c55e", "sort_order": 0},
+    {"key": "prequal", "name": "Pre-Qual", "color": "#3b82f6", "sort_order": 1},
+    {"key": "pre_approved", "name": "Pre-Approved", "color": "#8b5cf6", "sort_order": 2},
+    {"key": "under_contract", "name": "Under Contract", "color": "#f59e0b", "sort_order": 3},
+    {"key": "processing", "name": "Processing", "color": "#06b6d4", "sort_order": 4},
+    {"key": "closing", "name": "Closing", "color": "#10b981", "sort_order": 5},
+    {"key": "post_close", "name": "Post-Close", "color": "#6366f1", "sort_order": 6},
+    {"key": "nurture", "name": "Nurture", "color": "#ec4899", "sort_order": 7},
+]
+
+
 class WorkflowGraphService:
     def __init__(self, db: Session, organization_id: int):
         self.db = db
         self.organization_id = organization_id
 
     # ── Definitions ────────────────────────────────────────────────
+
+    def _seed_defaults(self):
+        """Create default workflow definitions for this org if none exist."""
+        for wf in DEFAULT_WORKFLOWS:
+            definition = WorkflowDefinition(
+                id=str(uuid.uuid4()),
+                organization_id=self.organization_id,
+                key=wf["key"],
+                name=wf["name"],
+                color=wf["color"],
+                sort_order=wf["sort_order"],
+            )
+            self.db.add(definition)
+            self.db.flush()
+            start_node = WorkflowNode(
+                id=str(uuid.uuid4()),
+                workflow_definition_id=definition.id,
+                type="start",
+                label=f"Lead Enters {wf['name']}",
+                x=380.0,
+                y=30.0,
+                role="System",
+                day_label="Trigger",
+                sort_order=0,
+            )
+            self.db.add(start_node)
+        self.db.flush()
+        logger.info(f"Seeded {len(DEFAULT_WORKFLOWS)} default workflows for org {self.organization_id}")
 
     def list_definitions(self, include_inactive: bool = False):
         q = self.db.query(WorkflowDefinition).filter(
@@ -34,6 +74,13 @@ class WorkflowGraphService:
         if not include_inactive:
             q = q.filter(WorkflowDefinition.is_active == True)
         defs = q.order_by(WorkflowDefinition.sort_order).all()
+
+        if not defs:
+            self._seed_defaults()
+            defs = self.db.query(WorkflowDefinition).filter(
+                WorkflowDefinition.organization_id == self.organization_id,
+                WorkflowDefinition.is_active == True,
+            ).order_by(WorkflowDefinition.sort_order).all()
 
         result = []
         for d in defs:
