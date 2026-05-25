@@ -21,6 +21,16 @@ function getNodeCenter(node) {
   return { x: node.x + w / 2, y: node.y + h / 2 };
 }
 
+function getNodeBottom(node) {
+  const { w, h } = getNodeSize(node.type);
+  return { x: node.x + w / 2, y: node.y + h };
+}
+
+function getNodeTop(node) {
+  const { w } = getNodeSize(node.type);
+  return { x: node.x + w / 2, y: node.y };
+}
+
 function bezierPath(from, to) {
   const dy = to.y - from.y;
   const cp = Math.max(Math.abs(dy) * 0.5, 40);
@@ -37,18 +47,22 @@ export default function FlowchartCanvas({
   placingNodeType,
   onPlaceNode,
   onEdgeCreate,
+  zoom = 1,
+  onZoomChange,
 }) {
-  const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(null);
+  const [edgeDraft, setEdgeDraft] = useState(null);
   const canvasRef = useRef(null);
   const panStart = useRef(null);
+  const mousePos = useRef({ x: 0, y: 0 });
 
-  // -- Pan/zoom handlers --
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    setZoom(z => Math.max(0.3, Math.min(2, z - e.deltaY * 0.001)));
-  }, []);
+    if (onZoomChange) {
+      onZoomChange(z => Math.max(0.3, Math.min(2, z - e.deltaY * 0.001)));
+    }
+  }, [onZoomChange]);
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -57,13 +71,18 @@ export default function FlowchartCanvas({
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
+  const canvasCoords = useCallback((clientX, clientY) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - pan.x) / zoom,
+      y: (clientY - rect.top - pan.y) / zoom,
+    };
+  }, [pan, zoom]);
+
   const handleCanvasMouseDown = (e) => {
     if (e.target === canvasRef.current || e.target.closest('.wf-canvas-svg')) {
       if (placingNodeType) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left - pan.x) / zoom;
-        const y = (e.clientY - rect.top - pan.y) / zoom;
-        onPlaceNode({ x, y });
+        onPlaceNode(canvasCoords(e.clientX, e.clientY));
         return;
       }
       panStart.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
@@ -72,10 +91,15 @@ export default function FlowchartCanvas({
   };
 
   const handleMouseMove = useCallback((e) => {
+    mousePos.current = { x: e.clientX, y: e.clientY };
+
     if (dragging) {
-      const newX = e.clientX / zoom - dragging.offsetX - pan.x / zoom;
-      const newY = e.clientY / zoom - dragging.offsetY - pan.y / zoom;
-      onNodeDrag(dragging.id, newX, newY);
+      const coords = canvasCoords(e.clientX, e.clientY);
+      onNodeDrag(dragging.id, coords.x - dragging.offsetX, coords.y - dragging.offsetY);
+    }
+    if (edgeDraft) {
+      const coords = canvasCoords(e.clientX, e.clientY);
+      setEdgeDraft(prev => prev ? { ...prev, toX: coords.x, toY: coords.y } : null);
     }
     if (panStart.current) {
       setPan({
@@ -83,12 +107,25 @@ export default function FlowchartCanvas({
         y: e.clientY - panStart.current.startY + panStart.current.panY,
       });
     }
-  }, [dragging, zoom, pan, onNodeDrag]);
+  }, [dragging, edgeDraft, canvasCoords, onNodeDrag]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e) => {
+    if (edgeDraft) {
+      const coords = canvasCoords(e.clientX, e.clientY);
+      const target = nodes.find(n => {
+        const { w, h } = getNodeSize(n.type);
+        return n.id !== edgeDraft.fromId &&
+          coords.x >= n.x && coords.x <= n.x + w &&
+          coords.y >= n.y && coords.y <= n.y + h;
+      });
+      if (target && onEdgeCreate) {
+        onEdgeCreate(edgeDraft.fromId, target.id);
+      }
+      setEdgeDraft(null);
+    }
     setDragging(null);
     panStart.current = null;
-  }, []);
+  }, [edgeDraft, nodes, onEdgeCreate, canvasCoords]);
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove);
@@ -102,15 +139,23 @@ export default function FlowchartCanvas({
   const handleNodeMouseDown = (e, nodeId) => {
     e.stopPropagation();
     const node = nodes.find(n => n.id === nodeId);
+    const coords = canvasCoords(e.clientX, e.clientY);
     setDragging({
       id: nodeId,
-      offsetX: e.clientX / zoom - node.x,
-      offsetY: e.clientY / zoom - node.y,
+      offsetX: coords.x - node.x,
+      offsetY: coords.y - node.y,
     });
     onNodeSelect(nodeId);
   };
 
-  // -- Status dot color --
+  const handlePortMouseDown = (e, nodeId) => {
+    e.stopPropagation();
+    const node = nodes.find(n => n.id === nodeId);
+    const bottom = getNodeBottom(node);
+    const coords = canvasCoords(e.clientX, e.clientY);
+    setEdgeDraft({ fromId: nodeId, fromX: bottom.x, fromY: bottom.y, toX: coords.x, toY: coords.y });
+  };
+
   const statusColor = (s) =>
     s === 'healthy' ? 'var(--bt-success, #2D7A52)' :
     s === 'broken' ? 'var(--bt-error, #9B2C2C)' :
@@ -121,7 +166,7 @@ export default function FlowchartCanvas({
       className="wf-canvas"
       ref={canvasRef}
       onMouseDown={handleCanvasMouseDown}
-      style={{ cursor: placingNodeType ? 'crosshair' : 'default' }}
+      style={{ cursor: placingNodeType ? 'crosshair' : edgeDraft ? 'grabbing' : 'default' }}
     >
       <div
         className="wf-canvas-inner"
@@ -138,8 +183,8 @@ export default function FlowchartCanvas({
             const fromNode = nodes.find(n => n.id === edge.from_node_id);
             const toNode = nodes.find(n => n.id === edge.to_node_id);
             if (!fromNode || !toNode) return null;
-            const from = getNodeCenter(fromNode);
-            const to = getNodeCenter(toNode);
+            const from = getNodeBottom(fromNode);
+            const to = getNodeTop(toNode);
             return (
               <g key={edge.id}>
                 <path
@@ -164,11 +209,25 @@ export default function FlowchartCanvas({
               </g>
             );
           })}
+          {/* Draft edge while dragging */}
+          {edgeDraft && (
+            <path
+              d={bezierPath(
+                { x: edgeDraft.fromX, y: edgeDraft.fromY },
+                { x: edgeDraft.toX, y: edgeDraft.toY }
+              )}
+              fill="none"
+              stroke="var(--bt-accent, #B8924A)"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              markerEnd="url(#arrowhead)"
+            />
+          )}
         </svg>
 
         {/* HTML nodes */}
         {nodes.map(node => {
-          const { w } = getNodeSize(node.type);
+          const { w, h } = getNodeSize(node.type);
           const typeConfig = NODE_TYPES[node.type] || NODE_TYPES.task;
           const isSelected = selectedId === node.id;
           const channels = node.channels || {};
@@ -186,6 +245,11 @@ export default function FlowchartCanvas({
               }}
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
             >
+              {/* Input port (top) */}
+              {node.type !== 'start' && (
+                <div className="wf-port wf-port-in" />
+              )}
+
               <div className="wf-node-header">
                 <span className={`wf-node-label ${node.type === 'start' || node.type === 'end' ? 'light' : ''}`}>
                   {node.label}
@@ -208,6 +272,15 @@ export default function FlowchartCanvas({
                     <span className="wf-node-status" style={{ background: statusColor(node.status) }} />
                   </div>
                 </>
+              )}
+
+              {/* Output port (bottom) — drag to create edge */}
+              {node.type !== 'end' && (
+                <div
+                  className="wf-port wf-port-out"
+                  onMouseDown={(e) => handlePortMouseDown(e, node.id)}
+                  title="Drag to connect"
+                />
               )}
             </div>
           );
