@@ -235,6 +235,8 @@ def _build_lo_identity(ctx: dict) -> str:
     """Build the YOUR LO section for the LO assistant prompt."""
     name = ctx.get("full_name", "")
     email = ctx.get("email", "")
+    if not name or not name.strip():
+        name = email.split("@")[0].replace(".", " ").title() if email else ""
     if not name and not email:
         return ""
     parts = ["YOUR LO:"]

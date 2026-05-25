@@ -214,8 +214,11 @@ class AriaVoiceAgent(Agent):
 
         lo_first = ""
         fn = self._session_data.get("full_name", "")
-        if fn:
-            lo_first = fn.split()[0]
+        if not fn or not fn.strip():
+            email = self._session_data.get("email", "") or ""
+            fn = email.split("@")[0].replace(".", " ").title() if email else ""
+        if fn and fn.strip():
+            lo_first = fn.strip().split()[0]
 
         greetings = {
             "lo_assistant": (
