@@ -10,7 +10,7 @@ const NODE_TYPES = {
   end: { icon: '⏹', color: '#9B2C2C', border: '#9B2C2C' },
 };
 
-const CHANNEL_ICONS = { phone: '📞', text: '📱', email: '✉️', referral_partner: '🤝' };
+const CHANNEL_ICONS = { phone: '📞', text: '📱', voicemail_drop: '📩', text_process: '💬', email: '✉️', referral_partner: '🤝' };
 
 function getNodeSize(type) {
   return type === 'condition' ? { w: 180, h: 70 } : { w: 220, h: 90 };

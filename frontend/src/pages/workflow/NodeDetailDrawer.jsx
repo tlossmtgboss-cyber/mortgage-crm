@@ -6,6 +6,8 @@ const ROLES = ['LO', 'Processor', 'Concierge', 'AI', 'Manager', 'System'];
 const CHANNELS = [
   { key: 'phone', label: 'Phone', icon: '📞' },
   { key: 'text', label: 'Text', icon: '📱' },
+  { key: 'voicemail_drop', label: 'Voicemail Drop', icon: '📩' },
+  { key: 'text_process', label: 'Text Process', icon: '💬' },
   { key: 'email', label: 'Email', icon: '✉️' },
   { key: 'referral_partner', label: 'Referral Partner', icon: '🤝' },
 ];
