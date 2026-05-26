@@ -423,12 +423,14 @@ export default function AriaVoiceHome() {
     api.get('/api/v1/users/me').then(res => {
       if (cancelled) return;
       const data = res.data || res;
-      const fn = (data.full_name || '').trim();
-      if (fn) {
-        setUserFirstName(fn.split(' ')[0]);
+      const firstName = (data.first_name || '').trim();
+      const fullName = (data.full_name || '').trim();
+      const resolved = firstName || (fullName ? fullName.split(' ')[0] : '');
+      if (resolved) {
+        setUserFirstName(resolved);
         const stored = getUserData() || {};
-        if (stored.full_name !== fn) {
-          setTokens({ user_data: { ...stored, full_name: fn } });
+        if (stored.full_name !== fullName && fullName) {
+          setTokens({ user_data: { ...stored, full_name: fullName } });
         }
       }
     }).catch(() => {});
