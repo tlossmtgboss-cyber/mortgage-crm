@@ -16,6 +16,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useAriaVoice } from '../../hooks/useAriaVoice';
 import api from '../../services/api';
+import { getUserData } from '../../utils/tokenStore';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
 import CallIntelligenceSlidePanel from '../../components/aria/CallIntelligenceSlidePanel';
@@ -96,7 +97,7 @@ function DisconnectIcon() {
 // LiveKit Voice Agent UI — renders inside LiveKitRoom context
 // ---------------------------------------------------------------------------
 
-function LiveKitVoiceUI({ onDisconnect, onAgentMissing, ciPanelOpen, setCiPanelOpen }) {
+function LiveKitVoiceUI({ onDisconnect, onAgentMissing, ciPanelOpen, setCiPanelOpen, userFirstName }) {
   const voiceAssistant = useVoiceAssistant();
   const room = useRoomContext();
 
@@ -154,7 +155,7 @@ function LiveKitVoiceUI({ onDisconnect, onAgentMissing, ciPanelOpen, setCiPanelO
 
       {/* Center content */}
       <div className="avh-center">
-        <h1 className="avh-title">Aria</h1>
+        <h1 className="avh-title">{userFirstName ? `Hey ${userFirstName}` : 'Aria'}</h1>
         <p className="avh-subtitle">
           {voiceState === 'connected' ? 'Voice Connected' : 'Your AI Voice Assistant'}
         </p>
@@ -408,6 +409,14 @@ function getOrCreateSessionId() {
 
 export default function AriaVoiceHome() {
   const { isOnline } = useNetworkStatus();
+
+  // Resolve user's first name for personalized greeting
+  const userFirstName = (() => {
+    const userData = getUserData();
+    if (userData?.full_name) return userData.full_name.split(' ')[0];
+    if (userData?.email) return userData.email.split('@')[0].replace(/[._]/g, ' ').split(' ')[0];
+    return '';
+  })();
 
   // LiveKit state
   const [lkToken, setLkToken] = useState(null);
@@ -725,6 +734,7 @@ export default function AriaVoiceHome() {
           }}
           ciPanelOpen={ciPanelOpen}
           setCiPanelOpen={setCiPanelOpen}
+          userFirstName={userFirstName}
         />
       ) : (
         <>
@@ -739,8 +749,8 @@ export default function AriaVoiceHome() {
               </div>
             )}
 
-            <h1 className="avh-title">Aria</h1>
-            <p className="avh-subtitle">Your AI Voice Assistant</p>
+            <h1 className="avh-title">{userFirstName ? `Hey ${userFirstName}` : 'Aria'}</h1>
+            <p className="avh-subtitle">{userFirstName ? "What can I help you with?" : 'Your AI Voice Assistant'}</p>
 
             <div className={orbContainerClass}>
               <div className="avh-ring avh-ring--outer" />
