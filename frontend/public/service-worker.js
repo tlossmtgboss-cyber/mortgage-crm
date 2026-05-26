@@ -1,7 +1,7 @@
 /* Perennia AI — Service Worker for Offline Support */
 /* Caches app shell, handles API fallback, queues offline mutations, push notifications */
 
-const CACHE_NAME = 'perennia-v3';
+const CACHE_NAME = 'perennia-v4';
 const API_CACHE_NAME = 'perennia-api-v2';
 const OFFLINE_QUEUE_DB = 'perennia-offline-queue';
 const OFFLINE_QUEUE_STORE = 'mutations';

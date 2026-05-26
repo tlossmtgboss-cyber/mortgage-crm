@@ -16,7 +16,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useAriaVoice } from '../../hooks/useAriaVoice';
 import api from '../../services/api';
-import { getUserData } from '../../utils/tokenStore';
+import { getUserData, setTokens } from '../../utils/tokenStore';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
 import CallIntelligenceSlidePanel from '../../components/aria/CallIntelligenceSlidePanel';
@@ -423,9 +423,13 @@ export default function AriaVoiceHome() {
     api.get('/api/v1/users/me').then(res => {
       if (cancelled) return;
       const data = res.data || res;
-      const fn = data.full_name || '';
-      if (fn.trim()) {
-        setUserFirstName(fn.trim().split(' ')[0]);
+      const fn = (data.full_name || '').trim();
+      if (fn) {
+        setUserFirstName(fn.split(' ')[0]);
+        const stored = getUserData() || {};
+        if (stored.full_name !== fn) {
+          setTokens({ user_data: { ...stored, full_name: fn } });
+        }
       }
     }).catch(() => {});
     return () => { cancelled = true; };
