@@ -1,13 +1,13 @@
 {
   "codebase": {
-    "lines_of_code": 2603460,
-    "lines_of_code_display": "2603460",
+    "lines_of_code": 2603486,
+    "lines_of_code_display": "2603486",
     "source_files": 5389,
     "backend_files": 3157,
     "frontend_files": 2121
   },
   "repo": {
-    "total_commits": 6855,
+    "total_commits": 6857,
     "first_commit_date": "2025-11-07",
     "latest_commit_date": "2026-05-25"
   },
@@ -22,9 +22,9 @@
     "data_models": 723
   },
   "velocity": {
-    "commits_last_7d": 256,
-    "commits_last_30d": 1022
+    "commits_last_7d": 258,
+    "commits_last_30d": 1024
   },
-  "generated_at": "2026-05-26T00:04:40Z",
-  "commit_sha": "7ddf1900"
+  "generated_at": "2026-05-26T00:13:52Z",
+  "commit_sha": "21deba38"
 }
