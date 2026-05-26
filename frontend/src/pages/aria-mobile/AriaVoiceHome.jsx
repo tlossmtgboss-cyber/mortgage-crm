@@ -410,13 +410,26 @@ function getOrCreateSessionId() {
 export default function AriaVoiceHome() {
   const { isOnline } = useNetworkStatus();
 
-  // Resolve user's first name for personalized greeting
-  const userFirstName = (() => {
+  // Resolve user's first name — start with localStorage, then fetch live profile
+  const [userFirstName, setUserFirstName] = useState(() => {
     const userData = getUserData();
     if (userData?.full_name) return userData.full_name.split(' ')[0];
     if (userData?.email) return userData.email.split('@')[0].replace(/[._]/g, ' ').split(' ')[0];
     return '';
-  })();
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/api/v1/users/me').then(res => {
+      if (cancelled) return;
+      const data = res.data || res;
+      const fn = data.full_name || '';
+      if (fn.trim()) {
+        setUserFirstName(fn.trim().split(' ')[0]);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // LiveKit state
   const [lkToken, setLkToken] = useState(null);
@@ -720,7 +733,7 @@ export default function AriaVoiceHome() {
       </button>
 
       {ciPanelOpen && (
-        <CallIntelligenceSlidePanel onClose={() => setCiPanelOpen(false)} />
+        <CallIntelligenceSlidePanel isOpen={ciPanelOpen} onClose={() => setCiPanelOpen(false)} />
       )}
 
       {/* LiveKit mode — connected UI (guard must match LiveKitRoom wrapper at bottom) */}

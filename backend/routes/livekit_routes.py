@@ -105,6 +105,10 @@ async def create_voice_token(
         token.with_identity(participant_identity)
         user_full_name = getattr(current_user, "full_name", "") or ""
         if not user_full_name.strip():
+            fn = getattr(current_user, "first_name", None) or ""
+            ln = getattr(current_user, "last_name", None) or ""
+            user_full_name = f"{fn} {ln}".strip()
+        if not user_full_name.strip():
             email = getattr(current_user, "email", "") or ""
             user_full_name = email.split("@")[0].replace(".", " ").title() if email else ""
         token.with_name(user_full_name or getattr(current_user, "email", participant_identity))

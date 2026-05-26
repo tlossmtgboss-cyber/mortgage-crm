@@ -521,6 +521,10 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         user_role = getattr(user, 'role', '') or ''
         user_perm_role = getattr(user, 'permission_role', '') or ''
         user_full_name = user.full_name
+        user_first_name = getattr(user, 'first_name', None) or ''
+        user_last_name = getattr(user, 'last_name', None) or ''
+        if not user_full_name and (user_first_name or user_last_name):
+            user_full_name = f"{user_first_name} {user_last_name}".strip()
         user_onboarding = getattr(user, 'onboarding_completed', False)
         user_mfa_enabled = getattr(user, 'mfa_enabled', False) or False
         user_hashed_password = user.hashed_password

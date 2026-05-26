@@ -714,10 +714,15 @@ async def get_current_user_profile(
 
         business_hours = getattr(current_user, 'business_hours', None) or {}
 
+        fn = getattr(current_user, 'first_name', None) or ''
+        ln = getattr(current_user, 'last_name', None) or ''
+        resolved_name = current_user.full_name or f"{fn} {ln}".strip()
         return {
             "id": current_user.id,
             "slug": getattr(current_user, 'slug', None) or '',
-            "full_name": current_user.full_name or '',
+            "full_name": resolved_name,
+            "first_name": fn,
+            "last_name": ln,
             "email": current_user.email or '',
             "phone": getattr(current_user, 'phone', None) or '',
             "job_title": getattr(current_user, 'title', None) or '',
