@@ -697,10 +697,14 @@ async def resolve_alert(
 # ============================================================================
 
 _EMPTY_DASHBOARD = {
-    "agents": {"total": 0, "active": 0, "paused": 0, "maintenance": 0, "by_health": {}},
-    "executions": {"total_24h": 0, "successful": 0, "failed": 0, "avg_time_ms": 0},
-    "alerts": {"total_active": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+    "health": {"status": "unknown", "total_agents": 0, "active_agents": 0},
+    "metrics": {
+        "last_24h": {"total_executions": 0, "successful": 0, "failed": 0, "success_rate": 0, "total_cost": 0},
+        "last_7d": {"total_executions": 0, "successful": 0, "failed": 0, "success_rate": 0, "total_cost": 0},
+        "source": "none"
+    },
     "top_agents": [],
+    "recent_alerts": [],
 }
 
 

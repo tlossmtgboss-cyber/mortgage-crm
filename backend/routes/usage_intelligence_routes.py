@@ -107,6 +107,8 @@ async def get_dashboard_overview(
     """
     try:
         return await _get_dashboard_overview_impl(current_user, db)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"Usage intelligence dashboard query failed (tables may not exist): {e}")
         return {

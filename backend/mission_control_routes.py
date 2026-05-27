@@ -406,7 +406,7 @@ async def resolve_alert(alert_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.warning(f"Resolve alert failed: {e}")
-        return {"message": "Could not resolve alert", "error": str(e)}
+        raise HTTPException(status_code=500, detail="Could not resolve alert")
 
 
 @router.get("/security")
@@ -418,7 +418,13 @@ async def get_security_snapshot(db: Session = Depends(get_db)):
         """)).fetchone()
 
         if not result:
-            raise ValueError("No security data")
+            from datetime import date as date_cls
+            return {
+                "date": date_cls.today().isoformat(),
+                "active_users_with_2fa": 0, "active_users_total": 0,
+                "tfa_coverage_percent": 0, "high_privilege_actions_24h": 0,
+                "failed_login_attempts_24h": 0,
+            }
 
         tfa_coverage = (result.active_users_with_2fa / result.active_users_total * 100) if result.active_users_total > 0 else 0
         return {
