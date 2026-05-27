@@ -95,18 +95,27 @@ const DialerSettings = () => {
         })
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        setMessage({ type: 'error', text: `Server error (${response.status}): ${errorText}` });
+        return;
+      }
+
       const data = await response.json();
       if (data.success) {
         setMessage({
           type: 'success',
-          text: `Verification call initiated! Enter code: ${data.validation_code} when you receive the call. After completing the call, click "Check Verification Status".`
+          text: `Caller ID "${verifyName}" (${data.phone_number}) registered and verified!`
         });
+        setVerifyPhone('');
         setVerifyName('');
+        await fetchVerifiedCallerIds();
+        await fetchSettings();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to start verification' });
+        setMessage({ type: 'error', text: data.error || 'Failed to register caller ID' });
       }
     } catch (err) {
-      setMessage({ type: 'error', text: 'Error starting verification: ' + err.message });
+      setMessage({ type: 'error', text: 'Error registering caller ID: ' + err.message });
     } finally {
       setVerifying(false);
     }
@@ -191,7 +200,7 @@ const DialerSettings = () => {
 
         <div className="verify-caller-id">
           <h4>Add New Caller ID</h4>
-          <p>Verify a new business phone number to use as your caller ID</p>
+          <p>Add a business phone number to use as your outbound caller ID</p>
           <div className="verify-form">
             <input
               type="tel"
@@ -203,29 +212,21 @@ const DialerSettings = () => {
               type="text"
               value={verifyName}
               onChange={(e) => setVerifyName(e.target.value)}
-              placeholder="Display Name (e.g., Your Company)"
+              placeholder="Display Name (e.g., Tim Loss)"
             />
             <div className="verify-buttons">
               <button
                 onClick={startVerification}
-                disabled={verifying}
+                disabled={verifying || !verifyPhone || !verifyName}
                 className="btn-primary"
               >
-                {verifying ? 'Processing...' : 'Start Verification'}
-              </button>
-              <button
-                onClick={checkVerification}
-                disabled={verifying || !verifyPhone}
-                className="btn-secondary"
-              >
-                Check Status
+                {verifying ? 'Registering...' : 'Register Caller ID'}
               </button>
             </div>
           </div>
           <small>
-            <strong>Step 1:</strong> Enter your phone number and click "Start Verification". You will receive a call with a verification code.<br />
-            <strong>Step 2:</strong> Answer the call and enter the code when prompted.<br />
-            <strong>Step 3:</strong> Click "Check Status" to confirm verification is complete.
+            <strong>Step 1:</strong> Enter your business phone number and display name.<br />
+            <strong>Step 2:</strong> Click "Register Caller ID" to add it as your outbound number.
           </small>
         </div>
       </div>

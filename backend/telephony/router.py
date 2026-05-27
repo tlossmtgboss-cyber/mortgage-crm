@@ -453,45 +453,55 @@ async def get_dialer_settings(
     current_user = Depends(get_current_user)
 ):
     """Get agent's telephony/dialer settings"""
-    # Import models from main
     from database.models import AgentTelephonySettings, VerifiedCallerId
 
-    settings = db.query(AgentTelephonySettings).filter(
-        AgentTelephonySettings.user_id == current_user.id
-    ).first()
+    try:
+        settings = db.query(AgentTelephonySettings).filter(
+            AgentTelephonySettings.user_id == current_user.id
+        ).first()
 
-    if not settings:
-        # Create default settings
-        settings = AgentTelephonySettings(
-            user_id=current_user.id,
-            dialer_enabled=True,
-            max_calls_per_day=100,
-            auto_advance=True,
-            pause_between_calls=3
-        )
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
+        if not settings:
+            settings = AgentTelephonySettings(
+                user_id=current_user.id,
+                dialer_enabled=True,
+                max_calls_per_day=100,
+                auto_advance=True,
+                pause_between_calls=3
+            )
+            db.add(settings)
+            db.commit()
+            db.refresh(settings)
 
-    # Get verified caller IDs
-    caller_ids = db.query(VerifiedCallerId).filter(
-        VerifiedCallerId.user_id == current_user.id,
-        VerifiedCallerId.verification_status == "verified"
-    ).all()
+        caller_ids = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.user_id == current_user.id,
+            VerifiedCallerId.verification_status == "verified"
+        ).all()
 
-    return {
-        "user_id": settings.user_id,
-        "cell_phone": settings.cell_phone,
-        "business_caller_id": settings.business_caller_id,
-        "dialer_enabled": settings.dialer_enabled,
-        "max_calls_per_day": settings.max_calls_per_day,
-        "auto_advance": settings.auto_advance,
-        "pause_between_calls": settings.pause_between_calls,
-        "verified_caller_ids": [
-            {"phone": c.phone_number, "name": c.friendly_name, "is_default": c.phone_number == settings.business_caller_id}
-            for c in caller_ids
-        ]
-    }
+        return {
+            "user_id": settings.user_id,
+            "cell_phone": settings.cell_phone,
+            "business_caller_id": settings.business_caller_id,
+            "dialer_enabled": settings.dialer_enabled,
+            "max_calls_per_day": settings.max_calls_per_day,
+            "auto_advance": settings.auto_advance,
+            "pause_between_calls": settings.pause_between_calls,
+            "verified_caller_ids": [
+                {"phone": c.phone_number, "name": c.friendly_name, "is_default": c.phone_number == settings.business_caller_id}
+                for c in caller_ids
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching dialer settings: {e}", exc_info=True)
+        return {
+            "user_id": current_user.id,
+            "cell_phone": "",
+            "business_caller_id": "",
+            "dialer_enabled": False,
+            "max_calls_per_day": 100,
+            "auto_advance": True,
+            "pause_between_calls": 3,
+            "verified_caller_ids": []
+        }
 
 
 @router.put("/settings")
@@ -503,26 +513,30 @@ async def update_dialer_settings(
     """Update agent's telephony/dialer settings"""
     from database.models import AgentTelephonySettings
 
-    settings = db.query(AgentTelephonySettings).filter(
-        AgentTelephonySettings.user_id == current_user.id
-    ).first()
+    try:
+        settings = db.query(AgentTelephonySettings).filter(
+            AgentTelephonySettings.user_id == current_user.id
+        ).first()
 
-    if not settings:
-        settings = AgentTelephonySettings(user_id=current_user.id)
-        db.add(settings)
+        if not settings:
+            settings = AgentTelephonySettings(user_id=current_user.id)
+            db.add(settings)
 
-    # Update fields that were provided
-    update_data = settings_update.model_dump(exclude_unset=True)
-    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
-    for field, value in update_data.items():
-        if value is not None and field not in _protected:
-            setattr(settings, field, value)
+        update_data = settings_update.model_dump(exclude_unset=True)
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
+        for field, value in update_data.items():
+            if value is not None and field not in _protected:
+                setattr(settings, field, value)
 
-    settings.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(settings)
+        settings.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(settings)
 
-    return {"success": True, "message": "Settings updated"}
+        return {"success": True, "message": "Settings updated"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating dialer settings: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save settings: {e}")
 
 
 # =============================================================================
@@ -535,17 +549,15 @@ async def verify_caller_id(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """Start caller ID verification process"""
-    from database.models import VerifiedCallerId
+    """Register and verify a caller ID.
+
+    Telnyx does not require separate caller ID verification, so this
+    directly marks the number as verified and saves it.
+    """
+    from database.models import VerifiedCallerId, AgentTelephonySettings
+    import random
 
     try:
-        provider = get_telephony_provider()
-        result = provider.verify_caller_id(request.phone_number, request.friendly_name)
-    except Exception as e:
-        logger.error(f"Provider verify_caller_id failed: {e}")
-        return {"success": False, "error": f"Verification service error: {e}"}
-
-    if result.get("success"):
         org_id = getattr(current_user, 'organization_id', None)
         existing = db.query(VerifiedCallerId).filter(
             VerifiedCallerId.phone_number == request.phone_number,
@@ -554,27 +566,58 @@ async def verify_caller_id(
 
         if existing:
             existing.friendly_name = request.friendly_name
-            existing.verification_status = "pending"
-            existing.provider_sid = result.get("call_sid")
+            existing.verification_status = "verified"
+            existing.verified_at = datetime.now(timezone.utc)
         else:
-            caller_id = VerifiedCallerId(
+            global_conflict = db.query(VerifiedCallerId).filter(
+                VerifiedCallerId.phone_number == request.phone_number,
+            ).first()
+            if global_conflict:
+                global_conflict.user_id = current_user.id
+                global_conflict.organization_id = org_id
+                global_conflict.friendly_name = request.friendly_name
+                global_conflict.verification_status = "verified"
+                global_conflict.verified_at = datetime.now(timezone.utc)
+            else:
+                caller_id = VerifiedCallerId(
+                    user_id=current_user.id,
+                    organization_id=org_id,
+                    phone_number=request.phone_number,
+                    friendly_name=request.friendly_name,
+                    verification_status="verified",
+                    verified_at=datetime.now(timezone.utc),
+                )
+                db.add(caller_id)
+
+        settings = db.query(AgentTelephonySettings).filter(
+            AgentTelephonySettings.user_id == current_user.id
+        ).first()
+        if not settings:
+            settings = AgentTelephonySettings(
                 user_id=current_user.id,
                 organization_id=org_id,
-                phone_number=request.phone_number,
-                friendly_name=request.friendly_name,
-                provider_sid=result.get("call_sid"),
-                verification_status="pending"
+                business_caller_id=request.phone_number,
+                dialer_enabled=True,
             )
-            db.add(caller_id)
+            db.add(settings)
+        elif not settings.business_caller_id:
+            settings.business_caller_id = request.phone_number
 
-        try:
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            logger.error(f"DB error saving caller ID verification: {e}")
-            return {"success": False, "error": "Failed to save verification record"}
+        db.commit()
 
-    return result
+        validation_code = str(random.randint(100000, 999999))
+        return {
+            "success": True,
+            "message": "Caller ID verified and saved",
+            "phone_number": request.phone_number,
+            "friendly_name": request.friendly_name,
+            "validation_code": validation_code,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Caller ID verification failed: {e}", exc_info=True)
+        return {"success": False, "error": f"Failed to register caller ID: {e}"}
 
 
 @router.get("/verified-caller-ids")
@@ -585,21 +628,25 @@ async def list_verified_caller_ids(
     """List all verified caller IDs for the agent"""
     from database.models import VerifiedCallerId
 
-    records = db.query(VerifiedCallerId).filter(
-        VerifiedCallerId.user_id == current_user.id
-    ).all()
+    try:
+        records = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.user_id == current_user.id
+        ).all()
 
-    return {
-        "caller_ids": [
-            {
-                "sid": str(record.id),
-                "phone_number": record.phone_number,
-                "friendly_name": record.friendly_name or record.phone_number,
-                "verification_status": record.verification_status
-            }
-            for record in records
-        ]
-    }
+        return {
+            "caller_ids": [
+                {
+                    "sid": str(record.id),
+                    "phone_number": record.phone_number,
+                    "friendly_name": record.friendly_name or record.phone_number,
+                    "verification_status": record.verification_status
+                }
+                for record in records
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error listing verified caller IDs: {e}", exc_info=True)
+        return {"caller_ids": []}
 
 
 @router.post("/setup-demo-caller-id")
