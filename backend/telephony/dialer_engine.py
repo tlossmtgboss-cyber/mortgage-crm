@@ -891,10 +891,12 @@ def click_to_dial(
     if not agent_phone:
         return {"success": False, "error": "Agent cell phone not configured"}
 
+    telnyx_number = os.getenv("TELNYX_FROM_NUMBER", "+18438838956")
+
     result = provider.place_call(
-        to_number=agent_phone,  # Call agent first
-        from_number=settings.business_caller_id,
-        callback_url=callback_url,  # TwiML will dial the contact
+        to_number=agent_phone,
+        from_number=telnyx_number,
+        callback_url=callback_url,
         status_callback_url=status_callback_url,
         recording_status_callback=recording_callback_url,
         record=True,
