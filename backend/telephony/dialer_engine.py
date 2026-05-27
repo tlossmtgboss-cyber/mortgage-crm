@@ -929,12 +929,23 @@ def click_to_dial(
             "success": True,
             "call_sid": result.call_sid,
             "contact_name": contact_name,
-            "contact_phone": phone_number
+            "contact_phone": phone_number,
+            "debug": {
+                "to": agent_phone,
+                "from": telnyx_number,
+                "connection_id": provider.connection_id,
+                "callback_url": callback_url,
+            }
         }
     else:
         compliance.release_soft_lock(phone_number, agent_id)
         return {
             "success": False,
             "error": result.error_message,
-            "error_code": result.error_code
+            "error_code": getattr(result, 'error_code', None),
+            "debug": {
+                "to": agent_phone,
+                "from": telnyx_number,
+                "connection_id": provider.connection_id,
+            }
         }
