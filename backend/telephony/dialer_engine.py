@@ -870,12 +870,6 @@ def click_to_dial(
     if not settings or not settings.business_caller_id:
         return {"success": False, "error": "No verified caller ID configured"}
 
-    # Build callback URLs - include destination number for the TwiML to dial
-    from urllib.parse import quote
-    callback_url = f"{base_url}/api/v1/dialer/twiml/click-to-dial?destination={quote(phone_number)}&contact_name={quote(contact_name or 'Contact')}"
-    status_callback_url = f"{base_url}/api/v1/dialer/webhook/click-to-dial-status?agent_id={agent_id}"
-    recording_callback_url = f"{base_url}/api/v1/dialer/webhook/recording-complete?agent_id={agent_id}"
-
     # Acquire soft lock
     lock_acquired = compliance.acquire_soft_lock(
         phone_number,
@@ -886,21 +880,29 @@ def click_to_dial(
     if not lock_acquired:
         return {"success": False, "error": "Number currently in use by another agent"}
 
-    # First, call the agent's cell phone. When they answer, the TwiML will dial the contact.
     agent_phone = settings.cell_phone
     if not agent_phone:
         return {"success": False, "error": "Agent cell phone not configured"}
 
     telnyx_number = os.getenv("TELNYX_FROM_NUMBER", "+18438838956")
 
+    # Encode destination in client_state so the application's default webhook
+    # can transfer the call when the agent answers. No custom webhook URL needed.
+    import base64, json as _json
+    client_state_data = _json.dumps({
+        "type": "click_to_dial",
+        "destination": phone_number,
+        "contact_name": contact_name or "Contact",
+        "agent_id": agent_id,
+    })
+    client_state_b64 = base64.b64encode(client_state_data.encode()).decode()
+
     result = provider.place_call(
         to_number=agent_phone,
         from_number=telnyx_number,
-        callback_url=callback_url,
-        status_callback_url=status_callback_url,
-        recording_status_callback=recording_callback_url,
         record=True,
-        timeout=30
+        timeout=30,
+        client_state=client_state_b64,
     )
 
     if result.success:

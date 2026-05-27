@@ -283,6 +283,8 @@ class TelnyxProvider(TelephonyProvider):
         machine_detection_timeout: int = 30,
         async_amd: bool = False,
         async_amd_callback: str = None,
+        # Call control options
+        client_state: str = None,
     ) -> CallResult:
         """Place an outbound call via Telnyx with optional recording and AMD.
 
@@ -301,10 +303,17 @@ class TelnyxProvider(TelephonyProvider):
             "connection_id": self.connection_id,
             "to": to,
             "from_": from_,
-            "webhook_url": url,
-            "webhook_url_method": "POST",
             "timeout_secs": timeout,
         }
+
+        # Only set webhook_url if provided; otherwise Telnyx uses the
+        # application's default webhook URL.
+        if url:
+            call_params["webhook_url"] = url
+            call_params["webhook_url_method"] = "POST"
+
+        if client_state:
+            call_params["client_state"] = client_state
 
         # Add recording if enabled
         if record:

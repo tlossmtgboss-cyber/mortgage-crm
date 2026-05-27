@@ -569,8 +569,38 @@ async def process_amd_result(tracking_id: str, event: TelnyxAMDEvent, db: Sessio
 # =============================================================================
 
 async def handle_call_answered(event: TelnyxCallEvent, db: Session):
-    """Handle call answered event"""
+    """Handle call answered event — includes click-to-dial transfer."""
     call_control_id = event.call_control_id
+
+    # Check for click-to-dial client_state
+    raw_client_state = event.payload.get("client_state", "")
+    if raw_client_state:
+        try:
+            import base64
+            decoded = base64.b64decode(raw_client_state).decode()
+            state_data = json.loads(decoded)
+            if state_data.get("type") == "click_to_dial":
+                destination = state_data.get("destination")
+                contact_name = state_data.get("contact_name", "Contact")
+                if destination and call_control_id:
+                    logger.info(
+                        "Click-to-dial answered — transferring to %s (%s)",
+                        destination, contact_name,
+                    )
+                    from telephony.provider import _get_telnyx_client
+                    client = _get_telnyx_client()
+                    if client:
+                        telnyx_number = os.environ.get("TELNYX_FROM_NUMBER", "+18438838956")
+                        client.calls.actions.transfer(
+                            call_control_id,
+                            to=destination,
+                            from_=telnyx_number,
+                            timeout_secs=30,
+                        )
+                        logger.info("Click-to-dial transfer initiated to %s", destination)
+                        return {"status": "transferred", "destination": destination}
+        except Exception as e:
+            logger.error("Click-to-dial transfer failed: %s", e, exc_info=True)
 
     # Resolve tenant context from the call record for structured logging
     _ans_org_id = None
