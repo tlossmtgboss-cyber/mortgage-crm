@@ -1189,6 +1189,48 @@ async def websocket_status():
 
 
 # =============================================================================
+# Telnyx Diagnostics
+# =============================================================================
+
+@router.get("/diagnostics")
+async def telnyx_diagnostics():
+    """Check Telnyx configuration — connection type, number capabilities."""
+    from .provider import _get_telnyx_client
+    client = _get_telnyx_client()
+    result = {
+        "client_initialized": client is not None,
+        "connection_id": os.getenv("TELNYX_CONNECTION_ID", "NOT SET"),
+        "from_number": os.getenv("TELNYX_FROM_NUMBER", "+18438838956"),
+        "api_key_set": bool(os.getenv("TELNYX_API_KEY")),
+    }
+
+    if not client:
+        result["error"] = "Telnyx client not initialized"
+        return result
+
+    conn_id = os.getenv("TELNYX_CONNECTION_ID")
+    if conn_id:
+        try:
+            conn = client.connections.retrieve(conn_id)
+            conn_data = conn.model_dump() if hasattr(conn, 'model_dump') else str(conn)
+            result["connection"] = conn_data
+        except Exception as e:
+            result["connection_error"] = str(e)
+
+    try:
+        numbers = client.phone_numbers.list()
+        num_list = []
+        for num in numbers.data[:10]:
+            d = num.model_dump() if hasattr(num, 'model_dump') else {"phone_number": str(num)}
+            num_list.append(d)
+        result["phone_numbers"] = num_list
+    except Exception as e:
+        result["phone_numbers_error"] = str(e)
+
+    return result
+
+
+# =============================================================================
 # Telnyx Call Control Webhook Endpoints
 # =============================================================================
 
