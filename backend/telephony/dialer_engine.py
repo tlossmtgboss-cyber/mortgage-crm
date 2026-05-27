@@ -936,7 +936,6 @@ def click_to_dial(
                 "to": agent_phone,
                 "from": telnyx_number,
                 "connection_id": provider.connection_id,
-                "callback_url": callback_url,
             }
         }
     else:
