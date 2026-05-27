@@ -812,42 +812,57 @@ async def api_click_to_dial(
     """Initiate a single click-to-dial call"""
     import os
     from sqlalchemy import func
-    from datetime import datetime, timedelta, timezone
-    from database.models import CallLog
 
-    # Rate limit: max 10 click-to-dial calls per minute per user
-    organization_id = getattr(current_user, 'organization_id', None)
-    rate_q = db.query(func.count(CallLog.id)).filter(
-        CallLog.agent_id == current_user.id,
-        CallLog.created_at >= datetime.now(timezone.utc) - timedelta(minutes=1)
-    )
-    if organization_id:
-        rate_q = rate_q.filter(CallLog.organization_id == organization_id)
-    recent_calls = rate_q.scalar() or 0
-    if recent_calls >= 10:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded: max 10 calls per minute")
+    try:
+        organization_id = getattr(current_user, 'organization_id', None)
 
-    base_url = os.getenv("BASE_URL", "https://app.perenniaai.com")
+        try:
+            from database.models import CallLog
+            rate_q = db.query(func.count(CallLog.id)).filter(
+                CallLog.agent_id == current_user.id,
+                CallLog.created_at >= datetime.now(timezone.utc) - timedelta(minutes=1)
+            )
+            if organization_id:
+                rate_q = rate_q.filter(CallLog.organization_id == organization_id)
+            recent_calls = rate_q.scalar() or 0
+            if recent_calls >= 10:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded: max 10 calls per minute")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Rate limit check failed (skipping): {e}")
 
-    result = click_to_dial(
-        db_session=db,
-        agent_id=current_user.id,
-        phone_number=request.phone_number,
-        contact_name=request.contact_name,
-        base_url=base_url,
-        lead_id=request.lead_id,
-        loan_id=request.loan_id,
-        task_id=request.task_id,
-        organization_id=organization_id,
-    )
+        base_url = os.getenv("BASE_URL", "https://api.perenniaai.com")
 
-    return ClickToDialResponse(
-        success=result.get("success", False),
-        call_sid=result.get("call_sid"),
-        contact_name=request.contact_name,
-        contact_phone=request.phone_number,
-        error=result.get("error")
-    )
+        result = click_to_dial(
+            db_session=db,
+            agent_id=current_user.id,
+            phone_number=request.phone_number,
+            contact_name=request.contact_name,
+            base_url=base_url,
+            lead_id=request.lead_id,
+            loan_id=request.loan_id,
+            task_id=request.task_id,
+            organization_id=organization_id,
+        )
+
+        return ClickToDialResponse(
+            success=result.get("success", False),
+            call_sid=result.get("call_sid"),
+            contact_name=request.contact_name,
+            contact_phone=request.phone_number,
+            error=result.get("error")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Click-to-dial failed: {e}", exc_info=True)
+        return ClickToDialResponse(
+            success=False,
+            contact_name=request.contact_name,
+            contact_phone=request.phone_number,
+            error=str(e)
+        )
 
 
 # =============================================================================

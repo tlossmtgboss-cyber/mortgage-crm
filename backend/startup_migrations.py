@@ -1397,6 +1397,20 @@ def _run_critical_schema_migrations():
             except Exception:
                 db.rollback()
 
+        # --- Add missing columns to call_logs ---
+        cl_columns = [
+            ("organization_id", "INTEGER"),
+        ]
+        for col_name, col_type in cl_columns:
+            try:
+                db.execute(sa_text(
+                    f"ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+                ))
+                db.commit()
+                success_count += 1
+            except Exception:
+                db.rollback()
+
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
             logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")
