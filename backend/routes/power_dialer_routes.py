@@ -260,7 +260,8 @@ async def api_click_to_dial(
             base_url=base_url,
             lead_id=data.lead_id,
             loan_id=data.loan_id,
-            task_id=data.task_id
+            task_id=data.task_id,
+            organization_id=getattr(current_user, 'organization_id', None),
         )
 
         if not result.get("success"):

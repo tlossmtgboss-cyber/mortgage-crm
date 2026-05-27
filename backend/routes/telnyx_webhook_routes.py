@@ -2589,11 +2589,18 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
         )
 
     if recording_url:
-        # Store recording URL
+        # Store recording URL in call_attempts (AMD/session calls)
         db.execute(sa_text("""
             UPDATE call_attempts
             SET recording_url = :url
             WHERE call_sid = :call_id
+        """), {"url": recording_url, "call_id": call_control_id})
+
+        # Also store in call_logs (click-to-dial calls)
+        db.execute(sa_text("""
+            UPDATE call_logs
+            SET recording_url = :url, recording_status = 'available'
+            WHERE call_sid = :call_id AND recording_url IS NULL
         """), {"url": recording_url, "call_id": call_control_id})
         db.commit()
 
@@ -2763,6 +2770,28 @@ async def _transcribe_and_process_recording(
                             "CI org resolution: call_targets -> lead_id=%s -> org_id=%s for call %s",
                             lead_id_val, org_id, call_control_id,
                         )
+
+        # Fallback: try call_logs (click-to-dial and power dialer calls)
+        if not org_id:
+            cl_row = db.execute(sa_text("""
+                SELECT agent_id, organization_id, lead_id, loan_id, contact_phone
+                FROM call_logs
+                WHERE call_sid = :call_id
+                LIMIT 1
+            """), {"call_id": call_control_id}).fetchone()
+            if cl_row:
+                user_id = cl_row[0]
+                if cl_row[1]:
+                    org_id = cl_row[1]
+                if cl_row[3] and not loan_id:
+                    loan_id = cl_row[3]
+                if cl_row[4]:
+                    to_number = cl_row[4]
+                if org_id:
+                    logger.info(
+                        "CI org resolution: call_logs -> org_id=%s for call %s",
+                        org_id, call_control_id,
+                    )
 
         # Fallback: resolve org from user_id (already resolved above for
         # amd_outbound_calls path; this handles the case where
