@@ -848,23 +848,12 @@ async def api_click_to_dial(
             organization_id=organization_id,
         )
 
-        return ClickToDialResponse(
-            success=result.get("success", False),
-            call_sid=result.get("call_sid"),
-            contact_name=request.contact_name,
-            contact_phone=request.phone_number,
-            error=result.get("error")
-        )
+        return result
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Click-to-dial failed: {e}", exc_info=True)
-        return ClickToDialResponse(
-            success=False,
-            contact_name=request.contact_name,
-            contact_phone=request.phone_number,
-            error=str(e)
-        )
+        return {"success": False, "error": str(e)}
 
 
 # =============================================================================
