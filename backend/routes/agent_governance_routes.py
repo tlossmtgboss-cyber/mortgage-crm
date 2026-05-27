@@ -274,21 +274,27 @@ async def list_agent_profiles(
             })
         return profiles
     except Exception as e:
-        logger.error(f"Error listing agent profiles: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.warning(f"Agent profiles query failed (tables may not exist): {e}")
+        return []
 
 
-@router.get("/profiles/{agent_id}", response_model=AgentProfileResponse)
+@router.get("/profiles/{agent_id}")
 async def get_agent_profile(
     agent_id: str,
     db: Session = Depends(get_db)
 ):
     """Get a specific agent profile by ID."""
-    service = AgentGovernanceService(db)
-    agent = service.get_agent(agent_id)
-    if not agent:
+    try:
+        service = AgentGovernanceService(db)
+        agent = service.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        return agent
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Agent profile query failed: {e}")
         raise HTTPException(status_code=404, detail="Agent not found")
-    return agent
 
 
 @router.post("/profiles", response_model=AgentProfileResponse)
@@ -436,7 +442,7 @@ async def complete_execution(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/profiles/{agent_id}/executions", response_model=List[AgentExecutionResponse])
+@router.get("/profiles/{agent_id}/executions")
 async def list_agent_executions(
     agent_id: str,
     status: Optional[str] = Query(None),
@@ -447,16 +453,20 @@ async def list_agent_executions(
     db: Session = Depends(get_db)
 ):
     """Get executions for a specific agent."""
-    service = AgentGovernanceService(db)
-    result = service.list_executions(
-        agent_id=agent_id,
-        status=status,
-        success=success,
-        days=days,
-        limit=limit,
-        offset=offset
-    )
-    return result["executions"]
+    try:
+        service = AgentGovernanceService(db)
+        result = service.list_executions(
+            agent_id=agent_id,
+            status=status,
+            success=success,
+            days=days,
+            limit=limit,
+            offset=offset
+        )
+        return result["executions"]
+    except Exception as e:
+        logger.warning(f"Executions query failed: {e}")
+        return []
 
 
 @router.get("/executions/{execution_id}", response_model=AgentExecutionResponse)
@@ -534,14 +544,18 @@ async def get_agent_metrics(
     db: Session = Depends(get_db)
 ):
     """Get metrics for a specific agent."""
-    service = AgentGovernanceService(db)
-    metrics = service.get_agent_metrics(
-        agent_id=agent_id,
-        metric_type=metric_type,
-        metric_name=metric_name,
-        days=days
-    )
-    return metrics
+    try:
+        service = AgentGovernanceService(db)
+        metrics = service.get_agent_metrics(
+            agent_id=agent_id,
+            metric_type=metric_type,
+            metric_name=metric_name,
+            days=days
+        )
+        return metrics
+    except Exception as e:
+        logger.warning(f"Agent metrics query failed: {e}")
+        return []
 
 
 @router.get("/profiles/{agent_id}/metrics/aggregate")
@@ -553,14 +567,18 @@ async def get_aggregated_metrics(
     db: Session = Depends(get_db)
 ):
     """Get aggregated metrics for an agent."""
-    service = AgentGovernanceService(db)
-    aggregated = service.aggregate_metrics(
-        agent_id=agent_id,
-        metric_type=metric_type,
-        metric_name=metric_name,
-        days=days
-    )
-    return aggregated
+    try:
+        service = AgentGovernanceService(db)
+        aggregated = service.aggregate_metrics(
+            agent_id=agent_id,
+            metric_type=metric_type,
+            metric_name=metric_name,
+            days=days
+        )
+        return aggregated
+    except Exception as e:
+        logger.warning(f"Aggregated metrics query failed: {e}")
+        return {}
 
 
 # ============================================================================
@@ -595,7 +613,7 @@ async def create_alert(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/alerts", response_model=List[AgentAlertResponse])
+@router.get("/alerts")
 async def list_alerts(
     agent_id: Optional[str] = Query(None),
     alert_type: Optional[str] = Query(None),
@@ -607,17 +625,21 @@ async def list_alerts(
     db: Session = Depends(get_db)
 ):
     """Get alerts with optional filtering."""
-    service = AgentGovernanceService(db)
-    result = service.list_alerts(
-        agent_id=agent_id,
-        alert_type=alert_type,
-        severity=severity,
-        status=status,
-        days=days,
-        limit=limit,
-        offset=offset
-    )
-    return result["alerts"]
+    try:
+        service = AgentGovernanceService(db)
+        result = service.list_alerts(
+            agent_id=agent_id,
+            alert_type=alert_type,
+            severity=severity,
+            status=status,
+            days=days,
+            limit=limit,
+            offset=offset
+        )
+        return result["alerts"]
+    except Exception as e:
+        logger.warning(f"Alerts query failed: {e}")
+        return []
 
 
 @router.get("/alerts/{alert_id}", response_model=AgentAlertResponse)
@@ -674,6 +696,15 @@ async def resolve_alert(
 # Dashboard & Health Routes
 # ============================================================================
 
+_EMPTY_DASHBOARD = {
+    "agents": {"total": 0, "active": 0, "paused": 0, "maintenance": 0, "by_health": {}},
+    "executions": {"total_24h": 0, "successful": 0, "failed": 0, "avg_time_ms": 0},
+    "alerts": {"total_active": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+    "top_agents": [],
+}
+
+
+@router.get("/governance/dashboard")
 @router.get("/dashboard")
 async def get_agent_dashboard(
     db: Session = Depends(get_db)
@@ -684,15 +715,11 @@ async def get_agent_dashboard(
         dashboard = service.get_dashboard_data()
         return dashboard
     except Exception as e:
-        logger.error(f"Error getting agent dashboard: {e}")
-        # Return minimal data rather than error
+        logger.warning(f"Agent dashboard query failed (tables may not exist): {e}")
         return {
-            "agents": {"total": 0, "active": 0, "paused": 0, "maintenance": 0, "by_health": {}},
-            "executions": {"total_24h": 0, "successful": 0, "failed": 0, "avg_time_ms": 0},
-            "alerts": {"total_active": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
-            "top_agents": [],
+            **_EMPTY_DASHBOARD,
             "updated_at": datetime.now(timezone.utc).isoformat(),
-            "error": "Internal server error"
+            "message": "Agent governance data not yet available"
         }
 
 
@@ -701,9 +728,13 @@ async def get_system_health(
     db: Session = Depends(get_db)
 ):
     """Get overall agent system health status."""
-    service = AgentGovernanceService(db)
-    health = service.get_system_health()
-    return health
+    try:
+        service = AgentGovernanceService(db)
+        health = service.get_system_health()
+        return health
+    except Exception as e:
+        logger.warning(f"System health query failed: {e}")
+        return {"status": "unknown", "message": "Health data not yet available"}
 
 
 @router.get("/health/summary")
@@ -711,30 +742,32 @@ async def get_health_summary(
     db: Session = Depends(get_db)
 ):
     """Get a quick health summary of all agents."""
-    service = AgentGovernanceService(db)
+    try:
+        service = AgentGovernanceService(db)
+        result = service.list_agents(limit=1000)
+        agents = result["agents"]
 
-    # Get all agents - returns list of dicts from to_dict()
-    result = service.list_agents(limit=1000)
-    agents = result["agents"]
+        summary = {
+            "total_agents": len(agents),
+            "active": len([a for a in agents if a.get("status") == "active"]),
+            "paused": len([a for a in agents if a.get("status") == "paused"]),
+            "maintenance": len([a for a in agents if a.get("status") == "maintenance"]),
+            "disabled": len([a for a in agents if a.get("status") == "disabled"]),
+            "by_type": {}
+        }
 
-    summary = {
-        "total_agents": len(agents),
-        "active": len([a for a in agents if a.get("status") == "active"]),
-        "paused": len([a for a in agents if a.get("status") == "paused"]),
-        "maintenance": len([a for a in agents if a.get("status") == "maintenance"]),
-        "disabled": len([a for a in agents if a.get("status") == "disabled"]),
-        "by_type": {}
-    }
+        for agent in agents:
+            agent_type = agent.get("category", "unknown")
+            if agent_type not in summary["by_type"]:
+                summary["by_type"][agent_type] = {"total": 0, "active": 0}
+            summary["by_type"][agent_type]["total"] += 1
+            if agent.get("status") == "active":
+                summary["by_type"][agent_type]["active"] += 1
 
-    for agent in agents:
-        agent_type = agent.get("category", "unknown")
-        if agent_type not in summary["by_type"]:
-            summary["by_type"][agent_type] = {"total": 0, "active": 0}
-        summary["by_type"][agent_type]["total"] += 1
-        if agent.get("status") == "active":
-            summary["by_type"][agent_type]["active"] += 1
-
-    return summary
+        return summary
+    except Exception as e:
+        logger.warning(f"Health summary query failed: {e}")
+        return {"total_agents": 0, "active": 0, "paused": 0, "maintenance": 0, "disabled": 0, "by_type": {}}
 
 
 @router.get("/statistics")
@@ -1158,68 +1191,6 @@ async def update_governance_settings(settings: GovernanceSettingsModel):
     }
 
 
-@router.get("/governance/dashboard")
-async def get_governance_dashboard(db: Session = Depends(get_db)):
-    """
-    Get agent governance dashboard summary.
-
-    Returns aggregated metrics for the agent dashboard.
-    """
-    service = AgentGovernanceService(db)
-
-    try:
-        # Get all agents - returns list of dicts
-        agents = service.get_all_agents(include_metrics=False)
-
-        # Calculate health summary
-        health_summary = {
-            "healthy": 0,
-            "warning": 0,
-            "critical": 0,
-            "unknown": 0
-        }
-
-        for agent in agents:
-            # agent is a dict from to_dict()
-            status = agent.get('health_status', 'unknown')
-            if status in health_summary:
-                health_summary[status] += 1
-            else:
-                health_summary["unknown"] += 1
-
-        # Calculate active agents
-        active_count = len([a for a in agents if a.get('status') == 'active'])
-
-        # Get 24h execution stats (aggregate from agent data)
-        executions_24h = sum(a.get('total_executions', 0) for a in agents)
-        successful_24h = sum(a.get('successful_executions', 0) for a in agents)
-        avg_response_times = [a.get('avg_response_time_ms', 0) for a in agents if a.get('avg_response_time_ms')]
-        avg_response_time = sum(avg_response_times) / len(avg_response_times) if avg_response_times else 0
-
-        success_rate_24h = (successful_24h / executions_24h * 100) if executions_24h > 0 else 0
-
-        return {
-            "total_agents": len(agents),
-            "active_agents": active_count,
-            "health_summary": health_summary,
-            "executions_24h": executions_24h,
-            "success_rate_24h": round(success_rate_24h, 1),
-            "avg_response_time_ms": round(avg_response_time),
-            "active_alerts": 0  # Simplified - alerts not yet implemented
-        }
-    except Exception as e:
-        logger.error(f"Error getting dashboard summary: {e}")
-        return {
-            "total_agents": 0,
-            "active_agents": 0,
-            "health_summary": {"healthy": 0, "warning": 0, "critical": 0, "unknown": 0},
-            "executions_24h": 0,
-            "success_rate_24h": 0,
-            "avg_response_time_ms": 0,
-            "active_alerts": 0
-        }
-
-
 # =============================================================================
 # AGENT SEEDING ENDPOINT - Add Missing Agents
 # =============================================================================
@@ -1368,8 +1339,7 @@ async def seed_missing_agents(db: Session = Depends(get_db)):
     This endpoint checks which agents are missing and creates them.
     Safe to call multiple times - only adds agents that don't exist.
     """
-    import random
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from models.agent_governance import AgentProfile
 
     try:
@@ -1392,13 +1362,9 @@ async def seed_missing_agents(db: Session = Depends(get_db)):
                 "agents_added": []
             }
 
-        # Add missing agents
+        # Add missing agents with zeroed-out metrics (real data accumulates over time)
         added = []
         for data in missing:
-            total_executions = random.randint(1000, 10000)
-            base_success_rate = random.uniform(0.88, 0.98)
-            successful_executions = int(total_executions * base_success_rate)
-
             agent = AgentProfile(
                 agent_name=data["agent_name"],
                 display_name=data["display_name"],
@@ -1413,13 +1379,13 @@ async def seed_missing_agents(db: Session = Depends(get_db)):
                     "temperature": 0.7,
                     "max_tokens": 4096
                 },
-                total_executions=total_executions,
-                successful_executions=successful_executions,
-                failed_executions=total_executions - successful_executions,
-                success_rate=base_success_rate * 100,
-                avg_response_time_ms=random.randint(500, 2000),
-                last_execution_at=datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60)),
-                last_health_check=datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 10))
+                total_executions=0,
+                successful_executions=0,
+                failed_executions=0,
+                success_rate=0,
+                avg_response_time_ms=0,
+                last_execution_at=None,
+                last_health_check=datetime.now(timezone.utc)
             )
 
             db.add(agent)

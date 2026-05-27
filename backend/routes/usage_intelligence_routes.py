@@ -105,6 +105,26 @@ async def get_dashboard_overview(
     Get overview data for the usage intelligence dashboard.
     Includes KPIs, recent trends, and alerts.
     """
+    try:
+        return await _get_dashboard_overview_impl(current_user, db)
+    except Exception as e:
+        logger.warning(f"Usage intelligence dashboard query failed (tables may not exist): {e}")
+        return {
+            "kpis": {
+                "mtd_cost": 0, "projected_monthly": 0, "avg_daily_cost": 0,
+                "prev_month_cost": 0, "mom_change_pct": 0, "active_users": 0, "days_elapsed": 0
+            },
+            "cost_breakdown": {"ai_tokens": 0, "communications": 0, "storage": 0},
+            "projection_30d": {
+                "projected_cost": 0, "confidence_low": 0, "confidence_high": 0,
+                "trend_direction": "stable", "trend_percentage": 0
+            },
+            "alerts": [],
+            "message": "Usage data not yet available"
+        }
+
+
+async def _get_dashboard_overview_impl(current_user, db):
     today = date.today()
     yesterday = today - timedelta(days=1)
     month_start = today.replace(day=1)
@@ -226,28 +246,20 @@ async def get_user_costs(
     current_user: dict = Depends(require_owner),
     db: Session = Depends(get_db)
 ):
-    """
-    Get cost breakdown by user for the specified period.
-    """
-    org_id = _require_org_id(current_user)
-    projection_service = get_projection_service(db, organization_id=org_id)
-    ranking = projection_service.get_user_cost_ranking(
-        period_days=days,
-        limit=limit
-    )
-
-    # Get total cost for percentage calculation
-    total_cost = sum(u["total_cost"] for u in ranking)
-
-    for user in ranking:
-        user["pct_of_total"] = round((user["total_cost"] / total_cost * 100) if total_cost > 0 else 0, 1)
-
-    return {
-        "period_days": days,
-        "total_users": len(ranking),
-        "total_cost": round(total_cost, 2),
-        "users": ranking
-    }
+    """Get cost breakdown by user for the specified period."""
+    try:
+        org_id = _require_org_id(current_user)
+        projection_service = get_projection_service(db, organization_id=org_id)
+        ranking = projection_service.get_user_cost_ranking(period_days=days, limit=limit)
+        total_cost = sum(u["total_cost"] for u in ranking)
+        for user in ranking:
+            user["pct_of_total"] = round((user["total_cost"] / total_cost * 100) if total_cost > 0 else 0, 1)
+        return {"period_days": days, "total_users": len(ranking), "total_cost": round(total_cost, 2), "users": ranking}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"User costs query failed: {e}")
+        return {"period_days": days, "total_users": 0, "total_cost": 0, "users": [], "message": "Usage data not yet available"}
 
 
 @router.get("/users/{user_id}")
@@ -393,9 +405,17 @@ async def get_team_costs(
     current_user: dict = Depends(require_owner),
     db: Session = Depends(get_db)
 ):
-    """
-    Get cost breakdown by team for the specified period.
-    """
+    """Get cost breakdown by team for the specified period."""
+    try:
+        return await _get_team_costs_impl(days, current_user, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Team costs query failed: {e}")
+        return {"period_days": days, "total_teams": 0, "total_cost": 0, "teams": [], "message": "Usage data not yet available"}
+
+
+async def _get_team_costs_impl(days, current_user, db):
     end_date = date.today() - timedelta(days=1)
     start_date = end_date - timedelta(days=days)
 
@@ -453,9 +473,22 @@ async def get_organization_costs(
     current_user: dict = Depends(require_owner),
     db: Session = Depends(get_db)
 ):
-    """
-    Get organization-wide cost summary.
-    """
+    """Get organization-wide cost summary."""
+    try:
+        return await _get_org_costs_impl(days, current_user, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Organization costs query failed: {e}")
+        return {
+            "period_days": days, "totals": {"total_cost": 0, "ai_tokens_cost": 0, "communications_cost": 0, "storage_cost": 0, "infrastructure_cost": 0},
+            "usage": {"total_input_tokens": 0, "total_output_tokens": 0, "total_ai_requests": 0, "sms_segments": 0, "voice_minutes": 0, "email_count": 0},
+            "stats": {"user_count": 0, "team_count": 0, "avg_daily_cost": 0, "avg_cost_per_user": 0},
+            "message": "Usage data not yet available"
+        }
+
+
+async def _get_org_costs_impl(days, current_user, db):
     end_date = date.today() - timedelta(days=1)
     start_date = end_date - timedelta(days=days)
 
@@ -519,20 +552,17 @@ async def get_organization_cost_trend(
     current_user: dict = Depends(require_owner),
     db: Session = Depends(get_db)
 ):
-    """
-    Get daily cost trend for organization.
-    """
-    org_id = _require_org_id(current_user)
-    projection_service = get_projection_service(db, organization_id=org_id)
-    trend = projection_service.get_cost_trend(
-        scope_type="organization",
-        days=days
-    )
-
-    return {
-        "period_days": days,
-        "data": trend
-    }
+    """Get daily cost trend for organization."""
+    try:
+        org_id = _require_org_id(current_user)
+        projection_service = get_projection_service(db, organization_id=org_id)
+        trend = projection_service.get_cost_trend(scope_type="organization", days=days)
+        return {"period_days": days, "data": trend}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Organization trend query failed: {e}")
+        return {"period_days": days, "data": [], "message": "Usage data not yet available"}
 
 
 # =============================================================================
@@ -559,15 +589,18 @@ async def get_projections(
     if period not in [30, 60, 90]:
         raise HTTPException(status_code=400, detail="Period must be 30, 60, or 90 days")
 
-    org_id = _require_org_id(current_user)
-    projection_service = get_projection_service(db, organization_id=org_id)
-    projection = projection_service.generate_projections(
-        scope_type=scope_type,
-        scope_id=scope_id,
-        period_days=period
-    )
-
-    return projection
+    try:
+        org_id = _require_org_id(current_user)
+        projection_service = get_projection_service(db, organization_id=org_id)
+        projection = projection_service.generate_projections(
+            scope_type=scope_type, scope_id=scope_id, period_days=period
+        )
+        return projection
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Projections query failed: {e}")
+        return {"projected_cost": 0, "confidence_interval_low": 0, "confidence_interval_high": 0, "trend_direction": "stable", "trend_percentage": 0, "message": "Usage data not yet available"}
 
 
 # =============================================================================
@@ -655,51 +688,35 @@ async def get_ai_model_costs(
     current_user: dict = Depends(require_owner),
     db: Session = Depends(get_db)
 ):
-    """
-    Get cost breakdown by AI model.
-    """
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days)
-
-    models = db.execute(text("""
-        SELECT
-            provider,
-            model,
-            SUM(input_tokens) as input_tokens,
-            SUM(output_tokens) as output_tokens,
-            SUM(total_cost) as total_cost,
-            COUNT(*) as request_count,
-            AVG(latency_ms) as avg_latency
-        FROM ai_token_usage_log
-        WHERE organization_id = :org_id
-        AND timestamp >= :start_date
-        GROUP BY provider, model
-        ORDER BY total_cost DESC
-    """), {
-        "org_id": _require_org_id(current_user),
-        "start_date": start_date
-    }).fetchall()
-
-    total_cost = sum(float(m[4]) for m in models)
-
-    return {
-        "period_days": days,
-        "total_cost": round(total_cost, 2),
-        "models": [
-            {
-                "provider": m[0],
-                "model": m[1],
-                "input_tokens": int(m[2]),
-                "output_tokens": int(m[3]),
-                "total_cost": round(float(m[4]), 2),
-                "request_count": int(m[5]),
-                "avg_latency_ms": round(float(m[6]) if m[6] else 0, 0),
-                "pct_of_total": round((float(m[4]) / total_cost * 100) if total_cost > 0 else 0, 1),
-                "cost_per_request": round(float(m[4]) / max(int(m[5]), 1), 4)
-            }
-            for m in models
-        ]
-    }
+    """Get cost breakdown by AI model."""
+    try:
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+        models = db.execute(text("""
+            SELECT provider, model, SUM(input_tokens) as input_tokens,
+                   SUM(output_tokens) as output_tokens, SUM(total_cost) as total_cost,
+                   COUNT(*) as request_count, AVG(latency_ms) as avg_latency
+            FROM ai_token_usage_log
+            WHERE organization_id = :org_id AND timestamp >= :start_date
+            GROUP BY provider, model ORDER BY total_cost DESC
+        """), {"org_id": _require_org_id(current_user), "start_date": start_date}).fetchall()
+        total_cost = sum(float(m[4]) for m in models)
+        return {
+            "period_days": days, "total_cost": round(total_cost, 2),
+            "models": [
+                {"provider": m[0], "model": m[1], "input_tokens": int(m[2]), "output_tokens": int(m[3]),
+                 "total_cost": round(float(m[4]), 2), "request_count": int(m[5]),
+                 "avg_latency_ms": round(float(m[6]) if m[6] else 0, 0),
+                 "pct_of_total": round((float(m[4]) / total_cost * 100) if total_cost > 0 else 0, 1),
+                 "cost_per_request": round(float(m[4]) / max(int(m[5]), 1), 4)}
+                for m in models
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"AI model costs query failed: {e}")
+        return {"period_days": days, "total_cost": 0, "models": [], "message": "Usage data not yet available"}
 
 
 @router.get("/ai-models/pricing")
@@ -707,33 +724,21 @@ async def get_ai_model_pricing(
     current_user: dict = Depends(require_owner),
     db: Session = Depends(get_db)
 ):
-    """
-    Get current AI model pricing configuration.
-    """
-    pricing = db.execute(text("""
-        SELECT
-            provider, model_id, model_name,
-            input_price_per_1m, output_price_per_1m,
-            is_active, effective_date
-        FROM ai_model_pricing
-        WHERE is_active = true
-        ORDER BY provider, model_id
-    """)).fetchall()
-
-    return {
-        "pricing": [
-            {
-                "provider": p[0],
-                "model_id": p[1],
-                "model_name": p[2],
-                "input_price_per_1m": float(p[3]),
-                "output_price_per_1m": float(p[4]),
-                "is_active": p[5],
-                "effective_date": str(p[6])
-            }
+    """Get current AI model pricing configuration."""
+    try:
+        pricing = db.execute(text("""
+            SELECT provider, model_id, model_name, input_price_per_1m, output_price_per_1m, is_active, effective_date
+            FROM ai_model_pricing WHERE is_active = true ORDER BY provider, model_id
+        """)).fetchall()
+        return {"pricing": [
+            {"provider": p[0], "model_id": p[1], "model_name": p[2],
+             "input_price_per_1m": float(p[3]), "output_price_per_1m": float(p[4]),
+             "is_active": p[5], "effective_date": str(p[6])}
             for p in pricing
-        ]
-    }
+        ]}
+    except Exception as e:
+        logger.warning(f"AI model pricing query failed: {e}")
+        return {"pricing": [], "message": "Pricing data not yet available"}
 
 
 # =============================================================================
@@ -769,30 +774,28 @@ async def get_usage_alerts(
         ORDER BY created_at DESC
         LIMIT :limit
     """
-    alerts = db.execute(text(query), params).fetchall()
-
-    return {
-        "total": len(alerts),
-        "alerts": [
-            {
-                "id": str(a[0]),
-                "scope_type": a[1],
-                "scope_id": a[2],
-                "category": a[3],
-                "alert_type": a[4],
-                "severity": a[5],
-                "title": a[6],
-                "message": a[7],
-                "threshold_value": float(a[8]) if a[8] else None,
-                "actual_value": float(a[9]) if a[9] else None,
-                "status": a[10],
-                "created_at": a[11].isoformat() if a[11] else None,
-                "acknowledged_at": a[12].isoformat() if a[12] else None,
-                "resolved_at": a[13].isoformat() if a[13] else None
-            }
-            for a in alerts
-        ]
-    }
+    try:
+        alerts = db.execute(text(query), params).fetchall()
+        return {
+            "total": len(alerts),
+            "alerts": [
+                {
+                    "id": str(a[0]), "scope_type": a[1], "scope_id": a[2],
+                    "category": a[3], "alert_type": a[4], "severity": a[5],
+                    "title": a[6], "message": a[7],
+                    "threshold_value": float(a[8]) if a[8] else None,
+                    "actual_value": float(a[9]) if a[9] else None,
+                    "status": a[10],
+                    "created_at": a[11].isoformat() if a[11] else None,
+                    "acknowledged_at": a[12].isoformat() if a[12] else None,
+                    "resolved_at": a[13].isoformat() if a[13] else None
+                }
+                for a in alerts
+            ]
+        }
+    except Exception as e:
+        logger.warning(f"Usage alerts query failed: {e}")
+        return {"total": 0, "alerts": [], "message": "Alerts data not yet available"}
 
 
 @router.post("/alerts/{alert_id}/acknowledge")

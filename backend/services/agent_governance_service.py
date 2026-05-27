@@ -15,7 +15,7 @@ from decimal import Decimal
 import uuid
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, and_, or_
+from sqlalchemy import func, desc, and_, or_, case
 
 from models.agent_governance import (
     AgentProfile,
@@ -727,6 +727,37 @@ class AgentGovernanceService:
                 ) if recent_execs else 0
             }
 
+            # Fallback: if agent_executions is empty, query agent_invocations
+            # for real execution data from the performance tracker
+            if exec_summary["total_24h"] == 0:
+                try:
+                    from database.models.agent_metrics import AgentInvocation
+                    inv_stats = self.db.query(
+                        func.count(AgentInvocation.id).label("total"),
+                        func.sum(case(
+                            (AgentInvocation.status == "success", 1),
+                            else_=0
+                        )).label("successful"),
+                        func.sum(case(
+                            (AgentInvocation.status != "success", 1),
+                            else_=0
+                        )).label("failed"),
+                        func.avg(AgentInvocation.duration_ms).label("avg_duration")
+                    ).filter(
+                        AgentInvocation.created_at >= since_24h
+                    ).first()
+
+                    if inv_stats and (inv_stats.total or 0) > 0:
+                        exec_summary = {
+                            "total_24h": int(inv_stats.total or 0),
+                            "successful": int(inv_stats.successful or 0),
+                            "failed": int(inv_stats.failed or 0),
+                            "avg_time_ms": round(float(inv_stats.avg_duration or 0), 2),
+                            "source": "agent_invocations"
+                        }
+                except Exception as e:
+                    logger.debug(f"agent_invocations fallback failed: {e}")
+
             # Active alerts
             active_alerts = self.db.query(AgentAlert).filter(
                 AgentAlert.status == 'active'
@@ -742,18 +773,48 @@ class AgentGovernanceService:
 
             # Top agents by execution count
             top_agents = []
-            for agent in agents[:10]:
-                exec_count = self.db.query(AgentExecution).filter(
-                    AgentExecution.agent_id == agent.id,
-                    AgentExecution.created_at >= since_24h
-                ).count()
-                top_agents.append({
-                    "name": agent.agent_name,
-                    "display_name": agent.display_name,
-                    "status": agent.status,
-                    "health": agent.health_status,
-                    "executions_24h": exec_count
-                })
+            use_invocations_for_top = exec_summary.get("source") == "agent_invocations"
+
+            if use_invocations_for_top:
+                # Query agent_invocations grouped by agent_role for top agents
+                try:
+                    from database.models.agent_metrics import AgentInvocation
+                    inv_by_role = self.db.query(
+                        AgentInvocation.agent_role,
+                        func.count(AgentInvocation.id).label("cnt")
+                    ).filter(
+                        AgentInvocation.created_at >= since_24h
+                    ).group_by(
+                        AgentInvocation.agent_role
+                    ).order_by(desc(func.count(AgentInvocation.id))).limit(10).all()
+
+                    for row in inv_by_role:
+                        # Try to find matching agent profile
+                        agent = self.db.query(AgentProfile).filter(
+                            AgentProfile.agent_name == row.agent_role
+                        ).first()
+                        top_agents.append({
+                            "name": row.agent_role,
+                            "display_name": agent.display_name if agent else row.agent_role,
+                            "status": agent.status if agent else "active",
+                            "health": agent.health_status if agent else "unknown",
+                            "executions_24h": row.cnt
+                        })
+                except Exception as e:
+                    logger.debug(f"agent_invocations top agents fallback failed: {e}")
+            else:
+                for agent in agents[:10]:
+                    exec_count = self.db.query(AgentExecution).filter(
+                        AgentExecution.agent_id == agent.id,
+                        AgentExecution.created_at >= since_24h
+                    ).count()
+                    top_agents.append({
+                        "name": agent.agent_name,
+                        "display_name": agent.display_name,
+                        "status": agent.status,
+                        "health": agent.health_status,
+                        "executions_24h": exec_count
+                    })
 
             top_agents.sort(key=lambda x: x["executions_24h"], reverse=True)
 
@@ -875,6 +936,9 @@ class AgentGovernanceService:
         """
         Get comprehensive dashboard data for agent governance.
         Combines health, metrics, alerts, and cost data.
+
+        Falls back to agent_invocations table (written by performance_tracker)
+        when agent_executions has no data.
         """
         # Get system health
         health = self.get_system_health()
@@ -910,6 +974,69 @@ class AgentGovernanceService:
 
         top_agents = sorted(agent_usage.items(), key=lambda x: x[1], reverse=True)[:5]
 
+        # Fallback: if agent_executions is empty, query agent_invocations
+        # for real execution data from the performance tracker
+        _invocation_source = False
+        if total_24h == 0 or total_7d == 0:
+            try:
+                from database.models.agent_metrics import AgentInvocation
+
+                if total_24h == 0:
+                    inv_24h = self.db.query(
+                        func.count(AgentInvocation.id).label("total"),
+                        func.sum(case(
+                            (AgentInvocation.status == "success", 1),
+                            else_=0
+                        )).label("successful"),
+                        func.sum(case(
+                            (AgentInvocation.status != "success", 1),
+                            else_=0
+                        )).label("failed"),
+                        func.sum(AgentInvocation.cost_estimate).label("cost")
+                    ).filter(
+                        AgentInvocation.created_at >= since_24h
+                    ).first()
+
+                    if inv_24h and (inv_24h.total or 0) > 0:
+                        total_24h = int(inv_24h.total or 0)
+                        success_24h = int(inv_24h.successful or 0)
+                        failed_24h = int(inv_24h.failed or 0)
+                        cost_24h = float(inv_24h.cost or 0)
+                        _invocation_source = True
+
+                if total_7d == 0:
+                    inv_7d = self.db.query(
+                        func.count(AgentInvocation.id).label("total"),
+                        func.sum(case(
+                            (AgentInvocation.status == "success", 1),
+                            else_=0
+                        )).label("successful"),
+                        func.sum(AgentInvocation.cost_estimate).label("cost")
+                    ).filter(
+                        AgentInvocation.created_at >= since_7d
+                    ).first()
+
+                    if inv_7d and (inv_7d.total or 0) > 0:
+                        total_7d = int(inv_7d.total or 0)
+                        success_7d = int(inv_7d.successful or 0)
+                        cost_7d = float(inv_7d.cost or 0)
+
+                # Top agents from invocations if needed
+                if _invocation_source and not top_agents:
+                    inv_top = self.db.query(
+                        AgentInvocation.agent_role,
+                        func.count(AgentInvocation.id).label("cnt")
+                    ).filter(
+                        AgentInvocation.created_at >= since_24h
+                    ).group_by(
+                        AgentInvocation.agent_role
+                    ).order_by(desc(func.count(AgentInvocation.id))).limit(5).all()
+
+                    top_agents = [(row.agent_role, row.cnt) for row in inv_top]
+
+            except Exception as e:
+                logger.debug(f"agent_invocations fallback failed in dashboard v2: {e}")
+
         # Get active alerts
         alerts = self.db.query(AgentAlert).filter(
             AgentAlert.status == 'active'
@@ -931,7 +1058,8 @@ class AgentGovernanceService:
                     "failed": total_7d - success_7d,
                     "success_rate": round((success_7d / total_7d * 100) if total_7d > 0 else 100, 1),
                     "total_cost": round(cost_7d, 4)
-                }
+                },
+                "source": "agent_invocations" if _invocation_source else "agent_executions"
             },
             "top_agents": [{"name": name, "executions": count} for name, count in top_agents],
             "recent_alerts": [

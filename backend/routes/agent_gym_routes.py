@@ -167,8 +167,8 @@ async def list_scenarios(
             })
         return scenarios
     except Exception as e:
-        logger.error(f"Error listing scenarios: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.warning(f"Scenarios query failed (tables may not exist): {e}")
+        return []
 
 
 @router.get("/scenarios/{scenario_id}", response_model=ScenarioResponse)
@@ -335,7 +335,7 @@ async def fail_training_session(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/sessions", response_model=List[SessionResponse])
+@router.get("/sessions")
 async def list_training_sessions(
     agent_id: Optional[str] = Query(None),
     scenario_id: Optional[str] = Query(None),
@@ -346,16 +346,20 @@ async def list_training_sessions(
     db: Session = Depends(get_db)
 ):
     """List training sessions with filtering."""
-    service = AgentGymService(db)
-    result = service.list_training_sessions(
-        agent_id=agent_id,
-        scenario_id=scenario_id,
-        status=status,
-        days=days,
-        limit=limit,
-        offset=offset
-    )
-    return result["sessions"]
+    try:
+        service = AgentGymService(db)
+        result = service.list_training_sessions(
+            agent_id=agent_id,
+            scenario_id=scenario_id,
+            status=status,
+            days=days,
+            limit=limit,
+            offset=offset
+        )
+        return result["sessions"]
+    except Exception as e:
+        logger.warning(f"Training sessions query failed: {e}")
+        return []
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
@@ -430,19 +434,20 @@ async def get_leaderboard(
     db: Session = Depends(get_db)
 ):
     """Get training leaderboard."""
-    service = AgentGymService(db)
-    leaderboard = service.get_leaderboard(
-        agent_type=agent_type,
-        scenario_id=scenario_id,
-        limit=limit
-    )
-    return {
-        "filters": {
-            "agent_type": agent_type,
-            "scenario_id": scenario_id
-        },
-        "leaderboard": leaderboard
-    }
+    try:
+        service = AgentGymService(db)
+        leaderboard = service.get_leaderboard(
+            agent_type=agent_type,
+            scenario_id=scenario_id,
+            limit=limit
+        )
+        return {
+            "filters": {"agent_type": agent_type, "scenario_id": scenario_id},
+            "leaderboard": leaderboard
+        }
+    except Exception as e:
+        logger.warning(f"Leaderboard query failed: {e}")
+        return {"filters": {"agent_type": agent_type, "scenario_id": scenario_id}, "leaderboard": []}
 
 
 # ============================================================================
