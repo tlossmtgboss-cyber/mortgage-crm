@@ -431,3 +431,9 @@ export function useTeamChatBadge(clientFileId: string) {
     show: (data?.unread ?? 0) > 0 || (data?.mentions ?? 0) > 0,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Call Intelligence Engine
+// ─────────────────────────────────────────────────────────────────────────
+
+export { useCIEReports } from "./ConversationIntelligencePane";

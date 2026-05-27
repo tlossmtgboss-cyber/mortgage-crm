@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { analyticsAPI } from '../services/api';
+import { fetchStats as fetchCIEStats } from '../client-file/cie-api';
 import './Scorecard.css';
 
 function Scorecard() {
@@ -7,13 +8,23 @@ function Scorecard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [period, setPeriod] = useState({ start_date: null, end_date: null });
+  const [cieStats, setCieStats] = useState(null);
 
   useEffect(() => {
     loadScorecard();
-    // Auto-refresh every 60 seconds for real-time updates
-    const interval = setInterval(loadScorecard, 60000);
+    loadCIEStats();
+    const interval = setInterval(() => { loadScorecard(); loadCIEStats(); }, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const loadCIEStats = async () => {
+    try {
+      const stats = await fetchCIEStats();
+      setCieStats(stats);
+    } catch (e) {
+      // CIE stats are optional — don't block the scorecard
+    }
+  };
 
   const loadScorecard = async () => {
     try {
@@ -201,6 +212,114 @@ function Scorecard() {
         </div>
       </section>
       )}
+
+      {/* CALL INTELLIGENCE SCORES */}
+      <section className="scorecard-section blue-section">
+        <div className="section-header blue-header">
+          <span className="indicator"></span>
+          Call Intelligence Scores
+        </div>
+
+        <div className="call-scores-content">
+          <div className="call-scores-summary">
+            <div className="call-score-stat">
+              <span className="call-score-stat__value">{cieStats?.total_calls ?? 0}</span>
+              <span className="call-score-stat__label">Total Calls</span>
+            </div>
+            <div className="call-score-stat">
+              <span className="call-score-stat__value">{cieStats?.analyzed ?? 0}</span>
+              <span className="call-score-stat__label">Analyzed</span>
+            </div>
+            <div className="call-score-stat">
+              <span className="call-score-stat__value call-score-stat__value--accent">
+                {cieStats?.avg_cis != null ? (cieStats.avg_cis / 10).toFixed(1) : '—'}
+              </span>
+              <span className="call-score-stat__label">Avg Score (/ 10)</span>
+            </div>
+            <div className="call-score-stat">
+              <span className="call-score-stat__value">
+                {cieStats?.avg_conversion != null ? `${(cieStats.avg_conversion * 100).toFixed(0)}%` : '—'}
+              </span>
+              <span className="call-score-stat__label">Avg Conversion</span>
+            </div>
+            <div className="call-score-stat">
+              <span className="call-score-stat__value">{cieStats?.pending ?? 0}</span>
+              <span className="call-score-stat__label">Pending</span>
+            </div>
+          </div>
+
+          {cieStats && cieStats.analyzed > 0 && cieStats.avg_cis != null && (
+            <div className="call-score-gauge-row">
+              <div className="call-score-gauge">
+                <div className="call-score-gauge__label">Call Quality Score</div>
+                <div className="call-score-gauge__bar-container">
+                  <div
+                    className="call-score-gauge__bar-fill"
+                    style={{
+                      width: `${Math.min(cieStats.avg_cis, 100)}%`,
+                      backgroundColor: cieStats.avg_cis >= 80 ? '#4caf50' : cieStats.avg_cis >= 60 ? '#ff9800' : '#f44336',
+                    }}
+                  />
+                </div>
+                <div className="call-score-gauge__number">
+                  {(cieStats.avg_cis / 10).toFixed(1)} / 10
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(!cieStats || cieStats.total_calls === 0) && (
+            <div className="call-scores-empty">
+              No calls analyzed yet. Call scores will appear here once calls are processed by the Call Intelligence Engine.
+            </div>
+          )}
+
+          <div className="call-scores-dimensions">
+            <h4>Score Dimensions</h4>
+            <table className="scorecard-table">
+              <thead>
+                <tr>
+                  <th>Dimension</th>
+                  <th>Target</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="metric-name">Engagement</td>
+                  <td className="metric-pct goal-pct">80%+</td>
+                  <td>Active listening, questions asked, rapport building</td>
+                </tr>
+                <tr>
+                  <td className="metric-name">Information Quality</td>
+                  <td className="metric-pct goal-pct">80%+</td>
+                  <td>Accuracy, thoroughness, clarity of explanations</td>
+                </tr>
+                <tr>
+                  <td className="metric-name">Objection Handling</td>
+                  <td className="metric-pct goal-pct">75%+</td>
+                  <td>Addressing concerns, overcoming resistance</td>
+                </tr>
+                <tr>
+                  <td className="metric-name">Compliance</td>
+                  <td className="metric-pct goal-pct">90%+</td>
+                  <td>TRID, fair lending, consent disclosures</td>
+                </tr>
+                <tr>
+                  <td className="metric-name">Rapport</td>
+                  <td className="metric-pct goal-pct">80%+</td>
+                  <td>Trust building, empathy, personal connection</td>
+                </tr>
+                <tr>
+                  <td className="metric-name">Closing Effectiveness</td>
+                  <td className="metric-pct goal-pct">75%+</td>
+                  <td>Next steps, commitment, call-to-action clarity</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       {/* FUNDING TOTALS */}
       {data.funding_totals && (

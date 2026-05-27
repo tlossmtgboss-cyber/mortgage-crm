@@ -69,6 +69,12 @@
   color: #d97706;
 }
 
+.blue-header {
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .section-header .indicator {
   width: 12px;
   height: 12px;
@@ -262,6 +268,142 @@
 .funding-table tbody td.volume {
   font-weight: 600;
   color: #d97706;
+}
+
+/* Call Intelligence Scores */
+.call-scores-content {
+  padding: 20px;
+}
+
+.call-scores-summary {
+  display: flex;
+  gap: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.call-score-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.call-score-stat:last-child {
+  border-right: none;
+}
+
+.call-score-stat__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a202c;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.call-score-stat__value--accent {
+  color: #1d4ed8;
+}
+
+.call-score-stat__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.call-score-gauge-row {
+  margin-bottom: 20px;
+}
+
+.call-score-gauge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.call-score-gauge__label {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d3748;
+  width: 140px;
+}
+
+.call-score-gauge__bar-container {
+  flex: 1;
+  height: 24px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.call-score-gauge__bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.call-score-gauge__number {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a202c;
+  width: 70px;
+  text-align: right;
+}
+
+.call-scores-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: #64748b;
+  font-size: 14px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px dashed #cbd5e1;
+  margin-bottom: 20px;
+}
+
+.call-scores-dimensions {
+  margin-top: 16px;
+}
+
+.call-scores-dimensions h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d4ed8;
+  margin: 0 0 12px 0;
+  padding: 6px 12px;
+  background: #dbeafe;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+@media (max-width: 768px) {
+  .call-scores-summary {
+    flex-wrap: wrap;
+  }
+  .call-score-stat {
+    flex: 1 0 33%;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .call-score-stat:nth-child(3) {
+    border-right: none;
+  }
+  .call-score-stat:nth-last-child(-n+2) {
+    border-bottom: none;
+  }
+  .call-score-gauge {
+    flex-wrap: wrap;
+  }
+  .call-score-gauge__label {
+    width: 100%;
+  }
 }
 
 /* Footer */

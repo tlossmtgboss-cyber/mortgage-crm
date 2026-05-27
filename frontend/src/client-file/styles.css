@@ -2195,3 +2195,960 @@
   color: var(--pf-cf-text-tertiary);
   font-size: 11px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Call Intelligence Engine (CIE) — Two-column Call Detail View
+   ───────────────────────────────────────────────────────────────────────── */
+
+.cie-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px;
+  font-family: var(--pf-cf-font-sans);
+  color: var(--pf-cf-text);
+}
+
+/* ── Two-column detail layout ────────────────────────────────────────── */
+
+.cie-detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  min-height: 0;
+}
+
+.cie-detail__left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  max-height: calc(100vh - 260px);
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pf-cf-border-strong) transparent;
+}
+
+.cie-detail__left::-webkit-scrollbar { width: 5px; }
+.cie-detail__left::-webkit-scrollbar-track { background: transparent; }
+.cie-detail__left::-webkit-scrollbar-thumb {
+  background: var(--pf-cf-border-strong);
+  border-radius: 3px;
+}
+
+.cie-detail__right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  max-height: calc(100vh - 260px);
+  scrollbar-width: thin;
+  scrollbar-color: var(--pf-cf-border-strong) transparent;
+}
+
+.cie-detail__right::-webkit-scrollbar { width: 5px; }
+.cie-detail__right::-webkit-scrollbar-track { background: transparent; }
+.cie-detail__right::-webkit-scrollbar-thumb {
+  background: var(--pf-cf-border-strong);
+  border-radius: 3px;
+}
+
+@media (max-width: 800px) {
+  .cie-detail {
+    grid-template-columns: 1fr;
+  }
+  .cie-detail__left,
+  .cie-detail__right {
+    max-height: none;
+  }
+}
+
+/* ── Call header ──────────────────────────────────────────────────────── */
+
+.cie-call-header {
+  padding: 12px 14px;
+  background: var(--pf-cf-bg-glass-strong);
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-md);
+}
+
+.cie-call-header__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cie-call-header__row + .cie-call-header__row {
+  margin-top: 6px;
+}
+
+.cie-call-header__direction {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+}
+
+.cie-call-header__date {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--pf-cf-text-tertiary);
+  font-family: var(--pf-cf-font-mono);
+}
+
+.cie-call-header__duration {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-text-secondary);
+  font-family: var(--pf-cf-font-mono);
+}
+
+.cie-call-header__provider {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pf-cf-text-tertiary);
+}
+
+.cie-call-header__cis {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-cf-accent);
+  font-family: var(--pf-cf-font-mono);
+}
+
+/* ── Content blocks ──────────────────────────────────────────────────── */
+
+.cie-block {
+  padding: 14px;
+  background: var(--pf-cf-bg-deep);
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-md);
+}
+
+.cie-block--transcript {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cie-block__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pf-cf-text-tertiary);
+  margin: 0 0 10px;
+}
+
+.cie-block__text {
+  font-size: 13px;
+  color: var(--pf-cf-text);
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+
+.cie-block__bullets {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--pf-cf-text-secondary);
+  line-height: 1.55;
+}
+
+.cie-block__bullets li {
+  margin-bottom: 4px;
+}
+
+.cie-block__bullets li:last-child {
+  margin-bottom: 0;
+}
+
+.cie-block h4 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pf-cf-text-tertiary);
+  margin: 12px 0 8px;
+}
+
+.cie-block h4:first-of-type {
+  margin-top: 0;
+}
+
+/* ── Stats bar ────────────────────────────────────────────────────────── */
+
+.cie-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--pf-cf-bg-glass-strong);
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-md);
+  padding: 0;
+  overflow: hidden;
+}
+
+.cie-stats-bar > span {
+  flex: 1;
+  text-align: center;
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-text-secondary);
+  border-right: 1px solid var(--pf-cf-border);
+  font-family: var(--pf-cf-font-mono);
+  letter-spacing: 0.01em;
+}
+
+.cie-stats-bar > span:last-child {
+  border-right: none;
+}
+
+/* ── Call selector chips ──────────────────────────────────────────────── */
+
+.cie-call-selector {
+  display: flex;
+  gap: 6px;
+  padding: 8px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.cie-call-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.cie-call-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: 999px;
+  background: var(--pf-cf-bg-deep);
+  font-family: var(--pf-cf-font-mono);
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 150ms ease;
+}
+
+.cie-call-chip:hover {
+  border-color: var(--pf-cf-accent-border);
+  background: var(--pf-cf-accent-bg);
+}
+
+.cie-call-chip--active {
+  border-color: var(--pf-cf-accent);
+  background: var(--pf-cf-accent-bg);
+  color: var(--pf-cf-accent);
+  font-weight: 500;
+}
+
+/* ── Status badges ────────────────────────────────────────────────────── */
+
+.cie-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
+.cie-badge--ok {
+  background: var(--pf-cf-success-bg);
+  color: var(--pf-cf-success);
+}
+
+.cie-badge--err {
+  background: var(--pf-cf-danger-bg);
+  color: var(--pf-cf-danger);
+}
+
+.cie-badge--pending {
+  background: var(--pf-cf-warning-bg);
+  color: var(--pf-cf-warning);
+}
+
+/* ── Intent & confidence ──────────────────────────────────────────────── */
+
+.cie-intent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: var(--pf-cf-accent-bg);
+  border: 1px solid var(--pf-cf-accent-border);
+  border-radius: var(--pf-cf-radius-sm);
+  font-size: 13px;
+  color: var(--pf-cf-text);
+}
+
+.cie-intent strong {
+  text-transform: capitalize;
+}
+
+.cie-confidence {
+  margin-left: auto;
+  font-family: var(--pf-cf-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-accent);
+}
+
+/* ── Score bars ────────────────────────────────────────────────────────── */
+
+.cie-score-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cie-score-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cie-score-label {
+  flex-shrink: 0;
+  width: 120px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cie-score-track {
+  flex: 1;
+  height: 6px;
+  background: var(--pf-cf-bg-glass-strong);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cie-score-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--pf-cf-success);
+  transition: width 400ms ease;
+}
+
+/* Color by score — width is set inline, color via container query fallback */
+.cie-score-row:has(.cie-score-num) .cie-score-fill {
+  background: var(--pf-cf-success);
+}
+
+/* We rely on inline width for the fill. Scores are passed as 0-100 percentages.
+   Since CSS-only conditional coloring from inline widths isn't practical,
+   the JS component should add a data-attr or we use the number to the right.
+   Providing green default; yellow/red via modifier classes or future JS. */
+
+.cie-score-num {
+  flex-shrink: 0;
+  width: 28px;
+  text-align: right;
+  font-family: var(--pf-cf-font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-text);
+}
+
+/* ── Conversion probability ───────────────────────────────────────────── */
+
+.cie-conversion {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.cie-conversion-value {
+  font-family: var(--pf-cf-font-display);
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--pf-cf-text);
+}
+
+.cie-conversion-ci {
+  font-family: var(--pf-cf-font-mono);
+  font-size: 12px;
+  color: var(--pf-cf-text-tertiary);
+  letter-spacing: 0.01em;
+}
+
+/* ── Two-column layout (opportunities / risks) ────────────────────────── */
+
+.cie-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cie-two-col > div > h4 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pf-cf-text-tertiary);
+  margin: 0 0 8px;
+}
+
+@media (max-width: 600px) {
+  .cie-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Opportunity / risk cards ─────────────────────────────────────────── */
+
+.cie-card {
+  padding: 10px 12px;
+  border-radius: var(--pf-cf-radius-sm);
+  margin-bottom: 6px;
+  border: 1px solid var(--pf-cf-border);
+}
+
+.cie-card:last-child {
+  margin-bottom: 0;
+}
+
+.cie-card strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+  margin-bottom: 4px;
+}
+
+.cie-card p {
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  line-height: 1.5;
+  margin: 0 0 6px;
+}
+
+.cie-card--opp {
+  background: var(--pf-cf-success-bg);
+  border-color: rgba(93, 202, 165, 0.25);
+}
+
+.cie-card--risk {
+  background: var(--pf-cf-danger-bg);
+  border-color: rgba(240, 153, 123, 0.25);
+}
+
+/* ── Priority badges ──────────────────────────────────────────────────── */
+
+.cie-priority {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cie-priority--high {
+  background: var(--pf-cf-danger-bg);
+  color: var(--pf-cf-danger);
+}
+
+.cie-priority--medium {
+  background: var(--pf-cf-warning-bg);
+  color: var(--pf-cf-warning);
+}
+
+.cie-priority--low {
+  background: var(--pf-cf-success-bg);
+  color: var(--pf-cf-success);
+}
+
+/* ── Severity badges ──────────────────────────────────────────────────── */
+
+.cie-severity {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cie-severity--high {
+  background: var(--pf-cf-danger-bg);
+  color: var(--pf-cf-danger);
+}
+
+.cie-severity--medium {
+  background: var(--pf-cf-warning-bg);
+  color: var(--pf-cf-warning);
+}
+
+.cie-severity--low {
+  background: var(--pf-cf-success-bg);
+  color: var(--pf-cf-success);
+}
+
+/* ── Objection cards ──────────────────────────────────────────────────── */
+
+.cie-objection {
+  padding: 10px 12px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-sm);
+  margin-bottom: 8px;
+  background: var(--pf-cf-bg-glass);
+}
+
+.cie-objection:last-child {
+  margin-bottom: 0;
+}
+
+.cie-objection__text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pf-cf-text);
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.cie-objection__response {
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  line-height: 1.5;
+  padding-left: 10px;
+  border-left: 2px solid var(--pf-cf-accent-border);
+  margin-bottom: 6px;
+}
+
+/* ── Effectiveness badges ─────────────────────────────────────────────── */
+
+.cie-effectiveness {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cie-effectiveness--strong {
+  background: var(--pf-cf-success-bg);
+  color: var(--pf-cf-success);
+}
+
+.cie-effectiveness--adequate {
+  background: var(--pf-cf-warning-bg);
+  color: var(--pf-cf-warning);
+}
+
+.cie-effectiveness--weak {
+  background: var(--pf-cf-danger-bg);
+  color: var(--pf-cf-danger);
+}
+
+/* ── Compliance flags ─────────────────────────────────────────────────── */
+
+.cie-flag {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--pf-cf-radius-sm);
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cie-flag:last-child {
+  margin-bottom: 0;
+}
+
+.cie-flag__type {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 1px;
+}
+
+.cie-flag__msg {
+  color: var(--pf-cf-text);
+}
+
+.cie-flag--pass {
+  background: var(--pf-cf-success-bg);
+  border: 1px solid rgba(93, 202, 165, 0.25);
+}
+.cie-flag--pass .cie-flag__type { color: var(--pf-cf-success); }
+
+.cie-flag--info {
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.20);
+}
+.cie-flag--info .cie-flag__type { color: #3b82f6; }
+
+.cie-flag--warning {
+  background: var(--pf-cf-warning-bg);
+  border: 1px solid rgba(239, 159, 39, 0.25);
+}
+.cie-flag--warning .cie-flag__type { color: var(--pf-cf-warning); }
+
+.cie-flag--high {
+  background: var(--pf-cf-danger-bg);
+  border: 1px solid rgba(240, 153, 123, 0.25);
+}
+.cie-flag--high .cie-flag__type { color: var(--pf-cf-danger); }
+
+/* ── Coaching suggestions ─────────────────────────────────────────────── */
+
+.cie-coaching {
+  padding: 10px 12px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-sm);
+  background: var(--pf-cf-bg-glass);
+  margin-bottom: 8px;
+}
+
+.cie-coaching:last-child {
+  margin-bottom: 0;
+}
+
+.cie-coaching strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+  margin-bottom: 4px;
+  text-transform: capitalize;
+}
+
+.cie-coaching p {
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  line-height: 1.55;
+  margin: 0 0 6px;
+}
+
+.cie-coaching__example {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--pf-cf-accent);
+  padding: 6px 10px;
+  background: var(--pf-cf-accent-bg);
+  border-radius: var(--pf-cf-radius-sm);
+  border-left: 2px solid var(--pf-cf-accent-border);
+  margin: 0;
+}
+
+/* ── Generated tasks ──────────────────────────────────────────────────── */
+
+.cie-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--pf-cf-border);
+  font-size: 13px;
+  color: var(--pf-cf-text);
+}
+
+.cie-task:last-child {
+  border-bottom: none;
+}
+
+.cie-task__meta {
+  margin-left: auto;
+  font-family: var(--pf-cf-font-mono);
+  font-size: 11px;
+  color: var(--pf-cf-text-tertiary);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+/* ── Draft messages ───────────────────────────────────────────────────── */
+
+.cie-draft {
+  padding: 10px 12px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-sm);
+  background: var(--pf-cf-bg-glass);
+  margin-bottom: 8px;
+}
+
+.cie-draft:last-child {
+  margin-bottom: 0;
+}
+
+.cie-draft__channel {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--pf-cf-bg-secondary);
+  color: var(--pf-cf-text-secondary);
+  border: 1px solid var(--pf-cf-border);
+  margin-bottom: 6px;
+}
+
+.cie-draft p {
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* ── Audio player ─────────────────────────────────────────────────────── */
+
+.cie-audio {
+  width: 100%;
+  height: 36px;
+  border-radius: var(--pf-cf-radius-sm);
+}
+
+/* ── Transcript viewer ────────────────────────────────────────────────── */
+
+.cie-transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  margin: 0;
+  font-family: var(--pf-cf-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pf-cf-text-secondary);
+  background: var(--pf-cf-bg-glass-strong);
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pf-cf-border-strong) transparent;
+  min-height: 200px;
+  max-height: calc(100vh - 400px);
+}
+
+.cie-transcript::-webkit-scrollbar {
+  width: 6px;
+}
+.cie-transcript::-webkit-scrollbar-track { background: transparent; }
+.cie-transcript::-webkit-scrollbar-thumb {
+  background: var(--pf-cf-border-strong);
+  border-radius: 3px;
+}
+
+/* ── Load button (lazy content) ───────────────────────────────────────── */
+
+.cie-load-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 18px;
+  border: 1px solid var(--pf-cf-border-strong);
+  border-radius: var(--pf-cf-radius-sm);
+  background: var(--pf-cf-bg-deep);
+  color: var(--pf-cf-text-secondary);
+  font-family: var(--pf-cf-font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.cie-load-btn:hover:not(:disabled) {
+  background: var(--pf-cf-accent-bg);
+  border-color: var(--pf-cf-accent-border);
+  color: var(--pf-cf-accent);
+}
+
+.cie-load-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Score banner (right column hero) ─────────────────────────────────── */
+
+.cie-score-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 20px;
+  background: var(--pf-cf-bg-glass);
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-sm);
+  margin-bottom: 16px;
+}
+
+.cie-score-banner__circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 4px solid var(--pf-cf-text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.cie-score-banner__value {
+  font-family: var(--pf-cf-font-display, var(--pf-cf-font-sans));
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cie-score-banner__max {
+  font-size: 12px;
+  color: var(--pf-cf-text-tertiary);
+  font-weight: 500;
+}
+
+.cie-score-banner__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-cf-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── Compact block (recording player etc.) ────────────────────────────── */
+
+.cie-block--compact {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+/* ── Chat-style diarized transcript ───────────────────────────────────── */
+
+.cie-transcript-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: calc(100vh - 340px);
+  overflow-y: auto;
+  padding: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pf-cf-border-strong) transparent;
+}
+
+.cie-transcript-chat::-webkit-scrollbar { width: 6px; }
+.cie-transcript-chat::-webkit-scrollbar-track { background: transparent; }
+.cie-transcript-chat::-webkit-scrollbar-thumb {
+  background: var(--pf-cf-border-strong);
+  border-radius: 3px;
+}
+
+.cie-turn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  max-width: 92%;
+}
+
+.cie-turn--lo {
+  background: #e0f2fe;
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+}
+
+.cie-turn--borrower {
+  background: #f0fdf4;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+
+.cie-turn__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.cie-turn__speaker {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+}
+
+.cie-turn--lo .cie-turn__speaker { color: #0369a1; }
+.cie-turn--borrower .cie-turn__speaker { color: #15803d; }
+
+.cie-turn__time {
+  font-size: 11px;
+  color: var(--pf-cf-text-tertiary);
+  font-family: var(--pf-cf-font-mono);
+}
+
+.cie-turn__text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--pf-cf-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Raw transcript fallback */
+.cie-transcript-raw {
+  font-family: var(--pf-cf-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pf-cf-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  padding: 12px;
+  background: var(--pf-cf-bg-glass-strong);
+  border-radius: var(--pf-cf-radius-sm);
+}
+
+/* ── Responsive: compact on narrow viewports ──────────────────────────── */
+
+@media (max-width: 480px) {
+  .cie-stats-bar {
+    flex-wrap: wrap;
+  }
+
+  .cie-stats-bar > span {
+    flex: 1 0 50%;
+    border-bottom: 1px solid var(--pf-cf-border);
+  }
+
+  .cie-stats-bar > span:nth-last-child(-n+2) {
+    border-bottom: none;
+  }
+
+  .cie-score-label {
+    width: 90px;
+    font-size: 11px;
+  }
+
+  .cie-conversion-value {
+    font-size: 28px;
+  }
+}

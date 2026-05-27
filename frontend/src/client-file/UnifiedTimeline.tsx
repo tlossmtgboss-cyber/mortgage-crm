@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 
 import { Glyph } from "./primitives/Glyph";
 import { Pill } from "./primitives/Pill";
-import { useStarEvent, useTimeline } from "./hooks";
+import { ConversationIntelligencePane } from "./ConversationIntelligencePane";
+import { useClientFile, useStarEvent, useTimeline } from "./hooks";
 import { dayKey, formatDayLabel, formatTime } from "./format";
 import type { ActivityCategory, TimelineEvent } from "./types";
 
@@ -103,6 +104,9 @@ function EventRow({
 
 export function UnifiedTimeline({ clientFileId }: Props) {
   const [filter, setFilter] = useState<ActivityCategory>("all");
+  const { data: cf } = useClientFile(clientFileId);
+  const loanId = cf?.active_loan_id ?? null;
+  const showCIE = filter === "calls";
   const { data, isLoading } = useTimeline(clientFileId, filter);
 
   const grouped = useMemo(() => {
@@ -135,22 +139,26 @@ export function UnifiedTimeline({ clientFileId }: Props) {
         ))}
       </div>
 
-      <div className="pf-cf-timeline">
-        {isLoading ? (
-          <div className="pf-cf-loading">Loading activity…</div>
-        ) : grouped.length === 0 ? (
-          <div className="pf-cf-empty">No activity for this filter.</div>
-        ) : (
-          grouped.map((day) => (
-            <div key={day.label}>
-              <div className="pf-cf-timeline__day-label">{day.label}</div>
-              {day.events.map((e) => (
-                <EventRow key={e.id} event={e} clientFileId={clientFileId} />
-              ))}
-            </div>
-          ))
-        )}
-      </div>
+      {showCIE ? (
+        <ConversationIntelligencePane loanId={loanId ? Number(loanId) : null} />
+      ) : (
+        <div className="pf-cf-timeline">
+          {isLoading ? (
+            <div className="pf-cf-loading">Loading activity…</div>
+          ) : grouped.length === 0 ? (
+            <div className="pf-cf-empty">No activity for this filter.</div>
+          ) : (
+            grouped.map((day) => (
+              <div key={day.label}>
+                <div className="pf-cf-timeline__day-label">{day.label}</div>
+                {day.events.map((e) => (
+                  <EventRow key={e.id} event={e} clientFileId={clientFileId} />
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </>
   );
 }
