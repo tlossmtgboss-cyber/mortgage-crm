@@ -78,8 +78,6 @@ export const ClickablePhone = ({
       setCallState('error');
       const message = err.message || 'Failed to initiate call';
       toast.error(message);
-      // Fall back to native tel: dialer so the user can still make the call
-      window.location.href = `tel:${cleanPhone}`;
       setTimeout(() => setCallState('idle'), 3000);
     }
   };
