@@ -564,11 +564,21 @@ async def list_verified_caller_ids(
     """List all verified caller IDs for the agent"""
     from database.models import VerifiedCallerId
 
-    caller_ids = db.query(VerifiedCallerId).filter(
+    records = db.query(VerifiedCallerId).filter(
         VerifiedCallerId.user_id == current_user.id
     ).all()
 
-    return {"caller_ids": caller_ids}
+    return {
+        "caller_ids": [
+            {
+                "sid": str(record.id),
+                "phone_number": record.phone_number,
+                "friendly_name": record.friendly_name or record.phone_number,
+                "verification_status": record.verification_status
+            }
+            for record in records
+        ]
+    }
 
 
 @router.post("/setup-demo-caller-id")

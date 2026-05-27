@@ -145,78 +145,6 @@ async def update_dialer_settings(
     current_user = await main.get_current_user_flexible(request, db)
 
     try:
-        # Ensure all telephony tables exist (for fresh deployments)
-        try:
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS agent_telephony_settings (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
-                    cell_phone VARCHAR,
-                    business_caller_id VARCHAR,
-                    dialer_enabled BOOLEAN DEFAULT TRUE,
-                    max_calls_per_day INTEGER DEFAULT 200,
-                    max_concurrent_sessions INTEGER DEFAULT 1,
-                    auto_advance BOOLEAN DEFAULT TRUE,
-                    pause_between_calls INTEGER DEFAULT 3,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS contact_dnc_status (
-                    id SERIAL PRIMARY KEY,
-                    phone_number VARCHAR UNIQUE NOT NULL,
-                    reason VARCHAR,
-                    added_by_id INTEGER REFERENCES users(id),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                DROP TABLE IF EXISTS active_calls;
-                CREATE TABLE active_calls (
-                    id SERIAL PRIMARY KEY,
-                    contact_phone VARCHAR NOT NULL,
-                    agent_id INTEGER REFERENCES users(id),
-                    call_sid VARCHAR,
-                    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS call_logs (
-                    id SERIAL PRIMARY KEY,
-                    agent_id INTEGER REFERENCES users(id),
-                    contact_phone VARCHAR NOT NULL,
-                    contact_name VARCHAR,
-                    lead_id INTEGER,
-                    loan_id INTEGER,
-                    referral_partner_id INTEGER,
-                    mum_client_id INTEGER,
-                    session_id INTEGER,
-                    session_task_id INTEGER,
-                    call_sid VARCHAR,
-                    caller_id_used VARCHAR,
-                    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    end_time TIMESTAMP,
-                    duration_seconds INTEGER,
-                    outcome VARCHAR,
-                    failure_reason VARCHAR,
-                    disposition VARCHAR,
-                    notes TEXT,
-                    ai_note_summary TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                -- Add missing columns to existing call_logs table
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS referral_partner_id INTEGER;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS mum_client_id INTEGER;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_id INTEGER;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_task_id INTEGER;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS caller_id_used VARCHAR;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS start_time TIMESTAMP;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS end_time TIMESTAMP;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS failure_reason VARCHAR;
-                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            """))
-            db.commit()
-        except Exception as table_err:
-            logger.debug(f"Table creation note: {table_err}")
-            db.rollback()
-
         settings = db.query(main.AgentTelephonySettings).filter(
             main.AgentTelephonySettings.user_id == current_user.id
         ).first()
@@ -288,8 +216,21 @@ async def list_verified_caller_ids(
 
     current_user = await main.get_current_user_flexible(request, db)
 
-    provider = get_telephony_provider()
-    return provider.list_verified_caller_ids()
+    records = db.query(main.VerifiedCallerId).filter(
+        main.VerifiedCallerId.user_id == current_user.id
+    ).all()
+
+    return {
+        "caller_ids": [
+            {
+                "sid": str(record.id),
+                "phone_number": record.phone_number,
+                "friendly_name": record.friendly_name or record.phone_number,
+                "verification_status": record.verification_status
+            }
+            for record in records
+        ]
+    }
 
 
 # =============================================================================
@@ -839,13 +780,13 @@ async def get_call_logs(
             "id": log.id,
             "contact_phone": log.contact_phone,
             "contact_name": log.contact_name,
-            "direction": log.direction,
             "duration_seconds": log.duration_seconds,
-            "outcome": log.outcome,
+            "outcome": log.outcome.value if log.outcome else None,
             "disposition": log.disposition,
             "notes": log.notes,
-            "started_at": log.started_at.isoformat() if log.started_at else None,
-            "ended_at": log.ended_at.isoformat() if log.ended_at else None,
+            "started_at": log.start_time.isoformat() if log.start_time else None,
+            "ended_at": log.end_time.isoformat() if log.end_time else None,
+            "caller_id_used": log.caller_id_used,
             "lead_id": log.lead_id,
             "loan_id": log.loan_id
         } for log in logs]

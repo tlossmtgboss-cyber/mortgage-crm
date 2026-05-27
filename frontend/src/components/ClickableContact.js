@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
+import { getAuthHeaders } from '../utils/auth';
+import { toast } from '../utils/toast';
 import './ClickableContact.css';
+
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_BASE = isProduction
+  ? 'https://api.perenniaai.com'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Clickable email link
 export const ClickableEmail = ({ email, className = '' }) => {
@@ -16,28 +23,80 @@ export const ClickableEmail = ({ email, className = '' }) => {
   );
 };
 
-// Clickable phone link — opens Teams for click-to-dial
+// Clickable phone link — calls via backend dialer API
 export const ClickablePhone = ({
   phone,
   className = '',
   showActions = false,
   onSMSClick = null,
+  contactName = '',
+  leadId = null,
+  loanId = null,
 }) => {
-  const [callSuccess, setCallSuccess] = useState(false);
+  const [callState, setCallState] = useState('idle'); // idle | calling | success | error
 
   if (!phone) return <span className="no-value">N/A</span>;
 
   // Clean phone number (remove formatting)
   const cleanPhone = phone.replace(/[^0-9+]/g, '');
 
-  const handleClickToDial = (e) => {
+  const handleClickToDial = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
+    if (callState === 'calling') return;
+
+    setCallState('calling');
+
     const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
-    setCallSuccess(true);
-    setTimeout(() => setCallSuccess(false), 3000);
+    const payload = {
+      phone_number: dialNumber,
+      contact_name: contactName || '',
+    };
+    if (leadId) payload.lead_id = leadId;
+    if (loanId) payload.loan_id = loanId;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-dial`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || `Call failed (${response.status})`);
+      }
+
+      setCallState('success');
+      toast.success('Call initiated');
+      setTimeout(() => setCallState('idle'), 3000);
+    } catch (err) {
+      setCallState('error');
+      const message = err.message || 'Failed to initiate call';
+      toast.error(message);
+      // Fall back to native tel: dialer so the user can still make the call
+      window.location.href = `tel:${cleanPhone}`;
+      setTimeout(() => setCallState('idle'), 3000);
+    }
+  };
+
+  const isCalling = callState === 'calling';
+  const isSuccess = callState === 'success';
+
+  const getButtonTitle = () => {
+    if (isCalling) return 'Calling...';
+    if (isSuccess) return 'Call initiated';
+    return 'Click to call';
+  };
+
+  const getButtonContent = () => {
+    if (isCalling) return '...';
+    if (isSuccess) return '✓';
+    return '📞';
   };
 
   if (showActions) {
@@ -46,11 +105,12 @@ export const ClickablePhone = ({
         <span className="phone-number">{phone}</span>
         <div className="phone-action-buttons">
           <button
-            className={`phone-action-btn call-btn ${callSuccess ? 'success' : ''}`}
-            title={callSuccess ? 'Opening Teams...' : 'Call via Teams'}
+            className={`phone-action-btn call-btn ${isSuccess ? 'success' : ''} ${isCalling ? 'calling' : ''}`}
+            title={getButtonTitle()}
             onClick={handleClickToDial}
+            disabled={isCalling}
           >
-            {callSuccess ? '✓' : '📞'}
+            {getButtonContent()}
           </button>
           {onSMSClick ? (
             <button
@@ -80,11 +140,12 @@ export const ClickablePhone = ({
 
   return (
     <button
-      className={`clickable-phone ${className} ${callSuccess ? 'success' : ''}`}
+      className={`clickable-phone ${className} ${isSuccess ? 'success' : ''} ${isCalling ? 'calling' : ''}`}
       onClick={handleClickToDial}
-      title={callSuccess ? 'Opening Teams...' : 'Call via Teams'}
+      disabled={isCalling}
+      title={getButtonTitle()}
     >
-      {callSuccess ? '✓ ' + phone : phone}
+      {isCalling ? '... ' + phone : isSuccess ? '✓ ' + phone : phone}
     </button>
   );
 };
