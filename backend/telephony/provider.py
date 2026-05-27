@@ -229,7 +229,25 @@ class TelnyxProvider(TelephonyProvider):
 
     def __init__(self):
         self.client = _get_telnyx_client()
-        self.connection_id = os.getenv('TELNYX_CONNECTION_ID')
+        self.connection_id = os.getenv('TELNYX_CONNECTION_ID') or self._lookup_connection_id()
+
+    def _lookup_connection_id(self):
+        """Look up connection ID from the Telnyx number's assignment."""
+        if not self.client:
+            return None
+        try:
+            from_number = os.getenv("TELNYX_FROM_NUMBER", "+18438838956")
+            numbers = self.client.phone_numbers.list()
+            for num in numbers.data:
+                pn = getattr(num, 'phone_number', '')
+                if pn == from_number:
+                    cid = getattr(num, 'connection_id', None)
+                    if cid:
+                        logger.info(f"Resolved connection_id {cid} from {from_number}")
+                        return str(cid)
+        except Exception as e:
+            logger.warning(f"Could not look up connection_id: {e}")
+        return None
 
     def _ensure_client(self):
         """Ensure Telnyx client is available"""
