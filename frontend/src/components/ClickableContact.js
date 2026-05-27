@@ -71,8 +71,12 @@ export const ClickablePhone = ({
         throw new Error(errorData.detail || errorData.message || `Call failed (${response.status})`);
       }
 
+      const data = await response.json().catch(() => ({}));
+      const debugTo = data?.debug?.to || 'unknown';
+      const debugConn = data?.debug?.connection_id || 'unknown';
+
       setCallState('success');
-      toast.success('Call initiated');
+      toast.success(`Calling ${debugTo} via ${debugConn}`);
       setTimeout(() => setCallState('idle'), 3000);
     } catch (err) {
       setCallState('error');
