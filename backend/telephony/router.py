@@ -538,20 +538,41 @@ async def verify_caller_id(
     """Start caller ID verification process"""
     from database.models import VerifiedCallerId
 
-    provider = get_telephony_provider()
-    result = provider.verify_caller_id(request.phone_number, request.friendly_name)
+    try:
+        provider = get_telephony_provider()
+        result = provider.verify_caller_id(request.phone_number, request.friendly_name)
+    except Exception as e:
+        logger.error(f"Provider verify_caller_id failed: {e}")
+        return {"success": False, "error": f"Verification service error: {e}"}
 
     if result.get("success"):
-        # Save pending verification
-        caller_id = VerifiedCallerId(
-            user_id=current_user.id,
-            phone_number=request.phone_number,
-            friendly_name=request.friendly_name,
-            provider_sid=result.get("call_sid"),
-            verification_status="pending"
-        )
-        db.add(caller_id)
-        db.commit()
+        org_id = getattr(current_user, 'organization_id', None)
+        existing = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.phone_number == request.phone_number,
+            VerifiedCallerId.user_id == current_user.id,
+        ).first()
+
+        if existing:
+            existing.friendly_name = request.friendly_name
+            existing.verification_status = "pending"
+            existing.provider_sid = result.get("call_sid")
+        else:
+            caller_id = VerifiedCallerId(
+                user_id=current_user.id,
+                organization_id=org_id,
+                phone_number=request.phone_number,
+                friendly_name=request.friendly_name,
+                provider_sid=result.get("call_sid"),
+                verification_status="pending"
+            )
+            db.add(caller_id)
+
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"DB error saving caller ID verification: {e}")
+            return {"success": False, "error": "Failed to save verification record"}
 
     return result
 
@@ -614,16 +635,24 @@ async def setup_demo_caller_id(
                 "caller_id": existing.phone_number
             }
 
-        # Create a demo verified caller ID
-        demo_phone = "+18434169589"  # Demo telephony number
-        caller_id = VerifiedCallerId(
-            user_id=current_user.id,
-            phone_number=demo_phone,
-            friendly_name="Demo Business Line",
-            provider_sid="demo_sid_for_testing",
-            verification_status="verified"
-        )
-        db.add(caller_id)
+        demo_phone = "+18434169589"
+        org_id = getattr(current_user, 'organization_id', None)
+        caller_id = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.phone_number == demo_phone,
+            VerifiedCallerId.user_id == current_user.id,
+        ).first()
+        if not caller_id:
+            caller_id = VerifiedCallerId(
+                user_id=current_user.id,
+                organization_id=org_id,
+                phone_number=demo_phone,
+                friendly_name="Demo Business Line",
+                provider_sid="demo_sid_for_testing",
+                verification_status="verified"
+            )
+            db.add(caller_id)
+        else:
+            caller_id.verification_status = "verified"
 
         # Also update the user's settings to use this caller ID
         settings = db.query(AgentTelephonySettings).filter(
@@ -694,16 +723,20 @@ async def check_verification_status(
                 "message": "Caller ID verified successfully!"
             }
         else:
-            # Create new verified record if not exists
+            org_id = getattr(current_user, 'organization_id', None)
             new_caller_id = VerifiedCallerId(
                 user_id=current_user.id,
+                organization_id=org_id,
                 phone_number=normalized,
                 friendly_name=result.get("friendly_name", "Verified Number"),
                 provider_sid=result.get("sid"),
                 verification_status="verified"
             )
             db.add(new_caller_id)
-            db.commit()
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
             return {
                 "success": True,
                 "verified": True,
@@ -1241,7 +1274,7 @@ async def webhook_call_status(
             org_id = session.organization_id if session else None
 
             engine = DialerEngine(db, agent_id, organization_id=org_id)
-            engine.handle_call_status(
+            engine.handle_call_status_update(
                 session_id=session_id,
                 task_id=task_id,
                 call_sid=call_sid,

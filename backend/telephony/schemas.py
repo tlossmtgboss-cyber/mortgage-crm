@@ -246,8 +246,8 @@ class CallLogEntry(BaseModel):
     outcome: Optional[str] = None
     disposition: Optional[str] = None
     notes: Optional[str] = None
-    started_at: Optional[str] = None
-    ended_at: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     lead_id: Optional[int] = None
     loan_id: Optional[int] = None
 

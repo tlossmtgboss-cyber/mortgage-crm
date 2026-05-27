@@ -7,6 +7,7 @@ import CallDetailPanel from './shared/CallDetailPanel';
 import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import './ActionSidebar.css';
 import { toast } from '../utils/toast';
+import { clickToDial } from '../utils/clickToDial';
 
 const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const navigate = useNavigate();
@@ -376,9 +377,11 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       return;
     }
 
-    const cleanPhone = phone.replace(/[^\d+]/g, '');
-    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
+    await clickToDial(phone, {
+      contactName: item.entity_name || item.borrower_name || '',
+      leadId: item.lead_id || null,
+      loanId: item.loan_id || null,
+    });
     await handleCompleteTask(item);
   };
 

@@ -1200,11 +1200,12 @@ async def _aria_sms_ai_background_task(
                 )
 
             # Run synchronous Anthropic SDK call in a thread to avoid blocking event loop
+            from agents.anthropic_client import cached_system_block
             _resp = await asyncio.to_thread(
                 _client.messages.create,
                 model=os.environ.get("ARIA_SMS_MODEL", "claude-haiku-4-5-20251001"),
                 max_tokens=200,
-                system=_system,
+                system=cached_system_block(_system),
                 messages=_messages,
             )
             if _resp.content:
@@ -1303,7 +1304,7 @@ async def _aria_sms_ai_background_task(
                     _client.messages.create,
                     model=os.environ.get("ARIA_SMS_MODEL", "claude-haiku-4-5-20251001"),
                     max_tokens=400,
-                    system=(
+                    system=cached_system_block(
                         "You are a data extractor. Analyze this SMS conversation and determine "
                         "if an appointment has been CONFIRMED (both parties agreed on a specific "
                         "date and time). If confirmed, extract the details.\n\n"
@@ -2843,6 +2844,42 @@ async def _transcribe_and_process_recording(
             set_tenant_context(db, org_id)
         except Exception:
             pass
+
+        # -----------------------------------------------------------------
+        # 2d. Back up recording to S3 for durable storage
+        # -----------------------------------------------------------------
+        try:
+            from services.recording_backup import recording_backup
+            if recording_backup._enabled:
+                import tempfile as _tmpmod
+
+                async with httpx.AsyncClient(timeout=120) as _dl:
+                    _dl_resp = await _dl.get(recording_url)
+                    _dl_resp.raise_for_status()
+
+                with _tmpmod.NamedTemporaryFile(suffix=".mp3", delete=False) as _s3f:
+                    _s3f.write(_dl_resp.content)
+                    _s3_path = _s3f.name
+
+                try:
+                    s3_key = recording_backup.upload_recording(
+                        org_id=org_id,
+                        call_id=call_control_id,
+                        file_path=_s3_path,
+                    )
+                    if s3_key:
+                        logger.info("Recording backed up to S3: %s", s3_key)
+                finally:
+                    import os as _os2
+                    try:
+                        _os2.unlink(_s3_path)
+                    except OSError:
+                        pass
+        except Exception as _s3_exc:
+            logger.warning(
+                "S3 recording backup failed for %s: %s",
+                call_control_id, _s3_exc,
+            )
 
         # -----------------------------------------------------------------
         # 3. Feed transcript into Call Intelligence

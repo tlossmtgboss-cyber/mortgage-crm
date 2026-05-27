@@ -395,7 +395,6 @@ class TelnyxProvider(TelephonyProvider):
         Returns a validation_code so the UI flow can display it.
         """
         import random
-        self._ensure_client()
 
         logger.info("Telnyx caller ID check (verification not required for owned numbers)")
 

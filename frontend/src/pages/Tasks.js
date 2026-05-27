@@ -10,6 +10,7 @@ import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/t
 import { getAuthHeaders } from '../utils/auth';
 import './Tasks.css';
 import { toast } from '../utils/toast';
+import { clickToDial } from '../utils/clickToDial';
 import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -517,11 +518,13 @@ function Tasks() {
     }
   }, []);
 
-  const handleClickToDial = (task) => {
+  const handleClickToDial = async (task) => {
     if (!task?.contact_phone) return;
-    const cleanPhone = task.contact_phone.replace(/[^\d+]/g, '');
-    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
+    await clickToDial(task.contact_phone, {
+      contactName: task.contact_name || '',
+      leadId: task.lead_id || null,
+      loanId: task.loan_id || null,
+    });
   };
 
   const handleEndCall = async () => {

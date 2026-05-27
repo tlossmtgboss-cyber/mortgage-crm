@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { loansAPI, activitiesAPI, schedulerAPI, borrowerApplicationAPI, purlAPI } from '../services/api';
 import { toast } from '../utils/toast';
+import { clickToDial } from '../utils/clickToDial';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
@@ -726,11 +727,11 @@ function ClientProfile() {
           toast.error('No phone number available for this contact');
           return;
         }
-        {
-          const cleanPhone = phone.replace(/[^\d+]/g, '');
-          const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-          window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
-        }
+        await clickToDial(phone, {
+          contactName: client?.first_name ? `${client.first_name} ${client.last_name || ''}`.trim() : '',
+          leadId: client?.lead_id || null,
+          loanId: client?.loan_id || null,
+        });
         break;
       case 'sms':
         setShowSMSModal(true);

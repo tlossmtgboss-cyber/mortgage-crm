@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI, borrowerApplicationAPI } from '../services/api';
 import { toast } from '../utils/toast';
+import { clickToDial } from '../utils/clickToDial';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -939,11 +940,11 @@ function LoanDetail() {
           toast.error('No phone number available for this borrower');
           return;
         }
-        {
-          const cleanPhone = borrowerPhone.replace(/[^\d+]/g, '');
-          const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-          window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
-        }
+        await clickToDial(borrowerPhone, {
+          contactName: loan?.borrower_name || '',
+          loanId: loan?.id || null,
+          leadId: loan?.lead_id || null,
+        });
         break;
       case 'sms':
         setShowSMSModal(true);

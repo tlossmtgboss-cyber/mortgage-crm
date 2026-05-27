@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -8,7 +8,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../ClickableContact.css', () => ({}));
 
+vi.mock('../../utils/auth', () => ({
+  getAuthHeaders: () => ({ Authorization: 'Bearer test-token' }),
+}));
+
+vi.mock('../../utils/toast', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
+
 import { ClickableEmail, ClickablePhone, formatPhoneNumber } from '../ClickableContact';
+import { toast } from '../../utils/toast';
 
 // ---------------------------------------------------------------------------
 // ClickableEmail Tests
@@ -69,11 +83,9 @@ describe('ClickableEmail', () => {
 // ---------------------------------------------------------------------------
 
 describe('ClickablePhone', () => {
-  let windowOpenSpy;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    global.fetch = vi.fn();
   });
 
   afterEach(() => {
@@ -99,46 +111,60 @@ describe('ClickablePhone', () => {
     expect(button).toHaveClass('clickable-phone');
   });
 
-  it('opens Teams deep link on click', () => {
+  it('calls click-to-dial API on click', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    });
+
     render(<ClickablePhone phone="(555) 123-4567" />);
-
     fireEvent.click(screen.getByRole('button'));
 
-    expect(windowOpenSpy).toHaveBeenCalledWith(
-      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15551234567',
-      '_blank'
-    );
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/dialer/click-to-dial'),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('+15551234567'),
+        })
+      );
+    });
   });
 
-  it('shows success state after click', async () => {
+  it('shows success toast after successful call', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    });
+
     render(<ClickablePhone phone="(555) 123-4567" />);
-
     fireEvent.click(screen.getByRole('button'));
 
-    const button = screen.getByRole('button');
-    expect(button).toHaveClass('success');
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Call initiated');
+    });
   });
 
-  it('preserves + prefix for international numbers', () => {
-    render(<ClickablePhone phone="+1 (555) 123-4567" />);
+  it('shows error toast and falls back to tel: on API failure', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ detail: 'Server error' }),
+    });
 
+    const locationHrefSpy = vi.spyOn(window, 'location', 'get').mockReturnValue({
+      ...window.location,
+      href: '',
+    });
+
+    render(<ClickablePhone phone="(555) 123-4567" />);
     fireEvent.click(screen.getByRole('button'));
 
-    expect(windowOpenSpy).toHaveBeenCalledWith(
-      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15551234567',
-      '_blank'
-    );
-  });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalled();
+    });
 
-  it('adds +1 prefix for domestic numbers without one', () => {
-    render(<ClickablePhone phone="5551234567" />);
-
-    fireEvent.click(screen.getByRole('button'));
-
-    expect(windowOpenSpy).toHaveBeenCalledWith(
-      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15551234567',
-      '_blank'
-    );
+    locationHrefSpy.mockRestore();
   });
 
   it('stops event propagation on click', () => {
@@ -151,6 +177,22 @@ describe('ClickablePhone', () => {
     fireEvent.click(screen.getByRole('button'));
     expect(parentHandler).not.toHaveBeenCalled();
   });
+
+  it('sends leadId and loanId when provided', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    });
+
+    render(<ClickablePhone phone="(555) 123-4567" leadId={42} loanId={99} />);
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body.lead_id).toBe(42);
+      expect(body.loan_id).toBe(99);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -158,11 +200,12 @@ describe('ClickablePhone', () => {
 // ---------------------------------------------------------------------------
 
 describe('ClickablePhone with showActions', () => {
-  let windowOpenSpy;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }),
+    });
   });
 
   afterEach(() => {
@@ -195,16 +238,18 @@ describe('ClickablePhone with showActions', () => {
     expect(handleSMS).toHaveBeenCalledTimes(1);
   });
 
-  it('opens Teams on call button click in showActions mode', () => {
+  it('calls click-to-dial API on call button click', async () => {
     render(<ClickablePhone phone="(555) 999-8888" showActions />);
 
-    const callButton = screen.getByTitle('Call via Teams');
+    const callButton = screen.getByTitle('Call');
     fireEvent.click(callButton);
 
-    expect(windowOpenSpy).toHaveBeenCalledWith(
-      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15559998888',
-      '_blank'
-    );
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/dialer/click-to-dial'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
   });
 
   it('stops event propagation from phone-with-actions container', () => {

@@ -1,26 +1,27 @@
-/**
- * Click-to-Dial Button Component
- * Opens Teams to call the given phone number.
- */
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Phone } from 'lucide-react';
+import { clickToDial } from '../../utils/clickToDial';
 
 const ClickToDialButton = ({
   contactName,
   phone,
+  leadId = null,
+  loanId = null,
   variant = 'primary',
   size = 'md',
   className = ''
 }) => {
+  const [calling, setCalling] = useState(false);
+
   if (!phone) {
     return null;
   }
 
-  const handleClick = () => {
-    const cleanPhone = phone.replace(/[^\d+]/g, '');
-    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
+  const handleClick = async () => {
+    if (calling) return;
+    setCalling(true);
+    await clickToDial(phone, { contactName, leadId, loanId });
+    setTimeout(() => setCalling(false), 3000);
   };
 
   const sizeClasses = {
@@ -44,17 +45,19 @@ const ClickToDialButton = ({
   return (
     <button
       onClick={handleClick}
+      disabled={calling}
       className={`
         inline-flex items-center justify-center rounded-md transition-colors
         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+        ${calling ? 'opacity-60 cursor-not-allowed' : ''}
         ${sizeClasses[size]}
         ${variantClasses[variant]}
         ${className}
       `}
-      title={`Call ${contactName || phone} via Teams`}
+      title={`Call ${contactName || phone}`}
     >
       <Phone className={`${iconSize[size]} ${variant !== 'icon' ? 'mr-1.5' : ''}`} />
-      {variant !== 'icon' && 'Call'}
+      {variant !== 'icon' && (calling ? 'Calling...' : 'Call')}
     </button>
   );
 };

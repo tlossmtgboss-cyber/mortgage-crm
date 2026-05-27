@@ -27,6 +27,7 @@ import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import AIActivityTab from '../components/ai/AIActivityTab';
 import './LeadDetail.css';
 import { toast } from '../utils/toast';
+import { clickToDial } from '../utils/clickToDial';
 import { getToken } from '../utils/tokenStore';
 
 // Extracted tab components
@@ -1203,9 +1204,10 @@ function LeadDetail() {
     switch(action) {
       case 'call':
         if (!lead.phone) { toast.error('No phone number available for this lead'); return; }
-        { const cleanPhone = lead.phone.replace(/[^\d+]/g, '');
-          const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
-          window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank'); }
+        await clickToDial(lead.phone, {
+          contactName: lead.first_name ? `${lead.first_name} ${lead.last_name || ''}`.trim() : '',
+          leadId: lead.id || null,
+        });
         break;
       case 'sms': setShowSMSModal(true); break;
       case 'email': setShowEmailComposer(true); break;
