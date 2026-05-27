@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 
 from middleware.webhook_verification import require_telnyx_webhook
@@ -803,7 +803,7 @@ async def check_verification_status(
 # Click-to-Dial
 # =============================================================================
 
-@router.post("/click-to-dial", response_model=ClickToDialResponse)
+@router.post("/click-to-dial")
 async def api_click_to_dial(
     request: ClickToDialRequest,
     db: Session = Depends(get_db),
