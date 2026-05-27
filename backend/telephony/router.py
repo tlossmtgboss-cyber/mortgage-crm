@@ -849,13 +849,11 @@ async def api_click_to_dial(
         )
 
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("error", "Call failed"))
+            return {"success": False, "error": result.get("error", "Call failed"), "status": 400}
         return result
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Click-to-dial failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"success": False, "error": str(e), "traceback": repr(e)}
 
 
 # =============================================================================

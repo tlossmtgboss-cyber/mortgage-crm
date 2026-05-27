@@ -66,17 +66,15 @@ export const ClickablePhone = ({
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.message || `Call failed (${response.status})`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.detail || `Call failed (${response.status})`);
       }
 
-      const data = await response.json().catch(() => ({}));
-      const debugTo = data?.debug?.to || 'unknown';
-      const debugConn = data?.debug?.connection_id || 'unknown';
-
+      const debugTo = data?.debug?.to || '';
       setCallState('success');
-      toast.success(`Calling ${debugTo} via ${debugConn}`);
+      toast.success(debugTo ? `Calling ${debugTo}` : 'Call initiated');
       setTimeout(() => setCallState('idle'), 3000);
     } catch (err) {
       setCallState('error');
