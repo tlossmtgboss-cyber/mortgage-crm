@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_org_directives
 
 logger = logging.getLogger(__name__)
 
@@ -1059,6 +1060,7 @@ def cost_optimization(
     """
     actions = 0
     notifications_sent = 0
+    org_ctx = get_org_directives(db, organization_id)
 
     # ── 1. Query today's AI invocation data ────────────────────────────────
     try:

@@ -208,8 +208,12 @@ def run_agent_for_org(
 
     Creates a fresh DB session with tenant context set for RLS isolation.
     Passes an ActionGateway for confidence-gated execution and audit trail.
+    Memory context cache is cleared per-org so each org gets fresh lookups.
     """
     from database import SessionLocal
+    from agents.autonomous.memory_context import clear_cache as _clear_memory_cache
+
+    _clear_memory_cache()
 
     result = AgentExecutionResult(
         agent_name=agent_def.name,

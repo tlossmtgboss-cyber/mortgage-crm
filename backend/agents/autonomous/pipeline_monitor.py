@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_sla_target
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,10 @@ def pipeline_monitor(
     for loan in stuck_loans:
         stage = loan[3]
         days = int(loan[6] or 0)
-        threshold = SLA_THRESHOLDS.get(stage, 7)
+        lo_id = loan[4]
+        # Respect per-LO custom SLA overrides from memory
+        lo_memory = get_lo_memory_context(db, lo_id, organization_id) if lo_id else {}
+        threshold = get_sla_target(lo_memory, stage, SLA_THRESHOLDS.get(stage, 7))
 
         if days >= threshold:
             # Check if we already created a task for this recently

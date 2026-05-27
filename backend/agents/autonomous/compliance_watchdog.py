@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ def compliance_watchdog(
     """Check for upcoming compliance deadlines and create alerts."""
 
     actions = 0
+    org_ctx = get_org_directives(db, organization_id)
 
     # 1. LE not sent within 3 days of application
     le_overdue = db.execute(text("""

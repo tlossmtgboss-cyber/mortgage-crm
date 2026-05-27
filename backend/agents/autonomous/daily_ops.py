@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives
 
 logger = logging.getLogger(__name__)
 
@@ -228,13 +229,17 @@ def evening_recap(
         if not has_activity:
             continue
 
+        # ── Load LO memory context for personalization ────────────────────
+        lo_memory = get_lo_memory_context(db, lo_id, organization_id)
+        detail_level = lo_memory.get("detail_level", "moderate")
+
         # ── Build comparison strings ──────────────────────────────────────
         task_delta = completed_tasks - avg_tasks
         task_cmp = f"({'+' if task_delta >= 0 else ''}{task_delta:.0f} vs 30d avg {avg_tasks:.0f})"
         lead_delta = new_leads - avg_leads
         lead_cmp = f"({'+' if lead_delta >= 0 else ''}{lead_delta:.0f} vs avg {avg_leads:.0f})"
 
-        # ── Build recap content ───────────────────────────────────────────
+        # ── Build recap content (personalized by detail_level) ────────────
         lines = [f"Evening recap for {lo_name}:"]
         lines.append(f"  Tasks completed: {completed_tasks} {task_cmp}")
         lines.append(f"  New leads: {new_leads} {lead_cmp}")
@@ -243,14 +248,17 @@ def evening_recap(
         if fallen_count:
             fallen_names = ", ".join(f"{r[2]} ({r[3]})" for r in fallen_out[:5])
             lines.append(f"  Fallen out: {fallen_count} — {fallen_names}")
-        if progression_details:
-            lines.append(f"  Stage progressions ({progression_count}):")
-            for p in progression_details:
-                lines.append(f"    {p}")
-        if velocity_lines:
-            lines.append("  Pipeline velocity:")
-            lines.extend(velocity_lines)
+        if detail_level != "concise":
+            if progression_details:
+                lines.append(f"  Stage progressions ({progression_count}):")
+                for p in progression_details:
+                    lines.append(f"    {p}")
+            if velocity_lines:
+                lines.append("  Pipeline velocity:")
+                lines.extend(velocity_lines)
         lines.append(f"  Tomorrow: {tomorrow_appts} appointments")
+        if lo_memory.get("directives"):
+            lines.append(f"  Active directives: {len(lo_memory['directives'])}")
 
         recap_content = "\n".join(lines)
 

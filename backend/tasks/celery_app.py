@@ -77,6 +77,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.data_retention_tasks",
             "tasks.learning_tasks",
             "tasks.expire_voice_workflows",
+            "engine.worker.tasks",
         ],
     )
 
@@ -144,6 +145,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.learning_tasks.analyze_recent_conversations": {"queue": "ai_tasks"},
             "tasks.learning_tasks.refresh_agent_memory_scores": {"queue": "low_priority"},
             "tasks.learning_tasks.agent_learning_health_check": {"queue": "default"},
+            "engine.worker.tasks.process_call_pipeline": {"queue": "ai_tasks"},
         },
     )
 

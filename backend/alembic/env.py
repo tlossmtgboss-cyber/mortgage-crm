@@ -39,6 +39,7 @@ if config.config_file_name is not None:
 # every table on Base.metadata so that `--autogenerate` can diff them.
 from database import Base
 import database.models  # noqa: F401 — registers all model classes with Base
+import engine.models  # noqa: F401 — registers CIE tables with Base
 
 target_metadata = Base.metadata
 

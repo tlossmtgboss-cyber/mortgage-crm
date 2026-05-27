@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives
 
 logger = logging.getLogger(__name__)
 
@@ -839,6 +840,9 @@ def tcpa_compliance_scanner(
     """
     actions = 0
     lo_violations: Dict[int, Dict[str, int]] = {}  # lo_id -> {type: count}
+
+    # Load org-level compliance directives (e.g., stricter quiet hours)
+    org_ctx = get_org_directives(db, organization_id)
 
     # ---- 1. Quiet-hours violations by borrower timezone -------------------
     # Check lead-based contacts

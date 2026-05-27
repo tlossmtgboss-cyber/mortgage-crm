@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_sla_target
 
 logger = logging.getLogger(__name__)
 
@@ -315,7 +316,9 @@ def sla_enforcer(
         disclosures_sent_date = loan[7]
         loan_created_at = loan[8]
 
-        sla = SLA_TARGETS_DAYS.get(stage)
+        # Load LO memory for custom SLA overrides
+        lo_memory = get_lo_memory_context(db, lo_id, organization_id) if lo_id else {}
+        sla = get_sla_target(lo_memory, stage, SLA_TARGETS_DAYS.get(stage, 0))
         if not sla:
             continue
 

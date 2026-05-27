@@ -21,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_org_directives
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ def confidence_recalculator(
     """
     from services.autonomous.confidence_graduation import ConfidenceGraduationService
 
+    org_ctx = get_org_directives(db, organization_id)
     service = ConfidenceGraduationService(db)
     graduated = service.evaluate_graduations(organization_id)
 

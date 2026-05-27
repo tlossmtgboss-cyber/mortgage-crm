@@ -339,6 +339,7 @@ export default function MobileCallIntelligencePanel({
     sessionState, sessionId, consentInfo, errorMessage,
     isIdle, isPlayingDisclosure, isActive, isConsentFailed,
     isCompleted, isError, canManualOverride, canRetry,
+    transcript,
     startSession, stopSession, retryDisclosure, confirmVerbalDisclosure,
   } = useCallIntelligenceSession({
     callControlId,
@@ -353,10 +354,10 @@ export default function MobileCallIntelligencePanel({
   });
 
   const [agentStatuses, setAgentStatuses] = useState({});
-  const [transcript, setTranscript] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
   const [duration, setDuration] = useState(0);
   const [activeTab, setActiveTab] = useState('live');
+  const transcriptEndRef = useRef(null);
 
   const [sentiment, setSentiment] = useState(null);
   const [objections, setObjections] = useState([]);
@@ -371,6 +372,10 @@ export default function MobileCallIntelligencePanel({
     const timer = setInterval(() => setDuration(d => d + 1), 1000);
     return () => clearInterval(timer);
   }, [isActive]);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcript]);
 
   const handleConvertToApplication = useCallback(async () => {
     if (!sessionId) return;
@@ -569,28 +574,55 @@ export default function MobileCallIntelligencePanel({
             )}
 
             <div style={{
-              flex: 1, display: 'flex', flexDirection: 'column', gap: '6px',
+              flex: 1, display: 'flex', flexDirection: 'column', gap: '4px',
+              overflowY: 'auto', maxHeight: 'calc(100vh - 240px)',
+              paddingBottom: '8px',
             }}>
-              {transcript.map((chunk, i) => (
-                <div key={i} style={{
-                  display: 'flex', gap: '8px', alignItems: 'flex-start',
+              {transcript.length === 0 && (
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  justifyContent: 'center', padding: '40px 0', gap: '8px',
                 }}>
                   <div style={{
-                    fontSize: '10px', color: T.textMuted, fontFamily: T.mono,
-                    minWidth: '28px', paddingTop: '2px',
+                    width: '12px', height: '12px', borderRadius: '50%',
+                    background: T.blue, animation: 'pulse 1.5s infinite',
+                  }} />
+                  <div style={{ fontSize: '12px', color: T.textMuted }}>
+                    Listening for speech...
+                  </div>
+                </div>
+              )}
+              {transcript.map((line) => (
+                <div key={line.id} style={{
+                  display: 'flex', gap: '8px', alignItems: 'flex-start',
+                  padding: '4px 0',
+                  opacity: line.is_final ? 1 : 0.6,
+                }}>
+                  <div style={{
+                    fontSize: '10px', fontWeight: 600, fontFamily: T.mono,
+                    minWidth: '28px', paddingTop: '3px',
+                    color: line.speaker === 'lo' ? T.blue : T.green,
                   }}>
-                    {chunk.speaker === 'lo' ? 'LO' : 'BW'}
+                    {line.speaker === 'lo' ? 'LO' : 'BW'}
                   </div>
                   <div style={{
-                    fontSize: '13px', color: T.textPrimary, lineHeight: 1.5, flex: 1,
+                    fontSize: '13px', lineHeight: 1.6, flex: 1,
+                    color: line.is_final ? T.textPrimary : T.textSecondary,
+                    fontStyle: line.is_final ? 'normal' : 'italic',
                   }}>
-                    {chunk.text}
+                    {line.text}
                   </div>
-                  {sentiment && (
-                    <SentimentDot sentiment={chunk.sentiment || sentiment.current} />
+                  {line.timestamp != null && (
+                    <div style={{
+                      fontSize: '10px', color: T.textMuted, fontFamily: T.mono,
+                      minWidth: '32px', textAlign: 'right', paddingTop: '3px',
+                    }}>
+                      {formatDuration(Math.round(line.timestamp))}
+                    </div>
                   )}
                 </div>
               ))}
+              <div ref={transcriptEndRef} />
             </div>
           </>
         )}

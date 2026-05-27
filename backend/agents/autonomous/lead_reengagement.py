@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, should_skip_contact
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,12 @@ def lead_reengagement(
     """), {"org_id": organization_id}).fetchall()
 
     for lead in hot_leads:
+        owner_id = lead[5]
+        # Load LO memory to respect contact preferences
+        lo_memory = get_lo_memory_context(db, owner_id, organization_id) if owner_id else {}
+        if should_skip_contact(lo_memory, "call") and should_skip_contact(lo_memory, "sms"):
+            continue
+
         # Create a high-priority follow-up task for the LO
         existing = db.execute(text("""
             SELECT id FROM tasks

@@ -890,7 +890,10 @@ class VapiCRMIntegration:
             ))
 
         # Process through Call Intelligence if enabled and transcript available
-        if CALL_INTELLIGENCE_ENABLED and handle_vapi_call_ended and vapi_call.transcript:
+        from engine.config import cie_settings
+        if cie_settings.ENABLED and vapi_call.transcript:
+            await self._dispatch_cie_pipeline(vapi_call, call_data)
+        elif CALL_INTELLIGENCE_ENABLED and handle_vapi_call_ended and vapi_call.transcript:
             await self._process_call_intelligence(vapi_call, call_data)
 
         # Send post-call SMS follow-up
@@ -1157,6 +1160,61 @@ class VapiCRMIntegration:
         except Exception as e:
             # Don't fail the whole process if CI fails
             logger.exception("Call Intelligence error for %s: %s", vapi_call.vapi_call_id, type(e).__name__)
+
+    async def _dispatch_cie_pipeline(self, vapi_call: VapiCall, call_data: Dict[str, Any]) -> None:
+        """Dispatch call to the new CIE LangGraph pipeline via Celery."""
+        try:
+            from engine.models import CIECallRecord
+            from engine.cipher import encrypt_field
+            from engine.api.crm import resolve_call_context
+
+            org_id = getattr(vapi_call, "organization_id", None)
+            if not org_id:
+                logger.warning("CIE: no org_id for call %s, skipping", vapi_call.vapi_call_id)
+                return
+
+            existing = (
+                self.db.query(CIECallRecord.id)
+                .filter(
+                    CIECallRecord.external_call_id == vapi_call.vapi_call_id,
+                    CIECallRecord.organization_id == org_id,
+                )
+                .first()
+            )
+            if existing:
+                return
+
+            ctx = resolve_call_context(vapi_call.phone_from or "", org_id, self.db)
+
+            record = CIECallRecord(
+                external_call_id=vapi_call.vapi_call_id,
+                provider="vapi",
+                direction=getattr(vapi_call, "direction", "inbound") or "inbound",
+                phone_from=encrypt_field(vapi_call.phone_from) if vapi_call.phone_from else None,
+                phone_to=encrypt_field(vapi_call.phone_to) if vapi_call.phone_to else None,
+                started_at=vapi_call.started_at,
+                ended_at=vapi_call.ended_at,
+                duration_seconds=vapi_call.duration,
+                transcript_encrypted=encrypt_field(vapi_call.transcript) if vapi_call.transcript else None,
+                recording_url_encrypted=encrypt_field(vapi_call.recording_url) if vapi_call.recording_url else None,
+                raw_payload=call_data,
+                contact_id=ctx.contact_id,
+                loan_id=vapi_call.loan_id or ctx.loan_id,
+                lead_id=ctx.lead_id,
+                owner_user_id=ctx.user_id,
+                processing_status="pending",
+                organization_id=org_id,
+            )
+            self.db.add(record)
+            self.db.commit()
+            self.db.refresh(record)
+
+            from engine.worker.tasks import process_call_pipeline
+            process_call_pipeline.delay(str(record.id))
+
+            logger.info("CIE: dispatched pipeline for call %s (record %s)", vapi_call.vapi_call_id, record.id)
+        except Exception as e:
+            logger.exception("CIE dispatch failed for %s: %s", vapi_call.vapi_call_id, e)
 
     async def _process_status_update(self, data: Dict[str, Any]) -> Optional[VapiCall]:
         """Process real-time status updates"""

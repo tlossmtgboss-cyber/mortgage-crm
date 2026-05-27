@@ -1633,6 +1633,14 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     except Exception as e:
         logger.warning(f"Workflow graph table creation deferred: {e}")
 
+    # Call Intelligence Engine (CIE)
+    try:
+        from engine.api import router as cie_router
+        app.include_router(cie_router, tags=["Call Intelligence Engine"])
+        logger.info("CIE routes loaded (webhooks + reports)")
+    except Exception as e:
+        logger.warning(f"CIE routes skipped: {e}")
+
 
 def _register_late_routes(app, get_db, get_current_user, engine, SessionLocal):
     """Late-stage route registrations: mobile API, POS, integrations, table creation."""

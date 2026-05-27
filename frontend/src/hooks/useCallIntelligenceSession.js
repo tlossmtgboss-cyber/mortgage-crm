@@ -75,6 +75,7 @@ export function useCallIntelligenceSession({
   const [errorMessage, setErrorMessage] = useState(null);
   const [agentStatuses, setAgentStatuses] = useState({});
   const [agentEvents, setAgentEvents] = useState([]);
+  const [transcript, setTranscript] = useState([]);
   const [duration, setDuration] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
 
@@ -137,6 +138,26 @@ export function useCallIntelligenceSession({
             callbacksRef.current.onConsentCleared?.();
             callbacksRef.current.onSessionActive?.(sessionIdRef.current);
             break;
+
+          case 'transcript_line': {
+            const line = {
+              id: data.id || data.line_id || ++_eventCounter,
+              text: data.text || data.payload?.text || '',
+              speaker: data.speaker || data.payload?.speaker || 'unknown',
+              is_final: data.is_final ?? data.payload?.is_final ?? true,
+              timestamp: data.timestamp || data.payload?.timestamp_seconds || null,
+            };
+            setTranscript(prev => {
+              const idx = prev.findIndex(l => l.id === line.id);
+              if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = line;
+                return updated;
+              }
+              return [...prev, line];
+            });
+            break;
+          }
 
           case 'agent_update':
           case 'agent_complete':
@@ -274,6 +295,7 @@ export function useCallIntelligenceSession({
     setErrorMessage(null);
     setAgentEvents([]);
     setAgentStatuses({});
+    setTranscript([]);
 
     try {
       const isBrowserMode = !callControlId;
@@ -495,6 +517,7 @@ export function useCallIntelligenceSession({
     errorMessage,
     agentStatuses,
     agentEvents,
+    transcript,
     duration,
     wsConnected,
 

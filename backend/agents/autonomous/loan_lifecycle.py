@@ -22,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives, should_skip_contact
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,9 @@ def condition_chase(
 
         days = int(days_in_stage or 0)
 
+        # Load LO memory for contact preferences and directives
+        lo_memory = get_lo_memory_context(db, lo_id, organization_id) if lo_id else {}
+
         # ----- Determine urgency tier -----
         if days >= 10:
             tier = "critical"
@@ -347,14 +351,20 @@ def condition_chase(
         if days >= 10:
             escalation_note = " ESCALATION: 10+ days stale — loop in branch manager for resolution."
 
+        # Build action steps respecting LO channel preferences
+        steps = []
+        if borrower_phone and not should_skip_contact(lo_memory, "call"):
+            steps.append(f"1. Call borrower ({borrower_phone}) to request: {ctx['borrower_docs']}")
+        steps.append(f"{'2' if steps else '1'}. {ctx['internal_action']}")
+        if borrower_email and not should_skip_contact(lo_memory, "email"):
+            steps.append(f"{len(steps)+1}. Email borrower ({borrower_email}) with itemized list of needed docs")
+        steps.append(f"{len(steps)+1}. Update loan notes with condition status after each contact")
+
         lo_task_desc = (
             f"Loan {loan_number} ({borrower_name}) has been in {stage} for {days} days.\n\n"
             f"Condition type: {ctx['label']}\n\n"
             f"Action steps:\n"
-            f"1. Call borrower ({borrower_phone or 'no phone'}) to request: {ctx['borrower_docs']}\n"
-            f"2. {ctx['internal_action']}\n"
-            f"3. Email borrower ({borrower_email or 'no email'}) with itemized list of needed docs\n"
-            f"4. Update loan notes with condition status after each contact"
+            + "\n".join(steps) +
             f"{escalation_note}{closing_note}"
         )
 

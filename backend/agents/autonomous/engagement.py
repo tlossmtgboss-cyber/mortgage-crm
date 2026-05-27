@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives, should_skip_contact
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,9 @@ def speed_to_lead(
         loan_amount = lead[7]
         created_at = lead[8]
 
+        # Load LO memory for channel preferences
+        lo_memory = get_lo_memory_context(db, owner_id, organization_id) if owner_id else {}
+
         urgency = _score_lead_urgency(phone, email, loan_amount)
         urgency_label = _URGENCY_LABELS[urgency]
         priority = "critical" if urgency == "hot" else ("high" if urgency == "warm" else "medium")
@@ -300,7 +304,7 @@ def speed_to_lead(
             f"Loan amount: {'${:,.0f}'.format(float(loan_amount)) if loan_amount else 'N/A'}"
         )
 
-        if phone and phone.strip():
+        if phone and phone.strip() and not should_skip_contact(lo_memory, "call"):
             _insert_task(
                 db,
                 title=f"Speed-to-lead: Call {first_name} {last_name} NOW",
@@ -313,7 +317,7 @@ def speed_to_lead(
             )
             actions += 1
 
-            # SMS task (separate from call)
+        if phone and phone.strip() and not should_skip_contact(lo_memory, "sms"):
             _insert_task(
                 db,
                 title=f"Speed-to-lead: Text {first_name} {last_name}",
@@ -331,7 +335,7 @@ def speed_to_lead(
             )
             actions += 1
 
-        if email and email.strip():
+        if email and email.strip() and not should_skip_contact(lo_memory, "email"):
             _insert_task(
                 db,
                 title=f"Speed-to-lead: Email {first_name} {last_name}",
@@ -1119,10 +1123,18 @@ def drip_campaign_engine(
         if existing:
             continue
 
-        # --- Build task ---
+        # --- Build task (respect LO channel preferences) ---
+        drip_lo_memory = get_lo_memory_context(db, owner_id, organization_id) if owner_id else {}
         template = _pick_template(phase_key, first_name, loan_purpose)
-        channel = "email" if email else "SMS" if phone else "outreach"
-        contact_info = email or phone or "no contact info"
+        if email and not should_skip_contact(drip_lo_memory, "email"):
+            channel = "email"
+            contact_info = email
+        elif phone and not should_skip_contact(drip_lo_memory, "sms"):
+            channel = "SMS"
+            contact_info = phone
+        else:
+            channel = "outreach"
+            contact_info = email or phone or "no contact info"
 
         desc = (
             f"{phase_config['label']}{escalation_note}\n"

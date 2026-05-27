@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives, should_skip_contact
 
 logger = logging.getLogger(__name__)
 
@@ -637,11 +638,14 @@ def task_overdue_escalator(
     manager_id = _find_manager(db, organization_id)
 
     # ---- Process each LO's overdue tasks ----
+    org_ctx = get_org_directives(db, organization_id)
+
     for lo_id, tasks in lo_overdue.items():
         if lo_id == "unassigned":
             continue
 
         lo_name = tasks[0]["lo_name"]
+        lo_memory = get_lo_memory_context(db, int(lo_id), organization_id)
 
         # Check if LO is out of office (has an appointment/event marked as OOO today)
         ooo_row = db.execute(text("""

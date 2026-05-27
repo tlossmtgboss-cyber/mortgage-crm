@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,7 @@ def weekly_production_report(
     week-over-week trends, pull-through rates, and top performer recognition."""
     actions = 0
     notifications = 0
+    org_ctx = get_org_directives(db, organization_id)
 
     # ------------------------------------------------------------------
     # Per-LO production: this week, last week, and 4-week averages

@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from agents.autonomous.loop import autonomous_agent, AgentFrequency
+from agents.autonomous.memory_context import get_lo_memory_context, get_org_directives, should_skip_contact
 
 logger = logging.getLogger(__name__)
 
@@ -311,9 +312,15 @@ def refi_opportunity_scanner(
         if recent_refi_activity:
             continue
 
-        # Build talking points
+        # Build talking points — respect LO channel preferences
         rate_drop = current_rate - market_rate
-        contact_method = "call" if borrower_phone else ("email" if borrower_email else "mail")
+        lo_memory = get_lo_memory_context(db, lo_id, organization_id) if lo_id else {}
+        if borrower_phone and not should_skip_contact(lo_memory, "call"):
+            contact_method = "call"
+        elif borrower_email and not should_skip_contact(lo_memory, "email"):
+            contact_method = "email"
+        else:
+            contact_method = "mail"
 
         description = (
             f"REFI OPPORTUNITY ({segment.upper()})\n"
