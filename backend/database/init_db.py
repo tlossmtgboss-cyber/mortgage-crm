@@ -1011,6 +1011,7 @@ def init_db():
                         DROP TABLE IF EXISTS active_calls;
                         CREATE TABLE IF NOT EXISTS active_calls (
                             id SERIAL PRIMARY KEY,
+                            organization_id INTEGER,
                             contact_phone VARCHAR NOT NULL,
                             agent_id INTEGER REFERENCES users(id),
                             call_sid VARCHAR,
@@ -1045,6 +1046,7 @@ def init_db():
                         );
 
                         -- Add missing columns to existing call_logs table
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER;
                         ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS referral_partner_id INTEGER;
                         ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS mum_client_id INTEGER;
                         ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_id INTEGER;
@@ -1894,6 +1896,8 @@ def init_db():
 
                     ALTER TABLE verified_caller_ids ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 
+                    ALTER TABLE agent_telephony_settings ADD COLUMN IF NOT EXISTS organization_id INTEGER;
+
                     ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS organization_id INTEGER;
                     ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS sender_user_id INTEGER;
                     ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS sender_role VARCHAR;
@@ -1904,9 +1908,21 @@ def init_db():
                     ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
                 """))
                 conn.commit()
-                logger.info("✅ SMS pipeline columns added (sms_messages, verified_caller_ids, sms_panel_messages)")
+                logger.info("✅ SMS pipeline columns added (sms_messages, verified_caller_ids, agent_telephony_settings, sms_panel_messages)")
         except Exception as e:
             logger.warning(f"⚠️ SMS pipeline columns note: {e}")
+
+        # Power dialer session tables: backfill organization_id on legacy DBs.
+        # Isolated per-table so a missing table can't abort sibling migrations.
+        for _dialer_table in ("dialer_sessions", "dialer_session_tasks"):
+            try:
+                with _engine.connect() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE {_dialer_table} ADD COLUMN IF NOT EXISTS organization_id INTEGER;"
+                    ))
+                    conn.commit()
+            except Exception as e:
+                logger.warning(f"⚠️ {_dialer_table} organization_id migration note: {e}")
 
         # SMS auto-responder: create sms_tasks + supporting tables
         try:

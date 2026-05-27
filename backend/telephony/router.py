@@ -456,42 +456,56 @@ async def get_dialer_settings(
     # Import models from main
     from database.models import AgentTelephonySettings, VerifiedCallerId
 
-    settings = db.query(AgentTelephonySettings).filter(
-        AgentTelephonySettings.user_id == current_user.id
-    ).first()
+    try:
+        settings = db.query(AgentTelephonySettings).filter(
+            AgentTelephonySettings.user_id == current_user.id
+        ).first()
 
-    if not settings:
-        # Create default settings
-        settings = AgentTelephonySettings(
-            user_id=current_user.id,
-            dialer_enabled=True,
-            max_calls_per_day=100,
-            auto_advance=True,
-            pause_between_calls=3
-        )
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
+        if not settings:
+            # Create default settings
+            settings = AgentTelephonySettings(
+                user_id=current_user.id,
+                dialer_enabled=True,
+                max_calls_per_day=100,
+                auto_advance=True,
+                pause_between_calls=3
+            )
+            db.add(settings)
+            db.commit()
+            db.refresh(settings)
 
-    # Get verified caller IDs
-    caller_ids = db.query(VerifiedCallerId).filter(
-        VerifiedCallerId.user_id == current_user.id,
-        VerifiedCallerId.verification_status == "verified"
-    ).all()
+        # Get verified caller IDs
+        caller_ids = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.user_id == current_user.id,
+            VerifiedCallerId.verification_status == "verified"
+        ).all()
 
-    return {
-        "user_id": settings.user_id,
-        "cell_phone": settings.cell_phone,
-        "business_caller_id": settings.business_caller_id,
-        "dialer_enabled": settings.dialer_enabled,
-        "max_calls_per_day": settings.max_calls_per_day,
-        "auto_advance": settings.auto_advance,
-        "pause_between_calls": settings.pause_between_calls,
-        "verified_caller_ids": [
-            {"phone": c.phone_number, "name": c.friendly_name, "is_default": c.phone_number == settings.business_caller_id}
-            for c in caller_ids
-        ]
-    }
+        return {
+            "user_id": settings.user_id,
+            "cell_phone": settings.cell_phone,
+            "business_caller_id": settings.business_caller_id,
+            "dialer_enabled": settings.dialer_enabled,
+            "max_calls_per_day": settings.max_calls_per_day,
+            "auto_advance": settings.auto_advance,
+            "pause_between_calls": settings.pause_between_calls,
+            "verified_caller_ids": [
+                {"phone": c.phone_number, "name": c.friendly_name, "is_default": c.phone_number == settings.business_caller_id}
+                for c in caller_ids
+            ]
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error getting dialer settings for user {current_user.id}: {e}")
+        return {
+            "user_id": current_user.id,
+            "cell_phone": None,
+            "business_caller_id": None,
+            "dialer_enabled": False,
+            "max_calls_per_day": 100,
+            "auto_advance": True,
+            "pause_between_calls": 3,
+            "verified_caller_ids": []
+        }
 
 
 @router.put("/settings")
@@ -585,21 +599,26 @@ async def list_verified_caller_ids(
     """List all verified caller IDs for the agent"""
     from database.models import VerifiedCallerId
 
-    records = db.query(VerifiedCallerId).filter(
-        VerifiedCallerId.user_id == current_user.id
-    ).all()
+    try:
+        records = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.user_id == current_user.id
+        ).all()
 
-    return {
-        "caller_ids": [
-            {
-                "sid": str(record.id),
-                "phone_number": record.phone_number,
-                "friendly_name": record.friendly_name or record.phone_number,
-                "verification_status": record.verification_status
-            }
-            for record in records
-        ]
-    }
+        return {
+            "caller_ids": [
+                {
+                    "sid": str(record.id),
+                    "phone_number": record.phone_number,
+                    "friendly_name": record.friendly_name or record.phone_number,
+                    "verification_status": record.verification_status
+                }
+                for record in records
+            ]
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error listing verified caller IDs for user {current_user.id}: {e}")
+        return {"caller_ids": []}
 
 
 @router.post("/setup-demo-caller-id")
