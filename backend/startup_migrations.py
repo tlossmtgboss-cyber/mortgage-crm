@@ -2,8 +2,19 @@
 
 All migrations use try/except so individual failures don't crash the app.
 Each migration module exposes run_migration() that is idempotent (IF NOT EXISTS).
+
+========================================================================
+DEPRECATION NOTICE (2026-05-27)
+========================================================================
+These inline migrations are LEGACY.  New schema changes MUST go through
+Alembic migrations in backend/alembic/versions/.
+
+Set SKIP_LEGACY_MIGRATIONS=true to bypass all raw SQL when Alembic is
+fully managing the schema.
+========================================================================
 """
 import logging
+import os
 from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -15,6 +26,13 @@ def run_all_startup_migrations(engine: Any) -> None:
     Args:
         engine: SQLAlchemy engine instance (from database module).
     """
+    if os.getenv("SKIP_LEGACY_MIGRATIONS", "").lower() in ("true", "1", "yes"):
+        logger.info(
+            "SKIP_LEGACY_MIGRATIONS is set — skipping all legacy startup migrations. "
+            "Schema is managed by Alembic (backend/alembic/versions/)."
+        )
+        return
+
     # Initialize migration tracker (records which migrations have run, prevents duplicates)
     run_tracked: Optional[Callable] = None
     try:
@@ -1347,6 +1365,23 @@ def _run_critical_schema_migrations():
             db.commit()
         except Exception:
             db.rollback()
+
+        # --- Add missing columns to verified_caller_ids ---
+        vcid_columns = [
+            ("provider_sid", "VARCHAR"),
+            ("verified_at", "TIMESTAMP"),
+            ("organization_id", "INTEGER"),
+            ("user_id", "INTEGER REFERENCES users(id)"),
+        ]
+        for col_name, col_type in vcid_columns:
+            try:
+                db.execute(sa_text(
+                    f"ALTER TABLE verified_caller_ids ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+                ))
+                db.commit()
+                success_count += 1
+            except Exception:
+                db.rollback()
 
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
