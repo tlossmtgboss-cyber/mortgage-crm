@@ -301,11 +301,6 @@ function Scorecard() {
                   <td>Addressing concerns, overcoming resistance</td>
                 </tr>
                 <tr>
-                  <td className="metric-name">Compliance</td>
-                  <td className="metric-pct goal-pct">90%+</td>
-                  <td>TRID, fair lending, consent disclosures</td>
-                </tr>
-                <tr>
                   <td className="metric-name">Rapport</td>
                   <td className="metric-pct goal-pct">80%+</td>
                   <td>Trust building, empathy, personal connection</td>
