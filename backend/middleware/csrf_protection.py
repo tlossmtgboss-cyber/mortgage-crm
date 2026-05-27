@@ -54,12 +54,15 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/webhooks",
         "/api/v1/voicemail/webhook",  # RVM provider delivery callbacks
         "/api/v1/telnyx",  # Telnyx Call Control webhooks — signed with Ed25519
+        "/api/v1/dialer/twiml",  # Telnyx Call Control webhooks for click-to-dial
+        "/api/v1/dialer/webhook",  # Telnyx Call Control status/recording webhooks
         "/api/v1/telephony",  # Telephony webhooks (Vapi inbound, call routing) — verified by require_vapi_webhook
         "/api/v1/call-routing/webhook",  # Vapi call routing webhook — verified by require_vapi_webhook
         "/api/v1/call-routing/fix-phone-config",  # One-shot phone config fix (idempotent)
         "/api/vapi",  # Vapi AI receptionist webhooks — verified by require_vapi_webhook
         "/api/v1/zapier",
-        "/api/v1/borrower",  # Borrower portal uses JWT auth
+        # Borrower portal removed from exemptions — JWT Bearer bypass handles it.
+        # If a cookie-based borrower endpoint is ever added, CSRF will protect it.
         "/api/v1/builder-portal",  # Builder portal — uses submission token auth (stateless, inherently CSRF-safe)
         "/api/v1/csrf-token",  # Token endpoint itself
         "/api/v1/public",  # Public endpoints (migrations, etc.)
@@ -84,6 +87,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/internal",  # Server-to-server calls from voice agent — uses X-Internal-API-Key auth
         "/api/v1/management",  # Management endpoints — uses SECRET_KEY query param auth
         "/health",
+        "/health/services",
         "/api/health",
         "/docs",
         "/redoc",
