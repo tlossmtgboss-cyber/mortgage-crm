@@ -807,15 +807,29 @@ async def check_verification_status(
 
 @router.post("/click-to-dial")
 async def api_click_to_dial(
-    request: ClickToDialRequest,
+    raw_request: Request,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
 ):
     """Initiate a single click-to-dial call"""
     import os
+    import traceback as tb
     from sqlalchemy import func
 
     try:
+        # Auth inside try/except so errors are visible in response body
+        current_user = await get_current_user(raw_request, db)
+
+        # Parse request body manually (ClickToDialRequest validation)
+        body = await raw_request.json()
+        phone_number = body.get("phone_number", "")
+        contact_name = body.get("contact_name", "")
+        lead_id = body.get("lead_id")
+        loan_id = body.get("loan_id")
+        task_id = body.get("task_id")
+
+        if not phone_number:
+            return {"success": False, "error": "phone_number is required"}
+
         organization_id = getattr(current_user, 'organization_id', None)
 
         try:
@@ -828,9 +842,7 @@ async def api_click_to_dial(
                 rate_q = rate_q.filter(CallLog.organization_id == organization_id)
             recent_calls = rate_q.scalar() or 0
             if recent_calls >= 10:
-                raise HTTPException(status_code=429, detail="Rate limit exceeded: max 10 calls per minute")
-        except HTTPException:
-            raise
+                return {"success": False, "error": "Rate limit exceeded: max 10 calls per minute"}
         except Exception as e:
             logger.warning(f"Rate limit check failed (skipping): {e}")
 
@@ -839,21 +851,23 @@ async def api_click_to_dial(
         result = click_to_dial(
             db_session=db,
             agent_id=current_user.id,
-            phone_number=request.phone_number,
-            contact_name=request.contact_name,
+            phone_number=phone_number,
+            contact_name=contact_name,
             base_url=base_url,
-            lead_id=request.lead_id,
-            loan_id=request.loan_id,
-            task_id=request.task_id,
+            lead_id=lead_id,
+            loan_id=loan_id,
+            task_id=task_id,
             organization_id=organization_id,
         )
 
         if not result.get("success"):
             return {"success": False, "error": result.get("error", "Call failed"), "status": 400}
         return result
+    except HTTPException as he:
+        return {"success": False, "error": he.detail, "status": he.status_code}
     except Exception as e:
         logger.error(f"Click-to-dial failed: {e}", exc_info=True)
-        return {"success": False, "error": str(e), "traceback": repr(e)}
+        return {"success": False, "error": str(e), "traceback": tb.format_exc()}
 
 
 # =============================================================================
