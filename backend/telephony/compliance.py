@@ -37,6 +37,28 @@ class ComplianceError(Exception):
 import os
 import re
 
+_active_calls_org_col_ensured = False
+
+
+def _ensure_active_calls_org_column(db_session):
+    """One-time migration: add organization_id to active_calls if missing."""
+    global _active_calls_org_col_ensured
+    if _active_calls_org_col_ensured:
+        return
+    try:
+        db_session.execute(text(
+            "ALTER TABLE active_calls ADD COLUMN IF NOT EXISTS "
+            "organization_id INTEGER REFERENCES organizations(id)"
+        ))
+        db_session.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_active_calls_organization_id "
+            "ON active_calls(organization_id)"
+        ))
+        db_session.commit()
+    except Exception:
+        db_session.rollback()
+    _active_calls_org_col_ensured = True
+
 
 # ============================================================================
 # Area code → timezone mapping (covers major US metro areas)
@@ -987,6 +1009,7 @@ class ComplianceChecker:
             logger.error("Could not import ActiveCall/User models — treating as locked (fail-closed)")
             return True, {"agent_name": "unknown", "reason": "Soft lock check unavailable (import failure)"}
 
+        _ensure_active_calls_org_column(self.db)
         digits = self._normalize_phone(phone_number)
 
         lock_query = self.db.query(ActiveCall).filter(
@@ -1058,6 +1081,7 @@ class ComplianceChecker:
         except ImportError:
             return False
 
+        _ensure_active_calls_org_column(self.db)
         digits = self._normalize_phone(phone_number)
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=lock_duration_seconds)
@@ -1134,6 +1158,7 @@ class ComplianceChecker:
         except ImportError:
             return False
 
+        _ensure_active_calls_org_column(self.db)
         digits = self._normalize_phone(phone_number)
 
         try:
@@ -1160,6 +1185,7 @@ class ComplianceChecker:
         except ImportError:
             return
 
+        _ensure_active_calls_org_column(self.db)
         try:
             release_q = self.db.query(ActiveCall).filter(ActiveCall.call_sid == call_sid)
             if self.organization_id:
