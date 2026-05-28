@@ -2166,6 +2166,8 @@ def init_db():
                     CREATE INDEX IF NOT EXISTS ix_voicemail_campaigns_organization_id ON voicemail_campaigns(organization_id);
                     ALTER TABLE contact_dnc_status ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id);
                     CREATE INDEX IF NOT EXISTS ix_contact_dnc_status_organization_id ON contact_dnc_status(organization_id);
+                    ALTER TABLE active_calls ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id);
+                    CREATE INDEX IF NOT EXISTS ix_active_calls_organization_id ON active_calls(organization_id);
                 """))
                 conn.execute(text("""
                     ALTER TABLE voicemail_drops ALTER COLUMN contact_name TYPE TEXT;
