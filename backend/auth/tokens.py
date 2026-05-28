@@ -336,6 +336,9 @@ def decode_token(token: str, verify_exp: bool = True) -> Optional[Dict[str, Any]
     except InvalidTokenError as e:
         logger.debug(f"Token decode failed: {e}")
         return None
+    except ValueError as e:
+        logger.error("Token decode configuration error: %s", e)
+        return None
 
 
 def verify_token(
