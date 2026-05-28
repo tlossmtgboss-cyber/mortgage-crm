@@ -5,7 +5,7 @@
 // Layout modeled after Follow Up Boss "Call Details" view.
 
 import { useEffect, useState } from "react";
-import { fetchReportsForLoan, fetchTranscript, fetchRecordingUrl, fetchStats } from "./cie-api";
+import { fetchReportsForLoan, fetchReportsForLead, fetchTranscript, fetchRecordingUrl, fetchStats } from "./cie-api";
 import type {
   CIEReport,
   CIEStats,
@@ -16,23 +16,27 @@ import type {
 // Hook
 // ─────────────────────────────────────────────────────────────────────────
 
-export function useCIEReports(loanId: number | null) {
+export function useCIEReports(loanId: number | null, leadId: number | null = null) {
   const [items, setItems] = useState<ReportListItem[]>([]);
   const [stats, setStats] = useState<CIEStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loanId) return;
+    if (!loanId && !leadId) return;
     setLoading(true);
-    Promise.all([fetchReportsForLoan(loanId), fetchStats(loanId)])
+    const reportsFetch = loanId
+      ? fetchReportsForLoan(loanId)
+      : fetchReportsForLead(leadId!);
+    const statsFetch = fetchStats({ loanId: loanId ?? undefined, leadId: leadId ?? undefined });
+    Promise.all([reportsFetch, statsFetch])
       .then(([list, st]) => {
         setItems(list.items);
         setStats(st);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [loanId]);
+  }, [loanId, leadId]);
 
   return { items, stats, loading, error };
 }
@@ -43,21 +47,22 @@ export function useCIEReports(loanId: number | null) {
 
 interface Props {
   loanId: number | null;
+  leadId?: number | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────
 
-export function ConversationIntelligencePane({ loanId }: Props) {
-  const { items, stats, loading, error } = useCIEReports(loanId);
+export function ConversationIntelligencePane({ loanId, leadId }: Props) {
+  const { items, stats, loading, error } = useCIEReports(loanId, leadId ?? null);
   const [selectedIdx, setSelectedIdx] = useState(0);
 
-  if (!loanId) {
+  if (!loanId && !leadId) {
     return (
       <div className="cie-view">
         <div className="pf-cf-empty">
-          No active loan linked — call intelligence will appear here once a loan is associated with this client.
+          No lead or loan linked — call intelligence will appear here once calls are associated with this client.
         </div>
       </div>
     );

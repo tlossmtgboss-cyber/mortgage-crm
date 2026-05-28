@@ -66,7 +66,10 @@ export function fetchRecordingUrl(
   );
 }
 
-export function fetchStats(loanId?: number): Promise<CIEStats> {
-  const params = loanId ? `?loan_id=${loanId}` : "";
-  return cieRequest<CIEStats>(`/stats${params}`);
+export function fetchStats(opts?: { loanId?: number; leadId?: number }): Promise<CIEStats> {
+  const parts: string[] = [];
+  if (opts?.loanId) parts.push(`loan_id=${opts.loanId}`);
+  if (opts?.leadId) parts.push(`lead_id=${opts.leadId}`);
+  const qs = parts.length ? `?${parts.join("&")}` : "";
+  return cieRequest<CIEStats>(`/stats${qs}`);
 }

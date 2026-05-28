@@ -106,6 +106,7 @@ export function UnifiedTimeline({ clientFileId }: Props) {
   const [filter, setFilter] = useState<ActivityCategory>("all");
   const { data: cf } = useClientFile(clientFileId);
   const loanId = cf?.active_loan_id ?? null;
+  const leadId = cf?.lead_id ?? null;
   const showCIE = filter === "calls";
   const { data, isLoading } = useTimeline(clientFileId, filter);
 
@@ -140,7 +141,7 @@ export function UnifiedTimeline({ clientFileId }: Props) {
       </div>
 
       {showCIE ? (
-        <ConversationIntelligencePane loanId={loanId ? Number(loanId) : null} />
+        <ConversationIntelligencePane loanId={loanId ? Number(loanId) : null} leadId={leadId ? Number(leadId) : null} />
       ) : (
         <div className="pf-cf-timeline">
           {isLoading ? (

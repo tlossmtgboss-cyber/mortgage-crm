@@ -28,6 +28,7 @@ import VoicemailDrop from "../components/VoicemailDrop";
 import EscalationModal from "../components/EscalationModal";
 // @ts-ignore
 import SendApplicationModal from "../components/SendApplicationModal";
+import { clickToDial } from "../utils/clickToDial";
 
 interface Props {
   clientFileId: string;
@@ -120,6 +121,19 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
 
   const handleQuickAction = useCallback((key: string) => {
     if (!client) return;
+    if (key === "call") {
+      if (!client.primary_phone) {
+        toast.error("No phone number on file");
+        return;
+      }
+      const fullName = [client.first_name, client.last_name].filter(Boolean).join(" ");
+      clickToDial(client.primary_phone, {
+        contactName: fullName,
+        leadId: client.lead_id ?? null,
+        loanId: client.active_loan_id ? Number(client.active_loan_id) : null,
+      });
+      return;
+    }
     if (key === "portals" && client.lead_id) {
       navigate(`/leads/${client.lead_id}`, { state: { openAction: "client_portal" } });
       return;

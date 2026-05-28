@@ -55,7 +55,12 @@ async def list_reports(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    q = db.query(CIECallRecord).order_by(CIECallRecord.created_at.desc())
+    org_id = getattr(current_user, "organization_id", None)
+    q = (
+        db.query(CIECallRecord)
+        .filter(CIECallRecord.organization_id == org_id)
+        .order_by(CIECallRecord.created_at.desc())
+    )
 
     if loan_id is not None:
         q = q.filter(CIECallRecord.loan_id == loan_id)
@@ -140,7 +145,8 @@ async def get_stats(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    q = db.query(CIECallRecord)
+    org_id = getattr(current_user, "organization_id", None)
+    q = db.query(CIECallRecord).filter(CIECallRecord.organization_id == org_id)
     if loan_id is not None:
         q = q.filter(CIECallRecord.loan_id == loan_id)
     if lead_id is not None:
