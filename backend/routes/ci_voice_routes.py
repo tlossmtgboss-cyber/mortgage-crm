@@ -354,9 +354,11 @@ async def quick_upload_recording(
         if hasattr(current_user, 'id'):
             user_id = current_user.id
         elif isinstance(current_user, dict):
-            user_id = current_user.get("id") or current_user.get("user_id") or 1
+            user_id = current_user.get("id") or current_user.get("user_id")
         else:
-            user_id = 1
+            user_id = None
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
 
         logger.info(f"[QuickUpload] Receiving {request.duration_seconds}s recording from {request.source}")
 
@@ -1628,7 +1630,9 @@ async def create_coaching_clip(
             raise HTTPException(status_code=404, detail="Recording not found")
 
         duration = request.end_time - request.start_time
-        user_id = current_user.get("id", 1)
+        user_id = current_user.get("id") or current_user.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
 
         # Create clip
         db.execute(text("""
@@ -1739,7 +1743,9 @@ async def create_coaching_assignment(
     try:
         import uuid
         assignment_id = str(uuid.uuid4())
-        user_id = current_user.get("id", 1)
+        user_id = current_user.get("id") or current_user.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
 
         # Verify clip exists
         result = db.execute(text("""

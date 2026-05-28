@@ -22,8 +22,8 @@ Rate Limiting Architecture (consolidated 2026-05-14):
     - middleware/tenant_rate_limiter.py — per-organization quotas
     - middleware/mobile_rate_limit.py   — mobile-specific limits
 
-    DEPRECATED modules (thin wrappers for backward compat):
-    - middleware/rate_limiting.py   — dead code, retained for chat_system_bootstrap.py
+    REMOVED (2026-05-27):
+    - middleware/rate_limiting.py   — dead code, deleted
 
 This layer enforces a hard per-identity ceiling with prefix-specific tuning,
 independent of user role or tenant.  It is the final safety net before the
@@ -104,6 +104,7 @@ WINDOW_SECONDS = 60  # 1-minute sliding window
 EXEMPT_PATHS = frozenset({
     "/health",
     "/health/live",
+    "/health/services",
     "/api/health",
     "/docs",
     "/openapi.json",

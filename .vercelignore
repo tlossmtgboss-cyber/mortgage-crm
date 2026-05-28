@@ -1,0 +1,13 @@
+backend/
+.venv/
+*.pyc
+__pycache__/
+.git/
+docs/
+migrations/
+tests/
+.superpowers/
+.claude/
+premortem-*
+dashboard-redesign-options.html
+railway*

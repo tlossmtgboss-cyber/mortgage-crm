@@ -94,6 +94,19 @@ class AuthSettings(BaseModel):
         description="SameSite cookie policy"
     )
 
+    @field_validator("algorithm", mode="after")
+    @classmethod
+    def warn_hs256_in_production(cls, v):
+        """Log a warning if HS256 is used in production (RS256 is recommended)."""
+        environment = os.getenv("ENVIRONMENT", "development")
+        is_prod = environment.lower() in ("production", "prod") or os.getenv("RAILWAY_ENVIRONMENT")
+        if v == "HS256" and is_prod:
+            logger.warning(
+                "SECURITY: HS256 in production — RS256 is recommended. "
+                "Set AUTH_ALGORITHM=RS256 and configure AUTH_PRIVATE_KEY / AUTH_PUBLIC_KEY."
+            )
+        return v
+
     @field_validator("secret_key", mode="before")
     @classmethod
     def validate_secret_key(cls, v):
@@ -108,7 +121,6 @@ class AuthSettings(BaseModel):
         if not v and environment != "development":
             raise ValueError("SECRET_KEY environment variable is required in production")
         if not v:
-            # Generate random key for development only
             logger.warning("SECRET_KEY not set - using generated key for development only")
             return secrets.token_hex(32)
         return v

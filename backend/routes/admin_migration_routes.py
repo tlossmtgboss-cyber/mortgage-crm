@@ -4,7 +4,7 @@ Temporary migration endpoints for database updates and admin bootstrapping
 """
 import hmac
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import logging
@@ -141,7 +141,7 @@ async def check_phase2_permission_migration(
 
 @router.post("/api/v1/migrations/bootstrap-admin-user", response_model=None)
 async def bootstrap_admin_user(
-    user_id: int = 1,
+    user_id: int = Query(..., description="User ID to bootstrap as admin"),
     bootstrap_key: str = "",
     db: Session = Depends(lambda: get_db_dep())
 ):

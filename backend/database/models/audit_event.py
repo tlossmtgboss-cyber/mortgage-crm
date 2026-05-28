@@ -103,4 +103,6 @@ class AuditEvent(Base):
         Index("ix_audit_metadata_gin", "metadata", postgresql_using="gin"),
         Index("ix_audit_org_occurred", "org_id", "occurred_at"),
         Index("ix_audit_org_event_type", "org_id", "event_type"),
+        Index("ix_audit_org_int_occurred", "organization_id", "occurred_at"),
+        Index("ix_audit_org_int_event_type", "organization_id", "event_type"),
     )

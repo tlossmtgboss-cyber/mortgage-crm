@@ -537,8 +537,8 @@ def _check_dev_only():
 async def test_create_avatar(
     name: str = Query(..., description="Avatar name"),
     description: str = Query("", description="Avatar description"),
-    user_id: int = Query(1, description="User ID for test avatar"),
-    organization_id: int = Query(1, description="Organization ID for test avatar"),
+    user_id: int = Query(..., description="User ID for test avatar"),
+    organization_id: int = Query(..., description="Organization ID for test avatar"),
     db: Session = Depends(get_db)
 ):
     """Create a test avatar without authentication (for development/testing)."""
@@ -560,7 +560,7 @@ async def test_create_avatar(
 
 @router.get("/test/list", response_model=dict, dependencies=[Depends(_check_dev_only)])
 async def test_list_avatars(
-    user_id: int = Query(1, description="User ID to list avatars for"),
+    user_id: int = Query(..., description="User ID to list avatars for"),
     db: Session = Depends(get_db)
 ):
     """List avatars without authentication (for development/testing)."""

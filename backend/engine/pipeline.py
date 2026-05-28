@@ -277,11 +277,12 @@ TRANSCRIPT:
 {redacted[:12000]}"""
 
     try:
+        from agents.anthropic_client import cached_system_block
         response = await client.messages.create(
             model=cie_settings.PRIMARY_MODEL,
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
-            system="You are a mortgage call analyst. Extract structured insights. Return valid JSON only.",
+            system=cached_system_block("You are a mortgage call analyst. Extract structured insights. Return valid JSON only."),
         )
         raw = response.content[0].text.strip()
         if raw.startswith("```"):

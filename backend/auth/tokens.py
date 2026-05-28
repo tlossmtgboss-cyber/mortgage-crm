@@ -336,6 +336,9 @@ def decode_token(token: str, verify_exp: bool = True) -> Optional[Dict[str, Any]
     except InvalidTokenError as e:
         logger.debug(f"Token decode failed: {e}")
         return None
+    except ValueError as e:
+        logger.error("Token decode configuration error: %s", e)
+        return None
 
 
 def verify_token(
@@ -521,6 +524,123 @@ class _InMemoryBlacklist:
             self._store.pop(key, None)
 
 
+class _RedisCircuitBreaker:
+    """
+    3-state circuit breaker for Redis token blacklist operations.
+
+    States:
+      CLOSED    — normal operation, all requests go to Redis
+      OPEN      — Redis unreachable, callers fail-closed (OWASP ASVS 2.6)
+      HALF_OPEN — probing recovery, limited requests sent to Redis
+
+    Fail-closed rationale (OWASP ASVS 2.6, Top 10 A10):
+      When the breaker is OPEN, blacklist/revocation checks deny the token
+      rather than allowing potentially-revoked tokens through. Users with
+      valid tokens will be briefly denied during a Redis outage. With 15-min
+      access tokens, the blast radius is bounded. Accepting revoked tokens
+      (fail-open) would violate OWASP's "deny access by default" principle.
+
+    Recovery:
+      After recovery_timeout seconds in OPEN, the breaker transitions to
+      HALF_OPEN and allows up to half_open_max_probes requests through to
+      Redis. If success_threshold probes succeed, the breaker closes. If
+      any probe fails, the breaker reopens.
+    """
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+    def __init__(
+        self,
+        failure_threshold: int = 15,
+        recovery_timeout: float = 10.0,
+        half_open_max_probes: int = 3,
+        success_threshold: int = 2,
+    ):
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout
+        self._half_open_max_probes = half_open_max_probes
+        self._success_threshold = success_threshold
+
+        self._state = self.CLOSED
+        self._failure_count = 0
+        self._success_count = 0
+        self._half_open_probes = 0
+        self._last_failure_time: Optional[float] = None
+        self._last_state_change: float = time.time()
+        self._lock = threading.Lock()
+
+        self._total_failures = 0
+        self._total_successes = 0
+
+    def record_failure(self) -> None:
+        with self._lock:
+            self._total_failures += 1
+            self._failure_count += 1
+            self._last_failure_time = time.time()
+
+            if self._state == self.HALF_OPEN:
+                self._transition(self.OPEN)
+            elif self._state == self.CLOSED:
+                if self._failure_count >= self._failure_threshold:
+                    self._transition(self.OPEN)
+
+    def record_success(self) -> None:
+        with self._lock:
+            self._total_successes += 1
+
+            if self._state == self.HALF_OPEN:
+                self._success_count += 1
+                if self._success_count >= self._success_threshold:
+                    self._transition(self.CLOSED)
+            elif self._state == self.CLOSED and self._failure_count > 0:
+                self._failure_count -= 1
+
+    @property
+    def state(self) -> str:
+        with self._lock:
+            if self._state == self.OPEN and self._last_failure_time:
+                if time.time() - self._last_failure_time >= self._recovery_timeout:
+                    self._transition(self.HALF_OPEN)
+            return self._state
+
+    @property
+    def is_open(self) -> bool:
+        return self.state == self.OPEN
+
+    def _transition(self, new_state: str) -> None:
+        old = self._state
+        self._state = new_state
+        self._last_state_change = time.time()
+
+        if new_state == self.CLOSED:
+            self._failure_count = 0
+            self._success_count = 0
+        elif new_state == self.HALF_OPEN:
+            self._success_count = 0
+            self._half_open_probes = 0
+        elif new_state == self.OPEN:
+            self._success_count = 0
+
+        logger.warning(
+            "SECURITY: Redis circuit breaker %s -> %s (failures=%d/%d)",
+            old, new_state, self._failure_count, self._failure_threshold,
+        )
+
+    def get_status(self) -> dict:
+        current = self.state
+        return {
+            "state": current,
+            "failure_count": self._failure_count,
+            "failure_threshold": self._failure_threshold,
+            "total_failures": self._total_failures,
+            "total_successes": self._total_successes,
+            "last_failure": self._last_failure_time,
+            "recovery_timeout_seconds": self._recovery_timeout,
+        }
+
+
 class TokenBlacklist:
     """
     Token denylist for immediate revocation.
@@ -536,6 +656,11 @@ class TokenBlacklist:
     - User-level revocation: ``token:user_revoked:{user_id}``
     - Production: Redis is MANDATORY. In-memory fallback is disabled.
     - Development/test: In-memory fallback is allowed.
+    - Circuit breaker (3-state): CLOSED → OPEN → HALF_OPEN → CLOSED.
+      OWASP-compliant fail-closed: when breaker is OPEN, blacklist checks
+      deny the token (treating it as revoked) rather than allowing it through.
+      After recovery_timeout (10s), the breaker enters HALF_OPEN and probes
+      Redis. Two successful probes close the breaker.
     """
 
     def __init__(self):
@@ -544,25 +669,35 @@ class TokenBlacklist:
         self._fallback = _InMemoryBlacklist()
         self._using_fallback = True  # Start in fallback until Redis is configured
         self._is_production = _is_production()
+        self._breaker = _RedisCircuitBreaker(
+            failure_threshold=15,
+            recovery_timeout=10.0,
+            half_open_max_probes=3,
+            success_threshold=2,
+        )
 
     def _handle_redis_failure(self, operation: str, error: Exception):
         """Handle Redis failures based on environment.
 
-        Production: Log CRITICAL and do NOT fall back to in-memory.
+        Production: Log CRITICAL, record circuit breaker failure, fail-closed.
         Development: Log warning and fall back to in-memory.
         """
+        self._breaker.record_failure()
         if self._is_production:
-            logger.critical(
-                "SECURITY: Redis unavailable during %s: %s. "
-                "Token denylist is NOT operational — revoked tokens may be accepted. "
-                "Redis is MANDATORY in production for token revocation. "
-                "Restore Redis connectivity immediately.",
-                operation, error,
-            )
-            # Do NOT set self._using_fallback = True in production.
-            # The denylist will report "not denied" for all checks when Redis
-            # is down, which is safer than silently accepting an in-memory
-            # fallback that is not shared across replicas.
+            breaker_state = self._breaker.state
+            if breaker_state == _RedisCircuitBreaker.OPEN:
+                logger.critical(
+                    "SECURITY: Redis circuit breaker OPEN after %s failure: %s. "
+                    "All token checks will DENY (fail-closed) until Redis recovers.",
+                    operation, error,
+                )
+            else:
+                logger.critical(
+                    "SECURITY: Redis failure during %s: %s. "
+                    "Failing closed. Breaker at %d/%d failures.",
+                    operation, error,
+                    self._breaker._failure_count, self._breaker._failure_threshold,
+                )
         else:
             if not self._using_fallback:
                 logger.warning(
@@ -689,6 +824,11 @@ class TokenBlacklist:
 
         This avoids re-decoding the JWT when the caller already has the JTI
         extracted from the payload.
+
+        Fail-closed (OWASP ASVS 2.6): if Redis is unavailable and the circuit
+        breaker is OPEN, returns True (token treated as denied). Valid tokens
+        will be rejected during a Redis outage — bounded by the 15-min JWT
+        lifetime and the 10s breaker recovery probe cycle.
         """
         if not self._enabled:
             return False
@@ -698,23 +838,32 @@ class TokenBlacklist:
 
         key = f"{_DENY_KEY_PREFIX}{jti}"
 
+        # Breaker OPEN — fail-closed per OWASP
+        if self._breaker.is_open:
+            logger.warning(
+                "SECURITY: Redis breaker OPEN — denying token jti=%s... (fail-closed). "
+                "Recovery probe in %ds.",
+                jti[:8], int(self._breaker._recovery_timeout),
+            )
+            return True
+
+        # CLOSED or HALF_OPEN — attempt Redis
         if self._redis_available():
             try:
-                return self._redis.exists(key) > 0
+                result = self._redis.exists(key) > 0
+                self._breaker.record_success()
+                return result
             except Exception as e:
                 self._handle_redis_failure("is_blacklisted_by_jti", e)
 
-        # Fallback for dev/test
+        # Dev/test fallback
         if self._using_fallback:
             return self._fallback.exists(key) > 0
 
-        # Production with Redis down — cannot confirm denial
-        # Log and return False (fail-open for availability, fail is logged)
-        logger.error(
-            "SECURITY: Cannot check denylist for jti=%s... — Redis unavailable in production",
-            jti[:8],
-        )
-        return False
+        # Production, Redis unavailable — fail-closed
+        if not self._redis_available():
+            self._breaker.record_failure()
+        return True
 
     def revoke_all_for_user(self, user_id: int) -> int:
         """
@@ -748,6 +897,9 @@ class TokenBlacklist:
         """
         Check if a user's tokens have been globally revoked.
 
+        Fail-closed (OWASP ASVS 2.6): if Redis is unavailable, assumes the
+        user IS revoked (denies the token) rather than allowing through.
+
         Args:
             user_id: The user ID to check
             token_iat: The token's issued-at timestamp (if available)
@@ -761,20 +913,34 @@ class TokenBlacklist:
         key = f"{_USER_REVOKED_PREFIX}{user_id}"
         revoked_at = None
 
+        # Breaker OPEN — fail-closed per OWASP
+        if self._breaker.is_open:
+            logger.warning(
+                "SECURITY: Redis breaker OPEN — denying user %s (fail-closed)",
+                user_id,
+            )
+            return True
+
+        # CLOSED or HALF_OPEN — attempt Redis
         if self._redis_available():
             try:
                 revoked_at = self._redis.get(key)
+                self._breaker.record_success()
             except Exception as e:
                 self._handle_redis_failure("is_user_revoked", e)
                 if self._using_fallback:
                     revoked_at = self._fallback.get(key)
+                elif self._is_production:
+                    return True  # fail-closed
         elif self._using_fallback:
             revoked_at = self._fallback.get(key)
+        elif self._is_production:
+            self._breaker.record_failure()
+            return True  # fail-closed
 
         if not revoked_at:
             return False
 
-        # If we have token issue time, only reject if token was issued before revocation
         if token_iat:
             try:
                 revoked_timestamp = datetime.fromisoformat(revoked_at.decode() if isinstance(revoked_at, bytes) else revoked_at)
@@ -783,7 +949,6 @@ class TokenBlacklist:
                 token_issued = datetime.fromtimestamp(token_iat, tz=timezone.utc)
                 return token_issued < revoked_timestamp
             except (ValueError, TypeError):
-                # If we can't parse, assume revoked for safety
                 return True
 
         return True
@@ -854,6 +1019,7 @@ class TokenBlacklist:
                     "mode": "redis",
                     "blacklisted_count": blacklisted_count,
                     "cross_replica_safe": True,
+                    "circuit_breaker": self._breaker.get_status(),
                 }
             except Exception as e:
                 self._handle_redis_failure("get_status", e)
@@ -883,9 +1049,10 @@ class TokenBlacklist:
             "mode": "unavailable",
             "blacklisted_count": -1,
             "cross_replica_safe": False,
+            "circuit_breaker": self._breaker.get_status(),
             "warning": (
                 "SECURITY CRITICAL: Token denylist Redis is unavailable in production. "
-                "Revoked tokens may be accepted. Restore Redis immediately."
+                "All token checks fail-closed (deny). Restore Redis immediately."
             ),
         }
 

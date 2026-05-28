@@ -365,7 +365,10 @@ async def inbound_email_webhook(
                         ORDER BY id ASC
                         LIMIT 1
                     """)).fetchone()
-                    user_id = default_user.id if default_user else 1
+                    if not default_user:
+                        logger.error(f"No admin/owner/LO user found to assign inbound email from {from_address}")
+                        return {"status": "error", "reason": "no_assignable_user"}
+                    user_id = default_user.id
 
                 # Create new lead with organization_id for tenant isolation
                 db.execute(text("""

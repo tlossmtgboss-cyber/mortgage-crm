@@ -479,11 +479,12 @@ async def generate_proactive_message(
         if not client:
             raise RuntimeError("Anthropic client unavailable")
 
+        from agents.anthropic_client import cached_system_block
         resp = await asyncio.wait_for(
             client.messages.create(
                 model=SMS_MODEL,
                 max_tokens=SMS_MAX_TOKENS,
-                system=system,
+                system=cached_system_block(system),
                 messages=[{"role": "user", "content": prompt_instruction}],
             ),
             timeout=15.0,
@@ -926,13 +927,14 @@ async def _call_claude(system_prompt: str, messages: List[Dict]) -> str:
     if not client:
         raise RuntimeError("Anthropic async client not available")
 
+    from agents.anthropic_client import cached_system_block
     start = time.monotonic()
     try:
         resp = await asyncio.wait_for(
             client.messages.create(
                 model=SMS_MODEL,
                 max_tokens=SMS_MAX_TOKENS,
-                system=system_prompt,
+                system=cached_system_block(system_prompt),
                 messages=messages,
             ),
             timeout=15.0,

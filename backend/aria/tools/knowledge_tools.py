@@ -64,10 +64,11 @@ class KnowledgeTools:
     async def _fallback_guideline_answer(self, question: str) -> dict:
         """Fallback to Claude training data when RAG is unavailable."""
         try:
+            from agents.anthropic_client import cached_system_block
             response = await client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=1000,
-                system="You are a mortgage underwriting guidelines expert. Answer based on your training data. Add a disclaimer that the answer is from general knowledge, not from indexed official guidelines.",
+                system=cached_system_block("You are a mortgage underwriting guidelines expert. Answer based on your training data. Add a disclaimer that the answer is from general knowledge, not from indexed official guidelines."),
                 messages=[{"role": "user", "content": question}],
             )
             return {

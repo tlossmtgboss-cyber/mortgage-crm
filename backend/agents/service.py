@@ -24,6 +24,42 @@ from .anthropic_client import get_anthropic_client, get_async_anthropic_client
 from .orchestrator import run_orchestrator, OrchestratorSession
 from .state import create_initial_state, QueryIntent
 
+
+def _cached_system_block(system_prompt: str) -> list:
+    """Wrap system prompt with cache_control for Anthropic prompt caching.
+
+    Converts a plain string system prompt into the structured content-block
+    format with ``cache_control: {"type": "ephemeral"}``.  This tells the
+    Anthropic API to cache the system prompt across requests that share the
+    same prefix, reducing input token costs by up to 90 % for repeated prompts.
+    """
+    return [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def _add_cache_control_to_tools(tools: list) -> list:
+    """Add cache_control to the last tool definition for Anthropic prompt caching.
+
+    Anthropic caches everything from the start of the request up to and including
+    the last block with a cache_control marker.  Adding the marker to the *last*
+    tool definition ensures the entire tool list is eligible for caching, which
+    is significant when 15+ tools are sent on every request.
+
+    The input list is NOT mutated — a shallow copy is returned.
+    """
+    if not tools:
+        return tools
+    tools = list(tools)  # shallow copy
+    last_tool = dict(tools[-1])  # shallow copy of last tool dict
+    last_tool["cache_control"] = {"type": "ephemeral"}
+    tools[-1] = last_tool
+    return tools
+
 # Import optimized prompt system (local to agents package)
 try:
     from .prompt_integration import OptimizedPromptService
@@ -373,6 +409,12 @@ class AIAgentService:
             # Get tool definitions
             tools = self._get_tool_definitions()
 
+            # Wrap system prompt + tools with cache_control for Anthropic prompt caching.
+            # The system block and tool definitions are identical across requests for the
+            # same user session, so caching saves ~90% of input token costs on these.
+            cached_system = _cached_system_block(full_system_prompt)
+            cached_tools = _add_cache_control_to_tools(tools) if tools else None
+
             # Track full response for logging
             full_response = ""
 
@@ -380,9 +422,9 @@ class AIAgentService:
             async with self.async_anthropic_client.messages.stream(
                 model=self.model,
                 max_tokens=1500,  # Reduced from 4000 — concise responses stream faster
-                system=full_system_prompt,
+                system=cached_system,
                 messages=messages,
-                tools=tools if tools else None
+                tools=cached_tools
             ) as stream:
                 # Yield text chunks as they arrive
                 async for text in stream.text_stream:
@@ -458,14 +500,15 @@ class AIAgentService:
 
                 # Stream follow-up response(s) after tool execution.
                 # Loop to support multi-hop tool chains (e.g., search_leads -> click_to_dial).
+                # Reuse cached_system and cached_tools from above for prompt caching.
                 max_tool_rounds = 3
                 for _round in range(max_tool_rounds):
                     async with self.async_anthropic_client.messages.stream(
                         model=self.model,
                         max_tokens=1500,
-                        system=full_system_prompt,
+                        system=cached_system,
                         messages=messages,
-                        tools=tools if tools else None
+                        tools=cached_tools
                     ) as followup_stream:
                         async for text in followup_stream.text_stream:
                             full_response += text
@@ -1022,6 +1065,22 @@ Never reference, query, or return data from other organizations.
                 }
             })
 
+        if "find_contact" in self._tool_functions:
+            definitions.append({
+                "name": "find_contact",
+                "description": "Find a contact by name — searches leads, team members, and referral partners. Use this FIRST when the user mentions a person by name to get their ID, phone, and email before sending SMS, scheduling calls, or looking up loan status.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Full or partial name to search for"
+                        }
+                    },
+                    "required": ["name"]
+                }
+            })
+
         if "search_loans" in self._tool_functions:
             definitions.append({
                 "name": "search_loans",
@@ -1146,7 +1205,7 @@ Never reference, query, or return data from other organizations.
         if "send_sms" in self._tool_functions:
             definitions.append({
                 "name": "send_sms",
-                "description": "Send an SMS text message to a phone number. Use search_leads first to find the contact's phone number if not provided.",
+                "description": "Send an SMS text message to a phone number. Use find_contact first to find the contact's phone number if not provided.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -1161,7 +1220,7 @@ Never reference, query, or return data from other organizations.
         if "click_to_dial" in self._tool_functions:
             definitions.append({
                 "name": "click_to_dial",
-                "description": "Initiate an outbound phone call to a contact. Use search_leads first to find the contact's phone number if not provided.",
+                "description": "Initiate an outbound phone call to a contact. Use find_contact first to find the contact's phone number if not provided.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -1431,9 +1490,19 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             "— tenant isolation degraded for AI tool queries"
         )
 
-    # Determine data scope: admins/managers see org-wide, others see own data only
+    # Determine data scope: check permission_role AND granular permissions.
+    # Must match CRM page logic (filter_leads_by_permissions) to avoid
+    # users seeing leads on the CRM page but not through Aria.
     _user_role = (getattr(current_user, 'permission_role', '') or '').lower()
     _has_org_wide_access = _user_role in ('admin', 'site_admin', 'leadership', 'management')
+    if not _has_org_wide_access:
+        try:
+            from routes.permission_core_routes import has_permission
+            _uid = getattr(current_user, 'id', None)
+            if _uid and has_permission(_uid, 'leads.view_all', db):
+                _has_org_wide_access = True
+        except Exception:
+            pass
     if _has_org_wide_access:
         logger.info(f"[TOOLS] User {getattr(current_user, 'id', '?')} has org-wide AI tool access (role={_user_role})")
 
@@ -1665,6 +1734,75 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return {"count": 0, "leads": [], "error": "Internal server error"}
 
     tools["search_leads"] = execute_search_leads
+
+    # ============ Contact Resolution ============
+
+    async def execute_find_contact(args):
+        """Find a contact by name across leads, users, and referral partners."""
+        name = args.get("name", "").strip()
+        if not name:
+            return {"found": False, "error": "Name is required"}
+
+        try:
+            search = f"%{name}%"
+            params = {"search": search, "org_id": org_id}
+
+            # Search leads (always org-scoped)
+            lead_sql = (
+                "SELECT id, name, email, phone, stage, 'lead' as contact_type"
+                " FROM leads"
+                " WHERE organization_id = :org_id"
+                " AND name ILIKE :search"
+                " ORDER BY updated_at DESC LIMIT 5"
+            )
+            lead_rows = db.execute(text(lead_sql), params).fetchall()
+
+            # Search users in same org
+            user_sql = (
+                "SELECT id, CONCAT(first_name, ' ', last_name) as name,"
+                " email, phone, 'team_member' as contact_type"
+                " FROM users"
+                " WHERE organization_id = :org_id"
+                " AND (first_name || ' ' || last_name) ILIKE :search"
+                " LIMIT 5"
+            )
+            user_rows = db.execute(text(user_sql), params).fetchall()
+
+            # Search referral partners
+            partner_sql = (
+                "SELECT id, name, email, phone, 'referral_partner' as contact_type"
+                " FROM referral_partners"
+                " WHERE organization_id = :org_id"
+                " AND name ILIKE :search"
+                " LIMIT 5"
+            )
+            partner_rows = db.execute(text(partner_sql), params).fetchall()
+
+            contacts = []
+            for row in list(lead_rows) + list(user_rows) + list(partner_rows):
+                contacts.append({
+                    "id": row.id,
+                    "name": row.name,
+                    "email": row.email,
+                    "phone": row.phone,
+                    "type": row.contact_type,
+                })
+
+            if not contacts:
+                return {"found": False, "count": 0, "contacts": []}
+
+            return {
+                "found": True,
+                "count": len(contacts),
+                "contacts": contacts,
+                "best_match": contacts[0],
+            }
+        except Exception as e:
+            logger.error(f"Error in find_contact: {e}")
+            db.rollback()
+            return {"found": False, "error": "Internal server error"}
+
+    tools["find_contact"] = execute_find_contact
 
     # ============ Loan Search Tools ============
 

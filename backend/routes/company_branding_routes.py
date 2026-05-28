@@ -566,9 +566,11 @@ class BrandingStore:
 
 
 def _get_org_id(current_user) -> int:
-    """Extract organization_id from the authenticated user, defaulting to 1."""
+    """Extract organization_id from the authenticated user. Raises if not set."""
     org_id = getattr(current_user, "organization_id", None)
-    return org_id if org_id is not None else 1
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="User has no organization assigned")
+    return org_id
 
 
 # =============================================================================

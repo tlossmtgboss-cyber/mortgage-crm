@@ -331,11 +331,22 @@ def handle_chat_request(
             len(system_prompt)
         )
 
+    # Wrap system prompt with cache_control for Anthropic prompt caching.
+    # The routed prompt is the same for every request of the same category,
+    # so caching saves ~90% of input token costs on repeated calls.
+    cached_system = [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
     # Make API call
     response = client.messages.create(
         model=model,
         max_tokens=max_tokens,
-        system=system_prompt,
+        system=cached_system,
         messages=[{"role": "user", "content": user_message}]
     )
 

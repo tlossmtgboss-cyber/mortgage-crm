@@ -773,7 +773,9 @@ async def connect_integration(
                         detail=error_response("Salesforce integration not configured", code="NOT_CONFIGURED")
                     )
                 # Get user_id for state token
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
                 return_url = f"{frontend_url}/settings/integrations"
                 # Generate OAuth URL with secure database-stored state token
@@ -794,7 +796,9 @@ async def connect_integration(
                         detail=error_response("HubSpot integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 # Get user_id for state parameter
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = hubspot_client.get_authorization_url(state=state)
@@ -813,7 +817,9 @@ async def connect_integration(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("Google Calendar integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = google_calendar_client.get_authorization_url(state=state)
@@ -832,7 +838,9 @@ async def connect_integration(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("Zoom integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = zoom_client.get_authorization_url(state=state)
@@ -851,7 +859,9 @@ async def connect_integration(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("Slack integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = slack_client.get_authorization_url(state=state)
@@ -870,7 +880,9 @@ async def connect_integration(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("DocuSign integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}:{frontend_url}/settings/integrations"
                 oauth_url = docusign_client.get_authorization_url(state=state)
@@ -889,7 +901,9 @@ async def connect_integration(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("Microsoft Outlook integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}|{frontend_url}/settings/integrations|calendar"
                 oauth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type="calendar")
@@ -908,7 +922,9 @@ async def connect_integration(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("Microsoft Outlook integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 state = f"{user_id}|{frontend_url}/settings/integrations|email"
                 oauth_url = microsoft_outlook_client.get_authorization_url(state=state, integration_type="email")
@@ -927,7 +943,9 @@ async def connect_integration(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=error_response("Gmail integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
-                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="Could not determine user identity")
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
                 redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"{frontend_url}/api/v1/gmail/callback")
                 scopes = "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/contacts.readonly"

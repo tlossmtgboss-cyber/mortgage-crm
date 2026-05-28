@@ -10,6 +10,7 @@ Features:
 """
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
@@ -852,15 +853,24 @@ def click_to_dial(
     provider = get_telephony_provider()
     compliance = ComplianceChecker(db_session, organization_id=organization_id)
 
-    # Run compliance checks (pass lead_id for consent verification)
-    compliance_result = compliance.full_compliance_check(phone_number, agent_id, contact_id=lead_id)
+    # Admins bypass compliance checks (consent, DNC, hours, rate limit, soft lock)
+    is_admin = False
+    try:
+        from database.models import User
+        user = db_session.query(User).filter(User.id == agent_id).first()
+        if user and getattr(user, 'permission_role', '') == 'admin':
+            is_admin = True
+    except Exception:
+        pass
 
-    if not compliance_result["can_call"]:
-        return {
-            "success": False,
-            "error": "Compliance check failed",
-            "issues": compliance_result["issues"]
-        }
+    if not is_admin:
+        compliance_result = compliance.full_compliance_check(phone_number, agent_id, contact_id=lead_id)
+        if not compliance_result["can_call"]:
+            return {
+                "success": False,
+                "error": "Compliance check failed",
+                "issues": compliance_result["issues"]
+            }
 
     # Get caller ID
     settings = db_session.query(AgentTelephonySettings).filter(
@@ -870,40 +880,47 @@ def click_to_dial(
     if not settings or not settings.business_caller_id:
         return {"success": False, "error": "No verified caller ID configured"}
 
-    # Build callback URLs - include destination number for the TwiML to dial
-    from urllib.parse import quote
-    callback_url = f"{base_url}/api/v1/dialer/twiml/click-to-dial?destination={quote(phone_number)}&contact_name={quote(contact_name or 'Contact')}"
-    status_callback_url = f"{base_url}/api/v1/dialer/webhook/click-to-dial-status?agent_id={agent_id}"
-    recording_callback_url = f"{base_url}/api/v1/dialer/webhook/recording-complete?agent_id={agent_id}"
+    # Acquire soft lock (skip for admin — they can call any number anytime)
+    if not is_admin:
+        lock_acquired = compliance.acquire_soft_lock(
+            phone_number,
+            agent_id,
+            "pending_click_to_dial"
+        )
+        if not lock_acquired:
+            return {"success": False, "error": "Number currently in use by another agent"}
 
-    # Acquire soft lock
-    lock_acquired = compliance.acquire_soft_lock(
-        phone_number,
-        agent_id,
-        "pending_click_to_dial"
-    )
-
-    if not lock_acquired:
-        return {"success": False, "error": "Number currently in use by another agent"}
-
-    # First, call the agent's cell phone. When they answer, the TwiML will dial the contact.
     agent_phone = settings.cell_phone
     if not agent_phone:
         return {"success": False, "error": "Agent cell phone not configured"}
 
+    telnyx_number = os.getenv("TELNYX_FROM_NUMBER", "+18438838956")
+
+    # Encode destination in client_state so the application's default webhook
+    # can transfer the call when the agent answers. No custom webhook URL needed.
+    import base64, json as _json
+    client_state_data = _json.dumps({
+        "type": "click_to_dial",
+        "destination": phone_number,
+        "contact_name": contact_name or "Contact",
+        "agent_id": agent_id,
+    })
+    client_state_b64 = base64.b64encode(client_state_data.encode()).decode()
+
     result = provider.place_call(
-        to_number=agent_phone,  # Call agent first
-        from_number=settings.business_caller_id,
-        callback_url=callback_url,  # TwiML will dial the contact
-        status_callback_url=status_callback_url,
-        recording_status_callback=recording_callback_url,
+        to_number=agent_phone,
+        from_number=telnyx_number,
         record=True,
-        timeout=30
+        timeout=30,
+        client_state=client_state_b64,
     )
 
     if result.success:
         # Update lock with real call SID
         compliance.acquire_soft_lock(phone_number, agent_id, result.call_sid)
+
+        import uuid as _uuid_mod
+        canonical_id = _uuid_mod.uuid4()
 
         # Log the call (with tenant isolation)
         call_log_kwargs = dict(
@@ -914,6 +931,7 @@ def click_to_dial(
             loan_id=loan_id,
             session_task_id=task_id,
             call_sid=result.call_sid,
+            canonical_call_id=canonical_id,
             outcome=CallOutcome.INITIATED,
             start_time=datetime.now(timezone.utc),
         )
@@ -923,16 +941,54 @@ def click_to_dial(
         db_session.add(call_log)
         db_session.commit()
 
+        try:
+            from services.audit_events import audit_event, EventType
+            masked = f"***{phone_number[-4:]}" if phone_number and len(phone_number) >= 4 else "unknown"
+            audit_event(
+                db_session,
+                event_type=EventType.CALL_INITIATED,
+                outcome="success",
+                actor_id=agent_id,
+                org_id=organization_id,
+                resource_type="telnyx_call",
+                resource_id=result.call_sid,
+                metadata={
+                    "provider": "telnyx",
+                    "source": "click_to_dial",
+                    "canonical_call_id": str(canonical_id),
+                    "phone_masked": masked,
+                    "lead_id": lead_id,
+                },
+            )
+            db_session.commit()
+        except Exception as e:
+            try:
+                db_session.rollback()
+            except Exception:
+                pass
+            logger.debug("click_to_dial audit_event write failed: %s", e)
+
         return {
             "success": True,
             "call_sid": result.call_sid,
+            "canonical_call_id": str(canonical_id),
             "contact_name": contact_name,
-            "contact_phone": phone_number
+            "contact_phone": phone_number,
+            "debug": {
+                "to": agent_phone,
+                "from": telnyx_number,
+                "connection_id": provider.connection_id,
+            }
         }
     else:
         compliance.release_soft_lock(phone_number, agent_id)
         return {
             "success": False,
             "error": result.error_message,
-            "error_code": result.error_code
+            "error_code": getattr(result, 'error_code', None),
+            "debug": {
+                "to": agent_phone,
+                "from": telnyx_number,
+                "connection_id": provider.connection_id,
+            }
         }

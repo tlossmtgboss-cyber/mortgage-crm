@@ -869,12 +869,13 @@ class MorningBriefingService:
                 logger.warning("ANTHROPIC_API_KEY not set; skipping AI narrative")
                 return None
 
+            from agents.anthropic_client import cached_system_block
             client = anthropic.Anthropic(api_key=api_key)
             response = client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=350,
                 temperature=0.3,
-                system=system_prompt,
+                system=cached_system_block(system_prompt),
                 messages=[{"role": "user", "content": user_prompt}],
             )
             return response.content[0].text

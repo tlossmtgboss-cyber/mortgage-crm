@@ -20,6 +20,11 @@ from datetime import datetime, timezone
 import asyncio
 import logging
 
+from exceptions import (
+    EntityNotFoundError, LeadNotFoundError, AuthorizationError,
+    ValidationError as DomainValidationError, TenantIsolationError,
+)
+
 logger = logging.getLogger(__name__)
 
 # Cache table names to avoid expensive metadata reflection per-request
@@ -80,7 +85,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 lead_ids = []
             lead_ids = [int(id) for id in lead_ids]  # Ensure integers
         except Exception as e:
-            raise HTTPException(status_code=400, detail="Invalid request body")
+            raise DomainValidationError("Invalid request body")
 
         # Permission check: require leads.delete or leads.update permission
         is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
@@ -92,10 +97,10 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 or has_permission(current_user.id, 'leads.update_all', db)
             )
             if not has_delete_permission:
-                raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
+                raise AuthorizationError("Permission denied: leads.delete")
 
         if not lead_ids:
-            raise HTTPException(status_code=400, detail="No lead IDs provided")
+            raise DomainValidationError("No lead IDs provided")
 
         deleted_count = 0
         errors = []
@@ -166,20 +171,20 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             logger.info(f"[bulk-update-status] Parsed {len(lead_ids)} lead IDs, new_status={new_status}")
         except Exception as e:
             logger.error(f"[bulk-update-status] Failed to parse request: {e}")
-            raise HTTPException(status_code=400, detail="Invalid request body")
+            raise DomainValidationError("Invalid request body")
 
         if not lead_ids:
-            raise HTTPException(status_code=400, detail="No lead IDs provided")
+            raise DomainValidationError("No lead IDs provided")
 
         if not new_status:
-            raise HTTPException(status_code=400, detail="No status provided")
+            raise DomainValidationError("No status provided")
 
         # Check update permission (platform admins bypass)
         is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
         if not is_platform_admin:
             has_update_permission = has_permission(current_user.id, 'leads.update', db) or has_permission(current_user.id, 'leads.update_all', db)
             if not has_update_permission:
-                raise HTTPException(status_code=403, detail="Permission denied: leads.update")
+                raise AuthorizationError("Permission denied: leads.update")
 
         updated_count = 0
         updated_lead_ids = []  # Track actually-updated IDs (not just a slice of input)
@@ -380,7 +385,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
     async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
         lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead or lead.deleted_at is not None:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise LeadNotFoundError(lead_id)
 
         # Handle stage value - it might be an enum or a string depending on DB content
         stage_value = None
@@ -495,7 +500,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         """Get all documents associated with a lead"""
         lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise LeadNotFoundError(lead_id)
 
         # Fetch documents for this lead
         documents = db.query(Document).filter(Document.borrower_id == lead_id, Document.status == "active").all()
@@ -556,11 +561,11 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 or has_permission(current_user.id, 'leads.update_all', db)
             )
             if not has_update_permission:
-                raise HTTPException(status_code=403, detail="Permission denied: leads.update")
+                raise AuthorizationError("Permission denied: leads.update")
 
         lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise LeadNotFoundError(lead_id)
 
         # Capture old status for workflow trigger
         old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
@@ -571,10 +576,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         resulting_phone = update_data.get('phone', lead.phone)
         # Treat empty string as None for contact method check
         if not resulting_email and not resulting_phone:
-            raise HTTPException(
-                status_code=422,
-                detail="At least one contact method is required: cannot clear both email and phone"
-            )
+            raise DomainValidationError("At least one contact method is required: cannot clear both email and phone")
 
         _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id', 'owner_id'}
         for key, value in update_data.items():
@@ -596,10 +598,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             from workflows.lead_workflow_engine import VALID_TRANSITIONS as _LEAD_VALID_TRANSITIONS
             allowed = _LEAD_VALID_TRANSITIONS.get(old_status, [])
             if allowed and new_status not in allowed:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Invalid stage transition: '{old_status}' -> '{new_status}'. "
-                           f"Allowed transitions: {allowed}",
+                raise DomainValidationError(
+                    f"Invalid stage transition: '{old_status}' -> '{new_status}'. "
+                    f"Allowed transitions: {allowed}"
                 )
 
             now = datetime.now(timezone.utc)
@@ -810,11 +811,11 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 or has_permission(current_user.id, 'leads.delete_all', db)
             )
             if not has_delete_permission:
-                raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
+                raise AuthorizationError("Permission denied: leads.delete")
 
         lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead or lead.deleted_at is not None:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise LeadNotFoundError(lead_id)
 
         lead_name = lead.name
 
@@ -847,7 +848,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         """
         org_id = getattr(current_user, 'organization_id', None)
         if not org_id:
-            raise HTTPException(status_code=403, detail="Organization context required")
+            raise TenantIsolationError("Organization context required")
 
         try:
             result = db.execute(

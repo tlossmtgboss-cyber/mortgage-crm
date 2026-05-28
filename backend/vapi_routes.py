@@ -38,7 +38,7 @@ def _resolve_org_id_from_assistant(db: Session, data: dict) -> Optional[int]:
     )
     if assistant_id:
         assistant = db.query(VapiAssistant).filter(
-            VapiAssistant.assistant_id == assistant_id
+            VapiAssistant.vapi_assistant_id == assistant_id
         ).first()
         if assistant and getattr(assistant, "organization_id", None):
             return assistant.organization_id
@@ -639,6 +639,59 @@ async def process_webhook_background(
         logger.info("Webhook processed successfully")
         # DB write succeeded -- clean up backup
         _cleanup_webhook_backup(call_id)
+
+        # Write call event to SOC 2 audit trail
+        try:
+            from services.audit_events import audit_event, EventType
+            msg = payload.get("message", {})
+            msg_type = msg.get("type", "")
+            call_data = msg.get("call", {})
+            org_id = None
+            assistant_id = call_data.get("assistantId")
+            if assistant_id:
+                from sqlalchemy import text as sa_text
+                row = db.execute(
+                    sa_text(
+                        "SELECT organization_id FROM vapi_assistants WHERE vapi_assistant_id = :aid LIMIT 1"
+                    ),
+                    {"aid": assistant_id},
+                ).first()
+                if row:
+                    org_id = row[0]
+
+            if msg_type == "end-of-call-report":
+                event_type = EventType.CALL_COMPLETED
+            elif msg_type == "status-update":
+                event_type = EventType.CALL_INITIATED
+            elif msg_type == "transfer-destination-request":
+                event_type = EventType.CALL_TRANSFERRED
+            else:
+                event_type = f"VAPI_WEBHOOK_{msg_type.upper().replace('-', '_')}"
+
+            audit_event(
+                db,
+                event_type=event_type,
+                outcome="success",
+                actor_email="vapi-webhook",
+                actor_role="system",
+                org_id=org_id,
+                resource_type="vapi_call",
+                resource_id=call_id,
+                metadata={
+                    "provider": "vapi",
+                    "message_type": msg_type,
+                    "direction": call_data.get("type", "unknown"),
+                    "duration": call_data.get("duration"),
+                },
+            )
+            db.commit()
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.debug("Vapi audit_event write failed: %s", e)
+
     except Exception as e:
         db.rollback()
         logger.error(
@@ -1766,7 +1819,7 @@ async def identify_caller_function(
         assistant_id = call_data.get("assistantId")
         if assistant_id:
             try:
-                assistant = db.query(VapiAssistant).filter(VapiAssistant.assistant_id == assistant_id).first()
+                assistant = db.query(VapiAssistant).filter(VapiAssistant.vapi_assistant_id == assistant_id).first()
                 if assistant:
                     org_id = getattr(assistant, 'organization_id', None)
             except Exception:

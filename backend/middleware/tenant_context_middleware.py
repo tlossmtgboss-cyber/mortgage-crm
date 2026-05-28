@@ -20,8 +20,8 @@ Tenant Middleware Architecture (consolidated 2026-05-14):
     ACTIVE:
     - middleware/tenant_context_middleware.py (THIS FILE) — JWT-based context setting
     - middleware/tenant_filter.py             — query-level isolation helpers
-    DEPRECATED:
-    - middleware/tenant_middleware.py — unused multi-DB routing (example file only)
+    REMOVED (2026-05-27):
+    - middleware/tenant_middleware.py — deleted (was unused multi-DB routing)
 """
 
 import logging
@@ -38,6 +38,10 @@ from sqlalchemy.orm import Session
 
 _CachedUser = namedtuple("_CachedUser", ["id", "organization_id", "permission_role", "email"])
 
+# Set to False to disable plaintext API key fallback after confirming all keys
+# have been migrated to sha256 hashes (run: SELECT count(*) FROM api_keys WHERE key IS NOT NULL)
+_PLAINTEXT_API_KEY_FALLBACK = True
+
 # Import auth.tokens for algorithm-agnostic JWT verification (RS256/HS256)
 try:
     from auth.tokens import verify_token as _verify_secure_token
@@ -50,7 +54,21 @@ except ImportError:
 import jwt
 from jwt.exceptions import InvalidTokenError
 
-# Import structured logging context setters
+# Import request-context setters so that every stdlib logging call
+# during the request automatically includes user_id and org_id
+# (via RequestContextFilter in utils/logging_config.py).
+try:
+    from middleware.request_context import (
+        set_user_id as _set_ctx_user_id,
+        set_org_id as _set_ctx_org_id,
+    )
+    _REQUEST_CONTEXT_AVAILABLE = True
+except ImportError:
+    _REQUEST_CONTEXT_AVAILABLE = False
+    _set_ctx_user_id = None
+    _set_ctx_org_id = None
+
+# Legacy: also set core.logging context vars if available (structlog bridge)
 try:
     from core.logging import set_user_id, set_tenant_id
     STRUCTURED_LOGGING_AVAILABLE = True
@@ -120,7 +138,14 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             is_platform_admin=is_platform_admin
         )
 
-        # Set structured logging context for correlation
+        # Set request context vars so RequestContextFilter injects
+        # user_id and org_id into every stdlib log record automatically.
+        if _REQUEST_CONTEXT_AVAILABLE:
+            _set_ctx_user_id(user.id)
+            if request.state.organization_id:
+                _set_ctx_org_id(request.state.organization_id)
+
+        # Also set core.logging context vars (structlog bridge, if configured)
         if STRUCTURED_LOGGING_AVAILABLE:
             set_user_id(user.id)
             if request.state.organization_id:
@@ -173,12 +198,32 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                                 ApiKey.key_hash == _token_hash,
                                 ApiKey.is_active == True
                             ).first()
-                            # Fallback to plaintext for unmigrated keys
-                            if not api_key:
+                            # Fallback to plaintext for unmigrated keys — DEPRECATED.
+                            # Auto-migrates matched keys to sha256 hash.
+                            # Disable via _PLAINTEXT_API_KEY_FALLBACK = False after migration.
+                            if not api_key and _PLAINTEXT_API_KEY_FALLBACK:
                                 api_key = db.query(ApiKey).filter(
                                     ApiKey.key == token,
                                     ApiKey.is_active == True
                                 ).first()
+                                if api_key:
+                                    logger.warning(
+                                        "SECURITY: API key id=%s matched via plaintext fallback. "
+                                        "Auto-migrating to sha256 hash. Plaintext fallback will "
+                                        "be removed in a future release.",
+                                        api_key.id,
+                                    )
+                                    # Intentional db.commit() in middleware: the hash migration
+                                    # must persist regardless of whether the downstream route
+                                    # handler succeeds or fails. Uses a separate DB session
+                                    # from the route handler (created at line 188).
+                                    try:
+                                        api_key.key_hash = _token_hash
+                                        api_key.key = None
+                                        db.commit()
+                                    except Exception as migrate_err:
+                                        db.rollback()
+                                        logger.warning("API key hash migration failed: %s", migrate_err)
                             if api_key:
                                 user = db.query(self.user_model).filter(
                                     self.user_model.id == api_key.user_id

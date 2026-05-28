@@ -72,7 +72,9 @@ async def import_document_notification_email(
     ActivityType = models['ActivityType']
 
     try:
-        user_id = current_user.id if current_user else 1
+        if not current_user or not getattr(current_user, 'id', None):
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
+        user_id = current_user.id
         now = datetime.now(timezone.utc)
 
         # Parse received_date if provided

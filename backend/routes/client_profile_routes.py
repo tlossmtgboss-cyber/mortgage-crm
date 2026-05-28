@@ -22,6 +22,10 @@ import random
 import uuid
 
 from utils.background_tasks import tenant_task
+from exceptions import (
+    EntityNotFoundError, AuthorizationError, TenantIsolationError,
+    ValidationError as DomainValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +138,7 @@ async def get_client_profile(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found. Create one first.")
+        raise EntityNotFoundError("ClientProfile", current_user.id, "Client profile not found. Create one first.")
 
     return profile
 
@@ -156,7 +160,7 @@ async def update_client_profile(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     # Update fields if provided
     _protected = {'id', 'primary_user_id', 'organization_id', 'created_at', 'updated_at'}
@@ -192,7 +196,7 @@ async def delete_client_profile(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     db.delete(profile)
     db.commit()
@@ -222,7 +226,7 @@ async def create_team_role(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     db_role = TeamRole(
         profile_id=profile.id,
@@ -249,7 +253,7 @@ async def get_team_roles(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     roles = db.query(TeamRole).filter(TeamRole.profile_id == profile.id, TeamRole.is_active == True).all()
     return roles
@@ -273,11 +277,11 @@ async def update_team_role(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     role = db.query(TeamRole).filter(TeamRole.id == role_id, TeamRole.profile_id == profile.id).first()
     if not role:
-        raise HTTPException(status_code=404, detail="Team role not found")
+        raise EntityNotFoundError("TeamRole", role_id)
 
     _protected = {'id', 'profile_id', 'organization_id', 'created_at', 'updated_at'}
     update_data = role_update.dict(exclude_unset=True)
@@ -306,11 +310,11 @@ async def delete_team_role(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     role = db.query(TeamRole).filter(TeamRole.id == role_id, TeamRole.profile_id == profile.id).first()
     if not role:
-        raise HTTPException(status_code=404, detail="Team role not found")
+        raise EntityNotFoundError("TeamRole", role_id)
 
     role.is_active = False
     db.commit()
@@ -427,7 +431,7 @@ async def upload_process_flow(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     db_document = ProcessFlowDocument(
         profile_id=profile.id,
@@ -462,7 +466,7 @@ async def get_process_flows(
 
     profile = db.query(ClientProfile).filter(ClientProfile.primary_user_id == current_user.id).first()
     if not profile:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+        raise EntityNotFoundError("ClientProfile", current_user.id)
 
     documents = db.query(ProcessFlowDocument).filter(ProcessFlowDocument.profile_id == profile.id).all()
     return documents
@@ -644,7 +648,7 @@ async def get_task(
             "status": wf_task.status,
         }
 
-    raise HTTPException(status_code=404, detail="Task not found")
+    raise EntityNotFoundError("Task", task_id)
 
 
 @router.patch("/tasks/{task_id}")
@@ -672,7 +676,7 @@ async def update_task(
         is_workflow = True
 
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise EntityNotFoundError("Task", task_id)
 
     if is_workflow:
         update_data = task_update.dict(exclude_unset=True)
@@ -737,7 +741,7 @@ async def delegate_task(
                 regular_task.updated_at = datetime.now(timezone.utc)
                 db.commit()
                 return {"success": True, "message": "Task delegated successfully"}
-            raise HTTPException(status_code=404, detail="Task not found or not owned by you")
+            raise EntityNotFoundError("Task", task_id, "Task not found or not owned by you")
 
         # Get the new owner's info for logging — must be in same org
         new_owner = db.query(User).filter(User.id == new_owner_id, User.organization_id == current_user.organization_id).first()
@@ -912,7 +916,7 @@ async def delete_task(
             task_type = "Task (any user)"
 
         if not task:
-            raise HTTPException(status_code=404, detail="Task not found")
+            raise EntityNotFoundError("Task", task_id)
 
         task_title = task.title
         db.delete(task)
@@ -1262,7 +1266,7 @@ async def apply_disposition_task(
 
     task = db.query(Task).filter(Task.id == task_id, Task.organization_id == current_user.organization_id).first()
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise EntityNotFoundError("Task", task_id)
     if not task.sf_proposed_stage:
         raise HTTPException(status_code=400, detail="Not a disposition task")
     if task.status != "pending":
@@ -1270,7 +1274,7 @@ async def apply_disposition_task(
 
     loan = db.query(Loan).filter(Loan.id == task.loan_id, Loan.organization_id == current_user.organization_id).first()
     if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
+        raise EntityNotFoundError("Loan", loan_id)
 
     # Parse optional disposition_date or default to now
     disposition_date_str = body.get("disposition_date")
@@ -1402,7 +1406,7 @@ async def dismiss_disposition_task(
 
     task = db.query(Task).filter(Task.id == task_id, Task.organization_id == current_user.organization_id).first()
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise EntityNotFoundError("Task", task_id)
     if not task.sf_proposed_stage:
         raise HTTPException(status_code=400, detail="Not a disposition task")
     if task.status != "pending":
@@ -1501,7 +1505,7 @@ async def approve_unified_task(
             ).first()
 
             if not task:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise EntityNotFoundError("Task", task_id)
 
             task.type = TaskType.COMPLETED
             task.completed_at = datetime.now(timezone.utc)
@@ -1527,7 +1531,7 @@ async def approve_unified_task(
             ).first()
 
             if not task:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise EntityNotFoundError("Task", task_id)
 
             task.status = "completed"
             task.completed_at = datetime.now(timezone.utc)
@@ -1585,7 +1589,7 @@ async def approve_unified_task(
             ).first()
 
             if not extracted:
-                raise HTTPException(status_code=404, detail="Item not found")
+                raise EntityNotFoundError("Item", task_id)
 
             extracted.status = "approved"
             extracted.reviewed_by = current_user.id
@@ -1681,7 +1685,7 @@ async def reject_unified_task(
             ).first()
 
             if not task:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise EntityNotFoundError("Task", task_id)
 
             task.type = TaskType.COMPLETED
             task.completed_at = datetime.now(timezone.utc)
@@ -1704,7 +1708,7 @@ async def reject_unified_task(
             ).first()
 
             if not task:
-                raise HTTPException(status_code=404, detail="Task not found")
+                raise EntityNotFoundError("Task", task_id)
 
             task.status = "completed"
             task.completed_at = datetime.now(timezone.utc)
@@ -1715,7 +1719,7 @@ async def reject_unified_task(
             ).first()
 
             if not extracted:
-                raise HTTPException(status_code=404, detail="Item not found")
+                raise EntityNotFoundError("Item", task_id)
 
             extracted.status = "rejected"
             extracted.reviewed_by = current_user.id
@@ -1901,7 +1905,7 @@ async def get_referral_partner(
         ReferralPartner.owner_id == current_user.id
     ).first()
     if not partner:
-        raise HTTPException(status_code=404, detail="Referral partner not found")
+        raise EntityNotFoundError("ReferralPartner", partner_id)
     return partner
 
 
@@ -1924,7 +1928,7 @@ async def update_referral_partner(
         ReferralPartner.owner_id == current_user.id
     ).first()
     if not partner:
-        raise HTTPException(status_code=404, detail="Referral partner not found")
+        raise EntityNotFoundError("ReferralPartner", partner_id)
 
     _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in partner_update.dict(exclude_unset=True).items():
@@ -1953,7 +1957,7 @@ async def delete_referral_partner(
         ReferralPartner.owner_id == current_user.id
     ).first()
     if not partner:
-        raise HTTPException(status_code=404, detail="Referral partner not found")
+        raise EntityNotFoundError("ReferralPartner", partner_id)
 
     db.delete(partner)
     db.commit()
@@ -1983,7 +1987,7 @@ async def get_partner_referrals(
         ReferralPartner.organization_id == current_user.organization_id
     ).first()
     if not partner:
-        raise HTTPException(status_code=404, detail="Referral partner not found")
+        raise EntityNotFoundError("ReferralPartner", partner_id)
 
     referrals = []
     seen_ids = set()
@@ -2145,7 +2149,7 @@ async def get_loan_team_members(
         # Verify loan exists and belongs to current user's org before querying related data
         loan = db.query(Loan).filter(Loan.id == loan_id, Loan.organization_id == current_user.organization_id).first()
         if not loan:
-            raise HTTPException(status_code=404, detail="Loan not found")
+            raise EntityNotFoundError("Loan", loan_id)
 
         # Get custom team members from the table
         result = db.execute(text("""
@@ -2234,7 +2238,7 @@ async def create_loan_team_member(
         # Verify loan exists and belongs to current user's org
         loan = db.query(Loan).filter(Loan.id == loan_id, Loan.organization_id == current_user.organization_id).first()
         if not loan:
-            raise HTTPException(status_code=404, detail="Loan not found")
+            raise EntityNotFoundError("Loan", loan_id)
 
         referral_partner_id = None
 
@@ -2378,7 +2382,7 @@ async def update_loan_team_member(
         ).first()
 
         if not member:
-            raise HTTPException(status_code=404, detail="Team member not found")
+            raise EntityNotFoundError("TeamMember", member_id)
 
         # Update fields
         update_data = member_update.dict(exclude_unset=True)
@@ -2448,7 +2452,7 @@ async def delete_loan_team_member(
         ).first()
 
         if not member:
-            raise HTTPException(status_code=404, detail="Team member not found")
+            raise EntityNotFoundError("TeamMember", member_id)
 
         member_name = member.name
         db.delete(member)

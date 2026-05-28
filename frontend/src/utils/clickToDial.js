@@ -32,7 +32,6 @@ export async function clickToDial(phone, { contactName = '', leadId = null, loan
     return true;
   } catch (err) {
     toast.error(err.message || 'Failed to initiate call');
-    window.location.href = `tel:${cleanPhone}`;
     return false;
   }
 }

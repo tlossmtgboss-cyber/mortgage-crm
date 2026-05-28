@@ -359,7 +359,7 @@ const DEMO_USERS = [
   {
     id: '57',
     name: 'Tim Loss',
-    email: 'admin@perenniaai.com',
+    email: 'tloss@cmgfi.com',
     roles: ['Admin', 'Master Admin'],
     status: 'active',
     lastLoginAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),

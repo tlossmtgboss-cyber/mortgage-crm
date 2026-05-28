@@ -206,7 +206,197 @@ class TokenBudget:
             usage = self._get_or_reset(org_id)
             return max(0, self._degraded_max - usage.tokens_used)
 
+    # --- Lua scripts for atomic reserve ---
+
+    # Atomic check-and-reserve: reads current value, checks if adding the
+    # increment would exceed the budget, and only increments if it fits.
+    # Lua scripts execute atomically in Redis (single-threaded), so no other
+    # command can interleave between the GET and INCRBY.
+    #
+    # KEYS[1] = token counter key
+    # ARGV[1] = estimated tokens to reserve
+    # ARGV[2] = max budget for the period
+    # ARGV[3] = TTL in seconds for the key
+    #
+    # Returns: new total (>= 0) on success, -1 if budget would be exceeded
+    _RESERVE_SCRIPT = """
+local key = KEYS[1]
+local increment = tonumber(ARGV[1])
+local max_budget = tonumber(ARGV[2])
+local ttl = tonumber(ARGV[3])
+local current = tonumber(redis.call('GET', key) or '0')
+if current + increment > max_budget then
+    return -1
+end
+local new_total = redis.call('INCRBY', key, increment)
+redis.call('EXPIRE', key, ttl)
+return new_total
+"""
+
+    def __init_reserve_script(self):
+        """Register the Lua reserve script with Redis (lazy, once)."""
+        if not hasattr(self, '_reserve_sha'):
+            self._reserve_sha = None
+        if self._reserve_sha is None and self._redis_available:
+            try:
+                self._reserve_sha = self._redis.register_script(
+                    self._RESERVE_SCRIPT
+                )
+            except Exception as e:
+                logger.warning(f"[TOKEN_BUDGET] Failed to register Lua script: {e}")
+                self._reserve_sha = None
+
+    # --- In-memory fallback for reservations ---
+
+    def _memory_reserve_budget(self, org_id: int, estimated_tokens: int) -> bool:
+        """Atomic check-and-reserve using in-memory lock."""
+        with self._lock:
+            usage = self._get_or_reset(org_id)
+            if usage.tokens_used + estimated_tokens > self._degraded_max:
+                return False
+            usage.tokens_used += estimated_tokens
+            usage.requests += 1
+            return True
+
+    def _memory_adjust_reservation(
+        self, org_id: int, estimated_tokens: int, actual_tokens: int
+    ) -> None:
+        """Correct reservation estimate with actual usage (in-memory)."""
+        with self._lock:
+            usage = self._get_or_reset(org_id)
+            delta = actual_tokens - estimated_tokens
+            usage.tokens_used = max(0, usage.tokens_used + delta)
+
     # --- Public API ---
+
+    def reserve_budget(self, org_id: int, estimated_tokens: int) -> bool:
+        """
+        Atomically check and reserve tokens for an upcoming LLM call.
+
+        This is the PREFERRED method over the check_budget() + record_usage()
+        pattern. It eliminates the race condition where concurrent requests
+        both pass check_budget() and overspend.
+
+        Args:
+            org_id: Organization ID.
+            estimated_tokens: Estimated tokens for the upcoming LLM call.
+                Use a conservative (high) estimate. After the call completes,
+                call adjust_reservation() to correct the difference.
+
+        Returns:
+            True if the reservation succeeded (tokens were reserved).
+            False if the budget would be exceeded (no tokens were reserved).
+        """
+        if self._redis_available:
+            try:
+                self.__init_reserve_script()
+                if self._reserve_sha is not None:
+                    key = self._redis_key(org_id, self._KEY_TOKENS)
+                    ttl = self.period_seconds + 60
+                    result = self._reserve_sha(
+                        keys=[key],
+                        args=[estimated_tokens, self.max_tokens_per_org, ttl],
+                    )
+                    result = int(result)
+                    if result == -1:
+                        logger.warning(
+                            f"[BUDGET] Org {org_id} reservation denied: "
+                            f"adding {estimated_tokens} would exceed "
+                            f"{self.max_tokens_per_org} budget"
+                        )
+                        return False
+                    # Reservation succeeded — also bump request counter
+                    try:
+                        req_key = self._redis_key(org_id, self._KEY_REQUESTS)
+                        pipe = self._redis.pipeline()
+                        pipe.incr(req_key)
+                        pipe.expire(req_key, self.period_seconds + 60)
+                        pipe.execute()
+                    except Exception:
+                        pass  # Request counter is best-effort
+                    logger.debug(
+                        f"[BUDGET] Org {org_id}: reserved {estimated_tokens} tokens, "
+                        f"new total {result}/{self.max_tokens_per_org}"
+                    )
+                    return True
+                else:
+                    # Lua script not available — fall through to in-memory
+                    logger.warning(
+                        "[TOKEN_BUDGET] Lua script unavailable, using in-memory fallback"
+                    )
+            except Exception as e:
+                self._activate_fallback("reserve_budget", e)
+
+        # In-memory fallback
+        allowed = self._memory_reserve_budget(org_id, estimated_tokens)
+        if not allowed:
+            with self._lock:
+                usage = self._get_or_reset(org_id)
+                logger.warning(
+                    f"[BUDGET] Org {org_id} reservation denied (in-memory): "
+                    f"{usage.tokens_used} + {estimated_tokens} would exceed "
+                    f"{self._degraded_max} budget"
+                )
+        return allowed
+
+    def adjust_reservation(
+        self, org_id: int, estimated_tokens: int, actual_tokens: int
+    ) -> None:
+        """
+        Correct a previous reservation after the LLM call completes.
+
+        Call this after reserve_budget() once you know the actual token count.
+        If actual < estimated, the difference is released back to the budget.
+        If actual > estimated, the additional usage is recorded.
+
+        Args:
+            org_id: Organization ID.
+            estimated_tokens: The estimate originally passed to reserve_budget().
+            actual_tokens: The actual tokens consumed by the LLM call.
+        """
+        delta = actual_tokens - estimated_tokens
+        if delta == 0:
+            return  # Estimate was exact, nothing to adjust
+
+        if self._redis_available:
+            try:
+                key = self._redis_key(org_id, self._KEY_TOKENS)
+                ttl = self.period_seconds + 60
+                if delta > 0:
+                    # Underestimated — add the difference
+                    pipe = self._redis.pipeline()
+                    pipe.incrby(key, delta)
+                    pipe.expire(key, ttl)
+                    results = pipe.execute()
+                    new_total = int(results[0])
+                else:
+                    # Overestimated — release the difference (DECRBY)
+                    pipe = self._redis.pipeline()
+                    pipe.decrby(key, abs(delta))
+                    pipe.expire(key, ttl)
+                    results = pipe.execute()
+                    new_total = int(results[0])
+                    # Guard against going negative (shouldn't happen, but be safe)
+                    if new_total < 0:
+                        self._redis.set(key, 0)
+                        self._redis.expire(key, ttl)
+                        new_total = 0
+                logger.debug(
+                    f"[BUDGET] Org {org_id}: adjusted reservation "
+                    f"(estimated={estimated_tokens}, actual={actual_tokens}, "
+                    f"delta={delta:+d}), new total={new_total}"
+                )
+                return
+            except Exception as e:
+                self._activate_fallback("adjust_reservation", e)
+
+        # In-memory fallback
+        self._memory_adjust_reservation(org_id, estimated_tokens, actual_tokens)
+        logger.debug(
+            f"[BUDGET] Org {org_id}: adjusted reservation (in-memory) "
+            f"(estimated={estimated_tokens}, actual={actual_tokens}, "
+            f"delta={delta:+d})"
+        )
 
     def check_budget(self, org_id: int) -> bool:
         """

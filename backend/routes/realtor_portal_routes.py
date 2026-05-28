@@ -685,11 +685,14 @@ async def generate_preapproval_for_lead(
         raise HTTPException(status_code=404, detail="Lead not found")
 
     # Get organization_id from the lead's owner
-    org_id = 1  # Default
+    org_id = None
     if lead[16]:  # owner_id
         owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[16]}).fetchone()
         if owner and owner[0]:
             org_id = owner[0]
+    if not org_id:
+        logger.warning(f"Lead {lead_id} has no resolvable organization context")
+        raise HTTPException(status_code=400, detail="Lead has no organization context")
 
     # Get organization info (only columns that exist)
     org = db.execute(text("""
@@ -897,11 +900,14 @@ async def notify_overlimit_request(
         raise HTTPException(status_code=404, detail="Lead not found")
 
     # Get organization_id from the lead's owner
-    owner_org_id = 1  # Default
+    owner_org_id = None
     if lead[4]:  # owner_id
         owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[4]}).fetchone()
         if owner and owner[0]:
             owner_org_id = owner[0]
+    if not owner_org_id:
+        logger.warning(f"Lead {request.lead_id} has no resolvable organization context for referral request")
+        raise HTTPException(status_code=400, detail="Lead has no organization context")
 
     # Get LO email
     lo_email = None
@@ -1962,7 +1968,9 @@ async def create_test_realtor(
             # Step 2: Get organization
             logger.info("Step 2: Getting organization")
             org = db.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
-            org_id = org[0] if org else 1
+            if not org:
+                raise HTTPException(status_code=500, detail="No organizations found in database")
+            org_id = org[0]
             logger.info(f"Using org_id: {org_id}")
 
             # Step 3: Get an LO

@@ -191,10 +191,11 @@ async def execute_agent(
                 "content": request.metadata.get("initial_trigger", "Starting conversation")
             })
 
+        from agents.anthropic_client import cached_system_block
         response = client.messages.create(
             model=model,
             max_tokens=500,
-            system=prompt,
+            system=cached_system_block(prompt),
             messages=messages
         )
 
@@ -289,10 +290,11 @@ async def analyze_email(
         from anthropic import Anthropic
         client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+        from agents.anthropic_client import cached_system_block
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1000,
-            system=prompt,
+            system=cached_system_block(prompt),
             messages=[{
                 "role": "user",
                 "content": f"Analyze this email:\n\nSubject: {request.subject}\nFrom: {request.sender}\n\n{request.email_content}"

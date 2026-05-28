@@ -66,20 +66,20 @@ export const ClickablePhone = ({
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.message || `Call failed (${response.status})`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || data.detail || `Call failed (${response.status})`);
       }
 
+      const debugTo = data?.debug?.to || '';
       setCallState('success');
-      toast.success('Call initiated');
+      toast.success(debugTo ? `Calling ${debugTo}` : 'Call initiated');
       setTimeout(() => setCallState('idle'), 3000);
     } catch (err) {
       setCallState('error');
       const message = err.message || 'Failed to initiate call';
       toast.error(message);
-      // Fall back to native tel: dialer so the user can still make the call
-      window.location.href = `tel:${cleanPhone}`;
       setTimeout(() => setCallState('idle'), 3000);
     }
   };

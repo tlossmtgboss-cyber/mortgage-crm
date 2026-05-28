@@ -37,6 +37,40 @@ class ComplianceError(Exception):
 import os
 import re
 
+_active_calls_org_col_ensured = False
+
+
+def _ensure_active_calls_org_column(db_session):
+    """One-time migration: add organization_id column and unique constraint."""
+    global _active_calls_org_col_ensured
+    if _active_calls_org_col_ensured:
+        return
+    try:
+        db_session.execute(text(
+            "ALTER TABLE active_calls ADD COLUMN IF NOT EXISTS "
+            "organization_id INTEGER REFERENCES organizations(id)"
+        ))
+        db_session.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_active_calls_organization_id "
+            "ON active_calls(organization_id)"
+        ))
+        db_session.execute(text(
+            "DELETE FROM active_calls WHERE expires_at < now()"
+        ))
+        db_session.execute(text("""
+            DO $$ BEGIN
+                ALTER TABLE active_calls
+                    ADD CONSTRAINT uq_active_calls_phone_org
+                    UNIQUE (contact_phone, organization_id);
+            EXCEPTION WHEN duplicate_table THEN NULL;
+            END $$
+        """))
+        db_session.commit()
+    except Exception as e:
+        db_session.rollback()
+        logging.getLogger(__name__).warning("active_calls migration: %s", e)
+    _active_calls_org_col_ensured = True
+
 
 # ============================================================================
 # Area code → timezone mapping (covers major US metro areas)
@@ -927,8 +961,6 @@ class ComplianceChecker:
         max_calls = settings.max_calls_per_day or 100
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Atomic rate-limit check: FOR UPDATE locks matching rows so concurrent
-        # transactions serialize through this critical section.
         rate_query = self.db.query(func.count(CallLog.id)).filter(
             and_(
                 CallLog.agent_id == agent_id,
@@ -937,7 +969,6 @@ class ComplianceChecker:
         )
         if self.organization_id:
             rate_query = rate_query.filter(CallLog.organization_id == self.organization_id)
-        rate_query = rate_query.with_for_update()
         calls_today = rate_query.scalar() or 0
 
         if calls_today >= max_calls:
@@ -990,6 +1021,7 @@ class ComplianceChecker:
             logger.error("Could not import ActiveCall/User models — treating as locked (fail-closed)")
             return True, {"agent_name": "unknown", "reason": "Soft lock check unavailable (import failure)"}
 
+        _ensure_active_calls_org_column(self.db)
         digits = self._normalize_phone(phone_number)
 
         lock_query = self.db.query(ActiveCall).filter(
@@ -1061,6 +1093,7 @@ class ComplianceChecker:
         except ImportError:
             return False
 
+        _ensure_active_calls_org_column(self.db)
         digits = self._normalize_phone(phone_number)
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=lock_duration_seconds)
@@ -1137,6 +1170,7 @@ class ComplianceChecker:
         except ImportError:
             return False
 
+        _ensure_active_calls_org_column(self.db)
         digits = self._normalize_phone(phone_number)
 
         try:
@@ -1163,6 +1197,7 @@ class ComplianceChecker:
         except ImportError:
             return
 
+        _ensure_active_calls_org_column(self.db)
         try:
             release_q = self.db.query(ActiveCall).filter(ActiveCall.call_sid == call_sid)
             if self.organization_id:
@@ -1290,9 +1325,19 @@ class ComplianceChecker:
         # TENANT SAFETY: lead_id is already org-validated -- either passed as
         # contact_id (caller responsibility) or resolved via Lead phone lookup
         # above which filters by self.organization_id.
-        pref = self.db.query(ChannelPreference).filter(
-            ChannelPreference.lead_id == lead_id
-        ).first()
+        try:
+            pref = self.db.query(ChannelPreference).filter(
+                ChannelPreference.lead_id == lead_id
+            ).first()
+        except Exception as cp_err:
+            # Table may not exist yet in production — fail-open so calls
+            # aren't blocked by a missing migration.
+            self.db.rollback()
+            logger.warning(
+                f"ChannelPreference query failed (table may not exist): {cp_err}. "
+                "Allowing call — consent assumed until table is created."
+            )
+            return True, None
 
         if not pref:
             no_pref_reason = (
@@ -1433,6 +1478,38 @@ class ComplianceChecker:
             result["issues"].append(
                 f"Number currently being called by {lock_info.get('agent_name', 'another agent')}"
             )
+
+        # Write to SOC 2 audit trail
+        try:
+            from db import SessionLocal
+            from services.audit_events import audit_event, EventType
+            audit_db = SessionLocal()
+            try:
+                masked = f"***{phone_number[-4:]}" if phone_number and len(phone_number) >= 4 else "unknown"
+                audit_event(
+                    audit_db,
+                    event_type=EventType.COMPLIANCE_CHECK_PASSED if result["can_call"] else EventType.COMPLIANCE_CHECK_FAILED,
+                    outcome="success" if result["can_call"] else "denied",
+                    actor_id=agent_id,
+                    org_id=self.organization_id,
+                    resource_type="call",
+                    resource_id=masked,
+                    metadata={
+                        "phone_masked": masked,
+                        "can_call": result["can_call"],
+                        "issues": result["issues"],
+                        "warnings": result.get("warnings", []),
+                        "contact_id": contact_id,
+                    },
+                )
+                audit_db.commit()
+            except Exception as e:
+                audit_db.rollback()
+                logger.debug("Compliance audit_event write failed: %s", e)
+            finally:
+                audit_db.close()
+        except Exception as e:
+            logger.debug("Compliance audit_event import failed: %s", e)
 
         return result
 

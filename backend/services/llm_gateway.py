@@ -217,6 +217,9 @@ class LLMGateway:
         self._total_input_tokens = 0
         self._total_output_tokens = 0
         self._total_latency_ms = 0.0
+        self._total_cache_read_tokens = 0
+        self._total_cache_creation_tokens = 0
+        self._cache_hit_count = 0
 
     @property
     def sync_client(self) -> Anthropic:
@@ -349,13 +352,19 @@ class LLMGateway:
 
         input_tokens = getattr(response.usage, "input_tokens", 0)
         output_tokens = getattr(response.usage, "output_tokens", 0)
-        cache_hit = getattr(response.usage, "cache_read_input_tokens", 0) > 0
+        cache_read_tokens = getattr(response.usage, "cache_read_input_tokens", 0)
+        cache_creation_tokens = getattr(response.usage, "cache_creation_input_tokens", 0)
+        cache_hit = cache_read_tokens > 0
 
         # Update metrics
         self._total_calls += 1
         self._total_input_tokens += input_tokens
         self._total_output_tokens += output_tokens
         self._total_latency_ms += latency_ms
+        self._total_cache_read_tokens += cache_read_tokens
+        self._total_cache_creation_tokens += cache_creation_tokens
+        if cache_hit:
+            self._cache_hit_count += 1
 
         result = LLMResponse(
             text=response.content[0].text.strip(),
@@ -372,7 +381,7 @@ class LLMGateway:
         logger.info(
             f"[LLM_GATEWAY] intent={intent} model={model} temp={temperature:.1f} "
             f"tokens={input_tokens}+{output_tokens} latency={latency_ms:.0f}ms "
-            f"cache_hit={cache_hit}"
+            f"cache_hit={cache_hit} cache_read={cache_read_tokens} cache_create={cache_creation_tokens}"
         )
 
         return result
@@ -507,9 +516,17 @@ class LLMGateway:
         )
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Return gateway-level metrics for monitoring."""
+        """Return gateway-level metrics for monitoring.
+
+        Includes prompt caching stats: cache_hit_rate, total tokens saved
+        via cache reads, and total tokens used for cache creation.
+        """
         avg_latency = (
             self._total_latency_ms / self._total_calls
+            if self._total_calls > 0 else 0
+        )
+        cache_hit_rate = (
+            self._cache_hit_count / self._total_calls
             if self._total_calls > 0 else 0
         )
         return {
@@ -518,6 +535,11 @@ class LLMGateway:
             "total_output_tokens": self._total_output_tokens,
             "avg_latency_ms": round(avg_latency, 1),
             "circuit_breaker_state": self._circuit_breaker.state.value,
+            # Prompt caching metrics
+            "cache_hit_count": self._cache_hit_count,
+            "cache_hit_rate": round(cache_hit_rate, 3),
+            "total_cache_read_tokens": self._total_cache_read_tokens,
+            "total_cache_creation_tokens": self._total_cache_creation_tokens,
         }
 
 

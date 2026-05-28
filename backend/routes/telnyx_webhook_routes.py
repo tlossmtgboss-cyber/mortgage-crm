@@ -569,8 +569,38 @@ async def process_amd_result(tracking_id: str, event: TelnyxAMDEvent, db: Sessio
 # =============================================================================
 
 async def handle_call_answered(event: TelnyxCallEvent, db: Session):
-    """Handle call answered event"""
+    """Handle call answered event — includes click-to-dial transfer."""
     call_control_id = event.call_control_id
+
+    # Check for click-to-dial client_state
+    raw_client_state = event.payload.get("client_state", "")
+    if raw_client_state:
+        try:
+            import base64
+            decoded = base64.b64decode(raw_client_state).decode()
+            state_data = json.loads(decoded)
+            if state_data.get("type") == "click_to_dial":
+                destination = state_data.get("destination")
+                contact_name = state_data.get("contact_name", "Contact")
+                if destination and call_control_id:
+                    logger.info(
+                        "Click-to-dial answered — transferring to %s (%s)",
+                        destination, contact_name,
+                    )
+                    from telephony.provider import _get_telnyx_client
+                    client = _get_telnyx_client()
+                    if client:
+                        telnyx_number = os.environ.get("TELNYX_FROM_NUMBER", "+18438838956")
+                        client.calls.actions.transfer(
+                            call_control_id,
+                            to=destination,
+                            from_=telnyx_number,
+                            timeout_secs=30,
+                        )
+                        logger.info("Click-to-dial transfer initiated to %s", destination)
+                        return {"status": "transferred", "destination": destination}
+        except Exception as e:
+            logger.error("Click-to-dial transfer failed: %s", e, exc_info=True)
 
     # Resolve tenant context from the call record for structured logging
     _ans_org_id = None
@@ -647,6 +677,32 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
     except Exception as e:
         db.rollback()
         logger.debug("amd_outbound_calls update skipped: %s", e)
+
+    # SOC 2 audit trail
+    try:
+        from services.audit_events import audit_event, EventType
+        audit_event(
+            db,
+            event_type=EventType.CALL_COMPLETED,
+            outcome="success",
+            actor_email="telnyx-webhook",
+            actor_role="system",
+            org_id=_hup_org_id,
+            resource_type="telnyx_call",
+            resource_id=call_control_id,
+            metadata={
+                "provider": "telnyx",
+                "hangup_cause": hangup_cause,
+                "direction": getattr(event, "direction", None),
+            },
+        )
+        db.commit()
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.debug("Telnyx hangup audit_event write failed: %s", e)
 
     return {"status": "acknowledged", "call_id": call_control_id, "cause": hangup_cause}
 
@@ -2605,10 +2661,38 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
         """), {"url": recording_url, "call_id": call_control_id})
         db.commit()
 
+        # SOC 2 audit trail for recording
+        try:
+            from services.audit_events import audit_event, EventType
+            audit_event(
+                db,
+                event_type=EventType.CALL_RECORDING_SAVED,
+                outcome="success",
+                actor_email="telnyx-webhook",
+                actor_role="system",
+                org_id=_rec_org_id,
+                resource_type="telnyx_call",
+                resource_id=call_control_id,
+                metadata={
+                    "provider": "telnyx",
+                    "has_recording": True,
+                },
+            )
+            db.commit()
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.debug("Telnyx recording audit_event write failed: %s", e)
+
         # Kick off background transcription + CI processing
         if CALL_INTELLIGENCE_ENABLED:
             asyncio.create_task(
-                _transcribe_and_process_recording(call_control_id, recording_url)
+                _transcribe_and_process_recording(
+                    call_control_id, recording_url,
+                    raw_event_payload=event.payload if hasattr(event, "payload") else {},
+                )
             )
         else:
             logger.debug("Call Intelligence not enabled, skipping recording processing")
@@ -2619,6 +2703,7 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
 async def _transcribe_and_process_recording(
     call_control_id: str,
     recording_url: str,
+    raw_event_payload: Optional[dict] = None,
 ) -> None:
     """Background task: transcribe a Telnyx call recording and run CI.
 
@@ -2912,6 +2997,89 @@ async def _transcribe_and_process_recording(
                 call_control_id,
                 ci_result.get("error", ci_result.get("errors", "unknown")),
             )
+
+        # -----------------------------------------------------------------
+        # 4. Dispatch to CIE scoring pipeline (if enabled)
+        # -----------------------------------------------------------------
+        try:
+            from engine.config import cie_settings
+            if cie_settings.ENABLED:
+                from engine.models import CIECallRecord
+                from engine.cipher import encrypt_field
+                from engine.api.crm import resolve_call_context
+
+                existing_cie = (
+                    db.query(CIECallRecord.id)
+                    .filter(
+                        CIECallRecord.external_call_id == call_control_id,
+                        CIECallRecord.organization_id == org_id,
+                    )
+                    .first()
+                )
+                if existing_cie:
+                    logger.debug("CIE record already exists for %s", call_control_id)
+                else:
+                    ctx = resolve_call_context(to_number or "", org_id, db)
+                    duration_seconds = transcript_result.get("duration_seconds")
+
+                    too_short = (
+                        duration_seconds is not None
+                        and duration_seconds < cie_settings.MIN_ANALYZABLE_SECONDS
+                    )
+
+                    # Resolve canonical_call_id from CallLog if available
+                    _canonical_id = None
+                    try:
+                        _cl_row = db.execute(sa_text(
+                            "SELECT canonical_call_id FROM call_logs WHERE call_sid = :sid LIMIT 1"
+                        ), {"sid": call_control_id}).fetchone()
+                        if _cl_row and _cl_row[0]:
+                            _canonical_id = _cl_row[0]
+                    except Exception:
+                        pass
+
+                    cie_record = CIECallRecord(
+                        external_call_id=call_control_id,
+                        canonical_call_id=_canonical_id,
+                        provider="telnyx",
+                        direction="outbound",
+                        phone_to=encrypt_field(to_number) if to_number else None,
+                        duration_seconds=duration_seconds,
+                        transcript_encrypted=encrypt_field(full_text) if full_text else None,
+                        recording_url_encrypted=encrypt_field(recording_url) if recording_url else None,
+                        raw_payload=raw_event_payload or {},
+                        contact_id=ctx.contact_id,
+                        loan_id=loan_id or ctx.loan_id,
+                        lead_id=ctx.lead_id,
+                        owner_user_id=user_id or ctx.user_id,
+                        processing_status="too_short" if too_short else "pending",
+                        organization_id=org_id,
+                    )
+                    db.add(cie_record)
+                    db.commit()
+                    db.refresh(cie_record)
+
+                    if not too_short:
+                        from engine.worker.tasks import process_call_pipeline
+                        process_call_pipeline.delay(str(cie_record.id))
+                        logger.info(
+                            "CIE pipeline dispatched for Telnyx call %s (record=%s)",
+                            call_control_id, cie_record.id,
+                        )
+                    else:
+                        logger.info(
+                            "CIE: Telnyx call %s too short for analysis (%ss)",
+                            call_control_id, duration_seconds,
+                        )
+        except Exception as cie_exc:
+            logger.warning(
+                "CIE dispatch failed for Telnyx recording %s: %s",
+                call_control_id, cie_exc,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
     except Exception as e:
         logger.exception(

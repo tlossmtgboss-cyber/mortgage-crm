@@ -943,15 +943,21 @@ async def query_mode_node(state: AriaState) -> AriaState:
 
     messages = [{"role": "user", "content": question}]
 
+    from agents.anthropic_client import cached_system_block, cache_tool_definitions
+    cached_query_system = cached_system_block(
+        system + "\n\nYou have access to CRM query tools. Use them to answer the LO's question. Chain multiple tools if needed. Be specific with numbers and names."
+    )
+    cached_query_tools = cache_tool_definitions(QUERY_TOOL_DEFINITIONS)
+
     try:
         response = await asyncio.wait_for(
             client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=1024,
                 temperature=0.3,
-                system=system + "\n\nYou have access to CRM query tools. Use them to answer the LO's question. Chain multiple tools if needed. Be specific with numbers and names.",
+                system=cached_query_system,
                 messages=messages,
-                tools=QUERY_TOOL_DEFINITIONS,
+                tools=cached_query_tools,
             ),
             timeout=_LLM_TIMEOUT,
         )
@@ -963,6 +969,9 @@ async def query_mode_node(state: AriaState) -> AriaState:
             "messages": [AIMessage(content="I ran into an issue looking that up. Could you try asking again?")],
             "phase": DialoguePhase.RESPONDING,
         }
+
+    # Cached system for tool-loop follow-ups (same system prompt reused)
+    cached_loop_system = cached_system_block(system)
 
     for _ in range(3):
         tool_blocks = [b for b in response.content if b.type == "tool_use"]
@@ -990,9 +999,9 @@ async def query_mode_node(state: AriaState) -> AriaState:
                     model="claude-sonnet-4-6",
                     max_tokens=1024,
                     temperature=0.3,
-                    system=system,
+                    system=cached_loop_system,
                     messages=messages,
-                    tools=QUERY_TOOL_DEFINITIONS,
+                    tools=cached_query_tools,
                 ),
                 timeout=_LLM_TIMEOUT,
             )

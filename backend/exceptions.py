@@ -184,6 +184,24 @@ class SLABreachError(PerenniaError):
 # Data Integrity Errors
 # =============================================================================
 
+class ValidationError(PerenniaError):
+    """Raised for input validation failures (422).
+
+    Use this for request-body / query-param validation that does not fit a
+    more specific exception (e.g., InvalidStageError, ComplianceViolationError).
+    Alias as ``DomainValidationError`` when Pydantic's ``ValidationError`` is
+    also in scope.
+    """
+
+    def __init__(self, message: str, field: Optional[str] = None):
+        self.field = field
+        super().__init__(
+            message,
+            code="VALIDATION_ERROR",
+            details={"field": field} if field else {},
+        )
+
+
 class InvalidStageError(PerenniaError):
     """Raised when an invalid pipeline stage value is used."""
 
@@ -454,6 +472,8 @@ __all__ = [
     'ComplianceViolationError',
     'AuditImmutabilityError',
     'SLABreachError',
+    # Validation
+    'ValidationError',
     # Data integrity
     'InvalidStageError',
     'InvalidStateTransitionError',

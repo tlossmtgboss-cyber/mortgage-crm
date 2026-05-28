@@ -1575,8 +1575,13 @@ async def submit_mortgage_planner_questionnaire(
     from sqlalchemy import text
 
     try:
-        # Determine the loan officer ID (default to demo user ID 1 if not specified)
-        loan_officer_id = int(submission.loan_officer_id) if submission.loan_officer_id else 1
+        # Determine the loan officer ID — require it to be specified
+        if not submission.loan_officer_id:
+            raise HTTPException(
+                status_code=400,
+                detail="loan_officer_id is required to associate the questionnaire with a loan officer"
+            )
+        loan_officer_id = int(submission.loan_officer_id)
 
         # Check if lead already exists by email
         existing_lead = db.query(Lead).filter(Lead.email == submission.email).first()
@@ -1593,7 +1598,17 @@ async def submit_mortgage_planner_questionnaire(
             # Look up organization_id from the loan officer's user record
             from database.models import User as _User
             lo_user = db.query(_User).filter(_User.id == loan_officer_id).first()
-            lo_org_id = lo_user.organization_id if lo_user and lo_user.organization_id else 1
+            if not lo_user:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Loan officer with ID {loan_officer_id} not found"
+                )
+            lo_org_id = lo_user.organization_id
+            if not lo_org_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Loan officer has no organization assigned"
+                )
 
             lead = Lead(
                 name=submission.name,
@@ -2312,7 +2327,10 @@ IP: {req.client.host if req.client else 'Unknown'}
             org_row = db.execute(
                 text("SELECT id FROM organizations ORDER BY id LIMIT 1")
             ).fetchone()
-            default_org_id = org_row[0] if org_row else 1
+            if not org_row:
+                logger.error("No organizations found in database; cannot create lead from contact form")
+                raise HTTPException(status_code=500, detail="Internal server error")
+            default_org_id = org_row[0]
 
             db.execute(
                 text("""

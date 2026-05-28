@@ -931,7 +931,7 @@ class WorkflowSLAService:
                 config_id = instance.workflow_configuration_id
                 lead_id = getattr(instance, 'lead_id', None)
                 loan_id = getattr(instance, 'loan_id', None)
-                org_id = getattr(instance, 'organization_id', 1)
+                org_id = getattr(instance, 'organization_id', None)
                 trigger_time = getattr(instance, 'trigger_milestone_entered_at', None) or getattr(instance, 'started_at', None)
                 last_generated = getattr(instance, 'last_task_generated_day', -1) or -1
             elif isinstance(instance, dict):
@@ -939,7 +939,7 @@ class WorkflowSLAService:
                 config_id = instance.get('workflow_configuration_id')
                 lead_id = instance.get('lead_id')
                 loan_id = instance.get('loan_id')
-                org_id = instance.get('organization_id', 1)
+                org_id = instance.get('organization_id')
                 trigger_time = instance.get('trigger_milestone_entered_at') or instance.get('started_at')
                 last_generated = instance.get('last_task_generated_day', -1) or -1
             else:
@@ -948,6 +948,10 @@ class WorkflowSLAService:
 
             if not inst_id or not config_id:
                 logger.warning(f"Cannot generate tasks: missing instance_id={inst_id} or config_id={config_id}")
+                return 0
+
+            if not org_id:
+                logger.warning(f"Cannot generate tasks for instance {inst_id}: missing organization_id")
                 return 0
 
             # Calculate days elapsed

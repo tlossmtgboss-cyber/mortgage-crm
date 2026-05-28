@@ -88,9 +88,10 @@ class RoleAssignmentService:
             if not organization_id:
                 if lead.owner_id:
                     owner = self.db.query(self.User).filter(self.User.id == lead.owner_id).first()
-                    organization_id = owner.organization_id if owner else 1
-                else:
-                    organization_id = 1
+                    organization_id = owner.organization_id if owner else None
+                if not organization_id:
+                    logger.warning(f"Cannot assign role for lead {lead_id}: no organization context")
+                    return {"success": False, "error": "No organization context for lead"}
 
             # Deactivate existing assignment for this role
             self.db.execute(text("""
@@ -241,9 +242,10 @@ class RoleAssignmentService:
             if not organization_id:
                 if loan.loan_officer_id:
                     lo = self.db.query(self.User).filter(self.User.id == loan.loan_officer_id).first()
-                    organization_id = lo.organization_id if lo else 1
-                else:
-                    organization_id = 1
+                    organization_id = lo.organization_id if lo else None
+                if not organization_id:
+                    logger.warning(f"Cannot assign role for loan {loan_id}: no organization context")
+                    return {"success": False, "error": "No organization context for loan"}
 
             # Deactivate existing assignment for this role
             self.db.execute(text("""
@@ -377,17 +379,21 @@ class RoleAssignmentService:
         """
         # 1. Check org-wide default_role_assignments (primary source of truth)
         try:
-            org_id = 1
+            org_id = None
             if lead_id:
                 lead = self.db.query(self.Lead).filter(self.Lead.id == lead_id).first()
                 if lead and lead.owner_id:
                     owner = self.db.query(self.User).filter(self.User.id == lead.owner_id).first()
-                    org_id = owner.organization_id if owner else 1
+                    org_id = owner.organization_id if owner else None
             elif loan_id:
                 loan = self.db.query(self.Loan).filter(self.Loan.id == loan_id).first()
                 if loan and loan.loan_officer_id:
                     lo = self.db.query(self.User).filter(self.User.id == loan.loan_officer_id).first()
-                    org_id = lo.organization_id if lo else 1
+                    org_id = lo.organization_id if lo else None
+
+            if not org_id:
+                logger.warning(f"Cannot resolve user for role {role_id}: no organization context (lead_id={lead_id}, loan_id={loan_id})")
+                return None
 
             default_result = self.db.execute(text("""
                 SELECT user_id FROM default_role_assignments
@@ -491,9 +497,10 @@ class RoleAssignmentService:
             org_id = None
             if loan.loan_officer_id:
                 lo = self.db.query(self.User).filter(self.User.id == loan.loan_officer_id).first()
-                org_id = lo.organization_id if lo else 1
-            else:
-                org_id = 1
+                org_id = lo.organization_id if lo else None
+            if not org_id:
+                logger.warning(f"Cannot copy role assignments to loan {loan_id}: no organization context")
+                return {"success": False, "error": "No organization context for loan"}
 
             copied = 0
             for assignment in lead_assignments:

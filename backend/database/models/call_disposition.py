@@ -2,6 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Integer, Float, Text, JSON, ForeignKey, Index, Boolean
+from sqlalchemy.dialects.postgresql import UUID
 from db import Base
 
 
@@ -13,6 +14,7 @@ class CallDisposition(Base):
     __tablename__ = "call_dispositions"
 
     id = Column(String, primary_key=True, default=_uuid)
+    canonical_call_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     call_log_id = Column(String, nullable=True, index=True)
     lead_id = Column(String, ForeignKey("leads.id"), nullable=True, index=True)
     loan_id = Column(String, nullable=True, index=True)
@@ -49,8 +51,10 @@ class CallDisposition(Base):
     session_id = Column(String, nullable=True)  # dialer session if applicable
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_disposition_org_date", "organization_id", "created_at"),
         Index("ix_disposition_user_date", "user_id", "created_at"),
+        Index("ix_disposition_canonical", "canonical_call_id"),
     )

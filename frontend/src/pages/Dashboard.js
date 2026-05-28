@@ -37,15 +37,14 @@ function Dashboard() {
     return () => window.removeEventListener('crm-mutation', handleMutation);
   }, [refetchDashboard]);
 
-  // Check if current user is demo user
-  const isDemoUser = () => {
+  const isPlatformAdmin = () => {
     try {
       const user = getUserData();
       if (user) {
-        return user.email === 'admin@perenniaai.com';
+        return ['admin@perenniaai.com', 'tloss@cmgfi.com'].includes(user.email);
       }
     } catch (error) {
-      console.error('Error checking demo user:', error);
+      console.error('Error checking platform admin:', error);
     }
     return false;
   };
@@ -263,12 +262,12 @@ function Dashboard() {
 
     if (containerId === 'production-tracker') {
       // PHASE 4: Show for users with production.view permission or roles that should see production
-      // Always show for demo user or if container is in the allowed list for this role
+      // Always show for platform admin or if container is in the allowed list for this role
       const productionRoles = ['admin', 'site_admin', 'loan_officer', 'manager', 'executive', 'sales', 'management'];
       const canViewProduction = hasPermission('production.view') ||
                                 productionRoles.includes(userRole) ||
                                 productionRoles.includes(effectiveRole) ||
-                                isDemoUser() ||
+                                isPlatformAdmin() ||
                                 allowedContainers.includes('production-tracker');
       if (!canViewProduction) {
         return null;
@@ -886,12 +885,12 @@ function Dashboard() {
 
     if (containerId === 'referrals') {
       // PHASE 4: Show for users with referrals.view permission or roles that should see referrals
-      // Always show for demo user or if container is in the allowed list for this role
+      // Always show for platform admin or if container is in the allowed list for this role
       const referralRoles = ['admin', 'site_admin', 'loan_officer', 'manager', 'sales', 'management'];
       const canViewReferrals = hasPermission('referrals.view') ||
                                referralRoles.includes(userRole) ||
                                referralRoles.includes(effectiveRole) ||
-                               isDemoUser() ||
+                               isPlatformAdmin() ||
                                allowedContainers.includes('referrals');
       if (!canViewReferrals) {
         return null;
@@ -1020,13 +1019,13 @@ function Dashboard() {
 
     if (containerId === 'team' && teamStats.has_team) {
       // PHASE 4: Show for users with team.view_all/team.view_team permission or management roles
-      // Always show for demo user or if container is in the allowed list for this role
+      // Always show for platform admin or if container is in the allowed list for this role
       const teamRoles = ['admin', 'site_admin', 'manager', 'executive', 'management'];
       const canViewTeam = hasPermission('team.view_all') ||
                           hasPermission('team.view_team') ||
                           teamRoles.includes(userRole) ||
                           teamRoles.includes(effectiveRole) ||
-                          isDemoUser() ||
+                          isPlatformAdmin() ||
                           allowedContainers.includes('team');
       if (!canViewTeam) {
         return null;

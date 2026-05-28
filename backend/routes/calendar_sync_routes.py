@@ -1511,7 +1511,9 @@ async def google_calendar_auth(
             detail="Google Calendar integration not configured"
         )
 
-    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Could not determine user identity from auth token")
     frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
     redirect_url = f"{frontend_url}/settings/integrations"
 
@@ -1545,7 +1547,9 @@ async def google_calendar_auth_url(
             detail="Google Calendar integration not configured"
         )
 
-    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Could not determine user identity from auth token")
     frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
     redirect_url = f"{frontend_url}/settings/integrations"
 

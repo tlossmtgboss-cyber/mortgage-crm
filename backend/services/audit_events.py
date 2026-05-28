@@ -67,6 +67,20 @@ class EventType:
     INTEGRATION_SYNC_STARTED = "INTEGRATION_SYNC_STARTED"
     INTEGRATION_SYNC_COMPLETED = "INTEGRATION_SYNC_COMPLETED"
 
+    # Call lifecycle
+    CALL_INITIATED = "CALL_INITIATED"
+    CALL_COMPLETED = "CALL_COMPLETED"
+    CALL_TRANSFERRED = "CALL_TRANSFERRED"
+    CALL_FAILED = "CALL_FAILED"
+    CALL_RECORDING_SAVED = "CALL_RECORDING_SAVED"
+    CALL_TRANSCRIPT_RECEIVED = "CALL_TRANSCRIPT_RECEIVED"
+    CALL_SCORED = "CALL_SCORED"
+    RECORDING_ACCESSED = "RECORDING_ACCESSED"
+
+    # Compliance
+    COMPLIANCE_CHECK_PASSED = "COMPLIANCE_CHECK_PASSED"
+    COMPLIANCE_CHECK_FAILED = "COMPLIANCE_CHECK_FAILED"
+
     # System / admin
     CONFIG_CHANGED = "CONFIG_CHANGED"
     SECRET_ROTATED = "SECRET_ROTATED"
@@ -93,14 +107,18 @@ def audit_event(
     any failure is logged but does not propagate.
     """
     try:
+        actor_uuid = _coerce_uuid(actor_id)
+        org_uuid = _coerce_uuid(org_id)
+        org_int = _coerce_int(org_id)
         event = AuditEvent(
             occurred_at=datetime.now(timezone.utc),
             event_type=event_type,
             outcome=outcome,
-            actor_id=_coerce_uuid(actor_id),
+            actor_id=actor_uuid,
             actor_email=actor_email,
             actor_role=actor_role,
-            org_id=_coerce_uuid(org_id),
+            org_id=org_uuid,
+            organization_id=org_int,
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id else None,
             ip=ip,
@@ -108,6 +126,8 @@ def audit_event(
             request_id=request_id,
             metadata_json=_sanitize_metadata(metadata or {}),
         )
+        if actor_uuid is None and actor_id is not None:
+            event.metadata_json.setdefault("_actor_id_raw", str(actor_id))
         db.add(event)
         db.flush()
     except Exception as e:
@@ -123,6 +143,20 @@ def _coerce_uuid(value: Any) -> Optional[uuid.UUID]:
         return uuid.UUID(str(value))
     except (ValueError, TypeError):
         return None
+
+
+def _coerce_int(value: Any) -> Optional[int]:
+    """Extract an integer from value, or None if it's a UUID/string/missing."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+    return None
 
 
 _BLOCKED_KEYS = {

@@ -28,6 +28,8 @@ class CRMTools:
         def _query():
             db = SessionLocal()
             try:
+                if org_id:
+                    db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
                 # Try by ID first
                 try:
                     lead_id = int(identifier)
@@ -71,6 +73,8 @@ class CRMTools:
         def _query():
             db = SessionLocal()
             try:
+                if org_id:
+                    db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
                 row = db.execute(text(
                     "SELECT l.id, l.loan_number, l.loan_amount, l.loan_type, "
                     "l.stage, l.rate, l.property_address, l.purchase_price, "
@@ -147,6 +151,8 @@ class CRMTools:
         def _query():
             db = SessionLocal()
             try:
+                if org_id:
+                    db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
                 row = db.execute(text(
                     "SELECT id, email, first_name, last_name, phone "
                     "FROM users WHERE organization_id = :org "

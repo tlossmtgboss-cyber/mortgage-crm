@@ -27,7 +27,18 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
             logger.info("Skipping startup DB operations (TESTING=1)")
             return
 
-        # Run all startup migrations
+        # ── Alembic migrations (run FIRST, before legacy migrations) ────
+        try:
+            from alembic_runner import run_alembic_migrations
+            alembic_ok = run_alembic_migrations()
+            if alembic_ok:
+                logger.info("Alembic migrations: OK")
+            else:
+                logger.warning("Alembic migrations: FAILED (continuing with legacy migrations)")
+        except Exception as e:
+            logger.error("Alembic runner import/execution error: %s", e)
+
+        # Run all startup migrations (legacy — will be phased out)
         from startup_migrations import run_all_startup_migrations
         run_all_startup_migrations(engine)
 

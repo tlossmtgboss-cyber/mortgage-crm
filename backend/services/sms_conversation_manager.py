@@ -366,11 +366,12 @@ class SMSConversationManager:
             if not conversation_messages:
                 conversation_messages = [{"role": "user", "content": message}]
 
+            from agents.anthropic_client import cached_system_block
             response = await asyncio.wait_for(
                 client.messages.create(
                     model=_CLAUDE_MODEL,
                     max_tokens=_CLAUDE_MAX_TOKENS,
-                    system=system_prompt,
+                    system=cached_system_block(system_prompt),
                     messages=conversation_messages,
                 ),
                 timeout=15.0,

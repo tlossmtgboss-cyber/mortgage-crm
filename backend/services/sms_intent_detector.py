@@ -141,11 +141,12 @@ class SMSIntentDetector:
                     for m in recent
                 )
 
+            from agents.anthropic_client import cached_system_block
             model = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-20250514")
             response = await client.messages.create(
                 model=model,
                 max_tokens=200,
-                system=(
+                system=cached_system_block(
                     "Classify this SMS message from a mortgage lead into exactly one category: "
                     "scheduling, qualifying, objection, positive, question, document, greeting, unknown. "
                     "Respond with JSON: {\"intent\": \"...\", \"confidence\": 0.0-1.0, \"stage\": \"...\"}"
