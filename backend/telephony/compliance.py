@@ -927,8 +927,6 @@ class ComplianceChecker:
         max_calls = settings.max_calls_per_day or 100
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Atomic rate-limit check: FOR UPDATE locks matching rows so concurrent
-        # transactions serialize through this critical section.
         rate_query = self.db.query(func.count(CallLog.id)).filter(
             and_(
                 CallLog.agent_id == agent_id,
@@ -937,7 +935,6 @@ class ComplianceChecker:
         )
         if self.organization_id:
             rate_query = rate_query.filter(CallLog.organization_id == self.organization_id)
-        rate_query = rate_query.with_for_update()
         calls_today = rate_query.scalar() or 0
 
         if calls_today >= max_calls:
