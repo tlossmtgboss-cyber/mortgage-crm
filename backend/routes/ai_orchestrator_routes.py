@@ -166,6 +166,66 @@ def get_db_dep(request: Request = None):
     yield from get_db(request)
 
 
+async def _load_aria_context(user_id: str, org_id: int, message: str = "") -> str:
+    """Load pipeline context, memory, and knowledge graph for Aria-mobile.
+
+    Returns a context block that can be prepended to document_context so
+    the orchestrator has the same situational awareness as the Aria
+    WebSocket conversation engine.
+    """
+    parts = []
+
+    # Pipeline context + knowledge graph
+    try:
+        from aria.core.context_loader import AriaContextLoader
+        import asyncio
+        loader = AriaContextLoader()
+        ctx = await asyncio.wait_for(
+            loader.load_with_memory(user_id, query=message, org_id=org_id),
+            timeout=8.0,
+        )
+
+        pipeline = ctx.get("pipeline_summary", "")
+        recent = ctx.get("recent_contacts", "")
+        kg = ctx.get("knowledge_graph_context", "")
+        memory = ctx.get("memory_context", "")
+
+        if pipeline:
+            parts.append(f"Pipeline: {pipeline}")
+        if recent:
+            parts.append(f"Recent contacts:\n{recent}")
+        if kg:
+            parts.append(kg)
+        if memory:
+            parts.append(memory)
+    except Exception as e:
+        logger.debug(f"Aria context load skipped: {e}")
+
+    # Voice preferences
+    try:
+        from aria.core.voice_memory import VoiceMemory
+        import asyncio
+        vm = VoiceMemory(organization_id=str(org_id))
+        prefs = await asyncio.to_thread(vm.get_preferences, user_id)
+        if prefs:
+            pref_parts = []
+            if prefs.get("preferred_name"):
+                pref_parts.append(f"Address user as \"{prefs['preferred_name']}\"")
+            if prefs.get("response_length") == "short":
+                pref_parts.append("User prefers brief responses")
+            elif prefs.get("response_length") == "long":
+                pref_parts.append("User prefers detailed responses")
+            if pref_parts:
+                parts.append("User preferences: " + "; ".join(pref_parts))
+    except Exception as e:
+        logger.debug(f"Voice preferences load skipped: {e}")
+
+    if not parts:
+        return ""
+
+    return "[ARIA CONTEXT]\n" + "\n".join(parts) + "\n[END ARIA CONTEXT]"
+
+
 MAX_DOCUMENT_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_DOCUMENT_CHARS = 50_000
 SUPPORTED_DOC_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md", ".html"}
@@ -332,6 +392,11 @@ async def orchestrator_chat(
             logger.warning(f"Failed to load conversation history: {e}")
             conversation_history = []
 
+        # Load Aria context (pipeline, memory, knowledge graph) for aria-mobile
+        aria_context = await _load_aria_context(user_id_str, org_id, message)
+        if aria_context:
+            document_context = f"{aria_context}\n\n{document_context}" if document_context else aria_context
+
         # Create the full agent service with all 215 tools
         service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
 
@@ -422,7 +487,14 @@ async def orchestrator_chat_stream(
     if not message:
         raise HTTPException(status_code=400, detail="Message is required")
 
+    # Load Aria context before entering the generator (needs await)
+    _aria_ctx = await _load_aria_context(user_id_str, org_id, message)
+
     async def generate():
+        nonlocal document_context
+        if _aria_ctx:
+            document_context = f"{_aria_ctx}\n\n{document_context}" if document_context else _aria_ctx
+
         try:
             from agents.service import create_ai_agent_service
             from conversation_memory_service import ConversationMemory as ConvMemory

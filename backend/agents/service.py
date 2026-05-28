@@ -1065,6 +1065,22 @@ Never reference, query, or return data from other organizations.
                 }
             })
 
+        if "find_contact" in self._tool_functions:
+            definitions.append({
+                "name": "find_contact",
+                "description": "Find a contact by name — searches leads, team members, and referral partners. Use this FIRST when the user mentions a person by name to get their ID, phone, and email before sending SMS, scheduling calls, or looking up loan status.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Full or partial name to search for"
+                        }
+                    },
+                    "required": ["name"]
+                }
+            })
+
         if "search_loans" in self._tool_functions:
             definitions.append({
                 "name": "search_loans",
@@ -1189,7 +1205,7 @@ Never reference, query, or return data from other organizations.
         if "send_sms" in self._tool_functions:
             definitions.append({
                 "name": "send_sms",
-                "description": "Send an SMS text message to a phone number. Use search_leads first to find the contact's phone number if not provided.",
+                "description": "Send an SMS text message to a phone number. Use find_contact first to find the contact's phone number if not provided.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -1204,7 +1220,7 @@ Never reference, query, or return data from other organizations.
         if "click_to_dial" in self._tool_functions:
             definitions.append({
                 "name": "click_to_dial",
-                "description": "Initiate an outbound phone call to a contact. Use search_leads first to find the contact's phone number if not provided.",
+                "description": "Initiate an outbound phone call to a contact. Use find_contact first to find the contact's phone number if not provided.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -1474,9 +1490,19 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             "— tenant isolation degraded for AI tool queries"
         )
 
-    # Determine data scope: admins/managers see org-wide, others see own data only
+    # Determine data scope: check permission_role AND granular permissions.
+    # Must match CRM page logic (filter_leads_by_permissions) to avoid
+    # users seeing leads on the CRM page but not through Aria.
     _user_role = (getattr(current_user, 'permission_role', '') or '').lower()
     _has_org_wide_access = _user_role in ('admin', 'site_admin', 'leadership', 'management')
+    if not _has_org_wide_access:
+        try:
+            from routes.permission_core_routes import has_permission
+            _uid = getattr(current_user, 'id', None)
+            if _uid and has_permission(_uid, 'leads.view_all', db):
+                _has_org_wide_access = True
+        except Exception:
+            pass
     if _has_org_wide_access:
         logger.info(f"[TOOLS] User {getattr(current_user, 'id', '?')} has org-wide AI tool access (role={_user_role})")
 
@@ -1708,6 +1734,75 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return {"count": 0, "leads": [], "error": "Internal server error"}
 
     tools["search_leads"] = execute_search_leads
+
+    # ============ Contact Resolution ============
+
+    async def execute_find_contact(args):
+        """Find a contact by name across leads, users, and referral partners."""
+        name = args.get("name", "").strip()
+        if not name:
+            return {"found": False, "error": "Name is required"}
+
+        try:
+            search = f"%{name}%"
+            params = {"search": search, "org_id": org_id}
+
+            # Search leads (always org-scoped)
+            lead_sql = (
+                "SELECT id, name, email, phone, stage, 'lead' as contact_type"
+                " FROM leads"
+                " WHERE organization_id = :org_id"
+                " AND name ILIKE :search"
+                " ORDER BY updated_at DESC LIMIT 5"
+            )
+            lead_rows = db.execute(text(lead_sql), params).fetchall()
+
+            # Search users in same org
+            user_sql = (
+                "SELECT id, CONCAT(first_name, ' ', last_name) as name,"
+                " email, phone, 'team_member' as contact_type"
+                " FROM users"
+                " WHERE organization_id = :org_id"
+                " AND (first_name || ' ' || last_name) ILIKE :search"
+                " LIMIT 5"
+            )
+            user_rows = db.execute(text(user_sql), params).fetchall()
+
+            # Search referral partners
+            partner_sql = (
+                "SELECT id, name, email, phone, 'referral_partner' as contact_type"
+                " FROM referral_partners"
+                " WHERE organization_id = :org_id"
+                " AND name ILIKE :search"
+                " LIMIT 5"
+            )
+            partner_rows = db.execute(text(partner_sql), params).fetchall()
+
+            contacts = []
+            for row in list(lead_rows) + list(user_rows) + list(partner_rows):
+                contacts.append({
+                    "id": row.id,
+                    "name": row.name,
+                    "email": row.email,
+                    "phone": row.phone,
+                    "type": row.contact_type,
+                })
+
+            if not contacts:
+                return {"found": False, "count": 0, "contacts": []}
+
+            return {
+                "found": True,
+                "count": len(contacts),
+                "contacts": contacts,
+                "best_match": contacts[0],
+            }
+        except Exception as e:
+            logger.error(f"Error in find_contact: {e}")
+            db.rollback()
+            return {"found": False, "error": "Internal server error"}
+
+    tools["find_contact"] = execute_find_contact
 
     # ============ Loan Search Tools ============
 
