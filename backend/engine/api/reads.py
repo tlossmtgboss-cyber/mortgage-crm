@@ -46,7 +46,7 @@ async def get_report(
     return report
 
 
-@router.get("/reports", response_model=ReportListResponse)
+@router.get("/reports")
 async def list_reports(
     loan_id: Optional[int] = Query(None),
     lead_id: Optional[int] = Query(None),
@@ -55,39 +55,43 @@ async def list_reports(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    org_id = getattr(current_user, "organization_id", None)
-    q = (
-        db.query(CIECallRecord)
-        .filter(CIECallRecord.organization_id == org_id)
-        .order_by(CIECallRecord.created_at.desc())
-    )
-
-    if loan_id is not None:
-        q = q.filter(CIECallRecord.loan_id == loan_id)
-    if lead_id is not None:
-        q = q.filter(CIECallRecord.lead_id == lead_id)
-
-    total = q.count()
-    records = q.offset(offset).limit(limit).all()
-
-    items = []
-    for rec in records:
-        call_brief = CallRecordBrief(
-            id=rec.id,
-            external_call_id=rec.external_call_id,
-            provider=rec.provider,
-            direction=rec.direction,
-            started_at=rec.started_at,
-            duration_seconds=rec.duration_seconds,
-            processing_status=rec.processing_status,
-            created_at=rec.created_at,
+    try:
+        org_id = getattr(current_user, "organization_id", None)
+        q = (
+            db.query(CIECallRecord)
+            .filter(CIECallRecord.organization_id == org_id)
+            .order_by(CIECallRecord.created_at.desc())
         )
-        report = None
-        if rec.report:
-            report = ReportResponse.model_validate(rec.report)
-        items.append(ReportListItem(call=call_brief, report=report))
 
-    return ReportListResponse(items=items, total=total)
+        if loan_id is not None:
+            q = q.filter(CIECallRecord.loan_id == loan_id)
+        if lead_id is not None:
+            q = q.filter(CIECallRecord.lead_id == lead_id)
+
+        total = q.count()
+        records = q.offset(offset).limit(limit).all()
+
+        items = []
+        for rec in records:
+            call_brief = CallRecordBrief(
+                id=rec.id,
+                external_call_id=rec.external_call_id,
+                provider=rec.provider,
+                direction=rec.direction,
+                started_at=rec.started_at,
+                duration_seconds=rec.duration_seconds,
+                processing_status=rec.processing_status,
+                created_at=rec.created_at,
+            )
+            report = None
+            if rec.report:
+                report = ReportResponse.model_validate(rec.report)
+            items.append(ReportListItem(call=call_brief, report=report))
+
+        return ReportListResponse(items=items, total=total)
+    except Exception as e:
+        logger.exception("CIE list_reports error")
+        return {"items": [], "total": 0, "error": str(e)}
 
 
 @router.get("/reports/{report_id}/transcript")
@@ -138,49 +142,56 @@ async def get_recording_url(
     return {"recording_url": decrypt_field(call.recording_url_encrypted)}
 
 
-@router.get("/stats", response_model=StatsResponse)
+@router.get("/stats")
 async def get_stats(
     loan_id: Optional[int] = Query(None),
     lead_id: Optional[int] = Query(None),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    org_id = getattr(current_user, "organization_id", None)
-    q = db.query(CIECallRecord).filter(CIECallRecord.organization_id == org_id)
-    if loan_id is not None:
-        q = q.filter(CIECallRecord.loan_id == loan_id)
-    if lead_id is not None:
-        q = q.filter(CIECallRecord.lead_id == lead_id)
-
-    total = q.count()
-    analyzed = q.filter(CIECallRecord.processing_status == "completed").count()
-    pending = q.filter(CIECallRecord.processing_status.in_(["pending", "processing"])).count()
-    failed = q.filter(CIECallRecord.processing_status == "failed").count()
-
-    avg_cis = None
-    avg_conv = None
-    if analyzed > 0:
-        stats = (
-            db.query(
-                func.avg(CIEIntelligenceReport.cis_composite),
-                func.avg(CIEIntelligenceReport.conversion_probability),
-            )
-            .join(CIECallRecord, CIEIntelligenceReport.call_record_id == CIECallRecord.id)
-        )
+    try:
+        org_id = getattr(current_user, "organization_id", None)
+        q = db.query(CIECallRecord).filter(CIECallRecord.organization_id == org_id)
         if loan_id is not None:
-            stats = stats.filter(CIECallRecord.loan_id == loan_id)
+            q = q.filter(CIECallRecord.loan_id == loan_id)
         if lead_id is not None:
-            stats = stats.filter(CIECallRecord.lead_id == lead_id)
-        row = stats.first()
-        if row:
-            avg_cis = round(float(row[0]), 1) if row[0] else None
-            avg_conv = round(float(row[1]), 3) if row[1] else None
+            q = q.filter(CIECallRecord.lead_id == lead_id)
 
-    return StatsResponse(
-        total_calls=total,
-        analyzed=analyzed,
-        pending=pending,
-        failed=failed,
-        avg_cis=avg_cis,
-        avg_conversion=avg_conv,
-    )
+        total = q.count()
+        analyzed = q.filter(CIECallRecord.processing_status == "completed").count()
+        pending = q.filter(CIECallRecord.processing_status.in_(["pending", "processing"])).count()
+        failed = q.filter(CIECallRecord.processing_status == "failed").count()
+
+        avg_cis = None
+        avg_conv = None
+        if analyzed > 0:
+            stats = (
+                db.query(
+                    func.avg(CIEIntelligenceReport.cis_composite),
+                    func.avg(CIEIntelligenceReport.conversion_probability),
+                )
+                .join(CIECallRecord, CIEIntelligenceReport.call_record_id == CIECallRecord.id)
+            )
+            if loan_id is not None:
+                stats = stats.filter(CIECallRecord.loan_id == loan_id)
+            if lead_id is not None:
+                stats = stats.filter(CIECallRecord.lead_id == lead_id)
+            row = stats.first()
+            if row:
+                avg_cis = round(float(row[0]), 1) if row[0] else None
+                avg_conv = round(float(row[1]), 3) if row[1] else None
+
+        return {
+            "total_calls": total,
+            "analyzed": analyzed,
+            "pending": pending,
+            "failed": failed,
+            "avg_cis": avg_cis,
+            "avg_conversion": avg_conv,
+        }
+    except Exception as e:
+        logger.exception("CIE get_stats error")
+        return {
+            "total_calls": 0, "analyzed": 0, "pending": 0, "failed": 0,
+            "avg_cis": None, "avg_conversion": None, "error": str(e),
+        }
