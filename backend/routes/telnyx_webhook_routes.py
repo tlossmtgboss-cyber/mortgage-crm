@@ -3007,7 +3007,6 @@ async def _transcribe_and_process_recording(
                 from engine.models import CIECallRecord
                 from engine.cipher import encrypt_field
                 from engine.api.crm import resolve_call_context
-                from datetime import datetime as _dt, timezone as _tz
 
                 existing_cie = (
                     db.query(CIECallRecord.id)
