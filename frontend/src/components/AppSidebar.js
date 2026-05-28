@@ -9,7 +9,7 @@ import './AppSidebar.css';
 const SECTION_MAP = {
   pipeline: ['dashboard', 'leads', 'activeLoans', 'portfolio', 'rateMonitor'],
   workflow: ['tasks', 'workflowFlowchart', 'smartDocs', 'marketing', 'calendar'],
-  intelligence: ['briefing', 'scorecard', 'goalTracker', 'partners', 'aiUnderwriter', 'market', 'profitability'],
+  intelligence: ['briefing', 'scorecard', 'goalTracker', 'partners', 'aiUnderwriter', 'guidelineSearch', 'market', 'profitability'],
   aiAgents: ['missionControl', 'agentDashboard', 'agentGym', 'opsManager', 'usageIntelligence'],
 };
 
@@ -36,6 +36,7 @@ const ICONS = {
   goalTracker: '▲',
   partners: '◆',
   aiUnderwriter: '⚛',
+  guidelineSearch: '⚖',
   market: '◈',
   profitability: '$',
   missionControl: '⚙',

@@ -113,7 +113,7 @@ export const NAVIGATION_ITEMS = {
   },
   guidelineSearch: {
     path: '/guideline-search',
-    label: 'Guideline Search',
+    label: 'Underwriter Guidelines',
     module: 'ai_assistant'
   },
   market: {
