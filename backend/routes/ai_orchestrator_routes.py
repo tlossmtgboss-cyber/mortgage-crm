@@ -609,6 +609,98 @@ async def get_concurrency_stats(
     return get_ai_concurrency_stats()
 
 
+@router.get("/aria-diagnostic")
+async def aria_diagnostic(
+    request: Request,
+    db: Session = Depends(get_db_dep),
+    current_user=Depends(current_user_flexible_dep),
+):
+    """
+    Lightweight diagnostic endpoint to verify Aria-mobile's data access chain.
+    Returns user context, permission scope, lead visibility, Aria context status,
+    and available tools -- all without needing Railway logs.
+    """
+    result: Dict[str, Any] = {
+        "user_id": None,
+        "org_id": None,
+        "permission_role": None,
+        "has_org_wide_access": False,
+        "lead_count": 0,
+        "sample_leads": [],
+        "aria_context_loaded": False,
+        "aria_context_length": 0,
+        "tools_available": [],
+        "errors": [],
+    }
+
+    try:
+        from sqlalchemy import text, func
+        from database.models.lead_loan import Lead
+        from routes.permission_core_routes import has_permission
+
+        user_id = getattr(current_user, "id", None)
+        org_id = getattr(current_user, "organization_id", None)
+        perm_role = getattr(current_user, "permission_role", None)
+
+        result["user_id"] = user_id
+        result["org_id"] = org_id
+        result["permission_role"] = perm_role
+
+        # --- org-wide access check ---
+        try:
+            is_admin = perm_role and perm_role.lower() in ("admin", "site_admin")
+            has_view_all = has_permission(user_id, "leads.view_all", db) if user_id else False
+            result["has_org_wide_access"] = bool(is_admin or has_view_all)
+        except Exception as e:
+            result["errors"].append(f"permission_check: {e}")
+
+        # --- lead count + sample leads ---
+        try:
+            base_query = db.query(Lead)
+            if org_id:
+                base_query = base_query.filter(Lead.organization_id == org_id)
+
+            if result["has_org_wide_access"]:
+                filtered = base_query
+            else:
+                filtered = base_query.filter(Lead.owner_id == user_id)
+
+            result["lead_count"] = filtered.count()
+
+            sample_rows = filtered.order_by(Lead.id.desc()).limit(3).all()
+            result["sample_leads"] = [
+                {
+                    "id": l.id,
+                    "name": f"{getattr(l, 'first_name', '') or ''} {getattr(l, 'last_name', '') or ''}".strip() or "(no name)",
+                    "stage": getattr(l, "stage", None),
+                }
+                for l in sample_rows
+            ]
+        except Exception as e:
+            result["errors"].append(f"lead_query: {e}")
+
+        # --- aria context check ---
+        try:
+            aria_ctx = await _load_aria_context(str(user_id), org_id, "diagnostic ping")
+            result["aria_context_loaded"] = bool(aria_ctx)
+            result["aria_context_length"] = len(aria_ctx) if aria_ctx else 0
+        except Exception as e:
+            result["errors"].append(f"aria_context: {e}")
+
+        # --- available tools ---
+        try:
+            from agents.dynamic_tool_loader import create_all_tools
+            tools = create_all_tools(db, current_user)
+            result["tools_available"] = sorted(tools.keys())
+        except Exception as e:
+            result["errors"].append(f"tools_load: {e}")
+
+    except Exception as e:
+        result["errors"].append(f"top_level: {e}")
+
+    return result
+
+
 def set_dependencies(get_db_func, get_current_user_func):
     """Set dependencies for this router"""
     global _get_db, _get_current_user
