@@ -153,11 +153,9 @@ async def get_my_modules(
         user_email = getattr(current_user, 'email', None)
         user_role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
 
-        # Default to org 1 if user doesn't have an org (single-tenant fallback)
         if not org_id:
-            # For admins or if no org set, default to org 1
-            org_id = 1
-            logger.info(f"User {user_id} ({user_email}) has no organization_id, defaulting to org 1")
+            logger.warning(f"User {user_id} ({user_email}) has no organization_id; cannot load modules")
+            raise HTTPException(status_code=403, detail="User has no organization assigned")
 
         modules = ModuleService.get_organization_modules_detailed(db, org_id)
         pricing = ModuleService.get_pricing_summary(db, org_id)

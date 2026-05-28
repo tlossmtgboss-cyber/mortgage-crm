@@ -229,8 +229,12 @@ async def get_application_slides_config(
         # Try to get existing configuration from database
         from sqlalchemy import text
 
-        user_id = current_user.id if hasattr(current_user, 'id') else 1
-        org_id = current_user.company_id if hasattr(current_user, 'company_id') else 1
+        user_id = getattr(current_user, 'id', None)
+        org_id = getattr(current_user, 'company_id', None) or getattr(current_user, 'organization_id', None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
+        if not org_id:
+            raise HTTPException(status_code=403, detail="User has no organization assigned")
 
         # Validate app_type
         if app_type not in ["purchase", "refinance"]:
@@ -281,8 +285,12 @@ async def save_application_slides_config(
         import json
         from sqlalchemy import text
 
-        user_id = current_user.id if hasattr(current_user, 'id') else 1
-        org_id = current_user.company_id if hasattr(current_user, 'company_id') else 1
+        user_id = getattr(current_user, 'id', None)
+        org_id = getattr(current_user, 'company_id', None) or getattr(current_user, 'organization_id', None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
+        if not org_id:
+            raise HTTPException(status_code=403, detail="User has no organization assigned")
 
         # Validate app_type
         if app_type not in ["purchase", "refinance"]:
@@ -384,7 +392,9 @@ async def reset_application_slides_config(
     try:
         from sqlalchemy import text
 
-        org_id = current_user.company_id if hasattr(current_user, 'company_id') else 1
+        org_id = getattr(current_user, 'company_id', None) or getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="User has no organization assigned")
 
         # Validate app_type
         if app_type not in ["purchase", "refinance"]:

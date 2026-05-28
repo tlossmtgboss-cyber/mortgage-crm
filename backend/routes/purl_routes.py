@@ -98,10 +98,12 @@ logger = logging.getLogger(__name__)
 
 def get_user_org_id(user) -> int:
     """
-    Get user's organization_id, defaulting to 1 if NULL.
-    This handles cases where users don't have an explicit organization assigned.
+    Get user's organization_id. Raises if not set (multi-tenant requirement).
     """
-    return user.organization_id if user.organization_id else 1
+    org_id = user.organization_id if user.organization_id else None
+    if not org_id:
+        raise HTTPException(status_code=403, detail="User has no organization assigned")
+    return org_id
 
 
 # =============================================================================

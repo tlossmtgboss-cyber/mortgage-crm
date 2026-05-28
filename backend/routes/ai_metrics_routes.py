@@ -341,7 +341,9 @@ async def manually_verify_response(
         )
 
         # Record to database for metrics tracking
-        user_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
+        if not current_user or not hasattr(current_user, 'id') or not current_user.id:
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
+        user_id = current_user.id
         await AIMetricsService.record_hallucination_report(
             db=db,
             user_id=user_id,

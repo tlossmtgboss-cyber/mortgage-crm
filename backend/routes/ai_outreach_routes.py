@@ -291,7 +291,8 @@ async def get_contacts_for_outreach(
 @router.post("/start")
 async def start_ai_outreach(
     request: StartOutreachRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user())
 ):
     """Start an AI-powered outreach conversation"""
     try:
@@ -393,15 +394,10 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
         # Generate message ID for threading
         message_id = f"<{conv_id}@mortgagecrm.ai>"
 
-        # Get user ID (demo user for now)
-        user_id = 1
-        try:
-            import main
-            demo_user = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1")).fetchone()
-            if demo_user:
-                user_id = demo_user.id
-        except Exception as e:
-            logger.error(f"Error fetching demo user: {e}")
+        # Get user ID from authenticated user
+        user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Could not determine user identity")
 
         # Ensure conversation tables exist
         try:

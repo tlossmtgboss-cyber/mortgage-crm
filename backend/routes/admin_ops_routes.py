@@ -1303,17 +1303,32 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.info(f"Found {len(unmatched)} unmatched extracted data records to rematch")
 
             matched_count = 0
-            # Get the default user (loan officer) for matching context
-            default_user = db.query(User).first()
-            user_id = default_user.id if default_user else 1
+            skipped_no_user = 0
 
             for extracted in unmatched:
                 fields = extracted.fields or {}
                 if not fields:
                     continue
 
+                # Derive user_id from the extracted data's incoming event
+                event_user_id = None
+                if extracted.incoming_event and getattr(extracted.incoming_event, 'user_id', None):
+                    event_user_id = extracted.incoming_event.user_id
+                elif extracted.event_id:
+                    # Fallback: query event directly if relationship not loaded
+                    from database.models import IncomingDataEvent
+                    event = db.query(IncomingDataEvent).filter(
+                        IncomingDataEvent.id == extracted.event_id
+                    ).first()
+                    event_user_id = event.user_id if event else None
+
+                if not event_user_id:
+                    skipped_no_user += 1
+                    logger.warning(f"Skipping extracted_data {extracted.id}: no user_id from incoming event")
+                    continue
+
                 # Re-run matching with improved logic
-                entity_match = match_entity(fields, db, user_id)
+                entity_match = match_entity(fields, db, event_user_id)
 
                 if entity_match["entity_type"] and entity_match["confidence"] > 0.5:
                     extracted.match_entity_type = entity_match["entity_type"]
@@ -1323,13 +1338,14 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     logger.info(f"Rematched extracted_data {extracted.id}: {entity_match['entity_type']} {entity_match['entity_id']} ({entity_match['confidence']:.2f})")
 
             db.commit()
-            logger.info(f"Rematched {matched_count}/{len(unmatched)} extracted data records")
+            logger.info(f"Rematched {matched_count}/{len(unmatched)} extracted data records (skipped {skipped_no_user} with no user context)")
 
             return {
                 "status": "success",
                 "total_unmatched": len(unmatched),
                 "newly_matched": matched_count,
-                "message": f"Rematched {matched_count} of {len(unmatched)} records"
+                "skipped_no_user": skipped_no_user,
+                "message": f"Rematched {matched_count} of {len(unmatched)} records ({skipped_no_user} skipped, no user context)"
             }
 
         except Exception as e:
@@ -2095,7 +2111,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             'Tyler Martinez', 'Olivia Anderson', 'Admin User'
         ]
 
-        protected_emails = ['admin@perenniaai.com', current_user.email]
+        protected_emails = ['admin@perenniaai.com', 'tloss@cmgfi.com', current_user.email]
 
         try:
             # Find sample users

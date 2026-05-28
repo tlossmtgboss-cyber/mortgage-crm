@@ -82,7 +82,9 @@ async def docusign_auth(
             detail=error_response("DocuSign integration not configured", code="NOT_CONFIGURED")
         )
 
-    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Could not determine user identity")
     frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
     state = f"{user_id}:{frontend_url}/settings/integrations"
 

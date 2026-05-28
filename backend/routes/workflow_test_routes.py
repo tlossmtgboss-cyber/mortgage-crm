@@ -44,6 +44,13 @@ router = APIRouter(
 # RUNTIME IMPORTS - To avoid circular imports
 # ============================================================================
 
+def _extract_user_id(current_user) -> int:
+    """Extract user ID from current_user (dict or object). Raises 401 if unavailable."""
+    uid = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Could not determine user identity")
+    return uid
+
 def get_current_user_dep():
     """Get current_user dependency from main at runtime"""
     import main
@@ -679,7 +686,7 @@ async def create_lead_condition(
             "priority": condition.priority,
             "due_date": condition.due_date if condition.due_date else None,
             "status": condition.status,
-            "created_by": getattr(current_user, 'id', 1)
+            "created_by": _extract_user_id(current_user)
         })
         db.commit()
 
@@ -1547,13 +1554,19 @@ async def _execute_power_play_actions(actions: list, entity: Any, db: Session, T
                 task_data = action.data
                 due_date = datetime.now(timezone.utc) + timedelta(hours=task_data.get("due_hours", 24))
 
+                # Use entity's owner_id for task ownership
+                entity_owner_id = getattr(entity, 'owner_id', None) or getattr(entity, 'user_id', None)
+                if not entity_owner_id:
+                    logger.warning(f"No owner_id on entity for Power Play task; skipping task creation")
+                    continue
+
                 task = Task(
                     title=task_data.get("title", "Power Play Task"),
                     description=task_data.get("description", ""),
                     due_date=due_date,
                     priority=task_data.get("priority", "medium"),
                     status="pending",
-                    owner_id=1,  # Default owner
+                    owner_id=entity_owner_id,
                     loan_id=task_data.get("loan_id"),
                     lead_id=task_data.get("lead_id")
                 )
@@ -1846,7 +1859,7 @@ async def classify_attachment(
     try:
         result = await handler.classify_attachment(
             attachment_id=attachment_id,
-            user_id=getattr(current_user, 'id', 1),
+            user_id=_extract_user_id(current_user),
             doc_type=classification.doc_type,
             doc_category=classification.doc_category,
             borrower_id=classification.borrower_id,
@@ -1883,7 +1896,7 @@ async def discard_attachment(
     try:
         result = await handler.discard_attachment(
             attachment_id=attachment_id,
-            user_id=getattr(current_user, 'id', 1),
+            user_id=_extract_user_id(current_user),
             reason=discard_data.reason
         )
         return result
@@ -1913,7 +1926,7 @@ async def complete_classification_task(
     try:
         result = await handler.complete_classification_task(
             task_id=task_id,
-            user_id=getattr(current_user, 'id', 1)
+            user_id=_extract_user_id(current_user)
         )
         return result
     except ValueError as e:
