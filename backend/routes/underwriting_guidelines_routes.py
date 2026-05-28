@@ -100,7 +100,7 @@ except Exception:
 
 # Storage configuration
 UPLOAD_DIR = os.getenv("GUIDELINE_UPLOAD_DIR", "/tmp/guidelines")
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB (streamed to disk, so memory-safe)
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".doc", ".html", ".md"}
 
 
@@ -140,28 +140,41 @@ async def upload_guideline(
             detail=f"File type {file_ext} not allowed. Allowed: {ALLOWED_EXTENSIONS}"
         )
 
-    # Read file content
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
-        )
-
-    # Create upload directory if needed
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-    # Generate unique filename — sanitize original filename to prevent path traversal
+    # Build storage path first (sanitize filename to prevent path traversal)
     import re as _re
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     file_id = str(uuid.uuid4())[:8]
     safe_original = os.path.basename(file.filename or "upload")
     safe_original = _re.sub(r'[^a-zA-Z0-9._-]', '_', safe_original)  # Only allow safe chars
     stored_filename = f"{file_id}_{safe_original}"
     file_path = os.path.join(UPLOAD_DIR, stored_filename)
 
-    # Save file
-    with open(file_path, "wb") as f:
-        f.write(content)
+    # Stream the upload to disk in 1MB chunks. Reading the whole file into
+    # memory (await file.read()) can OOM-kill the worker on large PDFs, which
+    # the client sees as a dropped connection (ERR_HTTP2_PROTOCOL_ERROR).
+    file_size = 0
+    try:
+        with open(file_path, "wb") as f:
+            while True:
+                chunk = await file.read(1024 * 1024)  # 1MB
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        logger.error(f"Failed to save uploaded guideline file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
 
     # Parse tags
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
@@ -183,7 +196,7 @@ async def upload_guideline(
         source_file_name=file.filename,
         source_file_path=file_path,
         source_file_type=file_ext.replace(".", ""),
-        source_file_size=len(content),
+        source_file_size=file_size,
         effective_date=eff_date,
         expiration_date=exp_date,
         tags=tag_list,

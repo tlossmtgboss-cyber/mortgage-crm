@@ -70,9 +70,9 @@ def _max_upload_bytes() -> int:
     payloads, so they get a higher ceiling than MAX_BODY_BYTES.
     """
     try:
-        mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+        mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "100"))
     except (TypeError, ValueError):
-        mb = 50
+        mb = 100
     return max(mb, 1) * 1024 * 1024
 
 
