@@ -707,34 +707,41 @@ async def aria_diag_temp(request: Request, db: Session = Depends(get_db_dep)):
     from sqlalchemy import text
     result = {"errors": []}
     try:
-        # Count total leads per org
+        # Check user 133 (owner of 429-lead org)
+        u133 = db.execute(text(
+            "SELECT id, email, permission_role, organization_id FROM users WHERE id = 133"
+        )).fetchone()
+        result["user_133"] = {"id": u133[0], "email": u133[1], "permission_role": u133[2], "org_id": u133[3]} if u133 else None
+
+        # Check user 118
+        u118 = db.execute(text(
+            "SELECT id, email, permission_role, organization_id FROM users WHERE id = 118"
+        )).fetchone()
+        result["user_118"] = {"id": u118[0], "email": u118[1], "permission_role": u118[2], "org_id": u118[3]} if u118 else None
+
+        # Check which user the tlossmtgboss@gmail.com login maps to
+        gmail_user = db.execute(text(
+            "SELECT id, email, permission_role, organization_id FROM users WHERE email = 'tlossmtgboss@gmail.com'"
+        )).fetchone()
+        result["gmail_user"] = {"id": gmail_user[0], "email": gmail_user[1], "permission_role": gmail_user[2], "org_id": gmail_user[3]} if gmail_user else None
+
+        # Count leads per org
         orgs = db.execute(text(
             "SELECT organization_id, COUNT(*) as cnt FROM leads GROUP BY organization_id ORDER BY cnt DESC LIMIT 5"
         )).fetchall()
         result["orgs_with_leads"] = [{"org_id": r[0], "lead_count": r[1]} for r in orgs]
 
-        # Find Timothy Loss specifically
-        timothy = db.execute(text(
-            "SELECT id, name, email, phone, stage, organization_id, owner_id FROM leads WHERE name ILIKE '%timothy loss%' LIMIT 5"
+        # Timothy Loss in org 2469
+        timothy_2469 = db.execute(text(
+            "SELECT id, name, email, stage, owner_id FROM leads WHERE name ILIKE '%timothy%' AND organization_id = 2469 LIMIT 3"
         )).fetchall()
-        result["timothy_loss_matches"] = [{"id": r[0], "name": r[1], "email": r[2], "stage": r[4], "org_id": r[5], "owner_id": r[6]} for r in timothy]
+        result["timothy_in_2469"] = [{"id": r[0], "name": r[1], "owner_id": r[4]} for r in timothy_2469]
 
-        # Check what user has this org
-        if timothy:
-            org = timothy[0][5]
-            users = db.execute(text(
-                "SELECT id, email, permission_role, organization_id FROM users WHERE organization_id = :org LIMIT 5"
-            ), {"org": org}).fetchone()
-            if users:
-                result["user_in_org"] = {"id": users[0], "email": users[1], "permission_role": users[2], "org_id": users[3]}
-
-        # Check if find_contact tool would work with this org_id
-        if timothy:
-            org = timothy[0][5]
-            test_search = db.execute(text(
-                "SELECT id, name FROM leads WHERE organization_id = :org_id AND name ILIKE :search LIMIT 3"
-            ), {"org_id": org, "search": "%timothy%"}).fetchall()
-            result["direct_search_test"] = [{"id": r[0], "name": r[1]} for r in test_search]
+        # Timothy Loss in org 2435
+        timothy_2435 = db.execute(text(
+            "SELECT id, name, email, stage, owner_id FROM leads WHERE name ILIKE '%timothy%' AND organization_id = 2435 LIMIT 3"
+        )).fetchall()
+        result["timothy_in_2435"] = [{"id": r[0], "name": r[1], "owner_id": r[4]} for r in timothy_2435]
 
     except Exception as e:
         result["errors"].append(str(e))
