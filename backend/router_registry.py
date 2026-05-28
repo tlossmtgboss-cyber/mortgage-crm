@@ -1636,6 +1636,10 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     # Call Intelligence Engine (CIE)
     try:
         from engine.api import router as cie_router
+        from engine.models import CIECallRecord, CIEIntelligenceReport
+        from database import engine as _db_engine
+        CIECallRecord.__table__.create(_db_engine, checkfirst=True)
+        CIEIntelligenceReport.__table__.create(_db_engine, checkfirst=True)
         app.include_router(cie_router, tags=["Call Intelligence Engine"])
         logger.info("CIE routes loaded (webhooks + reports)")
     except Exception as e:
