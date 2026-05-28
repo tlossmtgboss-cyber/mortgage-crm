@@ -1950,6 +1950,105 @@ def init_db():
             except Exception as e:
                 logger.warning(f"⚠️ {_dialer_table} organization_id migration note: {e}")
 
+        # Underwriting guideline platform tables (AI Underwriter / guideline RAG).
+        # Production skips Base.metadata.create_all(), so these must be created
+        # explicitly here. Schema matches models.call_monitoring_models with
+        # INTEGER org/user ids (the app is integer-keyed, not UUID).
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"⚠️ pgvector extension note (guidelines): {e}")
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS underwriting_guidelines (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        name VARCHAR(500) NOT NULL,
+                        description TEXT,
+                        version VARCHAR(50),
+                        guideline_type VARCHAR(50) NOT NULL,
+                        category VARCHAR(50),
+                        loan_program VARCHAR(50) DEFAULT 'all',
+                        investor_name VARCHAR(200),
+                        source_file_name VARCHAR(500),
+                        source_file_path VARCHAR(1000),
+                        source_file_type VARCHAR(50),
+                        source_file_size INTEGER,
+                        full_text TEXT,
+                        summary TEXT,
+                        key_points JSONB DEFAULT '[]'::jsonb,
+                        structured_rules JSONB DEFAULT '{}'::jsonb,
+                        tags TEXT[] DEFAULT '{}',
+                        keywords TEXT[] DEFAULT '{}',
+                        effective_date DATE,
+                        expiration_date DATE,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        is_processed BOOLEAN DEFAULT FALSE,
+                        uploaded_by INTEGER,
+                        organization_id INTEGER,
+                        processing_notes TEXT,
+                        last_processed_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW(),
+                        embedding_status VARCHAR(20) DEFAULT 'pending',
+                        chunk_count INTEGER DEFAULT 0,
+                        overlay_priority INTEGER DEFAULT 4
+                    );
+                    -- Idempotent column adds for legacy/partial tables
+                    ALTER TABLE underwriting_guidelines ADD COLUMN IF NOT EXISTS organization_id INTEGER;
+                    ALTER TABLE underwriting_guidelines ADD COLUMN IF NOT EXISTS uploaded_by INTEGER;
+                    ALTER TABLE underwriting_guidelines ADD COLUMN IF NOT EXISTS keywords TEXT[] DEFAULT '{}';
+                    ALTER TABLE underwriting_guidelines ADD COLUMN IF NOT EXISTS embedding_status VARCHAR(20) DEFAULT 'pending';
+                    ALTER TABLE underwriting_guidelines ADD COLUMN IF NOT EXISTS chunk_count INTEGER DEFAULT 0;
+                    ALTER TABLE underwriting_guidelines ADD COLUMN IF NOT EXISTS overlay_priority INTEGER DEFAULT 4;
+                    CREATE INDEX IF NOT EXISTS ix_uw_guidelines_type ON underwriting_guidelines(guideline_type);
+                    CREATE INDEX IF NOT EXISTS ix_uw_guidelines_category ON underwriting_guidelines(category);
+                    CREATE INDEX IF NOT EXISTS ix_uw_guidelines_loan_program ON underwriting_guidelines(loan_program);
+                    CREATE INDEX IF NOT EXISTS ix_uw_guidelines_active ON underwriting_guidelines(is_active);
+                    CREATE INDEX IF NOT EXISTS ix_uw_guidelines_org ON underwriting_guidelines(organization_id);
+
+                    CREATE TABLE IF NOT EXISTS guideline_sections (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        guideline_id UUID NOT NULL REFERENCES underwriting_guidelines(id) ON DELETE CASCADE,
+                        section_number VARCHAR(100),
+                        section_title VARCHAR(500),
+                        parent_section VARCHAR(100),
+                        content TEXT NOT NULL,
+                        summary TEXT,
+                        category VARCHAR(50),
+                        topics TEXT[] DEFAULT '{}',
+                        embedding_model VARCHAR(50) DEFAULT 'text-embedding-3-small',
+                        token_count INTEGER,
+                        chunk_hash VARCHAR(64),
+                        page_number INTEGER,
+                        position_start INTEGER,
+                        position_end INTEGER,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_guideline_sections_guideline ON guideline_sections(guideline_id);
+                    CREATE INDEX IF NOT EXISTS ix_guideline_sections_category ON guideline_sections(category);
+                """))
+                conn.commit()
+            # content_embedding column: prefer pgvector, fall back to TEXT so the
+            # table stays ORM-queryable even where the extension is unavailable.
+            try:
+                with _engine.connect() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE guideline_sections ADD COLUMN IF NOT EXISTS content_embedding vector(1536);"
+                    ))
+                    conn.commit()
+            except Exception:
+                with _engine.connect() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE guideline_sections ADD COLUMN IF NOT EXISTS content_embedding TEXT;"
+                    ))
+                    conn.commit()
+            logger.info("✅ Underwriting guideline tables ready (underwriting_guidelines, guideline_sections)")
+        except Exception as e:
+            logger.warning(f"⚠️ Underwriting guideline tables note: {e}")
+
         # SMS auto-responder: create sms_tasks + supporting tables
         try:
             with _engine.connect() as conn:
