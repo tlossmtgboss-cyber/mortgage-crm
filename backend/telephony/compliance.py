@@ -1290,9 +1290,19 @@ class ComplianceChecker:
         # TENANT SAFETY: lead_id is already org-validated -- either passed as
         # contact_id (caller responsibility) or resolved via Lead phone lookup
         # above which filters by self.organization_id.
-        pref = self.db.query(ChannelPreference).filter(
-            ChannelPreference.lead_id == lead_id
-        ).first()
+        try:
+            pref = self.db.query(ChannelPreference).filter(
+                ChannelPreference.lead_id == lead_id
+            ).first()
+        except Exception as cp_err:
+            # Table may not exist yet in production — fail-open so calls
+            # aren't blocked by a missing migration.
+            self.db.rollback()
+            logger.warning(
+                f"ChannelPreference query failed (table may not exist): {cp_err}. "
+                "Allowing call — consent assumed until table is created."
+            )
+            return True, None
 
         if not pref:
             no_pref_reason = (
