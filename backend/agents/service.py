@@ -1130,6 +1130,24 @@ Never reference, query, or return data from other organizations.
                 }
             })
 
+        if "send_preapproval" in self._tool_functions:
+            definitions.append({
+                "name": "send_preapproval",
+                "description": "Generate a pre-approval letter PDF and email it to the borrower, their realtor, or any specified recipient. Looks up the borrower's loan data automatically. Use when the user says 'send a pre-approval', 'email the pre-approval letter', 'send pre-approval to the realtor'.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "borrower_name": {"type": "string", "description": "Borrower's name to look up in the CRM"},
+                        "recipient_email": {"type": "string", "description": "Email to send the letter to (defaults to borrower's email). Use for sending to realtors or other parties."},
+                        "recipient_name": {"type": "string", "description": "Name of the recipient (e.g., the realtor's name)"},
+                        "approval_amount": {"type": "number", "description": "Pre-approval amount in dollars (auto-detected from loan if not specified)"},
+                        "loan_type": {"type": "string", "description": "Loan type: Conventional, FHA, VA, USDA, Jumbo (auto-detected from loan if not specified)"},
+                        "property_address": {"type": "string", "description": "Property address for the letter (auto-detected from loan if not specified)"}
+                    },
+                    "required": ["borrower_name"]
+                }
+            })
+
         if "create_task" in self._tool_functions:
             definitions.append({
                 "name": "create_task",
@@ -2054,6 +2072,161 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return {"count": 0, "clients": [], "error": str(e)}
 
     tools["search_mum_clients"] = execute_search_mum_clients
+
+    # ============ Pre-Approval Letter ============
+
+    async def execute_send_preapproval(args):
+        """Generate a pre-approval letter and email it to the borrower or a specified recipient."""
+        borrower_name = args.get("borrower_name", "").strip()
+        recipient_email = args.get("recipient_email", "").strip()
+        recipient_name = args.get("recipient_name", "").strip()
+        approval_amount = args.get("approval_amount")
+        loan_type = args.get("loan_type", "Conventional")
+        property_address = args.get("property_address")
+
+        if not borrower_name:
+            return {"success": False, "error": "borrower_name is required"}
+
+        try:
+            # 1. Find the borrower/lead
+            search = f"%{borrower_name}%"
+            lead_row = db.execute(text(
+                "SELECT id, name, first_name, last_name, email, phone,"
+                " loan_amount, property_address"
+                " FROM leads WHERE organization_id = :org_id"
+                " AND name ILIKE :search"
+                " ORDER BY updated_at DESC LIMIT 1"
+            ), {"org_id": org_id, "search": search}).fetchone()
+
+            if not lead_row:
+                return {"success": False, "error": f"No borrower found matching '{borrower_name}'"}
+
+            # 2. Find active loan for this borrower
+            loan_row = db.execute(text(
+                "SELECT id, loan_number, loan_amount, loan_type, rate, property_address"
+                " FROM loans WHERE lead_id = :lead_id AND organization_id = :org_id"
+                " AND stage NOT IN ('FUNDED','CANCELLED','DENIED','DEAD','WITHDRAWN')"
+                " ORDER BY updated_at DESC LIMIT 1"
+            ), {"lead_id": lead_row.id, "org_id": org_id}).fetchone()
+
+            # 3. Get LO info
+            lo_row = db.execute(text(
+                "SELECT id, email, first_name, last_name, phone, nmls_number"
+                " FROM users WHERE id = :uid"
+            ), {"uid": current_user.id}).fetchone()
+
+            lo_name = f"{lo_row.first_name or ''} {lo_row.last_name or ''}".strip() if lo_row else ""
+            lo_email = lo_row.email if lo_row else ""
+
+            # Determine approval amount
+            amount = None
+            if approval_amount:
+                try:
+                    amount = float(str(approval_amount).replace("$", "").replace(",", ""))
+                except (ValueError, TypeError):
+                    pass
+            if not amount and loan_row:
+                amount = float(loan_row.loan_amount) if loan_row.loan_amount else None
+            if not amount and lead_row.loan_amount:
+                amount = float(lead_row.loan_amount)
+            if not amount:
+                return {"success": False, "error": "Could not determine approval amount. Please specify the amount."}
+
+            # Determine loan type
+            if loan_row and loan_row.loan_type:
+                loan_type = loan_row.loan_type
+
+            # Determine property address
+            if not property_address:
+                if loan_row and loan_row.property_address:
+                    property_address = loan_row.property_address
+                elif lead_row.property_address:
+                    property_address = lead_row.property_address
+
+            # Determine recipient
+            to_email = recipient_email or lead_row.email
+            to_name = recipient_name or lead_row.name
+            if not to_email:
+                return {"success": False, "error": f"No email address found for {lead_row.name}. Please specify recipient_email."}
+
+            # 4. Generate the PDF
+            from aria.documents.document_generator import DocumentGenerator
+            generator = DocumentGenerator()
+            doc_result = await generator.generate_preapproval_letter(
+                borrower={"full_name": lead_row.name, "first_name": lead_row.first_name or "", "last_name": lead_row.last_name or ""},
+                loan={"loan_type": loan_type, "loan_amount": amount},
+                lo={"full_name": lo_name, "email": lo_email, "phone": lo_row.phone if lo_row else "",
+                    "nmls_number": lo_row.nmls_number if lo_row else "", "org_name": "", "title": "Loan Officer"},
+                approval_amount=amount,
+                property_address=property_address,
+                expiry_days=30,
+            )
+
+            # 5. Email it
+            import httpx
+            token_row = db.execute(text(
+                "SELECT access_token FROM microsoft_oauth_tokens"
+                " WHERE user_id = :uid ORDER BY updated_at DESC LIMIT 1"
+            ), {"uid": current_user.id}).fetchone()
+
+            if not token_row:
+                return {"success": False, "error": "Microsoft email not connected. Connect Outlook in Settings to send emails."}
+
+            import base64
+            attachment_b64 = base64.b64encode(doc_result["pdf_bytes"]).decode("utf-8")
+            filename = f"Pre-Approval-{lead_row.name.replace(' ', '-')}.pdf"
+
+            email_body = (
+                f"Hi {to_name.split()[0] if to_name else 'there'},\n\n"
+                f"Please find attached the pre-approval letter for {lead_row.name}.\n\n"
+                f"Pre-approved up to ${amount:,.0f} for a {loan_type} mortgage."
+            )
+            if property_address:
+                email_body += f"\nProperty: {property_address}"
+            email_body += f"\n\nBest regards,\n{lo_name}"
+
+            graph_payload = {
+                "message": {
+                    "subject": f"Pre-Approval Letter — {lead_row.name}",
+                    "body": {"contentType": "Text", "content": email_body},
+                    "toRecipients": [{"emailAddress": {"address": to_email, "name": to_name}}],
+                    "attachments": [{
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        "name": filename,
+                        "contentType": "application/pdf",
+                        "contentBytes": attachment_b64,
+                    }],
+                },
+                "saveToSentItems": "true",
+            }
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    "https://graph.microsoft.com/v1.0/me/sendMail",
+                    json=graph_payload,
+                    headers={"Authorization": f"Bearer {token_row.access_token}", "Content-Type": "application/json"},
+                )
+
+            if resp.status_code in (200, 202):
+                return {
+                    "success": True,
+                    "action": "pre_approval_sent",
+                    "borrower": lead_row.name,
+                    "recipient": to_email,
+                    "recipient_name": to_name,
+                    "amount": amount,
+                    "loan_type": loan_type,
+                    "property_address": property_address,
+                }
+            else:
+                return {"success": False, "error": f"Email send failed: {resp.status_code} {resp.text[:200]}"}
+
+        except Exception as e:
+            logger.error(f"Error in send_preapproval: {e}", exc_info=True)
+            db.rollback()
+            return {"success": False, "error": str(e)}
+
+    tools["send_preapproval"] = execute_send_preapproval
 
     # ============ Task Creation Tools ============
 
