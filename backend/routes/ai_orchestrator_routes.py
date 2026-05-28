@@ -397,6 +397,14 @@ async def orchestrator_chat(
         if aria_context:
             document_context = f"{aria_context}\n\n{document_context}" if document_context else aria_context
 
+        # Diagnostic: log user context for Aria data access debugging
+        _perm_role = getattr(current_user, 'permission_role', 'MISSING')
+        logger.warning(
+            f"[ARIA-DIAG] orchestrator-chat user_id={user_id_str} org_id={org_id} "
+            f"permission_role={_perm_role} aria_context_len={len(aria_context) if aria_context else 0} "
+            f"message_preview={message[:60]}"
+        )
+
         # Create the full agent service with all 215 tools
         service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
 
