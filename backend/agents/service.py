@@ -1540,6 +1540,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
     # Must match CRM page logic (filter_leads_by_permissions) to avoid
     # users seeing leads on the CRM page but not through Aria.
     _user_role = (getattr(current_user, 'permission_role', '') or '').lower()
+    _is_platform_admin = _user_role == 'admin'
     _has_org_wide_access = _user_role in ('admin', 'site_admin', 'leadership', 'management')
     if not _has_org_wide_access:
         try:
@@ -1549,8 +1550,13 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 _has_org_wide_access = True
         except Exception:
             pass
+    # Platform admins (permission_role='admin') see ALL orgs on the CRM page
+    # (filter_leads_by_permissions applies no org filter for them).
+    # Match that behavior by clearing org_id so tools use the "show all" path.
+    if _is_platform_admin:
+        org_id = None
     if _has_org_wide_access:
-        logger.info(f"[TOOLS] User {getattr(current_user, 'id', '?')} has org-wide AI tool access (role={_user_role})")
+        logger.info(f"[TOOLS] User {getattr(current_user, 'id', '?')} has org-wide AI tool access (role={_user_role}, platform_admin={_is_platform_admin}, org_scope={'all' if _is_platform_admin else org_id})")
 
     # ============ Pipeline Tools ============
 
@@ -1791,34 +1797,34 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
         try:
             search = f"%{name}%"
-            params = {"search": search, "org_id": org_id}
+            org_filter = "organization_id = :org_id" if org_id else "1=1"
+            params = {"search": search}
+            if org_id:
+                params["org_id"] = org_id
 
-            # Search leads (always org-scoped)
             lead_sql = (
                 "SELECT id, name, email, phone, stage, 'lead' as contact_type"
                 " FROM leads"
-                " WHERE organization_id = :org_id"
+                f" WHERE {org_filter}"
                 " AND name ILIKE :search"
                 " ORDER BY updated_at DESC LIMIT 5"
             )
             lead_rows = db.execute(text(lead_sql), params).fetchall()
 
-            # Search users in same org
             user_sql = (
                 "SELECT id, CONCAT(first_name, ' ', last_name) as name,"
                 " email, phone, 'team_member' as contact_type"
                 " FROM users"
-                " WHERE organization_id = :org_id"
+                f" WHERE {org_filter}"
                 " AND (first_name || ' ' || last_name) ILIKE :search"
                 " LIMIT 5"
             )
             user_rows = db.execute(text(user_sql), params).fetchall()
 
-            # Search referral partners
             partner_sql = (
                 "SELECT id, name, email, phone, 'referral_partner' as contact_type"
                 " FROM referral_partners"
-                " WHERE organization_id = :org_id"
+                f" WHERE {org_filter}"
                 " AND name ILIKE :search"
                 " LIMIT 5"
             )
@@ -1930,8 +1936,8 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return {"found": False, "error": "Provide borrower_name, loan_number, or loan_id"}
 
         try:
-            conditions = ["l.organization_id = :org_id"]
-            params = {"org_id": org_id}
+            conditions = ["l.organization_id = :org_id"] if org_id else []
+            params = {"org_id": org_id} if org_id else {}
 
             if loan_id:
                 conditions.append("l.id = :loan_id")
@@ -2019,8 +2025,8 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         limit = min(args.get("limit", 15), 50)
 
         try:
-            conditions = ["m.organization_id = :org_id"]
-            params = {"org_id": org_id, "limit": limit}
+            conditions = ["m.organization_id = :org_id"] if org_id else []
+            params = {"org_id": org_id, "limit": limit} if org_id else {"limit": limit}
 
             if query_str:
                 params["search"] = f"%{query_str}%"
@@ -2090,13 +2096,14 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         try:
             # 1. Find the borrower/lead
             search = f"%{borrower_name}%"
+            _org_where = "AND organization_id = :org_id" if org_id else ""
+            _org_params = {"org_id": org_id} if org_id else {}
             lead_row = db.execute(text(
                 "SELECT id, name, first_name, last_name, email, phone,"
                 " loan_amount, property_address"
-                " FROM leads WHERE organization_id = :org_id"
-                " AND name ILIKE :search"
+                f" FROM leads WHERE name ILIKE :search {_org_where}"
                 " ORDER BY updated_at DESC LIMIT 1"
-            ), {"org_id": org_id, "search": search}).fetchone()
+            ), {"search": search, **_org_params}).fetchone()
 
             if not lead_row:
                 return {"success": False, "error": f"No borrower found matching '{borrower_name}'"}
@@ -2104,10 +2111,10 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             # 2. Find active loan for this borrower
             loan_row = db.execute(text(
                 "SELECT id, loan_number, loan_amount, loan_type, rate, property_address"
-                " FROM loans WHERE lead_id = :lead_id AND organization_id = :org_id"
+                f" FROM loans WHERE lead_id = :lead_id {_org_where}"
                 " AND stage NOT IN ('FUNDED','CANCELLED','DENIED','DEAD','WITHDRAWN')"
                 " ORDER BY updated_at DESC LIMIT 1"
-            ), {"lead_id": lead_row.id, "org_id": org_id}).fetchone()
+            ), {"lead_id": lead_row.id, **_org_params}).fetchone()
 
             # 3. Get LO info
             lo_row = db.execute(text(
