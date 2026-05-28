@@ -62,6 +62,22 @@ def _max_body_bytes() -> int:
 
 MAX_BODY_BYTES: int = _max_body_bytes()
 
+
+def _max_upload_bytes() -> int:
+    """Read MAX_UPLOAD_SIZE_MB from environment, default 50 MB.
+
+    File uploads (multipart/form-data) are legitimately larger than JSON
+    payloads, so they get a higher ceiling than MAX_BODY_BYTES.
+    """
+    try:
+        mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+    except (TypeError, ValueError):
+        mb = 50
+    return max(mb, 1) * 1024 * 1024
+
+
+MAX_UPLOAD_BYTES: int = _max_upload_bytes()
+
 _BODY_SCAN_MAX_BYTES: int = 1 * 1024 * 1024  # 1 MB
 _BODY_SCAN_MAX_DEPTH: int = 10
 
@@ -288,8 +304,12 @@ class RequestValidatorMiddleware(BaseHTTPMiddleware):
         if content_length_str:
             try:
                 content_length = int(content_length_str)
-                if content_length > MAX_BODY_BYTES:
-                    max_mb = MAX_BODY_BYTES / (1024 * 1024)
+                # File uploads (multipart/form-data) get a higher ceiling than
+                # JSON/form bodies — they are legitimately large.
+                is_upload = request.headers.get("content-type", "").lower().startswith("multipart/form-data")
+                size_limit = MAX_UPLOAD_BYTES if is_upload else MAX_BODY_BYTES
+                if content_length > size_limit:
+                    max_mb = size_limit / (1024 * 1024)
                     logger.warning(
                         "Request rejected: body too large (%d bytes, max %d MB) | "
                         "request_id=%s ip=%s path=%s",
