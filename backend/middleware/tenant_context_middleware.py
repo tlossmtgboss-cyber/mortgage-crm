@@ -38,6 +38,10 @@ from sqlalchemy.orm import Session
 
 _CachedUser = namedtuple("_CachedUser", ["id", "organization_id", "permission_role", "email"])
 
+# Set to False to disable plaintext API key fallback after confirming all keys
+# have been migrated to sha256 hashes (run: SELECT count(*) FROM api_keys WHERE key IS NOT NULL)
+_PLAINTEXT_API_KEY_FALLBACK = True
+
 # Import auth.tokens for algorithm-agnostic JWT verification (RS256/HS256)
 try:
     from auth.tokens import verify_token as _verify_secure_token
@@ -196,7 +200,8 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                             ).first()
                             # Fallback to plaintext for unmigrated keys — DEPRECATED.
                             # Auto-migrates matched keys to sha256 hash.
-                            if not api_key:
+                            # Disable via _PLAINTEXT_API_KEY_FALLBACK = False after migration.
+                            if not api_key and _PLAINTEXT_API_KEY_FALLBACK:
                                 api_key = db.query(ApiKey).filter(
                                     ApiKey.key == token,
                                     ApiKey.is_active == True
@@ -208,6 +213,10 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                                         "be removed in a future release.",
                                         api_key.id,
                                     )
+                                    # Intentional db.commit() in middleware: the hash migration
+                                    # must persist regardless of whether the downstream route
+                                    # handler succeeds or fails. Uses a separate DB session
+                                    # from the route handler (created at line 188).
                                     try:
                                         api_key.key_hash = _token_hash
                                         api_key.key = None
