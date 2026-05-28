@@ -111,6 +111,76 @@ def _ensure_cie_tables(db: Session) -> None:
         _tables_ensured = True
 
 
+def _fallback_call_logs(db: Session, org_id, lead_id, loan_id, limit, offset):
+    """Fall back to call_logs table when no CIE records exist."""
+    try:
+        from database.models.dialer import CallLog
+        import uuid as _uuid
+
+        q = db.query(CallLog).filter(CallLog.organization_id == org_id)
+        if lead_id is not None:
+            q = q.filter(CallLog.lead_id == lead_id)
+        if loan_id is not None:
+            q = q.filter(CallLog.loan_id == loan_id)
+        q = q.order_by(CallLog.created_at.desc())
+
+        total = q.count()
+        rows = q.offset(offset).limit(limit).all()
+
+        items = []
+        for row in rows:
+            has_transcript = bool(row.transcript_text)
+            has_recording = bool(row.recording_url)
+            status = "completed" if has_transcript else ("pending" if has_recording else "no_recording")
+            call_brief = {
+                "id": str(row.canonical_call_id or _uuid.uuid4()),
+                "external_call_id": row.call_sid or "",
+                "provider": "telnyx",
+                "direction": "outbound",
+                "started_at": row.start_time.isoformat() if row.start_time else None,
+                "duration_seconds": row.duration_seconds,
+                "processing_status": status,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            report = None
+            if has_transcript:
+                report = {
+                    "id": str(row.canonical_call_id or _uuid.uuid4()),
+                    "call_record_id": str(row.canonical_call_id or _uuid.uuid4()),
+                    "summary": row.ai_note_summary,
+                    "summary_bullets": None,
+                    "cis_composite": None,
+                    "engagement_score": None,
+                    "information_quality_score": None,
+                    "objection_handling_score": None,
+                    "compliance_score": None,
+                    "rapport_score": None,
+                    "closing_effectiveness_score": None,
+                    "primary_intent": None,
+                    "intent_confidence": None,
+                    "conversion_probability": None,
+                    "conversion_ci_low": None,
+                    "conversion_ci_high": None,
+                    "opportunities": None,
+                    "risks": None,
+                    "objections": None,
+                    "compliance_flags": None,
+                    "coaching_suggestions": None,
+                    "generated_tasks": None,
+                    "draft_messages": None,
+                    "llm_model_used": None,
+                    "pipeline_version": "call_log_fallback",
+                    "processing_time_ms": None,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                }
+            items.append({"call": call_brief, "report": report})
+        return items, total
+    except Exception as e:
+        logger.warning("call_logs fallback failed: %s", e)
+        return [], 0
+
+
 @router.get("/reports/{report_id}", response_model=ReportResponse)
 async def get_report(
     report_id: UUID,
@@ -175,7 +245,10 @@ async def list_reports(
                 report = ReportResponse.model_validate(rec.report)
             items.append(ReportListItem(call=call_brief, report=report))
 
-        return ReportListResponse(items=items, total=total)
+        if total == 0 and (lead_id is not None or loan_id is not None):
+            items, total = _fallback_call_logs(db, org_id, lead_id, loan_id, limit, offset)
+
+        return {"items": [i.model_dump() if hasattr(i, 'model_dump') else i for i in items], "total": total}
     except Exception as e:
         logger.exception("CIE list_reports error")
         return {"items": [], "total": 0, "error": str(e)}
@@ -193,6 +266,18 @@ async def get_transcript(
         .first()
     )
     if not report:
+        try:
+            from database.models.dialer import CallLog
+            cl = db.query(CallLog).filter(CallLog.canonical_call_id == report_id).first()
+            if cl and cl.transcript_text:
+                org_id = getattr(current_user, "organization_id", None)
+                if cl.organization_id != org_id:
+                    raise HTTPException(404, "Report not found")
+                return {"transcript": cl.transcript_text}
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         raise HTTPException(404, "Report not found")
 
     call = report.call_record
@@ -217,6 +302,18 @@ async def get_recording_url(
         .first()
     )
     if not report:
+        try:
+            from database.models.dialer import CallLog
+            cl = db.query(CallLog).filter(CallLog.canonical_call_id == report_id).first()
+            if cl and cl.recording_url:
+                org_id = getattr(current_user, "organization_id", None)
+                if cl.organization_id != org_id:
+                    raise HTTPException(404, "Report not found")
+                return {"recording_url": cl.recording_url}
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         raise HTTPException(404, "Report not found")
 
     call = report.call_record
