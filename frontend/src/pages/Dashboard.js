@@ -37,12 +37,11 @@ function Dashboard() {
     return () => window.removeEventListener('crm-mutation', handleMutation);
   }, [refetchDashboard]);
 
-  // Check if current user is demo user
   const isDemoUser = () => {
     try {
       const user = getUserData();
       if (user) {
-        return user.email === 'admin@perenniaai.com';
+        return ['admin@perenniaai.com', 'tloss@cmgfi.com'].includes(user.email);
       }
     } catch (error) {
       console.error('Error checking demo user:', error);

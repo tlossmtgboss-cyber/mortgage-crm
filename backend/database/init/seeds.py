@@ -83,8 +83,8 @@ def create_sample_data(db: Session):
         demo_user = User(
             email="admin@perenniaai.com",
             hashed_password=get_password_hash(_demo_pw),
-            full_name="Demo User",
-            role="loan_officer",
+            full_name="Admin",
+            role="admin",
             branch_id=branch.id
         )
         db.add(demo_user)

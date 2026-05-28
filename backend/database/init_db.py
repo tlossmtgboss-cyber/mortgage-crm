@@ -2182,9 +2182,9 @@ def init_db():
             with _engine.connect() as conn:
                 result = conn.execute(text("""
                     UPDATE users
-                    SET permission_role = 'admin', role = 'admin'
+                    SET permission_role = 'admin', role = 'admin',
+                        full_name = CASE WHEN full_name IS NULL OR full_name = 'Demo User' OR full_name = '' THEN 'Tim Loss' ELSE full_name END
                     WHERE email = 'tloss@cmgfi.com'
-                      AND (permission_role != 'admin' OR role != 'admin')
                 """))
                 conn.commit()
                 if result.rowcount > 0:
@@ -2243,8 +2243,9 @@ def create_sample_data(db: Session):
         demo_user = User(
             email="admin@perenniaai.com",
             hashed_password=get_password_hash(_demo_pw),
-            full_name="Demo User",
-            role="loan_officer",
+            full_name="Admin",
+            role="admin",
+            permission_role="admin",
             branch_id=branch.id,
             organization_id=org.id,
         )

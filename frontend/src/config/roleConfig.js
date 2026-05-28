@@ -875,15 +875,12 @@ export const getDefaultRouteForRole = (effectiveRole) => {
 // MASTER ADMIN NAVIGATION - Consolidated dropdown structure for admin@perenniaai.com
 // =============================================================================
 
+export const MASTER_ADMIN_EMAILS = ['admin@perenniaai.com', 'tloss@cmgfi.com'];
+
 export const MASTER_ADMIN_EMAIL = 'admin@perenniaai.com';
 
-/**
- * Check if user is the master admin (admin@perenniaai.com)
- * @param {string} email - The user's email
- * @returns {boolean} True if user is master admin
- */
 export const isMasterAdmin = (email) => {
-  return email?.toLowerCase() === MASTER_ADMIN_EMAIL;
+  return MASTER_ADMIN_EMAILS.includes(email?.toLowerCase());
 };
 
 /**

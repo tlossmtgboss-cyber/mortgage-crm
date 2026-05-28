@@ -291,7 +291,7 @@ def filter_leads_by_permissions(query, user, db: Session):
         # Now apply permission-based filters WITHIN the organization
 
         # Master user can see all leads in their org (check both ID and email)
-        if user.id == 1 or user.email == 'admin@perenniaai.com':
+        if user.id == 1 or user.email in ('admin@perenniaai.com', 'tloss@cmgfi.com'):
             return query
 
         if has_permission(user.id, 'leads.view_all', db):
@@ -666,7 +666,7 @@ async def get_user_permissions_endpoint(
         current_permission_role = getattr(user, 'permission_role', None)
         if current_permission_role not in ('admin', 'site_admin'):
             is_admin_user = (
-                user.email == 'admin@perenniaai.com' or
+                user.email in ('admin@perenniaai.com', 'tloss@cmgfi.com') or
                 getattr(user, 'is_admin', False) or
                 getattr(user, 'role', '') == 'admin'
             )

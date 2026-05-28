@@ -184,7 +184,7 @@ function Leads() {
   useEffect(() => {
     const user = getCurrentUser();
     if (user) {
-      setIsMasterUser(user.id === 1 || user.user_id === 1 || user.email === 'admin@perenniaai.com');
+      setIsMasterUser(user.id === 1 || user.user_id === 1 || ['admin@perenniaai.com', 'tloss@cmgfi.com'].includes(user.email));
     }
   }, []);
 

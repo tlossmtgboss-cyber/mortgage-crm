@@ -1677,7 +1677,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         # Check if platform admin (can see all users across all organizations)
         is_platform_admin = (
             current_user.permission_role == 'admin' or
-            current_user.email == 'admin@perenniaai.com'
+            current_user.email in ('admin@perenniaai.com', 'tloss@cmgfi.com')
         )
 
         if is_platform_admin:
