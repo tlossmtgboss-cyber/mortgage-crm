@@ -47,6 +47,32 @@ def run_all_startup_migrations(engine: Any) -> None:
     # EARLY MIGRATIONS — Required before services start
     # ========================================================================
 
+    # Fix Demo User name for tloss@cmgfi.com and backfill loans (idempotent)
+    try:
+        from sqlalchemy import text as _text
+        with engine.connect() as _conn:
+            _r1 = _conn.execute(_text(
+                "UPDATE users SET full_name = 'Tim Loss' "
+                "WHERE email = 'tloss@cmgfi.com' "
+                "AND (full_name IS NULL OR full_name = 'Demo User' OR full_name = '')"
+            ))
+            _row = _conn.execute(_text(
+                "SELECT id FROM users WHERE email = 'tloss@cmgfi.com'"
+            )).fetchone()
+            _r2_count = 0
+            if _row:
+                _r2 = _conn.execute(_text(
+                    "UPDATE loans SET loan_officer_name = 'Tim Loss' "
+                    "WHERE loan_officer_id = :uid "
+                    "AND (loan_officer_name = 'Demo User' OR loan_officer_name IS NULL)"
+                ), {"uid": _row[0]})
+                _r2_count = _r2.rowcount
+            _conn.commit()
+            if _r1.rowcount or _r2_count:
+                logger.info(f"Fix Demo User: updated {_r1.rowcount} user(s), {_r2_count} loan(s)")
+    except Exception as e:
+        logger.warning(f"Fix Demo User name migration note: {e}")
+
     # Run API key hash migration (adds key_hash/key_prefix columns, migrates plaintext keys)
     try:
         from migrations.hash_api_keys import run_migration as _run_api_key_hash_migration
