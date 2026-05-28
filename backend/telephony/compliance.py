@@ -41,7 +41,7 @@ _active_calls_org_col_ensured = False
 
 
 def _ensure_active_calls_org_column(db_session):
-    """One-time migration: add organization_id to active_calls if missing."""
+    """One-time migration: add organization_id column and unique constraint."""
     global _active_calls_org_col_ensured
     if _active_calls_org_col_ensured:
         return
@@ -54,9 +54,21 @@ def _ensure_active_calls_org_column(db_session):
             "CREATE INDEX IF NOT EXISTS ix_active_calls_organization_id "
             "ON active_calls(organization_id)"
         ))
+        db_session.execute(text(
+            "DELETE FROM active_calls WHERE expires_at < now()"
+        ))
+        db_session.execute(text("""
+            DO $$ BEGIN
+                ALTER TABLE active_calls
+                    ADD CONSTRAINT uq_active_calls_phone_org
+                    UNIQUE (contact_phone, organization_id);
+            EXCEPTION WHEN duplicate_table THEN NULL;
+            END $$
+        """))
         db_session.commit()
-    except Exception:
+    except Exception as e:
         db_session.rollback()
+        logging.getLogger(__name__).warning("active_calls migration: %s", e)
     _active_calls_org_col_ensured = True
 
 
