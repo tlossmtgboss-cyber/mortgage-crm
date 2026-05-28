@@ -816,8 +816,8 @@ class UnderwritingGuideline(Base):
     is_processed = Column(Boolean, default=False)  # Has text been extracted?
 
     # Ownership
-    uploaded_by = Column(UUID(as_uuid=True), ForeignKey('users.id'))
-    organization_id = Column(UUID(as_uuid=True))  # For multi-tenant
+    uploaded_by = Column(Integer, ForeignKey('users.id'))
+    organization_id = Column(Integer, index=True)  # For multi-tenant
 
     # Processing metadata
     processing_notes = Column(Text)

@@ -121,6 +121,9 @@ from . import credit_monitoring_tools
 # Knowledge Graph Tools (entity relationship queries for Aria)
 from . import knowledge_graph
 
+# Underwriting Guideline Tools (RAG over uploaded agency/investor/company guidelines)
+from . import guidelines
+
 
 # =============================================================================
 # Agent Configuration
