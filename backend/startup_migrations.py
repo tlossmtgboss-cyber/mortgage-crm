@@ -73,6 +73,31 @@ def run_all_startup_migrations(engine: Any) -> None:
     except Exception as e:
         logger.warning(f"Fix Demo User name migration note: {e}")
 
+    # Add missing scheduler_appointments columns (model has them, production may not)
+    try:
+        from sqlalchemy import text as _sa_text
+        _sched_cols = [
+            ("recovery_step", "INTEGER DEFAULT 0"),
+            ("recovery_started_at", "TIMESTAMP"),
+            ("recovery_completed_at", "TIMESTAMP"),
+            ("recovery_opted_out", "BOOLEAN DEFAULT false"),
+            ("communication_consent_at", "TIMESTAMP"),
+            ("communication_consent_source", "VARCHAR(50)"),
+            ("booking_attribution", "JSONB"),
+        ]
+        with engine.connect() as _sc:
+            for _col_name, _col_type in _sched_cols:
+                try:
+                    _sc.execute(_sa_text(
+                        f"ALTER TABLE scheduler_appointments ADD COLUMN IF NOT EXISTS {_col_name} {_col_type}"
+                    ))
+                except Exception:
+                    pass
+            _sc.commit()
+            logger.info("Scheduler appointments columns ensured")
+    except Exception as e:
+        logger.warning(f"Scheduler column migration note: {e}")
+
     # Run API key hash migration (adds key_hash/key_prefix columns, migrates plaintext keys)
     try:
         from migrations.hash_api_keys import run_migration as _run_api_key_hash_migration

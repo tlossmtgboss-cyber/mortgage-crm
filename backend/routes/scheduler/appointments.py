@@ -876,8 +876,13 @@ async def create_appointment_endpoint(
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"Scheduler tables not available for appointment creation: {e}")
-        raise HTTPException(status_code=503, detail="Scheduler service temporarily unavailable")
+        logger.error(f"Appointment creation failed: {type(e).__name__}: {e}", exc_info=True)
+        db.rollback()
+        detail = "Scheduler service temporarily unavailable"
+        if "column" in str(e).lower() or "relation" in str(e).lower():
+            detail = f"Database schema issue: {type(e).__name__}"
+            logger.error(f"Likely missing column/table — run migrations. Detail: {e}")
+        raise HTTPException(status_code=500, detail=detail)
 
 
 # ============================================================================

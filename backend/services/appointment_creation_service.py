@@ -557,6 +557,10 @@ def _ensure_lead(
 
     except Exception as e:
         logger.error(f"Failed to ensure lead for booking: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return None
 
 
