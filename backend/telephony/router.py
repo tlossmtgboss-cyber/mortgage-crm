@@ -832,19 +832,21 @@ async def api_click_to_dial(
 
         organization_id = getattr(current_user, 'organization_id', None)
 
-        try:
-            from database.models import CallLog
-            rate_q = db.query(func.count(CallLog.id)).filter(
-                CallLog.agent_id == current_user.id,
-                CallLog.created_at >= datetime.now(timezone.utc) - timedelta(minutes=1)
-            )
-            if organization_id:
-                rate_q = rate_q.filter(CallLog.organization_id == organization_id)
-            recent_calls = rate_q.scalar() or 0
-            if recent_calls >= 10:
-                return {"success": False, "error": "Rate limit exceeded: max 10 calls per minute"}
-        except Exception as e:
-            logger.warning(f"Rate limit check failed (skipping): {e}")
+        _user_role = getattr(current_user, 'permission_role', '')
+        if _user_role != 'admin':
+            try:
+                from database.models import CallLog
+                rate_q = db.query(func.count(CallLog.id)).filter(
+                    CallLog.agent_id == current_user.id,
+                    CallLog.created_at >= datetime.now(timezone.utc) - timedelta(minutes=1)
+                )
+                if organization_id:
+                    rate_q = rate_q.filter(CallLog.organization_id == organization_id)
+                recent_calls = rate_q.scalar() or 0
+                if recent_calls >= 10:
+                    return {"success": False, "error": "Rate limit exceeded: max 10 calls per minute"}
+            except Exception as e:
+                logger.warning(f"Rate limit check failed (skipping): {e}")
 
         base_url = os.getenv("BASE_URL", "https://api.perenniaai.com")
 

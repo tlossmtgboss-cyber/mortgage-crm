@@ -853,15 +853,24 @@ def click_to_dial(
     provider = get_telephony_provider()
     compliance = ComplianceChecker(db_session, organization_id=organization_id)
 
-    # Run compliance checks (pass lead_id for consent verification)
-    compliance_result = compliance.full_compliance_check(phone_number, agent_id, contact_id=lead_id)
+    # Admins bypass compliance checks (consent, DNC, hours, rate limit, soft lock)
+    is_admin = False
+    try:
+        from database.models import User
+        user = db_session.query(User).filter(User.id == agent_id).first()
+        if user and getattr(user, 'permission_role', '') == 'admin':
+            is_admin = True
+    except Exception:
+        pass
 
-    if not compliance_result["can_call"]:
-        return {
-            "success": False,
-            "error": "Compliance check failed",
-            "issues": compliance_result["issues"]
-        }
+    if not is_admin:
+        compliance_result = compliance.full_compliance_check(phone_number, agent_id, contact_id=lead_id)
+        if not compliance_result["can_call"]:
+            return {
+                "success": False,
+                "error": "Compliance check failed",
+                "issues": compliance_result["issues"]
+            }
 
     # Get caller ID
     settings = db_session.query(AgentTelephonySettings).filter(
@@ -871,15 +880,15 @@ def click_to_dial(
     if not settings or not settings.business_caller_id:
         return {"success": False, "error": "No verified caller ID configured"}
 
-    # Acquire soft lock
-    lock_acquired = compliance.acquire_soft_lock(
-        phone_number,
-        agent_id,
-        "pending_click_to_dial"
-    )
-
-    if not lock_acquired:
-        return {"success": False, "error": "Number currently in use by another agent"}
+    # Acquire soft lock (skip for admin — they can call any number anytime)
+    if not is_admin:
+        lock_acquired = compliance.acquire_soft_lock(
+            phone_number,
+            agent_id,
+            "pending_click_to_dial"
+        )
+        if not lock_acquired:
+            return {"success": False, "error": "Number currently in use by another agent"}
 
     agent_phone = settings.cell_phone
     if not agent_phone:
