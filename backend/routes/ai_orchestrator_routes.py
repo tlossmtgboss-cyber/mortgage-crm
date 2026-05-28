@@ -701,6 +701,46 @@ async def aria_diagnostic(
     return result
 
 
+@router.get("/aria-diag-temp")
+async def aria_diag_temp(request: Request, db: Session = Depends(get_db_dep)):
+    """Temporary unauthenticated diagnostic — REMOVE AFTER DEBUGGING."""
+    from sqlalchemy import text
+    result = {"errors": []}
+    try:
+        # Count total leads per org
+        orgs = db.execute(text(
+            "SELECT organization_id, COUNT(*) as cnt FROM leads GROUP BY organization_id ORDER BY cnt DESC LIMIT 5"
+        )).fetchall()
+        result["orgs_with_leads"] = [{"org_id": r[0], "lead_count": r[1]} for r in orgs]
+
+        # Find Timothy Loss specifically
+        timothy = db.execute(text(
+            "SELECT id, name, email, phone, stage, organization_id, owner_id FROM leads WHERE name ILIKE '%timothy loss%' LIMIT 5"
+        )).fetchall()
+        result["timothy_loss_matches"] = [{"id": r[0], "name": r[1], "email": r[2], "stage": r[4], "org_id": r[5], "owner_id": r[6]} for r in timothy]
+
+        # Check what user has this org
+        if timothy:
+            org = timothy[0][5]
+            users = db.execute(text(
+                "SELECT id, email, permission_role, organization_id FROM users WHERE organization_id = :org LIMIT 5"
+            ), {"org": org}).fetchone()
+            if users:
+                result["user_in_org"] = {"id": users[0], "email": users[1], "permission_role": users[2], "org_id": users[3]}
+
+        # Check if find_contact tool would work with this org_id
+        if timothy:
+            org = timothy[0][5]
+            test_search = db.execute(text(
+                "SELECT id, name FROM leads WHERE organization_id = :org_id AND name ILIKE :search LIMIT 3"
+            ), {"org_id": org, "search": "%timothy%"}).fetchall()
+            result["direct_search_test"] = [{"id": r[0], "name": r[1]} for r in test_search]
+
+    except Exception as e:
+        result["errors"].append(str(e))
+    return result
+
+
 def set_dependencies(get_db_func, get_current_user_func):
     """Set dependencies for this router"""
     global _get_db, _get_current_user
