@@ -909,6 +909,9 @@ def click_to_dial(
         # Update lock with real call SID
         compliance.acquire_soft_lock(phone_number, agent_id, result.call_sid)
 
+        import uuid as _uuid_mod
+        canonical_id = _uuid_mod.uuid4()
+
         # Log the call (with tenant isolation)
         call_log_kwargs = dict(
             agent_id=agent_id,
@@ -918,6 +921,7 @@ def click_to_dial(
             loan_id=loan_id,
             session_task_id=task_id,
             call_sid=result.call_sid,
+            canonical_call_id=canonical_id,
             outcome=CallOutcome.INITIATED,
             start_time=datetime.now(timezone.utc),
         )
@@ -927,9 +931,37 @@ def click_to_dial(
         db_session.add(call_log)
         db_session.commit()
 
+        try:
+            from services.audit_events import audit_event, EventType
+            masked = f"***{phone_number[-4:]}" if phone_number and len(phone_number) >= 4 else "unknown"
+            audit_event(
+                db_session,
+                event_type=EventType.CALL_INITIATED,
+                outcome="success",
+                actor_id=agent_id,
+                org_id=organization_id,
+                resource_type="telnyx_call",
+                resource_id=result.call_sid,
+                metadata={
+                    "provider": "telnyx",
+                    "source": "click_to_dial",
+                    "canonical_call_id": str(canonical_id),
+                    "phone_masked": masked,
+                    "lead_id": lead_id,
+                },
+            )
+            db_session.commit()
+        except Exception as e:
+            try:
+                db_session.rollback()
+            except Exception:
+                pass
+            logger.debug("click_to_dial audit_event write failed: %s", e)
+
         return {
             "success": True,
             "call_sid": result.call_sid,
+            "canonical_call_id": str(canonical_id),
             "contact_name": contact_name,
             "contact_phone": phone_number,
             "debug": {

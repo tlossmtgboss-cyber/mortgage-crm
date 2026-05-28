@@ -3,7 +3,9 @@ Vapi AI Receptionist - Database Models
 Handles call records, transcriptions, and lead capture
 """
 import logging
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Float, Boolean, ForeignKey, text
+import uuid as _uuid_mod
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Float, Boolean, ForeignKey, Index, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from database import Base
@@ -17,6 +19,7 @@ class VapiCall(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    canonical_call_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     vapi_call_id = Column(String(255), unique=True, index=True, nullable=False)
 
     # Call Details
@@ -227,6 +230,7 @@ def ensure_vapi_ci_columns(db) -> None:
         ("loan_officer_id", "INTEGER REFERENCES users(id)"),
         ("recording_local_path", "VARCHAR(512)"),
         ("recording_downloaded_at", "TIMESTAMPTZ"),
+        ("canonical_call_id", "UUID"),
     ]
     for col_name, col_def in _cols:
         try:

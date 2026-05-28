@@ -1444,6 +1444,38 @@ class ComplianceChecker:
                 f"Number currently being called by {lock_info.get('agent_name', 'another agent')}"
             )
 
+        # Write to SOC 2 audit trail
+        try:
+            from db import SessionLocal
+            from services.audit_events import audit_event, EventType
+            audit_db = SessionLocal()
+            try:
+                masked = f"***{phone_number[-4:]}" if phone_number and len(phone_number) >= 4 else "unknown"
+                audit_event(
+                    audit_db,
+                    event_type=EventType.COMPLIANCE_CHECK_PASSED if result["can_call"] else EventType.COMPLIANCE_CHECK_FAILED,
+                    outcome="success" if result["can_call"] else "denied",
+                    actor_id=agent_id,
+                    org_id=self.organization_id,
+                    resource_type="call",
+                    resource_id=masked,
+                    metadata={
+                        "phone_masked": masked,
+                        "can_call": result["can_call"],
+                        "issues": result["issues"],
+                        "warnings": result.get("warnings", []),
+                        "contact_id": contact_id,
+                    },
+                )
+                audit_db.commit()
+            except Exception as e:
+                audit_db.rollback()
+                logger.debug("Compliance audit_event write failed: %s", e)
+            finally:
+                audit_db.close()
+        except Exception as e:
+            logger.debug("Compliance audit_event import failed: %s", e)
+
         return result
 
     # =========================================================================

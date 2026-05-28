@@ -8,11 +8,13 @@ Usage:
     from database.models.dialer import DialerSession, CallLog, AgentTelephonySettings
 """
 
+import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
     Text, ForeignKey, Enum as SQLEnum, Index, UniqueConstraint
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from db import Base
@@ -112,8 +114,10 @@ class CallLog(Base):
     __table_args__ = (
         Index('ix_call_logs_agent', 'agent_id', 'created_at'),
         Index('ix_call_logs_call_sid', 'call_sid'),
+        Index('ix_call_logs_canonical', 'canonical_call_id'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    canonical_call_id = Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=True, unique=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     contact_phone = Column(String, nullable=False)

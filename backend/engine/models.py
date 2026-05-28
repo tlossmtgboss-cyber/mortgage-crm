@@ -28,6 +28,7 @@ class CIECallRecord(Base):
     __tablename__ = "cie_call_records"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    canonical_call_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     external_call_id = Column(String(255), nullable=False)
     provider = Column(String(50), nullable=False)
     direction = Column(String(10), nullable=False, default="inbound")
