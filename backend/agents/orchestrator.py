@@ -558,7 +558,7 @@ async def run_orchestrator(
                 if name in scoped_tool_names
             }
             # Always include base tools that might be needed
-            for name in ["get_pipeline", "get_tasks", "search_leads", "search_loans", "find_contact", "send_sms"]:
+            for name in ["get_pipeline", "get_tasks", "search_leads", "search_loans", "find_contact", "send_sms", "get_loan_file", "search_mum_clients"]:
                 if name in tool_functions and name not in scoped_tools:
                     scoped_tools[name] = tool_functions[name]
         elif db_session and current_user:

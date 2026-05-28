@@ -1102,6 +1102,34 @@ Never reference, query, or return data from other organizations.
                 }
             })
 
+        if "get_loan_file" in self._tool_functions:
+            definitions.append({
+                "name": "get_loan_file",
+                "description": "Get full loan file details including stage, rate, amount, team, open tasks, and recent notes. Use when the user asks about a specific loan, borrower's file, conditions, or loan status.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "borrower_name": {"type": "string", "description": "Borrower name to search for"},
+                        "loan_number": {"type": "string", "description": "Loan number"},
+                        "loan_id": {"type": "integer", "description": "Loan ID"}
+                    }
+                }
+            })
+
+        if "search_mum_clients" in self._tool_functions:
+            definitions.append({
+                "name": "search_mum_clients",
+                "description": "Search past clients (Members Under Management / MUM) by name, email, phone, or loan number. Returns client details, current rate, loan balance, property value, refinance opportunity, and estimated savings. Use when the user asks about past clients, funded loans, MUM clients, or refinance opportunities.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search by name, email, phone, or loan number"},
+                        "status": {"type": "string", "description": "Filter by status (e.g., active, dormant)"},
+                        "limit": {"type": "integer", "description": "Max results", "default": 15}
+                    }
+                }
+            })
+
         if "create_task" in self._tool_functions:
             definitions.append({
                 "name": "create_task",
@@ -1871,6 +1899,161 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return {"count": 0, "loans": [], "error": "Internal server error"}
 
     tools["search_loans"] = execute_search_loans
+
+    # ============ Loan File Detail ============
+
+    async def execute_get_loan_file(args):
+        """Get comprehensive loan file details by borrower name or loan number."""
+        borrower_name = args.get("borrower_name", "").strip()
+        loan_number = args.get("loan_number", "").strip()
+        loan_id = args.get("loan_id")
+
+        if not borrower_name and not loan_number and not loan_id:
+            return {"found": False, "error": "Provide borrower_name, loan_number, or loan_id"}
+
+        try:
+            conditions = ["l.organization_id = :org_id"]
+            params = {"org_id": org_id}
+
+            if loan_id:
+                conditions.append("l.id = :loan_id")
+                params["loan_id"] = loan_id
+            elif loan_number:
+                conditions.append("l.loan_number = :loan_number")
+                params["loan_number"] = loan_number
+            elif borrower_name:
+                conditions.append("l.borrower_name ILIKE :search")
+                params["search"] = f"%{borrower_name}%"
+
+            where = " AND ".join(conditions)
+            row = db.execute(text(
+                f"SELECT l.id, l.loan_number, l.borrower_name, l.borrower_email,"
+                f" l.borrower_phone, l.stage, l.loan_type, l.program,"
+                f" l.amount, l.rate, l.term, l.purchase_price, l.down_payment,"
+                f" l.property_address, l.closing_date, l.lock_expiration_date,"
+                f" l.processor, l.underwriter, l.closer, l.loan_officer_name,"
+                f" l.days_in_stage, l.stage_changed_at, l.application_date,"
+                f" l.funded_date, l.created_at, l.updated_at,"
+                f" l.lead_id, l.coborrower_name"
+                f" FROM loans l WHERE {where}"
+                f" ORDER BY l.updated_at DESC LIMIT 1"
+            ), params).fetchone()
+
+            if not row:
+                return {"found": False, "count": 0}
+
+            loan = {
+                "id": row.id, "loan_number": row.loan_number,
+                "borrower_name": row.borrower_name,
+                "borrower_email": row.borrower_email,
+                "borrower_phone": row.borrower_phone,
+                "coborrower_name": row.coborrower_name,
+                "stage": str(row.stage) if row.stage else None,
+                "loan_type": row.loan_type, "program": row.program,
+                "amount": float(row.amount) if row.amount else None,
+                "rate": float(row.rate) if row.rate else None,
+                "term": row.term,
+                "purchase_price": float(row.purchase_price) if row.purchase_price else None,
+                "down_payment": float(row.down_payment) if row.down_payment else None,
+                "property_address": row.property_address,
+                "closing_date": row.closing_date.isoformat() if row.closing_date else None,
+                "lock_expiration_date": row.lock_expiration_date.isoformat() if row.lock_expiration_date else None,
+                "processor": row.processor, "underwriter": row.underwriter,
+                "closer": row.closer, "loan_officer": row.loan_officer_name,
+                "days_in_stage": row.days_in_stage,
+                "stage_changed_at": row.stage_changed_at.isoformat() if row.stage_changed_at else None,
+                "application_date": row.application_date.isoformat() if row.application_date else None,
+                "funded_date": row.funded_date.isoformat() if row.funded_date else None,
+            }
+
+            # Get open tasks for this loan
+            task_rows = db.execute(text(
+                "SELECT id, title, status, priority, due_date"
+                " FROM tasks WHERE loan_id = :lid AND status = 'pending'"
+                " ORDER BY due_date ASC LIMIT 10"
+            ), {"lid": row.id}).fetchall()
+            loan["open_tasks"] = [{"id": t.id, "title": t.title, "priority": t.priority,
+                                   "due_date": t.due_date.isoformat() if t.due_date else None} for t in task_rows]
+
+            # Get recent notes
+            note_rows = db.execute(text(
+                "SELECT id, content, note_type, created_at"
+                " FROM loan_notes WHERE loan_id = :lid"
+                " ORDER BY created_at DESC LIMIT 5"
+            ), {"lid": row.id}).fetchall()
+            loan["recent_notes"] = [{"content": n.content[:200], "type": n.note_type,
+                                     "date": n.created_at.isoformat() if n.created_at else None} for n in note_rows]
+
+            return {"found": True, "loan": loan}
+        except Exception as e:
+            logger.error(f"Error in get_loan_file: {e}")
+            db.rollback()
+            return {"found": False, "error": str(e)}
+
+    tools["get_loan_file"] = execute_get_loan_file
+
+    # ============ MUM Client Search ============
+
+    async def execute_search_mum_clients(args):
+        """Search past clients (Members Under Management) by name, loan number, or status."""
+        query_str = args.get("query", "").strip()
+        status_filter = args.get("status", "")
+        limit = min(args.get("limit", 15), 50)
+
+        try:
+            conditions = ["m.organization_id = :org_id"]
+            params = {"org_id": org_id, "limit": limit}
+
+            if query_str:
+                params["search"] = f"%{query_str}%"
+                conditions.append(
+                    "(m.client_name ILIKE :search OR m.email ILIKE :search"
+                    " OR m.phone ILIKE :search OR m.loan_number ILIKE :search)"
+                )
+            if status_filter:
+                conditions.append("m.status = :status")
+                params["status"] = status_filter
+
+            where = " AND ".join(conditions)
+            rows = db.execute(text(
+                f"SELECT m.id, m.client_name, m.email, m.phone, m.loan_number,"
+                f" m.original_rate, m.current_rate, m.original_loan_amount,"
+                f" m.current_loan_amount, m.current_property_value,"
+                f" m.refinance_opportunity, m.estimated_savings,"
+                f" m.status, m.last_contact, m.next_touchpoint,"
+                f" m.loan_officer, m.closing_date, m.days_since_funding"
+                f" FROM mum_clients m WHERE {where}"
+                f" ORDER BY m.closing_date DESC NULLS LAST LIMIT :limit"
+            ), params).fetchall()
+
+            clients = []
+            for r in rows:
+                clients.append({
+                    "id": r.id, "name": r.client_name,
+                    "email": r.email, "phone": r.phone,
+                    "loan_number": r.loan_number,
+                    "original_rate": float(r.original_rate) if r.original_rate else None,
+                    "current_rate": float(r.current_rate) if r.current_rate else None,
+                    "original_loan_amount": float(r.original_loan_amount) if r.original_loan_amount else None,
+                    "current_loan_amount": float(r.current_loan_amount) if r.current_loan_amount else None,
+                    "current_property_value": float(r.current_property_value) if r.current_property_value else None,
+                    "refinance_opportunity": r.refinance_opportunity,
+                    "estimated_savings": float(r.estimated_savings) if r.estimated_savings else None,
+                    "status": r.status,
+                    "last_contact": r.last_contact.isoformat() if r.last_contact else None,
+                    "next_touchpoint": r.next_touchpoint.isoformat() if r.next_touchpoint else None,
+                    "loan_officer": r.loan_officer,
+                    "closing_date": r.closing_date.isoformat() if r.closing_date else None,
+                    "days_since_funding": r.days_since_funding,
+                })
+
+            return {"count": len(clients), "clients": clients}
+        except Exception as e:
+            logger.error(f"Error in search_mum_clients: {e}")
+            db.rollback()
+            return {"count": 0, "clients": [], "error": str(e)}
+
+    tools["search_mum_clients"] = execute_search_mum_clients
 
     # ============ Task Creation Tools ============
 
