@@ -6,7 +6,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from auth.dependencies import get_current_user
@@ -23,6 +23,92 @@ from engine.api.schemas import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_tables_ensured = False
+
+def _ensure_cie_tables(db: Session) -> None:
+    global _tables_ensured
+    if _tables_ensured:
+        return
+    try:
+        db.execute(text("SELECT 1 FROM cie_call_records LIMIT 0"))
+        _tables_ensured = True
+        return
+    except Exception:
+        db.rollback()
+
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS cie_call_records (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                canonical_call_id UUID,
+                external_call_id VARCHAR(255) NOT NULL,
+                provider VARCHAR(50) NOT NULL,
+                direction VARCHAR(10) NOT NULL DEFAULT 'inbound',
+                phone_from TEXT,
+                phone_to TEXT,
+                started_at TIMESTAMPTZ,
+                ended_at TIMESTAMPTZ,
+                duration_seconds INTEGER,
+                transcript_encrypted TEXT,
+                recording_url_encrypted TEXT,
+                raw_payload JSONB,
+                contact_id INTEGER,
+                loan_id INTEGER,
+                lead_id INTEGER,
+                owner_user_id INTEGER,
+                processing_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                processing_error TEXT,
+                organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE(external_call_id, organization_id)
+            )
+        """))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_cie_call_org_created ON cie_call_records(organization_id, created_at)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_cie_call_status ON cie_call_records(processing_status)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_cie_call_loan ON cie_call_records(loan_id)"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_cie_call_lead ON cie_call_records(lead_id)"))
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS cie_intelligence_reports (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                call_record_id UUID NOT NULL REFERENCES cie_call_records(id) ON DELETE CASCADE,
+                cis_composite FLOAT,
+                engagement_score FLOAT,
+                information_quality_score FLOAT,
+                objection_handling_score FLOAT,
+                compliance_score FLOAT,
+                rapport_score FLOAT,
+                closing_effectiveness_score FLOAT,
+                primary_intent VARCHAR(100),
+                intent_confidence FLOAT,
+                conversion_probability FLOAT,
+                conversion_ci_low FLOAT,
+                conversion_ci_high FLOAT,
+                summary TEXT,
+                summary_bullets JSONB,
+                opportunities JSONB,
+                risks JSONB,
+                objections JSONB,
+                compliance_flags JSONB,
+                coaching_suggestions JSONB,
+                generated_tasks JSONB,
+                draft_messages JSONB,
+                llm_model_used VARCHAR(100),
+                pipeline_version VARCHAR(50),
+                processing_time_ms INTEGER,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+        """))
+        db.execute(text("CREATE INDEX IF NOT EXISTS ix_cie_report_call ON cie_intelligence_reports(call_record_id)"))
+        db.commit()
+        logger.info("CIE tables created via self-heal")
+        _tables_ensured = True
+    except Exception as e:
+        db.rollback()
+        logger.warning("CIE table creation failed: %s", e)
+        _tables_ensured = True
 
 
 @router.get("/reports/{report_id}", response_model=ReportResponse)
@@ -56,6 +142,7 @@ async def list_reports(
     db: Session = Depends(get_db),
 ):
     try:
+        _ensure_cie_tables(db)
         org_id = getattr(current_user, "organization_id", None)
         q = (
             db.query(CIECallRecord)
@@ -150,6 +237,7 @@ async def get_stats(
     db: Session = Depends(get_db),
 ):
     try:
+        _ensure_cie_tables(db)
         org_id = getattr(current_user, "organization_id", None)
         q = db.query(CIECallRecord).filter(CIECallRecord.organization_id == org_id)
         if loan_id is not None:
