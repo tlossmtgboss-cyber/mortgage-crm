@@ -194,12 +194,27 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                                 ApiKey.key_hash == _token_hash,
                                 ApiKey.is_active == True
                             ).first()
-                            # Fallback to plaintext for unmigrated keys
+                            # Fallback to plaintext for unmigrated keys — DEPRECATED.
+                            # Auto-migrates matched keys to sha256 hash.
                             if not api_key:
                                 api_key = db.query(ApiKey).filter(
                                     ApiKey.key == token,
                                     ApiKey.is_active == True
                                 ).first()
+                                if api_key:
+                                    logger.warning(
+                                        "SECURITY: API key id=%s matched via plaintext fallback. "
+                                        "Auto-migrating to sha256 hash. Plaintext fallback will "
+                                        "be removed in a future release.",
+                                        api_key.id,
+                                    )
+                                    try:
+                                        api_key.key_hash = _token_hash
+                                        api_key.key = None
+                                        db.commit()
+                                    except Exception as migrate_err:
+                                        db.rollback()
+                                        logger.warning("API key hash migration failed: %s", migrate_err)
                             if api_key:
                                 user = db.query(self.user_model).filter(
                                     self.user_model.id == api_key.user_id

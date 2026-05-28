@@ -521,6 +521,33 @@ class _InMemoryBlacklist:
             self._store.pop(key, None)
 
 
+class _CircuitBreaker:
+    """Track consecutive Redis failures to avoid log-spam and allow degraded auth."""
+
+    def __init__(self, threshold: int = 5, window_seconds: float = 60.0):
+        self._threshold = threshold
+        self._window = window_seconds
+        self._failures: list[float] = []
+        self._lock = threading.Lock()
+
+    def record_failure(self) -> None:
+        now = time.time()
+        with self._lock:
+            self._failures = [t for t in self._failures if now - t < self._window]
+            self._failures.append(now)
+
+    def record_success(self) -> None:
+        with self._lock:
+            self._failures.clear()
+
+    @property
+    def is_open(self) -> bool:
+        now = time.time()
+        with self._lock:
+            recent = [t for t in self._failures if now - t < self._window]
+            return len(recent) >= self._threshold
+
+
 class TokenBlacklist:
     """
     Token denylist for immediate revocation.
@@ -536,6 +563,8 @@ class TokenBlacklist:
     - User-level revocation: ``token:user_revoked:{user_id}``
     - Production: Redis is MANDATORY. In-memory fallback is disabled.
     - Development/test: In-memory fallback is allowed.
+    - Circuit breaker: after 5 consecutive Redis failures in 60s, degrades
+      to allow tokens through rather than causing a full auth outage.
     """
 
     def __init__(self):
@@ -544,25 +573,30 @@ class TokenBlacklist:
         self._fallback = _InMemoryBlacklist()
         self._using_fallback = True  # Start in fallback until Redis is configured
         self._is_production = _is_production()
+        self._breaker = _CircuitBreaker(threshold=5, window_seconds=60.0)
 
     def _handle_redis_failure(self, operation: str, error: Exception):
         """Handle Redis failures based on environment.
 
-        Production: Log CRITICAL and do NOT fall back to in-memory.
+        Production: Log CRITICAL, record circuit breaker failure.
         Development: Log warning and fall back to in-memory.
         """
+        self._breaker.record_failure()
         if self._is_production:
-            logger.critical(
-                "SECURITY: Redis unavailable during %s: %s. "
-                "Token denylist is NOT operational — revoked tokens may be accepted. "
-                "Redis is MANDATORY in production for token revocation. "
-                "Restore Redis connectivity immediately.",
-                operation, error,
-            )
-            # Do NOT set self._using_fallback = True in production.
-            # The denylist will report "not denied" for all checks when Redis
-            # is down, which is safer than silently accepting an in-memory
-            # fallback that is not shared across replicas.
+            if self._breaker.is_open:
+                logger.critical(
+                    "SECURITY: Redis circuit breaker OPEN during %s: %s. "
+                    "Degraded mode — token denylist checks will pass through "
+                    "until Redis recovers. Monitor for revoked token abuse.",
+                    operation, error,
+                )
+            else:
+                logger.critical(
+                    "SECURITY: Redis unavailable during %s: %s. "
+                    "Token denylist is NOT operational — revoked tokens may be accepted. "
+                    "Redis is MANDATORY in production for token revocation.",
+                    operation, error,
+                )
         else:
             if not self._using_fallback:
                 logger.warning(
@@ -700,7 +734,9 @@ class TokenBlacklist:
 
         if self._redis_available():
             try:
-                return self._redis.exists(key) > 0
+                result = self._redis.exists(key) > 0
+                self._breaker.record_success()
+                return result
             except Exception as e:
                 self._handle_redis_failure("is_blacklisted_by_jti", e)
 
@@ -708,11 +744,21 @@ class TokenBlacklist:
         if self._using_fallback:
             return self._fallback.exists(key) > 0
 
-        # Production with Redis down — FAIL CLOSED: deny all tokens.
-        # A revoked token slipping through is worse than a brief auth outage.
+        # Production with Redis down — check circuit breaker.
+        # If breaker is open (sustained outage), degrade to allow tokens
+        # through rather than causing total auth failure for all users.
+        if self._breaker.is_open:
+            logger.warning(
+                "SECURITY-DEGRADED: Redis circuit breaker open — allowing token jti=%s... "
+                "(revoked tokens may pass through until Redis recovers)",
+                jti[:8],
+            )
+            return False
+
+        # Breaker still closed (transient failure) — fail closed.
         logger.critical(
             "SECURITY: Redis unavailable — DENYING token jti=%s... (fail-closed). "
-            "All token validation will fail until Redis is restored.",
+            "Circuit breaker will open after sustained failures.",
             jti[:8],
         )
         return True
@@ -765,24 +811,39 @@ class TokenBlacklist:
         if self._redis_available():
             try:
                 revoked_at = self._redis.get(key)
+                self._breaker.record_success()
             except Exception as e:
                 self._handle_redis_failure("is_user_revoked", e)
                 if self._using_fallback:
                     revoked_at = self._fallback.get(key)
                 elif self._is_production:
-                    logger.critical(
-                        "SECURITY: Redis unavailable — assuming user %s is revoked (fail-closed)",
-                        user_id,
-                    )
-                    return True
+                    if self._breaker.is_open:
+                        logger.warning(
+                            "SECURITY-DEGRADED: Redis circuit breaker open — "
+                            "allowing user %s through (revocation check skipped)",
+                            user_id,
+                        )
+                    else:
+                        logger.critical(
+                            "SECURITY: Redis unavailable — assuming user %s is revoked (fail-closed)",
+                            user_id,
+                        )
+                        return True
         elif self._using_fallback:
             revoked_at = self._fallback.get(key)
         elif self._is_production:
-            logger.critical(
-                "SECURITY: Redis unavailable — assuming user %s is revoked (fail-closed)",
-                user_id,
-            )
-            return True
+            if self._breaker.is_open:
+                logger.warning(
+                    "SECURITY-DEGRADED: Redis circuit breaker open — "
+                    "allowing user %s through (revocation check skipped)",
+                    user_id,
+                )
+            else:
+                logger.critical(
+                    "SECURITY: Redis unavailable — assuming user %s is revoked (fail-closed)",
+                    user_id,
+                )
+                return True
 
         if not revoked_at:
             return False
