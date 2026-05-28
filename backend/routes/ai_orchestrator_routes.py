@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/ai")
 
+# In-memory diagnostic capture — stores last orchestrator request/response
+_last_aria_diag: dict = {}
+
 
 # =============================================================================
 # RATE LIMITER — per-user, in-memory sliding window
@@ -397,16 +400,19 @@ async def orchestrator_chat(
         if aria_context:
             document_context = f"{aria_context}\n\n{document_context}" if document_context else aria_context
 
-        # Diagnostic: log user context for Aria data access debugging
+        # Diagnostic: capture last request/response for debugging
         _perm_role = getattr(current_user, 'permission_role', 'MISSING')
-        logger.warning(
-            f"[ARIA-DIAG] orchestrator-chat user_id={user_id_str} org_id={org_id} "
-            f"permission_role={_perm_role} aria_context_len={len(aria_context) if aria_context else 0} "
-            f"message_preview={message[:60]}"
-        )
+        _last_aria_diag["last_request"] = {
+            "ts": time.time(), "user_id": user_id_str, "org_id": org_id,
+            "permission_role": _perm_role,
+            "aria_context_len": len(aria_context) if aria_context else 0,
+            "message": message[:200],
+        }
 
         # Create the full agent service with all 215 tools
         service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
+        _last_aria_diag["tools_created"] = sorted(list(service._tool_functions.keys()))[:30]
+        _last_aria_diag["tool_count"] = len(service._tool_functions)
 
         # Enforce AI concurrency limits (Enterprise Check 6.14)
         from middleware.ai_concurrency import ai_concurrency_gate
@@ -421,6 +427,13 @@ async def orchestrator_chat(
                 active_loan_id=active_loan_id,
                 voice_mode=voice_mode,
             )
+        _last_aria_diag["last_response"] = {
+            "response": (result.get("response", ""))[:500],
+            "intent": result.get("intent"),
+            "confidence": result.get("confidence"),
+            "actions_executed": result.get("actions_executed", []),
+            "error": result.get("error"),
+        }
 
         # Save to conversation memory (non-fatal on failure)
         for role, content in [("user", message), ("assistant", result.get("response", ""))]:
@@ -699,6 +712,12 @@ async def aria_diagnostic(
         result["errors"].append(f"top_level: {e}")
 
     return result
+
+
+@router.get("/aria-last-request")
+async def aria_last_request():
+    """Return the last orchestrator-chat request/response for debugging."""
+    return _last_aria_diag or {"status": "no requests captured yet"}
 
 
 @router.get("/aria-diag-temp")
