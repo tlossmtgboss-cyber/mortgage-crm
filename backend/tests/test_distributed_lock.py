@@ -5,17 +5,21 @@ Uses mock Redis to test lock acquisition, release, contention, and fallback beha
 without requiring a running Redis instance.
 """
 
+import asyncio
 import time
 import threading
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch, PropertyMock, AsyncMock
 
 from services.distributed_lock import (
     DistributedLockService,
     DistributedLockError,
+    distributed_lock,
     get_lock_service,
     _RELEASE_LOCK_LUA,
+    _local_locks,
+    _local_lock_guard,
 )
 
 
@@ -443,3 +447,196 @@ class TestIntegrationPattern:
             mock_check_conflict()  # SELECT FOR UPDATE still runs
 
         assert conflict_checked is True
+
+
+# =============================================================================
+# Test: Async distributed_lock context manager
+# =============================================================================
+
+class TestDistributedLockAsync:
+    """Tests for the async distributed_lock() context manager."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_local_locks(self):
+        """Ensure _local_locks is empty before and after each test."""
+        with _local_lock_guard:
+            _local_locks.clear()
+        yield
+        with _local_lock_guard:
+            _local_locks.clear()
+
+    @pytest.mark.asyncio
+    async def test_acquire_with_redis_unavailable_falls_back_to_local(self):
+        """When Redis is unavailable, lock should succeed via local fallback."""
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = None
+            mock_get.return_value = svc
+
+            async with distributed_lock("test:local", ttl=5, extend=False) as acquired:
+                assert acquired is True
+                # Key should be in local locks
+                with _local_lock_guard:
+                    assert "dlock:test:local" in _local_locks
+
+        # After exit, key should be removed
+        with _local_lock_guard:
+            assert "dlock:test:local" not in _local_locks
+
+    @pytest.mark.asyncio
+    async def test_local_contention_returns_false_nonblocking(self):
+        """When local lock is held and block=False, should yield False."""
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = None
+            mock_get.return_value = svc
+
+            async with distributed_lock("test:contention", ttl=5, extend=False) as first:
+                assert first is True
+                # Nested acquire of same key should yield False
+                async with distributed_lock("test:contention", ttl=5, block=False, extend=False) as second:
+                    assert second is False
+
+    @pytest.mark.asyncio
+    async def test_release_allows_reacquire(self):
+        """After releasing, the same key should be acquirable again."""
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = None
+            mock_get.return_value = svc
+
+            async with distributed_lock("test:reacquire", ttl=5, extend=False) as first:
+                assert first is True
+
+            async with distributed_lock("test:reacquire", ttl=5, extend=False) as second:
+                assert second is True
+
+    @pytest.mark.asyncio
+    async def test_redis_acquire_and_release(self):
+        """With mock Redis available, should acquire via SETNX and release via Lua."""
+        _store = {}
+
+        mock_redis = MagicMock()
+
+        def mock_set(key, value, nx=False, ex=None):
+            if nx and key in _store:
+                return False
+            _store[key] = value
+            return True
+
+        mock_redis.set.side_effect = mock_set
+
+        def mock_lua(keys, args):
+            key = keys[0]
+            expected = args[0]
+            if _store.get(key) == expected:
+                _store.pop(key, None)
+                return 1
+            return 0
+
+        mock_release = MagicMock(side_effect=mock_lua)
+        mock_redis.register_script.return_value = mock_release
+
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = mock_redis
+            svc._release.side_effect = lambda k, v: bool(mock_lua([k], [v]))
+            mock_get.return_value = svc
+
+            async with distributed_lock("test:redis", ttl=10, extend=False) as acquired:
+                assert acquired is True
+                # Key should be in Redis store
+                assert "dlock:test:redis" in _store
+                stored_value = _store["dlock:test:redis"]
+
+            # After exit, release should have been called
+            svc._release.assert_called_once()
+            call_args = svc._release.call_args
+            assert call_args[0][0] == "dlock:test:redis"
+
+    @pytest.mark.asyncio
+    async def test_redis_contention_nonblocking(self):
+        """When Redis key exists and block=False, should yield False."""
+        mock_redis = MagicMock()
+        # Simulate key already held
+        mock_redis.set.return_value = False
+
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = mock_redis
+            mock_get.return_value = svc
+
+            async with distributed_lock("test:busy", ttl=10, block=False, extend=False) as acquired:
+                assert acquired is False
+
+    @pytest.mark.asyncio
+    async def test_redis_error_during_acquire_falls_back(self):
+        """If Redis SET throws, should fall back to local locking."""
+        mock_redis = MagicMock()
+        mock_redis.set.side_effect = ConnectionError("Redis gone")
+
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = mock_redis
+            mock_get.return_value = svc
+
+            # block=True but Redis fails -> falls back to local
+            async with distributed_lock("test:error", ttl=5, block=True, timeout=0.2, extend=False) as acquired:
+                assert acquired is True  # local fallback succeeds
+
+    @pytest.mark.asyncio
+    async def test_key_prefix_applied(self):
+        """Lock key should be prefixed with 'dlock:' to avoid collisions."""
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = None
+            mock_get.return_value = svc
+
+            async with distributed_lock("agent:my_agent", ttl=5, extend=False):
+                with _local_lock_guard:
+                    assert "dlock:agent:my_agent" in _local_locks
+                    assert "agent:my_agent" not in _local_locks
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_starts_when_extend_true(self):
+        """Heartbeat task should be created when extend=True and Redis is available."""
+        _store = {}
+        mock_redis = MagicMock()
+
+        def mock_set(key, value, nx=False, ex=None):
+            if nx and key in _store:
+                return False
+            _store[key] = value
+            return True
+
+        mock_redis.set.side_effect = mock_set
+
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = mock_redis
+            mock_get.return_value = svc
+
+            async with distributed_lock("test:heartbeat", ttl=30, extend=True) as acquired:
+                assert acquired is True
+                # Give a tiny moment for the task to be created
+                await asyncio.sleep(0.01)
+                # Check that a heartbeat task exists
+                tasks = [t for t in asyncio.all_tasks() if "dlock-heartbeat" in (t.get_name() or "")]
+                assert len(tasks) == 1
+
+        # After exit, heartbeat should be cancelled
+        await asyncio.sleep(0.01)
+        tasks = [t for t in asyncio.all_tasks() if "dlock-heartbeat" in (t.get_name() or "")]
+        assert len(tasks) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_heartbeat_when_extend_false(self):
+        """No heartbeat task when extend=False."""
+        with patch("services.distributed_lock.get_lock_service") as mock_get:
+            svc = MagicMock()
+            svc._get_redis.return_value = None
+            mock_get.return_value = svc
+
+            async with distributed_lock("test:no-hb", ttl=5, extend=False):
+                tasks = [t for t in asyncio.all_tasks() if "dlock-heartbeat" in (t.get_name() or "")]
+                assert len(tasks) == 0

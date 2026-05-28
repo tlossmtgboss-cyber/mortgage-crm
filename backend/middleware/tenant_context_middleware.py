@@ -20,8 +20,8 @@ Tenant Middleware Architecture (consolidated 2026-05-14):
     ACTIVE:
     - middleware/tenant_context_middleware.py (THIS FILE) — JWT-based context setting
     - middleware/tenant_filter.py             — query-level isolation helpers
-    DEPRECATED:
-    - middleware/tenant_middleware.py — unused multi-DB routing (example file only)
+    REMOVED (2026-05-27):
+    - middleware/tenant_middleware.py — deleted (was unused multi-DB routing)
 """
 
 import logging
@@ -50,7 +50,21 @@ except ImportError:
 import jwt
 from jwt.exceptions import InvalidTokenError
 
-# Import structured logging context setters
+# Import request-context setters so that every stdlib logging call
+# during the request automatically includes user_id and org_id
+# (via RequestContextFilter in utils/logging_config.py).
+try:
+    from middleware.request_context import (
+        set_user_id as _set_ctx_user_id,
+        set_org_id as _set_ctx_org_id,
+    )
+    _REQUEST_CONTEXT_AVAILABLE = True
+except ImportError:
+    _REQUEST_CONTEXT_AVAILABLE = False
+    _set_ctx_user_id = None
+    _set_ctx_org_id = None
+
+# Legacy: also set core.logging context vars if available (structlog bridge)
 try:
     from core.logging import set_user_id, set_tenant_id
     STRUCTURED_LOGGING_AVAILABLE = True
@@ -120,7 +134,14 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             is_platform_admin=is_platform_admin
         )
 
-        # Set structured logging context for correlation
+        # Set request context vars so RequestContextFilter injects
+        # user_id and org_id into every stdlib log record automatically.
+        if _REQUEST_CONTEXT_AVAILABLE:
+            _set_ctx_user_id(user.id)
+            if request.state.organization_id:
+                _set_ctx_org_id(request.state.organization_id)
+
+        # Also set core.logging context vars (structlog bridge, if configured)
         if STRUCTURED_LOGGING_AVAILABLE:
             set_user_id(user.id)
             if request.state.organization_id:

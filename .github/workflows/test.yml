@@ -148,7 +148,7 @@ jobs:
         run: |
           pytest tests/ -v -m "golden or critical" --timeout=120 --tb=short --continue-on-collection-errors
   # ============================================================================
-  # STAGE 2: INTEGRATION & AI TESTS (Non-blocking)
+  # STAGE 2: INTEGRATION & AI TESTS (Blocking)
   # ============================================================================
   integration-tests:
     name: Integration Tests
@@ -413,3 +413,58 @@ jobs:
           name: frontend-build
           path: ./frontend/build
           retention-days: 7
+  # ============================================================================
+  # FINAL GATE: All stages must pass for the pipeline to succeed
+  # ============================================================================
+  pipeline-status:
+    name: Pipeline Status
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      # Stage 1
+      - unit-tests
+      - contract-tests
+      - golden-flow-tests
+      # Stage 2
+      - integration-tests
+      - ai-harness-tests
+      - frontend-tests
+      # Stage 3
+      - lint
+      - type-check
+      - file-size-check
+      - dependency-audit
+      - secret-scan
+      - build-check
+    steps:
+      - name: Check pipeline result
+        run: |
+          echo "Job results:"
+          echo "  unit-tests:        ${{ needs.unit-tests.result }}"
+          echo "  contract-tests:    ${{ needs.contract-tests.result }}"
+          echo "  golden-flow-tests: ${{ needs.golden-flow-tests.result }}"
+          echo "  integration-tests: ${{ needs.integration-tests.result }}"
+          echo "  ai-harness-tests:  ${{ needs.ai-harness-tests.result }}"
+          echo "  frontend-tests:    ${{ needs.frontend-tests.result }}"
+          echo "  lint:              ${{ needs.lint.result }}"
+          echo "  type-check:        ${{ needs.type-check.result }}"
+          echo "  file-size-check:   ${{ needs.file-size-check.result }}"
+          echo "  dependency-audit:  ${{ needs.dependency-audit.result }}"
+          echo "  secret-scan:       ${{ needs.secret-scan.result }}"
+          echo "  build-check:       ${{ needs.build-check.result }}"
+          if [[ "${{ needs.unit-tests.result }}" != "success" || \
+                "${{ needs.contract-tests.result }}" != "success" || \
+                "${{ needs.golden-flow-tests.result }}" != "success" || \
+                "${{ needs.integration-tests.result }}" != "success" || \
+                "${{ needs.ai-harness-tests.result }}" != "success" || \
+                "${{ needs.frontend-tests.result }}" != "success" || \
+                "${{ needs.lint.result }}" != "success" || \
+                "${{ needs.type-check.result }}" != "success" || \
+                "${{ needs.file-size-check.result }}" != "success" || \
+                "${{ needs.dependency-audit.result }}" != "success" || \
+                "${{ needs.secret-scan.result }}" != "success" || \
+                "${{ needs.build-check.result }}" != "success" ]]; then
+            echo "::error::One or more pipeline jobs failed or were skipped."
+            exit 1
+          fi
+          echo "All pipeline jobs passed."

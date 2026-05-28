@@ -169,11 +169,12 @@ async def generate_ai_response(
     try:
         start_time = time.time()
 
+        from agents.anthropic_client import cached_system_block
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
-            system=system_prompt,
+            system=cached_system_block(system_prompt),
             messages=messages
         )
 

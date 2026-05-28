@@ -194,6 +194,7 @@ class CallAnalysisService:
 
         # Call Claude
         try:
+            from agents.anthropic_client import cached_system_block
             response = self.client.messages.create(
                 model=ANALYSIS_MODEL,
                 max_tokens=MAX_TOKENS,
@@ -203,7 +204,7 @@ class CallAnalysisService:
                         "content": prompt
                     }
                 ],
-                system=self._get_system_prompt()
+                system=cached_system_block(self._get_system_prompt())
             )
 
             # Parse the response

@@ -18,6 +18,7 @@ import logging
 
 from db import get_db
 from utils.pagination import clamp_pagination
+from exceptions import EntityNotFoundError, ValidationError as DomainValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ async def create_lead(
         lead_data = LeadCreate(**lead)
     except Exception as validation_err:
         logger.warning(f"Lead validation failed: {validation_err}")
-        raise HTTPException(status_code=422, detail=str(validation_err))
+        raise DomainValidationError(str(validation_err))
 
     try:
         # Sanitize free-text fields that bypass Pydantic (e.g., source, employer_name)
@@ -405,5 +406,5 @@ def get_client_file_id_for_lead(
         sa_select(ClientFile.id).where(ClientFile.lead_id == lead_id)
     ).scalar_one_or_none()
     if cf is None:
-        raise HTTPException(404, "no client file for this lead")
+        raise EntityNotFoundError("ClientFile", lead_id, "no client file for this lead")
     return {"client_file_id": str(cf)}

@@ -38,6 +38,7 @@ from exceptions import (
     TenantIsolationError,
     AuthenticationError,
     AuthorizationError,
+    ValidationError,
     ComplianceViolationError,
     SLABreachError,
     InvalidStageError,
@@ -163,6 +164,18 @@ async def sla_breach_handler(request: Request, exc: SLABreachError) -> JSONRespo
         "SLA breach: %s (milestone=%s, days_overdue=%s) - %s %s",
         exc.message, exc.milestone, exc.days_overdue,
         request.method, request.url.path,
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=_build_error_body(exc.code, exc.message, 422),
+    )
+
+
+async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+    """Handle ValidationError (422)."""
+    logger.info(
+        "Validation error: %s - %s %s",
+        exc.message, request.method, request.url.path,
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -296,6 +309,9 @@ def register_domain_exception_handlers(app: FastAPI):
     # 400 - Bad request / validation
     app.add_exception_handler(InvalidStageError, invalid_stage_handler)
 
+    # 422 - Validation
+    app.add_exception_handler(ValidationError, validation_error_handler)
+
     # 409 - Conflict
     app.add_exception_handler(DuplicateEntityError, duplicate_entity_handler)
 
@@ -314,4 +330,4 @@ def register_domain_exception_handlers(app: FastAPI):
     # Catch-all for any PerenniaError subclass without a specific handler
     app.add_exception_handler(PerenniaError, perennia_error_fallback_handler)
 
-    logger.info("Domain exception handlers registered (14 exception types)")
+    logger.info("Domain exception handlers registered (15 exception types)")

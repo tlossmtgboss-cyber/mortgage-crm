@@ -37,10 +37,10 @@ class AuthSettings(BaseModel):
         description="Secret key for JWT signing (HS256)"
     )
     algorithm: Literal["HS256", "RS256"] = Field(
-        default_factory=lambda: os.getenv("AUTH_ALGORITHM", "HS256"),
-        description="JWT signing algorithm (RS256 recommended for production). "
-        "Only HS256 and RS256 are allowed — 'none' is explicitly rejected to prevent "
-        "algorithm confusion attacks."
+        default_factory=lambda: os.getenv("AUTH_ALGORITHM", "RS256"),
+        description="JWT signing algorithm. RS256 (asymmetric) is the default and "
+        "required in production. HS256 is allowed only in development/test. "
+        "'none' is explicitly rejected to prevent algorithm confusion attacks."
     )
     access_token_expire_minutes: int = Field(
         default=15,
@@ -94,12 +94,25 @@ class AuthSettings(BaseModel):
         description="SameSite cookie policy"
     )
 
+    @field_validator("algorithm", mode="after")
+    @classmethod
+    def reject_hs256_in_production(cls, v):
+        """HS256 is forbidden in production — RS256 is mandatory for mortgage data."""
+        environment = os.getenv("ENVIRONMENT", "development")
+        is_prod = environment.lower() in ("production", "prod") or os.getenv("RAILWAY_ENVIRONMENT")
+        if v == "HS256" and is_prod:
+            raise ValueError(
+                "HS256 is not allowed in production. Set AUTH_ALGORITHM=RS256 and "
+                "configure AUTH_PRIVATE_KEY / AUTH_PUBLIC_KEY environment variables."
+            )
+        return v
+
     @field_validator("secret_key", mode="before")
     @classmethod
     def validate_secret_key(cls, v):
         """Ensure secret key is set in production (for HS256)."""
         environment = os.getenv("ENVIRONMENT", "development")
-        algorithm = os.getenv("AUTH_ALGORITHM", "HS256")
+        algorithm = os.getenv("AUTH_ALGORITHM", "RS256")
 
         # Secret key only required for HS256
         if algorithm == "RS256":
@@ -108,7 +121,6 @@ class AuthSettings(BaseModel):
         if not v and environment != "development":
             raise ValueError("SECRET_KEY environment variable is required in production")
         if not v:
-            # Generate random key for development only
             logger.warning("SECRET_KEY not set - using generated key for development only")
             return secrets.token_hex(32)
         return v

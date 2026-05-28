@@ -4,6 +4,18 @@ Database Initialization & Schema Migrations
 Extracted from inline_legacy_routes.py.
 Handles table creation, schema migrations (ALTER TABLE ADD COLUMN),
 enum type updates, and sample data creation.
+
+========================================================================
+DEPRECATION NOTICE (2026-05-27)
+========================================================================
+The raw SQL ALTER TABLE / CREATE TABLE IF NOT EXISTS statements in this
+file are LEGACY.  New schema changes MUST go through Alembic migrations
+in backend/alembic/versions/.
+
+Set SKIP_LEGACY_MIGRATIONS=true to bypass ALL raw SQL in init_db() once
+Alembic is fully managing the schema.  This env-var acts as the kill
+switch for the legacy migration path.
+========================================================================
 """
 import os
 import logging
@@ -47,10 +59,24 @@ def init_db():
 
         # Skip auto-create in production unless explicitly enabled
         if _ENVIRONMENT == "production" and not _AUTO_CREATE_TABLES:
-            logger.info("ℹ️ Skipping Base.metadata.create_all() in production - use Alembic migrations")
+            logger.info("Skipping Base.metadata.create_all() in production - use Alembic migrations")
         else:
             _Base.metadata.create_all(bind=_engine)
-            logger.info("✅ Database tables created successfully")
+            logger.info("Database tables created successfully")
+
+        # ── Legacy migration kill-switch ────────────────────────────────
+        # When SKIP_LEGACY_MIGRATIONS=true, all raw SQL below is skipped.
+        # Enable this once Alembic fully owns the schema.
+        if os.getenv("SKIP_LEGACY_MIGRATIONS", "").lower() in ("true", "1", "yes"):
+            logger.info(
+                "SKIP_LEGACY_MIGRATIONS is set — skipping all legacy raw SQL migrations in init_db(). "
+                "Schema is managed by Alembic (backend/alembic/versions/)."
+            )
+            return True
+
+        # ================================================================
+        # LEGACY RAW SQL MIGRATIONS (deprecated — use Alembic instead)
+        # ================================================================
 
         # Explicitly create Salesforce integration tables if they don't exist
         # Use individual transactions for each table to ensure partial success

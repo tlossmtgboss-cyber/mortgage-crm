@@ -71,11 +71,11 @@ class Lead(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)  # Multi-tenant isolation
-    name = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups.
-    first_name = Column(String)  # NOTE: Not encrypted — used with name index for search.
-    last_name = Column(String)  # NOTE: Not encrypted — used with name index for search.
-    email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
-    phone = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups.
+    name = Column(String(255), nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups.
+    first_name = Column(String(255))  # NOTE: Not encrypted — used with name index for search.
+    last_name = Column(String(255))  # NOTE: Not encrypted — used with name index for search.
+    email = Column(String(255), index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
+    phone = Column(String(50), index=True)  # NOTE: Not encrypted — indexed for lookups.
 
     # Co-applicant
     co_applicant_name = Column(EncryptedString)  # PII: name
@@ -83,23 +83,23 @@ class Lead(Base):
     co_applicant_phone = Column(EncryptedString)  # PII: phone number
 
     # Communication
-    preferred_communication = Column(String)  # email, phone, text, voicemail
+    preferred_communication = Column(String(50))  # email, phone, text, voicemail
 
     # Pipeline status
-    stage = Column(String, default="New")
+    stage = Column(String(50), default="New")
     workflow_definition_id = Column(String(36), ForeignKey("workflow_definitions.id", ondelete="SET NULL"), nullable=True, index=True)
     workflow_node_id = Column(String(36), ForeignKey("workflow_nodes.id", ondelete="SET NULL"), nullable=True, index=True)
-    source = Column(String)
-    organization_code = Column(String)  # Branch/organization identifier
+    source = Column(String(255))
+    organization_code = Column(String(100))  # Branch/organization identifier
     referral_partner_id = Column(Integer, ForeignKey("referral_partners.id", ondelete="SET NULL"))
 
     # AI scoring
     ai_score = Column(Integer, default=50)
-    sentiment = Column(String, default="neutral")
+    sentiment = Column(String(50), default="neutral")
     next_action = Column(Text)
 
     # Loan qualification
-    loan_type = Column(String)
+    loan_type = Column(String(100))
     preapproval_amount = Column(Numeric(18, 2))
     credit_score = Column(Integer)
     debt_to_income = Column(Numeric(8, 4))
@@ -107,7 +107,7 @@ class Lead(Base):
     # Assignment
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     last_contact = Column(DateTime)
-    loan_number = Column(String)
+    loan_number = Column(String(255))
     notes = Column(Text)
 
     # Property Information
@@ -115,12 +115,12 @@ class Lead(Base):
     city = Column(EncryptedString)  # PII: physical address
     state = Column(EncryptedString)  # PII: physical address
     zip_code = Column(EncryptedString)  # PII: physical address
-    property_type = Column(String)
+    property_type = Column(String(100))
     property_value = Column(Numeric(18, 2))
     down_payment = Column(Numeric(18, 2))
 
     # Financial Information
-    employment_status = Column(String)
+    employment_status = Column(String(100))
     annual_income = Column(Numeric(18, 2))
     monthly_debts = Column(Numeric(18, 2))
     first_time_buyer = Column(Boolean, default=False)
@@ -134,18 +134,18 @@ class Lead(Base):
     lock_date = Column(DateTime)
     lock_expiration = Column(DateTime)
     closing_date = Column(DateTime)
-    lender = Column(String)
-    loan_officer = Column(String)
-    processor = Column(String)
-    underwriter = Column(String)
-    production_assistant = Column(String)
+    lender = Column(String(255))
+    loan_officer = Column(String(255))
+    processor = Column(String(255))
+    underwriter = Column(String(255))
+    production_assistant = Column(String(255))
     appraisal_value = Column(Numeric(18, 2))
     ltv = Column(Numeric(8, 4))
     cltv = Column(Numeric(8, 4))
     dti = Column(Numeric(8, 4))
     dti_front = Column(Numeric(8, 4))
     dti_back = Column(Numeric(8, 4))
-    program = Column(String)
+    program = Column(String(255))
     status_date = Column(DateTime)
 
     # SLA Milestone Dates
@@ -177,14 +177,14 @@ class Lead(Base):
     employment_referral_flag = Column(Boolean, default=False)
     manager_flag = Column(Boolean, default=False)
     employees_managed = Column(Integer, default=0)
-    leadership_level = Column(String)
+    leadership_level = Column(String(100))
     company_size = Column(Integer)
-    employer_name = Column(String)
-    industry = Column(String)
+    employer_name = Column(String(255))
+    industry = Column(String(255))
     circle_of_cash_flow_map = Column(JSON)
 
     # Workflow tracking
-    current_workflow_id = Column(String)
+    current_workflow_id = Column(String(36))
     workflow_day = Column(Integer, default=0)
     last_workflow_action = Column(DateTime)
     nurture_month = Column(Integer, default=0)
@@ -195,13 +195,13 @@ class Lead(Base):
     current_milestone_entered_at = Column(DateTime)
 
     # Salesforce Sync - Property Details
-    occupancy_type = Column(String)
-    property_county = Column(String)
-    property_ownership_type = Column(String)
+    occupancy_type = Column(String(100))
+    property_county = Column(String(255))
+    property_ownership_type = Column(String(100))
     property_units = Column(Integer)
 
     # Salesforce Sync - Financial Details
-    rate_type = Column(String)
+    rate_type = Column(String(50))
     monthly_payment = Column(Numeric(18, 2))
     property_tax = Column(Numeric(18, 2))
     hazard_insurance = Column(Numeric(18, 2))
@@ -213,8 +213,8 @@ class Lead(Base):
     margin = Column(Numeric(8, 4))
 
     # Salesforce Sync - LTV/Purpose
-    loan_purpose = Column(String)
-    file_state = Column(String)
+    loan_purpose = Column(String(100))
+    file_state = Column(String(50))
 
     # Salesforce Sync - 2nd Loan
     second_loan_amount = Column(Numeric(18, 2))
@@ -231,7 +231,7 @@ class Lead(Base):
     receive_marketing = Column(Boolean, default=False)
 
     # Salesforce Integration
-    salesforce_id = Column(String)
+    salesforce_id = Column(String(255))
     meta_data = Column(JSON)
 
     # Follow Up Boss Integration
@@ -322,21 +322,21 @@ class Loan(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    loan_number = Column(String, unique=True, index=True, nullable=False)
+    loan_number = Column(String(255), unique=True, index=True, nullable=False)
 
     # Borrower info
-    borrower_name = Column(String, nullable=False)  # NOTE: Not encrypted — indexed for lookups (ix_loans_borrower_name).
+    borrower_name = Column(String(255), nullable=False)  # NOTE: Not encrypted — indexed for lookups (ix_loans_borrower_name).
     borrower_email = Column(EncryptedString)  # PII: email address
     borrower_phone = Column(EncryptedString)  # PII: phone number
-    preferred_communication = Column(String)
+    preferred_communication = Column(String(50))
     coborrower_name = Column(EncryptedString)  # PII: name
     co_borrower_email = Column(EncryptedString)  # PII: email address
     co_borrower_phone = Column(EncryptedString)  # PII: phone number
 
     # Pipeline status
-    stage = Column(String, default="DISCLOSED")
-    program = Column(String)
-    loan_type = Column(String)
+    stage = Column(String(50), default="DISCLOSED")
+    program = Column(String(255))
+    loan_type = Column(String(100))
 
     # Financials
     amount = Column(Numeric(18, 2), nullable=False)
@@ -358,22 +358,22 @@ class Loan(Base):
 
     # Team
     loan_officer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
-    processor = Column(String)
-    underwriter = Column(String)
-    realtor_agent = Column(String)
-    title_company = Column(String)
-    lender = Column(String)
-    loan_officer_name = Column(String)
-    loan_officer_email = Column(String)
-    processor_email = Column(String)
-    underwriter_email = Column(String)
-    closer = Column(String)
-    closer_email = Column(String)
-    production_assistant = Column(String)
+    processor = Column(String(255))
+    underwriter = Column(String(255))
+    realtor_agent = Column(String(255))
+    title_company = Column(String(255))
+    lender = Column(String(255))
+    loan_officer_name = Column(String(255))
+    loan_officer_email = Column(String(255))
+    processor_email = Column(String(255))
+    underwriter_email = Column(String(255))
+    closer = Column(String(255))
+    closer_email = Column(String(255))
+    production_assistant = Column(String(255))
 
     # SLA tracking
     days_in_stage = Column(Integer, default=0)
-    sla_status = Column(String, default="on-track")
+    sla_status = Column(String(50), default="on-track")
     milestones = Column(JSON)
     ai_insights = Column(Text)
     predicted_close_date = Column(DateTime)
@@ -400,7 +400,7 @@ class Loan(Base):
     rate_lock_recommendation = Column(SQLEnum(RateLockRecommendation))
     lock_term_days = Column(Integer)
     float_down_available = Column(Boolean, default=False)
-    float_down_terms = Column(String)
+    float_down_terms = Column(String(500))
     extension_cost_estimate = Column(Numeric(18, 2))
     volatility_score = Column(Integer, default=50)
     borrower_risk_profile = Column(SQLEnum(BorrowerRiskProfile))
@@ -427,7 +427,7 @@ class Loan(Base):
     refi_opportunity_score = Column(Integer, default=0)
 
     # Workflow tracking
-    current_workflow_id = Column(String)
+    current_workflow_id = Column(String(36))
     last_workflow_action = Column(DateTime)
     stage_changed_at = Column(DateTime)
 
@@ -467,14 +467,14 @@ class Loan(Base):
     withdrawn_date = Column(DateTime)
 
     # Salesforce Sync - Property
-    property_type = Column(String)
-    occupancy_type = Column(String)
-    property_county = Column(String)
-    property_ownership_type = Column(String)
+    property_type = Column(String(100))
+    occupancy_type = Column(String(100))
+    property_county = Column(String(255))
+    property_ownership_type = Column(String(100))
     property_units = Column(Integer)
 
     # Salesforce Sync - Financials
-    rate_type = Column(String)
+    rate_type = Column(String(50))
     monthly_payment = Column(Numeric(18, 2))
     property_tax = Column(Numeric(18, 2))
     hazard_insurance = Column(Numeric(18, 2))
@@ -487,8 +487,8 @@ class Loan(Base):
     margin = Column(Numeric(8, 4))
     ltv = Column(Numeric(8, 4))
     cltv = Column(Numeric(8, 4))
-    loan_purpose = Column(String)
-    file_state = Column(String)
+    loan_purpose = Column(String(100))
+    file_state = Column(String(50))
 
     # Salesforce Sync - 2nd Loan
     second_loan_amount = Column(Numeric(18, 2))
@@ -502,12 +502,12 @@ class Loan(Base):
     proposed_monthly_payment = Column(Numeric(18, 2))
 
     # Salesforce Integration
-    salesforce_id = Column(String, index=True)
+    salesforce_id = Column(String(255), index=True)
 
     # Encompass LOS Integration
-    encompass_loan_id = Column(String, index=True, nullable=True)
+    encompass_loan_id = Column(String(255), index=True, nullable=True)
     encompass_last_synced_at = Column(DateTime, nullable=True)
-    encompass_sync_status = Column(String, nullable=True)  # "synced", "pending", "error"
+    encompass_sync_status = Column(String(50), nullable=True)  # "synced", "pending", "error"
 
     # AI tracking (COMP-001: mark AI-generated modifications)
     last_modified_by_ai = Column(Boolean, default=False, server_default="false")

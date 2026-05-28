@@ -831,6 +831,236 @@ def register_health_routes(app, get_db, **kwargs):
 
 
     # ========================================================================
+    # External service connectivity check (no auth required)
+    # ========================================================================
+
+    @app.get("/health/services", tags=["Health"])
+    async def service_connectivity_check():
+        """
+        Lightweight connectivity check for all external services.
+
+        No auth required. Each service is checked independently with a
+        3-second timeout so one failing service never blocks the others.
+        Makes real API calls (not just env-var presence checks) to detect
+        actual outages proactively.
+
+        Checks: PostgreSQL, Redis, Telnyx, Twilio, Anthropic/Claude, Vapi.
+
+        Returns 200 with status "healthy" or "degraded". PostgreSQL failure
+        results in "unhealthy" and HTTP 503.
+        """
+        import httpx
+
+        CHECK_TIMEOUT = 3.0  # seconds per service
+        services = {}
+        critical_healthy = True  # only PostgreSQL is critical
+
+        # --- Helper: run a sync function in executor with timeout ---
+        async def _run_with_timeout(name, fn):
+            try:
+                loop = asyncio.get_event_loop()
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(None, fn),
+                    timeout=CHECK_TIMEOUT,
+                )
+                return result
+            except asyncio.TimeoutError:
+                return {"status": "unhealthy", "error": "timeout"}
+            except Exception as e:
+                return {"status": "unhealthy", "error": str(e)[:200]}
+
+        # --- Helper: run an async function with timeout ---
+        async def _run_async_with_timeout(name, coro):
+            try:
+                result = await asyncio.wait_for(coro, timeout=CHECK_TIMEOUT)
+                return result
+            except asyncio.TimeoutError:
+                return {"status": "unhealthy", "error": "timeout"}
+            except Exception as e:
+                return {"status": "unhealthy", "error": str(e)[:200]}
+
+        # --- PostgreSQL: SELECT 1 ---
+        def _check_postgresql():
+            start = time.monotonic()
+            try:
+                if not SessionLocal:
+                    return {"status": "unhealthy", "error": "SessionLocal not available"}
+                db = SessionLocal()
+                try:
+                    db.execute(text("SELECT 1"))
+                    latency = round((time.monotonic() - start) * 1000, 1)
+                    return {"status": "healthy", "latency_ms": latency}
+                finally:
+                    db.close()
+            except Exception as e:
+                latency = round((time.monotonic() - start) * 1000, 1)
+                return {"status": "unhealthy", "latency_ms": latency, "error": str(e)[:200]}
+
+        # --- Redis: PING ---
+        def _check_redis():
+            redis_url = os.getenv("REDIS_URL")
+            if not redis_url:
+                return {"status": "not_configured"}
+            start = time.monotonic()
+            try:
+                import redis as redis_lib
+                r = redis_lib.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+                r.ping()
+                latency = round((time.monotonic() - start) * 1000, 1)
+                r.close()
+                return {"status": "healthy", "latency_ms": latency}
+            except ImportError:
+                return {"status": "not_configured", "error": "redis package not installed"}
+            except Exception as e:
+                latency = round((time.monotonic() - start) * 1000, 1)
+                return {"status": "unhealthy", "latency_ms": latency, "error": str(e)[:200]}
+
+        # --- Telnyx: GET /v2/messaging_profiles (lightweight auth check) ---
+        async def _check_telnyx():
+            api_key = os.getenv("TELNYX_API_KEY", "").strip()
+            if not api_key:
+                return {"status": "not_configured"}
+            start = time.monotonic()
+            try:
+                async with httpx.AsyncClient(timeout=CHECK_TIMEOUT) as client:
+                    resp = await client.get(
+                        "https://api.telnyx.com/v2/balance",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                latency = round((time.monotonic() - start) * 1000, 1)
+                if resp.status_code in (200, 201):
+                    return {"status": "healthy", "latency_ms": latency}
+                elif resp.status_code == 401:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": "invalid API key (401)"}
+                else:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": f"HTTP {resp.status_code}"}
+            except Exception as e:
+                latency = round((time.monotonic() - start) * 1000, 1)
+                return {"status": "unhealthy", "latency_ms": latency, "error": str(e)[:200]}
+
+        # --- Twilio: GET /2010-04-01/Accounts/{sid}.json ---
+        async def _check_twilio():
+            account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+            auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+            if not account_sid or not auth_token:
+                return {"status": "not_configured"}
+            start = time.monotonic()
+            try:
+                async with httpx.AsyncClient(timeout=CHECK_TIMEOUT) as client:
+                    resp = await client.get(
+                        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}.json",
+                        auth=(account_sid, auth_token),
+                    )
+                latency = round((time.monotonic() - start) * 1000, 1)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    acct_status = data.get("status", "unknown")
+                    return {"status": "healthy", "latency_ms": latency, "account_status": acct_status}
+                elif resp.status_code == 401:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": "invalid credentials (401)"}
+                else:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": f"HTTP {resp.status_code}"}
+            except Exception as e:
+                latency = round((time.monotonic() - start) * 1000, 1)
+                return {"status": "unhealthy", "latency_ms": latency, "error": str(e)[:200]}
+
+        # --- Anthropic/Claude: GET /v1/models ---
+        async def _check_anthropic():
+            api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+            if not api_key:
+                return {"status": "not_configured"}
+            start = time.monotonic()
+            try:
+                async with httpx.AsyncClient(timeout=CHECK_TIMEOUT) as client:
+                    resp = await client.get(
+                        "https://api.anthropic.com/v1/models",
+                        headers={
+                            "x-api-key": api_key,
+                            "anthropic-version": "2023-06-01",
+                        },
+                    )
+                latency = round((time.monotonic() - start) * 1000, 1)
+                if resp.status_code in (200, 201):
+                    return {"status": "healthy", "latency_ms": latency}
+                elif resp.status_code == 401:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": "invalid API key (401)"}
+                else:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": f"HTTP {resp.status_code}"}
+            except Exception as e:
+                latency = round((time.monotonic() - start) * 1000, 1)
+                return {"status": "unhealthy", "latency_ms": latency, "error": str(e)[:200]}
+
+        # --- Vapi: GET /phone-number (lightweight auth check) ---
+        async def _check_vapi():
+            api_key = os.getenv("VAPI_API_KEY", "").strip()
+            if not api_key:
+                return {"status": "not_configured"}
+            start = time.monotonic()
+            try:
+                async with httpx.AsyncClient(timeout=CHECK_TIMEOUT) as client:
+                    resp = await client.get(
+                        "https://api.vapi.ai/phone-number",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                latency = round((time.monotonic() - start) * 1000, 1)
+                if resp.status_code in (200, 201):
+                    return {"status": "healthy", "latency_ms": latency}
+                elif resp.status_code == 401:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": "invalid API key (401)"}
+                else:
+                    return {"status": "unhealthy", "latency_ms": latency, "error": f"HTTP {resp.status_code}"}
+            except Exception as e:
+                latency = round((time.monotonic() - start) * 1000, 1)
+                return {"status": "unhealthy", "latency_ms": latency, "error": str(e)[:200]}
+
+        # --- Run all checks concurrently ---
+        pg_task = _run_with_timeout("postgresql", _check_postgresql)
+        redis_task = _run_with_timeout("redis", _check_redis)
+        telnyx_task = _run_async_with_timeout("telnyx", _check_telnyx())
+        twilio_task = _run_async_with_timeout("twilio", _check_twilio())
+        anthropic_task = _run_async_with_timeout("anthropic", _check_anthropic())
+        vapi_task = _run_async_with_timeout("vapi", _check_vapi())
+
+        results = await asyncio.gather(
+            pg_task, redis_task, telnyx_task, twilio_task, anthropic_task, vapi_task,
+            return_exceptions=True,
+        )
+
+        names = ["postgresql", "redis", "telnyx", "twilio", "anthropic", "vapi"]
+        for name, result in zip(names, results):
+            if isinstance(result, Exception):
+                services[name] = {"status": "unhealthy", "error": str(result)[:200]}
+            else:
+                services[name] = result
+
+        # --- Determine overall status ---
+        # PostgreSQL is critical; everything else is non-critical
+        pg_status = services.get("postgresql", {}).get("status", "unhealthy")
+        if pg_status != "healthy":
+            critical_healthy = False
+
+        any_unhealthy = any(
+            svc.get("status") == "unhealthy"
+            for svc in services.values()
+        )
+
+        if not critical_healthy:
+            overall_status = "unhealthy"
+        elif any_unhealthy:
+            overall_status = "degraded"
+        else:
+            overall_status = "healthy"
+
+        response_body = {
+            "status": overall_status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "services": services,
+        }
+
+        status_code = 200 if overall_status in ("healthy", "degraded") else 503
+        return JSONResponse(status_code=status_code, content=response_body)
+
+    # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
     # ========================================================================
 

@@ -65,9 +65,29 @@ def get_user_id() -> Optional[str]:
     return _user_id_var.get()
 
 
+def set_user_id(user_id: str) -> None:
+    """
+    Set the authenticated user ID in the request context.
+
+    Called by TenantContextMiddleware after auth resolves so that
+    all subsequent log records (via RequestContextFilter) include user_id.
+    """
+    _user_id_var.set(str(user_id) if user_id is not None else None)
+
+
 def get_org_id() -> Optional[str]:
     """Return the tenant org ID for the current request, if available."""
     return _org_id_var.get()
+
+
+def set_org_id(org_id: str) -> None:
+    """
+    Set the tenant organization ID in the request context.
+
+    Called by TenantContextMiddleware after auth resolves so that
+    all subsequent log records (via RequestContextFilter) include org_id.
+    """
+    _org_id_var.set(str(org_id) if org_id is not None else None)
 
 
 def get_request_method() -> Optional[str]:

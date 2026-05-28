@@ -708,13 +708,14 @@ class TokenBlacklist:
         if self._using_fallback:
             return self._fallback.exists(key) > 0
 
-        # Production with Redis down — cannot confirm denial
-        # Log and return False (fail-open for availability, fail is logged)
-        logger.error(
-            "SECURITY: Cannot check denylist for jti=%s... — Redis unavailable in production",
+        # Production with Redis down — FAIL CLOSED: deny all tokens.
+        # A revoked token slipping through is worse than a brief auth outage.
+        logger.critical(
+            "SECURITY: Redis unavailable — DENYING token jti=%s... (fail-closed). "
+            "All token validation will fail until Redis is restored.",
             jti[:8],
         )
-        return False
+        return True
 
     def revoke_all_for_user(self, user_id: int) -> int:
         """
@@ -768,8 +769,20 @@ class TokenBlacklist:
                 self._handle_redis_failure("is_user_revoked", e)
                 if self._using_fallback:
                     revoked_at = self._fallback.get(key)
+                elif self._is_production:
+                    logger.critical(
+                        "SECURITY: Redis unavailable — assuming user %s is revoked (fail-closed)",
+                        user_id,
+                    )
+                    return True
         elif self._using_fallback:
             revoked_at = self._fallback.get(key)
+        elif self._is_production:
+            logger.critical(
+                "SECURITY: Redis unavailable — assuming user %s is revoked (fail-closed)",
+                user_id,
+            )
+            return True
 
         if not revoked_at:
             return False

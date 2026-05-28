@@ -128,3 +128,54 @@ def get_async_anthropic_client(
         timeout=_timeout,
         max_retries=_max_retries,
     )
+
+
+# ---------------------------------------------------------------------------
+# Prompt caching helpers
+# ---------------------------------------------------------------------------
+# Anthropic's prompt caching caches everything from the start of the request
+# up to the last content block with a ``cache_control`` marker.  Adding
+# ``{"type": "ephemeral"}`` to the system block (and optionally the last
+# tool definition) lets subsequent requests with the same prefix reuse the
+# cached KV-cache state, reducing input token costs by up to 90 %.
+#
+# Usage:
+#     from agents.anthropic_client import cached_system_block, cache_tool_definitions
+#
+#     response = client.messages.create(
+#         model=model,
+#         system=cached_system_block(system_prompt),
+#         messages=messages,
+#         tools=cache_tool_definitions(tools),
+#     )
+# ---------------------------------------------------------------------------
+
+
+def cached_system_block(system_prompt: str) -> list:
+    """Wrap a system prompt string with cache_control for Anthropic prompt caching.
+
+    Returns the structured content-block list that the ``system`` parameter
+    of ``messages.create()`` / ``messages.stream()`` accepts.
+    """
+    return [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def cache_tool_definitions(tools: list | None) -> list | None:
+    """Add cache_control to the last tool definition.
+
+    This ensures the entire tool list is included in the cached prefix.
+    Returns ``None`` unchanged, and never mutates the original list.
+    """
+    if not tools:
+        return tools
+    tools = list(tools)  # shallow copy
+    last_tool = dict(tools[-1])
+    last_tool["cache_control"] = {"type": "ephemeral"}
+    tools[-1] = last_tool
+    return tools

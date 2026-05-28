@@ -627,6 +627,29 @@ async def _download_recording(vapi_call_id: str, recording_url: str, org_id: int
         finally:
             db.close()
 
+        # Back up to S3 for durable storage (Railway containers are ephemeral)
+        try:
+            from services.recording_backup import recording_backup
+            s3_key = recording_backup.upload_recording(
+                org_id=org_id,
+                call_id=vapi_call_id,
+                file_path=str(local_path),
+            )
+            if s3_key:
+                db = SessionLocal()
+                try:
+                    db.query(VapiCall).filter(
+                        VapiCall.vapi_call_id == vapi_call_id
+                    ).update({"recording_s3_key": s3_key})
+                    db.commit()
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.error(
+                "S3 backup failed for call %s: %s (local copy exists at %s)",
+                vapi_call_id, e, local_path,
+            )
+
     except Exception as e:
         logger.error(
             "Recording download failed: call=%s url=%s error=%s "

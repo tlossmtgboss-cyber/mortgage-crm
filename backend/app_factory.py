@@ -124,6 +124,12 @@ def create_app(
     except Exception as e:
         logger.warning(f"Exception handlers not registered: {e}")
 
+    try:
+        from middleware.error_response import register_domain_exception_handlers
+        register_domain_exception_handlers(app)
+    except Exception as e:
+        logger.warning(f"Domain exception handlers not registered: {e}")
+
     # ── Routers ─────────────────────────────────────────────────────────
     from router_registry import register_routers
 

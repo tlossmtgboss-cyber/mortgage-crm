@@ -24,6 +24,42 @@ from .anthropic_client import get_anthropic_client, get_async_anthropic_client
 from .orchestrator import run_orchestrator, OrchestratorSession
 from .state import create_initial_state, QueryIntent
 
+
+def _cached_system_block(system_prompt: str) -> list:
+    """Wrap system prompt with cache_control for Anthropic prompt caching.
+
+    Converts a plain string system prompt into the structured content-block
+    format with ``cache_control: {"type": "ephemeral"}``.  This tells the
+    Anthropic API to cache the system prompt across requests that share the
+    same prefix, reducing input token costs by up to 90 % for repeated prompts.
+    """
+    return [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def _add_cache_control_to_tools(tools: list) -> list:
+    """Add cache_control to the last tool definition for Anthropic prompt caching.
+
+    Anthropic caches everything from the start of the request up to and including
+    the last block with a cache_control marker.  Adding the marker to the *last*
+    tool definition ensures the entire tool list is eligible for caching, which
+    is significant when 15+ tools are sent on every request.
+
+    The input list is NOT mutated — a shallow copy is returned.
+    """
+    if not tools:
+        return tools
+    tools = list(tools)  # shallow copy
+    last_tool = dict(tools[-1])  # shallow copy of last tool dict
+    last_tool["cache_control"] = {"type": "ephemeral"}
+    tools[-1] = last_tool
+    return tools
+
 # Import optimized prompt system (local to agents package)
 try:
     from .prompt_integration import OptimizedPromptService
@@ -373,6 +409,12 @@ class AIAgentService:
             # Get tool definitions
             tools = self._get_tool_definitions()
 
+            # Wrap system prompt + tools with cache_control for Anthropic prompt caching.
+            # The system block and tool definitions are identical across requests for the
+            # same user session, so caching saves ~90% of input token costs on these.
+            cached_system = _cached_system_block(full_system_prompt)
+            cached_tools = _add_cache_control_to_tools(tools) if tools else None
+
             # Track full response for logging
             full_response = ""
 
@@ -380,9 +422,9 @@ class AIAgentService:
             async with self.async_anthropic_client.messages.stream(
                 model=self.model,
                 max_tokens=1500,  # Reduced from 4000 — concise responses stream faster
-                system=full_system_prompt,
+                system=cached_system,
                 messages=messages,
-                tools=tools if tools else None
+                tools=cached_tools
             ) as stream:
                 # Yield text chunks as they arrive
                 async for text in stream.text_stream:
@@ -458,14 +500,15 @@ class AIAgentService:
 
                 # Stream follow-up response(s) after tool execution.
                 # Loop to support multi-hop tool chains (e.g., search_leads -> click_to_dial).
+                # Reuse cached_system and cached_tools from above for prompt caching.
                 max_tool_rounds = 3
                 for _round in range(max_tool_rounds):
                     async with self.async_anthropic_client.messages.stream(
                         model=self.model,
                         max_tokens=1500,
-                        system=full_system_prompt,
+                        system=cached_system,
                         messages=messages,
-                        tools=tools if tools else None
+                        tools=cached_tools
                     ) as followup_stream:
                         async for text in followup_stream.text_stream:
                             full_response += text

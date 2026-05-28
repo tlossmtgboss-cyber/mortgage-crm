@@ -19,8 +19,8 @@ Rate Limiting Architecture (consolidated 2026-05-14):
     - middleware/tenant_rate_limiter.py — per-organization quotas
     - middleware/mobile_rate_limit.py   — mobile-specific limits
 
-    DEPRECATED modules (thin wrappers for backward compat):
-    - middleware/rate_limiting.py   — dead code, retained for chat_system_bootstrap.py
+    REMOVED (2026-05-27):
+    - middleware/rate_limiting.py   — dead code, deleted
 
 Features:
     - Sliding window counter (no Redis — pure in-memory)

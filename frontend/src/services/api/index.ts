@@ -5,20 +5,14 @@
  * `import { leadsAPI, loansAPI, ... } from '../services/api'` continue
  * to work after the decomposition.
  *
- * The actual api instance, interceptors, and all endpoint objects remain
- * in the original `../api.js` file which is still the canonical source.
- * This index exists so that if the import path resolves to `api/index.ts`
- * (directory import), it re-exports everything from the parent `api.js`.
- *
- * New domain-specific modules are available for targeted imports:
+ * Domain-specific modules are available for targeted imports:
  *   import { calendarAPI } from '../services/api/calendar';
  *   import { aiAPI } from '../services/api/ai';
+ *   import { leadsAPI } from '../services/api/leads';
  */
 
-// Re-export everything from the original monolith file.
-// The original api.js continues to be the single source of truth for all
-// endpoint objects (leadsAPI, loansAPI, etc.) until they are individually
-// migrated into this directory.
+// Re-export everything from the barrel file (../api.js).
+// The barrel in turn re-exports from the domain modules in this directory.
 export {
   default,
   API_BASE_URL,
@@ -87,14 +81,13 @@ export {
   agentMetricsAPI,
   isOffline,
   isApiError,
+  builderApplicationsAPI,
+  guidelinesAPI,
 } from '../api.js';
 
 // Re-export infrastructure utilities for targeted imports
-export { default as apiClient } from './client';
-export { isNativeApp } from './client';
 export type { ApiError, OfflineCacheEntry, ApiRequestOptions } from './types';
 export { buildApiError, SAFE_ERROR_MESSAGES, isApiError as isApiErrorGuard } from './errors';
 export { isOffline as checkOffline } from './errors';
 export { cacheSet, cacheGet, dispatchMutationDebounced } from './offline';
-export { fetchCSRFToken, getCSRFToken, resetCSRFTokenCache } from './auth';
 export { attachInterceptors } from './interceptors';

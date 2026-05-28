@@ -24,6 +24,11 @@ import traceback
 
 from db import get_db
 from utils.pagination import clamp_pagination
+from exceptions import (
+    EntityNotFoundError, LoanNotFoundError, AuthorizationError,
+    DuplicateEntityError, ComplianceViolationError,
+    ValidationError as DomainValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -542,7 +547,7 @@ async def create_loan(
     if not is_platform_admin:
         has_create_perm = has_permission(current_user.id, 'loans.create', db)
         if not has_create_perm:
-            raise HTTPException(status_code=403, detail="Permission denied: loans.create")
+            raise AuthorizationError("Permission denied: loans.create")
 
     # ---- Input validation (contact info, amounts, rates) ----
     try:
@@ -560,14 +565,14 @@ async def create_loan(
             try:
                 loan_data["borrower_email"] = validate_email_format(loan_data["borrower_email"])
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=f"Invalid borrower email: {e}")
+                raise DomainValidationError(f"Invalid borrower email: {e}")
 
         # Validate and normalize borrower phone (optional field)
         if loan_data.get("borrower_phone"):
             try:
                 loan_data["borrower_phone"] = validate_phone_format(loan_data["borrower_phone"])
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=f"Invalid borrower phone: {e}")
+                raise DomainValidationError(f"Invalid borrower phone: {e}")
 
         # Validate loan amount if provided and non-zero
         raw_amount = loan_data.get("amount")
@@ -575,7 +580,7 @@ async def create_loan(
             try:
                 validated_amount = float(validate_loan_amount_decimal(raw_amount))
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=f"Invalid loan amount: {e}")
+                raise DomainValidationError(f"Invalid loan amount: {e}")
         else:
             validated_amount = None  # will be handled below
 
@@ -584,18 +589,18 @@ async def create_loan(
             try:
                 loan_data["rate"] = float(validate_interest_rate(loan_data["rate"]))
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=f"Invalid interest rate: {e}")
+                raise DomainValidationError(f"Invalid interest rate: {e}")
 
         # Sanitize free-text fields
         for text_field in ("borrower_name", "property_address", "ai_insights",
                            "coborrower_name", "realtor_agent", "title_company", "lender"):
             if loan_data.get(text_field):
                 loan_data[text_field] = sanitize_string(loan_data[text_field], max_length=500)
-    except HTTPException:
+    except (HTTPException, DomainValidationError):
         raise
     except Exception as val_err:
         logger.warning(f"Loan input validation error: {val_err}")
-        raise HTTPException(status_code=422, detail=str(val_err))
+        raise DomainValidationError(str(val_err))
 
     try:
         # Check for duplicate loan number unless explicitly skipped
@@ -604,10 +609,7 @@ async def create_loan(
                 Loan.loan_number == loan_data["loan_number"]
             ).first()
             if existing:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Loan with number {loan_data['loan_number']} already exists"
-                )
+                raise DuplicateEntityError("Loan", loan_data["loan_number"])
 
         # Ensure loan_number is set
         loan_number = loan_data.get("loan_number")
@@ -833,7 +835,7 @@ async def get_loan(
         db.query(Loan), current_user, db
     ).filter(Loan.id == loan_id).first()
     if not loan or loan.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="Loan not found")
+        raise LoanNotFoundError(loan_id)
 
     return _loan_to_dict(loan)
 
@@ -868,13 +870,13 @@ async def update_loan(
             or has_permission(current_user.id, 'loans.update_all', db)
         )
         if not has_update_perm:
-            raise HTTPException(status_code=403, detail="Permission denied: loans.update")
+            raise AuthorizationError("Permission denied: loans.update")
 
     loan = filter_loans_by_permissions(
         db.query(Loan), current_user, db
     ).filter(Loan.id == loan_id).first()
     if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
+        raise LoanNotFoundError(loan_id)
 
     # ========================================================================
     # Critical Failure 2.5: CD Waiting Period Enforcement
@@ -901,7 +903,7 @@ async def update_loan(
                 user_id=user_id,
             )
             if cd_error:
-                raise HTTPException(status_code=422, detail=cd_error)
+                raise ComplianceViolationError(cd_error, violation_type="cd_waiting_period")
         except HTTPException:
             raise
         except Exception as e:
@@ -935,7 +937,7 @@ async def update_loan(
             force=force_stage,
         )
         if transition_error:
-            raise HTTPException(status_code=422, detail=transition_error)
+            raise DomainValidationError(transition_error)
 
     # ========================================================================
     # Input validation for updated fields (contact info, amounts, rates)
@@ -957,28 +959,28 @@ async def update_loan(
                 try:
                     update_data[email_field] = _val_email(update_data[email_field])
                 except ValueError as e:
-                    raise HTTPException(status_code=422, detail=f"Invalid {email_field}: {e}")
+                    raise DomainValidationError(f"Invalid {email_field}: {e}")
 
         # Validate phone field
         if update_data.get("borrower_phone"):
             try:
                 update_data["borrower_phone"] = _val_phone(update_data["borrower_phone"])
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=f"Invalid borrower_phone: {e}")
+                raise DomainValidationError(f"Invalid borrower_phone: {e}")
 
         # Validate loan amount
         if "amount" in update_data and update_data["amount"]:
             try:
                 update_data["amount"] = float(_val_amount(update_data["amount"]))
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=f"Invalid loan amount: {e}")
+                raise DomainValidationError(f"Invalid loan amount: {e}")
 
         # Validate interest rate
         if "rate" in update_data and update_data["rate"]:
             try:
                 update_data["rate"] = float(_val_rate(update_data["rate"]))
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=f"Invalid interest rate: {e}")
+                raise DomainValidationError(f"Invalid interest rate: {e}")
 
         # Sanitize free-text fields
         for text_field in ("borrower_name", "property_address", "coborrower_name",
@@ -986,7 +988,7 @@ async def update_loan(
                            "loan_officer_name", "ai_insights"):
             if update_data.get(text_field):
                 update_data[text_field] = _san_str(update_data[text_field], max_length=500)
-    except HTTPException:
+    except (HTTPException, DomainValidationError, ComplianceViolationError):
         raise
     except Exception as val_err:
         logger.warning(f"Loan update validation error: {val_err}")
@@ -1184,13 +1186,13 @@ async def delete_loan(
             or has_permission(current_user.id, 'loans.delete_all', db)
         )
         if not has_delete_perm:
-            raise HTTPException(status_code=403, detail="Permission denied: loans.delete")
+            raise AuthorizationError("Permission denied: loans.delete")
 
     loan = filter_loans_by_permissions(
         db.query(Loan), current_user, db
     ).filter(Loan.id == loan_id).first()
     if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
+        raise LoanNotFoundError(loan_id)
 
     try:
         _org = getattr(loan, "organization_id", None)
@@ -1234,7 +1236,7 @@ async def bulk_delete_loans(
             or has_permission(current_user.id, 'loans.delete_all', db)
         )
         if not has_delete_perm:
-            raise HTTPException(status_code=403, detail="Permission denied: loans.delete")
+            raise AuthorizationError("Permission denied: loans.delete")
 
     try:
         # Soft-delete: set deleted_at timestamp instead of removing data

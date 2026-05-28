@@ -24,6 +24,7 @@ from database.models.autonomous_task import AutonomousTask, TaskExecution
 from database.models.core import Organization
 from db import SessionLocal
 from services.autonomous.circuit_breaker import get_circuit_breaker
+from services.distributed_lock import distributed_lock
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +138,13 @@ class AutonomousTaskExecutor:
         return executed
 
     async def _run_guarded(self, task: AutonomousTask) -> None:
+        lock_key = f"agent:{task.agent_type}:org:{task.organization_id}"
         async with self._semaphore:
-            await self._execute_task(task)
+            async with distributed_lock(lock_key, ttl=task.timeout_seconds or 300, block=False) as acquired:
+                if not acquired:
+                    logger.info("Task %d [%s] skipped — running on another replica", task.id, task.agent_type)
+                    return
+                await self._execute_task(task)
 
     def _get_due_tasks(self) -> List[AutonomousTask]:
         """Query enabled tasks whose next_run_at <= now, ordered by priority."""
