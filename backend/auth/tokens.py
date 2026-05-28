@@ -744,9 +744,10 @@ class TokenBlacklist:
         if self._using_fallback:
             return self._fallback.exists(key) > 0
 
-        # Production with Redis down — check circuit breaker.
-        # If breaker is open (sustained outage), degrade to allow tokens
-        # through rather than causing total auth failure for all users.
+        # Production with Redis down — record failure and check circuit breaker.
+        # (Covers the case where _redis is None and we never entered the try/except above.)
+        self._breaker.record_failure()
+
         if self._breaker.is_open:
             logger.warning(
                 "SECURITY-DEGRADED: Redis circuit breaker open — allowing token jti=%s... "
@@ -832,6 +833,7 @@ class TokenBlacklist:
         elif self._using_fallback:
             revoked_at = self._fallback.get(key)
         elif self._is_production:
+            self._breaker.record_failure()
             if self._breaker.is_open:
                 logger.warning(
                     "SECURITY-DEGRADED: Redis circuit breaker open — "

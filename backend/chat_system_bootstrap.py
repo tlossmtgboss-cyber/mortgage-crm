@@ -29,7 +29,11 @@ import redis.asyncio as redis
 from sqlalchemy.orm import Session
 
 from middleware.structured_logging import StructuredLogger, setup_structured_logging
-from middleware.rate_limiting import setup_rate_limiting, AdaptiveRateLimiter
+try:
+    from middleware.rate_limiting import setup_rate_limiting, AdaptiveRateLimiter
+except ImportError:
+    setup_rate_limiting = None
+    AdaptiveRateLimiter = None
 from services.circuit_breaker import CircuitBreaker, AIServiceWithCircuitBreaker
 from services.graceful_degradation import GracefulDegradation
 from services.response_cache import ResponseCache
@@ -197,7 +201,7 @@ class ChatSystemBootstrap:
             logger.info("Realtime monitor initialized")
 
         # 11. Setup Rate Limiting
-        if self.components.redis_client and self.config["rate_limiting"]["enabled"]:
+        if self.components.redis_client and self.config["rate_limiting"]["enabled"] and setup_rate_limiting:
             setup_rate_limiting(self.app, self.components.redis_client)
             logger.info("Rate limiting middleware enabled")
 
