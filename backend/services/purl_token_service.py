@@ -194,6 +194,7 @@ class PURLTokenService:
             )
             return None
 
+        nested = None
         try:
             from sqlalchemy import text
             nested = self.db.begin_nested()
@@ -204,6 +205,16 @@ class PURLTokenService:
             nested.commit()
         except SQLAlchemyError as e:
             logger.warning(f"Failed to update last_used_at for token {token_record.id}: {e}")
+            # CRITICAL: roll back the savepoint. Without this, a transient failure
+            # on the UPDATE (e.g. connection pressure) leaves the session's
+            # transaction aborted, so every subsequent query in the request fails
+            # with InFailedSqlTransaction — poisoning the entire borrower portal
+            # request even though last_used_at is only non-critical telemetry.
+            if nested is not None:
+                try:
+                    nested.rollback()
+                except SQLAlchemyError:
+                    pass
 
         return {
             "token_id": token_record.id,
