@@ -127,9 +127,12 @@ export function ConversationIntelligencePane({ loanId, leadId }: Props) {
       {call.processing_status === "failed" && (
         <div className="pf-cf-empty">Analysis failed. Will retry.</div>
       )}
+      {call.processing_status === "no_recording" && (
+        <div className="pf-cf-empty">No recording available for this call.</div>
+      )}
 
       {/* Two-column call detail: transcript left, AI feedback right */}
-      {report && call.processing_status === "completed" && (
+      {report && (call.processing_status === "completed" || report.pipeline_version === "call_log_fallback") && (
         <CallDetailView report={report} call={call} />
       )}
     </div>

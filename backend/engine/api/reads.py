@@ -112,16 +112,36 @@ def _ensure_cie_tables(db: Session) -> None:
 
 
 def _fallback_call_logs(db: Session, org_id, lead_id, loan_id, limit, offset):
-    """Fall back to call_logs table when no CIE records exist."""
+    """Fall back to call_logs table when no CIE records exist.
+
+    Searches by lead_id first, then by the lead's phone number if no
+    results (click-to-dial may not have passed lead_id to the call_log).
+    """
     try:
         from database.models.dialer import CallLog
+        from sqlalchemy import or_
+        import re
         import uuid as _uuid
 
         q = db.query(CallLog).filter(CallLog.organization_id == org_id)
+
+        filters = []
         if lead_id is not None:
-            q = q.filter(CallLog.lead_id == lead_id)
+            filters.append(CallLog.lead_id == lead_id)
+            try:
+                from database.models import Lead
+                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                if lead and getattr(lead, "phone", None):
+                    digits = re.sub(r"[^0-9]", "", lead.phone)[-10:]
+                    if digits:
+                        filters.append(CallLog.contact_phone.contains(digits))
+            except Exception:
+                pass
         if loan_id is not None:
-            q = q.filter(CallLog.loan_id == loan_id)
+            filters.append(CallLog.loan_id == loan_id)
+
+        if filters:
+            q = q.filter(or_(*filters))
         q = q.order_by(CallLog.created_at.desc())
 
         total = q.count()
@@ -365,6 +385,10 @@ async def get_stats(
             if row:
                 avg_cis = round(float(row[0]), 1) if row[0] else None
                 avg_conv = round(float(row[1]), 3) if row[1] else None
+
+        if total == 0 and (lead_id is not None or loan_id is not None):
+            fallback_items, fallback_total = _fallback_call_logs(db, org_id, lead_id, loan_id, 100, 0)
+            total = fallback_total
 
         return {
             "total_calls": total,
