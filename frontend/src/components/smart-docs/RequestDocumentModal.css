@@ -860,12 +860,13 @@
   border-radius: 8px;
   overflow: hidden;
   background: #e5e7eb;
+  max-height: 60vh;
 }
 
 .pdf-placement-container {
   position: relative;
   width: 100%;
-  aspect-ratio: 612 / 792;
+  height: 60vh;
   background: white;
   cursor: default;
 }
@@ -881,6 +882,10 @@
   width: 100%;
   height: 100%;
   border: none;
+  z-index: 1;
+}
+
+.pdf-placement-container.placing .pdf-background-frame {
   pointer-events: none;
 }
 
@@ -891,6 +896,11 @@
   width: 100%;
   height: 100%;
   z-index: 2;
+  pointer-events: none;
+}
+
+.pdf-placement-container.placing .pdf-field-overlay {
+  pointer-events: auto;
 }
 
 /* ============================================
