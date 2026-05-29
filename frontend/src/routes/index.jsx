@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Route, Navigate, useParams } from 'react-router-dom';
+import LegacyPortalRedirect from '../components/Portal/LegacyPortalRedirect';
 import { Capacitor } from '@capacitor/core';
 import MainLayout from '../layouts/MainLayout';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
@@ -554,10 +555,12 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/all-in-one-loan" path="/all-in-one-loan" element={<LazyPage><AllInOneLoan /></LazyPage>} />,
 
     // Portal routes (public)
-    <Route key="/portal/loan/:loanId" path="/portal/loan/:loanId" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />,
-    <Route key="/portal/active/:token" path="/portal/active/:token" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />,
-    <Route key="/portal/ultimate/:loanId" path="/portal/ultimate/:loanId" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />,
-    <Route key="/portal/ultimate/token/:token" path="/portal/ultimate/token/:token" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />,
+    // Legacy/dead portal routes — redirect into the canonical stack (portal consolidation Phase 0).
+    // loanId routes resolve via LoanPortalRedirect; token routes redirect to the live /borrower-portal/:token.
+    <Route key="/portal/loan/:loanId" path="/portal/loan/:loanId" element={<LazyPage><LoanPortalRedirect /></LazyPage>} />,
+    <Route key="/portal/active/:token" path="/portal/active/:token" element={<LegacyPortalRedirect />} />,
+    <Route key="/portal/ultimate/:loanId" path="/portal/ultimate/:loanId" element={<LazyPage><LoanPortalRedirect /></LazyPage>} />,
+    <Route key="/portal/ultimate/token/:token" path="/portal/ultimate/token/:token" element={<LegacyPortalRedirect />} />,
     <Route key="/portal/redirect/:loanId" path="/portal/redirect/:loanId" element={<LazyPage><LoanPortalRedirect /></LazyPage>} />,
     <Route key="/client-portal/:loanId" path="/client-portal/:loanId" element={<LazyPage><LoanPortalRedirect /></LazyPage>} />,
     <Route key="/portal/tca/:loanId" path="/portal/tca/:loanId" element={<LazyPage><TotalCostAnalysis /></LazyPage>} />,
