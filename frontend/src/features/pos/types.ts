@@ -15,6 +15,10 @@ export type SectionKey =
   | 'schedule'
   | 'review';
 
+// Note: 'documents_upload' is intentionally omitted — document collection
+// lives in the dedicated Documents area, not as an inline application step.
+// The key remains in SectionKey/PANEL_COMPONENTS for back-compat with any
+// in-flight application data that still references it.
 export const SECTION_ORDER: SectionKey[] = [
   'personal',
   'coborrower',
@@ -24,7 +28,6 @@ export const SECTION_ORDER: SectionKey[] = [
   'liabilities',
   'reo',
   'loan',
-  'documents_upload',
   'declarations',
   'credit_auth',
   'schedule',

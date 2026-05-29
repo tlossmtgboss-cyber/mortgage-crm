@@ -72,6 +72,8 @@ class POSSectionKey:
 
     # Source of truth for ordering and the step count shown to the borrower.
     # intake is excluded — it's a pre-screen, not a numbered step.
+    # documents_upload is excluded — document collection happens in the
+    # dedicated Documents area, not as an inline application step.
     ORDERED = (
         PERSONAL,
         COBORROWER,
@@ -81,15 +83,15 @@ class POSSectionKey:
         LIABILITIES,
         REO,
         LOAN,
-        DOCUMENTS_UPLOAD,
         DECLARATIONS,
         CREDIT_AUTH,
         SCHEDULE,
         REVIEW,
     )
 
-    # All valid section keys (includes pre-screen sections not in ORDERED).
-    ALL_VALID = ORDERED + (INTAKE,)
+    # All valid section keys (includes sections not in the numbered flow:
+    # the intake pre-screen and the out-of-flow documents_upload bucket).
+    ALL_VALID = ORDERED + (INTAKE, DOCUMENTS_UPLOAD)
 
 
 class POSAuditEvent:
