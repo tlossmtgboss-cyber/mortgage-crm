@@ -407,7 +407,7 @@ async def upload_document(
     request: Request,
     file: UploadFile = File(...),
     loan_id: int = Form(...),
-    borrower_id: int = Form(...),
+    borrower_id: int = Form(0),
     request_id: Optional[int] = Form(None),
     doc_type: Optional[str] = Form(None),
     db: Session = Depends(get_db),

@@ -150,7 +150,7 @@ export async function uploadDocument(file, loanId, borrowerId, requestId = null,
   const formData = new FormData();
   formData.append('file', file);
   formData.append('loan_id', loanId);
-  formData.append('borrower_id', borrowerId);
+  formData.append('borrower_id', borrowerId != null ? borrowerId : 0);
   if (requestId) formData.append('request_id', requestId);
   if (docType) formData.append('doc_type', docType);
 
