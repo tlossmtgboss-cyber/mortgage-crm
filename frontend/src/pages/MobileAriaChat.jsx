@@ -22,9 +22,9 @@ import React, {
   useRef,
 } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { sendMessage as sendAriaMessage, executeTask, submitMessageFeedback } from '../services/mobileAriaApi';
-import api from '../services/api';
+import { submitMessageFeedback } from '../services/mobileAriaApi';
 import { useAriaVoice } from '../hooks/useAriaVoice';
+import { useAriaWebSocket } from '../hooks/useAriaWebSocket';
 import { auditLog, AUDIT_EVENTS } from '../services/mobileAuditLogger';
 import { toast } from '../utils/toast';
 import MobileBottomNav from '../components/mobile/MobileBottomNav';
@@ -498,6 +498,76 @@ export default function MobileAriaChat() {
     },
   });
 
+  // Aria WebSocket connection
+  const { connected: wsConnected, connecting: wsConnecting, sendMessage: wsSend, sendConfirmation } = useAriaWebSocket({
+    onGreeting: (content) => {
+      setMessages(prev => {
+        if (prev.length === 0 || prev[0].role !== 'aria' || prev[0].isGreeting !== true) {
+          return [{ id: newId(), role: 'aria', text: content, timestamp: new Date().toISOString(), actions: [], suggestions: [], isGreeting: true }, ...prev.filter(m => !m.isGreeting)];
+        }
+        return prev;
+      });
+      setInitialLoad(false);
+    },
+    onTyping: () => {
+      setIsLoading(true);
+    },
+    onMessage: (content) => {
+      setIsLoading(false);
+      if (!content) return;
+      const ariaMsg = {
+        id: newId(),
+        role: 'aria',
+        text: content,
+        timestamp: new Date().toISOString(),
+        actions: [],
+        suggestions: [],
+      };
+      setMessages(prev => [...prev, ariaMsg]);
+      triggerHaptic('light');
+      auditLog(AUDIT_EVENTS.PII_ACCESSED, { action: 'aria_ws_message' });
+    },
+    onConfirmation: (preview) => {
+      setIsLoading(false);
+      const confirmMsg = {
+        id: newId(),
+        role: 'aria',
+        text: preview,
+        timestamp: new Date().toISOString(),
+        actions: [],
+        suggestions: [],
+        isConfirmation: true,
+      };
+      setMessages(prev => [...prev, confirmMsg]);
+    },
+    onTaskComplete: (result) => {
+      setIsLoading(false);
+      triggerHaptic('success');
+      const taskMsg = {
+        id: newId(),
+        role: 'aria',
+        text: result?.message || 'Done!',
+        timestamp: new Date().toISOString(),
+        actions: [{ type: result?.action, ...result }],
+        suggestions: [],
+      };
+      setMessages(prev => [...prev, taskMsg]);
+    },
+    onError: (message) => {
+      setIsLoading(false);
+      const errMsg = {
+        id: newId(),
+        role: 'aria',
+        text: message || 'Something went wrong. Try again?',
+        timestamp: new Date().toISOString(),
+        actions: [],
+        suggestions: [],
+        isError: true,
+      };
+      setMessages(prev => [...prev, errMsg]);
+    },
+  });
+
   // ── Session & persistence ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -614,12 +684,12 @@ export default function MobileAriaChat() {
 
   // ── API calls ──────────────────────────────────────────────────────────────
 
-  const sendMessageToAria = useCallback(async (text, retryMsgId = null) => {
+  const sendMessageToAria = useCallback((text, retryMsgId = null) => {
     if (!text || !text.trim() || isLoading) return;
 
     const trimmedText = text.trim();
 
-    // Add user message
+    // Add user message to chat
     const userMsg = {
       id: newId(),
       role: 'user',
@@ -632,103 +702,25 @@ export default function MobileAriaChat() {
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
     setIsLoading(true);
-
-    // Haptic on send
     triggerHaptic('light');
-
-    // Store payload for retry
     retryPayloadRef.current = trimmedText;
 
-    try {
-      let responseData;
+    // Handle confirmation responses
+    if (trimmedText.toLowerCase().match(/^(yes|yeah|yep|go ahead|do it|send it|confirm|sure|ok|okay)$/)) {
+      sendConfirmation(true);
+      return;
+    }
+    if (trimmedText.toLowerCase().match(/^(no|nope|cancel|stop|don't|wait|hold on)$/)) {
+      sendConfirmation(false);
+      return;
+    }
 
-      // If we have lead context, use autonomous-task endpoint for richer integration
-      if (contextLeadId && (
-        trimmedText.toLowerCase().includes('sms') ||
-        trimmedText.toLowerCase().includes('task') ||
-        trimmedText.toLowerCase().includes('call') ||
-        trimmedText.toLowerCase().includes('email')
-      )) {
-        responseData = await executeTask(trimmedText, {
-          lead_id: contextLeadId,
-          lead_name: contextLeadName,
-          context: contextType,
-          ...(workflowContext && { workflow_context: workflowContext }),
-        });
-      } else {
-        // Standard orchestrator chat
-        responseData = await sendAriaMessage(trimmedText, sessionId, {
-          ...(contextLeadId || contextLoanId ? {
-            context: {
-              ...(contextLeadId && { lead_id: contextLeadId }),
-              ...(contextLeadName && { lead_name: contextLeadName }),
-              ...(contextLoanId && { loan_id: contextLoanId }),
-              context_type: contextType,
-              ...(workflowContext && { workflow_context: workflowContext }),
-            },
-          } : {}),
-        });
-
-        // Persist session_id if returned
-        if (responseData.session_id && responseData.session_id !== sessionId) {
-          setSessionId(responseData.session_id);
-          try {
-            localStorage.setItem(SESSION_KEY, responseData.session_id);
-          } catch (_) {}
-        }
-      }
-
-      // Check if the service layer returned an error
-      if (responseData.success === false && responseData.error) {
-        throw new Error(responseData.error);
-      }
-
-      // Build Aria message
-      const ariaMsg = {
-        id: newId(),
-        role: 'aria',
-        text: responseData.response || responseData.message || responseData.result || 'Done.',
-        timestamp: new Date().toISOString(),
-        actions: normalizeActions(responseData),
-        suggestions: responseData.follow_up_suggestions || [],
-        intent: responseData.intent,
-        confidence: responseData.confidence,
-      };
-
-      setMessages(prev => {
-        // If this was a retry, replace the error message
-        if (retryMsgId) {
-          return prev.map(m =>
-            m.id === retryMsgId ? { ...ariaMsg, id: m.id } : m
-          );
-        }
-        return [...prev, ariaMsg];
-      });
-
-      // Haptic on success if actions executed
-      if (ariaMsg.actions && ariaMsg.actions.length > 0) {
-        triggerHaptic('success');
-      }
-
-      auditLog(AUDIT_EVENTS.PII_ACCESSED, { action: 'aria_chat_message', intent: ariaMsg.intent });
-    } catch (err) {
-      const errText = err.message || 'Something went wrong. Please try again.';
-
-      const errMsg = {
-        id: newId(),
-        role: 'aria',
-        text: errText,
-        timestamp: new Date().toISOString(),
-        actions: [],
-        suggestions: [],
-        isError: true,
-      };
-
-      setMessages(prev => [...prev, errMsg]);
-    } finally {
+    // Send via WebSocket
+    const sent = wsSend(trimmedText);
+    if (!sent) {
       setIsLoading(false);
     }
-  }, [isLoading, sessionId, contextLeadId, contextLeadName, contextLoanId, contextType, workflowContext]);
+  }, [isLoading, wsSend, sendConfirmation]);
 
   // Normalize the actions from different response shapes
   function normalizeActions(data) {
