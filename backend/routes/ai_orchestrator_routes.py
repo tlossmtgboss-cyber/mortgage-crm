@@ -720,6 +720,46 @@ async def aria_last_request():
     return _last_aria_diag or {"status": "no requests captured yet"}
 
 
+@router.get("/smart-docs-diag")
+async def smart_docs_diag(request: Request, db: Session = Depends(get_db_dep)):
+    """Temp diagnostic for smart docs 500 errors."""
+    from sqlalchemy import text
+    result = {"errors": []}
+    try:
+        # Check if table exists
+        exists = db.execute(text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'smart_document_requests')"
+        )).scalar()
+        result["table_exists"] = exists
+
+        if exists:
+            cols = db.execute(text(
+                "SELECT column_name, data_type, is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'smart_document_requests' ORDER BY ordinal_position"
+            )).fetchall()
+            result["columns"] = [{"name": c[0], "type": c[1], "nullable": c[2]} for c in cols]
+            result["row_count"] = db.execute(text("SELECT COUNT(*) FROM smart_document_requests")).scalar()
+
+        # Check loan 2912
+        loan = db.execute(text(
+            "SELECT id, organization_id, borrower_name, stage FROM loans WHERE id = 2912"
+        )).fetchone()
+        result["loan_2912"] = {"id": loan[0], "org_id": loan[1], "borrower": loan[2], "stage": loan[3]} if loan else None
+
+        # Try the exact operation that fails
+        if exists and loan:
+            try:
+                from services.smart_docs.needs_list_generator import NeedsListGenerator
+                gen = NeedsListGenerator(db)
+                org = gen._get_loan_org_id(2912)
+                result["generator_org_lookup"] = org
+            except Exception as e:
+                result["generator_error"] = str(e)
+    except Exception as e:
+        result["errors"].append(str(e))
+    return result
+
+
 @router.get("/aria-diag-temp")
 async def aria_diag_temp(request: Request, db: Session = Depends(get_db_dep)):
     """Temporary unauthenticated diagnostic — REMOVE AFTER DEBUGGING."""
