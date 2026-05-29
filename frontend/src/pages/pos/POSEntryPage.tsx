@@ -29,6 +29,7 @@ type AuthTab = 'signup' | 'login';
 interface VerifySession {
   sessionId: string;
   emailMasked: string;
+  sentTo: string;
   expiresAt: string;
   flowType: AuthTab;
 }
@@ -856,6 +857,7 @@ function SignupForm({
       onStarted({
         sessionId: data.session_id,
         emailMasked: data.email_masked,
+        sentTo: data.message || '',
         expiresAt: data.expires_at,
         flowType: 'signup',
       });
@@ -1004,6 +1006,7 @@ function LoginForm({
         onStarted({
           sessionId: data.session_id,
           emailMasked: data.email_masked,
+          sentTo: data.message || '',
           expiresAt: data.expires_at,
           flowType: 'login',
         });
@@ -1213,9 +1216,12 @@ function VerifyCodeForm({
           <PeLogoIcon />
         </div>
 
-        <h1 className="pos-start__title">Verify Your Email</h1>
+        <h1 className="pos-start__title">Verify Your Identity</h1>
         <p className="pos-start__subtitle">
-          We sent a 6-digit code to <strong>{session.emailMasked}</strong>.
+          {session.sentTo
+            ? <>We sent a 6-digit code — <strong>{session.sentTo.replace(/^Verification code sent to /, '')}</strong>.</>
+            : <>We sent a 6-digit code to <strong>{session.emailMasked}</strong>.</>
+          }
         </p>
 
         {countdown.expired ? (

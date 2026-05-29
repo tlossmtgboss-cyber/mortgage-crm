@@ -326,13 +326,38 @@ class TokenCheckResponse(BaseModel):
     borrower_name: str = ""
 
 
-# ── Email helper ──────────────────────────────────────────────────
+# ── Verification code delivery ────────────────────────────────────
+
+def _send_verification_sms(phone: str, code: str):
+    try:
+        from integrations.sms_service import SMSClient
+        client = SMSClient()
+        result = client.send_sms(
+            to_phone=phone,
+            message=f"Your Perennia verification code is: {code}. Expires in {CODE_TTL_MINUTES} min. Do not share.",
+            bypass_compliance=True,
+        )
+        if not result.get("success"):
+            logger.error("SMS verification send failed: %s", result.get("error"))
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Could not send verification code via SMS. Please try again.",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to send verification SMS to %s: %s", phone[-4:] if phone else "?", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not send verification code. Please try again.",
+        )
+
 
 def _send_verification_email(email_addr: str, code: str):
     try:
         from services.notification_service import NotificationService
         svc = NotificationService()
-        svc.send_email(
+        result = svc.send_email(
             to_email=email_addr,
             subject="Your Perennia Verification Code",
             html_content=(
@@ -353,12 +378,17 @@ def _send_verification_email(email_addr: str, code: str):
                 f"Do not share this code with anyone."
             ),
         )
+        if not result.get("success"):
+            logger.error("Email verification send failed: %s", result.get("error"))
     except Exception as e:
         logger.error("Failed to send verification email to %s: %s", email_addr, e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not send verification code. Please try again.",
-        )
+
+
+def _send_verification_code(phone: str, email: str, code: str):
+    if phone:
+        _send_verification_sms(phone, code)
+    else:
+        _send_verification_email(email, code)
 
 
 def _mask_email(email_addr: str) -> str:
@@ -452,14 +482,15 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
             detail="Something went wrong. Please try again.",
         )
 
-    _send_verification_email(email_lower, code)
+    _send_verification_code(phone_raw, email_lower, code)
 
     expires = now + timedelta(minutes=CODE_TTL_MINUTES)
+    sent_to = f"phone ending {phone_raw[-4:]}" if phone_raw else _mask_email(email_lower)
     return StartResponse(
         session_id=session_id,
         email_masked=_mask_email(email_lower),
         expires_at=expires.isoformat(),
-        message="Verification code sent",
+        message=f"Verification code sent to {sent_to}",
     )
 
 
@@ -687,7 +718,7 @@ def resend_code(body: ResendRequest, request: Request, db: Session = Depends(get
         verification.resend_count = resend_count + 1
     db.commit()
 
-    _send_verification_email(verification.email, code)
+    _send_verification_code(verification.phone or "", verification.email, code)
 
     expires = now + timedelta(minutes=CODE_TTL_MINUTES)
     return ResendResponse(
@@ -813,7 +844,7 @@ async def login_start(body: LoginRequest, request: Request, db: Session = Depend
     db.add(verification)
     db.commit()
 
-    _send_verification_email(email_lower, code)
+    _send_verification_code(contact.phone or "", email_lower, code)
 
     expires = now + timedelta(minutes=CODE_TTL_MINUTES)
     return LoginResponse(
