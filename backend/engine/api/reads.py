@@ -457,6 +457,21 @@ async def debug_call_lookup(
     """Temporary diagnostic (no auth) — remove after debugging."""
     result: dict = {"org_id": org_id, "lead_id": lead_id, "phone_param": phone}
     try:
+        # Self-heal: ensure canonical_call_id column exists
+        try:
+            db.execute(text("SELECT canonical_call_id FROM call_logs LIMIT 0"))
+            result["canonical_call_id_column"] = "exists"
+        except Exception:
+            db.rollback()
+            try:
+                db.execute(text("ALTER TABLE call_logs ADD COLUMN canonical_call_id UUID"))
+                db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_call_logs_canonical ON call_logs(canonical_call_id)"))
+                db.commit()
+                result["canonical_call_id_column"] = "just_created"
+            except Exception as col_err:
+                db.rollback()
+                result["canonical_call_id_column"] = f"failed: {col_err}"
+
         if lead_id:
             try:
                 from database.models import Lead

@@ -932,15 +932,25 @@ def click_to_dial(
             loan_id=loan_id,
             session_task_id=task_id,
             call_sid=result.call_sid,
-            canonical_call_id=canonical_id,
             outcome=CallOutcome.INITIATED,
             start_time=datetime.now(timezone.utc),
         )
         if organization_id and hasattr(CallLog, 'organization_id'):
             call_log_kwargs['organization_id'] = organization_id
-        call_log = CallLog(**call_log_kwargs)
-        db_session.add(call_log)
-        db_session.commit()
+
+        # canonical_call_id may not exist in production yet — try with it, fall back without
+        try:
+            call_log_kwargs['canonical_call_id'] = canonical_id
+            call_log = CallLog(**call_log_kwargs)
+            db_session.add(call_log)
+            db_session.commit()
+        except Exception:
+            db_session.rollback()
+            call_log_kwargs.pop('canonical_call_id', None)
+            call_log = CallLog(**call_log_kwargs)
+            db_session.add(call_log)
+            db_session.commit()
+            logger.warning("CallLog saved without canonical_call_id — column may not exist")
 
         try:
             from services.audit_events import audit_event, EventType
