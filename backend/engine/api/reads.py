@@ -111,91 +111,93 @@ def _ensure_cie_tables(db: Session) -> None:
         _tables_ensured = True
 
 
-def _fallback_call_logs(db: Session, org_id, lead_id, loan_id, limit, offset):
-    """Fall back to call_logs table when no CIE records exist.
+def _format_call_log_row(row):
+    import uuid as _uuid
+    has_transcript = bool(row.transcript_text)
+    has_recording = bool(row.recording_url)
+    status = "completed" if has_transcript else ("pending" if has_recording else "no_recording")
+    row_id = str(row.canonical_call_id or _uuid.uuid4())
+    call_brief = {
+        "id": row_id,
+        "external_call_id": row.call_sid or "",
+        "provider": "telnyx",
+        "direction": "outbound",
+        "started_at": row.start_time.isoformat() if row.start_time else None,
+        "duration_seconds": row.duration_seconds,
+        "processing_status": status,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+    report = None
+    if has_transcript or has_recording:
+        report = {
+            "id": row_id,
+            "call_record_id": row_id,
+            "summary": getattr(row, "ai_note_summary", None),
+            "summary_bullets": None,
+            "cis_composite": None, "engagement_score": None,
+            "information_quality_score": None, "objection_handling_score": None,
+            "compliance_score": None, "rapport_score": None,
+            "closing_effectiveness_score": None,
+            "primary_intent": None, "intent_confidence": None,
+            "conversion_probability": None, "conversion_ci_low": None,
+            "conversion_ci_high": None,
+            "opportunities": None, "risks": None, "objections": None,
+            "compliance_flags": None, "coaching_suggestions": None,
+            "generated_tasks": None, "draft_messages": None,
+            "llm_model_used": None, "pipeline_version": "call_log_fallback",
+            "processing_time_ms": None,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+    return {"call": call_brief, "report": report}
 
-    Searches by lead_id first, then by the lead's phone number if no
-    results (click-to-dial may not have passed lead_id to the call_log).
-    """
+
+def _fallback_call_logs(db: Session, org_id, lead_id, loan_id, limit, offset):
+    """Fall back to call_logs table when no CIE records exist."""
     try:
         from database.models.dialer import CallLog
         from sqlalchemy import or_
         import re
-        import uuid as _uuid
 
-        q = db.query(CallLog).filter(CallLog.organization_id == org_id)
-
-        filters = []
+        phone_digits = None
         if lead_id is not None:
-            filters.append(CallLog.lead_id == lead_id)
             try:
                 from database.models import Lead
                 lead = db.query(Lead).filter(Lead.id == lead_id).first()
                 if lead and getattr(lead, "phone", None):
-                    digits = re.sub(r"[^0-9]", "", lead.phone)[-10:]
-                    if digits:
-                        filters.append(CallLog.contact_phone.contains(digits))
+                    phone_digits = re.sub(r"[^0-9]", "", lead.phone)[-10:]
             except Exception:
                 pass
+
+        # Strategy 1: search with org filter, by lead_id OR phone OR loan_id
+        org_filter = or_(CallLog.organization_id == org_id, CallLog.organization_id.is_(None))
+        filters = []
+        if lead_id is not None:
+            filters.append(CallLog.lead_id == lead_id)
+        if phone_digits:
+            filters.append(CallLog.contact_phone.contains(phone_digits))
         if loan_id is not None:
             filters.append(CallLog.loan_id == loan_id)
 
         if filters:
-            q = q.filter(or_(*filters))
-        q = q.order_by(CallLog.created_at.desc())
+            q = db.query(CallLog).filter(org_filter).filter(or_(*filters))
+            q = q.order_by(CallLog.created_at.desc())
+            total = q.count()
+            if total > 0:
+                rows = q.offset(offset).limit(limit).all()
+                return [_format_call_log_row(r) for r in rows], total
 
-        total = q.count()
-        rows = q.offset(offset).limit(limit).all()
+        # Strategy 2: search by phone only, no org filter (catches older records)
+        if phone_digits:
+            q2 = db.query(CallLog).filter(CallLog.contact_phone.contains(phone_digits))
+            q2 = q2.order_by(CallLog.created_at.desc())
+            total = q2.count()
+            if total > 0:
+                rows = q2.offset(offset).limit(limit).all()
+                logger.info("call_logs fallback: found %d rows by phone %s (no org filter)", total, phone_digits)
+                return [_format_call_log_row(r) for r in rows], total
 
-        items = []
-        for row in rows:
-            has_transcript = bool(row.transcript_text)
-            has_recording = bool(row.recording_url)
-            status = "completed" if has_transcript else ("pending" if has_recording else "no_recording")
-            call_brief = {
-                "id": str(row.canonical_call_id or _uuid.uuid4()),
-                "external_call_id": row.call_sid or "",
-                "provider": "telnyx",
-                "direction": "outbound",
-                "started_at": row.start_time.isoformat() if row.start_time else None,
-                "duration_seconds": row.duration_seconds,
-                "processing_status": status,
-                "created_at": row.created_at.isoformat() if row.created_at else None,
-            }
-            report = None
-            if has_transcript:
-                report = {
-                    "id": str(row.canonical_call_id or _uuid.uuid4()),
-                    "call_record_id": str(row.canonical_call_id or _uuid.uuid4()),
-                    "summary": row.ai_note_summary,
-                    "summary_bullets": None,
-                    "cis_composite": None,
-                    "engagement_score": None,
-                    "information_quality_score": None,
-                    "objection_handling_score": None,
-                    "compliance_score": None,
-                    "rapport_score": None,
-                    "closing_effectiveness_score": None,
-                    "primary_intent": None,
-                    "intent_confidence": None,
-                    "conversion_probability": None,
-                    "conversion_ci_low": None,
-                    "conversion_ci_high": None,
-                    "opportunities": None,
-                    "risks": None,
-                    "objections": None,
-                    "compliance_flags": None,
-                    "coaching_suggestions": None,
-                    "generated_tasks": None,
-                    "draft_messages": None,
-                    "llm_model_used": None,
-                    "pipeline_version": "call_log_fallback",
-                    "processing_time_ms": None,
-                    "created_at": row.created_at.isoformat() if row.created_at else None,
-                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-                }
-            items.append({"call": call_brief, "report": report})
-        return items, total
+        return [], 0
     except Exception as e:
         logger.warning("call_logs fallback failed: %s", e)
         return [], 0
