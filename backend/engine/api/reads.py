@@ -417,9 +417,19 @@ async def debug_call_lookup(
 ):
     """Temporary diagnostic: check what call data exists for a lead/phone."""
     org_id = getattr(current_user, "organization_id", None)
-    result: dict = {"org_id": org_id, "lead_id": lead_id, "phone": phone}
+    result: dict = {"org_id": org_id, "lead_id": lead_id, "phone_param": phone}
     try:
         from database.models.dialer import CallLog
+        if lead_id:
+            try:
+                from database.models import Lead
+                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                if lead:
+                    result["lead_name"] = f"{lead.first_name} {lead.last_name}"
+                    result["lead_phone"] = getattr(lead, "phone", None)
+                    result["lead_org_id"] = lead.organization_id
+            except Exception:
+                pass
         q = db.query(CallLog).filter(CallLog.organization_id == org_id)
         if lead_id:
             q_lead = q.filter(CallLog.lead_id == lead_id)
@@ -437,17 +447,33 @@ async def debug_call_lookup(
             import re
             digits = re.sub(r"[^0-9]", "", phone)[-10:]
             q_phone = q.filter(CallLog.contact_phone.contains(digits))
-            result["call_logs_by_phone"] = q_phone.count()
+            result["call_logs_by_phone_org"] = q_phone.count()
             rows = q_phone.order_by(CallLog.created_at.desc()).limit(5).all()
-            result["call_logs_phone_matches"] = [
+            result["call_logs_phone_org_matches"] = [
                 {"id": r.id, "call_sid": r.call_sid, "phone": r.contact_phone,
-                 "lead_id": r.lead_id, "duration": r.duration_seconds,
+                 "lead_id": r.lead_id, "org_id": r.organization_id,
+                 "duration": r.duration_seconds,
+                 "has_recording": bool(r.recording_url),
+                 "has_transcript": bool(r.transcript_text),
                  "recording_status": r.recording_status,
                  "transcript_status": r.transcript_status,
                  "created_at": str(r.created_at)}
                 for r in rows
             ]
+            q_phone_any = db.query(CallLog).filter(CallLog.contact_phone.contains(digits))
+            result["call_logs_by_phone_any_org"] = q_phone_any.count()
+            rows2 = q_phone_any.order_by(CallLog.created_at.desc()).limit(5).all()
+            result["call_logs_phone_any_org_matches"] = [
+                {"id": r.id, "call_sid": r.call_sid, "phone": r.contact_phone,
+                 "lead_id": r.lead_id, "org_id": r.organization_id,
+                 "duration": r.duration_seconds,
+                 "has_recording": bool(r.recording_url),
+                 "has_transcript": bool(r.transcript_text),
+                 "created_at": str(r.created_at)}
+                for r in rows2
+            ]
         result["total_call_logs_in_org"] = db.query(CallLog).filter(CallLog.organization_id == org_id).count()
+        result["total_call_logs_all"] = db.query(CallLog).count()
         cie_count = db.query(CIECallRecord).filter(CIECallRecord.organization_id == org_id).count()
         result["total_cie_records"] = cie_count
     except Exception as e:
