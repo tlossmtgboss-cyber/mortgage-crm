@@ -1164,6 +1164,7 @@ export const guidelinesAPI = {
   upload: (formData) =>
     api.post('/api/v1/underwriting-guidelines/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 minutes for large guideline PDFs
     }),
   chartCatalog: () =>
     api.get('/api/v1/underwriting-guidelines/compare/catalog'),

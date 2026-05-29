@@ -289,7 +289,8 @@ def main():
         "uvicorn",
         "main:app",
         "--host", "0.0.0.0",
-        "--port", port
+        "--port", port,
+        "--timeout-keep-alive", "120",
     ])
 
 ALLOWED_WORKERS = {"team_chat_bot", "voice_agent"}
