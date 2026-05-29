@@ -116,7 +116,7 @@ def _format_call_log_row(row):
     has_transcript = bool(row.transcript_text)
     has_recording = bool(row.recording_url)
     status = "completed" if has_transcript else ("pending" if has_recording else "no_recording")
-    row_id = str(row.canonical_call_id or _uuid.uuid4())
+    row_id = str(row.id)
     call_brief = {
         "id": row_id,
         "external_call_id": row.call_sid or "",
@@ -152,50 +152,83 @@ def _format_call_log_row(row):
     return {"call": call_brief, "report": report}
 
 
+_CALL_LOG_COLS = """id, call_sid, contact_phone, lead_id, loan_id,
+    organization_id, duration_seconds, start_time,
+    recording_url, transcript_text, ai_note_summary,
+    recording_status, transcript_status,
+    created_at, updated_at"""
+
+
 def _fallback_call_logs(db: Session, org_id, lead_id, loan_id, limit, offset):
-    """Fall back to call_logs table when no CIE records exist."""
+    """Fall back to call_logs table when no CIE records exist.
+
+    Uses raw SQL to avoid referencing columns that may not exist in production
+    (e.g. canonical_call_id was added to the model but never migrated).
+    """
     try:
-        from database.models.dialer import CallLog
-        from sqlalchemy import or_
         import re
 
         phone_digits = None
+        lead_org_id = None
         if lead_id is not None:
             try:
                 from database.models import Lead
                 lead = db.query(Lead).filter(Lead.id == lead_id).first()
-                if lead and getattr(lead, "phone", None):
-                    phone_digits = re.sub(r"[^0-9]", "", lead.phone)[-10:]
+                if lead:
+                    lead_org_id = getattr(lead, "organization_id", None)
+                    phone = getattr(lead, "phone", None)
+                    if phone:
+                        phone_digits = re.sub(r"[^0-9]", "", phone)[-10:]
             except Exception:
                 pass
 
-        # Strategy 1: search with org filter, by lead_id OR phone OR loan_id
-        org_filter = or_(CallLog.organization_id == org_id, CallLog.organization_id.is_(None))
-        filters = []
+        def _run(where: str, params: dict):
+            count_sql = text(f"SELECT count(*) FROM call_logs WHERE {where}")
+            total = db.execute(count_sql, params).scalar() or 0
+            if total == 0:
+                return [], 0
+            sql = text(f"""
+                SELECT {_CALL_LOG_COLS} FROM call_logs
+                WHERE {where}
+                ORDER BY created_at DESC
+                LIMIT :lim OFFSET :off
+            """)
+            params.update({"lim": limit, "off": offset})
+            rows = db.execute(sql, params).fetchall()
+            return [_format_call_log_row(r) for r in rows], total
+
+        # Strategy 1: org filter (user's org OR lead's org OR NULL) + lead/phone/loan
+        org_clause_parts = ["organization_id = :oid", "organization_id IS NULL"]
+        params: dict = {"oid": org_id}
+        if lead_org_id and lead_org_id != org_id:
+            org_clause_parts.append("organization_id = :lead_oid")
+            params["lead_oid"] = lead_org_id
+        org_clause = f"({' OR '.join(org_clause_parts)})"
+
+        match_parts = []
         if lead_id is not None:
-            filters.append(CallLog.lead_id == lead_id)
+            match_parts.append("lead_id = :lid")
+            params["lid"] = lead_id
         if phone_digits:
-            filters.append(CallLog.contact_phone.contains(phone_digits))
+            match_parts.append("contact_phone LIKE :ph")
+            params["ph"] = f"%{phone_digits}%"
         if loan_id is not None:
-            filters.append(CallLog.loan_id == loan_id)
+            match_parts.append("loan_id = :loanid")
+            params["loanid"] = loan_id
 
-        if filters:
-            q = db.query(CallLog).filter(org_filter).filter(or_(*filters))
-            q = q.order_by(CallLog.created_at.desc())
-            total = q.count()
+        if match_parts:
+            where = f"{org_clause} AND ({' OR '.join(match_parts)})"
+            items, total = _run(where, params)
             if total > 0:
-                rows = q.offset(offset).limit(limit).all()
-                return [_format_call_log_row(r) for r in rows], total
+                return items, total
 
-        # Strategy 2: search by phone only, no org filter (catches older records)
+        # Strategy 2: phone only, no org filter
         if phone_digits:
-            q2 = db.query(CallLog).filter(CallLog.contact_phone.contains(phone_digits))
-            q2 = q2.order_by(CallLog.created_at.desc())
-            total = q2.count()
+            items, total = _run(
+                "contact_phone LIKE :ph", {"ph": f"%{phone_digits}%"})
             if total > 0:
-                rows = q2.offset(offset).limit(limit).all()
                 logger.info("call_logs fallback: found %d rows by phone %s (no org filter)", total, phone_digits)
-                return [_format_call_log_row(r) for r in rows], total
+                return items, total
 
         return [], 0
     except Exception as e:
@@ -289,11 +322,14 @@ async def get_transcript(
     )
     if not report:
         try:
-            from database.models.dialer import CallLog
-            cl = db.query(CallLog).filter(CallLog.canonical_call_id == report_id).first()
+            sql = text("""
+                SELECT id, transcript_text, organization_id
+                FROM call_logs WHERE id = :rid LIMIT 1
+            """)
+            cl = db.execute(sql, {"rid": str(report_id)}).first()
             if cl and cl.transcript_text:
                 org_id = getattr(current_user, "organization_id", None)
-                if cl.organization_id != org_id:
+                if cl.organization_id and cl.organization_id != org_id:
                     raise HTTPException(404, "Report not found")
                 return {"transcript": cl.transcript_text}
         except HTTPException:
@@ -325,11 +361,14 @@ async def get_recording_url(
     )
     if not report:
         try:
-            from database.models.dialer import CallLog
-            cl = db.query(CallLog).filter(CallLog.canonical_call_id == report_id).first()
+            sql = text("""
+                SELECT id, recording_url, organization_id
+                FROM call_logs WHERE id = :rid LIMIT 1
+            """)
+            cl = db.execute(sql, {"rid": str(report_id)}).first()
             if cl and cl.recording_url:
                 org_id = getattr(current_user, "organization_id", None)
-                if cl.organization_id != org_id:
+                if cl.organization_id and cl.organization_id != org_id:
                     raise HTTPException(404, "Report not found")
                 return {"recording_url": cl.recording_url}
         except HTTPException:
@@ -418,7 +457,6 @@ async def debug_call_lookup(
     """Temporary diagnostic (no auth) — remove after debugging."""
     result: dict = {"org_id": org_id, "lead_id": lead_id, "phone_param": phone}
     try:
-        from database.models.dialer import CallLog
         if lead_id:
             try:
                 from database.models import Lead
@@ -427,52 +465,64 @@ async def debug_call_lookup(
                     result["lead_name"] = f"{lead.first_name} {lead.last_name}"
                     result["lead_phone"] = getattr(lead, "phone", None)
                     result["lead_org_id"] = lead.organization_id
-            except Exception:
-                pass
-        q = db.query(CallLog).filter(CallLog.organization_id == org_id)
-        if lead_id:
-            q_lead = q.filter(CallLog.lead_id == lead_id)
-            result["call_logs_by_lead_id"] = q_lead.count()
-            rows = q_lead.order_by(CallLog.created_at.desc()).limit(5).all()
-            result["call_logs_by_lead"] = [
+                    if not org_id:
+                        org_id = lead.organization_id
+                        result["org_id_from_lead"] = True
+            except Exception as e:
+                result["lead_lookup_error"] = str(e)
+
+        def _query_call_logs(where_clause: str, params: dict) -> list:
+            sql = text(f"""
+                SELECT id, call_sid, contact_phone, lead_id, loan_id,
+                       organization_id, duration_seconds,
+                       recording_url, transcript_text,
+                       recording_status, transcript_status,
+                       ai_note_summary, created_at
+                FROM call_logs
+                WHERE {where_clause}
+                ORDER BY created_at DESC LIMIT 5
+            """)
+            rows = db.execute(sql, params).fetchall()
+            return [
                 {"id": r.id, "call_sid": r.call_sid, "phone": r.contact_phone,
-                 "lead_id": r.lead_id, "duration": r.duration_seconds,
+                 "lead_id": r.lead_id, "org_id": r.organization_id,
+                 "duration": r.duration_seconds,
+                 "has_recording": bool(r.recording_url),
+                 "has_transcript": bool(r.transcript_text),
                  "recording_status": r.recording_status,
                  "transcript_status": r.transcript_status,
                  "created_at": str(r.created_at)}
                 for r in rows
             ]
+
+        def _count_call_logs(where_clause: str, params: dict) -> int:
+            sql = text(f"SELECT count(*) FROM call_logs WHERE {where_clause}")
+            return db.execute(sql, params).scalar() or 0
+
+        if lead_id:
+            result["call_logs_by_lead_id"] = _count_call_logs(
+                "lead_id = :lid", {"lid": lead_id})
+            result["call_logs_by_lead"] = _query_call_logs(
+                "lead_id = :lid", {"lid": lead_id})
+
         if phone:
             import re
             digits = re.sub(r"[^0-9]", "", phone)[-10:]
-            q_phone = q.filter(CallLog.contact_phone.contains(digits))
-            result["call_logs_by_phone_org"] = q_phone.count()
-            rows = q_phone.order_by(CallLog.created_at.desc()).limit(5).all()
-            result["call_logs_phone_org_matches"] = [
-                {"id": r.id, "call_sid": r.call_sid, "phone": r.contact_phone,
-                 "lead_id": r.lead_id, "org_id": r.organization_id,
-                 "duration": r.duration_seconds,
-                 "has_recording": bool(r.recording_url),
-                 "has_transcript": bool(r.transcript_text),
-                 "recording_status": r.recording_status,
-                 "transcript_status": r.transcript_status,
-                 "created_at": str(r.created_at)}
-                for r in rows
-            ]
-            q_phone_any = db.query(CallLog).filter(CallLog.contact_phone.contains(digits))
-            result["call_logs_by_phone_any_org"] = q_phone_any.count()
-            rows2 = q_phone_any.order_by(CallLog.created_at.desc()).limit(5).all()
-            result["call_logs_phone_any_org_matches"] = [
-                {"id": r.id, "call_sid": r.call_sid, "phone": r.contact_phone,
-                 "lead_id": r.lead_id, "org_id": r.organization_id,
-                 "duration": r.duration_seconds,
-                 "has_recording": bool(r.recording_url),
-                 "has_transcript": bool(r.transcript_text),
-                 "created_at": str(r.created_at)}
-                for r in rows2
-            ]
-        result["total_call_logs_in_org"] = db.query(CallLog).filter(CallLog.organization_id == org_id).count()
-        result["total_call_logs_all"] = db.query(CallLog).count()
+            if org_id:
+                result["call_logs_by_phone_org"] = _count_call_logs(
+                    "organization_id = :oid AND contact_phone LIKE :ph",
+                    {"oid": org_id, "ph": f"%{digits}%"})
+                result["call_logs_phone_org_matches"] = _query_call_logs(
+                    "organization_id = :oid AND contact_phone LIKE :ph",
+                    {"oid": org_id, "ph": f"%{digits}%"})
+            result["call_logs_by_phone_any_org"] = _count_call_logs(
+                "contact_phone LIKE :ph", {"ph": f"%{digits}%"})
+            result["call_logs_phone_any_org_matches"] = _query_call_logs(
+                "contact_phone LIKE :ph", {"ph": f"%{digits}%"})
+        if org_id:
+            result["total_call_logs_in_org"] = _count_call_logs(
+                "organization_id = :oid", {"oid": org_id})
+        result["total_call_logs_all"] = _count_call_logs("1=1", {})
         cie_count = db.query(CIECallRecord).filter(CIECallRecord.organization_id == org_id).count()
         result["total_cie_records"] = cie_count
     except Exception as e:
