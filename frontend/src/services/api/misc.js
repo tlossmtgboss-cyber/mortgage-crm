@@ -1166,6 +1166,10 @@ export const guidelinesAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000, // 5 minutes for large guideline PDFs
     }),
+  getUploadUrl: (params) =>
+    api.post('/api/v1/underwriting-guidelines/upload-url', params),
+  confirmUpload: (params) =>
+    api.post('/api/v1/underwriting-guidelines/confirm-upload', params),
   chartCatalog: () =>
     api.get('/api/v1/underwriting-guidelines/compare/catalog'),
   saveQuery: (name, query, filters) =>

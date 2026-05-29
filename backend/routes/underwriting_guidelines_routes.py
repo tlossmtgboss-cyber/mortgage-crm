@@ -224,6 +224,234 @@ async def upload_guideline(
     return _to_guideline_response(guideline)
 
 
+# ---------------------------------------------------------------------------
+# Pydantic models for presigned S3 upload
+# ---------------------------------------------------------------------------
+
+class PresignedUploadRequest(PydanticBaseModel):
+    """Request body for generating a presigned S3 upload URL."""
+    name: str = Field(..., min_length=1, max_length=500)
+    guideline_type: str = Field(..., min_length=1, max_length=50)
+    loan_program: Optional[str] = Field("all", max_length=50)
+    filename: str = Field(..., min_length=1, max_length=500)
+    content_type: str = Field(..., min_length=1, max_length=100)
+    file_size: int = Field(..., gt=0)
+
+
+class ConfirmUploadRequest(PydanticBaseModel):
+    """Request body for confirming a completed S3 upload."""
+    guideline_id: str = Field(..., min_length=1)
+    storage_key: str = Field(..., min_length=1)
+
+
+@router.post("/upload-url")
+async def get_presigned_upload_url(
+    request: PresignedUploadRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
+):
+    """
+    Generate a presigned S3 URL for direct browser upload of large guideline PDFs.
+
+    Use this instead of /upload when the file is large enough to trigger
+    Railway CDN connection drops (ERR_HTTP2_PROTOCOL_ERROR).
+    """
+    _require_admin(current_user)
+
+    # Validate file extension
+    file_ext = os.path.splitext(request.filename)[1].lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type {file_ext} not allowed. Allowed: {list(ALLOWED_EXTENSIONS)}"
+        )
+
+    # Validate file size
+    if request.file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)}MB"
+        )
+
+    # Validate content type (allow guideline-relevant MIME types)
+    allowed_content_types = {
+        "application/pdf",
+        "text/plain",
+        "text/html",
+        "text/markdown",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    if request.content_type not in allowed_content_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Content type '{request.content_type}' not allowed for guidelines. "
+                   f"Allowed: {sorted(allowed_content_types)}"
+        )
+
+    # Lazy import to avoid failure if AWS is not configured
+    try:
+        from services.perennia_s3_service import PerenniaS3Service
+    except Exception as e:
+        logger.error(f"S3 service import failed: {e}")
+        raise HTTPException(status_code=501, detail="S3 storage is not configured on this server")
+
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
+    user_id = current_user.id if hasattr(current_user, 'id') else current_user.get('id')
+
+    # Create guideline record
+    guideline_id = uuid.uuid4()
+    import re as _re
+    safe_filename = os.path.basename(request.filename)
+    safe_filename = _re.sub(r'[^a-zA-Z0-9._-]', '_', safe_filename)
+    storage_key = f"guidelines/org-{org_id}/{guideline_id}/{safe_filename}"
+
+    try:
+        s3 = PerenniaS3Service()
+        # Override the default 50MB limit — guidelines can be up to 100MB
+        s3.max_file_size = MAX_FILE_SIZE
+        # Add guideline content types to the S3 service's allowlist
+        s3.allowed_content_types = list(allowed_content_types | set(s3.allowed_content_types))
+    except Exception as e:
+        logger.error(f"Failed to initialize S3 service: {e}")
+        raise HTTPException(status_code=501, detail="S3 storage is not configured on this server")
+
+    result = s3.get_presigned_upload_url(
+        storage_key=storage_key,
+        content_type=request.content_type,
+        file_size=request.file_size,
+        metadata={
+            "guideline_id": str(guideline_id),
+            "organization_id": str(org_id or ""),
+            "uploaded_by": str(user_id or ""),
+        },
+    )
+
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("error", "Failed to generate presigned URL")
+        )
+
+    # Persist the guideline record
+    guideline = UnderwritingGuideline(
+        id=guideline_id,
+        name=request.name,
+        guideline_type=request.guideline_type,
+        loan_program=request.loan_program,
+        source_file_name=request.filename,
+        source_file_path=f"s3://{s3.bucket_name}/{storage_key}",
+        source_file_type=file_ext.replace(".", ""),
+        source_file_size=request.file_size,
+        is_active=True,
+        is_processed=False,
+        uploaded_by=user_id,
+        organization_id=org_id,
+    )
+    db.add(guideline)
+    db.commit()
+    db.refresh(guideline)
+
+    logger.info(f"Presigned upload URL generated for guideline {guideline_id} ({request.filename})")
+
+    return {
+        "guideline_id": str(guideline_id),
+        "presigned_url": result["presigned_url"],
+        "presigned_fields": result.get("fields", {}),
+        "storage_key": storage_key,
+    }
+
+
+@router.post("/confirm-upload", response_model=GuidelineResponse)
+async def confirm_upload(
+    request: ConfirmUploadRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
+):
+    """
+    Notify backend that a presigned S3 upload is complete.
+
+    Downloads the file from S3 to local temp storage and kicks off
+    background processing (text extraction, embedding).
+    """
+    _require_admin(current_user)
+
+    org_id = current_user.organization_id if hasattr(current_user, 'organization_id') else current_user.get('organization_id')
+
+    # Look up guideline and verify ownership
+    guideline = db.query(UnderwritingGuideline).filter(
+        UnderwritingGuideline.id == request.guideline_id,
+    ).first()
+
+    if not guideline:
+        raise HTTPException(status_code=404, detail="Guideline not found")
+
+    if guideline.organization_id and guideline.organization_id != org_id:
+        raise HTTPException(status_code=403, detail="Guideline belongs to another organization")
+
+    # Lazy import to avoid failure if AWS is not configured
+    try:
+        from services.perennia_s3_service import PerenniaS3Service
+    except Exception as e:
+        logger.error(f"S3 service import failed: {e}")
+        raise HTTPException(status_code=501, detail="S3 storage is not configured on this server")
+
+    try:
+        s3 = PerenniaS3Service()
+    except Exception as e:
+        logger.error(f"Failed to initialize S3 service: {e}")
+        raise HTTPException(status_code=501, detail="S3 storage is not configured on this server")
+
+    # Verify the file exists in S3
+    verify_result = s3.verify_upload(request.storage_key)
+    if not verify_result.get("success") or not verify_result.get("exists"):
+        raise HTTPException(
+            status_code=400,
+            detail="File not found in S3. Upload may have failed or the storage key is incorrect."
+        )
+
+    # Download from S3 to local temp for processing
+    file_ext = f".{guideline.source_file_type}" if guideline.source_file_type else ".pdf"
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    local_filename = f"{uuid.uuid4().hex[:8]}_{os.path.basename(request.storage_key)}"
+    local_path = os.path.join(UPLOAD_DIR, local_filename)
+
+    try:
+        s3.s3_client.download_file(
+            s3.bucket_name,
+            request.storage_key,
+            local_path,
+        )
+    except Exception as e:
+        logger.error(f"Failed to download guideline from S3: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to download file from S3 for processing"
+        )
+
+    # Update the guideline with actual file size from S3
+    actual_size = verify_result.get("file_size")
+    if actual_size:
+        guideline.source_file_size = actual_size
+
+    db.commit()
+    db.refresh(guideline)
+
+    # Kick off background processing
+    background_tasks.add_task(
+        process_guideline_document,
+        str(guideline.id),
+        local_path,
+        file_ext,
+    )
+    background_tasks.add_task(_embed_after_processing, str(guideline.id))
+
+    logger.info(f"Confirmed S3 upload for guideline {guideline.id}, processing started")
+
+    return _to_guideline_response(guideline)
+
+
 @router.post("/text", response_model=GuidelineResponse)
 async def add_guideline_text(
     request: GuidelineTextInput,

@@ -8,6 +8,7 @@ function GuidelineAdmin() {
   const [guidelines, setGuidelines] = useState([]);
   const [stats, setStats] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const [uploadName, setUploadName] = useState('');
   const [uploadType, setUploadType] = useState('agency');
@@ -44,14 +45,75 @@ function GuidelineAdmin() {
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
     try {
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('name', uploadName);
-      formData.append('guideline_type', uploadType);
-      formData.append('loan_program', uploadProgram);
+      // Step 1: Request presigned upload URL
+      let presignedRes;
+      try {
+        presignedRes = await guidelinesAPI.getUploadUrl({
+          name: uploadName,
+          guideline_type: uploadType,
+          loan_program: uploadProgram,
+          filename: uploadFile.name,
+          content_type: uploadFile.type || 'application/pdf',
+          file_size: uploadFile.size,
+        });
+      } catch (urlErr) {
+        // Fallback to direct upload if S3 not configured (501)
+        if (urlErr.response?.status === 501) {
+          const formData = new FormData();
+          formData.append('file', uploadFile);
+          formData.append('name', uploadName);
+          formData.append('guideline_type', uploadType);
+          formData.append('loan_program', uploadProgram);
+          await guidelinesAPI.upload(formData);
+          toast.success('Guideline uploaded — processing will begin shortly');
+          setUploadName('');
+          setUploadFile(null);
+          fetchGuidelines();
+          fetchStats();
+          return;
+        }
+        throw urlErr;
+      }
 
-      await guidelinesAPI.upload(formData);
+      const { presigned_url, presigned_fields, guideline_id, storage_key } = presignedRes.data;
+
+      // Step 2: Upload file directly to S3 via presigned POST
+      toast.info('Uploading to storage...');
+      const s3Form = new FormData();
+      // Presigned fields must come before the file
+      Object.entries(presigned_fields).forEach(([key, value]) => {
+        s3Form.append(key, value);
+      });
+      // File MUST be the last field for S3 presigned POST
+      s3Form.append('file', uploadFile);
+
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', presigned_url);
+        // Do NOT set Authorization header — S3 presigned POST uses its own auth
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`S3 upload failed with status ${xhr.status}`));
+          }
+        });
+        xhr.addEventListener('error', () => reject(new Error('S3 upload network error')));
+        xhr.addEventListener('abort', () => reject(new Error('S3 upload aborted')));
+        xhr.send(s3Form);
+      });
+
+      // Step 3: Confirm upload to trigger processing
+      toast.info('Processing guideline...');
+      await guidelinesAPI.confirmUpload({ guideline_id, storage_key });
+
       toast.success('Guideline uploaded — processing will begin shortly');
       setUploadName('');
       setUploadFile(null);
@@ -61,6 +123,7 @@ function GuidelineAdmin() {
       toast.error('Upload failed');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   }, [uploadFile, uploadName, uploadType, uploadProgram, fetchGuidelines, fetchStats]);
 
@@ -142,6 +205,20 @@ function GuidelineAdmin() {
             />
           </div>
         </div>
+        {isUploading && uploadProgress > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+              <span>Uploading to storage...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div style={{ width: '100%', height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{
+                width: `${uploadProgress}%`, height: '100%', background: '#16a34a',
+                borderRadius: 3, transition: 'width 0.2s ease',
+              }} />
+            </div>
+          </div>
+        )}
         <button
           onClick={handleUpload}
           disabled={isUploading || !uploadFile || !uploadName}
@@ -150,7 +227,7 @@ function GuidelineAdmin() {
             color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
           }}
         >
-          {isUploading ? 'Uploading...' : 'Upload & Process'}
+          {isUploading ? (uploadProgress > 0 ? `Uploading ${uploadProgress}%...` : 'Uploading...') : 'Upload & Process'}
         </button>
       </div>
 
