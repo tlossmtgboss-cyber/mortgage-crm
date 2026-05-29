@@ -582,19 +582,21 @@ async def handle_call_answered(event: TelnyxCallEvent, db: Session):
             if state_data.get("type") == "click_to_dial":
                 destination = state_data.get("destination")
                 contact_name = state_data.get("contact_name", "Contact")
+                caller_id = state_data.get("caller_id")
                 if destination and call_control_id:
+                    if not caller_id:
+                        caller_id = os.environ.get("TELNYX_FROM_NUMBER", "+18438838956")
                     logger.info(
-                        "Click-to-dial answered — transferring to %s (%s)",
-                        destination, contact_name,
+                        "Click-to-dial answered — transferring to %s (%s) from %s",
+                        destination, contact_name, caller_id,
                     )
                     from telephony.provider import _get_telnyx_client
                     client = _get_telnyx_client()
                     if client:
-                        telnyx_number = os.environ.get("TELNYX_FROM_NUMBER", "+18438838956")
                         client.calls.actions.transfer(
                             call_control_id,
                             to=destination,
-                            from_=telnyx_number,
+                            from_=caller_id,
                             timeout_secs=30,
                         )
                         logger.info("Click-to-dial transfer initiated to %s", destination)
