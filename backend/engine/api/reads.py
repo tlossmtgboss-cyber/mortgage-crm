@@ -412,11 +412,10 @@ async def get_stats(
 async def debug_call_lookup(
     lead_id: Optional[int] = Query(None),
     phone: Optional[str] = Query(None),
-    current_user=Depends(get_current_user),
+    org_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Temporary diagnostic: check what call data exists for a lead/phone."""
-    org_id = getattr(current_user, "organization_id", None)
+    """Temporary diagnostic (no auth) — remove after debugging."""
     result: dict = {"org_id": org_id, "lead_id": lead_id, "phone_param": phone}
     try:
         from database.models.dialer import CallLog
