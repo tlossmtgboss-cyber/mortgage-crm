@@ -121,8 +121,13 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   React.useEffect(() => {
     if (application && !sections.personal) {
-      setActiveStep(application.current_step);
-      loadSection(application.current_step);
+      // Guard against a stale current_step that's no longer in the flow
+      // (e.g. the removed documents_upload step on in-flight applications).
+      const resumeStep = SECTION_ORDER.includes(application.current_step)
+        ? application.current_step
+        : 'personal';
+      setActiveStep(resumeStep);
+      loadSection(resumeStep);
       loadSection('intake' as SectionKey).then(sec => {
         if (sec?.data && sec.data.is_veteran != null && sec.data.loan_purpose != null) {
           setIntakeData(sec.data as unknown as IntakeData);

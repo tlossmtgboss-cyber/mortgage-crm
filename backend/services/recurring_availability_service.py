@@ -539,6 +539,7 @@ class RecurringAvailabilityService:
         buffer_after: int = 0,
         max_per_day: Optional[int] = None,
         timezone_str: Optional[str] = None,
+        fallback_to_default: bool = False,
     ) -> List[dict]:
         """
         Compute actual available time slots by merging:
@@ -563,6 +564,11 @@ class RecurringAvailabilityService:
             timezone_str: IANA timezone for the user (e.g. "America/Chicago").
                 Falls back to the recurring availability row's timezone,
                 then DEFAULT_TIMEZONE.
+            fallback_to_default: When True, any weekday (Mon-Fri) that has no
+                configured availability falls back to a default 9:00-17:00
+                block so borrower-facing calendars never dead-end. Existing
+                appointments are still subtracted. Off by default — only the
+                POS borrower calendar opts in.
 
         Returns:
             List of available slot dicts: [{"date": "2026-03-15", "start": "09:00", "end": "09:30"}, ...]
@@ -584,6 +590,12 @@ class RecurringAvailabilityService:
         while current_date <= end_date:
             # Get effective schedule for this date (recurring + exceptions)
             day_schedule = self.get_effective_schedule(user_id, org_id, current_date)
+
+            # Borrower-facing fallback: if an LO has no availability configured
+            # for a weekday, offer default business hours so the calendar is
+            # never empty. Existing appointments are still subtracted below.
+            if not day_schedule and fallback_to_default and current_date.weekday() < 5:
+                day_schedule = [{"start": "09:00", "end": "17:00"}]
 
             # Get appointments for this date
             day_appointments = [

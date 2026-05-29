@@ -214,6 +214,9 @@ class SchedulerBridge:
             end_date=end_date.date() if hasattr(end_date, "date") else end_date,
             duration_minutes=duration_minutes,
             timezone_str=timezone_str,
+            # Borrowers must always be able to book — fall back to default
+            # business hours when the LO hasn't configured availability.
+            fallback_to_default=True,
         )
 
         out: list[BridgeSlot] = []

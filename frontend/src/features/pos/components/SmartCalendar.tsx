@@ -111,6 +111,17 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     [timesForSelectedDate, selectedSlotStart],
   );
 
+  // Dates that have at least one available slot. Declared before any early
+  // return so hook order stays stable across renders (Rules of Hooks).
+  const datesWithSlots = useMemo(() => {
+    if (!slots?.slots_by_date) return new Set<string>();
+    const result = new Set<string>();
+    for (const [dateKey, dateSlots] of Object.entries(slots.slots_by_date)) {
+      if (dateSlots.some(s => s.is_available)) result.add(dateKey);
+    }
+    return result;
+  }, [slots]);
+
   const handleDateSelect = useCallback((date: Date) => {
     const key = date.toISOString().slice(0, 10);
     setSelectedDate(key);
@@ -175,16 +186,6 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
   }
 
   const loName = lo?.name ?? 'your loan officer';
-
-  // Dates that have at least one available slot.
-  const datesWithSlots = useMemo(() => {
-    if (!slots?.slots_by_date) return new Set<string>();
-    const result = new Set<string>();
-    for (const [dateKey, dateSlots] of Object.entries(slots.slots_by_date)) {
-      if (dateSlots.some(s => s.is_available)) result.add(dateKey);
-    }
-    return result;
-  }, [slots]);
 
   // ---------- main view ----------
 
