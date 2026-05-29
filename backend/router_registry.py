@@ -1636,12 +1636,22 @@ def _register_new_routes(app, get_db, get_current_user, get_current_user_flexibl
     # Call Intelligence Engine (CIE)
     try:
         from engine.api import router as cie_router
-        from engine.models import CIECallRecord, CIEIntelligenceReport
-        from database import engine as _db_engine
-        CIECallRecord.__table__.create(_db_engine, checkfirst=True)
-        CIEIntelligenceReport.__table__.create(_db_engine, checkfirst=True)
         app.include_router(cie_router, tags=["Call Intelligence Engine"])
         logger.info("CIE routes loaded (webhooks + reports)")
+
+        # Ensure missing columns exist (models added columns after table creation)
+        from database import engine as _db_engine
+        from sqlalchemy import text as _text
+        with _db_engine.connect() as _conn:
+            for _stmt in [
+                "ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS canonical_call_id UUID",
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_call_logs_canonical ON call_logs(canonical_call_id)",
+            ]:
+                try:
+                    _conn.execute(_text(_stmt))
+                    _conn.commit()
+                except Exception:
+                    _conn.rollback()
     except Exception as e:
         logger.warning(f"CIE routes skipped: {e}")
 

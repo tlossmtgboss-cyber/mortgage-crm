@@ -523,8 +523,12 @@ async def debug_call_lookup(
             result["total_call_logs_in_org"] = _count_call_logs(
                 "organization_id = :oid", {"oid": org_id})
         result["total_call_logs_all"] = _count_call_logs("1=1", {})
-        cie_count = db.query(CIECallRecord).filter(CIECallRecord.organization_id == org_id).count()
-        result["total_cie_records"] = cie_count
+        if org_id:
+            cie_sql = text("SELECT count(*) FROM cie_call_records WHERE organization_id = :oid")
+            result["total_cie_records"] = db.execute(cie_sql, {"oid": org_id}).scalar() or 0
+        else:
+            cie_sql = text("SELECT count(*) FROM cie_call_records")
+            result["total_cie_records"] = db.execute(cie_sql).scalar() or 0
     except Exception as e:
         result["error"] = str(e)
     return result
