@@ -163,6 +163,21 @@ export const POSContainer: React.FC<POSContainerProps> = ({
     [sections, loadSection],
   );
 
+  // Derive session-error state from the error string. Must be computed before
+  // any early return so the useEffect below always runs (Rules of Hooks).
+  const isSessionError = !!(error && (
+    error.includes('401') || error.includes('403') || error.includes('400') ||
+    error.includes('404') || error.includes('Not Found') || error.includes('Unauthorized')
+  ));
+
+  // Bounce back to the auth gate when the PURL token is rejected.
+  // This hook MUST live before conditional returns to satisfy Rules of Hooks.
+  useEffect(() => {
+    if (isSessionError && onAuthError) {
+      onAuthError();
+    }
+  }, [isSessionError, onAuthError]);
+
   if (loading) {
     return (
       <div className="pos-page">
@@ -173,17 +188,6 @@ export const POSContainer: React.FC<POSContainerProps> = ({
       </div>
     );
   }
-
-  const isSessionError = !!(error && (
-    error.includes('401') || error.includes('403') || error.includes('400') ||
-    error.includes('404') || error.includes('Not Found') || error.includes('Unauthorized')
-  ));
-
-  useEffect(() => {
-    if (isSessionError && onAuthError) {
-      onAuthError();
-    }
-  }, [isSessionError, onAuthError]);
 
   if (isSessionError && onAuthError) return null;
 
