@@ -47,72 +47,14 @@ function GuidelineAdmin() {
     setIsUploading(true);
     setUploadProgress(0);
     try {
-      // Step 1: Request presigned upload URL
-      let presignedRes;
-      try {
-        presignedRes = await guidelinesAPI.getUploadUrl({
-          name: uploadName,
-          guideline_type: uploadType,
-          loan_program: uploadProgram,
-          filename: uploadFile.name,
-          content_type: uploadFile.type || 'application/pdf',
-          file_size: uploadFile.size,
-        });
-      } catch (urlErr) {
-        // Fallback to direct upload if S3 not configured (501)
-        if (urlErr.response?.status === 501) {
-          const formData = new FormData();
-          formData.append('file', uploadFile);
-          formData.append('name', uploadName);
-          formData.append('guideline_type', uploadType);
-          formData.append('loan_program', uploadProgram);
-          await guidelinesAPI.upload(formData);
-          toast.success('Guideline uploaded — processing will begin shortly');
-          setUploadName('');
-          setUploadFile(null);
-          fetchGuidelines();
-          fetchStats();
-          return;
-        }
-        throw urlErr;
-      }
-
-      const { presigned_url, presigned_fields, guideline_id, storage_key } = presignedRes.data;
-
-      // Step 2: Upload file directly to S3 via presigned POST
-      toast.info('Uploading to storage...');
-      const s3Form = new FormData();
-      // Presigned fields must come before the file
-      Object.entries(presigned_fields).forEach(([key, value]) => {
-        s3Form.append(key, value);
-      });
-      // File MUST be the last field for S3 presigned POST
-      s3Form.append('file', uploadFile);
-
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', presigned_url);
-        // Do NOT set Authorization header — S3 presigned POST uses its own auth
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            setUploadProgress(Math.round((e.loaded / e.total) * 100));
-          }
-        });
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`S3 upload failed with status ${xhr.status}`));
-          }
-        });
-        xhr.addEventListener('error', () => reject(new Error('S3 upload network error')));
-        xhr.addEventListener('abort', () => reject(new Error('S3 upload aborted')));
-        xhr.send(s3Form);
-      });
-
-      // Step 3: Confirm upload to trigger processing
-      toast.info('Processing guideline...');
-      await guidelinesAPI.confirmUpload({ guideline_id, storage_key });
+      // Direct upload through the API (with 5-min timeout)
+      toast.info('Uploading guideline...');
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('name', uploadName);
+      formData.append('guideline_type', uploadType);
+      formData.append('loan_program', uploadProgram);
+      await guidelinesAPI.upload(formData);
 
       toast.success('Guideline uploaded — processing will begin shortly');
       setUploadName('');
