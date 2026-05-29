@@ -720,6 +720,26 @@ async def aria_last_request():
     return _last_aria_diag or {"status": "no requests captured yet"}
 
 
+@router.post("/fix-smart-docs-schema")
+async def fix_smart_docs_schema(db: Session = Depends(get_db_dep)):
+    """One-time migration: add missing columns to smart_document_requests."""
+    from sqlalchemy import text
+    results = []
+    migrations = [
+        ("organization_id", "ALTER TABLE smart_document_requests ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)"),
+        ("request_metadata", "ALTER TABLE smart_document_requests ADD COLUMN IF NOT EXISTS request_metadata JSONB"),
+    ]
+    for col_name, sql in migrations:
+        try:
+            db.execute(text(sql))
+            db.commit()
+            results.append(f"{col_name}: added")
+        except Exception as e:
+            db.rollback()
+            results.append(f"{col_name}: {e}")
+    return {"results": results}
+
+
 @router.get("/smart-docs-diag")
 async def smart_docs_diag(request: Request, db: Session = Depends(get_db_dep)):
     """Temp diagnostic for smart docs 500 errors."""
