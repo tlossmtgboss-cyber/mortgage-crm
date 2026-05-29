@@ -738,7 +738,7 @@ function SmartDocsClientDetail() {
         </button>
         <div className="client-info-header">
           <h1>{client?.name || 'Client'}</h1>
-          {client?.email && <span className="client-email">{client.email}</span>}
+          {client?.email && !client.email.startsWith('gAAAA') && <span className="client-email">{client.email}</span>}
         </div>
         <div className="header-actions">
           <button
