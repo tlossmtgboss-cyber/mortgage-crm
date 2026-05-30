@@ -993,48 +993,132 @@ def get_partner_portal_data(
 # BORROWER PORTAL ENDPOINTS
 # =============================================================================
 
+def _assert_loan_belongs_to_purl_context(
+    db: Session,
+    purl_context: PURLAuthContext,
+    crm_loan_id: int,
+) -> None:
+    """Tenant-isolation guard for borrower (PURL-token) loan reads.
+
+    The borrower dashboard endpoints accept a CRM loan id in the path and
+    resolve it through ``PortalLifecycleService.get_portal_loan`` /
+    ``PortalHomeValueService`` — neither of which scopes by tenant, and the
+    underlying ``portal_loans`` table has NO organization_id/workspace_id
+    column. Without this guard a valid PURL token could pass an arbitrary
+    integer and read (or, via get_portal_loan's lazy create, write) another
+    org's PortalLoan: a classic IDOR / cross-tenant read.
+
+    This binds the client-supplied CRM loan id to the authenticated token's
+    workspace BEFORE any PortalLoan / home-value lookup runs. The CRM loan id
+    must correspond to a PURLLoan row (purl_loans is org/workspace scoped) that
+    is owned by exactly this token's organization AND workspace. On mismatch we
+    raise 404 (not 403) so the endpoint does not confirm the existence of loan
+    ids in other tenants — and we log the probe at WARNING for monitoring.
+    """
+    from models.purl import PURLLoan
+
+    owned = (
+        db.query(PURLLoan.id)
+        .filter(
+            PURLLoan.main_loan_id == crm_loan_id,
+            PURLLoan.organization_id == purl_context.organization_id,
+            PURLLoan.workspace_id == purl_context.workspace_id,
+        )
+        .first()
+    )
+
+    if owned is None:
+        logger.warning(
+            "PURL cross-tenant probe blocked: token_id=%s org=%s workspace=%s "
+            "attempted crm_loan_id=%s not owned by workspace",
+            purl_context.token_id,
+            purl_context.organization_id,
+            purl_context.workspace_id,
+            crm_loan_id,
+        )
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+
 @router.get("/borrower/{loan_id}/dashboard")
 def get_borrower_dashboard(
-    loan_id: int = Path(..., description="Loan ID"),
+    loan_id: int = Path(..., description="CRM loan id (PURLLoan.main_loan_id)"),
     db: Session = Depends(get_db),
     purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Get comprehensive borrower dashboard data. Requires PURL token auth."""
+    """Get comprehensive borrower dashboard data. Requires PURL token auth.
+
+    ``loan_id`` is the CRM loan id (PURLLoan.main_loan_id), validated against
+    the token's workspace before any PortalLoan lookup.
+    """
+    # Tenant guard FIRST — never trust a client-supplied loan id.
+    _assert_loan_belongs_to_purl_context(db, purl_context, loan_id)
+
     lifecycle_service = PortalLifecycleService(db)
     milestone_service = PortalMilestoneService(db)
     close_service = PortalCloseOnTimeService(db)
     document_service = PortalDocumentService(db)
+    home_value_service = PortalHomeValueService(db)
 
-    portal_loan = lifecycle_service.get_portal_loan(loan_id)
+    # Resolve by crm_deal_id ONLY (never PortalLoan.id, never lazy-create) — the
+    # guard already proved a PURLLoan with main_loan_id==loan_id is owned by this
+    # workspace. portal_loans / risks / home-value / milestones are all keyed by
+    # PortalLoan.id, so every downstream lookup must use portal_loan.id, NOT the
+    # CRM loan_id, or it queries the wrong id-space (empty data + IDOR surface).
+    portal_loan = lifecycle_service.get_portal_loan_by_crm_deal_id(loan_id)
 
-    if not portal_loan.portal_enabled:
+    if portal_loan is None:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # `portal_enabled` is not guaranteed to be a mapped column on every
+    # deployment of PortalLoan; fall back to is_active (the signal used by
+    # PortalLifecycleService.get_portal_status) so this does not 500.
+    if not getattr(portal_loan, "portal_enabled", portal_loan.is_active):
         raise HTTPException(status_code=403, detail="Borrower portal not enabled")
 
+    pid = portal_loan.id
     return {
         "loan_id": loan_id,
-        "lifecycle": lifecycle_service.get_current_stage(loan_id),
-        "milestone_progress": milestone_service.get_milestone_progress(loan_id),
-        "journey_summary": milestone_service.get_journey_summary(loan_id),
-        "countdown": close_service.get_countdown_data(loan_id),
-        "documents": document_service.get_document_summary(loan_id),
+        "lifecycle": lifecycle_service.get_current_stage(pid),
+        "milestone_progress": milestone_service.get_milestone_progress(pid),
+        "journey_summary": milestone_service.get_journey_summary(pid),
+        "countdown": close_service.get_countdown_data(pid),
+        "documents": document_service.get_document_summary(pid),
         "recent_activity": lifecycle_service.get_recent_activity(
-            loan_id, limit=5, borrower_visible_only=True
+            pid, limit=5, borrower_visible_only=True
         ),
-        "risks": lifecycle_service.get_active_risks(loan_id),
+        # Borrower read path: do NOT persist a valuation on every dashboard
+        # open (save_valuation=False) to avoid write amplification / external
+        # valuation spend. Degrades to {"has_baseline": False} when no baseline.
+        "home_value": home_value_service.get_home_value_dashboard(
+            pid, save_valuation=False
+        ),
+        "risks": lifecycle_service.get_active_risks(pid),
     }
 
 
 @router.get("/borrower/{loan_id}/mum-dashboard")
 def get_mum_dashboard(
-    loan_id: int = Path(..., description="Loan ID"),
+    loan_id: int = Path(..., description="CRM loan id (PURLLoan.main_loan_id)"),
     db: Session = Depends(get_db),
     purl_context: PURLAuthContext = Depends(require_purl_token),
 ):
-    """Get MUM (Member Until Maturity) servicing dashboard. Requires PURL token auth."""
+    """Get MUM (Member Until Maturity) servicing dashboard. Requires PURL token auth.
+
+    ``loan_id`` is the CRM loan id (PURLLoan.main_loan_id), validated against
+    the token's workspace before any PortalLoan lookup.
+    """
+    # Tenant guard FIRST — same IDOR surface as the dashboard endpoint.
+    _assert_loan_belongs_to_purl_context(db, purl_context, loan_id)
+
     lifecycle_service = PortalLifecycleService(db)
     home_value_service = PortalHomeValueService(db)
 
-    portal_loan = lifecycle_service.get_portal_loan(loan_id)
+    # crm_deal_id-only resolution (see get_borrower_dashboard) — read-only,
+    # tenant-safe, and all downstream lookups key on portal_loan.id.
+    portal_loan = lifecycle_service.get_portal_loan_by_crm_deal_id(loan_id)
+
+    if portal_loan is None:
+        raise HTTPException(status_code=404, detail="Loan not found")
 
     if portal_loan.lifecycle_stage not in [LifecycleStage.MUM, LifecycleStage.FUNDED]:
         raise HTTPException(
@@ -1042,12 +1126,15 @@ def get_mum_dashboard(
             detail="MUM dashboard only available for funded loans"
         )
 
+    pid = portal_loan.id
     return {
         "loan_id": loan_id,
-        "lifecycle": lifecycle_service.get_current_stage(loan_id),
-        "home_value": home_value_service.get_home_value_dashboard(loan_id),
+        "lifecycle": lifecycle_service.get_current_stage(pid),
+        "home_value": home_value_service.get_home_value_dashboard(
+            pid, save_valuation=False
+        ),
         "recent_activity": lifecycle_service.get_recent_activity(
-            loan_id, limit=10, borrower_visible_only=True
+            pid, limit=10, borrower_visible_only=True
         ),
     }
 

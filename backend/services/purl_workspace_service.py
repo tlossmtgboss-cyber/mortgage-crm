@@ -1041,6 +1041,13 @@ class PURLWorkspaceService:
         """Convert loan to dict."""
         return {
             "id": loan.id,
+            # CRM loan id (= PURLLoan.main_loan_id). This is the id-space the
+            # borrower dashboard endpoints resolve against (PortalLoan.crm_deal_id).
+            # The frontend MUST use this — NOT `id` (PURLLoan.id) — when calling
+            # /api/v1/portal/borrower/{loan_id}/dashboard. Exposed under both keys:
+            # `crm_loan_id` (canonical) and `main_loan_id` (raw column name).
+            "crm_loan_id": loan.main_loan_id,
+            "main_loan_id": loan.main_loan_id,
             "organization_id": loan.organization_id,
             "workspace_id": loan.workspace_id,
             "application_id": loan.application_id,

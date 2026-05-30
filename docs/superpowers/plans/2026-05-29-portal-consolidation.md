@@ -40,31 +40,56 @@ Stale portal links may already sit in borrowers' inboxes. Before deleting any ro
 
 ### Task 2: Harvest valuable features into live stage portals
 
-The dead files contain features the live portals lack. Port each into the correct live stage portal **before** deletion. Source line references are in "Verified Facts." Build a thin shared layer where a feature is needed by more than one stage portal (e.g. the real-time hook) rather than copy-pasting.
+**REVISED after verification (2026-05-29).** The original premise — "the dead files contain working features we just move over" — is **partly false**. The dead files' data layer was wired to a *parallel, legacy* backend (`portal_routes.py` + `PortalLoan`/`portal_loans` + `portal_lifecycle_service`) that is **LO-authenticated and keyed on a different loan-id space** than the live PURL portal stack (`purl_routes.py` + `PURLLoan`/`purl_loans`, slug-keyed, PURL-token auth). There are **three disjoint loan-id spaces** in play: `PURLLoan.id` (what the live portal exposes via `data.loan.id`), CRM `Loan.id` (`PURLLoan.main_loan_id`), and `PortalLoan.id` (legacy, what `/borrower/{loan_id}/dashboard` keys on via `get_portal_loan`). They are linked only by an uncertain CRM-deal-id bridge. This is why the dead portals were abandoned: their data never worked for a real borrower holding a PURL token.
 
-**Features to harvest and their target:**
+**Decision (user, 2026-05-29):** harvest the client-side-feasible features now; defer anything needing new borrower-auth backend endpoints to separate tickets.
 
-| Feature | Source (dead file) | Target (live) |
-|---|---|---|
-| WebSocket real-time + 30s polling fallback + keep-alive | `PerenniaClientPortalUltimate` / `ActiveLoanPortalComplete` | shared hook → `ActiveLoanPortal` (+ `MUMPortal` if useful) |
-| Risk-flag display (severity + mitigation) | both dead files | `ActiveLoanPortal` |
-| Quick-actions bar (Call LO / Message / Upload / Schedule / Refresh) | `ActiveLoanPortalComplete` | `ActiveLoanPortal` |
-| Financial scenarios (refi / cash-out / HELOC / sell) | `PerenniaClientPortalUltimate:870-1084` | `MUMPortal` |
-| Home-value / equity / appreciation tab | `PerenniaClientPortalUltimate:758-864` | `MUMPortal` |
-| Progress circle (% complete) | both dead files | `ActiveLoanPortal` (optional — it already has a 6-step stepper; reconcile, don't duplicate) |
+**Verified feasibility:**
 
-**Files:**
-- Add: `frontend/src/hooks/usePortalRealtime.js` (shared WebSocket+polling hook extracted from dead files)
-- Modify: `frontend/src/pages/portal/ActiveLoanPortal.jsx`
-- Modify: `frontend/src/pages/portal/MUMPortal.jsx`
-- Tests: co-located `__tests__` for the hook and each new section
+| Feature | Verdict | Path | Status |
+|---|---|---|---|
+| Financial scenarios (refi/cash-out/HELOC/sell) | ✅ client-side | Pure math off `data.loan` + MUMPortal's computed `propertyValue`/`currentBalance` — no endpoint | **DONE** |
+| Quick-actions bar | ✅ client-side | UI only; wires to contact data already in `data` | TODO |
+| Close-on-time countdown | ✅ client-side | Compute from `data.loan.target_close_date` (already in PURL payload); `ActiveLoanPortal` already renders `DaysUntilClosing` — verify/extend, don't add an endpoint | TODO (verify existing) |
+| Risk flags | ⛔ deferred | Only source is LO-auth `/loans/{id}/risks` or the fragile legacy `/borrower/{id}/dashboard` bridge — no clean PURL-native source | **Backend ticket** |
+| Home-value / equity tab | ⛔ deferred | All home-value endpoints are LO-auth (`get_current_user_dep`); 401 for borrowers | **Backend ticket** |
+| Real-time WebSocket | ⛔ deferred | `/ws/loan/{id}` requires a **borrower JWT** (`verify_borrower_token`), not the PURL access token the stack holds; keyed on CRM loan id | **Backend ticket** |
 
-- [ ] **Step 1: Extract the real-time hook (test-first)** — write a test for `usePortalRealtime` (connects, falls back to polling on socket failure, sends keep-alive, cleans up on unmount), then extract the logic verbatim from the dead files into the hook.
-- [ ] **Step 2: Verify each harvested feature against a live API endpoint.** The dead files call `homeValueApi.getHomeValueDashboard`, `homeValueApi.generateInsights`, `closeOnTimeApi.getCountdownData`, `documentApi.getLoanDocuments`. Confirm each endpoint exists and returns the expected shape **before** wiring the UI. If an endpoint is itself dead, that feature needs backend work — flag it, do not silently ship a broken tab.
-- [ ] **Step 3: Port one feature at a time** into the target stage portal, each behind its own test, each verified in the running app.
-- [ ] **Step 4: Reconcile duplicates** — `ActiveLoanPortal` already has a stepper; don't bolt a redundant progress circle next to it. Pick one progress representation.
+> The earlier "Add methods to lib/api" decision still holds in principle, but for the *deferred* features it's not enough — they need new PURL-token-authenticated endpoints, not just client methods. The client-side features need no `lib/api` change at all.
 
-**Gate:** feature parity confirmed — the live stage portals now do everything the dead files did that we want to keep. Get explicit sign-off on the parity list before Task 3.
+**Backend tickets to file (deferred features):**
+- PURL-token-authenticated home-value/equity endpoint keyed by workspace/PURLLoan.
+- PURL-token-authenticated risk-flags source for borrowers.
+- PURL-token (or surfaced borrower-JWT) WebSocket path for the PURL portal stack.
+
+**Files (this task):**
+- Add: `frontend/src/pages/portal/scenarioCalcs.js` + `MUMScenarios.jsx` ✅
+- Modify: `frontend/src/pages/portal/MUMPortal.jsx` (Scenarios tab) ✅, `ActiveLoanPortal.jsx` (quick-actions, countdown verify)
+- Tests: co-located `__tests__` per feature
+
+- [x] **Step 1: Financial scenarios → MUMPortal.** Pure calc functions in `scenarioCalcs.js` (6 unit tests vs known values), `MUMScenarios.jsx` component (3 render tests, inline-styled so no dependency on deleted CSS), wired as a new "Scenarios" tab. Build clean. **Live-portal smoke deferred to end-of-phase batch run.**
+- [x] **Step 2: Quick-actions bar → ActiveLoanPortal + MUMPortal.** The dead bar was decorative (no handlers); rebuilt as functional `PortalQuickActions.jsx` — Call/Message are real tel:/mailto: links from LO contact data; Upload→documents tab, Schedule→existing modal. 4 tests. Wired into both portals (MUM omits Upload, post-close). Inline-styled (no deleted-CSS dependency). Build clean.
+- [x] **Step 3: Close-on-time countdown.** `ActiveLoanPortal` already renders `DaysUntilClosing` (line 338) — but it read `closing_date`/`scheduled_closing_date` while the PURL payload provides `target_close_date`, so it showed nothing for PURL workspaces. Fixed with a one-line `target_close_date` fallback (ActiveLoanPortal.jsx:229). No endpoint, no new component.
+- [ ] **Step 4: End-of-phase live smoke** — one Playwright run against a MUM + active workspace fixture covering all harvested features at once. **Pending** (needs workspace fixtures; components are unit + render tested in the meantime).
+
+**Phase 1 client-side harvest COMPLETE** (scenarios, quick-actions, countdown). 16 portal tests green, build clean (14,309 modules). 3 features deferred to backend tickets (above). Remaining before Task 3: Step 4 live smoke + gate sign-off + decision on whether the deferred backend tickets block deletion.
+
+**Gate:** the 3 client-side features in + verified; the 3 deferred features filed as backend tickets (NOT silently dropped). Sign-off on this split before Task 3 deletion.
+
+#### Deferred-feature build via dev-team workflow (2026-05-29)
+
+A 10-agent workflow (design → build → adversarial review) BUILT the deferred backend features instead of just filing tickets:
+- **Backend:** PURL-token borrower dashboard now also returns `home_value`; `_loan_to_dict` surfaces `crm_loan_id`/`main_loan_id`; tenant guard `_assert_loan_belongs_to_purl_context` binds the path loan id to the token's org+workspace.
+- **Frontend:** `lib/api.getBorrowerDashboard`, `usePortalRealtime` (polling Phase-1; WS deferred), `HomeValueTab` (MUM), `RiskFlags` (ActiveLoanPortal overview).
+
+**Review verdict was BLOCK — Security/QA/Architect unanimously caught a CRITICAL cross-tenant IDOR**, now FIXED:
+- Root cause: the 3-id-space trap — the guard validated a CRM loan id, but `get_portal_loan()` matched `PortalLoan.id == loan_id` FIRST (PortalLoan is org-unscoped), so a foreign tenant's `PortalLoan.id` colliding with the borrower's CRM loan id leaked data. The same mismatch also made risks/home-value query the wrong id-space (empty for everyone) and turned a borrower GET into a lazy-create write.
+- Fix: new read-only `get_portal_loan_by_crm_deal_id()` (crm_deal_id ONLY, no id-match, no create); both borrower endpoints resolve through it and pass `portal_loan.id` to every inner service. **Fails safe** (404/empty, never a leak) even if the `crm_deal_id == CRM loan id` assumption is wrong.
+- Regression test `test_borrower_dashboard_resolves_own_loan_not_id_colliding_foreign` seeds the id collision; asserts the borrower reads their OWN loan (mum→400, dashboard→200). **Passes.**
+
+**Verified:** backend isolation suite 10 passed (+ collision test asserts pass; the lone "error" is a pre-existing teardown infra issue hitting the whole suite). Frontend 30 passed, build clean. Local DB execution required standing up Postgres + working around a pre-existing global mapper defect (`user_onboarding.py` private `declarative_base()` orphans `Role`) — flagged for follow-up; CI runs the full suite on clean PG.
+
+**Follow-ups (non-blocking — fix fails safe):** confirm `PortalLoan.crm_deal_id == CRM Loan.id == PURLLoan.main_loan_id`; confirm `main_loan_id` reliably populated; confirm one-loan-per-workspace; consider adding `organization_id` to `portal_loans` for durable RLS; real-time is polling-only (WS PURL-auth deferred).
 
 ---
 

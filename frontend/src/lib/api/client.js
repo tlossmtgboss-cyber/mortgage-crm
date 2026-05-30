@@ -402,6 +402,26 @@ class PerenniaAPI {
   }
 
   /**
+   * Get the borrower-facing loan dashboard aggregator.
+   *
+   * This is PURL-token authed (GET /api/v1/portal/borrower/{crmLoanId}/dashboard,
+   * Depends(require_purl_token)) and returns
+   * { lifecycle, milestone_progress, countdown, documents, recent_activity,
+   *   risks, home_value }. The PURL access token already set via setAuthToken
+   * is attached on the standard Bearer path.
+   *
+   * IMPORTANT: crmLoanId is the CRM Loan.id, surfaced to the frontend as
+   * `data.loan.crm_loan_id` (PURLLoan.main_loan_id). Do NOT pass
+   * `data.loan.id` (PURLLoan.id) — that is a different, disjoint id-space and
+   * will resolve to the wrong loan (or 404).
+   *
+   * @param {number|string} crmLoanId - CRM Loan.id (data.loan.crm_loan_id)
+   */
+  async getBorrowerDashboard(crmLoanId) {
+    return this.get(`/api/v1/portal/borrower/${crmLoanId}/dashboard`);
+  }
+
+  /**
    * Get post-close data for MUM portal
    * @param {string} slug
    */
