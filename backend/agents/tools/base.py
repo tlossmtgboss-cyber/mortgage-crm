@@ -532,6 +532,8 @@ class ToolDefinition:
     agent_roles: List[str]
     risk_level: str = "low"
     requires_confirmation: bool = False
+    side_effect: bool = False
+    surface_constraints: List[str] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
     parameters: Dict[str, Any] = field(default_factory=dict)
 
@@ -662,6 +664,33 @@ class ToolRegistry:
     def __iter__(self):
         """Iterate over tool names."""
         return iter(self._tools)
+
+
+_HIGH_RISK_LEVELS = {"high", "critical"}
+
+
+def requires_confirmation_for(tool_or_name) -> bool:
+    """
+    Default-deny confirmation policy.
+
+    Returns True (confirmation required) when the tool is side-effecting,
+    high/critical risk, explicitly flagged, OR unknown. Read-only, low-risk,
+    known tools return False.
+
+    Accepts a ToolDefinition or a tool name (str). An unrecognised name is
+    treated as requiring confirmation — fail safe.
+    """
+    if isinstance(tool_or_name, str):
+        td = ToolRegistry().get(tool_or_name)
+        if td is None:
+            return True  # unknown -> default-deny
+    else:
+        td = tool_or_name
+    if td.requires_confirmation or td.side_effect:
+        return True
+    if (td.risk_level or "").lower() in _HIGH_RISK_LEVELS:
+        return True
+    return False
 
 
 # =============================================================================
