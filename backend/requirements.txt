@@ -35,7 +35,7 @@ requests>=2.31.0
 # LangGraph & LangChain
 langgraph>=0.2.0
 langchain>=0.2.0
-langchain-anthropic>=0.1.0
+langchain-anthropic==1.0.4  # pin to langchain-core 1.0.x line (1.4.x requires core>=1.4 and would upgrade the whole stack)
 langchain-openai>=0.1.0
 langchain-core>=0.2.0
 
