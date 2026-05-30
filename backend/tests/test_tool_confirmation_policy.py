@@ -31,5 +31,7 @@ def test_readonly_low_risk_does_not_require():
 
 
 def test_unknown_tool_name_defaults_to_require():
-    # default-deny: a name not in the registry is treated as needing confirmation
-    assert requires_confirmation_for("a_tool_that_does_not_exist") is True
+    # default-deny: a name not in the registry is treated as needing confirmation.
+    # Use a collision-proof name so a future registration can't silently turn this
+    # into a test of a registered tool's policy (ToolRegistry is a singleton).
+    assert requires_confirmation_for("__no_such_tool_xyzzy_98f3c1__") is True
