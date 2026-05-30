@@ -378,9 +378,7 @@ const BudgetList = lazyRetry(() => import('../pages/accounting/budgets/BudgetLis
 const BudgetVariance = lazyRetry(() => import('../pages/accounting/budgets/BudgetVariance'));
 
 // Portal Components
-const ActiveLoanPortalComplete = lazyRetry(() => import('../components/Portal/ActiveLoanPortalComplete'));
 const PartnerPortalView = lazyRetry(() => import('../components/Portal/PartnerPortalView'));
-const PerenniaClientPortalUltimate = lazyRetry(() => import('../components/Portal/PerenniaClientPortalUltimate'));
 const TotalCostAnalysis = lazyRetry(() => import('../components/Portal/TotalCostAnalysis'));
 
 // E-Signature Components
