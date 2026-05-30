@@ -20,7 +20,7 @@ vi.mock('../FreshnessIndicator', () => ({
   ),
 }));
 
-import DocumentStatusCard from '../DocumentStatusCard';
+import DocumentStatusCard from '../DocumentStatusCard.jsx';
 
 // ---------------------------------------------------------------------------
 // Helpers
