@@ -240,6 +240,17 @@ def create_workflow_config_models(Base):
         workflow = relationship("WorkflowConfiguration")
         day_config = relationship("WorkflowDayConfig")
         assigned_user = relationship("User", foreign_keys=[assigned_user_id])
+        # Reverse side of WorkflowInstance.task_instances (models/workflow_sla.py),
+        # which declares back_populates="workflow_instance". Without this matching
+        # property the mapper registry fails to initialize once the SLA factory is
+        # invoked ("Mapper[WorkflowTaskInstance] has no property
+        # 'workflow_instance'"), surfacing as a 500 on the first ORM query of an
+        # otherwise-unrelated request. Completing the bidirectional pair fixes it.
+        workflow_instance = relationship(
+            "WorkflowInstance",
+            back_populates="task_instances",
+            foreign_keys=[workflow_instance_id],
+        )
 
 
     class BrokenTaskAlert(Base):
