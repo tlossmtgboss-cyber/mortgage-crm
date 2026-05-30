@@ -52,6 +52,34 @@ Executing Task 1/2 proved the model layer contains **multiple parallel/duplicate
 
 ---
 
+## Task 0b — Duplicate-model reconciliation inventory (COMPLETE, 2026-05-30)
+
+AST scan of `models/`, `database/models/`, and the factory modules (780 mapped classes). **Good news: the duplication is concentrated, not sprawling.** 13 of 14 duplicate tables are the single onboarding cluster.
+
+### Cluster A — Onboarding (13 duplicate tables, ONE decision) → factory canonical
+`models/user_onboarding.py` (direct classes) and `user_onboarding_integration.py` (factory) define the **same 13 `onboarding_*` tables**. Production registers the factory (`inline_legacy_routes.py:1989`). **Action = Task 4:** make `user_onboarding.py` re-export the factory's classes. Resolves all 13 at once. (Decision already taken.)
+
+### Cluster B — Distinct entities sharing a name → rename + back-compat alias (mechanical)
+| Class | Definitions (file → table) | Action |
+|---|---|---|
+| `Role` | user_onboarding `onboarding_roles` / permission `roles` | ✅ DONE (canonical Role on `roles`; rename onboarding→`OnboardingRole` in Task 4) |
+| `Responsibility` | user_onboarding `onboarding_responsibilities` / permission `responsibilities` | rename onboarding → `OnboardingResponsibility` (+alias) [Task 3] |
+| `UserResponsibility` | user_onboarding `onboarding_user_responsibilities` / permission `user_responsibilities` | rename onboarding → `OnboardingUserResponsibility` (+alias) [Task 3] |
+| `Appointment` | recruit_portal_models `None` / scheduler `scheduler_appointments` | recruit one has no table (likely abstract/unused) — verify; rename or drop |
+| `DocumentRequest` | smart_docs_models `smart_document_requests` / perennia_docs `perennia_document_requests` | distinct — rename perennia's → `PerenniaDocumentRequest` (+alias) |
+| `NotificationPreference` | doc_notification `smart_docs_notification_preferences` / notification_preference `notification_preferences` | distinct — rename doc one → `SmartDocsNotificationPreference` (+alias) |
+
+### Cluster C — TRUE duplicates (same table, 2 classes) → pick canonical, redirect the other ⚠ NEEDS DECISION
+| Table | Competing classes | Decision needed |
+|---|---|---|
+| `income_sources` | income_models.py:`IncomeSource` vs income_calculation.py:`IncomeSource` | Which module is canonical? (check which routes import which) |
+| `refi_opportunities` | rate_watch.py:`RefiOpportunityEvent` vs refinance_intelligence.py:`RefiOpportunity` | Same table, two classes — which is canonical? |
+
+### Revised scope assessment
+Not a multi-week sprawl. The work is: **1 cluster collapse (onboarding, Task 4)** + **~5 mechanical renames (Cluster B)** + **2 true-dup canonical decisions (Cluster C)** + the factory Base-binding (Tasks 1–2) + harness (Task 6). With Cluster C decided, the whole refactor is a tractable, finite checklist. The esign factory's runtime collision (Scope Finding #2) is expected to clear once the registration is idempotent and the duplicate `database/models/esignature.py` vs `models/esign_models.py` distinction is confirmed (different tables `esignature_*` vs `esign_*` → likely distinct; verify during Task 2).
+
+---
+
 ## Ground Truth (verified during investigation — read before starting)
 
 **Canonical Base:** `backend/db.py:74` — `class Base(DeclarativeBase)`. Importable as `from db import Base` or `from database import Base`.
