@@ -10,6 +10,26 @@
 
 ---
 
+## ⚠ EXECUTION BLOCKER — decision required before Task 1 (found 2026-05-30 during execution)
+
+Executing Task 1 surfaced a **pre-existing mis-wired relationship** that Base unification cannot resolve mechanically:
+
+- `LeadWorkflowRoleAssignment` (`models/workflow_sla.py:318`) declares `role_id = ForeignKey("roles.id")` **and** `role = relationship("Role")`.
+- The **only** `class Role` in application code is `models/user_onboarding.py:34`, mapped to table **`onboarding_roles`** — NOT `roles`.
+- There is **no ORM model mapped to table `roles`** anywhere in app code (only a test fixture defines it).
+
+So the FK target table (`roles`) and the relationship target's table (`onboarding_roles`) disagree, and the relationship cannot resolve cleanly regardless of Base unification. This is why `configure_mappers()` warns in prod and fails in tests.
+
+**Decision required (product/architecture):**
+1. What is the canonical `Role`? The RBAC/team role (Loan Officer, Processor — table `roles`) or the onboarding role (`onboarding_roles`)?
+2. Should `LeadWorkflowRoleAssignment.role` point at the RBAC role (then a `Role` ORM model on table `roles` must be created/identified) or the onboarding role (then change the FK to `onboarding_roles.id`)?
+
+Until this is decided, **Task 0's expected-table assumption (`Role → onboarding_roles`) is wrong** and Task 1 cannot make `configure_mappers()` green. Resolve this first, then update Task 0's parametrize table and proceed.
+
+**Status:** Tasks completed before this blocker — Task 0 (red gate committed `d26576038`), plan committed. Task 1 paused pending the decision above.
+
+---
+
 ## Ground Truth (verified during investigation — read before starting)
 
 **Canonical Base:** `backend/db.py:74` — `class Base(DeclarativeBase)`. Importable as `from db import Base` or `from database import Base`.
