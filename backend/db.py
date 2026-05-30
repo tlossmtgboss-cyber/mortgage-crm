@@ -98,23 +98,39 @@ elif USE_PGBOUNCER:
         }
     )
 else:
-    # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has ~20 max connections. With numReplicas=1 in railway.toml,
-    # pool_size=15 + max_overflow=10 = 25 connections per process.
-    # This supports ~50 concurrent webhook requests (Aria voice calls each
-    # need a DB session). During rolling deploys (2 containers briefly) this
-    # could exceed Railway's limit, but the old pool of 5 caused immediate
-    # pool exhaustion under any realistic voice load. The startup cleanup
-    # (cleanup_idle_connections) terminates stale connections from the
-    # previous container, keeping total connections within the ~20 limit
-    # under steady-state single-replica operation.
+    # Direct PostgreSQL connection with SQLAlchemy pooling.
+    #
+    # CONNECTION BUDGET (root-cause fix 2026-05-30): Postgres max_connections=100
+    # is SHARED across EVERY service in this project — the web app PLUS the
+    # team_chat_bot and voice_agent worker services (start.py ALLOWED_WORKERS),
+    # each of which imports this module and opens its own pool. A uniform
+    # 25-conn pool meant 3 services = 75 steady, and rolling deploys (old+new
+    # container overlap) blew past 100 -> "FATAL: sorry, too many clients".
+    #
+    # Fix: size the pool by ROLE. Worker processes (WORKER_MODE set) do light,
+    # bursty DB access and get a small pool; the web app keeps the larger pool
+    # it needs for concurrent voice/webhook sessions. Both overridable via
+    # DB_POOL_SIZE / DB_MAX_OVERFLOW for tuning without a code change. Every
+    # connection is tagged with application_name so usage is attributable in
+    # pg_stat_activity (previously all blank, making this impossible to debug).
     # pool_recycle=1800 recycles connections every 30 min to avoid stale TCP.
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=15, max_overflow=10, max=25)")
+    _worker_mode = os.environ.get("WORKER_MODE", "").strip()
+    if _worker_mode:
+        _default_pool, _default_overflow = 2, 3        # workers: 5 connections max
+    else:
+        _default_pool, _default_overflow = 15, 10      # web app: 25 max (unchanged)
+    _pool_size = int(os.environ.get("DB_POOL_SIZE", _default_pool))
+    _max_overflow = int(os.environ.get("DB_MAX_OVERFLOW", _default_overflow))
+    _app_name = os.environ.get("DB_APP_NAME", f"perennia-{_worker_mode or 'web'}")
+    logger.info(
+        "Using direct PostgreSQL pooling (role=%s, pool_size=%d, max_overflow=%d, max=%d, app_name=%s)",
+        _worker_mode or "web", _pool_size, _max_overflow, _pool_size + _max_overflow, _app_name,
+    )
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,
-        pool_size=15,
-        max_overflow=10,
+        pool_size=_pool_size,
+        max_overflow=_max_overflow,
         pool_recycle=1800,            # Recycle connections every 30min to prevent stale TCP
         pool_timeout=10,              # Wait max 10s for a connection
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
@@ -122,6 +138,7 @@ else:
         echo=False,                   # Set True for SQL debugging
         connect_args={
             "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
+            "application_name": _app_name,  # attributable connections in pg_stat_activity
             "sslmode": os.environ.get("DB_SSLMODE", "require"),
             "connect_timeout": "5",   # 5s TCP connect timeout
             "keepalives": 1,          # Enable TCP keepalives
