@@ -186,3 +186,16 @@ These were confirmed by reading the code on 2026-05-29. A fresh agent's instinct
 5. **API clients:** `services/api/client.js` (12 imports, axios, CSRF/auth/offline/retry — keep), `utils/api/client.js` (2 imports — migrate), `lib/api/client.js` (0 imports — delete).
 
 6. **Backend tenant isolation is already correct** — POS/portal models all carry indexed `organization_id`, and application access is `contact_id`-scoped with deliberate 404-not-403 (`routes/pos/_helpers.py:67-90`). This plan does **not** touch backend isolation; do not "fix" it.
+
+
+---
+
+## Completion Status (2026-05-30)
+
+- **Task 1 / Phase 0 (redirect safety net):** DONE, committed (3fd2f437a).
+- **Task 2 / Phase 1 (harvest + deferred build):** DONE, committed (4a4d10b6d). 3 client-side features (scenarios, quick-actions, countdown) + 2 deferred features built via the dev-team workflow (home-value, risk-flags through the PURL borrower dashboard) + a CRITICAL cross-tenant IDOR caught by the review panel and fixed (crm_deal_id-only read resolver; fails safe). Backend isolation suite 10 passed; frontend 30 passed.
+- **Task 3 (delete dead code):** DONE, committed (099dc9a37). Removed PerenniaClientPortalUltimate.jsx/.css and ActiveLoanPortalComplete.jsx/.css and their 2 lazyRetry imports (PartnerPortalView preserved). Build 14,308 modules; redirect tests 3/3.
+- **Task 4 (fold BorrowerPortal):** BLOCKED — not safely doable as a frontend redirect. The legacy /borrower-portal/{token} access token has no PURL workspace slug mapping (/portal/access/{token} returns no slug/workspace; no PURL token->slug resolver exists), and the backend STILL emits /borrower-portal/{token} links (portal_routes.py:1961,1997). Redirecting would break live borrower access. Requires backend work to bridge the legacy access-token system to PURL workspaces. Left /borrower-portal/:token -> BorrowerPortal as the working legacy path.
+- **Task 5 (consolidate API clients):** PREMISE INVALIDATED — the plan assumed lib/api/client.js was 0-imports/deletable. It is NOT: the live portal stack imports it and Phase 1 added getBorrowerDashboard to it. No dead client remains; merging the 3 actively-used clients is a large risky refactor outside scope. Defer to a dedicated plan.
+
+**Net:** 3 of 5 phases complete and committed. Tasks 4 and 5 are blocked by the parallel legacy/PURL backend architecture and need dedicated backend work — they cannot be completed as a safe frontend-only change.
