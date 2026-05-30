@@ -66,42 +66,44 @@ class PipelineTools:
         self, loan_id: int, user_id: str,
         note: str, note_type: str = "manual",
     ) -> Dict:
-        """Add a note to a loan file."""
+        """Add a note to a loan file.
+
+        Writes to the `activities` table (type='Note'), deriving organization_id
+        from the loan so the activity is correctly tenant-scoped. The previous
+        implementation targeted a nonexistent `loan_notes` table and fell back to
+        a `loans.lead_id` subquery (loans has no lead_id) — both threw, and it
+        still returned {"id": 0} as if it had succeeded. Now it returns an honest
+        error when nothing was persisted.
+        """
         def _query():
             db = SessionLocal()
             try:
-                # Try the notes table if it exists, otherwise update lead notes
+                # int() coercion: user_id arrives as a string from the WS layer.
+                try:
+                    uid = int(user_id)
+                except (TypeError, ValueError):
+                    uid = None
                 result = db.execute(text(
-                    "INSERT INTO loan_notes (loan_id, user_id, content, note_type, created_at) "
-                    "VALUES (:loan_id, :user_id, :content, :note_type, NOW()) "
+                    "INSERT INTO activities (type, content, loan_id, organization_id, user_id, created_at) "
+                    "SELECT 'Note', :content, l.id, l.organization_id, :user_id, NOW() "
+                    "FROM loans l WHERE l.id = :loan_id "
                     "RETURNING id, created_at"
-                ), {
-                    "loan_id": loan_id, "user_id": user_id,
-                    "content": note, "note_type": note_type,
-                })
+                ), {"content": note, "loan_id": loan_id, "user_id": uid})
                 db.commit()
                 row = result.fetchone()
                 if row:
-                    return {"id": row[0], "created_at": row[1].isoformat() if row[1] else datetime.now(timezone.utc).isoformat()}
-            except Exception:
+                    return {
+                        "id": row[0],
+                        "created_at": row[1].isoformat() if row[1] else datetime.now(timezone.utc).isoformat(),
+                    }
+                # No row inserted → loan_id didn't match any loan.
+                return {"action": "add_note_failed", "error": "Loan not found — note not saved."}
+            except Exception as e:
                 db.rollback()
-                # Fallback: append to lead.notes text field
-                try:
-                    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-                    db.execute(text(
-                        "UPDATE leads SET notes = COALESCE(notes, '') || :note_line "
-                        "WHERE id = (SELECT lead_id FROM loans WHERE id = :loan_id)"
-                    ), {
-                        "note_line": f"\n[{timestamp}] {note}",
-                        "loan_id": loan_id,
-                    })
-                    db.commit()
-                except Exception as e2:
-                    db.rollback()
-                    logger.warning(f"Note fallback failed: {e2}")
+                logger.error(f"add_note failed: {e}")
+                return {"action": "add_note_failed", "error": "Could not save the note."}
             finally:
                 db.close()
-            return {"id": 0, "created_at": datetime.now(timezone.utc).isoformat()}
         return await _run_sync(_query)
 
     async def create_task(
@@ -144,11 +146,12 @@ class PipelineTools:
         def _query():
             db = SessionLocal()
             try:
+                # tasks has a real loan_id FK; loans has no lead_id, so the old
+                # JOIN on t.lead_id = l.lead_id was invalid. Filter directly.
                 rows = db.execute(text(
                     "SELECT t.id, t.title, t.due_date, t.status "
                     "FROM tasks t "
-                    "JOIN loans l ON t.lead_id = l.lead_id "
-                    "WHERE l.id = :loan_id AND t.status NOT IN ('completed', 'cancelled') "
+                    "WHERE t.loan_id = :loan_id AND t.status NOT IN ('completed', 'cancelled') "
                     "ORDER BY t.due_date ASC"
                 ), {"loan_id": loan_id}).fetchall()
                 return [{"id": r[0], "title": r[1], "due_date": str(r[2]) if r[2] else None,
@@ -234,7 +237,7 @@ class PipelineTools:
 
                 # Funded this month
                 funded = db.execute(text(
-                    "SELECT COUNT(*), COALESCE(SUM(loan_amount), 0) FROM loans "
+                    "SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM loans "
                     "WHERE organization_id = :org AND stage = 'FUNDED' "
                     "AND updated_at >= DATE_TRUNC('month', NOW())"
                 ), {"org": org_id}).fetchone()

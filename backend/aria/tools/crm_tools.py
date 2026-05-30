@@ -75,23 +75,32 @@ class CRMTools:
             try:
                 if org_id:
                     db.execute(text("SET LOCAL app.current_tenant = :tid"), {"tid": str(org_id)})
+                # NOTE: `loans` has no lead_id FK — the link to a lead is the
+                # shared `loan_number`. Columns are `amount` (not loan_amount)
+                # and `loan_officer_id` (not owner_id). Verified against prod schema.
                 row = db.execute(text(
-                    "SELECT l.id, l.loan_number, l.loan_amount, l.loan_type, "
+                    "SELECT l.id, l.loan_number, l.amount, l.loan_type, "
                     "l.stage, l.rate, l.property_address, l.purchase_price, "
-                    "l.updated_at, l.owner_id "
+                    "l.updated_at, l.loan_officer_id "
                     "FROM loans l "
-                    "WHERE l.lead_id = :lead_id AND l.organization_id = :org "
+                    "JOIN leads ld ON ld.loan_number = l.loan_number "
+                    "AND ld.organization_id = l.organization_id "
+                    "WHERE ld.id = :lead_id AND l.organization_id = :org "
+                    "AND l.loan_number IS NOT NULL AND l.loan_number <> '' "
                     "AND l.stage NOT IN ('FUNDED','CANCELLED','DENIED','DEAD','WITHDRAWN') "
                     "ORDER BY l.updated_at DESC LIMIT 1"
                 ), {"lead_id": borrower_id, "org": org_id}).fetchone()
                 if not row:
-                    # Fallback: any loan for this lead
+                    # Fallback: any loan for this lead (linked via loan_number)
                     row = db.execute(text(
-                        "SELECT l.id, l.loan_number, l.loan_amount, l.loan_type, "
+                        "SELECT l.id, l.loan_number, l.amount, l.loan_type, "
                         "l.stage, l.rate, l.property_address, l.purchase_price, "
-                        "l.updated_at, l.owner_id "
+                        "l.updated_at, l.loan_officer_id "
                         "FROM loans l "
-                        "WHERE l.lead_id = :lead_id AND l.organization_id = :org "
+                        "JOIN leads ld ON ld.loan_number = l.loan_number "
+                        "AND ld.organization_id = l.organization_id "
+                        "WHERE ld.id = :lead_id AND l.organization_id = :org "
+                        "AND l.loan_number IS NOT NULL AND l.loan_number <> '' "
                         "ORDER BY l.updated_at DESC LIMIT 1"
                     ), {"lead_id": borrower_id, "org": org_id}).fetchone()
                 if row:

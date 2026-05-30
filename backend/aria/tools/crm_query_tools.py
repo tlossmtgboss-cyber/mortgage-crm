@@ -188,10 +188,10 @@ def search_loans(org_id: str, **params) -> list[dict]:
         conditions.append("UPPER(l.stage) = UPPER(:stage)")
         bind["stage"] = params["stage"]
     if params.get("min_amount"):
-        conditions.append("l.loan_amount >= :min_amount")
+        conditions.append("l.amount >= :min_amount")
         bind["min_amount"] = params["min_amount"]
     if params.get("max_amount"):
-        conditions.append("l.loan_amount <= :max_amount")
+        conditions.append("l.amount <= :max_amount")
         bind["max_amount"] = params["max_amount"]
     if params.get("min_rate"):
         conditions.append("l.rate >= :min_rate")
@@ -211,7 +211,7 @@ def search_loans(org_id: str, **params) -> list[dict]:
     limit = min(int(params.get("limit", 20)), 50)
     where = " AND ".join(conditions)
     return _query(
-        f"SELECT l.id, l.loan_number, l.borrower_name, l.loan_amount, "
+        f"SELECT l.id, l.loan_number, l.borrower_name, l.amount AS loan_amount, "
         f"l.rate, l.stage, l.loan_type, l.property_address, l.closing_date, "
         f"l.updated_at "
         f"FROM loans l WHERE {where} "
@@ -251,7 +251,7 @@ def search_leads(org_id: str, **params) -> list[dict]:
 def get_pipeline_summary(org_id: str, **params) -> list[dict]:
     return _query(
         "SELECT stage, COUNT(*) as count, "
-        "COALESCE(SUM(loan_amount), 0) as total_volume "
+        "COALESCE(SUM(amount), 0) as total_volume "
         "FROM loans WHERE organization_id = :org_id "
         "AND stage NOT IN ('FUNDED','CANCELLED','DENIED','DEAD','WITHDRAWN') "
         "GROUP BY stage ORDER BY count DESC",
@@ -280,8 +280,8 @@ def get_production_stats(org_id: str, **params) -> dict:
         end = today
     row = _single(
         "SELECT COUNT(*) as closed_count, "
-        "COALESCE(SUM(loan_amount), 0) as total_volume, "
-        "COALESCE(AVG(loan_amount), 0) as avg_loan_size "
+        "COALESCE(SUM(amount), 0) as total_volume, "
+        "COALESCE(AVG(amount), 0) as avg_loan_size "
         "FROM loans WHERE organization_id = :org_id "
         "AND UPPER(stage) = 'FUNDED' "
         "AND updated_at >= :start AND updated_at <= :end",
@@ -305,7 +305,7 @@ def get_rate_analysis(org_id: str, **params) -> list[dict]:
         bind["max_rate"] = params["max_rate"]
     where = " AND ".join(conditions)
     return _query(
-        f"SELECT id, borrower_name, loan_amount, rate, stage, loan_type "
+        f"SELECT id, borrower_name, amount AS loan_amount, rate, stage, loan_type "
         f"FROM loans WHERE {where} ORDER BY rate DESC LIMIT 25",
         bind,
     )
@@ -324,7 +324,7 @@ def get_commission_data(org_id: str, **params) -> dict:
         start = today.replace(day=1)
     row = _single(
         "SELECT COUNT(*) as deal_count, "
-        "COALESCE(SUM(loan_amount), 0) as total_volume "
+        "COALESCE(SUM(amount), 0) as total_volume "
         "FROM loans WHERE organization_id = :org_id "
         "AND UPPER(stage) = 'FUNDED' AND updated_at >= :start",
         {"org_id": org_id, "start": start.isoformat()},
@@ -350,14 +350,14 @@ def get_loan_details(org_id: str, **params) -> dict | None:
     if params.get("loan_id"):
         return _single(
             "SELECT l.*, ld.name as lead_name, ld.email as lead_email, ld.phone as lead_phone "
-            "FROM loans l LEFT JOIN leads ld ON l.lead_id = ld.id "
+            "FROM loans l LEFT JOIN leads ld ON ld.loan_number = l.loan_number AND ld.organization_id = l.organization_id "
             "WHERE l.id = :loan_id AND l.organization_id = :org_id",
             {"loan_id": params["loan_id"], "org_id": org_id},
         )
     if params.get("borrower_name"):
         return _single(
             "SELECT l.*, ld.name as lead_name, ld.email as lead_email, ld.phone as lead_phone "
-            "FROM loans l LEFT JOIN leads ld ON l.lead_id = ld.id "
+            "FROM loans l LEFT JOIN leads ld ON ld.loan_number = l.loan_number AND ld.organization_id = l.organization_id "
             "WHERE l.organization_id = :org_id "
             "AND LOWER(l.borrower_name) LIKE :name "
             "ORDER BY l.updated_at DESC LIMIT 1",

@@ -533,6 +533,8 @@ class TaskExecutor:
         loan     = await self.crm.get_active_loan(borrower["id"], org_id)
 
         note = await self.pipe.add_note(loan["id"], user_id, slots["note_text"], "manual")
+        if isinstance(note, dict) and note.get("error"):
+            return note  # propagate failure instead of faking note_added
 
         return {"action": "note_added", "borrower_name": borrower["full_name"],
                 "note_id": note["id"], "added_at": note["created_at"]}
@@ -558,6 +560,8 @@ class TaskExecutor:
             doc_list=slots["doc_list"], due_date=slots.get("due_date"),
             note=slots.get("note"), requested_by=user_id,
         )
+        if isinstance(result, dict) and result.get("error"):
+            return {"action": "document_request_failed", "error": result["error"]}
 
         return {"action": "document_request_sent", "borrower_name": borrower["full_name"],
                 "portal_link": result["portal_link"], "docs_requested": slots["doc_list"]}
