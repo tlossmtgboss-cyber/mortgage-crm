@@ -1,5 +1,4 @@
 import time
-import pytest
 from agents.orchestration.llm_circuit_breaker import LLMCircuitBreaker, CircuitState
 
 
