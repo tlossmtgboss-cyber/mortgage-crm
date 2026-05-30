@@ -8,22 +8,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Mock the api module (streamMessage imports it for baseURL)
+// Mock the api module (streamMessage imports it for baseURL + token refresh)
 // ---------------------------------------------------------------------------
 
 vi.mock('../services/api', () => ({
   default: {
     defaults: { baseURL: 'http://test-api.local' },
   },
+  attemptTokenRefresh: vi.fn().mockResolvedValue(false),
 }));
 
 // ---------------------------------------------------------------------------
-// Mock the storage utility (dynamically imported inside streamMessage)
+// Mock the in-memory token store (streamMessage reads the token synchronously
+// via getToken() to build the SSE fetch Authorization header)
 // ---------------------------------------------------------------------------
 
-vi.mock('../utils/storage', () => ({
-  getItem: vi.fn().mockResolvedValue('test-jwt-token'),
-  STORAGE_KEYS: { AUTH_TOKEN: 'auth_token' },
+vi.mock('../utils/tokenStore', () => ({
+  getToken: vi.fn().mockReturnValue('test-jwt-token'),
+  setToken: vi.fn(),
+  clearToken: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -451,9 +454,9 @@ describe('streamMessage', () => {
     });
 
     it('omits Authorization header when no token is available', async () => {
-      // Re-mock storage to return null
-      const storage = await import('../utils/storage');
-      storage.getItem.mockResolvedValueOnce(null);
+      // Re-mock the token store to return null
+      const tokenStore = await import('../utils/tokenStore');
+      tokenStore.getToken.mockReturnValueOnce(null);
 
       global.fetch = vi.fn().mockResolvedValue(
         makeFetchResponse([])

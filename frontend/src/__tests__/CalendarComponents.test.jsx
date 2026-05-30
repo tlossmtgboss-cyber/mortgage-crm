@@ -6,7 +6,16 @@
  *   - calendarUtils (pure functions)
  */
 import React from 'react';
+import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+// The calendar components transitively pull in the app's services barrel, which
+// references certificatePinning.js -> dynamic import of the native-only Capacitor
+// plugin "@capgo/capacitor-ssl-pinning". That package is not installed for web/test
+// builds, so Vitest's import-analysis fails to resolve it and the suite collects
+// 0 tests. Mock it as a virtual module (same pattern as api.test.js) so the
+// specifier resolves and certificatePinning falls back to its web no-op path.
+vi.mock('@capgo/capacitor-ssl-pinning', () => ({ SSLPinning: null }), { virtual: true });
 
 // ---------------------------------------------------------------------------
 // calendarUtils (pure function tests -- no mocking needed)
@@ -269,9 +278,15 @@ describe('MiniCalendar', () => {
   });
 
   it('renders day name headers (S, M, T, W, T, F, S)', () => {
-    render(<MiniCalendar {...defaultProps} />);
-    const dayHeaders = screen.getAllByText(/^[SMTWF]$/);
+    const { container } = render(<MiniCalendar {...defaultProps} />);
+    // Query the dedicated day-name header cells directly. A bare /^[SMTWF]$/
+    // text match also catches single-letter content elsewhere in the grid, so
+    // scope to the .day-name class that the component uses for the header row.
+    const dayHeaders = container.querySelectorAll('.day-name');
     expect(dayHeaders.length).toBe(7);
+    expect([...dayHeaders].map((el) => el.textContent)).toEqual([
+      'S', 'M', 'T', 'W', 'T', 'F', 'S',
+    ]);
   });
 
   it('renders 31 day cells for March', () => {
@@ -288,7 +303,9 @@ describe('MiniCalendar', () => {
 
   it('calls onDateClick when Enter is pressed on a day', () => {
     render(<MiniCalendar {...defaultProps} />);
-    const day15 = screen.getByText('15').closest('[role="button"]');
+    // Day cells are role="gridcell" (not "button"); the keydown handler
+    // lives on the .calendar-day element.
+    const day15 = screen.getByText('15').closest('.calendar-day');
     fireEvent.keyDown(day15, { key: 'Enter' });
     expect(defaultProps.onDateClick).toHaveBeenCalledTimes(1);
   });
@@ -328,7 +345,8 @@ describe('MiniCalendar', () => {
 
   it('day cells have accessible aria-labels', () => {
     render(<MiniCalendar {...defaultProps} />);
-    const day1 = screen.getByLabelText(/Select March 1, 2026/i);
+    // Day cells expose a full weekday/date aria-label, e.g. "Sunday, March 1, 2026".
+    const day1 = screen.getByLabelText(/Sunday, March 1, 2026/i);
     expect(day1).toBeInTheDocument();
   });
 

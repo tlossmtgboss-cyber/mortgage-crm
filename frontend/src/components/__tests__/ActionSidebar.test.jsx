@@ -55,17 +55,24 @@ vi.mock('../../utils/taskEvents', () => ({
 }));
 
 // Mock API modules
+// NOTE: ActionSidebar loads workflow tasks via the default axios-style `api`
+// instance (`api.get('/api/v1/workflow-config/all-workflow-tasks')`), not via
+// global.fetch. The mock must therefore provide a default export with a `get`
+// method, plus the named exports the component imports (leadsAPI included).
+const mockApiGet = vi.fn();
 const mockCommandCenterAPI = { getAll: vi.fn() };
 const mockTasksAPI = { getUnified: vi.fn(), update: vi.fn() };
-const mockReconciliationAPI = {};
+const mockLeadsAPI = { update: vi.fn() };
 
 vi.mock('../../services/api', () => ({
+  default: { get: (...args) => mockApiGet(...args) },
   commandCenterAPI: { getAll: (...args) => mockCommandCenterAPI.getAll(...args) },
   tasksAPI: {
     getUnified: (...args) => mockTasksAPI.getUnified(...args),
     update: (...args) => mockTasksAPI.update(...args),
   },
   reconciliationAPI: {},
+  leadsAPI: { update: (...args) => mockLeadsAPI.update(...args) },
 }));
 
 // Mock global fetch for workflow tasks endpoint
@@ -98,6 +105,7 @@ function resolveEmptyAPIs() {
     ok: true,
     json: () => Promise.resolve({ tasks: [] }),
   });
+  mockApiGet.mockResolvedValue({ data: { tasks: [] } });
   mockCommandCenterAPI.getAll.mockResolvedValue({
     emails: [],
     calls: [],
@@ -119,6 +127,7 @@ function resolveWithTasks(workflowTasks = [], commandCenterData = {}) {
     ok: true,
     json: () => Promise.resolve({ tasks: workflowTasks }),
   });
+  mockApiGet.mockResolvedValue({ data: { tasks: workflowTasks } });
   mockCommandCenterAPI.getAll.mockResolvedValue({
     emails: [],
     calls: [],
@@ -284,7 +293,10 @@ describe('ActionSidebar', () => {
           due_date: '2026-03-20',
           description: 'Call to discuss application',
           workflow_name: 'New Lead',
-          communication_methods: ['phone', 'email'],
+          // Tasks tab shows non-phone tasks only (phone tasks route to the
+          // Calls tab via the component's nonPhoneTasks filter), so this task
+          // must not include 'phone' in its communication methods.
+          communication_methods: ['email'],
           days_until_due: 2,
         },
       ]);

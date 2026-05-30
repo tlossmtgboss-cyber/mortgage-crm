@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -14,14 +14,16 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-// Mock services/api
+// The component talks to the backend through the axios instance that is the
+// DEFAULT export of services/api (api.get(...)), not via global fetch.
+// Mock both the default export (with a get spy) and the named API_BASE_URL.
+const mockApiGet = vi.fn();
 vi.mock('../../services/api', () => ({
+  default: {
+    get: (...args) => mockApiGet(...args),
+  },
   API_BASE_URL: 'http://localhost:8000',
 }));
-
-// Mock global fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
 
 // localStorage mock
 Object.defineProperty(window, 'localStorage', {
@@ -38,32 +40,33 @@ import TaskWorkflowManager from '../TaskWorkflowManager';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function mockFetchResponse(body, status = 200) {
-  return Promise.resolve({
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(body),
+function setupDefaultApiMock() {
+  mockApiGet.mockImplementation((url) => {
+    if (url.includes('/workflow-stages') && !url.includes('/team-members')) {
+      // Returning no `stages` makes the component keep its default stages.
+      return Promise.resolve({ data: { stages: null } });
+    }
+    if (url.includes('/team-members')) {
+      return Promise.resolve({ data: { team_members: [] } });
+    }
+    if (url.includes('/users')) {
+      return Promise.resolve({
+        data: {
+          users: [
+            { id: 'user-1', name: 'Alice Manager', email: 'alice@test.com' },
+            { id: 'user-2', name: 'Bob Processor', email: 'bob@test.com' },
+          ],
+        },
+      });
+    }
+    return Promise.resolve({ data: {} });
   });
 }
 
-function setupDefaultFetchMock() {
-  mockFetch.mockImplementation((url) => {
-    if (url.includes('/workflow-stages') && !url.includes('/team-members')) {
-      return mockFetchResponse({ stages: null }); // use default stages
-    }
-    if (url.includes('/team-members')) {
-      return mockFetchResponse({ team_members: [] });
-    }
-    if (url.includes('/users')) {
-      return mockFetchResponse({
-        users: [
-          { id: 'user-1', name: 'Alice Manager', email: 'alice@test.com' },
-          { id: 'user-2', name: 'Bob Processor', email: 'bob@test.com' },
-        ],
-      });
-    }
-    return mockFetchResponse({});
-  });
+// The stage name (e.g. "Lead") appears both as a stage-card heading and in the
+// Client Lifecycle Flow section, so scope queries to the stage-cards grid.
+function getStagesGrid() {
+  return document.querySelector('.workflow-stages-grid');
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +76,7 @@ function setupDefaultFetchMock() {
 describe('TaskWorkflowManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setupDefaultFetchMock();
+    setupDefaultApiMock();
   });
 
   // -- 1. Renders the workflow manager header --
@@ -92,9 +95,10 @@ describe('TaskWorkflowManager', () => {
       render(<TaskWorkflowManager />);
     });
 
-    expect(screen.getByText('Lead')).toBeInTheDocument();
-    expect(screen.getByText('Active Loan')).toBeInTheDocument();
-    expect(screen.getByText('Portfolio')).toBeInTheDocument();
+    const grid = within(getStagesGrid());
+    expect(grid.getByText('Lead')).toBeInTheDocument();
+    expect(grid.getByText('Active Loan')).toBeInTheDocument();
+    expect(grid.getByText('Portfolio')).toBeInTheDocument();
   });
 
   // -- 3. Shows task counts in each stage card --
@@ -103,11 +107,11 @@ describe('TaskWorkflowManager', () => {
       render(<TaskWorkflowManager />);
     });
 
-    // Lead has 8 tasks, Active Loan has 10, Portfolio has 8
-    expect(screen.getByText('8 tasks')).toBeInTheDocument();
-    expect(screen.getByText('10 tasks')).toBeInTheDocument();
-    // There should be two elements showing "8 tasks" (Lead and Portfolio)
-    const eightTaskElements = screen.getAllByText('8 tasks');
+    const grid = within(getStagesGrid());
+    // Lead has 8 tasks, Active Loan has 10, Portfolio has 8 — scoped to cards
+    expect(grid.getByText('10 tasks')).toBeInTheDocument();
+    // Two cards (Lead and Portfolio) show "8 tasks"
+    const eightTaskElements = grid.getAllByText('8 tasks');
     expect(eightTaskElements.length).toBe(2);
   });
 
@@ -122,8 +126,9 @@ describe('TaskWorkflowManager', () => {
     expect(screen.getByText('Send Introduction Email')).toBeInTheDocument();
     expect(screen.getByText('Schedule Discovery Call')).toBeInTheDocument();
 
-    // Should show "+5 more tasks" for Lead (8 total - 3 shown)
-    expect(screen.getByText('+5 more tasks')).toBeInTheDocument();
+    // Both Lead and Portfolio have 8 tasks, so each shows "+5 more tasks".
+    const fiveMore = screen.getAllByText('+5 more tasks');
+    expect(fiveMore.length).toBe(2);
   });
 
   // -- 5. Stage card navigates to workflow detail --
@@ -132,8 +137,9 @@ describe('TaskWorkflowManager', () => {
       render(<TaskWorkflowManager />);
     });
 
-    // Click on the Lead stage header
-    const leadHeader = screen.getByText('Lead').closest('.stage-header');
+    // Click on the Lead stage header (scoped to the stage cards grid)
+    const grid = within(getStagesGrid());
+    const leadHeader = grid.getByText('Lead').closest('.stage-header');
     fireEvent.click(leadHeader);
 
     expect(mockNavigate).toHaveBeenCalledWith('/workflow/lead');
@@ -158,16 +164,17 @@ describe('TaskWorkflowManager', () => {
       render(<TaskWorkflowManager />);
     });
 
+    const stats = within(document.querySelector('.workflow-stats'));
     // Total Tasks = 8 + 10 + 8 = 26
-    expect(screen.getByText('26')).toBeInTheDocument();
-    expect(screen.getByText('Total Tasks')).toBeInTheDocument();
+    expect(stats.getByText('26')).toBeInTheDocument();
+    expect(stats.getByText('Total Tasks')).toBeInTheDocument();
 
     // 3 workflow stages
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('Workflow Stages')).toBeInTheDocument();
+    expect(stats.getByText('3')).toBeInTheDocument();
+    expect(stats.getByText('Workflow Stages')).toBeInTheDocument();
 
-    // Automated Tasks - count tasks where auto_trigger !== 'manual'
-    expect(screen.getByText('Automated Tasks')).toBeInTheDocument();
+    // Automated Tasks stat is rendered
+    expect(stats.getByText('Automated Tasks')).toBeInTheDocument();
   });
 
   // -- 8. Loads workflow stages from API --
@@ -176,13 +183,8 @@ describe('TaskWorkflowManager', () => {
       render(<TaskWorkflowManager />);
     });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/workflow-stages'),
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'Authorization': 'Bearer test-token',
-        }),
-      })
+    expect(mockApiGet).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/workflow-stages')
     );
   });
 
@@ -192,24 +194,24 @@ describe('TaskWorkflowManager', () => {
       render(<TaskWorkflowManager />);
     });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/users'),
-      expect.any(Object)
+    expect(mockApiGet).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/users')
     );
   });
 
   // -- 10. Handles API failure gracefully --
   it('renders with default stages when API fails', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'));
+    mockApiGet.mockRejectedValue(new Error('Network error'));
 
     await act(async () => {
       render(<TaskWorkflowManager />);
     });
 
     // Should still render with default hardcoded stages
-    expect(screen.getByText('Lead')).toBeInTheDocument();
-    expect(screen.getByText('Active Loan')).toBeInTheDocument();
-    expect(screen.getByText('Portfolio')).toBeInTheDocument();
+    const grid = within(getStagesGrid());
+    expect(grid.getByText('Lead')).toBeInTheDocument();
+    expect(grid.getByText('Active Loan')).toBeInTheDocument();
+    expect(grid.getByText('Portfolio')).toBeInTheDocument();
   });
 
   // -- 11. Stage descriptions are displayed --

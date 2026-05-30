@@ -99,10 +99,10 @@ describe('AppSidebar', () => {
       expect(screen.getByText('Aria')).toBeInTheDocument();
     });
 
-    it('logo links to root (dashboard)', () => {
+    it('logo links to the Aria experience', () => {
       renderWithProviders(<AppSidebar />);
       const logoLink = screen.getByText('Aria').closest('a');
-      expect(logoLink).toHaveAttribute('href', '/');
+      expect(logoLink).toHaveAttribute('href', '/aria-mobile');
     });
   });
 

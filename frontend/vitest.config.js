@@ -38,6 +38,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Native-only Capacitor plugin — not installed for web/test builds.
+      // vite.config.js aliases this to the web stub for production builds;
+      // mirror it here so Vitest's import-analysis can resolve the dynamic
+      // import in certificatePinning.js instead of failing to collect tests.
+      '@capgo/capacitor-ssl-pinning': path.resolve(__dirname, './src/stubs/capacitor-ssl-pinning.js'),
     },
   },
   // Handle JSX in .js files (CRA compatibility)
