@@ -1,8 +1,9 @@
 /**
  * API Client Tests
  *
- * Tests for the axios-based API client (src/services/api.js) and the
- * fetch-based APIClient class (src/utils/api/client.js).
+ * Tests for the axios-based API client request-building logic (CSRF /
+ * Authorization / 401 handling / base URL). Uses a self-contained
+ * TestableAPIClient that mirrors the canonical client's behavior.
  *
  * Covers:
  *  - CSRF token inclusion for state-changing methods

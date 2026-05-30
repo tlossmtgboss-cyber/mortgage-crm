@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { api } from '../utils/api/client';
+import { apiRequest } from '../services/api/client';
 import './CreateTaskModal.css';
 import { toast } from '../utils/toast';
 
@@ -35,7 +35,7 @@ function CreateTaskModal({ isOpen, onClose, lead, onTaskCreated }) {
         taskData.due_date = new Date(dueDate).toISOString();
       }
 
-      const data = await api.post('/api/v1/tasks', taskData);
+      const data = await apiRequest('/api/v1/tasks', { method: 'POST', data: taskData });
 
       // Reset form
       setTitle('');
