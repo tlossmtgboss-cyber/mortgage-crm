@@ -10,23 +10,23 @@
 
 ---
 
-## ⚠ EXECUTION BLOCKER — decision required before Task 1 (found 2026-05-30 during execution)
+## ✅ RESOLVED BLOCKER — canonical Role decided (2026-05-30)
 
-Executing Task 1 surfaced a **pre-existing mis-wired relationship** that Base unification cannot resolve mechanically:
+Executing Task 1 surfaced a pre-existing mis-wired relationship: `LeadWorkflowRoleAssignment` (`models/workflow_sla.py:318`) has `role_id = ForeignKey("roles.id")` + `role = relationship("Role")`, but the only `class Role` maps to `onboarding_roles`, and **no ORM model maps to `roles`**.
 
-- `LeadWorkflowRoleAssignment` (`models/workflow_sla.py:318`) declares `role_id = ForeignKey("roles.id")` **and** `role = relationship("Role")`.
-- The **only** `class Role` in application code is `models/user_onboarding.py:34`, mapped to table **`onboarding_roles`** — NOT `roles`.
-- There is **no ORM model mapped to table `roles`** anywhere in app code (only a test fixture defines it).
+**DECISION (product owner): the workflow role is the RBAC/team role (table `roles`).**
 
-So the FK target table (`roles`) and the relationship target's table (`onboarding_roles`) disagree, and the relationship cannot resolve cleanly regardless of Base unification. This is why `configure_mappers()` warns in prod and fails in tests.
+Verified against production: table `roles` exists with 19 rows. Schema:
+`id int PK, name varchar NOT NULL, code varchar, description text, is_active bool, created_at timestamptz, updated_at timestamptz, abbreviation varchar`.
 
-**Decision required (product/architecture):**
-1. What is the canonical `Role`? The RBAC/team role (Loan Officer, Processor — table `roles`) or the onboarding role (`onboarding_roles`)?
-2. Should `LeadWorkflowRoleAssignment.role` point at the RBAC role (then a `Role` ORM model on table `roles` must be created/identified) or the onboarding role (then change the FK to `onboarding_roles.id`)?
+**Resolution (do this as Task 1a, before the rest of Task 1):**
+1. **Create a canonical `Role` model on table `roles`** in `backend/database/models/permission.py` (alongside the RBAC `Responsibility`/`UserResponsibility`), matching the prod schema above, on the canonical `db.Base`. Re-export it via `database/models/__init__.py` if that's the established pattern. This is the `Role` that `relationship("Role")` resolves to.
+2. **Rename `models/user_onboarding.py`'s `class Role` → `class OnboardingRole`** (table stays `onboarding_roles`) and add alias `Role = OnboardingRole` for back-compat. Update its internal relationship string refs (`"Role"` → `"OnboardingRole"` in user_onboarding only). NOTE: the `user_onboarding_integration.py` factory **already** names this class `OnboardingRole` — so after Task 4 (collapse to factory), this rename aligns the two.
+3. **Update Task 0's parametrize row** to `("Role", "roles")` (was incorrectly `onboarding_roles`).
 
-Until this is decided, **Task 0's expected-table assumption (`Role → onboarding_roles`) is wrong** and Task 1 cannot make `configure_mappers()` green. Resolve this first, then update Task 0's parametrize table and proceed.
+After 1–3, `LeadWorkflowRoleAssignment.role` / FK `roles.id` / `relationship("Role")` all agree on the RBAC `roles` table.
 
-**Status:** Tasks completed before this blocker — Task 0 (red gate committed `d26576038`), plan committed. Task 1 paused pending the decision above.
+**Status:** Task 0 red gate committed (`d26576038`); plan committed; blocker recorded + resolved. Resume at Task 1a.
 
 ---
 
