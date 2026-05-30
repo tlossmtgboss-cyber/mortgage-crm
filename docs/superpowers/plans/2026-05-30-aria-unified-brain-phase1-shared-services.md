@@ -25,6 +25,26 @@
 
 ---
 
+## Pre-flight (before Task 1)
+
+Run once, before any task, to establish the baseline the whole phase is judged against (DevOps + Performance asks from review).
+
+- [ ] **P1: Confirm the venv path resolves from `backend/`**
+
+Run: `cd backend && ../.venv/bin/python --version`
+Expected: prints a Python 3.11.x version. If it errors, find the correct interpreter (`which python3` inside the project venv) and substitute it in every `../.venv/bin/python` command below.
+
+- [ ] **P2: Full-suite baseline (not the filtered subsets)**
+
+Run: `cd backend && ../.venv/bin/python -m pytest tests/ -q 2>&1 | tail -20`
+Record the pass/fail/error counts. This is the baseline; Phase 1 must not introduce new failures vs. this run. (Filtered `-k` runs inside tasks are fast gates; this full run is the real regression check.)
+
+- [ ] **P3: Capture a pre-change latency/cost sample (Performance)**
+
+On staging (or a dev shell with Anthropic creds), send ~10 representative chat turns through the existing `conversation_engine` and record total tokens + wall-clock per turn for the NLU/slot/confirmation path. Save the numbers in the PR description. After Task 5, re-sample the same turns to confirm the projected ~5× cost / ~2× latency improvement on those nodes (and to catch quality-driven retries). If a live sample isn't feasible, at minimum confirm `model_tier` is logged by `ModelRouter` so the comparison can be done from logs post-deploy.
+
+---
+
 ## Task 1: Shared `LLMCircuitBreaker` (extraction)
 
 Extract the canonical breaker (currently duplicated in `agents/orchestrator.py` as `CircuitBreaker` and in `aria/core/conversation_engine.py` as `_AriaCircuitBreaker`) into one module. Behavior is identical to the existing `agents/orchestrator.py` version.
@@ -462,8 +482,14 @@ Expected: prints a positive integer (existing tool count), no exceptions
 
 ```bash
 git add backend/agents/tools/base.py backend/tests/test_tool_confirmation_policy.py
-git commit -m "feat(aria): default-deny confirmation policy + side_effect/surface_constraints"
+git commit -m "feat(aria): define default-deny confirmation policy (not yet enforced)
+
+Adds requires_confirmation_for() + side_effect/surface_constraints. This is
+the policy definition only; the confirm gate that consumes it lands in Phase 2.
+No change to confirmation behavior ships in Phase 1."
 ```
+
+> **Security note (review):** this task defines the policy but **nothing calls `requires_confirmation_for()` yet** — the confirm gate is Phase 2. Phase 1 ships zero change to confirmation behavior. Do not describe it as "hardened confirmations."
 
 ---
 
@@ -577,8 +603,11 @@ git commit -m "perf(aria): tier chat classification nodes to Haiku; shared circu
 
 - [ ] `ModelRouter`, `LLMCircuitBreaker` exist with passing unit tests.
 - [ ] `agents/orchestrator.py` and `aria/core/conversation_engine.py` both import the shared breaker; no duplicate breaker classes remain.
-- [ ] `ToolDefinition` has `side_effect` + `surface_constraints`; `requires_confirmation_for()` is default-deny with passing tests.
+- [ ] `ToolDefinition` has `side_effect` + `surface_constraints`; `requires_confirmation_for()` is default-deny with passing tests. **(Policy defined, not yet enforced — Phase 2 wires the gate.)**
 - [ ] Chat NLU/slot/confirmation nodes run on Haiku; chitchat/response stays Sonnet; graph compiles; existing Aria tests green.
+- [ ] **Full-suite re-run after Task 5** (`cd backend && ../.venv/bin/python -m pytest tests/ -q`) shows no new failures vs. the Pre-flight P2 baseline.
+- [ ] **NLU-on-Haiku correctness smoke (QA):** at least one integration-level check that a representative user message still resolves to the correct intent on Haiku (live LLM; staging or manual is acceptable). Wiring tests prove the model id; this proves the cheaper model still understands the user.
+- [ ] **Before/after numbers captured (Performance):** the P3 sample re-run, with token-cost and latency deltas recorded in the PR description (or the log-based comparison if a live sample wasn't feasible).
 - [ ] All five commits landed on the branch.
 
 ## Out of scope (later phases, own plans)
