@@ -18,6 +18,7 @@ Performance:
 - v2 (pattern match): 10ms pattern, 5-7s LLM fallback
 - v3 (intent router): 1-5ms pattern, 500-1000ms Haiku fallback, scoped tools
 """
+from __future__ import annotations
 
 import json
 import logging

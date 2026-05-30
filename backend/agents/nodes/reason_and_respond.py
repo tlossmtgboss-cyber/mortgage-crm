@@ -7,6 +7,7 @@ reducing response time by ~5-7 seconds (eliminating one full LLM round-trip).
 Replaces the sequential: reason.py -> respond.py
 With a single: reason_and_respond.py
 """
+from __future__ import annotations
 
 import json
 import logging
