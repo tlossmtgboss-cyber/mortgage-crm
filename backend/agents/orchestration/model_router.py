@@ -37,6 +37,8 @@ class ModelRouter:
         raise ValueError(f"Unknown model tier: {tier!r} (expected 'haiku' or 'sonnet')")
 
     def get(self, tier: str) -> ChatAnthropic:
+        # No lock needed: a double-init on a concurrent race is harmless — the
+        # ChatAnthropic is a pure config object and both racers build it identically.
         if tier not in self._cache:
             model_id = self._model_id(tier)
             self._cache[tier] = ChatAnthropic(
@@ -48,7 +50,8 @@ class ModelRouter:
         return self._cache[tier]
 
 
-# Module-level shared router (mirrors the circuit-breaker singleton pattern).
+# Module-level shared router — instantiated once; get() is idempotent per tier
+# after the first call. Callers use get_model_router() to share the cache.
 _router = ModelRouter()
 
 
