@@ -30,6 +30,28 @@ After 1–3, `LeadWorkflowRoleAssignment.role` / FK `roles.id` / `relationship("
 
 ---
 
+## ⚠ SCOPE FINDING #2 — pervasive duplicate model definitions (2026-05-30, with evidence)
+
+Executing Task 1/2 proved the model layer contains **multiple parallel/duplicate definitions of the same domain models**, historically isolated by separate `Base`es. Unifying onto one Base surfaces each pair as a registry collision. Confirmed examples:
+
+- **E-sign ×2:** `models/esign_models.py` (factory, tables `esign_*`) **and** `database/models/esignature.py` (direct, tables `esignature_*`). Evidence: registering the esign factory then importing `database.models.esignature` (pulled in by `perennia_docs`'s import chain) collapses the `EsignAuditEvent` registry entry to `None` (name collision), which is what breaks `configure_mappers()` after factory #6 in `register_all_models`.
+- **Onboarding ×2:** `models/user_onboarding.py` (direct) **and** `user_onboarding_integration.py` (factory) — same `onboarding_*` tables. (Task 4 already addresses this one.)
+- **Module-level duplicate class names** (partial scan, excludes factory-internal classes): `Appointment`, `AvailabilitySlot`, plus many enum/Pydantic-name overlaps to triage.
+
+**Implication:** Tasks 1–7 as written are necessary but **not sufficient**. Before the mechanical Base-binding can go green, the duplicate **domain** models must be reconciled — and each pair is a product/architecture decision (which definition is canonical, or are they genuinely distinct and need distinct names?). This is the same shape as the Role decision, repeated per duplicated entity.
+
+**Required new step — Task 0b: Duplicate-model reconciliation inventory.** Before resuming Task 2:
+1. Enumerate every model NAME and TABLE defined in more than one module (include factory-internal classes — grep `^\s*class [A-Z]` across `models/`, `database/models/`, and the `*_models.py` factory files).
+2. For each duplicate, classify: (a) true duplicate of one entity → pick canonical, delete/redirect the other; (b) distinct entities sharing a name → rename one with a back-compat alias (the Role/Responsibility pattern).
+3. Get product sign-off on the (a)-vs-(b) call for each pair (esign, onboarding, Appointment, AvailabilitySlot, …).
+4. THEN the mechanical Base unification (Tasks 1–7) can complete.
+
+**Honest scope:** this is a multi-session reconciliation, not a single mechanical pass. The architectural blocker (Role) is resolved and committed; `register_all_models` + the canonical Role are in place; the remaining gate to green is the duplicate-model reconciliation above.
+
+**Commits so far on `refactor/model-base-unification`:** plan + finding (`315a2f14a`), red gate (`d26576038`), canonical Role (`803108760`), register_all_models (`34f5f38a2`), idempotency guard (`ca8845efc`).
+
+---
+
 ## Ground Truth (verified during investigation — read before starting)
 
 **Canonical Base:** `backend/db.py:74` — `class Base(DeclarativeBase)`. Importable as `from db import Base` or `from database import Base`.
