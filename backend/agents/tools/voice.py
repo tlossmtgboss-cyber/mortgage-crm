@@ -6,6 +6,7 @@ Tools for the Voice OS Agent handling outbound calls, voicemail, and call analyt
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
@@ -147,48 +148,72 @@ def initiate_outbound_call(
 
     if contact_type == "lead":
         contact = execute_single(
-            "SELECT id, first_name, last_name, phone FROM leads WHERE id = :id AND organization_id = :org_id",
+            "SELECT id, first_name, last_name, phone, owner_id FROM leads WHERE id = :id AND organization_id = :org_id",
             {"id": contact_id, "org_id": org_id}
         )
     else:
         contact = execute_single(
-            "SELECT id, borrower_name as name, borrower_phone as phone FROM loans WHERE id = :id AND organization_id = :org_id",
+            "SELECT id, borrower_name as name, borrower_phone as phone, loan_officer_id FROM loans WHERE id = :id AND organization_id = :org_id",
             {"id": contact_id, "org_id": org_id}
         )
 
     if not contact:
         return ToolResult.error("Contact not found in your organization")
 
-    contact_name = contact.get("first_name", contact.get("name", "Unknown")) if contact else "Unknown"
+    if contact_type == "lead":
+        contact_name = f"{contact.get('first_name') or ''} {contact.get('last_name') or ''}".strip() or "Unknown"
+        agent_id = contact.get("owner_id")
+    else:
+        contact_name = contact.get("name") or "Unknown"
+        agent_id = contact.get("loan_officer_id")
+
+    # The loan officer assigned to this contact is the agent we ring and then
+    # bridge to the borrower — the same whisper+bridge flow the click-to-dial
+    # button uses (telephony.dialer_engine.click_to_dial).
+    if not agent_id:
+        return ToolResult.error(
+            f"{contact_name} has no assigned loan officer, so I can't place the call. "
+            "Assign a loan officer to this contact first, then try again."
+        )
+
+    base_url = os.getenv("BASE_URL") or os.getenv("API_BASE_URL") or "https://api.perenniaai.com"
 
     try:
+        from telephony.dialer_engine import click_to_dial
         with db_session() as session:
-            from sqlalchemy import text
-            session.execute(text("""
-                INSERT INTO call_logs (contact_phone, contact_name, lead_id, loan_id, outcome, notes, organization_id, created_at)
-                VALUES (:phone, :name, :lead_id, :loan_id, 'initiating', :notes, :org_id, NOW())
-            """), {
-                "phone": phone_number,
-                "name": contact_name,
-                "lead_id": int(contact_id) if contact_type == "lead" else None,
-                "loan_id": int(contact_id) if contact_type != "lead" else None,
-                "notes": f"Outbound {purpose} call initiated",
-                "org_id": org_id,
-            })
+            result = click_to_dial(
+                db_session=session,
+                agent_id=int(agent_id),
+                phone_number=phone_number,
+                contact_name=contact_name,
+                base_url=base_url,
+                lead_id=int(contact_id) if contact_type == "lead" else None,
+                loan_id=int(contact_id) if contact_type != "lead" else None,
+                organization_id=int(org_id) if org_id else None,
+            )
     except Exception as e:
-        logger.warning(f"Failed to log call in initiate_outbound_call: {e}")
+        logger.error(f"initiate_outbound_call: click_to_dial failed: {e}", exc_info=True)
+        return ToolResult.error("I couldn't place the call due to a system error. Please try again.")
 
-    # HONEST FAILURE: outbound dialing is NOT wired here. This tool previously
-    # returned success and logged an "initiating" call, but no provider was ever
-    # called — the borrower's phone never rang. Reporting success was a trust
-    # hazard (Aria would tell the LO "calling now" for a call that never happens).
-    # Until the real dialer is wired (services/click_to_call_service.py
-    # ClickToCallService → Telnyx calls.create), fail honestly. The
-    # compliance-cleared request is still logged above for audit.
-    return ToolResult.error(
-        "I can't place outbound calls directly yet — use click-to-dial from the "
-        f"contact screen to call {contact_name} at {phone_number}. "
-        "(The request passed compliance checks and was logged.)"
+    if not isinstance(result, dict) or not result.get("success"):
+        detail = result.get("error", "the call could not be placed") if isinstance(result, dict) else "the call could not be placed"
+        issues = result.get("issues") if isinstance(result, dict) else None
+        msg = f"I couldn't place the call: {detail}."
+        if issues:
+            msg += " (" + "; ".join(str(i) for i in issues) + ")"
+        return ToolResult.error(msg)
+
+    return ToolResult.success(
+        data={
+            "call_id": call_id,
+            "phone_number": phone_number,
+            "contact_id": contact_id,
+            "contact_type": contact_type,
+            "contact_name": contact_name,
+            "purpose": purpose,
+            "provider_result": result,
+        },
+        message=f"Calling {contact_name} now — your phone rings first, then connects to {phone_number}.",
     )
 
 
