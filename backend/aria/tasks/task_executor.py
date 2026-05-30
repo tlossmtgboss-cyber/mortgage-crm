@@ -199,7 +199,45 @@ class TaskExecutor:
                 f"Please provide a phone number or check the contact name."
             )
 
-        portal_link = f"https://app.perenniaai.com/portal/documents/{doc_result['document_id']}"
+        # Persist the generated PDF to S3 and mint a short-lived, org-scoped
+        # presigned download link. The previous link pointed at a SPA route
+        # (/portal/documents/{uuid}) that does not exist (404), and the PDF was
+        # never stored anywhere. A 1-hour presigned URL is unguessable and
+        # expiring (acceptable for PII) and resolves for any SMS recipient
+        # (borrower or agent), neither of whom may hold a portal session.
+        import uuid as _uuid
+        pdf_bytes = doc_result.get("pdf_bytes")
+        if not pdf_bytes:
+            return {
+                "action": "pre_approval_letter_failed", "channel": "sms",
+                "borrower_name": borrower["full_name"], "recipient": recipient_name,
+                "error": "The pre-approval PDF wasn't generated, so there's nothing to send.",
+            }
+        try:
+            from services.perennia_s3_service import PerenniaS3Service
+            _s3 = PerenniaS3Service()
+            _last = (borrower.get("last_name") or (borrower.get("full_name") or "Borrower").split()[-1])
+            _key = f"org-{int(org_id)}/preapprovals/{_uuid.uuid4().hex}/PreApproval_{_last}.pdf"
+            _up = _s3.upload_file(
+                storage_key=_key, file_content=pdf_bytes, content_type="application/pdf",
+                metadata={"doc_type": "pre_approval_letter", "loan_id": str(loan.get("id", "")), "org_id": str(org_id)},
+            )
+            if not _up.get("success"):
+                raise RuntimeError(_up.get("error", "S3 upload failed"))
+            _dl = _s3.get_presigned_download_url(
+                storage_key=_key, file_name=f"PreApproval_{_last}.pdf",
+                expires_in=3600, organization_id=int(org_id),
+            )
+            if not _dl.get("success") or not _dl.get("presigned_url"):
+                raise RuntimeError(_dl.get("error", "presigned URL generation failed"))
+            portal_link = _dl["presigned_url"]
+        except Exception as e:
+            logger.error(f"Pre-approval PDF persist/presign failed: {e}", exc_info=True)
+            return {
+                "action": "pre_approval_letter_failed", "channel": "sms",
+                "borrower_name": borrower["full_name"], "recipient": recipient_name,
+                "error": "I couldn't prepare the download link for the letter — try email delivery instead.",
+            }
         amount_fmt = f"${float(slots['approval_amount']):,.0f}"
         expiry_days = int(slots.get("expiry_days", 30))
 
@@ -558,7 +596,7 @@ class TaskExecutor:
         result = await self.pipe.send_document_request(
             loan_id=loan["id"], borrower=borrower,
             doc_list=slots["doc_list"], due_date=slots.get("due_date"),
-            note=slots.get("note"), requested_by=user_id,
+            note=slots.get("note"), requested_by=user_id, org_id=org_id,
         )
         if isinstance(result, dict) and result.get("error"):
             return {"action": "document_request_failed", "error": result["error"]}
@@ -572,7 +610,7 @@ class TaskExecutor:
         borrower = await self.crm.get_borrower(slots["borrower_id"], org_id)
         loan     = await self.crm.get_active_loan(borrower["id"], org_id)
         tasks    = await self.pipe.get_open_tasks(loan["id"])
-        docs     = await self.pipe.get_document_status(loan["id"])
+        docs     = await self.pipe.get_document_status(loan["id"], org_id=org_id)
 
         return {
             "borrower_name": borrower["full_name"],
