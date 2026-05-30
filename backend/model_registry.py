@@ -42,6 +42,10 @@ _registered = False
 def register_all_models(Base=None):
     """Idempotent: import all direct models, then call every factory on Base."""
     global _registered
+    if _registered:
+        # Idempotent: the cacheless factories redefine classes on each call,
+        # which corrupts the registry. Register exactly once per process.
+        return True
     if Base is None:
         from db import Base as _B
         Base = _B
