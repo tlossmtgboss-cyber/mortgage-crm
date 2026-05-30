@@ -39,6 +39,7 @@ from .nodes.respond import format_structured_response
 from .hallucination_verifier import get_hallucination_verifier
 from .orchestration.quality_analyzer import QualityAnalyzer
 from .checkpointer import get_checkpointer
+from agents.orchestration.llm_circuit_breaker import LLMCircuitBreaker, CircuitState
 
 # Enterprise modules: budget, rate limiting, audit, correlation IDs
 from .token_budget import get_token_budget, get_rate_limiter
@@ -51,107 +52,15 @@ logger = logging.getLogger(__name__)
 # CIRCUIT BREAKER
 # =============================================================================
 
-class CircuitState(Enum):
-    CLOSED = "closed"          # Normal operation — requests flow through
-    OPEN = "open"              # Failing — reject requests immediately
-    HALF_OPEN = "half_open"    # Testing recovery — allow one probe request
-
-
-class CircuitBreaker:
-    """
-    Thread-safe circuit breaker for LLM API calls.
-
-    Prevents cascading failures during Anthropic outages by fast-failing
-    requests instead of letting each one timeout individually.
-
-    State transitions:
-        CLOSED  -> OPEN:      after `failure_threshold` consecutive failures
-        OPEN    -> HALF_OPEN: after `cooldown_seconds` elapse
-        HALF_OPEN -> CLOSED:  if the probe request succeeds
-        HALF_OPEN -> OPEN:    if the probe request fails
-    """
-
-    def __init__(
-        self,
-        failure_threshold: int = 5,
-        cooldown_seconds: float = 30.0,
-        name: str = "llm",
-    ):
-        self.failure_threshold = failure_threshold
-        self.cooldown_seconds = cooldown_seconds
-        self.name = name
-
-        self._state = CircuitState.CLOSED
-        self._consecutive_failures = 0
-        self._last_failure_time: float = 0.0
-        self._lock = threading.Lock()
-
-    @property
-    def state(self) -> CircuitState:
-        with self._lock:
-            if self._state == CircuitState.OPEN:
-                # Check if cooldown has elapsed -> transition to HALF_OPEN
-                elapsed = _time_module.monotonic() - self._last_failure_time
-                if elapsed >= self.cooldown_seconds:
-                    self._state = CircuitState.HALF_OPEN
-                    logger.warning(
-                        f"[CIRCUIT-BREAKER:{self.name}] OPEN -> HALF_OPEN "
-                        f"(cooldown {self.cooldown_seconds}s elapsed)"
-                    )
-            return self._state
-
-    def allow_request(self) -> bool:
-        """Return True if the request should be allowed through."""
-        current = self.state  # triggers OPEN->HALF_OPEN check
-        if current == CircuitState.CLOSED:
-            return True
-        if current == CircuitState.HALF_OPEN:
-            # Allow exactly one probe request
-            return True
-        # OPEN — reject
-        return False
-
-    def record_success(self) -> None:
-        """Record a successful call — reset failure count, close circuit."""
-        with self._lock:
-            prev = self._state
-            self._consecutive_failures = 0
-            self._state = CircuitState.CLOSED
-            if prev != CircuitState.CLOSED:
-                logger.warning(
-                    f"[CIRCUIT-BREAKER:{self.name}] {prev.value} -> CLOSED (success)"
-                )
-
-    def record_failure(self) -> None:
-        """Record a failed call — increment counter, potentially open circuit."""
-        with self._lock:
-            self._consecutive_failures += 1
-            self._last_failure_time = _time_module.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                # Probe failed — go back to OPEN
-                self._state = CircuitState.OPEN
-                logger.warning(
-                    f"[CIRCUIT-BREAKER:{self.name}] HALF_OPEN -> OPEN "
-                    f"(probe request failed)"
-                )
-            elif (
-                self._state == CircuitState.CLOSED
-                and self._consecutive_failures >= self.failure_threshold
-            ):
-                self._state = CircuitState.OPEN
-                logger.warning(
-                    f"[CIRCUIT-BREAKER:{self.name}] CLOSED -> OPEN "
-                    f"({self._consecutive_failures} consecutive failures)"
-                )
-
+# Alias so test files importing `CircuitBreaker` from this module keep working.
+CircuitBreaker = LLMCircuitBreaker
 
 # Module-level circuit breaker instance shared across all orchestrator calls.
 # Single instance is fine — the LLM backend is the same for all requests.
-_llm_circuit_breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0)
+_llm_circuit_breaker = LLMCircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, name="orchestrator")
 
 
-def _get_circuit_breaker() -> CircuitBreaker:
+def _get_circuit_breaker() -> LLMCircuitBreaker:
     """Return the module-level circuit breaker (useful for testing)."""
     return _llm_circuit_breaker
 
