@@ -533,6 +533,9 @@ class ToolDefinition:
     risk_level: str = "low"
     requires_confirmation: bool = False
     side_effect: bool = False
+    # surface_constraints: capability gates (e.g. "lo_assistant") consumed by the
+    # confirmation/surface gate in a later phase; defined here with side_effect as
+    # tool-behavior metadata.
     surface_constraints: List[str] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
     parameters: Dict[str, Any] = field(default_factory=dict)
@@ -681,7 +684,7 @@ def requires_confirmation_for(tool_or_name) -> bool:
     treated as requiring confirmation — fail safe.
     """
     if isinstance(tool_or_name, str):
-        td = ToolRegistry().get(tool_or_name)
+        td = ToolRegistry.get(tool_or_name)
         if td is None:
             return True  # unknown -> default-deny
     else:
