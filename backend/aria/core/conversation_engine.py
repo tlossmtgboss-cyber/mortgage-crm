@@ -26,13 +26,14 @@ from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Annotated
 from enum import Enum
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from agents.orchestration.llm_circuit_breaker import LLMCircuitBreaker
+from agents.orchestration.model_router import get_model_router
 from aria.core.intent_registry import IntentRegistry, Intent, SlotSpec
 from aria.core.context_loader import AriaContextLoader
 from aria.core.mode_router import classify_mode, AriaMode
@@ -59,108 +60,26 @@ def _create_tracked_task(coro, label: str = "background"):
 
 
 # ─── Circuit Breaker ────────────────────────────────────────────────────────
-# Modeled after backend/agents/orchestrator.py CircuitBreaker.
+# Uses the shared LLMCircuitBreaker from agents/orchestration/.
 # Prevents cascading failures when Anthropic is down by fast-failing
 # instead of letting every Aria message block until timeout.
 
-class _CircuitState(str, Enum):
-    CLOSED = "closed"          # Normal operation
-    OPEN = "open"              # Failing — reject immediately
-    HALF_OPEN = "half_open"    # Testing recovery — allow one probe
-
-class _AriaCircuitBreaker:
-    """
-    Thread-safe circuit breaker for Aria LLM calls.
-
-    State transitions:
-        CLOSED    -> OPEN:      after failure_threshold consecutive failures
-        OPEN      -> HALF_OPEN: after cooldown_seconds elapse
-        HALF_OPEN -> CLOSED:    if probe request succeeds
-        HALF_OPEN -> OPEN:      if probe request fails
-    """
-
-    def __init__(self, failure_threshold: int = 5, cooldown_seconds: float = 30.0):
-        self.failure_threshold = failure_threshold
-        self.cooldown_seconds = cooldown_seconds
-        self._state = _CircuitState.CLOSED
-        self._consecutive_failures = 0
-        self._last_failure_time: float = 0.0
-        self._lock = threading.Lock()
-
-    @property
-    def state(self) -> _CircuitState:
-        with self._lock:
-            if self._state == _CircuitState.OPEN:
-                elapsed = _time_module.monotonic() - self._last_failure_time
-                if elapsed >= self.cooldown_seconds:
-                    self._state = _CircuitState.HALF_OPEN
-                    logger.warning(
-                        "[ARIA-CIRCUIT-BREAKER] OPEN -> HALF_OPEN "
-                        "(cooldown %.1fs elapsed)", self.cooldown_seconds
-                    )
-            return self._state
-
-    def allow_request(self) -> bool:
-        """Return True if the request should be allowed through."""
-        current = self.state  # triggers OPEN->HALF_OPEN check
-        if current == _CircuitState.CLOSED:
-            return True
-        if current == _CircuitState.HALF_OPEN:
-            return True  # Allow one probe request
-        return False  # OPEN — reject
-
-    def record_success(self) -> None:
-        """Reset failure count and close circuit."""
-        with self._lock:
-            prev = self._state
-            self._consecutive_failures = 0
-            self._state = _CircuitState.CLOSED
-            if prev != _CircuitState.CLOSED:
-                logger.warning(
-                    "[ARIA-CIRCUIT-BREAKER] %s -> CLOSED (success)", prev.value
-                )
-
-    def record_failure(self) -> None:
-        """Increment failure counter, potentially open circuit."""
-        with self._lock:
-            self._consecutive_failures += 1
-            self._last_failure_time = _time_module.monotonic()
-
-            if self._state == _CircuitState.HALF_OPEN:
-                self._state = _CircuitState.OPEN
-                logger.warning(
-                    "[ARIA-CIRCUIT-BREAKER] HALF_OPEN -> OPEN (probe request failed)"
-                )
-            elif (
-                self._state == _CircuitState.CLOSED
-                and self._consecutive_failures >= self.failure_threshold
-            ):
-                self._state = _CircuitState.OPEN
-                logger.warning(
-                    "[ARIA-CIRCUIT-BREAKER] CLOSED -> OPEN "
-                    "(%d consecutive failures)", self._consecutive_failures
-                )
-
-
-_circuit_breaker = _AriaCircuitBreaker(failure_threshold=5, cooldown_seconds=30.0)
+_circuit_breaker = LLMCircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, name="aria-chat")
 
 # Request timeout for individual LLM calls (seconds)
 _LLM_TIMEOUT = 30.0
 
 
-# ─── LLM (lazy-initialized) ─────────────────────────────────────────────────
-_llm = None
+# ─── LLM via shared ModelRouter ─────────────────────────────────────────────
 
-def _get_llm():
-    """Lazy-initialize the LLM client on first use."""
-    global _llm
-    if _llm is None:
-        _llm = ChatAnthropic(
-            model="claude-sonnet-4-6",
-            temperature=0.3,
-            max_tokens=1024,
-        )
-    return _llm
+def _get_llm(tier: str = "sonnet"):
+    """Return the tier-appropriate LLM client.
+
+    'haiku' for classification/extraction nodes (NLU, slot-fill, slot-answer,
+    confirmation), 'sonnet' for the chitchat/response node. Default 'sonnet'
+    preserves prior behaviour for any unmodified caller.
+    """
+    return get_model_router().get(tier)
 
 # ─── State ────────────────────────────────────────────────────────────────────
 class DialoguePhase(str, Enum):
@@ -470,7 +389,7 @@ Respond ONLY with valid JSON in this exact format:
 
     try:
         response = await asyncio.wait_for(
-            _get_llm().ainvoke([
+            _get_llm("haiku").ainvoke([
                 SystemMessage(content="You are a precise NLU system. Respond only with the JSON object."),
                 HumanMessage(content=extraction_prompt)
             ]),
@@ -554,7 +473,7 @@ present them as options. Keep it brief and warm.
 
     try:
         response = await asyncio.wait_for(
-            _get_llm().ainvoke([
+            _get_llm("haiku").ainvoke([
                 SystemMessage(content="You are Aria, a warm and direct AI mortgage assistant."),
                 HumanMessage(content=question_prompt)
             ]),
@@ -606,7 +525,7 @@ Respond ONLY with JSON: {{"value": "extracted_value_or_null", "confident": true_
     else:
         try:
             response = await asyncio.wait_for(
-                _get_llm().ainvoke([
+                _get_llm("haiku").ainvoke([
                     SystemMessage(content="Extract the slot value. JSON only."),
                     HumanMessage(content=extraction_prompt)
                 ]),
@@ -682,7 +601,7 @@ Keep it conversational and under 100 words unless showing a document preview.
 
     try:
         response = await asyncio.wait_for(
-            _get_llm().ainvoke([
+            _get_llm("haiku").ainvoke([
                 SystemMessage(content="You are Aria. Write a natural confirmation message."),
                 HumanMessage(content=preview_prompt)
             ]),
