@@ -13,11 +13,8 @@ OPTIMIZATION v3: Intent-Based Tool Loading
 import asyncio
 import logging
 import os
-import threading
-import time as _time_module
 from typing import Any, Callable, Dict, Optional, Literal
 from datetime import datetime, timezone
-from enum import Enum
 
 from langgraph.graph import StateGraph, END
 from anthropic import Anthropic
@@ -39,7 +36,7 @@ from .nodes.respond import format_structured_response
 from .hallucination_verifier import get_hallucination_verifier
 from .orchestration.quality_analyzer import QualityAnalyzer
 from .checkpointer import get_checkpointer
-from agents.orchestration.llm_circuit_breaker import LLMCircuitBreaker, CircuitState
+from .orchestration.llm_circuit_breaker import LLMCircuitBreaker, CircuitState
 
 # Enterprise modules: budget, rate limiting, audit, correlation IDs
 from .token_budget import get_token_budget, get_rate_limiter
