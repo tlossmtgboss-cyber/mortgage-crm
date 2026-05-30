@@ -17,12 +17,10 @@ vi.mock('../../utils/toast', () => ({
   },
 }));
 
-// Mock api client
-const mockPost = vi.fn();
-vi.mock('../../utils/api/client', () => ({
-  api: {
-    post: (...args) => mockPost(...args),
-  },
+// Mock api client (canonical services/api/client apiRequest)
+const mockApiRequest = vi.fn();
+vi.mock('../../services/api/client', () => ({
+  apiRequest: (...args) => mockApiRequest(...args),
 }));
 
 import CreateTaskModal from '../CreateTaskModal';
@@ -68,7 +66,7 @@ const defaultProps = {
 describe('CreateTaskModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockPost.mockResolvedValue({ id: 'new-task-1', title: 'Test Task' });
+    mockApiRequest.mockResolvedValue({ id: 'new-task-1', title: 'Test Task' });
   });
 
   // -- 1. Returns null when not open --
@@ -142,11 +140,14 @@ describe('CreateTaskModal', () => {
     });
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tasks', {
-        title: 'Follow up with borrower',
-        description: 'Check on document status',
-        priority: 'medium',
-        lead_id: 'lead-1',
+      expect(mockApiRequest).toHaveBeenCalledWith('/api/v1/tasks', {
+        method: 'POST',
+        data: {
+          title: 'Follow up with borrower',
+          description: 'Check on document status',
+          priority: 'medium',
+          lead_id: 'lead-1',
+        },
       });
     });
 
@@ -192,10 +193,13 @@ describe('CreateTaskModal', () => {
     });
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith(
+      expect(mockApiRequest).toHaveBeenCalledWith(
         '/api/v1/tasks',
         expect.objectContaining({
-          due_date: expect.stringContaining('2026-04-01'),
+          method: 'POST',
+          data: expect.objectContaining({
+            due_date: expect.stringContaining('2026-04-01'),
+          }),
         })
       );
     });
@@ -203,7 +207,7 @@ describe('CreateTaskModal', () => {
 
   // -- 9. Handles API error gracefully --
   it('shows error message when API call fails', async () => {
-    mockPost.mockRejectedValue(new Error('Server error'));
+    mockApiRequest.mockRejectedValue(new Error('Server error'));
 
     render(<CreateTaskModal {...defaultProps} />);
 
@@ -249,7 +253,7 @@ describe('CreateTaskModal', () => {
   it('disables submit button and shows "Creating..." while submitting', async () => {
     // Make API call hang
     let resolvePost;
-    mockPost.mockReturnValue(new Promise((resolve) => { resolvePost = resolve; }));
+    mockApiRequest.mockReturnValue(new Promise((resolve) => { resolvePost = resolve; }));
 
     render(<CreateTaskModal {...defaultProps} />);
 

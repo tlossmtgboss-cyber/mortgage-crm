@@ -3,11 +3,24 @@
  *
  * Frontend API client for the e-signature system.
  * Handles envelope management, field placement, and signing sessions.
+ *
+ * Migrated from the retired utils/api/client to the canonical services/api/client:
+ * - apiRequest() returns parsed response data and routes through the shared axios
+ *   interceptors (auth + CSRF + token refresh), matching the prior data-returning
+ *   behavior of the old `api` helper.
+ * - Public (unauthenticated) borrower-signing endpoints used `{ skipAuth: true }`
+ *   on the old client; they now use bare re-exported `axios` against the absolute
+ *   URL so NO auth/CSRF headers are attached, preserving that behavior exactly.
  */
 
-import { api } from '../utils/api/client';
+import { apiRequest, axios, API_BASE_URL } from './api/client';
 
 const ESIGN_BASE = '/api/v1/esign';
+
+// Public borrower-signing calls — no auth/CSRF interceptors. Unwrap data to
+// match the old contract (callers await parsed data).
+const publicGet = (url) => axios.get(`${API_BASE_URL}${url}`).then((r) => r.data);
+const publicPost = (url, body) => axios.post(`${API_BASE_URL}${url}`, body).then((r) => r.data);
 
 /**
  * E-Signature API methods
@@ -21,7 +34,7 @@ export const esignApi = {
    * Create a new envelope from a PDF
    */
   createEnvelope: async (data) => {
-    return api.post(`${ESIGN_BASE}/envelopes`, data);
+    return apiRequest(`${ESIGN_BASE}/envelopes`, { method: 'POST', data });
   },
 
   /**
@@ -29,28 +42,28 @@ export const esignApi = {
    */
   listEnvelopes: async (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return api.get(`${ESIGN_BASE}/envelopes${query ? `?${query}` : ''}`);
+    return apiRequest(`${ESIGN_BASE}/envelopes${query ? `?${query}` : ''}`, { method: 'GET' });
   },
 
   /**
    * Get envelope details with signers and fields
    */
   getEnvelope: async (envelopeId) => {
-    return api.get(`${ESIGN_BASE}/envelopes/${envelopeId}`);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}`, { method: 'GET' });
   },
 
   /**
    * Send envelope to signers
    */
   sendEnvelope: async (envelopeId) => {
-    return api.post(`${ESIGN_BASE}/envelopes/${envelopeId}/send`);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/send`, { method: 'POST' });
   },
 
   /**
    * Void an envelope
    */
   voidEnvelope: async (envelopeId, reason = null) => {
-    return api.post(`${ESIGN_BASE}/envelopes/${envelopeId}/void`, { reason });
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/void`, { method: 'POST', data: { reason } });
   },
 
   // =========================================================================
@@ -61,14 +74,14 @@ export const esignApi = {
    * Add a signer to an envelope
    */
   addSigner: async (envelopeId, signer) => {
-    return api.post(`${ESIGN_BASE}/envelopes/${envelopeId}/signers`, signer);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/signers`, { method: 'POST', data: signer });
   },
 
   /**
    * Remove a signer from an envelope
    */
   removeSigner: async (envelopeId, signerId) => {
-    return api.delete(`${ESIGN_BASE}/envelopes/${envelopeId}/signers/${signerId}`);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/signers/${signerId}`, { method: 'DELETE' });
   },
 
   // =========================================================================
@@ -79,28 +92,28 @@ export const esignApi = {
    * Add a field to an envelope
    */
   addField: async (envelopeId, field) => {
-    return api.post(`${ESIGN_BASE}/envelopes/${envelopeId}/fields`, field);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/fields`, { method: 'POST', data: field });
   },
 
   /**
    * Update a field
    */
   updateField: async (envelopeId, fieldId, updates) => {
-    return api.put(`${ESIGN_BASE}/envelopes/${envelopeId}/fields/${fieldId}`, updates);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/fields/${fieldId}`, { method: 'PUT', data: updates });
   },
 
   /**
    * Delete a field
    */
   deleteField: async (envelopeId, fieldId) => {
-    return api.delete(`${ESIGN_BASE}/envelopes/${envelopeId}/fields/${fieldId}`);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/fields/${fieldId}`, { method: 'DELETE' });
   },
 
   /**
    * Bulk save fields (replaces all existing fields)
    */
   bulkSaveFields: async (envelopeId, fields) => {
-    return api.post(`${ESIGN_BASE}/envelopes/${envelopeId}/fields/bulk`, { fields });
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/fields/bulk`, { method: 'POST', data: { fields } });
   },
 
   // =========================================================================
@@ -111,40 +124,40 @@ export const esignApi = {
    * Validate signing token and get session data
    */
   validateSigningToken: async (token) => {
-    return api.get(`${ESIGN_BASE}/sign/${token}`, { skipAuth: true });
+    return publicGet(`${ESIGN_BASE}/sign/${token}`);
   },
 
   /**
    * Get document URL for signing
    */
   getSigningDocument: async (token) => {
-    return api.get(`${ESIGN_BASE}/sign/${token}/document`, { skipAuth: true });
+    return publicGet(`${ESIGN_BASE}/sign/${token}/document`);
   },
 
   /**
    * Adopt a typed signature
    */
   adoptSignature: async (token, signatureText, signatureFont) => {
-    return api.post(`${ESIGN_BASE}/sign/${token}/adopt`, {
+    return publicPost(`${ESIGN_BASE}/sign/${token}/adopt`, {
       signature_text: signatureText,
       signature_font: signatureFont,
-    }, { skipAuth: true });
+    });
   },
 
   /**
    * Submit a field value
    */
   submitFieldValue: async (token, fieldId, value) => {
-    return api.post(`${ESIGN_BASE}/sign/${token}/fields/${fieldId}`, {
+    return publicPost(`${ESIGN_BASE}/sign/${token}/fields/${fieldId}`, {
       value,
-    }, { skipAuth: true });
+    });
   },
 
   /**
    * Complete signing session
    */
   completeSigning: async (token) => {
-    return api.post(`${ESIGN_BASE}/sign/${token}/complete`, {}, { skipAuth: true });
+    return publicPost(`${ESIGN_BASE}/sign/${token}/complete`, {});
   },
 
   // =========================================================================
@@ -155,21 +168,21 @@ export const esignApi = {
    * Generate signed PDF and audit trail
    */
   generateSignedDocument: async (envelopeId) => {
-    return api.post(`${ESIGN_BASE}/envelopes/${envelopeId}/generate`);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/generate`, { method: 'POST' });
   },
 
   /**
    * List completed documents for an envelope
    */
   listCompletedDocuments: async (envelopeId) => {
-    return api.get(`${ESIGN_BASE}/envelopes/${envelopeId}/documents`);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/documents`, { method: 'GET' });
   },
 
   /**
    * Get audit trail for an envelope
    */
   getAuditTrail: async (envelopeId) => {
-    return api.get(`${ESIGN_BASE}/envelopes/${envelopeId}/audit`);
+    return apiRequest(`${ESIGN_BASE}/envelopes/${envelopeId}/audit`, { method: 'GET' });
   },
 
   // =========================================================================
@@ -182,7 +195,12 @@ export const esignApi = {
   extractPdfMetadata: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.upload(`${ESIGN_BASE}/pdf/metadata`, file);
+    return apiRequest(`${ESIGN_BASE}/pdf/metadata`, {
+      method: 'POST',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
   },
 };
 
