@@ -136,7 +136,7 @@ Respond with JSON only:
 {{"suggested_type": "TYPE_HERE", "confidence": 0.0-1.0, "reasoning": "why"}}"""
 
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}]
             )

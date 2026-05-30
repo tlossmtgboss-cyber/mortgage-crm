@@ -63,7 +63,9 @@ class ModelTier(str, Enum):
 MODEL_REGISTRY = {
     "fast": "claude-haiku-4-5-20251001",
     "standard": "claude-sonnet-4-6",
-    "premium": "claude-sonnet-4-6",
+    # Premium = Opus for the hardest reasoning (complex compliance, income /
+    # underwriting analysis). Previously aliased to Sonnet, making the tier a no-op.
+    "premium": "claude-opus-4-8",
 }
 
 
@@ -119,9 +121,15 @@ FAST_INTENTS = frozenset({
 
 # Intents that need the standard (Sonnet) model
 STANDARD_INTENTS = frozenset({
-    "pipeline", "leads", "compliance", "compound", "rates",
+    "pipeline", "leads", "compound", "rates",
     "historical", "priorities", "profit", "reports", "billing",
     "integrations", "email", "operations",
+})
+
+# Intents that warrant the premium (Opus) model — highest-stakes reasoning where
+# a wrong answer is costly (regulatory/compliance, income & underwriting analysis).
+PREMIUM_INTENTS = frozenset({
+    "compliance", "underwriting", "income_analysis",
 })
 
 
@@ -246,6 +254,8 @@ class LLMGateway:
             return model_override
         if intent in FAST_INTENTS:
             return MODEL_REGISTRY["fast"]
+        if intent in PREMIUM_INTENTS:
+            return MODEL_REGISTRY["premium"]
         return MODEL_REGISTRY["standard"]
 
     def _select_temperature(self, intent: str, temperature_override: Optional[float] = None) -> float:

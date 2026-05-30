@@ -19,7 +19,7 @@ import anthropic
 logger = logging.getLogger(__name__)
 
 # Claude model configuration
-AGENT_MODEL = os.getenv("CALL_MONITORING_MODEL", "claude-sonnet-4-20250514")
+AGENT_MODEL = os.getenv("CALL_MONITORING_MODEL", "claude-sonnet-4-6")
 AGENT_MODEL_FAST = os.getenv("CALL_MONITORING_MODEL_FAST", "claude-haiku-4-5-20251001")
 MAX_TOKENS = 4096
 

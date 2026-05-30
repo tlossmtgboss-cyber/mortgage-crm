@@ -66,7 +66,7 @@ class SmartDocumentExtraction(Base):
 
     # Overall extraction confidence
     overall_confidence = Column(Integer, nullable=True)  # 0-100
-    extraction_model = Column(String(64), nullable=True)  # e.g., 'claude-sonnet-4-20250514'
+    extraction_model = Column(String(64), nullable=True)  # e.g., 'claude-sonnet-4-6'
     extraction_duration_ms = Column(Integer, nullable=True)
 
     # Review status

@@ -320,7 +320,7 @@ Extract ALL rates visible in the document. Focus on the most common rate scenari
         """Parse using Anthropic Claude."""
         try:
             message = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=4096,
                 messages=[
                     {"role": "user", "content": prompt}
@@ -331,7 +331,7 @@ Extract ALL rates visible in the document. Focus on the most common rate scenari
 
             # Extract JSON from response
             result = self._extract_json_from_response(response_text)
-            result['model_used'] = 'anthropic/claude-sonnet-4-20250514'
+            result['model_used'] = 'anthropic/claude-sonnet-4-6'
             return result
 
         except Exception as e:

@@ -70,7 +70,7 @@ class DocumentCacheService:
                 by the same model. Defaults to ANTHROPIC_MODEL env var.
         """
         self._model_version = current_model_version or os.getenv(
-            "ANTHROPIC_MODEL", "claude-sonnet-4-20250514"
+            "ANTHROPIC_MODEL", "claude-sonnet-4-6"
         )
 
     # ------------------------------------------------------------------

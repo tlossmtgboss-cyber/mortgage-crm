@@ -665,7 +665,7 @@ async def ai_compose_email(
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
@@ -923,7 +923,7 @@ async def ai_generate_text(
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=256,
             system=f"{field_prompt}\nRespond with ONLY the generated text, no quotes or formatting.",
             messages=[{"role": "user", "content": user_prompt}],

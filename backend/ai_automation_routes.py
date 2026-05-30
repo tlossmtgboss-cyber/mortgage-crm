@@ -1197,7 +1197,7 @@ async def regenerate_message(
             )
 
         resp = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=500,
             messages=[{
                 "role": "user",
@@ -1295,7 +1295,7 @@ Write only the bio text, no headers or labels."""
         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}]
         )

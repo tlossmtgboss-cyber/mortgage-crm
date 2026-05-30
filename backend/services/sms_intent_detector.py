@@ -142,7 +142,7 @@ class SMSIntentDetector:
                 )
 
             from agents.anthropic_client import cached_system_block
-            model = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-20250514")
+            model = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-6")
             response = await client.messages.create(
                 model=model,
                 max_tokens=200,

@@ -48,7 +48,7 @@ class DISCContentGenerator:
         self.client = anthropic.Anthropic(
             api_key=os.getenv("ANTHROPIC_API_KEY")
         )
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-sonnet-4-6"
 
     async def generate_all_content(
         self,

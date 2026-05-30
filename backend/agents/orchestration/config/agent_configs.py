@@ -85,7 +85,7 @@ class AgentConfig:
     channels: List[AgentChannel]
     first_message_template: str
     ai_provider: str = "claude"
-    ai_model: str = "claude-sonnet-4-20250514"
+    ai_model: str = "claude-sonnet-4-6"
     is_active: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
 

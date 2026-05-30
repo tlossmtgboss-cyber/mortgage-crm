@@ -230,7 +230,7 @@ async def process_meeting_ai_analysis(room_id: int):
                             "content-type": "application/json",
                         },
                         json={
-                            "model": "claude-sonnet-4-20250514",
+                            "model": "claude-sonnet-4-6",
                             "max_tokens": 2000,
                             "messages": [{
                                 "role": "user",

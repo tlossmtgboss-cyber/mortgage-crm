@@ -271,7 +271,7 @@ class BankStatementAnalyzerService:
     def __init__(self, db: Session):
         self.db = db
         self._anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-        self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     # =========================================================================
     # 1. MAIN ENTRY POINT

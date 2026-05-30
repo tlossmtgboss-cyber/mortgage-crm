@@ -56,7 +56,7 @@ class Config:
     
     # Judge model for scoring
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    JUDGE_MODEL = "claude-sonnet-4-5-20250929"
+    JUDGE_MODEL = "claude-sonnet-4-6"
     
     # Results storage
     RESULTS_DIR = Path(os.getenv("CHALLENGE_RESULTS_DIR", "./challenge_results"))

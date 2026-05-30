@@ -151,7 +151,7 @@ class IncomeCalculatorService:
         self.db = db
         self.org_id = org_id
         self._anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-        self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     # =========================================================================
     # 1. MAIN ENTRY POINT

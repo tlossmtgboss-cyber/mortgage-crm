@@ -57,7 +57,7 @@ def get_sqlite_commands():
             use_case VARCHAR(100),
             channel VARCHAR(50),
             ai_provider VARCHAR(50) DEFAULT 'claude',
-            model VARCHAR(100) DEFAULT 'claude-sonnet-4-20250514',
+            model VARCHAR(100) DEFAULT 'claude-sonnet-4-6',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             created_by INTEGER
@@ -206,7 +206,7 @@ def get_postgres_commands():
             use_case VARCHAR(100),
             channel VARCHAR(50),
             ai_provider VARCHAR(50) DEFAULT 'claude',
-            model VARCHAR(100) DEFAULT 'claude-sonnet-4-20250514',
+            model VARCHAR(100) DEFAULT 'claude-sonnet-4-6',
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             created_by INTEGER REFERENCES users(id) ON DELETE SET NULL

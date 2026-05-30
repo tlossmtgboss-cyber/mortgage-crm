@@ -169,7 +169,7 @@ class AITenantIsolation:
     # AI-005: Content attribution
     # ==================================================================
     @staticmethod
-    def mark_ai_generated(content: str, model: str = "claude-sonnet-4-20250514") -> Dict:
+    def mark_ai_generated(content: str, model: str = "claude-sonnet-4-6") -> Dict:
         """
         Mark content as AI-generated with attribution metadata.
         This metadata is stored alongside the content in conversation memory.

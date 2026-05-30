@@ -305,7 +305,7 @@ class AIServiceWithCircuitBreaker:
         self,
         messages: list,
         system_prompt: str,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-sonnet-4-6",
         max_tokens: int = 1024
     ) -> str:
         """Get AI response with circuit breaker protection"""

@@ -351,7 +351,7 @@ def seed_ai_model_pricing(engine):
         },
         {
             "provider": "anthropic",
-            "model_id": "claude-sonnet-4-20250514",
+            "model_id": "claude-sonnet-4-6",
             "model_name": "Claude Sonnet 4",
             "input_price_per_1m": Decimal("3.00"),
             "output_price_per_1m": Decimal("15.00"),

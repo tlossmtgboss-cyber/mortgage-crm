@@ -27,7 +27,7 @@ except ImportError:
     _enc = None
 
 # Claude configuration
-CLAUDE_MODEL = os.getenv("GUIDELINES_MODEL", "claude-sonnet-4-20250514")
+CLAUDE_MODEL = os.getenv("GUIDELINES_MODEL", "claude-sonnet-4-6")
 
 
 # =============================================================================

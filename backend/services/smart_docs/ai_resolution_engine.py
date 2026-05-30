@@ -83,7 +83,7 @@ from services.smart_docs.ai_resilience import resilient_ai_call
 # CONSTANTS & CONFIGURATION
 # =============================================================================
 
-_ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+_ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
 # ---------------------------------------------------------------------------
 # Text-resolvable criteria: items that can be collected via 1-2 SMS exchanges

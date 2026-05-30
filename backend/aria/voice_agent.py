@@ -71,7 +71,7 @@ CARTESIA_VOICE_ID = os.getenv(
     "b7d50908-b17c-442d-ad8d-810c63997ed9",  # California Girl — enthusiastic, friendly
 )
 DEEPGRAM_TTS_MODEL = os.getenv("ARIA_DEEPGRAM_TTS_MODEL", "aura-2-andromeda-en")
-CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-5")
+CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-6")
 TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
 
 BRIDGE_PHRASES = [

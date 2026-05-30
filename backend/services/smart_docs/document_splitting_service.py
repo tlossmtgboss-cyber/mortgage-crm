@@ -318,7 +318,7 @@ ID_DOCUMENT_TYPES = {"DRIVERS_LICENSE", "PASSPORT", "SSN_CARD"}
 PERIOD_SPLIT_TYPES = {"BANK_STATEMENT", "INVESTMENT_STATEMENT", "PAYSTUB"}
 
 # AI model used for page classification
-AI_MODEL = os.getenv("SMART_DOCS_AI_MODEL", "claude-sonnet-4-20250514")
+AI_MODEL = os.getenv("SMART_DOCS_AI_MODEL", "claude-sonnet-4-6")
 
 # Maximum file size for AI vision analysis (per page image)
 MAX_PAGE_IMAGE_BYTES = 2_000_000  # 2 MB

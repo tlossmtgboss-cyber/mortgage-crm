@@ -685,7 +685,7 @@ Provide your expert analysis as Sarah the Loan Officer. Help them understand the
         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=500,
             system=system_prompt,
             messages=[{"role": "user", "content": user_message}]
@@ -851,7 +851,7 @@ Please answer as Sarah the Loan Officer. Be helpful and specific. If relevant, m
         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=300,
             system=system_prompt,
             messages=[{"role": "user", "content": user_message}]

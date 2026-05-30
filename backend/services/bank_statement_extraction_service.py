@@ -22,7 +22,7 @@ class BankStatementExtractionService:
 
     def __init__(self):
         self.client = get_anthropic_client()
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-sonnet-4-6"
 
     async def extract_statement_data(
         self,

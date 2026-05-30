@@ -1876,7 +1876,7 @@ class HandwritingDetector:
                         },
                     ],
                 }],
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=50,
                 operation_name="ocr_handwriting_detect",
                 timeout=15.0,

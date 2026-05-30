@@ -29,7 +29,7 @@ class ContextSynthesisAgent:
         # }
     """
 
-    MODEL = "claude-sonnet-4-20250514"
+    MODEL = "claude-sonnet-4-6"
     MAX_EVENTS_IN_PROMPT = 50  # Trim to avoid token explosion
     MIN_CLUSTER_FREQUENCY = 2  # Ignore one-off events
 

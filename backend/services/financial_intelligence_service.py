@@ -648,7 +648,7 @@ Be specific with dollar amounts where possible. Focus on actionable recommendati
 Provide 3-5 specific investment areas and 3-5 cost-cutting opportunities."""
 
         response = self.client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1500,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}]

@@ -68,7 +68,7 @@ class EmailInteraction(Base):
     # ==================== PROCESSING METADATA ====================
     processed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     parser_version = Column(String(20))  # Claude parser version
-    parser_model = Column(String(50))  # Model used (e.g., "claude-sonnet-4-20250514")
+    parser_model = Column(String(50))  # Model used (e.g., "claude-sonnet-4-6")
     sync_status = Column(String(50), default='pending')  # 'pending', 'processed', 'applied', 'conflict', 'error'
     processing_time_ms = Column(Integer)  # Time to parse
     overall_confidence = Column(Integer)  # Average confidence across all fields

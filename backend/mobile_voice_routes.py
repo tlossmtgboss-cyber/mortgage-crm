@@ -492,7 +492,7 @@ class AriaVoiceAgent:
 
                 assistant_name = get_voice_assistant_name()
                 ai_response = client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model="claude-sonnet-4-6",
                     max_tokens=200,
                     system=f"""You are {assistant_name}, a helpful mortgage assistant. Keep responses brief (under 50 words) and conversational for voice. Be warm and professional.
 

@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
-MODEL_VERSION = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-20250514")
+MODEL_VERSION = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-6")
 
 SYSTEM_PROMPT = (
     "You are Aria, an AI assistant for a mortgage loan officer named {lo_name}. "

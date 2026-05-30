@@ -961,7 +961,7 @@ Message from {user_name}:
 Please provide an appropriate response and indicate if a task should be created."""
 
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=500,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}]

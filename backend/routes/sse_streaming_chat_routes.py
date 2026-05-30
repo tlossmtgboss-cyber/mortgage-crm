@@ -248,7 +248,7 @@ async def chat_stream(
                     "full_response": full_response,
                     "prioritized_tasks": prioritized_tasks_data if prioritized_tasks_data else None,
                     "metadata": {
-                        "model": "claude-sonnet-4-20250514",
+                        "model": "claude-sonnet-4-6",
                         "streaming": True,
                         "tools_used": final_metadata.get("tools_used", []),
                         "insights": final_metadata.get("insights", []),

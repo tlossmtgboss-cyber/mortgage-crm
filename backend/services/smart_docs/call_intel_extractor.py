@@ -868,7 +868,7 @@ TRANSCRIPT:
             response = resilient_ai_call(
                 client=client,
                 messages=[{"role": "user", "content": prompt}],
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1500,
                 operation_name="call_intel_extraction",
                 timeout=30.0,

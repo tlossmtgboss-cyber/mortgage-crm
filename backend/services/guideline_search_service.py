@@ -169,7 +169,7 @@ class GuidelineSearchService:
 
             response = await client.messages.create(
                 model=os.getenv(
-                    "GUIDELINE_SEARCH_MODEL", "claude-sonnet-4-20250514"
+                    "GUIDELINE_SEARCH_MODEL", "claude-sonnet-4-6"
                 ),
                 max_tokens=2048,
                 system=self._SYSTEM_PROMPT,

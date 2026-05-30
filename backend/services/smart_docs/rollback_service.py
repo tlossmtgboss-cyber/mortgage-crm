@@ -1250,7 +1250,7 @@ class SmartDocsRollbackService:
                 description="Make a test API call to verify Anthropic API is responding",
                 command="curl -s https://api.anthropic.com/v1/messages -H 'x-api-key: $ANTHROPIC_API_KEY' "
                        "-H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' "
-                       "-d '{\"model\":\"claude-sonnet-4-20250514\",\"max_tokens\":10,"
+                       "-d '{\"model\":\"claude-sonnet-4-6\",\"max_tokens\":10,"
                        "\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}'",
                 estimated_duration_seconds=10,
             ),

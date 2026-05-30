@@ -103,7 +103,7 @@ Make complex topics simple.""",
 
     def __init__(self):
         self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     async def generate_content(
         self,

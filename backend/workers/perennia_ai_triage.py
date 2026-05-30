@@ -10,7 +10,7 @@ Pipeline:
 4. Validate quality and completeness
 5. Update database with classification
 
-Uses Claude claude-sonnet-4-20250514 for vision-based classification.
+Uses Claude claude-sonnet-4-6 for vision-based classification.
 """
 
 import os
@@ -122,7 +122,7 @@ class PerenniaAITriageAgent:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-sonnet-4-20250514"
+        model: str = "claude-sonnet-4-6"
     ):
         """
         Initialize triage agent.

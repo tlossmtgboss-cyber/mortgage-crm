@@ -65,7 +65,7 @@ BaseAdapter = AIAdapter
 class ClaudeAdapter(AIAdapter):
     """Adapter for Claude API"""
 
-    def __init__(self, api_key: str = None, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, api_key: str = None, model: str = "claude-sonnet-4-6"):
         try:
             from anthropic import Anthropic
             self.client = Anthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))

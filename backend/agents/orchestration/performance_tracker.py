@@ -241,7 +241,7 @@ class PerformanceTracker:
     # Token costs (approximate, update as needed)
     TOKEN_COSTS = {
         "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},  # per 1K tokens
-        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+        "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
         "claude-haiku-4-5-20251001": {"input": 0.0008, "output": 0.004},
         "claude-opus-4-20250514": {"input": 0.015, "output": 0.075},
         "gpt-4-turbo": {"input": 0.01, "output": 0.03},
@@ -291,7 +291,7 @@ class PerformanceTracker:
         execution_id = str(uuid.uuid4())
         total_tokens = data.get("prompt_tokens", 0) + data.get("completion_tokens", 0)
         latency_ms = data.get("latency_ms", 0)
-        model_used = data.get("model_used", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"))
+        model_used = data.get("model_used", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"))
 
         execution = {
             "id": execution_id,
@@ -458,7 +458,7 @@ class PerformanceTracker:
             "stage": intent,
             "total_tokens": token_count,
             "latency_ms": response_time_ms,
-            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
             "executed_at": now,
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -1177,8 +1177,8 @@ class PerformanceTracker:
         """Calculate estimated cost for executions"""
         total_cost = 0.0
         for e in executions:
-            model = e.get("model_used", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"))
-            costs = self.TOKEN_COSTS.get(model, self.TOKEN_COSTS.get(os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"), self.TOKEN_COSTS["claude-sonnet-4-20250514"]))
+            model = e.get("model_used", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"))
+            costs = self.TOKEN_COSTS.get(model, self.TOKEN_COSTS.get(os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), self.TOKEN_COSTS["claude-sonnet-4-6"]))
 
             input_cost = (e.get("prompt_tokens", 0) / 1000) * costs["input"]
             output_cost = (e.get("completion_tokens", 0) / 1000) * costs["output"]
@@ -1194,10 +1194,10 @@ class PerformanceTracker:
         total_tokens: Optional[int] = None,
     ) -> float:
         """Estimate cost for a single interaction."""
-        model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
         costs = self.TOKEN_COSTS.get(
             model,
-            self.TOKEN_COSTS.get("claude-sonnet-4-20250514"),
+            self.TOKEN_COSTS.get("claude-sonnet-4-6"),
         )
         if prompt_tokens or completion_tokens:
             return (prompt_tokens / 1000) * costs["input"] + (completion_tokens / 1000) * costs["output"]

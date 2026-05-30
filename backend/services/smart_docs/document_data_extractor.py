@@ -323,7 +323,7 @@ class DocumentDataExtractor:
 
     def __init__(self):
         self.anthropic = Anthropic() if HAS_ANTHROPIC else None
-        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     def extract(
         self,

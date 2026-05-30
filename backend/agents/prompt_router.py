@@ -309,7 +309,7 @@ def handle_chat_request(
         user_message: The user's input
         client: Anthropic client instance
         user_context: Optional user context
-        model: Model to use (defaults to ANTHROPIC_MODEL env var or claude-sonnet-4-20250514)
+        model: Model to use (defaults to ANTHROPIC_MODEL env var or claude-sonnet-4-6)
         max_tokens: Max response tokens
         log_stats: Whether to log routing stats
 
@@ -317,7 +317,7 @@ def handle_chat_request(
         Anthropic API response
     """
     if model is None:
-        model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     # Route to optimal prompt
     prompt_getter = route_to_optimal_prompt(user_message, user_context)

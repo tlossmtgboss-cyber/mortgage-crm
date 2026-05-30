@@ -1512,7 +1512,7 @@ def bind_tools_to_model(model, agent_role: str):
         from langchain_anthropic import ChatAnthropic
         from backend.agents.tool_integration import bind_tools_to_model
 
-        model = ChatAnthropic(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"))
+        model = ChatAnthropic(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"))
         model_with_tools = bind_tools_to_model(model, "pipeline_analyst")
     """
     executor = AgentToolExecutor(agent_role)

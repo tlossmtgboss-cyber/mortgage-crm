@@ -1358,7 +1358,7 @@ PERMANENT MEMORY STATUS:
         logger.info(f"AI Request - User ID: {user_id}, Message: {message[:100]}...")
 
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=AI_CONFIG["max_tokens"],
             temperature=AI_CONFIG["temperature"],  # Deterministic responses
             system=system,

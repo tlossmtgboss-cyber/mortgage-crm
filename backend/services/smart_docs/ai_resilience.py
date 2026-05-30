@@ -16,7 +16,7 @@ Usage:
     response = resilient_ai_call(
         client=anthropic_client,
         messages=[{"role": "user", "content": "..."}],
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         operation_name="classify_document",
         org_id=org_id,
@@ -297,8 +297,8 @@ def _get_retry_after(error: Exception) -> Optional[float]:
 
 # Approximate cost per 1K tokens by model (input/output)
 _MODEL_COSTS = {
-    "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
-    "claude-haiku-4-20250514": {"input": 0.001, "output": 0.005},
+    "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
+    "claude-haiku-4-5-20251001": {"input": 0.001, "output": 0.005},
 }
 _DEFAULT_COST = {"input": 0.003, "output": 0.015}
 
@@ -330,7 +330,7 @@ def resilient_ai_call(
     Args:
         client: Anthropic client instance (must have .messages.create method)
         messages: Chat messages to send
-        model: Model identifier (e.g. "claude-sonnet-4-20250514")
+        model: Model identifier (e.g. "claude-sonnet-4-6")
         max_tokens: Maximum tokens in response
         operation_name: Descriptive name for logging (e.g. "classify_document")
         timeout: Per-attempt timeout in seconds (default: config.timeout_seconds)

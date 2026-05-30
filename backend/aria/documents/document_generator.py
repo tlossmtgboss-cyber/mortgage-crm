@@ -277,7 +277,7 @@ Requirements:
 Write ONLY the explanation paragraph body text.
 """
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}]
         )

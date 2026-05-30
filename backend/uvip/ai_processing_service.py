@@ -125,7 +125,7 @@ class AIProcessingService:
 
             # Call Claude for analysis
             response = self.anthropic_client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=4000,
                 temperature=0.3,
                 messages=[
@@ -309,7 +309,7 @@ Guidelines:
 Return just the email body text (no subject line needed)."""
 
             response = self.anthropic_client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1500,
                 temperature=0.5,
                 messages=[{"role": "user", "content": prompt}]

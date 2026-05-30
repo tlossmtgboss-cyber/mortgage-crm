@@ -159,7 +159,7 @@ Data Quality: {data_quality}
 
         llm_start = time.time()
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2000,
             system=REASONING_SYSTEM_PROMPT,
             messages=[

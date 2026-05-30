@@ -347,7 +347,7 @@ class SmartDocsHealthCheckService:
             # Use a minimal completion as a ping -- count_tokens is cheaper
             # than a full message. We use a trivial input.
             response = client.messages.count_tokens(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "health check ping"}],
             )
 

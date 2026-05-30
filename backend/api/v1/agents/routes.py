@@ -169,7 +169,7 @@ async def execute_agent(
 
         # Get agent config for model selection
         agent_config = get_agent_config(request.agent_id)
-        model = agent_config.ai_model if agent_config else "claude-sonnet-4-20250514"
+        model = agent_config.ai_model if agent_config else "claude-sonnet-4-6"
 
         # Execute AI call
         # NOTE: Replace with actual AI client call
@@ -292,7 +292,7 @@ async def analyze_email(
 
         from agents.anthropic_client import cached_system_block
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1000,
             system=cached_system_block(prompt),
             messages=[{

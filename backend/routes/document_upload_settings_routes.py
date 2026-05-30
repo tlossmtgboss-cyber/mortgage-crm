@@ -533,7 +533,7 @@ async def test_classification_settings(
             data={
                 "test_results": test_results,
                 "classification_available": True,
-                "ai_model": "claude-sonnet-4-20250514"
+                "ai_model": "claude-sonnet-4-6"
             },
             message="Classification test completed"
         )

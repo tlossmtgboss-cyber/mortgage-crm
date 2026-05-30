@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Claude API configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-CLAUDE_MODEL = "claude-sonnet-4-20250514"  # Use latest Claude with vision
+CLAUDE_MODEL = "claude-sonnet-4-6"  # Use latest Claude with vision
 
 
 class DocumentAnalysisResult:

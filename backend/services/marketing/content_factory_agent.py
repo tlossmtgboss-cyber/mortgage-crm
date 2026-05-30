@@ -414,7 +414,7 @@ class ContentFactoryAgent:
 
             client = AsyncAnthropic(api_key=self.anthropic_api_key)
             response = await client.messages.create(
-                model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+                model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
                 max_tokens=2000,
                 messages=[
                     {

@@ -57,7 +57,7 @@ _MAX_HISTORY_MESSAGES = 10
 _TIMEOUT_FALLBACK = "Thanks for your message! Let me look into that and get back to you shortly."
 
 # Claude model for SMS generation — Sonnet for speed + cost efficiency on short messages
-SMS_MODEL = "claude-sonnet-4-20250514"
+SMS_MODEL = "claude-sonnet-4-6"
 SMS_MAX_TOKENS = 200  # SMS-sized output
 
 # ── Compliance constants ──────────────────────────────────────────────

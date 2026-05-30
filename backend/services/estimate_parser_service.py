@@ -907,7 +907,7 @@ Original document:
         if self._anthropic_client is None:
             self._anthropic_client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY') or os.getenv('LLM_API_KEY'))
 
-        model = os.getenv('LLM_MODEL', 'claude-sonnet-4-20250514')
+        model = os.getenv('LLM_MODEL', 'claude-sonnet-4-6')
 
         message = self._anthropic_client.messages.create(
             model=model,

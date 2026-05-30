@@ -295,7 +295,7 @@ def create_anthropic_message(
     service: OptimizedPromptService,
     context: LoadContext,
     user_message: str,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = "claude-sonnet-4-6",
     max_tokens: int = 4096
 ) -> Dict[str, Any]:
     """

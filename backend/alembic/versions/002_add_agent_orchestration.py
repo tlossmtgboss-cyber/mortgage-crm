@@ -38,7 +38,7 @@ def upgrade():
         sa.Column('use_case', sa.String(100)),
         sa.Column('channel', sa.String(50)),
         sa.Column('ai_provider', sa.String(50), server_default='claude'),  # claude, openai
-        sa.Column('model', sa.String(100), server_default='claude-sonnet-4-20250514'),
+        sa.Column('model', sa.String(100), server_default='claude-sonnet-4-6'),
 
         # Metadata
         sa.Column('created_at', sa.DateTime, server_default=sa.func.now()),

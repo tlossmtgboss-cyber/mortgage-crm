@@ -254,7 +254,7 @@ class ContextAwareAI:
             # Wrap user message in boundary markers to prevent prompt injection
             bounded_message = f"[User Message]\n{current_message}\n[End User Message]"
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=2000,
                 system=system_prompt,
                 messages=[{
@@ -1003,7 +1003,7 @@ Extract and return ONLY a JSON object with:
 Return ONLY valid JSON, no other text."""
 
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=500,
                 messages=[{
                     "role": "user",

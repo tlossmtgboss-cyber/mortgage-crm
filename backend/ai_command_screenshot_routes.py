@@ -95,7 +95,7 @@ Return ONLY the JSON object, no additional text."""
 
         # Call Claude with vision
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1000,
             messages=[
                 {

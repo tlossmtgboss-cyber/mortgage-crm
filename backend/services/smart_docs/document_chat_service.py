@@ -703,7 +703,7 @@ class DocumentChatService:
         self.db = db
         self.org_id = org_id
         self.user_id = user_id
-        self.model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self.model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
         self._client: Optional[Any] = None
 
     @property

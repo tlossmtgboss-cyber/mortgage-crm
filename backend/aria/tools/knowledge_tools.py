@@ -66,7 +66,7 @@ class KnowledgeTools:
         try:
             from agents.anthropic_client import cached_system_block
             response = await client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1000,
                 system=cached_system_block("You are a mortgage underwriting guidelines expert. Answer based on your training data. Add a disclaimer that the answer is from general knowledge, not from indexed official guidelines."),
                 messages=[{"role": "user", "content": question}],

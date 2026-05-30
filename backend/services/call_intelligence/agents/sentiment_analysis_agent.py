@@ -214,7 +214,7 @@ class SentimentAnalysisAgent:
 
             response = await asyncio.to_thread(
                 client.messages.create,
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=256,
                 system=SENTIMENT_SYSTEM_PROMPT,
                 messages=[

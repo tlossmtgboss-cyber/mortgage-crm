@@ -107,7 +107,7 @@ class CandidateAIAnalyzer:
     def __init__(self, db_session=None):
         self.db = db_session
         self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-sonnet-4-6"
 
     async def analyze_candidate(
         self,

@@ -125,7 +125,7 @@ class AgentState(TypedDict, total=False):
     # === Token Tracking & Observability ===
     tokens_input: int                    # Input tokens from LLM API response
     tokens_output: int                   # Output tokens from LLM API response
-    model_used: str                      # Which model was used (e.g. claude-sonnet-4-20250514)
+    model_used: str                      # Which model was used (e.g. claude-sonnet-4-6)
 
     # === Verification & Quality ===
     verification_report: Optional[dict]  # Hallucination verification report summary

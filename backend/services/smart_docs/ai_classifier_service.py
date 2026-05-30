@@ -683,7 +683,7 @@ class AIDocumentClassifierService:
 
     def __init__(self):
         self._anthropic = None
-        self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
         if HAS_ANTHROPIC and os.getenv("ANTHROPIC_API_KEY"):
             try:

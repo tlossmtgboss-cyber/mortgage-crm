@@ -18,7 +18,7 @@ from services.sms_intent_detector import SMSIntentDetector
 logger = logging.getLogger(__name__)
 
 # Claude model for SMS response generation
-_CLAUDE_MODEL = "claude-sonnet-4-20250514"
+_CLAUDE_MODEL = "claude-sonnet-4-6"
 _CLAUDE_MAX_TOKENS = 300
 _CLAUDE_TIMEOUT = 10.0  # seconds — SMS responses must be fast
 

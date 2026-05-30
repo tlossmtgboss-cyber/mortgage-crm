@@ -240,7 +240,7 @@ class ClaudeEmailParser:
             raise ValueError("ANTHROPIC_API_KEY environment variable not set")
 
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-sonnet-4-6"
         logger.info("Claude Email Parser initialized")
 
     def _call_claude_sync(self, prompt: str) -> str:

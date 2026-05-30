@@ -613,7 +613,7 @@ class ESignFieldDetectorService:
 
     def __init__(self):
         self._anthropic = Anthropic() if HAS_ANTHROPIC else None
-        self._vision_model = os.getenv("ANTHROPIC_VISION_MODEL", "claude-sonnet-4-20250514")
+        self._vision_model = os.getenv("ANTHROPIC_VISION_MODEL", "claude-sonnet-4-6")
         self._enable_ai_vision = os.getenv("ESIGN_ENABLE_AI_VISION", "false").lower() == "true"
         # Minimum confidence to include a detected field in results
         self._min_confidence = int(os.getenv("ESIGN_MIN_FIELD_CONFIDENCE", "30"))

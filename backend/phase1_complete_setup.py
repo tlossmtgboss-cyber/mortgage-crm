@@ -75,7 +75,7 @@ class ClaudeEmailParser:
             raise ValueError("ANTHROPIC_API_KEY not found in environment")
 
         self.client = Anthropic(api_key=self.api_key)
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-sonnet-4-6"
 
     async def parse_email(
         self,

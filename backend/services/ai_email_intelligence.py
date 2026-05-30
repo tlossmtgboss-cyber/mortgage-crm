@@ -7,7 +7,7 @@ The most intelligent outbound email system in mortgage:
   - generate_follow_up_sequence: 3-email drip with unique angles per message
   - score_email_engagement: Per-lead engagement analytics and trend detection
 
-All AI generation uses Claude claude-sonnet-4-20250514 via the Anthropic SDK.
+All AI generation uses Claude claude-sonnet-4-6 via the Anthropic SDK.
 """
 
 import asyncio

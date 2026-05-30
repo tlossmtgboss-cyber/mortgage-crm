@@ -170,7 +170,7 @@ class BaseAgent(ABC):
             "status": "succeeded" if not env.human_approval_needed else "waiting_human",
             "started_at": started,
             "finished_at": finished,
-            "model": self.spec.get("model", "claude-sonnet-4-5"),
+            "model": self.spec.get("model", "claude-sonnet-4-6"),
             "summary": env.summary,
             "artifacts": env.artifacts,
             "patches": env.patches,
@@ -203,7 +203,7 @@ class BaseAgent(ABC):
 
     def _call_model(self, messages: list[dict[str, Any]]) -> tuple[str, tuple[int, int]]:
         """Issue an Anthropic API request with retries."""
-        model = self.spec.get("model", "claude-sonnet-4-5")
+        model = self.spec.get("model", "claude-sonnet-4-6")
         # System message pulled to top-level; Anthropic API expects it separately.
         system_parts = [m["content"] for m in messages if m["role"] == "system"]
         turns = [m for m in messages if m["role"] != "system"]
@@ -241,7 +241,7 @@ class BaseAgent(ABC):
             "status": "failed",
             "started_at": started,
             "finished_at": utcnow_iso(),
-            "model": self.spec.get("model", "claude-sonnet-4-5"),
+            "model": self.spec.get("model", "claude-sonnet-4-6"),
             "summary": "",
             "artifacts": {},
             "patches": {},

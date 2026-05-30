@@ -17,7 +17,7 @@ Usage:
 
     ctx.log_ai_call(
         operation="classify",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         tokens_in=500,
         tokens_out=120,
         duration_ms=1234.5,
