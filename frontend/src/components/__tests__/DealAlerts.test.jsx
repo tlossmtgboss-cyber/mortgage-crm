@@ -25,6 +25,18 @@ vi.mock('@/utils/toast', () => ({
 vi.mock('./DealAlerts.css', () => ({}));
 vi.mock('../DealAlerts.css', () => ({}));
 
+// The DealAlerts components fetch data through the shared axios `api` service
+// (default export of ../services/api), NOT the global fetch. Mock it so the
+// components receive axios-style `{ data }` responses.
+const mockApiGet = vi.fn();
+const mockApiPost = vi.fn();
+vi.mock('../../services/api', () => ({
+  default: {
+    get: (...args) => mockApiGet(...args),
+    post: (...args) => mockApiPost(...args),
+  },
+}));
+
 import { AlertPriorityBadge, AlertCard, DealAlertsBell, DealAlertsDashboard } from '../DealAlerts';
 import { toast } from '@/utils/toast';
 
@@ -99,18 +111,14 @@ const alertSummary = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const mockFetch = vi.fn();
-
-function setupFetchMock() {
-  global.fetch = mockFetch;
+// axios-style success response: resolves to an object with a `data` property.
+function apiResponse(body) {
+  return Promise.resolve({ data: body });
 }
 
-function mockFetchResponse(body, ok = true) {
-  return Promise.resolve({
-    ok,
-    status: ok ? 200 : 500,
-    json: () => Promise.resolve(body),
-  });
+// axios-style failure: rejects (component catches and logs).
+function apiError() {
+  return Promise.reject(new Error('Network Error'));
 }
 
 // ---------------------------------------------------------------------------
@@ -303,18 +311,18 @@ describe('AlertCard', () => {
 describe('DealAlertsBell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setupFetchMock();
+    mockApiGet.mockReset();
+    mockApiPost.mockReset();
     localStorage.setItem('token', 'test-token');
   });
 
   afterEach(() => {
     localStorage.clear();
-    vi.restoreAllMocks();
   });
 
   // 1. Renders bell icon
   it('renders bell icon button', async () => {
-    mockFetch.mockResolvedValue(mockFetchResponse(alertSummary, false));
+    mockApiGet.mockRejectedValue(new Error('Network Error'));
 
     render(
       <MemoryRouter>
@@ -327,10 +335,7 @@ describe('DealAlertsBell', () => {
 
   // 2. Shows alert count badge
   it('shows badge with total alert count after fetching summary', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(alertSummary),
-    });
+    mockApiGet.mockResolvedValue(apiResponse(alertSummary));
 
     render(
       <MemoryRouter>
@@ -345,10 +350,7 @@ describe('DealAlertsBell', () => {
 
   // 3. Applies critical class when critical alerts exist
   it('applies has-critical class to bell when critical alerts exist', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(alertSummary),
-    });
+    mockApiGet.mockResolvedValue(apiResponse(alertSummary));
 
     render(
       <MemoryRouter>
@@ -364,21 +366,12 @@ describe('DealAlertsBell', () => {
 
   // 4. Opens dropdown on click and shows severity counts
   it('opens dropdown with critical and high severity counts', async () => {
-    let callCount = 0;
-    mockFetch.mockImplementation(() => {
-      callCount++;
-      if (callCount <= 1) {
-        // Summary call
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(alertSummary),
-        });
+    mockApiGet.mockImplementation((url) => {
+      if (url.includes('/summary')) {
+        return apiResponse(alertSummary);
       }
       // Alerts call when dropdown opens
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([complianceAlert, slaAlert]),
-      });
+      return apiResponse([complianceAlert, slaAlert]);
     });
 
     render(
@@ -403,10 +396,7 @@ describe('DealAlertsBell', () => {
 
   // 5. Shows 99+ for large counts
   it('shows 99+ badge when total alerts exceed 99', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ ...alertSummary, total_alerts: 150 }),
-    });
+    mockApiGet.mockResolvedValue(apiResponse({ ...alertSummary, total_alerts: 150 }));
 
     render(
       <MemoryRouter>
@@ -421,10 +411,7 @@ describe('DealAlertsBell', () => {
 
   // 6. No badge when zero alerts
   it('does not show badge when there are no alerts', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ ...alertSummary, total_alerts: 0, critical_count: 0 }),
-    });
+    mockApiGet.mockResolvedValue(apiResponse({ ...alertSummary, total_alerts: 0, critical_count: 0 }));
 
     const { container } = render(
       <MemoryRouter>
@@ -439,19 +426,11 @@ describe('DealAlertsBell', () => {
 
   // 7. View All Alerts navigates to deal-alerts page
   it('navigates to /deal-alerts when View All Alerts is clicked', async () => {
-    let callCount = 0;
-    mockFetch.mockImplementation(() => {
-      callCount++;
-      if (callCount <= 1) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(alertSummary),
-        });
+    mockApiGet.mockImplementation((url) => {
+      if (url.includes('/summary')) {
+        return apiResponse(alertSummary);
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([]),
-      });
+      return apiResponse([]);
     });
 
     render(
@@ -476,19 +455,11 @@ describe('DealAlertsBell', () => {
 
   // 8. Empty dropdown shows "No active alerts" message
   it('shows "No active alerts" when dropdown is open but no alerts exist', async () => {
-    let callCount = 0;
-    mockFetch.mockImplementation(() => {
-      callCount++;
-      if (callCount <= 1) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ ...alertSummary, total_alerts: 0, critical_count: 0 }),
-        });
+    mockApiGet.mockImplementation((url) => {
+      if (url.includes('/summary')) {
+        return apiResponse({ ...alertSummary, total_alerts: 0, critical_count: 0 });
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([]),
-      });
+      return apiResponse([]);
     });
 
     render(
@@ -499,7 +470,7 @@ describe('DealAlertsBell', () => {
 
     // Wait for initial fetch
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockApiGet).toHaveBeenCalled();
     });
 
     fireEvent.click(screen.getByRole('button'));

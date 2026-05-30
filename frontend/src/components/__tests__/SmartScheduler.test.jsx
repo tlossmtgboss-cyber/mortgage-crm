@@ -420,11 +420,11 @@ describe('SmartScheduler', () => {
 
       // Should show the date heading with the selected date
       await waitFor(() => {
-        expect(screen.getByText(/Thursday, March 19/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Thursday, March 19/ })).toBeInTheDocument();
       });
 
-      // Should show time slot buttons
-      const slotButtons = screen.getAllByRole('button', { name: /AM|PM/i });
+      // Should show time slot buttons (rendered as listbox options)
+      const slotButtons = screen.getAllByRole('option', { name: /AM|PM/i });
       expect(slotButtons.length).toBe(3);
     });
 
@@ -531,11 +531,11 @@ describe('SmartScheduler', () => {
       fireEvent.click(day19);
 
       await waitFor(() => {
-        expect(screen.getByText(/Thursday, March 19/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Thursday, March 19/ })).toBeInTheDocument();
       });
 
-      // Click the first time slot
-      const slotButtons = screen.getAllByRole('button', { name: /AM|PM/i });
+      // Click the first time slot (rendered as a listbox option)
+      const slotButtons = screen.getAllByRole('option', { name: /AM|PM/i });
       fireEvent.click(slotButtons[0]);
 
       expect(onSelect).toHaveBeenCalledTimes(1);
@@ -565,8 +565,10 @@ describe('SmartScheduler', () => {
       );
       fireEvent.click(day19);
 
+      // Both the time-slots heading and the confirmation bar render this date,
+      // so disambiguate by targeting the heading specifically.
       await waitFor(() => {
-        expect(screen.getByText(/Thursday, March 19/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Thursday, March 19/ })).toBeInTheDocument();
       });
 
       // First slot should have "selected" class
@@ -799,11 +801,11 @@ describe('SmartScheduler', () => {
       fireEvent.click(day19);
 
       await waitFor(() => {
-        expect(screen.getByText(/Thursday, March 19/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Thursday, March 19/ })).toBeInTheDocument();
       });
 
-      // Should show 9:00 AM and 2:00 PM
-      const slotButtons = screen.getAllByRole('button', { name: /AM|PM/i });
+      // Should show 9:00 AM and 2:00 PM (listbox options)
+      const slotButtons = screen.getAllByRole('option', { name: /AM|PM/i });
       expect(slotButtons.length).toBe(2);
     });
 
@@ -929,10 +931,10 @@ describe('SmartScheduler', () => {
       fireEvent.click(day19);
 
       await waitFor(() => {
-        expect(screen.getByText(/Thursday, March 19/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Thursday, March 19/ })).toBeInTheDocument();
       });
 
-      const slotButtons = screen.getAllByRole('button', { name: /AM|PM/i });
+      const slotButtons = screen.getAllByRole('option', { name: /AM|PM/i });
       expect(slotButtons.length).toBe(1);
     });
 
@@ -966,10 +968,10 @@ describe('SmartScheduler', () => {
       fireEvent.click(day19);
 
       await waitFor(() => {
-        expect(screen.getByText(/Thursday, March 19/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Thursday, March 19/ })).toBeInTheDocument();
       });
 
-      const slotButtons = screen.getAllByRole('button', { name: /AM|PM/i });
+      const slotButtons = screen.getAllByRole('option', { name: /AM|PM/i });
       expect(slotButtons.length).toBe(1);
     });
   });
@@ -1012,7 +1014,7 @@ describe('SmartScheduler', () => {
   // =========================================================================
 
   describe('Accessibility', () => {
-    it('available day cells have role="button" and tabIndex=0', async () => {
+    it('available day cells are interactive gridcells with a focusable tabIndex', async () => {
       const slots = makeSlotsForDate('2026-03-19');
       setupDefaultFetchMock(slots);
       const { container } = await renderScheduler();
@@ -1022,11 +1024,14 @@ describe('SmartScheduler', () => {
         el => el.querySelector('.day-number')?.textContent === '19'
       );
 
-      expect(day19.getAttribute('role')).toBe('button');
-      expect(day19.getAttribute('tabindex')).toBe('0');
+      // Interactive day cells expose the gridcell role inside the calendar grid
+      // and participate in roving-tabindex focus management (0 when focused,
+      // -1 when not yet focused).
+      expect(day19.getAttribute('role')).toBe('gridcell');
+      expect(['0', '-1']).toContain(day19.getAttribute('tabindex'));
     });
 
-    it('unavailable day cells do NOT have role="button"', async () => {
+    it('unavailable day cells are presentation-only and not tabbable', async () => {
       const slots = makeSlotsForDate('2026-03-19');
       setupDefaultFetchMock(slots);
       const { container } = await renderScheduler();
@@ -1037,7 +1042,7 @@ describe('SmartScheduler', () => {
         el => el.querySelector('.day-number')?.textContent === '20'
       );
 
-      expect(day20.getAttribute('role')).toBeNull();
+      expect(day20.getAttribute('role')).toBe('presentation');
       expect(day20.getAttribute('tabindex')).toBeNull();
     });
 

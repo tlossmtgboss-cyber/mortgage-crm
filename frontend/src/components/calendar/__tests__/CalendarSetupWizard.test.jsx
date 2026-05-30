@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -77,6 +77,10 @@ describe('CalendarSetupWizard', () => {
   });
 
   afterEach(() => {
+    // Discard any timers a test left pending so they do not fire during the
+    // switch back to real timers (which would invoke callbacks against spies
+    // that have already been reset, surfacing as an unhandledRejection).
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 
@@ -92,7 +96,7 @@ describe('CalendarSetupWizard', () => {
 
     it('renders step 1 by default (Welcome)', () => {
       renderWizard();
-      const matches = screen.getAllByText(/Step 1 of 10/);
+      const matches = screen.getAllByText(/Step 1 of 6/);
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -120,7 +124,9 @@ describe('CalendarSetupWizard', () => {
 
     it('renders 0% complete initially', () => {
       renderWizard();
-      expect(screen.getByText('0% complete')).toBeInTheDocument();
+      const pct = document.querySelector('.cal-setup-progress-pct');
+      expect(pct).toBeTruthy();
+      expect(pct.textContent.replace(/\s+/g, ' ').trim()).toMatch(/^0\s*% Complete$/);
     });
   });
 
@@ -139,7 +145,7 @@ describe('CalendarSetupWizard', () => {
         vi.advanceTimersByTime(350);
       });
 
-      const matches = screen.getAllByText(/Step 2 of 10/);
+      const matches = screen.getAllByText(/Step 2 of 6/);
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -167,7 +173,7 @@ describe('CalendarSetupWizard', () => {
         vi.advanceTimersByTime(350);
       });
 
-      const matches = screen.getAllByText(/Step 1 of 10/);
+      const matches = screen.getAllByText(/Step 1 of 6/);
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -178,8 +184,9 @@ describe('CalendarSetupWizard', () => {
         vi.advanceTimersByTime(350);
       });
 
-      // Progress should show 10% (1 of 10 steps completed)
-      expect(screen.getByText('10% complete')).toBeInTheDocument();
+      // Progress should show 17% (1 of 6 steps completed)
+      const pct = document.querySelector('.cal-setup-progress-pct');
+      expect(pct.textContent.replace(/\s+/g, ' ').trim()).toMatch(/^17\s*% Complete$/);
     });
 
     it('shows "Next" instead of "Get Started" on steps after step 1', async () => {
@@ -239,14 +246,17 @@ describe('CalendarSetupWizard', () => {
     it('shows correct completed percentage as steps are completed', async () => {
       renderWizard();
 
-      // Complete steps 1 and 2
+      const pctText = () =>
+        document.querySelector('.cal-setup-progress-pct').textContent.replace(/\s+/g, ' ').trim();
+
+      // Complete steps 1 and 2 (of 6 total)
       fireEvent.click(screen.getByRole('button', { name: /continue to step 2/i }));
       await act(async () => { vi.advanceTimersByTime(350); });
-      expect(screen.getByText('10% complete')).toBeInTheDocument();
+      expect(pctText()).toMatch(/^17\s*% Complete$/);
 
       fireEvent.click(screen.getByRole('button', { name: /continue to step 3/i }));
       await act(async () => { vi.advanceTimersByTime(350); });
-      expect(screen.getByText('20% complete')).toBeInTheDocument();
+      expect(pctText()).toMatch(/^33\s*% Complete$/);
     });
   });
 
@@ -275,7 +285,7 @@ describe('CalendarSetupWizard', () => {
       }));
 
       renderWizard();
-      const matches = screen.getAllByText(/Step 3 of 10/);
+      const matches = screen.getAllByText(/Step 3 of 6/);
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -283,7 +293,7 @@ describe('CalendarSetupWizard', () => {
       localStorage.setItem(STORAGE_KEY, 'not-valid-json');
       // Should not throw; starts at step 1
       renderWizard();
-      const matches = screen.getAllByText(/Step 1 of 10/);
+      const matches = screen.getAllByText(/Step 1 of 6/);
       expect(matches.length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -301,7 +311,13 @@ describe('CalendarSetupWizard', () => {
         expect.stringContaining('progress has been saved')
       );
 
-      await act(async () => { vi.advanceTimersByTime(600); });
+      // Flush the navigate() delay timer. runAllTimers (inside act) drains every
+      // pending timer — including any autosave/transition timer left over from a
+      // prior test — so none survive to fire during teardown's timer cleanup,
+      // which is what otherwise surfaced as an unhandledRejection spy assertion.
+      await act(async () => {
+        vi.runAllTimers();
+      });
       expect(mockNavigate).toHaveBeenCalledWith('/calendar-settings');
     });
   });
@@ -313,9 +329,9 @@ describe('CalendarSetupWizard', () => {
   describe('Activation', () => {
     it('shows Activate Calendar button on the last step', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
@@ -325,44 +341,58 @@ describe('CalendarSetupWizard', () => {
 
     it('shows celebration overlay on activation', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
       renderWizard();
 
-      // Click the footer activate button
-      await act(async () => {
+      // Click the footer activate button. The overlay is rendered synchronously
+      // from the click handler's state update, so no waitFor is needed —
+      // avoiding RTL's fake-timer polling (runOnlyPendingTimers), which would
+      // otherwise flush the overlay's 4s auto-dismiss timer and fire navigate().
+      act(() => {
         fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
       });
 
       // Celebration overlay should appear
-      await waitFor(() => {
-        expect(screen.getByText('Your Calendar is Live!')).toBeInTheDocument();
-      });
-
-      // Verify celebration text is visible
+      expect(screen.getByText('Your Calendar is Live!')).toBeInTheDocument();
       expect(screen.getByText('Your Calendar is Live!')).toBeVisible();
     });
 
     it('celebration overlay navigates to /calendar on dismiss', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
       renderWizard();
-      fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
-
-      await waitFor(() => {
-        expect(screen.getByText('Your Calendar is Live!')).toBeInTheDocument();
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
       });
 
-      fireEvent.click(screen.getByText('Go to Calendar'));
+      // Overlay renders synchronously from the activate handler's state update.
+      // findBy* would invoke RTL's fake-timer polling and could flush the
+      // overlay's 4s auto-dismiss timer; the sync getBy is sufficient here.
+      const overlayHeading = screen.getByText('Your Calendar is Live!');
+      expect(overlayHeading).toBeInTheDocument();
+
+      // Disregard any navigate() the overlay's auto-dismiss may have queued so
+      // the assertion verifies the explicit "Go to Calendar" dismiss path only.
+      mockNavigate.mockClear();
+
+      // Dismiss via the "Go to Calendar" button (onClick -> onDismiss ->
+      // navigate('/calendar')). The button lives inside the overlay heading's
+      // dialog; scope the query to it to avoid matching any leaked overlay.
+      const dialog = overlayHeading.closest('.cal-setup-celebration');
+      const goBtn = within(dialog).getByRole('button', { name: /go to calendar/i });
+      act(() => {
+        fireEvent.click(goBtn);
+      });
       expect(mockNavigate).toHaveBeenCalledWith('/calendar');
     });
   });
@@ -387,9 +417,9 @@ describe('CalendarSetupWizard', () => {
 
     it('shows subtitle "Almost there" on last step', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 

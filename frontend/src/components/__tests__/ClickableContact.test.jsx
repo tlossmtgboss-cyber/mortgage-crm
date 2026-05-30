@@ -241,7 +241,7 @@ describe('ClickablePhone with showActions', () => {
   it('calls click-to-dial API on call button click', async () => {
     render(<ClickablePhone phone="(555) 999-8888" showActions />);
 
-    const callButton = screen.getByTitle('Call');
+    const callButton = screen.getByTitle('Click to call');
     fireEvent.click(callButton);
 
     await waitFor(() => {

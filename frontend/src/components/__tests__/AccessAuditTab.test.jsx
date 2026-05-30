@@ -168,10 +168,12 @@ describe('AccessAuditTab', () => {
       expect(screen.getByText('admin@example.com')).toBeInTheDocument();
     });
 
-    // Change type badges
-    expect(screen.getByText('Permission')).toBeInTheDocument();
-    expect(screen.getByText('Role')).toBeInTheDocument();
-    expect(screen.getByText('Emergency Revocation')).toBeInTheDocument();
+    // Change type badges. These labels also appear in the filter <select>
+    // options (and "Permission" additionally as an entity cell), so use the
+    // *AllBy* variants and assert at least one match per change type.
+    expect(screen.getAllByText('Permission').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Role').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Emergency Revocation').length).toBeGreaterThanOrEqual(1);
 
     // Entity types
     const cells = screen.getAllByText('Permission');
@@ -204,7 +206,9 @@ describe('AccessAuditTab', () => {
     });
 
     expect(screen.getByText('End Date')).toBeInTheDocument();
-    expect(screen.getByText('Change Type')).toBeInTheDocument();
+    // "Change Type" appears both as a filter <label> and as a table <th>,
+    // so assert at least one occurrence rather than a single unique element.
+    expect(screen.getAllByText('Change Type').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Search')).toBeInTheDocument();
     expect(screen.getByText('Apply Filters')).toBeInTheDocument();
   });
@@ -233,7 +237,9 @@ describe('AccessAuditTab', () => {
     renderTab();
 
     await waitFor(() => {
-      expect(screen.getByText('Audit Log')).toBeInTheDocument();
+      // "Audit Log" is both the nav <button> and the section <h3>, so target
+      // the nav button specifically.
+      expect(screen.getByRole('button', { name: 'Audit Log' })).toBeInTheDocument();
     });
 
     // Default section is audit log

@@ -13,7 +13,45 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { mockBookingLink, mockAvailableSlots, createMockFetch } from '../test/testUtils';
+
+// ---------------------------------------------------------------------------
+// Local test fixtures.
+//
+// These previously lived in ../test/testUtils, but that module no longer
+// exports them. The PublicBooking component reads booking-page data shaped
+// like `{ booking_page: { title, description, appointment_types: [...] } }`
+// and slot data shaped like `{ available_slots: [{ start }] }` (it maps
+// `slot.start` -> `start_time`). Defining the fixtures locally keeps the
+// test self-contained and matches the current component contract.
+// ---------------------------------------------------------------------------
+const mockBookingLink = {
+  id: 'link-1',
+  organization_id: 'org-1',
+  title: 'Schedule a meeting',
+  description: 'Pick a time that works for you.',
+  appointment_types: [
+    { id: 'type-1', type_name: 'Consultation', default_duration_minutes: 30, description: 'Initial consultation' },
+    { id: 'type-2', type_name: 'Rate Review', default_duration_minutes: 15, description: 'Review your rate' },
+  ],
+};
+
+// Future-dated slots so they are never filtered out as "past". The component
+// only reads `slot.start`, formatting it for display via toLocaleTimeString.
+const _slotDay = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  d.setHours(0, 0, 0, 0);
+  return d;
+})();
+const _slotAt = (hour) => {
+  const d = new Date(_slotDay);
+  d.setHours(hour, 0, 0, 0);
+  return d.toISOString();
+};
+const mockAvailableSlots = [
+  { start: _slotAt(10), end: _slotAt(11), available: true },
+  { start: _slotAt(13), end: _slotAt(14), available: true },
+];
 
 // Mock useOrgBranding hook
 vi.mock('../hooks/useOrgBranding', () => ({
@@ -112,7 +150,7 @@ describe('PublicBooking Page', () => {
     renderBooking();
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a date')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
     });
   });
 
@@ -172,14 +210,12 @@ describe('PublicBooking Page', () => {
     renderBooking();
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a date')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
     });
 
-    // Should show 7 date cards (one per day of the week)
-    const dateCards = screen.getAllByRole('button').filter(btn =>
-      btn.classList.contains('date-card')
-    );
-    // Date cards are buttons with day numbers
+    // Should show 7 date cards (one per day of the week). The cards are
+    // <button role="option"> inside the week listbox, so query by class.
+    const dateCards = document.querySelectorAll('.week-dates .date-card');
     expect(dateCards.length).toBe(7);
   });
 
@@ -187,7 +223,7 @@ describe('PublicBooking Page', () => {
     renderBooking();
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a date')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
     });
 
     expect(screen.getByLabelText('Previous week')).toBeInTheDocument();
@@ -198,7 +234,7 @@ describe('PublicBooking Page', () => {
     renderBooking();
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a date')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
     });
 
     const nextWeekBtn = screen.getByLabelText('Next week');
@@ -206,14 +242,14 @@ describe('PublicBooking Page', () => {
 
     // After clicking next week, the date cards should update
     // (exact dates depend on current date, so just verify the click didn't crash)
-    expect(screen.getByText('Pick a date')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
   });
 
   it('renders time picker section', async () => {
     renderBooking();
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a time')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a time' })).toBeInTheDocument();
     });
   });
 
@@ -258,7 +294,7 @@ describe('PublicBooking Page', () => {
     renderBooking();
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a date')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
     });
 
     const nextBtn = screen.getByText('Next');
@@ -271,7 +307,7 @@ describe('PublicBooking Page', () => {
     renderBooking();
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a date')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
     });
 
     // Wait for slots to load (auto-selects first slot)
@@ -283,7 +319,9 @@ describe('PublicBooking Page', () => {
     fireEvent.click(screen.getByText('Next'));
 
     await waitFor(() => {
-      expect(screen.getByText('Tell us a little about yourself')).toBeInTheDocument();
+      // The form-step heading; this text also appears in the step indicator,
+      // so target the heading specifically.
+      expect(screen.getByRole('heading', { name: 'Tell us a little about yourself' })).toBeInTheDocument();
     });
   });
 
@@ -323,7 +361,7 @@ describe('PublicBooking Page', () => {
     fireEvent.click(screen.getByText('Back'));
 
     await waitFor(() => {
-      expect(screen.getByText('Pick a date')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pick a date' })).toBeInTheDocument();
     });
   });
 
@@ -365,8 +403,9 @@ describe('PublicBooking Page', () => {
     fireEvent.submit(form);
 
     await waitFor(() => {
-      // The error message about required fields
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      // Validation surfaces both a top-level error banner and per-field
+      // error messages, all with role="alert" — assert at least one exists.
+      expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
     });
   });
 
