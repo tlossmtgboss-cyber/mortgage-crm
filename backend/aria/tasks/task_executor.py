@@ -287,7 +287,7 @@ class TaskExecutor:
 
         await self.pipe.add_note(loan["id"], user_id,
             f"Conditional approval sent to {slots['recipient_email']}", "document_sent")
-        await self.pipe.update_status(loan["id"], "conditional_approval", user_id)
+        await self.pipe.update_status(loan["id"], "conditional_approval", user_id, org_id=org_id)
 
         return {"action": "conditional_approval_sent", "borrower_name": borrower["full_name"],
                 "recipient_email": slots["recipient_email"], "sent_at": datetime.now(timezone.utc).isoformat()}
@@ -519,7 +519,9 @@ class TaskExecutor:
         loan     = await self.crm.get_active_loan(borrower["id"], org_id)
         prev_stage = loan.get("stage")
 
-        await self.pipe.update_status(loan["id"], slots["new_stage"], user_id)
+        upd = await self.pipe.update_status(loan["id"], slots["new_stage"], user_id, org_id=org_id)
+        if isinstance(upd, dict) and upd.get("error"):
+            return upd  # propagate failure so it isn't narrated as success
         await self.pipe.add_note(loan["id"], user_id,
             f"Stage updated: {prev_stage} → {slots['new_stage']}", "status_change")
 

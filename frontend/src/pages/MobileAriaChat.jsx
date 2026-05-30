@@ -22,6 +22,7 @@ import React, {
   useRef,
 } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import api from '../services/api';
 import { submitMessageFeedback } from '../services/mobileAriaApi';
 import { useAriaVoice } from '../hooks/useAriaVoice';
 import { useAriaWebSocket } from '../hooks/useAriaWebSocket';
@@ -374,7 +375,7 @@ function MessageFeedback({ messageId, sessionId, feedbackState, onFeedback }) {
 }
 
 // Message bubble with parent-wired handlers
-function MessageBubbleWithHandlers({ msg, onNavigate, onRetry, onSuggestionSelect, sessionId, feedbackState, onFeedback }) {
+function MessageBubbleWithHandlers({ msg, onNavigate, onRetry, onSuggestionSelect, onConfirm, sessionId, feedbackState, onFeedback }) {
   const isUser = msg.role === 'user';
 
   return (
@@ -407,6 +408,23 @@ function MessageBubbleWithHandlers({ msg, onNavigate, onRetry, onSuggestionSelec
               </svg>
               Retry
             </button>
+          )}
+
+          {msg.isConfirmation && !msg.confirmationResolved && onConfirm && (
+            <div className="mac__confirm-actions">
+              <button
+                className="mac__confirm-btn mac__confirm-btn--approve"
+                onClick={() => onConfirm(msg.id, true)}
+              >
+                Approve
+              </button>
+              <button
+                className="mac__confirm-btn mac__confirm-btn--decline"
+                onClick={() => onConfirm(msg.id, false)}
+              >
+                Decline
+              </button>
+            </div>
           )}
         </div>
 
@@ -566,6 +584,11 @@ export default function MobileAriaChat() {
       };
       setMessages(prev => [...prev, errMsg]);
     },
+    onDisconnect: () => {
+      // Clear any in-flight "Aria is thinking…" state so a mid-task socket
+      // drop doesn't leave the typing indicator spinning forever.
+      setIsLoading(false);
+    },
   });
 
   // ── Session & persistence ──────────────────────────────────────────────────
@@ -601,33 +624,11 @@ export default function MobileAriaChat() {
     return () => clearTimeout(t);
   }, []);
 
-  // Fetch personalized greeting on every mount (fresh context) and after clearing chat
-  useEffect(() => {
-    if (initialLoad) return;
-    let cancelled = false;
-    api.get('/api/v1/aria/greeting')
-      .then(res => {
-        if (cancelled || !res.data?.greeting) return;
-        const greetingMsg = {
-          id: newId(),
-          role: 'aria',
-          text: res.data.greeting,
-          timestamp: new Date().toISOString(),
-          actions: [],
-          suggestions: [],
-          isGreeting: true,
-        };
-        setMessages(prev => {
-          if (prev.length === 0) return [greetingMsg];
-          if (prev[0]?.isGreeting) return [greetingMsg, ...prev.slice(1)];
-          return [greetingMsg, ...prev];
-        });
-      })
-      .catch(err => {
-        if (!cancelled) console.warn('[MobileAriaChat] Greeting fetch failed:', err?.message);
-      });
-    return () => { cancelled = true; };
-  }, [initialLoad, greetingSeq]);
+  // NOTE: The personalized greeting now arrives via the Aria WebSocket
+  // `greeting` event (see onGreeting above). The previous REST fetch to
+  // /api/v1/aria/greeting was both DEAD (its `api` import was dropped in the
+  // WS rewire → ReferenceError on mount) and DUPLICATE (raced the WS greeting).
+  // Removed in favor of the single WS-driven greeting path.
 
   // Persist messages to localStorage whenever they change
   useEffect(() => {
@@ -721,6 +722,17 @@ export default function MobileAriaChat() {
       setIsLoading(false);
     }
   }, [isLoading, wsSend, sendConfirmation]);
+
+  // Tappable Approve/Decline on a confirmation prompt. Marks the prompt
+  // resolved so the buttons disappear after a choice is made.
+  const handleConfirm = useCallback((messageId, approved) => {
+    sendConfirmation(approved);
+    setIsLoading(true);
+    triggerHaptic(approved ? 'success' : 'light');
+    setMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, confirmationResolved: true } : m
+    ));
+  }, [sendConfirmation]);
 
   // Normalize the actions from different response shapes
   function normalizeActions(data) {
@@ -918,6 +930,7 @@ export default function MobileAriaChat() {
                 onNavigate={handleActionNavigate}
                 onRetry={handleRetry}
                 onSuggestionSelect={handleSuggestionSelect}
+                onConfirm={handleConfirm}
                 sessionId={sessionId}
                 feedbackState={feedbackState}
                 onFeedback={handleFeedback}

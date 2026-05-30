@@ -14,19 +14,22 @@ const WS_URL = API_BASE_URL.replace(/^http/, 'ws') + '/api/v1/aria/ws';
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
-export function useAriaWebSocket({ onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError } = {}) {
+export function useAriaWebSocket({ onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError, onDisconnect } = {}) {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const wsRef = useRef(null);
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef(null);
   const intentionalClose = useRef(false);
-  const callbacksRef = useRef({ onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError });
+  // Messages submitted while the socket wasn't OPEN — flushed once connected
+  // so a send during (re)connect isn't silently dropped.
+  const pendingMessages = useRef([]);
+  const callbacksRef = useRef({ onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError, onDisconnect });
 
   // Keep callbacks ref current without triggering reconnect
   useEffect(() => {
-    callbacksRef.current = { onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError };
-  }, [onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError]);
+    callbacksRef.current = { onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError, onDisconnect };
+  }, [onGreeting, onMessage, onTyping, onConfirmation, onTaskComplete, onError, onDisconnect]);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN || connecting) return;
@@ -62,6 +65,14 @@ export function useAriaWebSocket({ onGreeting, onMessage, onTyping, onConfirmati
               setConnecting(false);
               reconnectAttempts.current = 0;
               callbacksRef.current.onGreeting?.(data.content);
+              // Connection is authenticated and ready — flush any messages the
+              // user sent while we were (re)connecting.
+              if (pendingMessages.current.length > 0) {
+                const queued = pendingMessages.current.splice(0);
+                queued.forEach((text) =>
+                  ws.send(JSON.stringify({ type: 'message', content: text }))
+                );
+              }
               break;
 
             case 'typing':
@@ -107,6 +118,10 @@ export function useAriaWebSocket({ onGreeting, onMessage, onTyping, onConfirmati
         setConnecting(false);
         wsRef.current = null;
 
+        // Always let the UI reset in-flight state (e.g. the "Aria is thinking…"
+        // spinner) so a mid-task drop doesn't hang forever.
+        callbacksRef.current.onDisconnect?.(event);
+
         if (event.code === 4001) {
           callbacksRef.current.onError?.('Authentication failed. Please log in again.');
           return;
@@ -116,6 +131,9 @@ export function useAriaWebSocket({ onGreeting, onMessage, onTyping, onConfirmati
         if (!intentionalClose.current && reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttempts.current += 1;
           reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
+        } else if (!intentionalClose.current) {
+          // Exhausted reconnect attempts — surface it instead of failing silently.
+          callbacksRef.current.onError?.('Lost connection to Aria. Tap to retry.');
         }
       };
 
@@ -145,9 +163,11 @@ export function useAriaWebSocket({ onGreeting, onMessage, onTyping, onConfirmati
 
   const sendMessage = useCallback((text) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) {
-      callbacksRef.current.onError?.('Not connected to Aria. Reconnecting...');
+      // Queue and (re)connect instead of dropping the message. It will be
+      // flushed when the 'greeting' event confirms the socket is ready.
+      pendingMessages.current.push(text);
       connect();
-      return false;
+      return true;
     }
     wsRef.current.send(JSON.stringify({ type: 'message', content: text }));
     return true;

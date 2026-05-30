@@ -116,7 +116,13 @@ def generate_pre_approval_letter(
         lo_dict = {
             "full_name": lo_name,
             "email": lo_email,
+            # Generator reads `nmls_number` / `org_name` (see document_generator
+            # .generate_preapproval_letter). Supplying the old `nmls_id` /
+            # `organization_name` keys rendered a BLANK NMLS# and org on the
+            # letter — a regulatory defect on a mortgage solicitation.
+            "nmls_number": lo_nmls,
             "nmls_id": lo_nmls,
+            "org_name": org_name,
             "organization_name": org_name,
         }
 

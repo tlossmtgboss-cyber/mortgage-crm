@@ -178,23 +178,17 @@ def initiate_outbound_call(
     except Exception as e:
         logger.warning(f"Failed to log call in initiate_outbound_call: {e}")
 
-    call_data = {
-        "call_id": f"CALL-{call_id}",
-        "phone_number": phone_number,
-        "contact_id": contact_id,
-        "contact_type": contact_type,
-        "contact_name": contact_name,
-        "purpose": purpose,
-        "script_id": script_id,
-        "status": "initiating",
-        "initiated_at": datetime.now().isoformat(),
-        "compliance_cleared": True,
-    }
-
-    return ToolResult.success(
-        data=call_data,
-        message=f"Call initiating to {phone_number} (compliance cleared)",
-        requires_approval=True,
+    # HONEST FAILURE: outbound dialing is NOT wired here. This tool previously
+    # returned success and logged an "initiating" call, but no provider was ever
+    # called — the borrower's phone never rang. Reporting success was a trust
+    # hazard (Aria would tell the LO "calling now" for a call that never happens).
+    # Until the real dialer is wired (services/click_to_call_service.py
+    # ClickToCallService → Telnyx calls.create), fail honestly. The
+    # compliance-cleared request is still logged above for audit.
+    return ToolResult.error(
+        "I can't place outbound calls directly yet — use click-to-dial from the "
+        f"contact screen to call {contact_name} at {phone_number}. "
+        "(The request passed compliance checks and was logged.)"
     )
 
 

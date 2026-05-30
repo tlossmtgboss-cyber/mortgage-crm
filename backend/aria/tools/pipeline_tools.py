@@ -23,16 +23,40 @@ def _run_sync(fn):
 
 class PipelineTools:
 
-    async def update_status(self, loan_id: int, new_stage: str, user_id: str) -> Dict:
-        """Update a loan's pipeline stage."""
+    # Valid loan stages (VARCHAR, stored UPPERCASE). Mirrors CLAUDE.md.
+    _VALID_STAGES = {
+        "APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING",
+        "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "SUSPENDED", "CTC",
+        "CLEAR_TO_CLOSE", "CLOSING", "DOCS", "DOCS_OUT", "FUNDED", "CANCELLED",
+        "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY", "NURTURE",
+    }
+
+    async def update_status(self, loan_id: int, new_stage: str, user_id: str, org_id: str = "") -> Dict:
+        """Update a loan's pipeline stage. Tenant-scoped and stage-validated."""
+        stage_upper = new_stage.upper().replace(" ", "_")
+        if stage_upper not in self._VALID_STAGES:
+            return {
+                "action": "update_status_failed",
+                "error": f"'{new_stage}' is not a valid loan stage.",
+            }
+        if not org_id:
+            return {"action": "update_status_failed", "error": "Missing organization context."}
+
         def _query():
             db = SessionLocal()
             try:
-                stage_upper = new_stage.upper().replace(" ", "_")
-                db.execute(text(
-                    "UPDATE loans SET stage = :stage, updated_at = NOW() WHERE id = :id"
-                ), {"stage": stage_upper, "id": loan_id})
+                # SECURITY: scope the UPDATE to the caller's org so a loan_id
+                # collision cannot mutate another tenant's loan.
+                result = db.execute(text(
+                    "UPDATE loans SET stage = :stage, updated_at = NOW() "
+                    "WHERE id = :id AND organization_id = :org"
+                ), {"stage": stage_upper, "id": loan_id, "org": org_id})
                 db.commit()
+                if result.rowcount == 0:
+                    return {
+                        "action": "update_status_failed",
+                        "error": "Loan not found in your organization.",
+                    }
                 return {"loan_id": loan_id, "new_stage": stage_upper}
             finally:
                 db.close()

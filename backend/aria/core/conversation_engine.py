@@ -708,6 +708,32 @@ Keep it conversational and under 100 words unless showing a document preview.
     }
 
 
+def _detect_execution_failure(result: Any) -> str | None:
+    """Inspect a TaskExecutor result for failure signals.
+
+    Several handlers report failure by RETURNING a dict (e.g.
+    {"action": "sms_blocked", "error": "..."}) instead of raising. Without
+    this check, execute_node treats those as success and response_node
+    narrates "Done ✓" over a blocked/failed action — a compliance and trust
+    hazard. Returns a human-readable failure message, or None on success.
+    """
+    if not isinstance(result, dict):
+        return None
+    # Explicit error string wins.
+    err = result.get("error")
+    if err:
+        return str(err)
+    action = str(result.get("action") or "")
+    if action.endswith("_blocked") or action.endswith("_failed"):
+        return result.get("message") or f"Action did not complete ({action})."
+    if result.get("success") is False:
+        return result.get("message") or "The action did not complete successfully."
+    status = str(result.get("status") or "").lower()
+    if status in {"failed", "blocked", "error", "denied"}:
+        return result.get("message") or f"The action did not complete ({status})."
+    return None
+
+
 async def execute_node(state: AriaState) -> AriaState:
     """Execute the task using the TaskExecutor."""
     executor = TaskExecutor()
@@ -718,6 +744,21 @@ async def execute_node(state: AriaState) -> AriaState:
             user_id=state["user_id"],
             org_id=state["org_id"],
         )
+
+        # Result-integrity gate: handlers that signal failure by returning an
+        # error/blocked/failed dict must NOT be narrated as success. Route them
+        # to the honest error branch in response_node.
+        failure_msg = _detect_execution_failure(result)
+        if failure_msg:
+            logger.warning(
+                "Task '%s' reported failure via result payload: %s",
+                state.get("intent"), failure_msg,
+            )
+            return {
+                "task_result": result,
+                "phase": DialoguePhase.RESPONDING,
+                "error": failure_msg,
+            }
 
         # Fire-and-forget: record borrower context if task involved a borrower
         try:
@@ -1071,6 +1112,24 @@ async def check_confirm_node(state: AriaState) -> dict:
     return {}
 
 
+async def cancel_node(state: AriaState) -> dict:
+    """User declined a pending confirmation. Acknowledge and reset — never
+    narrate a completion for an action that was cancelled."""
+    return {
+        "messages": [AIMessage(content="No problem — I've cancelled that. What would you like to do instead?")],
+        "phase": DialoguePhase.RESPONDING,
+        "intent": None,
+        "slots": {},
+        "missing_slots": [],
+        "current_slot_question": None,
+        "mode": None,
+        "task_result": None,
+        "confirmation_preview": None,
+        "error": None,
+        "iteration_count": 0,
+    }
+
+
 # ─── Routing logic ────────────────────────────────────────────────────────────
 
 def route_dispatch(state: AriaState) -> str:
@@ -1121,23 +1180,36 @@ def route_after_confirmation(state: AriaState) -> str:
 
 def should_execute(state: AriaState) -> str:
     """Check if user confirmed or denied the pending action."""
+    import re as _re
+
     last_message = next(
         (m.content.lower() for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
         ""
     )
-    affirmative = any(w in last_message for w in [
-        "yes", "yeah", "yep", "do it", "send it", "go ahead", "confirm",
-        "sure", "ok", "okay", "correct", "looks good", "that's right", "proceed"
+
+    def _matches(words: list[str]) -> bool:
+        # Word-boundary match so "not correct" doesn't match "correct" and
+        # "now"/"know" don't match "no". Phrases match as whole phrases.
+        return any(_re.search(r"\b" + _re.escape(w) + r"\b", last_message) for w in words)
+
+    negative = _matches([
+        "no", "nope", "cancel", "stop", "don't", "do not", "wait", "hold on",
+        "change", "not", "wrong", "incorrect", "nevermind", "never mind",
     ])
-    negative = any(w in last_message for w in [
-        "no", "nope", "cancel", "stop", "don't", "wait", "hold on", "change"
+    affirmative = _matches([
+        "yes", "yeah", "yep", "do it", "send it", "send", "go ahead", "confirm",
+        "confirmed", "sure", "ok", "okay", "correct", "looks good",
+        "that's right", "proceed", "yup",
     ])
 
+    # Negative wins: an explicit rejection must NEVER execute, even if the
+    # reply also contains an affirmative token ("no, don't send it").
+    if negative:
+        return "cancel"
     if affirmative:
         return "execute"
-    if negative:
-        return "response"
-    # Ambiguous — re-run NLU to understand what they said
+    # Ambiguous — do NOT execute. Re-run NLU to interpret the reply; the pending
+    # action stays unexecuted rather than firing on an unclear answer.
     return "nlu"
 
 
@@ -1153,6 +1225,7 @@ def build_aria_graph() -> StateGraph:
     graph.add_node("slot_answer",   slot_answer_node)
     graph.add_node("confirmation",  confirmation_node)
     graph.add_node("check_confirm", check_confirm_node)
+    graph.add_node("cancel",        cancel_node)
     graph.add_node("execute",       execute_node)
     graph.add_node("response",      response_node)
     graph.add_node("query_mode",    query_mode_node)
@@ -1193,12 +1266,16 @@ def build_aria_graph() -> StateGraph:
     # User's yes/no response: confirmed → execute, denied → response, unclear → nlu
     graph.add_conditional_edges("check_confirm", should_execute, {
         "execute":  "execute",
+        "cancel":   "cancel",
         "response": "response",
         "nlu":      "nlu",
     })
 
     # Query mode → END
     graph.add_edge("query_mode", END)
+
+    # Cancelled confirmation → END (acknowledged, nothing executed)
+    graph.add_edge("cancel", END)
 
     # Execute → response → END
     graph.add_edge("execute", "response")

@@ -1044,3 +1044,36 @@
     max-width: 520px;
   }
 }
+
+/* Confirmation Approve/Decline buttons (Aria pending-action prompts) */
+.mac__confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mac__confirm-btn {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px; /* touch target */
+  transition: opacity 0.15s ease;
+}
+
+.mac__confirm-btn:active {
+  opacity: 0.7;
+}
+
+.mac__confirm-btn--approve {
+  background: #1f9d55;
+  color: #fff;
+}
+
+.mac__confirm-btn--decline {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
