@@ -93,12 +93,29 @@ class LeadSourceCategory(str, enum.Enum):
 # MODEL FACTORY
 # =============================================================================
 
+# Cache for SLA models keyed by id(Base), mirroring workflow_config_models.py.
+# Without this, every call to create_workflow_sla_models() defined a NEW
+# WorkflowInstance class against the same declarative Base, registering a
+# duplicate mapper. The duplicate broke string resolution for the
+# WorkflowInstance <-> WorkflowTaskInstance back_populates pair, causing
+# configure_mappers() to fail ("Mapper[WorkflowInstance] ... failed to locate
+# a name") on the first ORM query of ANY request once a second registration
+# occurred (e.g. tests calling the factory after app import). Caching makes the
+# factory idempotent so repeated calls return the same classes.
+_workflow_sla_models_cache = {}
+
+
 def create_workflow_sla_models(Base):
     """
     Factory function to create workflow SLA models with the provided SQLAlchemy Base.
 
     This follows the pattern used in workflow_config_models.py to avoid circular imports.
+    Idempotent: repeated calls with the same Base return the cached classes rather
+    than re-defining (and re-mapping) them.
     """
+    base_id = id(Base)
+    if base_id in _workflow_sla_models_cache:
+        return _workflow_sla_models_cache[base_id]
 
     class WorkflowInstance(Base):
         """
@@ -402,12 +419,14 @@ def create_workflow_sla_models(Base):
             self.deactivated_at = datetime.now(timezone.utc)
 
 
-    return {
+    models = {
         'WorkflowInstance': WorkflowInstance,
         'WorkflowAIConfidence': WorkflowAIConfidence,
         'LeadWorkflowRoleAssignment': LeadWorkflowRoleAssignment,
         'LoanWorkflowRoleAssignment': LoanWorkflowRoleAssignment,
     }
+    _workflow_sla_models_cache[base_id] = models
+    return models
 
 
 # =============================================================================

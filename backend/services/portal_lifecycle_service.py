@@ -125,6 +125,35 @@ class PortalLifecycleService:
             self.db.rollback()
             return None
 
+    def get_portal_loan_by_crm_deal_id(self, crm_loan_id: int) -> Optional[PortalLoan]:
+        """Borrower (PURL) read-path resolver: match crm_deal_id ONLY.
+
+        The borrower dashboard path must never resolve a PortalLoan by its
+        primary key from a client-supplied integer. That path value is a CRM
+        loan id (PURLLoan.main_loan_id); PortalLoan.id is a different id-space
+        and PortalLoan carries no organization_id, so a foreign tenant's
+        PortalLoan.id colliding with this borrower's CRM loan id would leak
+        cross-tenant data (the `get_portal_loan` dual-precedence resolver hits
+        `PortalLoan.id == loan_id` first). Ownership is already proven by the
+        route guard against the org/workspace-scoped purl_loans table; here we
+        only locate the matching PortalLoan by crm_deal_id, with NO id-match and
+        NO lazy create (a borrower GET must never write).
+
+        Returns None (caller -> 404) when no PortalLoan exists for this loan.
+        """
+        try:
+            return (
+                self.db.query(PortalLoan)
+                .filter(PortalLoan.crm_deal_id == crm_loan_id)
+                .first()
+            )
+        except SQLAlchemyError as e:
+            logger.warning(
+                f"Could not resolve portal loan by crm_deal_id={crm_loan_id}: {e}"
+            )
+            self.db.rollback()
+            return None
+
     def get_portal_loan_by_token(self, access_token: str) -> Optional[PortalLoan]:
         """Get portal loan by partner access token."""
         from models.portal_models import PartnerAccessToken

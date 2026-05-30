@@ -15,6 +15,7 @@ import { useParams, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import './PortalContainer.css';
 import PortalOnboardingGuide from '../../components/Portal/PortalOnboardingGuide';
+import usePortalRealtime from '../../hooks/usePortalRealtime';
 
 // Lazy load portal components for code splitting
 const LeadPortal = lazy(() => import('./LeadPortal'));
@@ -230,6 +231,28 @@ export default function PortalContainer() {
     return localStorage.getItem(`purl_token_${slug}`);
   }, [location.search, slug]);
 
+  // Apply already-fetched workspace data: store it and (re)detect the stage.
+  // Shared by the initial fetch and the realtime polling hook's onUpdate so a
+  // poll tick refreshes stage transitions without re-running the auth path.
+  const applyPortalData = useCallback((data) => {
+    if (!data) return;
+
+    setPortalData(data);
+
+    const detectedStage = detectPortalStage(data);
+    setStage(detectedStage);
+
+    if (detectedStage === PortalStage.ACTIVE_LOAN) {
+      setSubStage(detectSubStage(data));
+    }
+
+    if (detectedStage === PortalStage.FUNDED_CELEBRATION) {
+      setShowCelebration(true);
+    }
+
+    console.log('[PortalContainer] Stage detected:', detectedStage, 'Sub-stage:', detectSubStage(data));
+  }, []);
+
   // Fetch portal data
   const fetchPortalData = useCallback(async () => {
     const token = getToken();
@@ -254,25 +277,7 @@ export default function PortalContainer() {
         throw new Error('Portal not found');
       }
 
-      setPortalData(data);
-
-      // Detect stage
-      const detectedStage = detectPortalStage(data);
-      setStage(detectedStage);
-
-      // Detect sub-stage for active loans
-      if (detectedStage === PortalStage.ACTIVE_LOAN) {
-        const sub = detectSubStage(data);
-        setSubStage(sub);
-      }
-
-      // Show celebration if just funded
-      if (detectedStage === PortalStage.FUNDED_CELEBRATION) {
-        setShowCelebration(true);
-      }
-
-      console.log('[PortalContainer] Stage detected:', detectedStage, 'Sub-stage:', detectSubStage(data));
-
+      applyPortalData(data);
     } catch (err) {
       console.error('[PortalContainer] Error:', err);
       setError({
@@ -282,24 +287,38 @@ export default function PortalContainer() {
     } finally {
       setLoading(false);
     }
-  }, [slug, getToken]);
+  }, [slug, getToken, applyPortalData]);
+
+  // Surface auth failures from the realtime poll loop (token expired/revoked).
+  const handleRealtimeError = useCallback((err) => {
+    if (err?.status === 401 || err?.status === 403) {
+      setError({ status: err.status, message: 'Your session has expired. Please use your portal access link again.' });
+    }
+  }, []);
 
   // Load data on mount
   useEffect(() => {
     fetchPortalData();
   }, [fetchPortalData]);
 
-  // Auto-refresh polling — re-fetch every 60s so stage transitions appear
-  // without requiring a manual page refresh
-  useEffect(() => {
-    if (loading || error) return;
+  // Realtime liveness — 30s polling against the PURL-authed workspace endpoint,
+  // pausing while the tab is hidden and resuming with an immediate refresh on
+  // focus. Replaces the old inline 60s setInterval. Stops on a 401/403 and
+  // routes to handleRealtimeError so we surface re-auth instead of hammering.
+  const { refreshNow } = usePortalRealtime({
+    slug,
+    token: getToken(),
+    enabled: !loading && !error,
+    intervalMs: 30000,
+    onUpdate: applyPortalData,
+    onError: handleRealtimeError,
+  });
 
-    const interval = setInterval(() => {
-      fetchPortalData();
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [loading, error, fetchPortalData]);
+  // Children call onRefresh after borrower actions for instant feedback. Wrap
+  // refreshNow so a manual retry still goes through the full auth path.
+  const handleChildRefresh = useCallback(() => {
+    refreshNow();
+  }, [refreshNow]);
 
   // Check if should show onboarding (after data loads)
   useEffect(() => {
@@ -361,7 +380,7 @@ export default function PortalContainer() {
           <LeadPortal
             data={portalData}
             slug={slug}
-            onRefresh={fetchPortalData}
+            onRefresh={handleChildRefresh}
             onRestartTour={restartTour}
           />
         )}
@@ -371,7 +390,7 @@ export default function PortalContainer() {
             data={portalData}
             slug={slug}
             subStage={subStage}
-            onRefresh={fetchPortalData}
+            onRefresh={handleChildRefresh}
             onRestartTour={restartTour}
           />
         )}
@@ -380,7 +399,7 @@ export default function PortalContainer() {
           <MUMPortal
             data={portalData}
             slug={slug}
-            onRefresh={fetchPortalData}
+            onRefresh={handleChildRefresh}
             onRestartTour={restartTour}
           />
         )}

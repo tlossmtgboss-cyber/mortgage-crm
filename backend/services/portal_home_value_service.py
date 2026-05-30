@@ -538,8 +538,18 @@ class PortalHomeValueService:
     # DASHBOARD DATA
     # =========================================================================
 
-    def get_home_value_dashboard(self, loan_id: int) -> Dict[str, Any]:
-        """Get complete home value dashboard data."""
+    def get_home_value_dashboard(
+        self, loan_id: int, save_valuation: bool = True
+    ) -> Dict[str, Any]:
+        """Get complete home value dashboard data.
+
+        Args:
+            loan_id: PortalLoan.id or PortalLoan.crm_deal_id to resolve.
+            save_valuation: When True (default, LO path) the recomputed
+                valuation is persisted as a new valuation_history row. Borrower
+                read paths should pass False to avoid write amplification and
+                repeated external valuation spend on every portal open.
+        """
         baseline = self.get_property_baseline(loan_id)
 
         if not baseline:
@@ -548,7 +558,7 @@ class PortalHomeValueService:
                 "message": "Property value baseline not set",
             }
 
-        valuation = self.calculate_current_value(loan_id, save_valuation=True)
+        valuation = self.calculate_current_value(loan_id, save_valuation=save_valuation)
         insights = self.get_active_insights(loan_id)
         history = self.get_valuation_history(loan_id, limit=6)
 

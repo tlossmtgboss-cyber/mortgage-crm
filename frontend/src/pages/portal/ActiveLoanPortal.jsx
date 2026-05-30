@@ -12,6 +12,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
+import PortalQuickActions from './PortalQuickActions';
+import RiskFlags from './RiskFlags';
 import './ActiveLoanPortal.css';
 import { toast } from '../../utils/toast';
 
@@ -162,6 +164,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const [riskFlags, setRiskFlags] = useState([]);
 
   // Extract data
   const workspace = data?.workspace;
@@ -169,6 +172,11 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
   const contacts = data?.contacts || [];
   const borrower = contacts.find(c => c.contact_type === 'borrower') || contacts[0];
   const loanOfficer = data?.loan_officer || workspace?.loan_officer;
+
+  // crm_loan_id (PURLLoan.main_loan_id, surfaced by purl_workspace_service.
+  // _loan_to_dict) is the CRM Loan.id the borrower dashboard endpoint resolves
+  // against PortalLoan.crm_deal_id. NOT the same id-space as data.loan.id.
+  const crmLoanId = loan?.crm_loan_id;
 
   // Fetch tasks and documents
   useEffect(() => {
@@ -187,6 +195,29 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
     };
     fetchData();
   }, [slug]);
+
+  // Fetch borrower-facing risk flags from the PURL-authed dashboard aggregator.
+  // Kept as a separate, guarded fetch so a missing PortalLoan / 404 degrades
+  // gracefully (panel hides) without breaking the workspace render.
+  useEffect(() => {
+    if (!crmLoanId) {
+      setRiskFlags([]);
+      return;
+    }
+    let cancelled = false;
+    api.getBorrowerDashboard(crmLoanId)
+      .then((dash) => {
+        if (!cancelled) setRiskFlags(Array.isArray(dash?.risks) ? dash.risks : []);
+      })
+      .catch((err) => {
+        // 404 (no PortalLoan yet) or any error: just hide the panel.
+        if (!cancelled) setRiskFlags([]);
+        if (err?.status && err.status !== 404) {
+          console.warn('Could not fetch borrower risk flags:', err);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [crmLoanId]);
 
   // Borrower info
   const borrowerName = borrower
@@ -224,8 +255,10 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
     return 0;
   }, [loan, workspace]);
 
-  // Days until closing
-  const closingDate = estClosing || scheduledClosing;
+  // Days until closing. PURL workspace data exposes `target_close_date`
+  // (see purl_workspace_service._loan_to_dict); the legacy fields are kept as
+  // fallbacks so the countdown works regardless of which payload shape we get.
+  const closingDate = estClosing || scheduledClosing || loan?.target_close_date;
 
   // Action items — use real tasks if available, else defaults
   const actionItems = useMemo(() => {
@@ -406,6 +439,10 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
         {activeTab === 'overview' && (
           <div className="overview-layout">
             <div className="overview-main">
+              {/* Attention Needed — borrower-facing risk flags lead the Overview.
+                  Renders nothing when there are no risks. */}
+              <RiskFlags risks={riskFlags} />
+
               {/* Questions / CTA */}
               <div className="questions-card">
                 <div className="questions-left">
@@ -658,6 +695,12 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           </div>
         )}
       </div>
+
+      <PortalQuickActions
+        loanOfficer={loanOfficer}
+        onSchedule={() => setShowScheduleModal(true)}
+        onUpload={() => setActiveTab('documents')}
+      />
 
       {/* Schedule Modal */}
       <ScheduleAppointmentModal

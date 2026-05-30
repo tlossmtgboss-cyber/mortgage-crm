@@ -13,6 +13,10 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { mumPortalAPI } from '../../services/api';
 import { api } from '../../lib/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
+import MUMScenarios from './MUMScenarios';
+import PortalQuickActions from './PortalQuickActions';
+import HomeValueTab from './HomeValueTab';
+import RiskFlags from './RiskFlags';
 import './MUMPortal.css';
 import { toast } from '../../utils/toast';
 
@@ -221,6 +225,10 @@ export default function MUMPortal({ data, slug, onRefresh }) {
   // Post-close real data from API
   const [postcloseData, setPostcloseData] = useState(null);
 
+  // Borrower-facing home_value + risks from the PURL-authed dashboard aggregator
+  const [homeValueData, setHomeValueData] = useState(null);
+  const [riskFlags, setRiskFlags] = useState([]);
+
   // Fetch post-close data from API
   const fetchPostcloseData = useCallback(async () => {
     if (!slug) return;
@@ -250,6 +258,38 @@ export default function MUMPortal({ data, slug, onRefresh }) {
     fetchDocs();
     fetchPostcloseData();
   }, [slug, fetchPostcloseData]);
+
+  // crm_loan_id (PURLLoan.main_loan_id) — the CRM Loan.id the borrower dashboard
+  // resolves against PortalLoan.crm_deal_id. Distinct from data.loan.id.
+  const crmLoanId = data?.loan?.crm_loan_id;
+
+  // Fetch borrower-facing home_value + risks from the PURL-authed dashboard.
+  // Separate, guarded fetch so a missing baseline / PortalLoan / 404 degrades
+  // gracefully (Home Value falls back to the local estimate) without breaking
+  // the workspace render.
+  useEffect(() => {
+    if (!crmLoanId) {
+      setHomeValueData(null);
+      setRiskFlags([]);
+      return undefined;
+    }
+    let cancelled = false;
+    api.getBorrowerDashboard(crmLoanId)
+      .then((dash) => {
+        if (cancelled) return;
+        setHomeValueData(dash?.home_value || null);
+        setRiskFlags(Array.isArray(dash?.risks) ? dash.risks : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setHomeValueData(null);
+        setRiskFlags([]);
+        if (err?.status && err.status !== 404) {
+          console.warn('Could not fetch borrower dashboard:', err);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [crmLoanId]);
 
   // Extract data
   const workspace = data?.workspace;
@@ -383,7 +423,9 @@ export default function MUMPortal({ data, slug, onRefresh }) {
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
+    { id: 'home-value', label: 'Home Value' },
     { id: 'referrals', label: 'Referrals' },
+    { id: 'scenarios', label: 'Scenarios' },
     { id: 'documents', label: 'Documents' },
     { id: 'loan-details', label: 'Loan Details' },
     { id: 'contacts', label: 'Contacts' },
@@ -487,6 +529,10 @@ export default function MUMPortal({ data, slug, onRefresh }) {
         {activeTab === 'overview' && (
           <div className="overview-layout">
             <div className="overview-main">
+              {/* Attention Needed — borrower-facing risk flags. Renders nothing
+                  when there are no risks. */}
+              <RiskFlags risks={riskFlags} />
+
               {/* Questions / CTA Section */}
               <div className="questions-card">
                 <div className="questions-left">
@@ -580,6 +626,22 @@ export default function MUMPortal({ data, slug, onRefresh }) {
           </div>
         )}
 
+        {/* ===== HOME VALUE TAB ===== */}
+        {activeTab === 'home-value' && (
+          <div className="home-value-tab">
+            <h2>Your Home Value &amp; Equity</h2>
+            <p className="tab-subtitle">
+              An estimate of what your home is worth today and how much of it you own.
+            </p>
+            <HomeValueTab
+              homeValue={homeValueData}
+              fallbackValue={propertyValue}
+              fallbackBalance={currentBalance}
+              purchasePrice={loan?.purchase_price || loan?.loan_amount}
+            />
+          </div>
+        )}
+
         {/* ===== REFERRALS TAB ===== */}
         {activeTab === 'referrals' && (
           <div className="referrals-tab">
@@ -619,6 +681,18 @@ export default function MUMPortal({ data, slug, onRefresh }) {
                 <span className="ref-stat-label">Earned</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ===== SCENARIOS TAB ===== */}
+        {activeTab === 'scenarios' && (
+          <div className="scenarios-tab">
+            <h2>Explore Your Options</h2>
+            <MUMScenarios
+              propertyValue={propertyValue}
+              currentBalance={currentBalance}
+              currentRate={loan?.interest_rate || 6.5}
+            />
           </div>
         )}
 
@@ -771,6 +845,12 @@ export default function MUMPortal({ data, slug, onRefresh }) {
           </div>
         )}
       </div>
+
+      <PortalQuickActions
+        loanOfficer={loanOfficer}
+        onSchedule={() => setShowScheduleModal(true)}
+        showUpload={false}
+      />
 
       {/* Schedule Modal */}
       <ScheduleAppointmentModal
