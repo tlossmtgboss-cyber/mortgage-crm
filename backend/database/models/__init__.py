@@ -149,6 +149,7 @@ from .workflow_flowchart import (
 from .permission import (
     EmployeeInvite,
     CRMPage,
+    Role,
     RolePagePermission,
     UserPagePermission,
     UserPermission,
@@ -871,6 +872,7 @@ __all__ = [
     # =====================
     "EmployeeInvite",
     "CRMPage",
+    "Role",
     "RolePagePermission",
     "UserPagePermission",
     "UserPermission",
