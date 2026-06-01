@@ -15,14 +15,22 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy.orm import Session
 
 from database import get_db
-from middleware.purl_auth import PURLAuthContext, require_purl_write_scope
+from middleware.purl_auth import PURLAuthContext, check_purl_rate_limit, require_purl_write_scope
 from database.models.pos import POSApplication
 from ._helpers import resolve_application_for_borrower_write, build_audit_context
 from services.pos.application_service import AuditContext
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/pos/applications", tags=["pos-upload"])
+router = APIRouter(
+    prefix="/api/v1/pos/applications",
+    tags=["pos-upload"],
+    # Per-token rate limit, matching every other POS router (documents, tasks,
+    # application, etc.). Uploads are the most resource-intensive POS endpoint,
+    # so this was the most important one to gate — it was the only POS router
+    # missing it.
+    dependencies=[Depends(check_purl_rate_limit)],
+)
 
 ALLOWED_MIME_TYPES = {
     "application/pdf",

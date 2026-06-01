@@ -134,24 +134,29 @@ def get_pos_documents(
     """
 
     # -----------------------------------------------------------------------
-    # Verify borrower owns this loan via the PURL workspace
+    # Verify borrower owns this loan via the PURL workspace.
+    # Match the requested loan_id directly within the token's workspace rather
+    # than grabbing an arbitrary workspace loan with .first(): a workspace can
+    # hold more than one PURLLoan, and the unordered .first() would 404 a loan
+    # the borrower legitimately owns whenever it returned a different one.
+    # Still tenant-safe — the workspace_id filter scopes to this token.
     # -----------------------------------------------------------------------
     from models.purl import PURLLoan
+    from sqlalchemy import or_
 
     purl_loan = (
         db.query(PURLLoan)
         .filter(
             PURLLoan.workspace_id == purl_ctx.workspace_id,
+            or_(
+                PURLLoan.main_loan_id == loan_id,
+                PURLLoan.id == loan_id,
+            ),
         )
         .first()
     )
 
-    # The loan must belong to the borrower's workspace
-    resolved_loan_id = None
-    if purl_loan:
-        resolved_loan_id = purl_loan.main_loan_id or purl_loan.id
-
-    if resolved_loan_id is None or resolved_loan_id != loan_id:
+    if purl_loan is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Loan not found",

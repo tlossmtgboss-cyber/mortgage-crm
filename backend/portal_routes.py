@@ -1861,9 +1861,13 @@ def get_multi_loan_history(
     loan_ids = [loan["id"] for loan in borrower_loans]
 
     if loan_id not in loan_ids:
+        # 404 (not 403): a loan id outside the borrower's own workspace must not
+        # be confirmed to exist. 403 "does not belong to your account" leaks that
+        # the loan exists in another account — matches the 404-not-403 pattern the
+        # borrower-dashboard IDOR guard already uses.
         raise HTTPException(
-            status_code=403,
-            detail="Access denied. This loan does not belong to your account."
+            status_code=404,
+            detail="Loan not found."
         )
 
     lifecycle_service = MultiLoanLifecycleService(db)
