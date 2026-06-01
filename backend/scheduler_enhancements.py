@@ -86,6 +86,10 @@ class BookingChannel(str, Enum):
 # MODEL FACTORY
 # ============================================================================
 
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_scheduler_enhancement_models(Base):
     """Create enhanced scheduler models"""
 

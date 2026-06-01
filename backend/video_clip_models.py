@@ -217,6 +217,10 @@ DEFAULT_CLIP_TEMPLATES = [
 # MODEL FACTORY
 # ============================================================================
 
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_video_clip_models(Base):
     """
     Factory function to create video clip models with the provided SQLAlchemy Base.

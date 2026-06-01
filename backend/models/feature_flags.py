@@ -32,6 +32,10 @@ class FeatureCategory(str, enum.Enum):
 
 
 # Define the model class dynamically to avoid import issues
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_feature_models(Base):
     """Create feature flag models with the provided Base class"""
 

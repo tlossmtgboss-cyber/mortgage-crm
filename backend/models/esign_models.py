@@ -109,6 +109,10 @@ def hash_token(raw_token: str) -> str:
 # MODEL FACTORY
 # =============================================================================
 
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_esign_models(Base):
     """
     Factory function to create E-Sign models with the provided SQLAlchemy Base.

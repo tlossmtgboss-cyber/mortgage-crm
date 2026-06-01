@@ -37,6 +37,11 @@ _FACTORY_CALLS = [
 ]
 
 _registered = False
+# Strong references to every factory-created class. SQLAlchemy's _class_registry
+# holds only WEAK references, so if we don't retain the factory return dicts the
+# classes get garbage-collected and string relationship() refs fail to resolve
+# ("failed to locate a name"). This list keeps them alive for the process.
+_retained_models = []
 
 
 def register_all_models(Base=None):
@@ -50,11 +55,13 @@ def register_all_models(Base=None):
         from db import Base as _B
         Base = _B
     for mod in _DIRECT_MODEL_MODULES:
-        importlib.import_module(mod)
+        _retained_models.append(importlib.import_module(mod))
     for mod_name, fn_name in _FACTORY_CALLS:
         try:
             mod = importlib.import_module(mod_name)
-            getattr(mod, fn_name)(Base)
+            result = getattr(mod, fn_name)(Base)
+            # Retain a strong ref so the mapped classes are not GC'd.
+            _retained_models.append(result)
         except Exception as e:
             logger.error("Factory %s.%s failed: %s", mod_name, fn_name, e)
             raise
