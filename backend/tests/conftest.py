@@ -130,6 +130,20 @@ def db_engine():
 
         conn.commit()
 
+    # Baseline seed: tests use mock_user(organization_id=1, id=1) and insert rows
+    # referencing org 1 / user 1. Now that the full schema with FK constraints is
+    # created, these parent rows must exist.
+    with test_engine.connect() as conn:
+        conn.execute(text(
+            "INSERT INTO organizations (id, name) VALUES (1, 'Test Org') "
+            "ON CONFLICT (id) DO NOTHING"
+        ))
+        conn.execute(text(
+            "INSERT INTO users (id, email, hashed_password, organization_id) "
+            "VALUES (1, 'test@example.com', 'x', 1) ON CONFLICT (id) DO NOTHING"
+        ))
+        conn.commit()
+
     yield test_engine
 
     # Clean up after the full test session. DROP SCHEMA CASCADE is stale-safe —
