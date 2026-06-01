@@ -36,7 +36,7 @@ from .nodes.respond import format_structured_response
 from .hallucination_verifier import get_hallucination_verifier
 from .orchestration.quality_analyzer import QualityAnalyzer
 from .checkpointer import get_checkpointer
-from .orchestration.llm_circuit_breaker import LLMCircuitBreaker, CircuitState
+from .orchestration.llm_circuit_breaker import LLMCircuitBreaker, CircuitState  # noqa: F401 — CircuitState re-exported for backward-compat test imports
 
 # Enterprise modules: budget, rate limiting, audit, correlation IDs
 from .token_budget import get_token_budget, get_rate_limiter
