@@ -132,8 +132,13 @@ def db_engine():
 
     yield test_engine
 
-    # Clean up after the full test session
-    Base.metadata.drop_all(bind=test_engine)
+    # Clean up after the full test session. DROP SCHEMA CASCADE is stale-safe —
+    # metadata.drop_all() can fail on unnamed/use_alter FK constraints that the
+    # multi-pass creator never named.
+    with test_engine.connect() as _c:
+        _c.execute(text("DROP SCHEMA public CASCADE"))
+        _c.execute(text("CREATE SCHEMA public"))
+        _c.commit()
 
 
 @pytest.fixture(scope="function")
