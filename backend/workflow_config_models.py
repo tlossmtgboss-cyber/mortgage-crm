@@ -240,17 +240,18 @@ def create_workflow_config_models(Base):
         workflow = relationship("WorkflowConfiguration")
         day_config = relationship("WorkflowDayConfig")
         assigned_user = relationship("User", foreign_keys=[assigned_user_id])
-        # Reverse side of WorkflowInstance.task_instances (models/workflow_sla.py),
-        # which declares back_populates="workflow_instance". Without this matching
-        # property the mapper registry fails to initialize once the SLA factory is
-        # invoked ("Mapper[WorkflowTaskInstance] has no property
-        # 'workflow_instance'"), surfacing as a 500 on the first ORM query of an
-        # otherwise-unrelated request. Completing the bidirectional pair fixes it.
-        workflow_instance = relationship(
-            "WorkflowInstance",
-            back_populates="task_instances",
-            foreign_keys=[workflow_instance_id],
-        )
+        # HOTFIX 2026-06-01: the WorkflowInstance back-relationship is intentionally
+        # NOT declared here. It was added in e5bf3e37b to complete a bidirectional
+        # pair, but the SLA factory that registers WorkflowInstance
+        # (models.workflow_sla.create_workflow_sla_models) is NOT invoked at app
+        # startup in production — only create_workflow_config_models is. So this
+        # relationship's string target 'WorkflowInstance' fails to resolve at
+        # configure_mappers(), which aborts mapper init and makes EVERY ORM query
+        # 500 (total login outage). Until the canonical model registration
+        # (register_all_models, on the portal-consolidation branch) calls BOTH
+        # factories + imports the permission Role model on one Base, declaring this
+        # relationship is unsafe in prod. No production code uses .workflow_instance
+        # / .task_instances (verified), so omitting it is behavior-neutral.
 
 
     class BrokenTaskAlert(Base):
