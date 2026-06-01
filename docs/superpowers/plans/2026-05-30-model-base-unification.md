@@ -69,11 +69,20 @@ AST scan of `models/`, `database/models/`, and the factory modules (780 mapped c
 | `DocumentRequest` | smart_docs_models `smart_document_requests` / perennia_docs `perennia_document_requests` | distinct — rename perennia's → `PerenniaDocumentRequest` (+alias) |
 | `NotificationPreference` | doc_notification `smart_docs_notification_preferences` / notification_preference `notification_preferences` | distinct — rename doc one → `SmartDocsNotificationPreference` (+alias) |
 
-### Cluster C — TRUE duplicates (same table, 2 classes) → pick canonical, redirect the other ⚠ NEEDS DECISION
-| Table | Competing classes | Decision needed |
-|---|---|---|
-| `income_sources` | income_models.py:`IncomeSource` vs income_calculation.py:`IncomeSource` | Which module is canonical? (check which routes import which) |
-| `refi_opportunities` | rate_watch.py:`RefiOpportunityEvent` vs refinance_intelligence.py:`RefiOpportunity` | Same table, two classes — which is canonical? |
+### Cluster C — TABLE COLLISIONS between distinct features (investigated 2026-06-01) ⚠
+These are NOT simple name-dups: two **different** models claim the **same physical table**, with **incompatible schemas**. One must give up the table (rename + migration) or be removed if dead.
+
+**C1 — `income_sources` (two different entities, both on `income_sources`):**
+- `database/models/income_calculation.py:285 IncomeSource` — line-items of an income **calculation** (`calculation_id`→income_calculations, `employer_name`, `base_monthly_income`, `overtime_monthly`, `bonus_monthly`, `commission_monthly`). Canonical dir; 5 app imports.
+- `models/income_models.py:87 IncomeSource` — a borrower **income source** record (`loan_id`, `employment_id`, `income_type` enum, `gross_monthly_income`, `monthly_qualifying_income`, `supporting_document_ids`, `trending_direction`). Legacy `models/` dir; 4 app imports.
+- **Both are live and genuinely distinct.** Recommendation: keep both entities but give one a distinct table. Determine which model matches the **prod `income_sources` schema** (pre-execution check), then rename the OTHER's table (e.g. the calculation line-item → `income_calculation_sources`) with a data migration, and rename its class for clarity. NOT a delete.
+
+**C2 — `refi_opportunities`:**
+- `database/models/rate_watch.py:141 RefiOpportunityEvent` — **UUID** PK, `loan_id` FK. **Used** (1 import; the rate-watch feature).
+- `database/models/refinance_intelligence.py:71 RefiOpportunity` — **Integer** PK, org/lead/mum FKs. **0 app imports** (likely dead/aspirational).
+- Recommendation: **rate_watch.RefiOpportunityEvent is canonical.** Confirm `refinance_intelligence.RefiOpportunity` is truly unused (grep all callers incl. analytics/cron), then remove it (or, if it's a planned separate feature, give it its own table). The two cannot share `refi_opportunities` with conflicting PK types.
+
+**Pre-execution verification (blocked 2026-06-01):** prod `income_sources` and `refi_opportunities` column/PK check to confirm the live owner — the prod public proxy was connection-capped ("too many clients") at investigation time; retry before executing C1/C2.
 
 ### Revised scope assessment
 Not a multi-week sprawl. The work is: **1 cluster collapse (onboarding, Task 4)** + **~5 mechanical renames (Cluster B)** + **2 true-dup canonical decisions (Cluster C)** + the factory Base-binding (Tasks 1–2) + harness (Task 6). With Cluster C decided, the whole refactor is a tractable, finite checklist. The esign factory's runtime collision (Scope Finding #2) is expected to clear once the registration is idempotent and the duplicate `database/models/esignature.py` vs `models/esign_models.py` distinction is confirmed (different tables `esignature_*` vs `esign_*` → likely distinct; verify during Task 2).
