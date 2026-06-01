@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("aria.grounding")
 
 # Minimum average retrieval similarity to treat a RAG answer as sufficiently grounded.
+# Read once at import time; callers needing dynamic tuning should pass min_confidence
+# to is_sufficiently_grounded() explicitly rather than mutating the env var at runtime.
 GROUNDING_MIN_CONFIDENCE = float(os.getenv("ARIA_GROUNDING_MIN_CONFIDENCE", "0.45"))
 
 DISCLAIMER = (
@@ -41,10 +43,11 @@ def is_sufficiently_grounded(result: "GroundingResult",
     return result.confidence >= min_confidence
 
 
-async def ground_answer(question: str, org_id) -> "GroundingResult":
+async def ground_answer(question: str, org_id: Any) -> "GroundingResult":
     """Run the guideline RAG path and wrap the result in a GroundingResult.
 
-    Never raises — on any failure, returns an ungrounded result with a disclaimer.
+    Never raises — on any failure (or an unexpected RAG return type), returns an
+    ungrounded result with a disclaimer.
     """
     from aria.tools.knowledge_tools import KnowledgeTools
     try:
@@ -53,8 +56,12 @@ async def ground_answer(question: str, org_id) -> "GroundingResult":
         tenant_id = None
     try:
         raw = await KnowledgeTools().search_guidelines_rag(question=question, tenant_id=tenant_id)
-    except Exception as e:
-        logger.exception("ground_answer RAG call failed: %s", e)
+    except Exception:
+        logger.exception("ground_answer RAG call failed")
+        return GroundingResult(answer=DISCLAIMER, grounded=False, disclaimer=DISCLAIMER)
+
+    if not isinstance(raw, dict):
+        logger.warning("ground_answer: unexpected RAG response type %s", type(raw))
         return GroundingResult(answer=DISCLAIMER, grounded=False, disclaimer=DISCLAIMER)
 
     result = GroundingResult(
@@ -71,15 +78,16 @@ async def ground_answer(question: str, org_id) -> "GroundingResult":
 _GUIDELINE_HINTS = (
     "fha", "usda", "conventional", "conforming", "guideline", "eligibility",
     "reserve", "ltv", "dti", "credit score", "seasoning", "waiting period",
-    "down payment requirement", "occupancy requirement", "loan limit", "qualify",
+    "down payment requirement", "occupancy requirement", "loan limit", "qualify for",
 )
 
 
 def looks_like_guideline_question(text: str) -> bool:
     """Heuristic: does this QUERY-mode turn look like a guideline question?
 
-    Intentionally conservative — only delegates QUERY turns that clearly mention
-    guideline concepts to the grounding path; operational queries fall through.
+    A first-cut substring match behind the grounding flag — a false positive only
+    costs an unnecessary RAG call (it does not produce a wrong answer), so the
+    hints favour recall. Operational queries with none of these terms fall through.
     """
     if not text:
         return False
