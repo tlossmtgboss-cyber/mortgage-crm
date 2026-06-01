@@ -340,12 +340,12 @@ def _build_intents() -> List[Intent]:
     ]
 
 
-def intent_category(intent_name) -> str:
+def intent_category(intent_name: Optional[str]) -> str:
     """Derive the Phase-2 grounding category from an intent's registry category.
 
     'factual'     -> guideline/knowledge questions that must be grounded (RAG).
     'chitchat'    -> no resolved intent (general conversation).
-    'operational' -> everything else (DB-backed actions/lookups; no RAG).
+    'operational' -> everything else (actions, lookups, reporting, analysis; no RAG).
     """
     if not intent_name:
         return "chitchat"

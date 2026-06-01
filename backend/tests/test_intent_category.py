@@ -11,4 +11,5 @@ def test_action_intent_is_operational():
 
 def test_none_or_unknown_is_chitchat():
     assert intent_category(None) == "chitchat"
+    assert intent_category("") == "chitchat"
     assert intent_category("not_a_real_intent") == "chitchat"
