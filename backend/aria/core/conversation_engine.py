@@ -1026,7 +1026,7 @@ def grounding_check_node(state: AriaState) -> AriaState:
         msg = state.get("grounding_disclaimer") or DISCLAIMER
     return {
         "messages": [AIMessage(content=msg)],
-        "phase": DialoguePhase.RESPONDING.value,
+        "phase": DialoguePhase.RESPONDING,
         "intent": None,
         "missing_slots": [],
         "current_slot_question": None,
