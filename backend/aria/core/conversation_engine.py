@@ -18,6 +18,7 @@ Architecture:
 import asyncio
 import json
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -32,9 +33,10 @@ from typing_extensions import TypedDict
 
 from agents.orchestration.llm_circuit_breaker import LLMCircuitBreaker
 from agents.orchestration.model_router import get_model_router
-from aria.core.intent_registry import IntentRegistry, Intent, SlotSpec
+from aria.core.intent_registry import IntentRegistry, Intent, SlotSpec, intent_category
 from aria.core.context_loader import AriaContextLoader
 from aria.core.mode_router import classify_mode, AriaMode
+from aria.core.grounding import ground_answer, format_grounded_message, DISCLAIMER, looks_like_guideline_question
 from aria.tasks.task_executor import TaskExecutor
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,10 @@ _circuit_breaker = LLMCircuitBreaker(failure_threshold=5, cooldown_seconds=30.0,
 
 # Request timeout for individual LLM calls (seconds)
 _LLM_TIMEOUT = 30.0
+
+
+def _grounding_enabled() -> bool:
+    return os.getenv("ARIA_GROUNDING_ENABLED", "false").lower() == "true"
 
 
 # ─── LLM via shared ModelRouter ─────────────────────────────────────────────
@@ -117,6 +123,13 @@ class AriaState(TypedDict):
     # Operational
     iteration_count: int
     error: Optional[str]
+
+    # Grounding (Phase 2A)
+    sources: Optional[List[Dict[str, Any]]]
+    citations: Optional[List[Dict[str, Any]]]
+    grounded: Optional[bool]
+    grounding_answer: Optional[str]
+    grounding_disclaimer: Optional[str]
 
 
 # ─── System prompt for Aria ───────────────────────────────────────────────────
@@ -871,13 +884,23 @@ async def query_mode_node(state: AriaState) -> AriaState:
     """Agentic query mode — Claude picks tools, chains queries, synthesizes answer."""
     import json as _json
     import anthropic
-    import os
 
     from aria.tools.crm_query_tools import QUERY_TOOL_DEFINITIONS, execute_query_tool
 
     question = state["messages"][-1].content if state["messages"] else ""
     org_id = state["org_id"]
     user_id = state["user_id"]
+
+    if _grounding_enabled() and looks_like_guideline_question(question):
+        result = await ground_answer(question, org_id)
+        if result.grounded:
+            text = format_grounded_message(result.answer, result.sources)
+        else:
+            text = result.disclaimer or DISCLAIMER
+        return {
+            "messages": [AIMessage(content=text)],
+            "phase": DialoguePhase.RESPONDING,
+        }
 
     # Circuit breaker: fast-fail if LLM is unavailable
     if not _circuit_breaker.allow_request():
@@ -991,6 +1014,42 @@ async def query_mode_node(state: AriaState) -> AriaState:
     }
 
 
+async def ground_node(state: AriaState) -> AriaState:
+    """Retrieve grounded guideline context for a factual turn."""
+    question = (state.get("slots") or {}).get("question") \
+        or (state["messages"][-1].content if state.get("messages") else "")
+    result = await ground_answer(question, state["org_id"])
+    return {
+        "sources": result.sources,
+        "citations": result.citations,
+        "grounded": result.grounded,
+        "grounding_answer": result.answer,
+        "grounding_disclaimer": result.disclaimer or DISCLAIMER,
+    }
+
+
+def grounding_check_node(state: AriaState) -> AriaState:
+    """Blocking sufficiency gate: emit the cited answer, or a terminal disclaimer."""
+    if state.get("grounded"):
+        msg = format_grounded_message(state.get("grounding_answer") or "",
+                                      state.get("sources") or [])
+    else:
+        msg = state.get("grounding_disclaimer") or DISCLAIMER
+    return {
+        "messages": [AIMessage(content=msg)],
+        "phase": DialoguePhase.RESPONDING,
+        "intent": None,
+        "missing_slots": [],
+        "current_slot_question": None,
+        "slots": {},
+        "mode": None,
+        "task_result": None,
+        "confirmation_preview": None,
+        "error": None,
+        "iteration_count": 0,
+    }
+
+
 # ─── Entry router nodes ──────────────────────────────────────────────────────
 
 MAX_SLOT_ITERATIONS = 6
@@ -1078,12 +1137,16 @@ def route_after_nlu(state: AriaState) -> str:
         return "response"
     if state["missing_slots"]:
         return "slot_fill"
+    if _grounding_enabled() and intent_category(state.get("intent")) == "factual":
+        return "ground"
     return "confirmation"
 
 
 def route_after_slot_answer(state: AriaState) -> str:
     if state["missing_slots"]:
         return "slot_fill"
+    if _grounding_enabled() and intent_category(state.get("intent")) == "factual":
+        return "ground"
     return "confirmation"
 
 
@@ -1136,16 +1199,18 @@ def build_aria_graph() -> StateGraph:
     graph = StateGraph(AriaState)
 
     # Nodes
-    graph.add_node("dispatch",      dispatch_node)
-    graph.add_node("nlu",           nlu_node)
-    graph.add_node("slot_fill",     slot_fill_node)
-    graph.add_node("slot_answer",   slot_answer_node)
-    graph.add_node("confirmation",  confirmation_node)
-    graph.add_node("check_confirm", check_confirm_node)
-    graph.add_node("cancel",        cancel_node)
-    graph.add_node("execute",       execute_node)
-    graph.add_node("response",      response_node)
-    graph.add_node("query_mode",    query_mode_node)
+    graph.add_node("dispatch",         dispatch_node)
+    graph.add_node("nlu",              nlu_node)
+    graph.add_node("slot_fill",        slot_fill_node)
+    graph.add_node("slot_answer",      slot_answer_node)
+    graph.add_node("confirmation",     confirmation_node)
+    graph.add_node("check_confirm",    check_confirm_node)
+    graph.add_node("cancel",           cancel_node)
+    graph.add_node("execute",          execute_node)
+    graph.add_node("response",         response_node)
+    graph.add_node("query_mode",       query_mode_node)
+    graph.add_node("ground",           ground_node)
+    graph.add_node("grounding_check",  grounding_check_node)
 
     # Entry point — dispatch routes based on current dialogue phase
     graph.set_entry_point("dispatch")
@@ -1158,20 +1223,22 @@ def build_aria_graph() -> StateGraph:
         "query_mode":    "query_mode",
     })
 
-    # NLU routes: chitchat → response, missing slots → slot_fill, ready → confirmation
+    # NLU routes: chitchat → response, missing slots → slot_fill, factual → ground, ready → confirmation
     graph.add_conditional_edges("nlu", route_after_nlu, {
         "slot_fill":    "slot_fill",
         "confirmation": "confirmation",
         "response":     "response",
+        "ground":       "ground",
     })
 
     # Slot fill asks question then returns to user (END)
     graph.add_edge("slot_fill", END)
 
-    # Slot answer: more slots needed → slot_fill, all done → confirmation
+    # Slot answer: more slots needed → slot_fill, factual → ground, all done → confirmation
     graph.add_conditional_edges("slot_answer", route_after_slot_answer, {
         "slot_fill":    "slot_fill",
         "confirmation": "confirmation",
+        "ground":       "ground",
     })
 
     # Confirmation: no-confirm intents → execute immediately; otherwise wait for user
@@ -1190,6 +1257,10 @@ def build_aria_graph() -> StateGraph:
 
     # Query mode → END
     graph.add_edge("query_mode", END)
+
+    # Grounding path: ground → grounding_check → END
+    graph.add_edge("ground", "grounding_check")
+    graph.add_edge("grounding_check", END)
 
     # Cancelled confirmation → END (acknowledged, nothing executed)
     graph.add_edge("cancel", END)
