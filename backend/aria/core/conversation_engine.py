@@ -36,7 +36,7 @@ from agents.orchestration.model_router import get_model_router
 from aria.core.intent_registry import IntentRegistry, Intent, SlotSpec, intent_category
 from aria.core.context_loader import AriaContextLoader
 from aria.core.mode_router import classify_mode, AriaMode
-from aria.core.grounding import ground_answer, format_grounded_message, DISCLAIMER
+from aria.core.grounding import ground_answer, format_grounded_message, DISCLAIMER, looks_like_guideline_question
 from aria.tasks.task_executor import TaskExecutor
 
 logger = logging.getLogger(__name__)
@@ -890,6 +890,17 @@ async def query_mode_node(state: AriaState) -> AriaState:
     question = state["messages"][-1].content if state["messages"] else ""
     org_id = state["org_id"]
     user_id = state["user_id"]
+
+    if _grounding_enabled() and looks_like_guideline_question(question):
+        result = await ground_answer(question, org_id)
+        if result.grounded:
+            text = format_grounded_message(result.answer, result.sources)
+        else:
+            text = result.disclaimer or DISCLAIMER
+        return {
+            "messages": [AIMessage(content=text)],
+            "phase": DialoguePhase.RESPONDING,
+        }
 
     # Circuit breaker: fast-fail if LLM is unavailable
     if not _circuit_breaker.allow_request():
