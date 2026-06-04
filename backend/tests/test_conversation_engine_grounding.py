@@ -75,13 +75,18 @@ async def test_query_mode_delegates_guideline_question(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_query_mode_operational_not_delegated(monkeypatch):
+    # An operational QUERY turn must run query_mode_node WITHOUT delegating to grounding.
     monkeypatch.setenv("ARIA_GROUNDING_ENABLED", "true")
     called = {"ground": False}
     async def fake_ground(question, org_id):
         called["ground"] = True
         return grounding.GroundingResult(answer="x", grounded=True)
     monkeypatch.setattr(ce, "ground_answer", fake_ground)
-    from aria.core.grounding import looks_like_guideline_question
-    # Operational lookups must NOT be classified as guideline questions:
-    assert looks_like_guideline_question("How many leads do I have today?") is False
+    # Force the circuit breaker open so the node returns its fast-fail fallback
+    # without making any real LLM/DB call — we only care that grounding was skipped.
+    monkeypatch.setattr(ce._circuit_breaker, "allow_request", lambda: False)
+    state = _base_state("How many leads do I have today?", intent=None, slots={})
+    state["mode"] = "query"
+    out = await ce.query_mode_node(state)
     assert called["ground"] is False
+    assert out["messages"][-1].content  # returned a (fallback) message, did not delegate
