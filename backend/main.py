@@ -344,6 +344,16 @@ from database.models import (
     DeviceToken, PushNotificationPreference,
 )
 
+# Register every model (direct + factory) on the single canonical Base before
+# configuring mappers, so all cross-model relationships resolve at startup rather
+# than relying on lazy resolution during the first request. Defensive: a failure
+# here must never crash startup (mirrors the configure_mappers guard below).
+try:
+    from model_registry import register_all_models
+    register_all_models()
+except Exception as e:
+    logger.warning(f"register_all_models warning (mappers may resolve lazily): {e}")
+
 # Configure mappers after all model imports
 from sqlalchemy.orm import configure_mappers
 try:
