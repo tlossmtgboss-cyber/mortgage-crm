@@ -60,6 +60,15 @@ AST scan of `models/`, `database/models/`, and the factory modules (780 mapped c
 `models/user_onboarding.py` (direct classes) and `user_onboarding_integration.py` (factory) define the **same 13 `onboarding_*` tables**. Production registers the factory (`inline_legacy_routes.py:1989`). **Action = Task 4:** make `user_onboarding.py` re-export the factory's classes. Resolves all 13 at once. (Decision already taken.)
 
 ### Cluster B — Distinct entities sharing a name → rename + back-compat alias (mechanical)
+
+> **VERIFIED 2026-06-04 — Task 3 is preventive only, NOT required.** On the canonical app load
+> (`import database.models` + `register_all_models`), `Appointment` and `DocumentRequest` each resolve to a
+> single mapped class and `NotificationPreference` isn't co-loaded — `configure_mappers()` is clean and the
+> no-duplicate gate passes. The second definition of each pair lives in a module the app doesn't load on the
+> canonical path. So renaming is hygiene against *future* co-loading, with no current collision. `Role`,
+> `Responsibility`, `UserResponsibility`, `OnboardingSession` (the ones that DID collide) were already handled
+> by Task 1a/Task 4. Defer the rest unless a future change co-loads these modules.
+
 | Class | Definitions (file → table) | Action |
 |---|---|---|
 | `Role` | user_onboarding `onboarding_roles` / permission `roles` | ✅ DONE (canonical Role on `roles`; rename onboarding→`OnboardingRole` in Task 4) |
@@ -77,10 +86,10 @@ These are NOT simple name-dups: two **different** models claim the **same physic
 - `models/income_models.py:87 IncomeSource` — a borrower **income source** record (`loan_id`, `employment_id`, `income_type` enum, `gross_monthly_income`, `monthly_qualifying_income`, `supporting_document_ids`, `trending_direction`). Legacy `models/` dir; 4 app imports.
 - **Both are live and genuinely distinct.** Recommendation: keep both entities but give one a distinct table. Determine which model matches the **prod `income_sources` schema** (pre-execution check), then rename the OTHER's table (e.g. the calculation line-item → `income_calculation_sources`) with a data migration, and rename its class for clarity. NOT a delete.
 
-**C2 — `refi_opportunities`:**
-- `database/models/rate_watch.py:141 RefiOpportunityEvent` — **UUID** PK, `loan_id` FK. **Used** (1 import; the rate-watch feature).
-- `database/models/refinance_intelligence.py:71 RefiOpportunity` — **Integer** PK, org/lead/mum FKs. **0 app imports** (likely dead/aspirational).
-- Recommendation: **rate_watch.RefiOpportunityEvent is canonical.** Confirm `refinance_intelligence.RefiOpportunity` is truly unused (grep all callers incl. analytics/cron), then remove it (or, if it's a planned separate feature, give it its own table). The two cannot share `refi_opportunities` with conflicting PK types.
+**C2 — `refi_opportunities` (CORRECTED 2026-06-04):**
+- `database/models/rate_watch.py:141 RefiOpportunityEvent` — **UUID** PK, `loan_id` FK.
+- `database/models/refinance_intelligence.py:71 RefiOpportunity` — **Integer** PK, org/lead/mum FKs. **NOT dead** — `services/rate_watch/evaluator.py:149,280,307` creates/persists it (re-exported via `database/models/__init__.py`); also seeded by `seed_full_demo.py` and in `tenant_registry`.
+- So BOTH are used, both map to `refi_opportunities` with **incompatible PK types** (UUID vs Integer) — a genuine bug. The registry currently tolerates it (different class names, table coexists), but it's wrong. Reconciliation = decide the real schema (prod-schema check on `refi_opportunities`), migrate the loser, and repoint `evaluator.py`. **Needs a decision + migration — not a removal.** (My earlier "dead, just remove" assessment was wrong.)
 
 **Pre-execution verification (blocked 2026-06-01):** prod `income_sources` and `refi_opportunities` column/PK check to confirm the live owner — the prod public proxy was connection-capped ("too many clients") at investigation time; retry before executing C1/C2.
 
