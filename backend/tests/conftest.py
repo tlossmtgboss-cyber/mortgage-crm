@@ -28,6 +28,10 @@ load_dotenv(env_path)
 # Signal to main.py startup event to skip DB-dependent operations
 # (TestClient triggers startup before dependency overrides are in effect)
 os.environ["TESTING"] = "1"
+# Disable API rate limiting in tests — the in-memory limiter accumulates across
+# the session and returns 429 once the cumulative request count is exceeded.
+# Must be set BEFORE `from main import app` (read at middleware import time).
+os.environ["API_RL_ENABLED"] = "false"
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
@@ -135,12 +139,22 @@ def db_engine():
     # created, these parent rows must exist.
     with test_engine.connect() as conn:
         conn.execute(text(
-            "INSERT INTO organizations (id, name) VALUES (1, 'Test Org') "
+            "INSERT INTO organizations (id, name) VALUES (1, 'Test Org'), (2, 'Org Two') "
             "ON CONFLICT (id) DO NOTHING"
         ))
+        # Org-2 users used by cross-tenant isolation tests — admin so they pass the
+        # permission check and then hit org-scoping (expect 404 for org-1 rows).
         conn.execute(text(
-            "INSERT INTO users (id, email, hashed_password, organization_id) "
-            "VALUES (1, 'test@example.com', 'x', 1) ON CONFLICT (id) DO NOTHING"
+            "INSERT INTO users (id, email, hashed_password, organization_id, permission_role) "
+            "VALUES (50, 'o2a@example.com', 'x', 2, 'admin'), (60, 'o2b@example.com', 'x', 2, 'admin') "
+            "ON CONFLICT (id) DO NOTHING"
+        ))
+        # permission_role='admin' authorizes write ops via has_permission(); the
+        # in-memory mock user stays non-platform-admin so org-scoping is still
+        # enforced (cross-org isolation tests use their own users).
+        conn.execute(text(
+            "INSERT INTO users (id, email, hashed_password, organization_id, permission_role) "
+            "VALUES (1, 'test@example.com', 'x', 1, 'admin') ON CONFLICT (id) DO NOTHING"
         ))
         conn.commit()
 
