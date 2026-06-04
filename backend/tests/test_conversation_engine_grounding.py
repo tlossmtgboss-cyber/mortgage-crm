@@ -90,3 +90,24 @@ async def test_query_mode_operational_not_delegated(monkeypatch):
     out = await ce.query_mode_node(state)
     assert called["ground"] is False
     assert out["messages"][-1].content  # returned a (fallback) message, did not delegate
+
+
+def test_flag_off_factual_routes_legacy(monkeypatch):
+    monkeypatch.setenv("ARIA_GROUNDING_ENABLED", "false")
+    state = _base_state("FHA reserves?")
+    assert ce.route_after_nlu(state) == "confirmation"
+    assert ce.route_after_slot_answer(state) == "confirmation"
+
+
+def test_flag_on_factual_routes_ground_both_routers(monkeypatch):
+    monkeypatch.setenv("ARIA_GROUNDING_ENABLED", "true")
+    state = _base_state("FHA reserves?")
+    assert ce.route_after_nlu(state) == "ground"
+    assert ce.route_after_slot_answer(state) == "ground"
+
+
+def test_flag_off_operational_intent_routes_legacy(monkeypatch):
+    monkeypatch.setenv("ARIA_GROUNDING_ENABLED", "false")
+    state = _base_state("send a text", intent="send_sms", slots={})
+    # operational intent never grounds regardless of flag; legacy path is confirmation
+    assert ce.route_after_nlu(state) == "confirmation"
