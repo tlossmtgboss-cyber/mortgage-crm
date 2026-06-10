@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
@@ -59,9 +59,32 @@ def set_dependencies(user_dependency):
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user:
-        return await _get_current_user(request, db)
-    raise HTTPException(status_code=401, detail="Not authenticated")
+    # main.py's get_current_user signature is (token, request, db) — extract the
+    # Bearer token here; passing the Request positionally lands it in `token`
+    # and 500s every endpoint (AttributeError on token.startswith).
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if _get_current_user is None:
+        raise HTTPException(status_code=503, detail="Authentication service not initialized")
+
+    try:
+        return await _get_current_user(token=token, request=request, db=db)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 # -----------------------------------------------------------------
@@ -115,6 +138,12 @@ class StartSessionRequest(BaseModel):
     loan_officer_id: Optional[str] = None
     is_browser_mode: bool = False
 
+    @field_validator("call_control_id", "contact_id", "loan_officer_id", mode="before")
+    @classmethod
+    def _coerce_str(cls, v):
+        # Frontend sends numeric ids; pydantic v2 won't coerce int -> str.
+        return str(v) if v is not None else None
+
 
 class StartSessionResponse(BaseModel):
     session_id: str
@@ -158,6 +187,7 @@ def start_session(
     borrower_state = request.borrower_state
     if not borrower_state and request.contact_id:
         borrower_state = _lookup_state(db, request.contact_id)
+    borrower_state = _normalize_state(borrower_state)
 
     is_browser = request.is_browser_mode or not request.call_control_id
     session_id = str(uuid4())
@@ -526,6 +556,36 @@ async def handle_telnyx_webhook(
 # -----------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------
+
+_STATE_NAME_TO_CODE = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
+    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
+    "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID",
+    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
+    "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
+}
+_VALID_STATE_CODES = set(_STATE_NAME_TO_CODE.values()) | {"PR", "VI", "GU", "AS", "MP"}
+
+
+def _normalize_state(value: Optional[str]) -> Optional[str]:
+    """Normalize free-form state input ('South Carolina', 'sc') to a 2-letter
+    code. The column is VARCHAR(2); anything unrecognized becomes None so the
+    consent gate falls back to its conservative default."""
+    if not value:
+        return None
+    cleaned = value.strip()
+    if len(cleaned) == 2 and cleaned.upper() in _VALID_STATE_CODES:
+        return cleaned.upper()
+    return _STATE_NAME_TO_CODE.get(cleaned.lower())
+
 
 def _lookup_state(db: Session, contact_id: str) -> Optional[str]:
     """Best-effort borrower state lookup. There is no contacts table — the

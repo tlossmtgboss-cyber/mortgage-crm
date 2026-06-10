@@ -35,6 +35,13 @@ def run_migration(engine=None):
         ("call_sessions", "consent_override_by", "VARCHAR(255)"),
         ("call_sessions", "consent_override_at", "TIMESTAMP WITH TIME ZONE"),
         ("call_sessions", "call_ended_at", "TIMESTAMP WITH TIME ZONE"),
+        # Written by RecordingConsentService._update_consent — omitting these
+        # leaves browser-mode /session/start 500ing on the first UPDATE.
+        ("call_sessions", "consent_requirement", "VARCHAR(20)"),
+        ("call_sessions", "consent_disclosed_at", "TIMESTAMP WITH TIME ZONE"),
+        ("call_sessions", "consent_disclosure_method", "VARCHAR(20)"),
+        ("call_sessions", "is_two_party_state", "BOOLEAN DEFAULT false"),
+        ("organizations", "recording_consent_config", "JSONB"),
     ]
 
     with engine.connect() as conn:

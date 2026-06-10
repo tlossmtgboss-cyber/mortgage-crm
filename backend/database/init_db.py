@@ -1553,6 +1553,16 @@ def init_db():
                         ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ,
                         ADD COLUMN IF NOT EXISTS call_ended_at TIMESTAMPTZ
                 """))
+                # Stale CHECKs from the never-wired manual SQL migration reject
+                # values the app writes ('browser_pending', 'browser_local').
+                conn.execute(text("""
+                    ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS
+                        call_sessions_recording_consent_status_check
+                """))
+                conn.execute(text("""
+                    ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS
+                        call_sessions_consent_disclosure_method_check
+                """))
                 conn.execute(text("""
                     CREATE INDEX IF NOT EXISTS idx_call_sessions_consent_status
                         ON call_sessions (recording_consent_status)

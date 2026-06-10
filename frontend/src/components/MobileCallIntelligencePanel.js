@@ -340,23 +340,19 @@ export default function MobileCallIntelligencePanel({
     sessionState, sessionId, consentInfo, errorMessage,
     isIdle, isPlayingDisclosure, isActive, isConsentFailed,
     isCompleted, isError, canManualOverride, canRetry,
-    transcript,
+    transcript, agentStatuses, agentEvents, duration,
+    canPlayDisclosure,
     startSession, stopSession, retryDisclosure, confirmVerbalDisclosure,
+    playDisclosureManually, sendAudio,
   } = useCallIntelligenceSession({
     callControlId,
     contactId: borrowerContext?.id || contactId,
     borrowerState: borrowerContext?.state || borrowerState,
     loanOfficerId: currentUser?.id,
     websocketUrl: `${wsBaseUrl}/api/v1/call-intelligence`,
-    onSessionActive: () => {
-      // Start audio capture ONLY after consent clears
-      // Wire to your existing useMobileAudioCapture hook here
-    },
   });
 
-  const [agentStatuses, setAgentStatuses] = useState({});
   const [artifacts, setArtifacts] = useState([]);
-  const [duration, setDuration] = useState(0);
   const [activeTab, setActiveTab] = useState('live');
   const transcriptEndRef = useRef(null);
 
@@ -368,11 +364,62 @@ export default function MobileCallIntelligencePanel({
   const [docChecklist, setDocChecklist] = useState([]);
   const [sttStatus, setSttStatus] = useState({ provider: 'deepgram', status: 'connected' });
 
+  // ── Microphone capture: PCM16 base64 chunks over the CI WebSocket ──
+  // Starts only after consent clears (isActive), stops on end/unmount.
+  const sendAudioRef = useRef(sendAudio);
+  sendAudioRef.current = sendAudio;
+  const audioCaptureRef = useRef(null);
+
+  const stopAudioCapture = useCallback(() => {
+    const cap = audioCaptureRef.current;
+    if (!cap) return;
+    audioCaptureRef.current = null;
+    try { cap.processor.disconnect(); } catch { /* already gone */ }
+    try { cap.source.disconnect(); } catch { /* already gone */ }
+    try { cap.context.close(); } catch { /* already gone */ }
+    cap.stream.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  const startAudioCapture = useCallback(async () => {
+    if (audioCaptureRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const context = new AudioCtx({ sampleRate: 16000 });
+      const source = context.createMediaStreamSource(stream);
+      const processor = context.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        const pcm16 = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 8192) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+        }
+        sendAudioRef.current(btoa(binary));
+      };
+      source.connect(processor);
+      processor.connect(context.destination);
+      audioCaptureRef.current = { stream, context, source, processor };
+      setSttStatus({ provider: 'deepgram', status: 'connected' });
+    } catch (err) {
+      console.error('Mic capture failed:', err);
+      setSttStatus({ provider: 'deepgram', status: 'mic_blocked' });
+    }
+  }, []);
+
   useEffect(() => {
-    if (!isActive) return;
-    const timer = setInterval(() => setDuration(d => d + 1), 1000);
-    return () => clearInterval(timer);
-  }, [isActive]);
+    if (isActive) startAudioCapture();
+    else stopAudioCapture();
+  }, [isActive, startAudioCapture, stopAudioCapture]);
+
+  useEffect(() => () => stopAudioCapture(), [stopAudioCapture]);
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -434,14 +481,14 @@ export default function MobileCallIntelligencePanel({
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          {isIdle && (
+          {(isIdle || isError) && (
             <button onClick={startSession} style={{
               padding: '6px 14px', borderRadius: T.radiusSm,
               background: T.blue, border: 'none', color: '#000',
               fontSize: '12px', fontWeight: 600, cursor: 'pointer',
               fontFamily: T.font,
             }}>
-              Start
+              {isError ? 'Try Again' : 'Start'}
             </button>
           )}
           {isPlayingDisclosure && (
@@ -484,8 +531,10 @@ export default function MobileCallIntelligencePanel({
           errorMessage={errorMessage}
           canManualOverride={canManualOverride}
           canRetry={canRetry}
+          canPlayDisclosure={canPlayDisclosure}
           onConfirmVerbalDisclosure={confirmVerbalDisclosure}
           onRetryDisclosure={retryDisclosure}
+          onPlayDisclosure={playDisclosureManually}
         />
       </div>
 

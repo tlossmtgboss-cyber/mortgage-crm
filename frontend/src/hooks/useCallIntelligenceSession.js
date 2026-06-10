@@ -72,6 +72,7 @@ export function useCallIntelligenceSession({
 }) {
   const [sessionState, setSessionState] = useState(SESSION_STATES.IDLE);
   const [sessionId, setSessionId] = useState(null);
+  const [disclosureAudioUrl, setDisclosureAudioUrl] = useState(null);
   const [consentInfo, setConsentInfo] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [agentStatuses, setAgentStatuses] = useState({});
@@ -312,6 +313,7 @@ export function useCallIntelligenceSession({
       });
 
       if (data.consent_status === 'browser_pending' && data.disclosure_audio_url) {
+        setDisclosureAudioUrl(data.disclosure_audio_url);
         setSessionState(SESSION_STATES.PLAYING_DISCLOSURE);
 
         try {
@@ -386,6 +388,7 @@ export function useCallIntelligenceSession({
       const data = response.data;
 
       if (data.consent_status === 'browser_pending' && data.disclosure_audio_url) {
+        setDisclosureAudioUrl(data.disclosure_audio_url);
         setSessionState(SESSION_STATES.PLAYING_DISCLOSURE);
         try {
           await _playBrowserDisclosure(data.disclosure_audio_url, sessionId);
@@ -412,6 +415,26 @@ export function useCallIntelligenceSession({
       setErrorMessage(err.detail || err.message || 'Retry failed');
     }
   }, [sessionId, callControlId, _playBrowserDisclosure]);
+
+  // iOS blocks audio started after an async hop (the POST in startSession
+  // breaks the user-gesture chain). This replays the disclosure directly
+  // inside a tap handler, where Audio.play() is always allowed.
+  const playDisclosureManually = useCallback(async () => {
+    if (!disclosureAudioUrl || !sessionIdRef.current) return;
+    setSessionState(SESSION_STATES.PLAYING_DISCLOSURE);
+    setErrorMessage(null);
+    try {
+      await _playBrowserDisclosure(disclosureAudioUrl, sessionIdRef.current);
+      setSessionState(SESSION_STATES.ACTIVE);
+      setConsentInfo((prev) => ({ ...prev, status: CONSENT_STATUSES.DISCLOSED }));
+      callbacksRef.current.onConsentCleared?.();
+      callbacksRef.current.onSessionActive?.(sessionIdRef.current);
+    } catch (audioErr) {
+      setSessionState(SESSION_STATES.CONSENT_FAILED);
+      setErrorMessage(audioErr.message);
+      setConsentInfo((prev) => ({ ...prev, status: CONSENT_STATUSES.FAILED }));
+    }
+  }, [disclosureAudioUrl, _playBrowserDisclosure]);
 
   const confirmVerbalDisclosure = useCallback(async () => {
     if (!sessionId) return;
@@ -494,11 +517,15 @@ export function useCallIntelligenceSession({
       sessionState === SESSION_STATES.CONSENT_FAILED &&
       consentInfo?.requirement !== 'required',
     canRetry: sessionState === SESSION_STATES.CONSENT_FAILED,
+    canPlayDisclosure:
+      sessionState === SESSION_STATES.CONSENT_FAILED && !!disclosureAudioUrl,
+    disclosureAudioUrl,
 
     startSession,
     stopSession,
     retryDisclosure,
     confirmVerbalDisclosure,
+    playDisclosureManually,
     sendTranscript,
     sendAudio,
   };

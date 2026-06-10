@@ -7,15 +7,18 @@
  */
 
 import React, { lazy, Suspense, useMemo, useState, useEffect } from 'react';
-import { getCurrentUser } from '../../utils/auth';
+import { API_BASE_URL } from '../../services/api';
+import { getUserData } from '../../utils/tokenStore';
 
 const MobileCallIntelligencePanel = lazy(() =>
   import('../MobileCallIntelligencePanel')
 );
 
-const WS_BASE_URL = (
-  window.location.protocol === 'https:' ? 'wss://' : 'ws://'
-) + window.location.host;
+// WS must target the API host. window.location points at app.perenniaai.com
+// on web (no WS backend) and capacitor://localhost in the native app.
+const WS_BASE_URL = API_BASE_URL
+  .replace('https://', 'wss://')
+  .replace('http://', 'ws://');
 
 export default function CallIntelligenceSlidePanel({
   isOpen,
@@ -25,7 +28,13 @@ export default function CallIntelligenceSlidePanel({
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    setUser(getCurrentUser());
+    // getUserData reads Capacitor Preferences on native (localStorage is
+    // not populated there), falling back to localStorage on web.
+    let cancelled = false;
+    Promise.resolve(getUserData()).then((u) => {
+      if (!cancelled) setUser(u);
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, [isOpen]);
 
   const panelProps = useMemo(() => ({
