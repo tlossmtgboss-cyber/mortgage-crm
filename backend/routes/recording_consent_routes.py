@@ -528,22 +528,36 @@ async def handle_telnyx_webhook(
 # -----------------------------------------------------------------
 
 def _lookup_state(db: Session, contact_id: str) -> Optional[str]:
-    row = db.execute(
-        sa_text("SELECT state FROM contacts WHERE id = :id"), {"id": contact_id}
-    ).fetchone()
-    return row[0] if row else None
+    """Best-effort borrower state lookup. There is no contacts table — the
+    contact_id from the frontend is a lead id. leads.state is an
+    EncryptedString, so this must go through the ORM to decrypt."""
+    try:
+        if not str(contact_id).isdigit():
+            return None
+        from database.models import Lead
+        lead = db.query(Lead).filter(Lead.id == int(contact_id)).first()
+        return lead.state if lead and lead.state else None
+    except Exception as e:
+        logger.warning(f"Borrower state lookup failed for contact {contact_id}: {e}")
+        db.rollback()
+        return None
 
 
 def _get_org_config(db: Session, lo_id: str) -> RecordingConsentConfig:
-    row = db.execute(
-        sa_text("""
-            SELECT o.recording_consent_config
-            FROM users u JOIN organizations o ON u.organization_id = o.id
-            WHERE u.id = :lo_id
-        """),
-        {"lo_id": lo_id},
-    ).fetchone()
-    return RecordingConsentConfig(**(row[0])) if row and row[0] else RecordingConsentConfig()
+    try:
+        row = db.execute(
+            sa_text("""
+                SELECT o.recording_consent_config
+                FROM users u JOIN organizations o ON u.organization_id = o.id
+                WHERE u.id = CAST(:lo_id AS INTEGER)
+            """),
+            {"lo_id": lo_id},
+        ).fetchone()
+        return RecordingConsentConfig(**(row[0])) if row and row[0] else RecordingConsentConfig()
+    except Exception as e:
+        logger.warning(f"Org consent config lookup failed for LO {lo_id}: {e}")
+        db.rollback()
+        return RecordingConsentConfig()
 
 
 def _get_session(db: Session, session_id: str, current_user=None):
