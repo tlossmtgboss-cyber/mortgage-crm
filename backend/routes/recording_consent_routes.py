@@ -176,7 +176,7 @@ class RetryDisclosureRequest(BaseModel):
 # -----------------------------------------------------------------
 
 @router.post("/session/start", response_model=StartSessionResponse)
-def start_session(
+async def start_session(
     request: StartSessionRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -242,7 +242,7 @@ def start_session(
 # -----------------------------------------------------------------
 
 @router.post("/session/confirm-browser-disclosure")
-def confirm_browser_disclosure(
+async def confirm_browser_disclosure(
     request: BrowserDisclosureConfirm,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -268,6 +268,10 @@ def confirm_browser_disclosure(
     )
     db.commit()
 
+    # Spin up the live transcription runner — without this, audio streamed
+    # over the WebSocket after browser-mode consent goes nowhere.
+    _activate_stt(db, request.session_id, getattr(session, 'call_control_id', None))
+
     return {"status": "ok", "session_id": request.session_id, "active": True}
 
 
@@ -276,7 +280,7 @@ def confirm_browser_disclosure(
 # -----------------------------------------------------------------
 
 @router.post("/session/retry-disclosure")
-def retry_disclosure(
+async def retry_disclosure(
     request: RetryDisclosureRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -314,7 +318,7 @@ def retry_disclosure(
 # -----------------------------------------------------------------
 
 @router.post("/session/manual-consent-override")
-def manual_consent_override(
+async def manual_consent_override(
     request: ManualOverrideRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
