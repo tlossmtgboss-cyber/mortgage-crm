@@ -13,6 +13,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import api from '../services/api';
 
 export const SESSION_STATES = {
   IDLE: 'idle',
@@ -257,22 +258,13 @@ export function useCallIntelligenceSession({
         audio.onended = async () => {
           audioRef.current = null;
           try {
-            const resp = await fetch(
+            await api.post(
               '/api/v1/call-intelligence/session/confirm-browser-disclosure',
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessId }),
-              }
+              { session_id: sessId }
             );
-            if (resp.ok) {
-              resolve();
-            } else {
-              const err = await resp.json();
-              reject(new Error(err.detail || 'Browser disclosure confirmation failed'));
-            }
+            resolve();
           } catch (e) {
-            reject(e);
+            reject(new Error(e.detail || e.message || 'Browser disclosure confirmation failed'));
           }
         };
 
@@ -300,24 +292,15 @@ export function useCallIntelligenceSession({
     try {
       const isBrowserMode = !callControlId;
 
-      const response = await fetch('/api/v1/call-intelligence/session/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          call_control_id: callControlId || null,
-          contact_id: contactId || null,
-          borrower_state: borrowerState || null,
-          loan_officer_id: loanOfficerId || null,
-          is_browser_mode: isBrowserMode,
-        }),
+      const response = await api.post('/api/v1/call-intelligence/session/start', {
+        call_control_id: callControlId || null,
+        contact_id: contactId || null,
+        borrower_state: borrowerState || null,
+        loan_officer_id: loanOfficerId || null,
+        is_browser_mode: isBrowserMode,
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Failed to start session');
-      }
-
-      const data = await response.json();
+      const data = response.data;
       setSessionId(data.session_id);
 
       setConsentInfo({
@@ -382,7 +365,7 @@ export function useCallIntelligenceSession({
 
     } catch (err) {
       setSessionState(SESSION_STATES.ERROR);
-      setErrorMessage(err.message);
+      setErrorMessage(err.detail || err.message || 'Failed to start session');
       callbacksRef.current.onError?.(err);
     }
   }, [callControlId, contactId, borrowerState, loanOfficerId, _playBrowserDisclosure]);
@@ -394,22 +377,13 @@ export function useCallIntelligenceSession({
     setErrorMessage(null);
 
     try {
-      const response = await fetch('/api/v1/call-intelligence/session/retry-disclosure', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          call_control_id: callControlId || null,
-          is_browser_mode: !callControlId,
-        }),
+      const response = await api.post('/api/v1/call-intelligence/session/retry-disclosure', {
+        session_id: sessionId,
+        call_control_id: callControlId || null,
+        is_browser_mode: !callControlId,
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Retry failed');
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       if (data.consent_status === 'browser_pending' && data.disclosure_audio_url) {
         setSessionState(SESSION_STATES.PLAYING_DISCLOSURE);
@@ -435,7 +409,7 @@ export function useCallIntelligenceSession({
       }
     } catch (err) {
       setSessionState(SESSION_STATES.CONSENT_FAILED);
-      setErrorMessage(err.message);
+      setErrorMessage(err.detail || err.message || 'Retry failed');
     }
   }, [sessionId, callControlId, _playBrowserDisclosure]);
 
@@ -448,19 +422,10 @@ export function useCallIntelligenceSession({
     }
 
     try {
-      const response = await fetch('/api/v1/call-intelligence/session/manual-consent-override', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          lo_confirmed_verbal_disclosure: true,
-        }),
+      await api.post('/api/v1/call-intelligence/session/manual-consent-override', {
+        session_id: sessionId,
+        lo_confirmed_verbal_disclosure: true,
       });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Override failed');
-      }
 
       setSessionState(SESSION_STATES.ACTIVE);
       setConsentInfo((prev) => ({
@@ -471,15 +436,13 @@ export function useCallIntelligenceSession({
       callbacksRef.current.onConsentCleared?.();
       callbacksRef.current.onSessionActive?.(sessionIdRef.current);
     } catch (err) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.detail || err.message || 'Override failed');
     }
   }, [sessionId, consentInfo]);
 
   const stopSession = useCallback(async () => {
     if (sessionId) {
-      await fetch(`/api/v1/call-intelligence/session/${sessionId}/stop`, {
-        method: 'POST',
-      }).catch(() => {});
+      await api.post(`/api/v1/call-intelligence/session/${sessionId}/stop`).catch(() => {});
     }
     sessionStateRef.current = SESSION_STATES.COMPLETED;
     setSessionState(SESSION_STATES.COMPLETED);

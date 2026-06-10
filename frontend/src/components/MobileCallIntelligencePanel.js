@@ -34,6 +34,7 @@ import {
   getArtifactIcon,
 } from '../hooks/useCallIntelligenceSession';
 import ConsentGateBanner from './aria/ConsentGateBanner';
+import api from '../services/api';
 
 // ============================================================================
 // Design Tokens (Perennia)
@@ -380,14 +381,8 @@ export default function MobileCallIntelligencePanel({
   const handleConvertToApplication = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const resp = await fetch(`/api/v1/call-intelligence/session/${sessionId}/convert-to-application`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        onApplicationCreated?.(data);
-      }
+      const resp = await api.post(`/api/v1/call-intelligence/session/${sessionId}/convert-to-application`);
+      onApplicationCreated?.(resp.data);
     } catch (e) {
       console.error('Convert to application failed:', e);
     }
@@ -395,13 +390,8 @@ export default function MobileCallIntelligencePanel({
 
   const handleShareArtifact = useCallback(async (artifactId) => {
     try {
-      const resp = await fetch(`/api/v1/call-intelligence/artifacts/${artifactId}/share`, {
-        method: 'POST',
-      });
-      if (resp.ok) {
-        const { share_url } = await resp.json();
-        await navigator.clipboard.writeText(share_url);
-      }
+      const resp = await api.post(`/api/v1/call-intelligence/artifacts/${artifactId}/share`);
+      await navigator.clipboard.writeText(resp.data.share_url);
     } catch (e) {
       console.error('Share failed:', e);
     }
