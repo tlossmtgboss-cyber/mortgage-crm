@@ -382,19 +382,54 @@ export default function MobileCallIntelligencePanel({
 
   const startAudioCapture = useCallback(async () => {
     if (audioCaptureRef.current) return;
+    let stream;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
       });
+
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const context = new AudioCtx({ sampleRate: 16000 });
+      // Never force sampleRate on iOS: WebKit throws when a MediaStreamSource's
+      // hardware rate (44.1k/48k) differs from the context rate. Capture at the
+      // native rate and downsample to 16 kHz in JS.
+      const context = new AudioCtx();
+
+      // iOS starts contexts 'suspended' outside a user gesture.
+      if (context.state !== 'running') {
+        try { await context.resume(); } catch (e) {
+          console.warn('[CI] AudioContext resume failed:', e);
+        }
+      }
+      console.info(`[CI] AudioContext state=${context.state} sampleRate=${context.sampleRate}`);
+
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(4096, 1, 1);
+
+      const TARGET_RATE = 16000;
+      const ratio = context.sampleRate / TARGET_RATE;
+
       processor.onaudioprocess = (e) => {
         const input = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
+
+        // Downsample to 16 kHz: decimation with block averaging.
+        let samples;
+        if (ratio > 1) {
+          const outLength = Math.floor(input.length / ratio);
+          samples = new Float32Array(outLength);
+          for (let i = 0; i < outLength; i++) {
+            const start = Math.floor(i * ratio);
+            const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+            let sum = 0;
+            for (let j = start; j < end; j++) sum += input[j];
+            samples[i] = sum / (end - start || 1);
+          }
+        } else {
+          samples = input;
+        }
+
+        const pcm16 = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i++) {
+          const s = Math.max(-1, Math.min(1, samples[i]));
           pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
         }
         const bytes = new Uint8Array(pcm16.buffer);
@@ -404,15 +439,38 @@ export default function MobileCallIntelligencePanel({
         }
         sendAudioRef.current(btoa(binary));
       };
+
       source.connect(processor);
       processor.connect(context.destination);
       audioCaptureRef.current = { stream, context, source, processor };
-      setSttStatus({ provider: 'deepgram', status: 'connected' });
+      setSttStatus({
+        provider: 'deepgram',
+        status: context.state === 'running' ? 'connected' : 'degraded',
+      });
     } catch (err) {
-      console.error('Mic capture failed:', err);
+      console.error('[CI] Mic capture failed:', err.name, err.message);
+      // getUserMedia may have succeeded before the AudioContext wiring threw —
+      // stop the tracks or iOS keeps the mic indicator on with zero audio.
+      if (stream) stream.getTracks().forEach((t) => t.stop());
       setSttStatus({ provider: 'deepgram', status: 'mic_blocked' });
     }
   }, []);
+
+  // Suspended contexts can only reliably resume inside a gesture on iOS.
+  const resumeAudioContext = useCallback(() => {
+    const ctx = audioCaptureRef.current?.context;
+    if (ctx && ctx.state !== 'running') {
+      ctx.resume()
+        .then(() => setSttStatus({ provider: 'deepgram', status: 'connected' }))
+        .catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isActive) return;
+    document.addEventListener('touchend', resumeAudioContext, { passive: true });
+    return () => document.removeEventListener('touchend', resumeAudioContext);
+  }, [isActive, resumeAudioContext]);
 
   useEffect(() => {
     if (isActive) startAudioCapture();

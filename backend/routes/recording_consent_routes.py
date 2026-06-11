@@ -473,14 +473,44 @@ def share_artifact(
 @router.websocket("/{session_id}/stream")
 async def ci_websocket_stream(websocket: WebSocket, session_id: str):
     await ws_manager.connect(session_id, websocket)
-    from services.call_intelligence.live_session_runner import get_live_session
+    from services.call_intelligence.live_session_runner import (
+        activate_live_session,
+        get_live_session,
+    )
+
+    activation_attempted = False
+
+    async def _ensure_runner():
+        """Lazy-activate the runner if consent already cleared but the
+        activation task failed or raced — otherwise audio is dropped silently."""
+        nonlocal activation_attempted
+        runner = get_live_session(session_id)
+        if runner or activation_attempted:
+            return runner
+        activation_attempted = True
+        try:
+            from db import SessionLocal
+            db = SessionLocal()
+            try:
+                row = db.execute(
+                    sa_text("SELECT status FROM call_sessions WHERE id = :sid"),
+                    {"sid": session_id},
+                ).fetchone()
+            finally:
+                db.close()
+            if row and row[0] == "active":
+                logger.warning(f"[CI WS] Lazy-activating runner for {session_id}")
+                return await activate_live_session(session_id, ws_manager)
+        except Exception as e:
+            logger.error(f"[CI WS] Lazy activation failed for {session_id}: {e}")
+        return None
 
     try:
         while True:
             raw = await websocket.receive()
 
             if raw.get("bytes"):
-                runner = get_live_session(session_id)
+                runner = await _ensure_runner()
                 if runner:
                     await runner.feed_audio(raw["bytes"])
                 continue
@@ -500,12 +530,12 @@ async def ci_websocket_stream(websocket: WebSocket, session_id: str):
                 await websocket.send_json({"type": "pong"})
             elif msg_type == "audio_chunk":
                 import base64
-                runner = get_live_session(session_id)
+                runner = await _ensure_runner()
                 if runner and msg.get("data"):
                     audio_bytes = base64.b64decode(msg["data"])
                     await runner.feed_audio(audio_bytes)
             elif msg_type == "transcript":
-                runner = get_live_session(session_id)
+                runner = await _ensure_runner()
                 if runner and msg.get("text"):
                     await runner.feed_transcript_text(
                         msg["text"], is_final=msg.get("is_final", True)
@@ -661,6 +691,17 @@ def _activate_stt(db: Session, session_id: str, call_control_id: Optional[str]):
     from services.call_intelligence.live_session_runner import activate_live_session
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(activate_live_session(session_id, ws_manager))
+        task = loop.create_task(activate_live_session(session_id, ws_manager))
+        task.add_done_callback(_log_activation_result)
     except RuntimeError:
-        pass
+        logger.error(
+            f"[CI] No running event loop — live session NOT activated for {session_id}"
+        )
+
+
+def _log_activation_result(task):
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        logger.error(f"[CI] activate_live_session failed: {exc}", exc_info=exc)

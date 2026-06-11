@@ -91,6 +91,9 @@ export function useCallIntelligenceSession({
   const sessionStateRef = useRef(sessionState);
   const sessionIdRef = useRef(null);
   const callbacksRef = useRef({ onConsentCleared, onSessionActive, onError });
+  // Audio queued while the WS is CONNECTING (~5s worth), flushed on open.
+  const pendingAudioRef = useRef([]);
+  const droppedChunksRef = useRef(0);
 
   sessionStateRef.current = sessionState;
   sessionIdRef.current = sessionId;
@@ -126,7 +129,14 @@ export function useCallIntelligenceSession({
   }, [sessionState]);
 
   const _attachWsHandlers = useCallback((ws, sessId) => {
-    ws.onopen = () => setWsConnected(true);
+    ws.onopen = () => {
+      setWsConnected(true);
+      const queued = pendingAudioRef.current.splice(0);
+      for (const data of queued) {
+        ws.send(JSON.stringify({ type: 'audio_chunk', data }));
+      }
+      if (queued.length) console.info(`[CI] Flushed ${queued.length} buffered audio chunks`);
+    };
 
     ws.onmessage = (event) => {
       try {
@@ -524,11 +534,24 @@ export function useCallIntelligenceSession({
   }, []);
 
   const sendAudio = useCallback((base64Data) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'audio_chunk',
-        data: base64Data,
-      }));
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'audio_chunk', data: base64Data }));
+      return;
+    }
+    if (ws?.readyState === WebSocket.CONNECTING) {
+      if (pendingAudioRef.current.length < 60) {
+        pendingAudioRef.current.push(base64Data);
+      } else {
+        droppedChunksRef.current += 1;
+      }
+      return;
+    }
+    droppedChunksRef.current += 1;
+    if (droppedChunksRef.current % 20 === 1) {
+      console.warn(
+        `[CI] Dropped ${droppedChunksRef.current} audio chunks (WS state=${ws ? ws.readyState : 'none'})`
+      );
     }
   }, []);
 

@@ -77,6 +77,10 @@ class STTFallbackService:
         self._reconnect_count = 0
         self._audio_buffer: list = []
         self._receive_task: Optional[asyncio.Task] = None
+        self._sample_rate: int = 16000
+        # Audio arriving while CONNECTING/RECONNECTING — flushed on connect
+        # instead of silently dropped.
+        self._pending_chunks: list = []
 
     @property
     def provider(self) -> STTProvider:
@@ -96,9 +100,11 @@ class STTFallbackService:
         model: str = "nova-2",
         language: str = "en-US",
         enable_diarization: bool = True,
+        sample_rate: int = 16000,
     ) -> bool:
         self._session_id = session_id
         self._reconnect_count = 0
+        self._sample_rate = sample_rate
 
         if self.deepgram_key:
             success = await self._connect_deepgram(model, language, enable_diarization)
@@ -126,6 +132,12 @@ class STTFallbackService:
             except Exception as e:
                 logger.error(f"STT send error: {e}")
                 await self._handle_disconnect()
+            return
+
+        # CONNECTING / RECONNECTING — hold a few seconds of audio instead of
+        # dropping the start of the conversation; flushed on connect.
+        if len(self._pending_chunks) < 200:
+            self._pending_chunks.append(audio_data)
 
     async def disconnect(self) -> Optional[str]:
         audio_file = None
@@ -161,9 +173,13 @@ class STTFallbackService:
     async def _connect_deepgram(
         self, model: str, language: str, diarization: bool
     ) -> bool:
+        # encoding/sample_rate/channels are REQUIRED for raw PCM16 — Deepgram
+        # only auto-detects containerized audio (WAV/Opus/MP3). Without them
+        # the stream is undecodable and returns zero Results.
         params = (
             f"model={model}&language={language}&smart_format=true"
             f"&punctuate=true&utterances=true&interim_results=true"
+            f"&encoding=linear16&sample_rate={self._sample_rate}&channels=1"
         )
         if diarization:
             params += "&diarize=true"
@@ -229,7 +245,7 @@ class STTFallbackService:
             )
 
             await self._ws.send(json.dumps({
-                "sample_rate": 16000,
+                "sample_rate": self._sample_rate,
                 "word_boost": [
                     "mortgage", "refinance", "FHA", "VA", "USDA",
                     "pre-approval", "down payment", "closing costs",
@@ -305,7 +321,7 @@ class STTFallbackService:
         with wave.open(filepath, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
-            wf.setframerate(16000)
+            wf.setframerate(self._sample_rate)
             wf.writeframes(audio_data)
 
         size_mb = len(audio_data) / (1024 * 1024)
@@ -422,6 +438,16 @@ class STTFallbackService:
     async def _set_status(self, status: STTStatus):
         old = self._status
         self._status = status
+
+        # Flush audio buffered while the provider socket was connecting.
+        if status == STTStatus.CONNECTED and self._pending_chunks and self._ws:
+            queued, self._pending_chunks = self._pending_chunks, []
+            try:
+                for chunk in queued:
+                    await self._ws.send(chunk)
+                logger.info(f"STT flushed {len(queued)} buffered audio chunks")
+            except Exception as e:
+                logger.error(f"STT flush error: {e}")
 
         if self.on_status_change and self._session_id:
             await self.on_status_change(
