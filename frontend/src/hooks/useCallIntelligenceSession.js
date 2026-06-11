@@ -81,6 +81,7 @@ export function useCallIntelligenceSession({
   const [transcript, setTranscript] = useState([]);
   const [duration, setDuration] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
+  const [diagnostics, setDiagnostics] = useState(null);
 
   const wsRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -94,6 +95,7 @@ export function useCallIntelligenceSession({
   // Audio queued while the WS is CONNECTING (~5s worth), flushed on open.
   const pendingAudioRef = useRef([]);
   const droppedChunksRef = useRef(0);
+  const sentChunksRef = useRef(0);
 
   sessionStateRef.current = sessionState;
   sessionIdRef.current = sessionId;
@@ -507,9 +509,20 @@ export function useCallIntelligenceSession({
   }, [sessionId, consentInfo]);
 
   const stopSession = useCallback(async () => {
+    let serverDiag = null;
     if (sessionId) {
-      await api.post(`/api/v1/call-intelligence/session/${sessionId}/stop`).catch(() => {});
+      try {
+        const resp = await api.post(`/api/v1/call-intelligence/session/${sessionId}/stop`);
+        serverDiag = resp.data?.diagnostics || null;
+      } catch (e) {
+        serverDiag = { stop_error: e.detail || e.message };
+      }
     }
+    setDiagnostics({
+      chunks_sent: sentChunksRef.current,
+      chunks_dropped: droppedChunksRef.current,
+      ...(serverDiag || { server: 'unreachable' }),
+    });
     sessionStateRef.current = SESSION_STATES.COMPLETED;
     setSessionState(SESSION_STATES.COMPLETED);
     wsRef.current?.close();
@@ -537,6 +550,7 @@ export function useCallIntelligenceSession({
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'audio_chunk', data: base64Data }));
+      sentChunksRef.current += 1;
       return;
     }
     if (ws?.readyState === WebSocket.CONNECTING) {
@@ -565,6 +579,7 @@ export function useCallIntelligenceSession({
     transcript,
     duration,
     wsConnected,
+    diagnostics,
 
     isIdle: sessionState === SESSION_STATES.IDLE,
     isPlayingDisclosure: sessionState === SESSION_STATES.PLAYING_DISCLOSURE,

@@ -340,7 +340,7 @@ export default function MobileCallIntelligencePanel({
     sessionState, sessionId, consentInfo, errorMessage,
     isIdle, isPlayingDisclosure, isActive, isConsentFailed,
     isCompleted, isError, canManualOverride, canRetry,
-    transcript, agentStatuses, agentEvents, duration,
+    transcript, agentStatuses, agentEvents, duration, diagnostics,
     canPlayDisclosure,
     startSession, stopSession, retryDisclosure, confirmVerbalDisclosure,
     playDisclosureManually, sendAudio,
@@ -874,6 +874,18 @@ export default function MobileCallIntelligencePanel({
             <div style={{ fontSize: '12px', color: T.textMuted }}>
               {artifacts.length} artifacts • {transcript.length} transcript segments
             </div>
+            {diagnostics && (
+              <div style={{
+                fontSize: '10px', color: T.textMuted, fontFamily: T.mono,
+                textAlign: 'left', padding: '8px 12px', borderRadius: T.radiusSm,
+                background: T.surface, border: `1px solid ${T.surfaceBorder}`,
+                maxWidth: '320px', wordBreak: 'break-all',
+              }}>
+                {Object.entries(diagnostics).map(([k, v]) => (
+                  <div key={k}>{k}: {String(v)}</div>
+                ))}
+              </div>
+            )}
             {artifacts.length > 0 && (
               <button
                 onClick={handleConvertToApplication}

@@ -391,7 +391,18 @@ async def stop_session(
     )
     db.commit()
 
-    from services.call_intelligence.live_session_runner import stop_live_session
+    from services.call_intelligence.live_session_runner import (
+        get_live_session,
+        stop_live_session,
+    )
+
+    runner = get_live_session(session_id)
+    diagnostics = dict(runner.stats) if runner else {
+        "runner": "never_activated",
+        "deepgram_key_present": bool(os.getenv("DEEPGRAM_API_KEY", "")),
+    }
+    logger.info(f"[CI] Session {session_id} stop diagnostics: {diagnostics}")
+
     await stop_live_session(session_id)
 
     await ws_manager.send(session_id, {
@@ -406,6 +417,7 @@ async def stop_session(
         "status": "ok",
         "session_id": session_id,
         "duration_seconds": duration,
+        "diagnostics": diagnostics,
     }
 
 

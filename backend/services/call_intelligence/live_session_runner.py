@@ -57,6 +57,17 @@ class LiveSessionRunner:
         self._pending_extraction: Optional[asyncio.Task] = None
         # Audio arriving before the STT socket is up — flushed in start().
         self._early_audio: List[bytes] = []
+        # Pipeline diagnostics, surfaced in the /stop response so failures
+        # are visible from the device without server log access.
+        self.stats: Dict[str, Any] = {
+            "deepgram_key_present": bool(DEEPGRAM_API_KEY),
+            "audio_chunks_received": 0,
+            "audio_bytes_received": 0,
+            "early_buffered": 0,
+            "stt_provider": None,
+            "stt_status": None,
+            "transcript_lines": 0,
+        }
 
     async def start(self):
         from .llm_client import create_llm_client
@@ -104,6 +115,8 @@ class LiveSessionRunner:
         })
 
     async def feed_audio(self, audio_bytes: bytes):
+        self.stats["audio_chunks_received"] += 1
+        self.stats["audio_bytes_received"] += len(audio_bytes)
         if self._stt and self._running:
             try:
                 await self._stt.send_audio(audio_bytes)
@@ -112,6 +125,7 @@ class LiveSessionRunner:
         elif not self._stt and len(self._early_audio) < 200:
             # start() hasn't finished connecting STT yet — hold the audio.
             self._early_audio.append(audio_bytes)
+            self.stats["early_buffered"] += 1
 
     async def feed_transcript_text(self, text: str, is_final: bool = True):
         """For browser-mode: accept text transcripts directly (no audio)."""
@@ -171,6 +185,7 @@ class LiveSessionRunner:
         if not text.strip():
             return
 
+        self.stats["transcript_lines"] += 1
         if is_final:
             self._transcript_buffer.append(text)
 
@@ -188,7 +203,10 @@ class LiveSessionRunner:
 
     async def _on_stt_status(self, session_id: str, status, provider: str):
         status_str = status.value if hasattr(status, 'value') else str(status)
-        logger.info(f"[LiveCI] STT status: {status_str} ({provider})")
+        provider_str = provider.value if hasattr(provider, 'value') else str(provider)
+        self.stats["stt_status"] = status_str
+        self.stats["stt_provider"] = provider_str
+        logger.info(f"[LiveCI] STT status: {status_str} ({provider_str})")
 
     async def _maybe_extract(self):
         now = time.time()
