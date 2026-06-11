@@ -6,6 +6,7 @@
 # Delete the duplicate list in recording_consent.py after import.
 # =============================================================================
 
+import os
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel
@@ -51,7 +52,12 @@ class ConsentStatus(str, Enum):
 class RecordingConsentConfig(BaseModel):
     always_disclose: bool = True
     disclosure_audio_url: Optional[str] = None
-    default_disclosure_url: str = "https://perennia-assets.s3.amazonaws.com/audio/recording-disclosure.wav"
+    # Served by backend/routes/disclosure_audio_routes.py (TTS-generated, cached).
+    # Override with DISCLOSURE_AUDIO_URL env var if hosting the asset elsewhere.
+    default_disclosure_url: str = os.getenv(
+        "DISCLOSURE_AUDIO_URL",
+        "https://api.perenniaai.com/api/v1/call-intelligence/disclosure-audio",
+    )
     fallback_to_tts: bool = True
     tts_disclosure_text: str = "This call is now being recorded for quality and compliance purposes."
     tts_voice: str = "female"

@@ -92,6 +92,9 @@ class RecordingConsentService:
                 "is_felony_state": felony,
                 "is_browser_mode": True,
                 "disclosure_audio_url": audio_url,
+                # Lets the browser fall back to on-device speech synthesis
+                # when the audio asset can't be loaded.
+                "disclosure_text": org_config.tts_disclosure_text,
                 "message": "Play the disclosure audio through the browser before activating mic.",
             }
 

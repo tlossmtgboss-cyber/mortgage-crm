@@ -153,6 +153,7 @@ class StartSessionResponse(BaseModel):
     is_felony_state: bool
     is_browser_mode: bool
     disclosure_audio_url: Optional[str] = None
+    disclosure_text: Optional[str] = None
     message: str
 
 
@@ -233,6 +234,7 @@ async def start_session(
         is_felony_state=result["is_felony_state"],
         is_browser_mode=result["is_browser_mode"],
         disclosure_audio_url=result.get("disclosure_audio_url"),
+        disclosure_text=result.get("disclosure_text"),
         message=result["message"],
     )
 
@@ -309,6 +311,7 @@ async def retry_disclosure(
         "consent_status": result["consent_status"],
         "awaiting_disclosure": result["awaiting_webhook"] or result["consent_status"] == "browser_pending",
         "disclosure_audio_url": result.get("disclosure_audio_url"),
+        "disclosure_text": result.get("disclosure_text"),
         "message": result["message"],
     }
 
