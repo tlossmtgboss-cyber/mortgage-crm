@@ -219,6 +219,12 @@ export function useCallIntelligenceSession({
             break;
           }
 
+          case 'pipeline_status': {
+            const { event: _evt, ...status } = data;
+            setDiagnostics((prev) => ({ ...(prev || {}), ...status }));
+            break;
+          }
+
           case 'call_status':
             if (data.status === 'completed') {
               setSessionState(SESSION_STATES.COMPLETED);
@@ -518,11 +524,12 @@ export function useCallIntelligenceSession({
         serverDiag = { stop_error: e.detail || e.message };
       }
     }
-    setDiagnostics({
+    setDiagnostics((prev) => ({
+      ...(prev || {}),
       chunks_sent: sentChunksRef.current,
       chunks_dropped: droppedChunksRef.current,
       ...(serverDiag || { server: 'unreachable' }),
-    });
+    }));
     sessionStateRef.current = SESSION_STATES.COMPLETED;
     setSessionState(SESSION_STATES.COMPLETED);
     wsRef.current?.close();

@@ -224,7 +224,7 @@ async def start_session(
     )
 
     if not result["awaiting_webhook"] and result["consent_status"] not in ("failed", "browser_pending"):
-        _activate_stt(db, session_id, request.call_control_id)
+        await _activate_stt(db, session_id, request.call_control_id)
 
     return StartSessionResponse(
         session_id=session_id,
@@ -272,7 +272,7 @@ async def confirm_browser_disclosure(
 
     # Spin up the live transcription runner — without this, audio streamed
     # over the WebSocket after browser-mode consent goes nowhere.
-    _activate_stt(db, request.session_id, getattr(session, 'call_control_id', None))
+    await _activate_stt(db, request.session_id, getattr(session, 'call_control_id', None))
 
     return {"status": "ok", "session_id": request.session_id, "active": True}
 
@@ -352,7 +352,7 @@ async def manual_consent_override(
     )
     db.commit()
 
-    _activate_stt(db, request.session_id, getattr(session, 'call_control_id', None))
+    await _activate_stt(db, request.session_id, getattr(session, 'call_control_id', None))
     return {"status": "ok", "session_id": request.session_id, "consent_status": "disclosed"}
 
 
@@ -490,16 +490,18 @@ async def ci_websocket_stream(websocket: WebSocket, session_id: str):
         get_live_session,
     )
 
-    activation_attempted = False
+    activation_attempts = 0
+    activation_error = None
+    ws_chunks = 0
 
     async def _ensure_runner():
         """Lazy-activate the runner if consent already cleared but the
         activation task failed or raced — otherwise audio is dropped silently."""
-        nonlocal activation_attempted
+        nonlocal activation_attempts, activation_error
         runner = get_live_session(session_id)
-        if runner or activation_attempted:
+        if runner or activation_attempts >= 3:
             return runner
-        activation_attempted = True
+        activation_attempts += 1
         try:
             from db import SessionLocal
             db = SessionLocal()
@@ -513,18 +515,36 @@ async def ci_websocket_stream(websocket: WebSocket, session_id: str):
             if row and row[0] == "active":
                 logger.warning(f"[CI WS] Lazy-activating runner for {session_id}")
                 return await activate_live_session(session_id, ws_manager)
+            activation_error = f"session_status={row[0] if row else 'row_not_found'}"
+            logger.error(f"[CI WS] Cannot activate {session_id}: {activation_error}")
         except Exception as e:
-            logger.error(f"[CI WS] Lazy activation failed for {session_id}: {e}")
+            activation_error = str(e)[:200]
+            logger.error(f"[CI WS] Lazy activation failed for {session_id}: {e}", exc_info=True)
         return None
+
+    async def _report_pipeline(runner):
+        """Push server-side truth to the panel — same process as this WS."""
+        snapshot = dict(runner.stats) if runner else {
+            "runner": "not_active",
+            "activation_error": activation_error,
+        }
+        await ws_manager.send(session_id, {
+            "event": "pipeline_status",
+            "ws_chunks_received": ws_chunks,
+            **{k: v for k, v in snapshot.items()},
+        })
 
     try:
         while True:
             raw = await websocket.receive()
 
             if raw.get("bytes"):
+                ws_chunks += 1
                 runner = await _ensure_runner()
                 if runner:
                     await runner.feed_audio(raw["bytes"])
+                if ws_chunks % 50 == 1:
+                    await _report_pipeline(runner)
                 continue
 
             data = raw.get("text", "")
@@ -542,10 +562,13 @@ async def ci_websocket_stream(websocket: WebSocket, session_id: str):
                 await websocket.send_json({"type": "pong"})
             elif msg_type == "audio_chunk":
                 import base64
+                ws_chunks += 1
                 runner = await _ensure_runner()
                 if runner and msg.get("data"):
                     audio_bytes = base64.b64decode(msg["data"])
                     await runner.feed_audio(audio_bytes)
+                if ws_chunks % 50 == 1:
+                    await _report_pipeline(runner)
             elif msg_type == "transcript":
                 runner = await _ensure_runner()
                 if runner and msg.get("text"):
@@ -592,7 +615,7 @@ async def handle_telnyx_webhook(
     should_activate = service.handle_playback_ended(call_control_id, session_id)
 
     if should_activate:
-        _activate_stt(db, session_id, call_control_id)
+        await _activate_stt(db, session_id, call_control_id)
         await ws_manager.send(session_id, {
             "event": "consent_cleared",
             "consent_status": "disclosed",
@@ -687,7 +710,7 @@ def _get_session(db: Session, session_id: str, current_user=None):
     ).fetchone()
 
 
-def _activate_stt(db: Session, session_id: str, call_control_id: Optional[str]):
+async def _activate_stt(db: Session, session_id: str, call_control_id: Optional[str]):
     db.execute(
         sa_text("""
             UPDATE call_sessions
@@ -699,21 +722,14 @@ def _activate_stt(db: Session, session_id: str, call_control_id: Optional[str]):
     db.commit()
     logger.info(f"STT activated: session={session_id}")
 
-    import asyncio
+    # Await activation so failures surface here instead of dying silently in
+    # a fire-and-forget task. runner.start() is resilient (extractor optional,
+    # STT connect failures caught), so this should not raise in practice.
     from services.call_intelligence.live_session_runner import activate_live_session
     try:
-        loop = asyncio.get_running_loop()
-        task = loop.create_task(activate_live_session(session_id, ws_manager))
-        task.add_done_callback(_log_activation_result)
-    except RuntimeError:
+        await activate_live_session(session_id, ws_manager)
+        logger.info(f"[CI] Live session runner active: {session_id}")
+    except Exception as e:
         logger.error(
-            f"[CI] No running event loop — live session NOT activated for {session_id}"
+            f"[CI] activate_live_session failed for {session_id}: {e}", exc_info=True
         )
-
-
-def _log_activation_result(task):
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc:
-        logger.error(f"[CI] activate_live_session failed: {exc}", exc_info=exc)

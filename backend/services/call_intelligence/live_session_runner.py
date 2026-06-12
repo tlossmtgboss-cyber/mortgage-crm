@@ -70,12 +70,19 @@ class LiveSessionRunner:
         }
 
     async def start(self):
-        from .llm_client import create_llm_client
-        from .unified_extractor import UnifiedExtractionEngine
-
-        llm_client = create_llm_client()
-        self._extractor = UnifiedExtractionEngine(llm_client)
         self._running = True
+
+        # Extraction is optional — a failed LLM client init (missing key,
+        # SDK issue) must not take down live transcription with it.
+        try:
+            from .llm_client import create_llm_client
+            from .unified_extractor import UnifiedExtractionEngine
+            llm_client = create_llm_client()
+            self._extractor = UnifiedExtractionEngine(llm_client)
+        except Exception as e:
+            logger.error(f"[LiveCI] Extractor init failed (transcription continues): {e}")
+            self.stats["extractor_error"] = str(e)[:200]
+            self._extractor = None
 
         if DEEPGRAM_API_KEY:
             from .stt_fallback_service import STTFallbackService
