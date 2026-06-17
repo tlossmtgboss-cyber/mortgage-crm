@@ -17,6 +17,7 @@ from .context_manager import ContextManager
 from .prompt_builder import AgentPromptBuilder, ConversationStyle, SalesMethodology
 from .performance_tracker import PerformanceTracker
 from .quality_analyzer import QualityAnalyzer
+from .llm_circuit_breaker import LLMCircuitBreaker, CircuitState
 from .config.agent_configs import AgentPersona, ConversationRules, QualificationCriteria
 
 __all__ = [
@@ -26,6 +27,8 @@ __all__ = [
     "SalesMethodology",
     "PerformanceTracker",
     "QualityAnalyzer",
+    "LLMCircuitBreaker",
+    "CircuitState",
     "AgentPersona",
     "ConversationRules",
     "QualificationCriteria",
