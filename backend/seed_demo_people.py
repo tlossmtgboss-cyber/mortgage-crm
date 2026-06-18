@@ -19,9 +19,11 @@ import json
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import logging
 from database import SessionLocal
-from main import logger
 import bcrypt as _bcrypt
+
+logger = logging.getLogger(__name__)
 
 
 class _BcryptCompat:
