@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime, date
 from database import get_db
 from services.recruiting_service import RecruitingService
@@ -267,7 +267,7 @@ async def get_partner_recruit_stats(
 class CandidateCreate(BaseModel):
     first_name: str
     last_name: str
-    email: str
+    email: EmailStr
     phone: Optional[str] = None
     source: Optional[str] = "direct"
     referrer_user_id: Optional[int] = None
@@ -427,7 +427,14 @@ async def list_candidates(
         limit=limit,
         offset=offset
     )
-    return {"candidates": candidates, "count": len(candidates)}
+    total = await service.count_candidates(
+        organization_id=current_user.organization_id,
+        status=status,
+        role_id=role_id,
+        source=source,
+        search=search,
+    )
+    return {"candidates": candidates, "count": len(candidates), "total": total, "offset": offset}
 
 
 @router.get("/candidates/{candidate_id}")
@@ -1303,7 +1310,13 @@ async def list_candidate_notes(
     """List notes for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    query = text("""
+    is_admin = current_user.role in ("admin", "platform_admin", "site_admin")
+    if include_private and is_admin:
+        privacy_clause = "1=1"
+    else:
+        privacy_clause = "n.is_private IS NOT TRUE OR n.created_by = :user_id"
+
+    query = text(f"""
         SELECT
             n.id, n.note_type, n.content, n.is_private, n.created_at,
             u.full_name as author_name
@@ -1311,7 +1324,7 @@ async def list_candidate_notes(
         JOIN users u ON u.id = n.created_by
         WHERE n.candidate_id = :candidate_id
         AND n.organization_id = :org_id
-        AND (n.is_private = false OR n.created_by = :user_id)
+        AND ({privacy_clause})
         ORDER BY n.created_at DESC
     """)
 
@@ -1719,7 +1732,7 @@ async def get_candidate_full_profile(
             "slug": portal_workspace.slug if portal_workspace else None,
             "is_active": portal_workspace.is_active if portal_workspace else False,
             "has_portal": portal_workspace is not None,
-        } if True else None,
+        },
     }
 
 
