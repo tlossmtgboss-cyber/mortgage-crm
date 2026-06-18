@@ -11,10 +11,16 @@ Covers:
 """
 
 import asyncio
-import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi import HTTPException
+
+from routes.recruiting_routes import (
+    update_candidate_status,
+    submit_feedback,
+    CandidateStatusUpdate,
+    InterviewFeedback,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -40,45 +46,6 @@ def _make_db_mock(interview_row=None):
 
 def _run(coro):
     return asyncio.run(coro)
-
-
-# ---------------------------------------------------------------------------
-# Import the two route handlers under test
-# We patch their dependencies at the module level to avoid real DB/service
-# ---------------------------------------------------------------------------
-
-# We need the module importable; patch heavy dependencies first.
-import sys
-import types
-
-# Stub out modules that would require DB connections or heavy imports
-for mod_name in [
-    "services.recruiting_service",
-    "database",
-    "database.models",
-    "auth.dependencies",
-]:
-    if mod_name not in sys.modules:
-        sys.modules[mod_name] = types.ModuleType(mod_name)
-
-# Provide minimal stubs
-sys.modules["database"].get_db = MagicMock()
-sys.modules["database.models"].User = MagicMock()
-sys.modules["auth.dependencies"].get_current_user = MagicMock()
-
-# RecruitingService stub (will be patched per-test anyway)
-recruiting_service_stub = MagicMock()
-sys.modules["services.recruiting_service"].RecruitingService = recruiting_service_stub
-
-
-from routes.recruiting_routes import update_candidate_status, submit_feedback  # noqa: E402
-
-
-# ---------------------------------------------------------------------------
-# Data models used in routes
-# ---------------------------------------------------------------------------
-
-from routes.recruiting_routes import CandidateStatusUpdate, InterviewFeedback  # noqa: E402
 
 
 # ===========================================================================
@@ -269,7 +236,6 @@ class TestSubmitFeedbackMembershipCheck:
     def test_json_string_interviewer_ids_parsed_correctly(self):
         """interviewer_user_ids stored as JSON string (not list) is parsed correctly."""
         user = _make_user(user_id=10, role="loan_officer")
-        # Simulate JSONB returning a raw JSON string
         row = _make_interview_row(
             interviewer_user_ids='[10, 11]',
             primary_interviewer_id=99,
