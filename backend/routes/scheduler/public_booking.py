@@ -449,12 +449,12 @@ async def get_public_booking_page(
                                 user_id=target_user.id,
                                 slug=demo_slug,
                                 link_name="Schedule a Demo",
-                                description="Book a personalized demo of Perennia AI",
+                                description="Schedule a consultation with our team",
                                 is_active=True,
                                 is_public=True,
                                 appointment_type_ids=[user_type.id],
                                 custom_title="Schedule Your Demo",
-                                custom_description="See how Perennia AI can transform your mortgage operations."
+                                custom_description="Our team is here to help you with your mortgage needs."
                             )
                             db.add(link)
                         db.commit()
@@ -558,12 +558,35 @@ async def get_public_booking_page(
         if referer:
             attribution["referrer"] = referer[:2000]
 
+        # Resolve org-level branding fallbacks for white-label deployments
+        org_name = None
+        org_logo_url = link.custom_logo_url
+        org_color = link.custom_color
+        if link_type_org_id:
+            try:
+                from services.scheduler_email_templates import get_org_email_config
+                from database.models.core import Organization
+                _email_cfg = get_org_email_config(link_type_org_id, db)
+                org_name = _email_cfg.get("org_name")
+                if not org_logo_url:
+                    _org = db.query(Organization).filter(
+                        Organization.id == link_type_org_id
+                    ).first()
+                    if _org:
+                        org_logo_url = _org.booking_logo_url
+                        if not org_color:
+                            org_color = _org.booking_primary_color
+            except Exception as _branding_err:
+                logger.warning("Could not resolve org branding for booking page: %s", _branding_err)
+
         return {
             "booking_page": {
                 "title": link.custom_title or link.link_name,
                 "description": link.custom_description or link.description,
-                "logo_url": link.custom_logo_url,
-                "color": link.custom_color,
+                "logo_url": org_logo_url,
+                "color": org_color,
+                "org_name": org_name,
+                "powered_by_text": f"Powered by {org_name}" if org_name else None,
                 "appointment_types": appointment_types,
             },
             # The frontend should store this and send it back in the confirm request
@@ -1197,6 +1220,18 @@ async def confirm_public_booking(
         email_sent = False
         sms_sent = False
 
+        # Fetch org branding for white-label email footer (name + CAN-SPAM address)
+        _confirmation_org_name = None
+        _confirmation_org_address = None
+        if link_org_id:
+            try:
+                from services.scheduler_email_templates import get_org_email_config
+                _org_cfg = get_org_email_config(link_org_id, db)
+                _confirmation_org_name = _org_cfg.get("org_name")
+                _confirmation_org_address = _org_cfg.get("org_address")
+            except Exception as _org_cfg_err:
+                logger.warning("Could not fetch org email config for confirmation: %s", _org_cfg_err)
+
         if attendee_email:
             try:
                 reschedule_url = generate_reschedule_url(appointment.id, attendee_email, slug=slug)
@@ -1213,7 +1248,10 @@ async def confirm_public_booking(
                     video_link=video_link,
                     scheduled_start=appointment.scheduled_start,
                     duration_minutes=appointment.duration_minutes,
-                    reschedule_url=reschedule_url
+                    reschedule_url=reschedule_url,
+                    organization_id=link_org_id,
+                    org_name=_confirmation_org_name,
+                    org_address=_confirmation_org_address,
                 )
                 # H9: email_result is a dict -- extract boolean success
                 email_sent = email_result.get("success", False) if isinstance(email_result, dict) else bool(email_result)

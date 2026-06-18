@@ -154,8 +154,35 @@ class SchedulerService:
     """
 
     def __init__(self):
+        # Build a persistent SQLAlchemy job store so jobs survive container
+        # restarts and rolling deploys.  We reuse the application's sync engine
+        # (already configured with the correct dialect and credentials) rather
+        # than constructing a new URL, which avoids asyncpg/psycopg2 dialect
+        # mismatches.  APScheduler creates the `apscheduler_jobs` table
+        # automatically on first start if it doesn't exist.
+        try:
+            from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+            from database import engine as _db_engine
+            _jobstores = {
+                "default": SQLAlchemyJobStore(
+                    engine=_db_engine,
+                    tablename="apscheduler_jobs",
+                )
+            }
+            logger.info("APScheduler: using SQLAlchemy job store (persistent, survives restarts)")
+        except Exception as _js_err:
+            # Safety net: fall back to in-memory store if the import or engine
+            # is unavailable (e.g. during unit tests with no DB).
+            _jobstores = {}
+            logger.warning(
+                "APScheduler: failed to configure SQLAlchemy job store, "
+                "falling back to in-memory store (jobs will not survive restarts): %s",
+                _js_err,
+            )
+
         self.scheduler = BackgroundScheduler(
             timezone="America/New_York",
+            jobstores=_jobstores,
             executors={
                 "default": {"type": "threadpool", "max_workers": 3},
             },
@@ -1753,6 +1780,46 @@ class SchedulerService:
         except Exception as e:
             session.rollback()
             logger.error(f"Outbound calendar sync catchup failed: {e}", exc_info=True)
+        finally:
+            session.close()
+
+
+    # =========================================================================
+    # CALENDAR FEED CLEANUP
+    # =========================================================================
+
+    def cleanup_expired_calendar_feeds(self):
+        """Delete calendar feed tokens whose expires_at has passed.
+
+        Idempotent: safe to run multiple times; only rows with a non-NULL
+        expires_at in the past are removed.  NULL expires_at rows are legacy
+        tokens treated as already-expired by the feed reader but left in place
+        to avoid silently breaking existing subscribers until they regenerate.
+
+        Registered in scheduled_jobs.py as 'calendar_feed_cleanup'.
+        """
+        logger.info("Running expired calendar feed token cleanup")
+
+        session = get_db_session()
+        try:
+            result = session.execute(text("""
+                DELETE FROM calendar_feed_tokens
+                WHERE expires_at IS NOT NULL
+                  AND expires_at < NOW()
+                RETURNING id
+            """))
+            deleted_ids = result.fetchall()
+            session.commit()
+
+            count = len(deleted_ids)
+            if count > 0:
+                logger.info("Expired calendar feed cleanup: deleted %d tokens", count)
+            else:
+                logger.debug("Expired calendar feed cleanup: no expired tokens found")
+
+        except Exception as e:
+            session.rollback()
+            logger.error("Expired calendar feed cleanup failed: %s", e, exc_info=True)
         finally:
             session.close()
 

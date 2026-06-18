@@ -303,6 +303,19 @@ async def convert_hold_to_appointment(
     if not hold:
         raise SlotHoldError("Hold not found", "NOT_FOUND")
 
+    if hold.status == SlotHoldStatus.CONVERTED.value and hold.converted_to_appointment_id:
+        # Idempotent: hold already converted — return the existing appointment
+        existing = db.query(Appointment).filter(
+            Appointment.id == hold.converted_to_appointment_id,
+            Appointment.organization_id == organization_id,
+        ).first()
+        if existing:
+            logger.info(
+                "Hold %s already converted to appointment %s — returning existing (idempotent)",
+                hold_id, existing.id,
+            )
+            return {'hold_id': hold.id, 'appointment_id': existing.id, 'idempotent': True}
+
     if hold.status != SlotHoldStatus.ACTIVE.value:
         raise SlotHoldError(f"Hold is {hold.status}, cannot convert", "INVALID_STATUS")
 
@@ -357,6 +370,7 @@ async def convert_hold_to_appointment(
         attendee_phone=hold.held_for_phone or appointment_data.get('attendee_phone'),
         attendee_notes=appointment_data.get('attendee_notes'),
         intake_responses=appointment_data.get('intake_responses', {}),
+        idempotency_key=f"hold-{hold_id}",
         status=AppointmentStatus.BOOKED,
         status_changed_at=now,
         booked_by_ai=hold.held_by == 'ai_conversation',

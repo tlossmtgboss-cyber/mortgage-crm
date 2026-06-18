@@ -482,6 +482,60 @@ def _count_registered_modules() -> int:
         return 0
 
 
+
+def _check_sync_staleness() -> dict:
+    """Read per-org Redis heartbeat keys set by calendar_sync_tasks and return
+    any orgs whose last successful sync was >30 minutes ago.
+
+    Key pattern: calendar_sync:last_success:{org_id}
+    Written by _record_sync_success() in tasks/calendar_sync_tasks.py.
+
+    Returns a dict compatible with CheckResult (status: ok | warning).
+    Keys that do not exist in Redis mean the job has never run or the TTL
+    expired (2-hour TTL), both of which are treated as stale.
+    """
+    STALE_THRESHOLD_MINUTES = 30
+    try:
+        from services.distributed_lock import get_lock_service
+        lock_svc = get_lock_service()
+        redis = lock_svc._get_redis() if lock_svc else None
+        if redis is None:
+            return {"status": "ok", "note": "Redis unavailable — staleness check skipped", "stale_orgs": []}
+
+        # Scan for all known org heartbeat keys
+        keys = redis.keys("calendar_sync:last_success:*")
+        if not keys:
+            return {"status": "ok", "stale_orgs": [], "note": "No sync runs recorded yet"}
+
+        now = datetime.now(timezone.utc)
+        stale_orgs = []
+        for key in keys:
+            try:
+                raw = redis.get(key)
+                if raw is None:
+                    # Key disappeared between KEYS and GET — skip
+                    continue
+                last_ok = datetime.fromisoformat(raw.decode() if isinstance(raw, bytes) else raw)
+                if last_ok.tzinfo is None:
+                    last_ok = last_ok.replace(tzinfo=timezone.utc)
+                age_minutes = (now - last_ok).total_seconds() / 60
+                if age_minutes > STALE_THRESHOLD_MINUTES:
+                    org_id = key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1]
+                    stale_orgs.append({"org_id": org_id, "last_success_minutes_ago": round(age_minutes, 1)})
+            except Exception:
+                pass  # Malformed value — ignore
+
+        status = "warning" if stale_orgs else "ok"
+        return {
+            "status": status,
+            "stale_orgs": stale_orgs,
+            "orgs_tracked": len(keys),
+            "stale_threshold_minutes": STALE_THRESHOLD_MINUTES,
+        }
+    except Exception as e:
+        logger.debug("Sync staleness check failed: %s", e)
+        return {"status": "ok", "stale_orgs": [], "note": f"Check unavailable: {e}"}
+
 # =============================================================================
 # ENDPOINT
 # =============================================================================
@@ -594,6 +648,16 @@ async def scheduler_health(
     except Exception as e:
         logger.debug(f"Health check: scheduler_jobs skipped: {e}")
         checks["scheduler_jobs"] = {"status": "unknown", "scheduler_running": False, "note": "Check failed"}
+
+    # --- calendar_sync_staleness (per-org last-success Redis heartbeats) ---
+    try:
+        staleness_check = _check_sync_staleness()
+        checks["calendar_sync_staleness"] = staleness_check
+        if staleness_check["status"] == "warning":
+            any_degraded = True
+    except Exception as e:
+        logger.debug(f"Health check: calendar_sync_staleness skipped: {e}")
+        checks["calendar_sync_staleness"] = {"status": "ok", "stale_orgs": [], "note": "Check unavailable"}
 
     # --- overall status ---
     if critical_failed:

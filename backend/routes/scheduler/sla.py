@@ -2,10 +2,12 @@
 Scheduler SLA - Appointment SLA tracking and enforcement endpoints.
 
 Endpoints:
-  - GET /sla/dashboard              SLA compliance dashboard (all metrics)
-  - GET /sla/breaches               Recent SLA breaches with details
-  - GET /sla/lo/{lo_id}             Per-LO SLA metrics
-  - PUT /sla/targets                Update SLA targets (admin only)
+  - GET /sla/dashboard                                    SLA compliance dashboard (all metrics)
+  - GET /sla/breaches                                     Recent SLA breaches with details
+  - GET /sla/lo/{lo_id}                                   Per-LO SLA metrics
+  - PUT /sla/targets                                      Update org-level SLA targets (admin only)
+  - PUT /appointment-types/{type_id}/sla-targets          Update per-type SLA targets (admin only)
+  - GET /appointment-types/{type_id}/sla-targets          Get effective SLA targets for a type (admin only)
 
 All endpoints require authentication and are scoped to the user's organization.
 """
@@ -380,3 +382,214 @@ async def update_sla_targets(
         db.rollback()
         logger.exception(f"Failed to update SLA targets: {e}")
         raise HTTPException(status_code=500, detail="Failed to update SLA targets")
+
+
+# =============================================================================
+# PER-APPOINTMENT-TYPE SLA TARGETS (admin only)
+# =============================================================================
+
+class AppointmentTypeSLATargetsUpdate(BaseModel):
+    """Request body for updating per-appointment-type SLA target overrides."""
+    time_to_first_appointment_hours: Optional[float] = Field(
+        None, ge=1, le=168,
+        description="Hours from lead creation to first scheduled appointment (1-168). "
+                    "Set null to clear override and inherit org/system default.",
+    )
+    appointment_confirmation_minutes: Optional[float] = Field(
+        None, ge=1, le=1440,
+        description="Minutes from booking creation to confirmation sent (1-1440). "
+                    "Set null to clear override.",
+    )
+    reminder_lead_time_hours: Optional[float] = Field(
+        None, ge=1, le=72,
+        description="Hours before appointment to send reminder (1-72). "
+                    "Set null to clear override.",
+    )
+    reschedule_response_hours: Optional[float] = Field(
+        None, ge=0.5, le=48,
+        description="Hours to respond to a reschedule request (0.5-48). "
+                    "Set null to clear override.",
+    )
+    post_appointment_followup_hours: Optional[float] = Field(
+        None, ge=1, le=72,
+        description="Hours after appointment completion to send follow-up (1-72). "
+                    "Set null to clear override.",
+    )
+
+    class Config:
+        # Allow extra fields to be rejected cleanly
+        extra = "forbid"
+
+
+class AppointmentTypeSLATargetsResponse(BaseModel):
+    """Response with per-type SLA target overrides and effective (merged) targets."""
+    appointment_type_id: int
+    type_name: str = ""
+    organization_id: int
+    # The raw overrides stored on this type (may be null/empty)
+    type_overrides: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Overrides stored specifically on this appointment type",
+    )
+    # The fully resolved targets (system defaults + org overrides + type overrides)
+    effective_targets: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Effective targets after merging all levels of precedence",
+    )
+    message: str = ""
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Known SLA target keys — used for validation of incoming override payloads
+_KNOWN_SLA_KEYS = set(DEFAULT_SLA_TARGETS.keys())
+
+
+@router.put(
+    "/appointment-types/{type_id}/sla-targets",
+    response_model=AppointmentTypeSLATargetsResponse,
+)
+async def update_appointment_type_sla_targets(
+    request: Request,
+    type_id: int,
+    body: AppointmentTypeSLATargetsUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Update per-appointment-type SLA target overrides (admin only).
+
+    These overrides take the highest precedence — they override both the
+    system defaults and any org-level targets set via PUT /sla/targets.
+
+    Only the fields supplied in the request body are stored as overrides.
+    Omitted fields are left at None (inherit from org/system). To clear an
+    existing override, omit the field or pass null explicitly.
+
+    Valid keys: time_to_first_appointment_hours, appointment_confirmation_minutes,
+    reminder_lead_time_hours, reschedule_response_hours, post_appointment_followup_hours.
+    """
+    current_user = await get_current_user(request, db)
+    org_id = _get_org_id(current_user)
+    models = get_models()
+
+    if not models:
+        raise HTTPException(status_code=503, detail="Scheduler models not available")
+
+    if not _is_scheduler_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required to update appointment type SLA targets")
+
+    AppointmentType = models.get("AppointmentType")
+    if not AppointmentType:
+        raise HTTPException(status_code=503, detail="AppointmentType model not available")
+
+    try:
+        appt_type = db.query(AppointmentType).filter(
+            AppointmentType.id == type_id,
+            AppointmentType.organization_id == org_id,
+        ).first()
+
+        if not appt_type:
+            raise HTTPException(status_code=404, detail=f"Appointment type {type_id} not found")
+
+        # Build the override dict from non-null fields only
+        update_data = {k: v for k, v in body.dict().items() if v is not None}
+
+        # Validate keys (belt-and-suspenders: Pydantic already limits fields via extra="forbid")
+        unknown_keys = set(update_data.keys()) - _KNOWN_SLA_KEYS
+        if unknown_keys:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unknown SLA target keys: {sorted(unknown_keys)}. "
+                       f"Valid keys: {sorted(_KNOWN_SLA_KEYS)}",
+            )
+
+        # Merge with existing type overrides (so partial updates don't wipe other keys)
+        existing_overrides = {}
+        if hasattr(appt_type, "sla_targets") and appt_type.sla_targets:
+            existing_overrides = dict(appt_type.sla_targets)
+
+        existing_overrides.update(update_data)
+
+        # Persist
+        appt_type.sla_targets = existing_overrides if existing_overrides else None
+        db.commit()
+        db.refresh(appt_type)
+
+        # Return effective (merged) targets so the caller can see what will actually apply
+        effective = get_sla_targets(db, models, org_id, appointment_type_id=type_id)
+
+        type_name = getattr(appt_type, "type_name", "") or ""
+        stored_overrides = appt_type.sla_targets or {}
+
+        return AppointmentTypeSLATargetsResponse(
+            appointment_type_id=type_id,
+            type_name=type_name,
+            organization_id=org_id,
+            type_overrides=stored_overrides,
+            effective_targets=effective,
+            message=f"Updated {len(update_data)} SLA override(s) for '{type_name}'" if update_data else "No changes",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Failed to update SLA targets for appointment type {type_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update appointment type SLA targets")
+
+
+@router.get(
+    "/appointment-types/{type_id}/sla-targets",
+    response_model=AppointmentTypeSLATargetsResponse,
+)
+async def get_appointment_type_sla_targets(
+    request: Request,
+    type_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get the effective SLA targets for a specific appointment type (admin only).
+
+    Returns both the raw per-type overrides stored on this type, and the
+    fully resolved effective targets after merging system defaults,
+    org-level overrides, and per-type overrides.
+    """
+    current_user = await get_current_user(request, db)
+    org_id = _get_org_id(current_user)
+    models = get_models()
+
+    if not models:
+        raise HTTPException(status_code=503, detail="Scheduler models not available")
+
+    if not _is_scheduler_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required to view appointment type SLA targets")
+
+    AppointmentType = models.get("AppointmentType")
+    if not AppointmentType:
+        raise HTTPException(status_code=503, detail="AppointmentType model not available")
+
+    try:
+        appt_type = db.query(AppointmentType).filter(
+            AppointmentType.id == type_id,
+            AppointmentType.organization_id == org_id,
+        ).first()
+
+        if not appt_type:
+            raise HTTPException(status_code=404, detail=f"Appointment type {type_id} not found")
+
+        effective = get_sla_targets(db, models, org_id, appointment_type_id=type_id)
+        type_name = getattr(appt_type, "type_name", "") or ""
+        stored_overrides = appt_type.sla_targets or {}
+
+        return AppointmentTypeSLATargetsResponse(
+            appointment_type_id=type_id,
+            type_name=type_name,
+            organization_id=org_id,
+            type_overrides=stored_overrides,
+            effective_targets=effective,
+            message="",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to get SLA targets for appointment type {type_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve appointment type SLA targets")

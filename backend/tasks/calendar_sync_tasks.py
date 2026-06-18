@@ -37,6 +37,34 @@ logger = logging.getLogger(__name__)
 # Task: Push Single Event to Salesforce
 # ============================================================================
 
+
+
+# ============================================================================
+# Sync Staleness Tracking
+# ============================================================================
+
+def _record_sync_success(org_id) -> None:
+    """Write a Redis heartbeat key after a successful calendar sync for an org.
+
+    Key:   calendar_sync:last_success:{org_id}
+    Value: UTC ISO-8601 timestamp of the successful run
+    TTL:   7200 seconds (2 hours) -- auto-expires if the job stops running.
+
+    Silently swallowed on any Redis error so the observability layer never
+    causes sync failures.
+    """
+    try:
+        from services.distributed_lock import get_lock_service
+        lock_svc = get_lock_service()
+        redis = lock_svc._get_redis() if lock_svc else None
+        if redis is None:
+            return
+        key = f"calendar_sync:last_success:{org_id}"
+        value = datetime.now(timezone.utc).isoformat()
+        redis.set(key, value, ex=7200)
+    except Exception:
+        pass  # Never let observability break the sync path
+
 async def push_event_to_salesforce(
     crm_event_id: str,
     max_retries: int = 5,
@@ -236,6 +264,9 @@ async def process_pending_sync_events(
 
         except Exception as e:
             logger.error(f"Error processing pending sync events for org {org_id}: {e}")
+        else:
+            # Record heartbeat: org processed without exception
+            _record_sync_success(org_id)
 
     logger.info(
         f"Processed {results['processed']} events: "
@@ -569,6 +600,9 @@ async def poll_salesforce_events() -> dict:
 
         except Exception as e:
             logger.error(f"Error polling Salesforce events for org {org_id}: {e}")
+        else:
+            # Record heartbeat: org polling succeeded without exception
+            _record_sync_success(org_id)
 
     logger.info(
         f"Salesforce polling complete: {results['users_polled']} users, "

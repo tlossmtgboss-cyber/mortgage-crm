@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
 
+import httpx
 import requests
 from sqlalchemy.orm import Session
 
@@ -156,6 +157,103 @@ class MicrosoftGraphEmailService:
             "refresh_token": token_data.get("refresh_token", refresh_token),
             "expires_in": token_data.get("expires_in", 3600),
         }
+
+    @staticmethod
+    async def refresh_access_token_async(refresh_token: str) -> Dict[str, Any]:
+        """Async version of refresh_access_token — does not block the event loop.
+
+        Use this in all async FastAPI route handlers and services.
+
+        Raises:
+            ValueError: When the refresh fails (e.g. token revoked by user).
+        """
+        data = {
+            "client_id": MICROSOFT_CLIENT_ID,
+            "client_secret": MICROSOFT_CLIENT_SECRET,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+            "scope": SCOPES,
+        }
+
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+            resp = await client.post(TOKEN_URL, data=data)
+
+        if resp.status_code != 200:
+            error_detail = ""
+            try:
+                error_detail = resp.json().get("error_description", resp.text)
+            except Exception:
+                error_detail = resp.text[:200]
+            logger.error("Microsoft token refresh failed (async): %s", error_detail)
+            raise ValueError(f"Token refresh failed: {error_detail}")
+
+        token_data = resp.json()
+        return {
+            "access_token": token_data["access_token"],
+            "refresh_token": token_data.get("refresh_token", refresh_token),
+            "expires_in": token_data.get("expires_in", 3600),
+        }
+
+    @classmethod
+    async def get_valid_access_token_async(
+        cls,
+        db: Session,
+        org_id: int,
+    ) -> Tuple[str, str]:
+        """Async version of get_valid_access_token — proactively refreshes if expiring within 5 minutes.
+
+        Proactively refreshes when the token is within _TOKEN_REFRESH_MARGIN (5 min)
+        of expiry, rather than waiting for a 401 from the Graph API.
+
+        Returns:
+            Tuple of (access_token, from_email).
+
+        Raises:
+            ValueError: When no active token exists for the org, the token is
+                        revoked, or the user must reconnect Outlook.
+        """
+        from database.models.microsoft_email import MicrosoftEmailToken
+
+        record = (
+            db.query(MicrosoftEmailToken)
+            .filter(
+                MicrosoftEmailToken.organization_id == org_id,
+                MicrosoftEmailToken.is_active.is_(True),
+            )
+            .first()
+        )
+
+        if not record:
+            raise ValueError(f"No active Microsoft email token for org {org_id}")
+
+        now = datetime.now(timezone.utc)
+
+        # Proactive refresh: refresh when token is within the 5-minute buffer
+        if record.token_expiry and record.token_expiry <= now + _TOKEN_REFRESH_MARGIN:
+            logger.info(
+                "Proactively refreshing Microsoft token for org %d (%s)",
+                org_id, _mask(record.email_address),
+            )
+            try:
+                refreshed = await cls.refresh_access_token_async(record.refresh_token)
+            except ValueError:
+                # Refresh failed — mark record inactive so we don't keep retrying
+                record.is_active = False
+                db.commit()
+                raise ValueError(
+                    f"Microsoft Outlook token for org {org_id} has expired or been revoked. "
+                    "Please reconnect Outlook in Settings > Email Integration."
+                )
+
+            record.access_token = refreshed["access_token"]
+            if refreshed.get("refresh_token"):
+                record.refresh_token = refreshed["refresh_token"]
+            record.token_expiry = now + timedelta(seconds=refreshed.get("expires_in", 3600))
+            record.updated_at = now
+            db.commit()
+            db.refresh(record)
+
+        return record.access_token, record.email_address
 
     # ------------------------------------------------------------------
     # Graph API: Send Email

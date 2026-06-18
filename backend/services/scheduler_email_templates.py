@@ -24,6 +24,65 @@ except ImportError:
         "Perennia AI, 123 Main Street, Suite 100, Austin, TX 78701"
     )
 
+_DEFAULT_ORG_NAME = os.environ.get("COMPANY_NAME", "Perennia AI")
+_DEFAULT_ORG_ADDRESS = os.environ.get("CAN_SPAM_ADDRESS", CAN_SPAM_PHYSICAL_ADDRESS)
+
+
+def get_org_email_config(org_id: int, db) -> dict:
+    """Return white-label email config for an org: org_name, org_address, primary_color.
+
+    Resolution order for org_name:
+      1. organization_branding.company_name
+      2. Organization.name
+      3. COMPANY_NAME env var / "Perennia AI" fallback
+
+    Resolution order for org_address:
+      1. organization_branding.company_address
+      2. CAN_SPAM_ADDRESS env var / module-level fallback
+
+    Always returns a dict with ``org_name``, ``org_address``, and
+    ``primary_color`` keys so callers can rely on them without None-checks.
+    """
+    if not org_id or not db:
+        return {
+            "org_name": _DEFAULT_ORG_NAME,
+            "org_address": _DEFAULT_ORG_ADDRESS,
+            "primary_color": None,
+        }
+    try:
+        from sqlalchemy import text as _text
+        row = db.execute(_text(
+            "SELECT company_name, company_address, primary_color "
+            "FROM organization_branding "
+            "WHERE organization_id = :org_id AND is_active = true "
+            "LIMIT 1"
+        ), {"org_id": org_id}).fetchone()
+
+        org_name = (row[0] if row and row[0] else None)
+        org_address = (row[1] if row and row[1] else None)
+        primary_color = (row[2] if row and row[2] else None)
+
+        if not org_name:
+            # Fall back to Organization.name
+            org_row = db.execute(_text(
+                "SELECT name FROM organizations WHERE id = :org_id AND is_active = true LIMIT 1"
+            ), {"org_id": org_id}).fetchone()
+            if org_row and org_row[0]:
+                org_name = org_row[0]
+
+        return {
+            "org_name": org_name or _DEFAULT_ORG_NAME,
+            "org_address": org_address or _DEFAULT_ORG_ADDRESS,
+            "primary_color": primary_color,
+        }
+    except Exception as e:
+        logger.warning("get_org_email_config(%s) failed: %s", org_id, e)
+        return {
+            "org_name": _DEFAULT_ORG_NAME,
+            "org_address": _DEFAULT_ORG_ADDRESS,
+            "primary_color": None,
+        }
+
 
 # ============================================================================
 # Header color constants
@@ -46,6 +105,8 @@ def build_scheduler_email_html(
     heading: str,
     body_content: str,
     footer_text: str = None,
+    org_name: str = None,
+    org_address: str = None,
 ) -> str:
     """Build a complete HTML email from shared boilerplate.
 
@@ -55,9 +116,15 @@ def build_scheduler_email_html(
         heading: Text shown inside the colored header bar.
         body_content: Pre-escaped HTML that goes inside the white content area.
         footer_text: Optional override for the small footer line.
-            Defaults to ``"Sent from Perennia AI"``.
+            Defaults to ``"Sent from <org_name>"``.
+        org_name: White-label organization name shown in the footer.
+            Defaults to the ``COMPANY_NAME`` env var or "Perennia AI".
+        org_address: CAN-SPAM physical address shown below the footer text.
+            Defaults to ``CAN_SPAM_PHYSICAL_ADDRESS``.
     """
-    footer = footer_text or "Sent from Perennia AI"
+    effective_org_name = org_name or _DEFAULT_ORG_NAME
+    effective_address = org_address or CAN_SPAM_PHYSICAL_ADDRESS
+    footer = footer_text or f"Sent from {effective_org_name}"
     return f"""
         <!DOCTYPE html>
         <html>
@@ -81,7 +148,7 @@ def build_scheduler_email_html(
                     {footer}
                 </p>
                 <p style="text-align: center; color: #9ca3af; font-size: 11px; margin-top: 4px;">
-                    {CAN_SPAM_PHYSICAL_ADDRESS}
+                    {effective_address}
                 </p>
             </div>
         </body>

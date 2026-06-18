@@ -40,6 +40,11 @@ DEFAULT_RETENTION_DAYS = {
     "ai_audit_logs": 2555,      # 7 years — compliance
     "ai_feedback_logs": 730,    # 2 years
     "voicemail_drops": 365,     # 1 year
+    # Smart Calendar tables (Domain 8 audit addition)
+    "scheduler_appointments": 2555,  # 7 years — mortgage records regulatory requirement
+    "scheduler_audit_log": 2555,     # 7 years — immutable compliance trail (see NEVER_PURGE below)
+    "scheduler_reminders": 365,      # 1 year — reminder delivery logs
+    "scheduler_blocked_times": 365,  # 1 year — PTO/holiday blocks
 }
 
 # Allowlist of tables that retention policies may target.
@@ -52,6 +57,7 @@ NEVER_PURGE_TABLES = frozenset({
     "stage_history",
     "borrower_applications",  # regulatory — 7 years minimum per ECOA
     "platform_contracts",
+    "scheduler_audit_log",    # immutable compliance trail — DB trigger prevents UPDATE/DELETE
 })
 
 
@@ -336,14 +342,22 @@ class DataRetentionService:
                 result["action"] = "would_delete"
                 return result
 
-            # Tables with PII get redacted; others get deleted
+            # Tables with PII get redacted; others get deleted.
+            # scheduler_appointments uses soft-delete (sets deleted_at) instead
+            # of hard-delete to preserve the compliance audit trail.
             pii_tables = {
                 "sms_messages", "email_messages", "conversation_memory",
+            }
+            soft_delete_tables = {
+                "scheduler_appointments",
             }
 
             if table_name in pii_tables:
                 self._redact_expired(table_name, date_col, params)
                 result["action"] = "redacted"
+            elif table_name in soft_delete_tables:
+                self._soft_delete_expired(table_name, date_col, params, org_filter)
+                result["action"] = "soft_deleted"
             else:
                 self.db.execute(text(
                     f"DELETE FROM {table_name} "  # noqa: S608
@@ -360,6 +374,26 @@ class DataRetentionService:
             logger.warning(f"Retention cleanup failed for {table_name}: {e}")
 
         return result
+
+    def _soft_delete_expired(
+        self, table_name: str, date_col: str, params: dict, org_filter: str
+    ):
+        """
+        Soft-delete expired records by setting deleted_at = NOW().
+
+        Used for scheduler_appointments which must be retained as audit-trail
+        records even after the active retention window expires.  The records
+        remain queryable by admins and the compliance archival API but are
+        invisible to normal appointment list/get endpoints.
+        """
+        now = datetime.now(timezone.utc)
+        self.db.execute(text(
+            f"UPDATE {table_name} "  # noqa: S608
+            f"SET deleted_at = :now "
+            f"WHERE {date_col} < :cutoff "
+            f"AND deleted_at IS NULL"
+            f"{org_filter}"
+        ), {**params, "now": now})
 
     def _redact_expired(
         self, table_name: str, date_col: str, params: dict

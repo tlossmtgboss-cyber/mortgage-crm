@@ -20,6 +20,20 @@ AVAILABLE_SCOPES = [
     "read:documents", "write:documents",
     "read:reports",
     "admin:users", "admin:settings",
+
+    # Scheduler / appointment scopes (Enterprise Readiness, Domain 11 — least privilege)
+    # Grants read access to appointment records, slot data, and availability windows.
+    "read:appointments",
+    # Grants write access to create, update, reschedule, and cancel appointments.
+    "write:appointments",
+    # Grants read access to scheduler configuration, appointment types, and booking page links.
+    "read:scheduler",
+    # Grants write access to modify scheduler configuration and appointment type definitions.
+    "write:scheduler",
+    # Grants the ability to register, delete, and test webhook subscriptions for appointment events.
+    "webhooks:manage",
+    # Grants access to public booking endpoints used by embedded booking widgets.
+    "public:booking",
 ]
 
 
@@ -58,5 +72,12 @@ def get_scope_description(scope: str) -> str:
         "read:reports": "Access reports and analytics",
         "admin:users": "Manage user accounts",
         "admin:settings": "Manage system settings",
+        # Scheduler scopes
+        "read:appointments": "Read appointment data, slots, and availability",
+        "write:appointments": "Create, update, reschedule, and cancel appointments",
+        "read:scheduler": "Read scheduler configuration, appointment types, and booking links",
+        "write:scheduler": "Modify scheduler configuration and appointment types",
+        "webhooks:manage": "Register, delete, and test webhook subscriptions",
+        "public:booking": "Access public booking endpoints (for embedded widgets)",
     }
     return descriptions.get(scope, scope)

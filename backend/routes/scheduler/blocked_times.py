@@ -128,6 +128,9 @@ async def create_blocked_time(
                changes={'title': block_data.title, 'applies_to_all': applies_to_all}, request=request)
     db.commit()
     db.refresh(blocked)
+    # Invalidate availability cache for the affected user
+    from routes.scheduler._availability import invalidate_availability_cache
+    invalidate_availability_cache(org_id=org_id, user_id=user.id)
 
     return {"message": "Blocked time created", "blocked_time_id": blocked.id}
 
@@ -158,5 +161,8 @@ async def delete_blocked_time(
                entity_id=block_id, changes={'title': blocked.title}, request=request)
     blocked.is_active = False
     db.commit()
+    # Invalidate availability cache for the affected user
+    from routes.scheduler._availability import invalidate_availability_cache
+    invalidate_availability_cache(org_id=org_id, user_id=user.id)
 
     return {"message": "Blocked time deleted"}

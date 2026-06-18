@@ -157,7 +157,7 @@ def _sign_channel_token(org_id: int, user_id: int) -> str:
     guessed org_id:user_id values.
     """
     payload = f"{org_id}:{user_id}"
-    sig = hmac.new(_get_webhook_signing_key(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    sig = hmac.new(_get_webhook_signing_key(), payload.encode(), hashlib.sha256).hexdigest()[:32]
     return f"{payload}:{sig}"
 
 
@@ -178,15 +178,31 @@ def _verify_channel_token(token: str) -> tuple[int | None, int | None, bool]:
         return None, None, False
 
     if len(parts) == 3 and user_id is not None:
-        # Signed token — verify HMAC
+        # Signed token — verify HMAC. New tokens use 32 hex chars (128 bits);
+        # legacy tokens (pre-2026) used 16 hex chars (64 bits) and are accepted
+        # with a deprecation warning until watch channels are re-registered.
+        received_sig = parts[2]
+        sig_len = len(received_sig)
+        if sig_len not in (16, 32):
+            logger.warning(
+                "Calendar webhook: channel token signature wrong length (%d) — possible downgrade attempt",
+                sig_len,
+            )
+            return org_id, user_id, False
         expected_sig = hmac.new(
             _get_webhook_signing_key(),
             f"{org_id}:{user_id}".encode(),
             hashlib.sha256,
-        ).hexdigest()[:16]
-        is_valid = hmac.compare_digest(parts[2], expected_sig)
+        ).hexdigest()[:sig_len]
+        is_valid = hmac.compare_digest(received_sig, expected_sig)
         if not is_valid:
             logger.warning("Calendar webhook: invalid HMAC signature in channel token")
+        elif sig_len == 16:
+            logger.warning(
+                "Calendar webhook: legacy 64-bit HMAC token accepted for org=%s user=%s — "
+                "re-register the watch channel to upgrade to 128-bit",
+                org_id, user_id,
+            )
         return org_id, user_id, is_valid
 
     # Legacy unsigned token — reject (NC4: unsigned tokens are a spoofing risk)
@@ -364,10 +380,16 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
 
     See: https://learn.microsoft.com/en-us/graph/webhooks
     """
-    # Handle validation request BEFORE rate limiting -- Microsoft requires
-    # an immediate 200 response to validate the subscription endpoint.
+    # Handle validation request. Microsoft requires a fast 200 echo response to
+    # validate the subscription endpoint; we rate-limit here to prevent DoS on
+    # this otherwise-open path (100 req/min per IP, non-blocking Redis check).
     validation_token = request.query_params.get("validationToken")
     if validation_token:
+        await _check_rate_limit(
+            request,
+            max_requests=100,
+            custom_key="cal_sync_rl:outlook_validate",
+        )
         logger.info("Outlook webhook validation request received")
         return Response(
             content=validation_token,

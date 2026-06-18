@@ -53,6 +53,7 @@ from routes.scheduler._helpers import (
     _is_scheduler_admin, _audit_log,
     _generate_available_slots,
 )
+from auth.scope_enforcement import require_scope
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,8 @@ async def get_availability(
     start_date: date = Query(...),
     end_date: date = Query(...),
     user_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("read:appointments")),
 ):
     """Get availability slots for a date range"""
     user = await get_current_user(request, db)
@@ -210,7 +212,8 @@ async def get_availability(
 async def create_availability_slot(
     slot_data: AvailabilitySlotCreate,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("write:appointments")),
 ):
     """Create a custom availability slot"""
     user = await get_current_user(request, db)
@@ -284,6 +287,9 @@ async def create_availability_slot(
         request=request,
     )
     db.commit()
+    # Invalidate availability cache for this user
+    from routes.scheduler._availability import invalidate_availability_cache
+    invalidate_availability_cache(org_id=org_id, user_id=user.id)
 
     return {"message": "Availability slot created", "slot_id": slot.id}
 
@@ -292,7 +298,8 @@ async def create_availability_slot(
 async def delete_availability_slot(
     slot_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("write:appointments")),
 ):
     """Delete an availability slot"""
     user = await get_current_user(request, db)
@@ -323,6 +330,9 @@ async def delete_availability_slot(
         request=request,
     )
     db.commit()
+    # Invalidate availability cache for this user
+    from routes.scheduler._availability import invalidate_availability_cache
+    invalidate_availability_cache(org_id=org_id, user_id=user.id)
 
     return {"message": "Slot deleted"}
 
@@ -335,7 +345,8 @@ async def delete_availability_slot(
 async def get_available_slots(
     slot_request: AvailableSlotsRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("read:appointments")),
 ):
     """
     Get available time slots for booking.
@@ -381,18 +392,82 @@ async def get_available_slots(
                 if appt_type and getattr(appt_type, 'default_duration_minutes', None):
                     effective_duration = appt_type.default_duration_minutes
 
-        available_slots = _generate_available_slots(
-            db=db,
-            user_ids=user_ids,
-            start_date=slot_request.start_date,
-            end_date=slot_request.end_date,
-            duration_minutes=effective_duration,
-            org_id=org_id,
-            max_per_day=8,  # Default max per day for authenticated endpoint
-            check_cross_source=True,
-            include_user_id=True,
-            include_day_name=True,
+        # ---------------------------------------------------------------
+        # Redis availability cache (TTL=120s, per-user per date-range)
+        # Cache key: avail:{org_id}:{user_id}:{start}:{end}:{duration}
+        # Multi-user requests are cached per-user and merged.
+        # On any Redis error: log warning, compute fresh (never fail).
+        # ---------------------------------------------------------------
+        from routes.scheduler._availability import (
+            _avail_cache_get, _avail_cache_set,
         )
+        try:
+            from services.redis_service import redis_service
+            _redis = redis_service.get_client()
+        except Exception:
+            _redis = None
+
+        start_str = slot_request.start_date.isoformat()
+        end_str = slot_request.end_date.isoformat()
+
+        if _redis is not None and len(user_ids) > 0:
+            # Try to serve from cache (all user_ids must hit)
+            cached_slots = []
+            all_hit = True
+            for uid in user_ids:
+                cache_key = f"avail:{org_id}:{uid}:{start_str}:{end_str}:{effective_duration}"
+                hit = _avail_cache_get(_redis, cache_key)
+                if hit is None:
+                    all_hit = False
+                    break
+                cached_slots.extend(hit)
+
+            if all_hit:
+                logger.debug(
+                    "Availability cache HIT for org=%s users=%s %s..%s",
+                    org_id, user_ids, start_str, end_str,
+                )
+                available_slots = sorted(
+                    cached_slots,
+                    key=lambda s: s.get("start_time", s.get("start", "")),
+                )
+            else:
+                # Cache miss — compute and store per-user
+                available_slots = _generate_available_slots(
+                    db=db,
+                    user_ids=user_ids,
+                    start_date=slot_request.start_date,
+                    end_date=slot_request.end_date,
+                    duration_minutes=effective_duration,
+                    org_id=org_id,
+                    max_per_day=8,
+                    check_cross_source=True,
+                    include_user_id=True,
+                    include_day_name=True,
+                )
+                # Store per-user slices so invalidation is targeted
+                slots_by_user: dict = {}
+                for slot in available_slots:
+                    uid = slot.get("user_id")
+                    if uid is not None:
+                        slots_by_user.setdefault(uid, []).append(slot)
+                for uid in user_ids:
+                    cache_key = f"avail:{org_id}:{uid}:{start_str}:{end_str}:{effective_duration}"
+                    _avail_cache_set(_redis, cache_key, slots_by_user.get(uid, []))
+        else:
+            # Redis unavailable — compute without caching
+            available_slots = _generate_available_slots(
+                db=db,
+                user_ids=user_ids,
+                start_date=slot_request.start_date,
+                end_date=slot_request.end_date,
+                duration_minutes=effective_duration,
+                org_id=org_id,
+                max_per_day=8,
+                check_cross_source=True,
+                include_user_id=True,
+                include_day_name=True,
+            )
 
         return {
             "available_slots": available_slots,

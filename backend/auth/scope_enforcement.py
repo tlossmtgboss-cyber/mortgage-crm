@@ -63,6 +63,26 @@ ENDPOINT_SCOPE_MAP = {
     # Admin
     r"^/api/v1/admin/users": {"GET": ["admin:users"], "POST": ["admin:users"], "PUT": ["admin:users"], "PATCH": ["admin:users"], "DELETE": ["admin:users"]},
     r"^/api/v1/admin/settings": {"GET": ["admin:settings"], "POST": ["admin:settings"], "PUT": ["admin:settings"]},
+
+    # Scheduler — appointments
+    r"^/api/v1/scheduler/appointments$": {"GET": ["read:appointments"], "POST": ["write:appointments"]},
+    r"^/api/v1/scheduler/appointments/\d+$": {"GET": ["read:appointments"], "PUT": ["write:appointments"], "PATCH": ["write:appointments"], "DELETE": ["write:appointments"]},
+    r"^/api/v1/scheduler/appointments/\d+/cancel$": {"POST": ["write:appointments"]},
+    r"^/api/v1/scheduler/appointments/\d+/timeline$": {"GET": ["read:appointments"]},
+    r"^/api/v1/scheduler/appointments/\d+/audit-trail$": {"GET": ["read:appointments"]},
+    r"^/api/v1/scheduler/appointments/export": {"GET": ["read:appointments"]},
+
+    # Scheduler — availability / slots
+    r"^/api/v1/scheduler/availability$": {"GET": ["read:appointments"]},
+    r"^/api/v1/scheduler/availability/slots$": {"POST": ["write:appointments"]},
+    r"^/api/v1/scheduler/availability/slots/\d+$": {"DELETE": ["write:appointments"]},
+    r"^/api/v1/scheduler/available-slots$": {"POST": ["read:appointments"]},
+
+    # Scheduler — webhooks
+    r"^/api/v1/scheduler/webhooks$": {"GET": ["webhooks:manage"], "POST": ["webhooks:manage"]},
+    r"^/api/v1/scheduler/webhooks/\d+$": {"DELETE": ["webhooks:manage"]},
+    r"^/api/v1/scheduler/webhooks/\d+/test$": {"POST": ["webhooks:manage"]},
+    r"^/api/v1/scheduler/webhooks/\d+/deliveries$": {"GET": ["webhooks:manage"]},
 }
 
 

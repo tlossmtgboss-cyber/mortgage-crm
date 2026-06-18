@@ -680,7 +680,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/sms-tasks" path="/sms-tasks" element={<Navigate to="/tasks" replace />} />,
     <Route key="/calendar" path="/calendar" element={withMainLayout(Calendar)} />,
     <Route key="/calendar-settings" path="/calendar-settings" element={withMainLayout(CalendarSettings)} />,
-    <Route key="/calendar/setup" path="/calendar/setup" element={withMainLayout(CalendarSetupWizard)} />,
+    <Route key="/calendar/setup" path="/calendar/setup" element={withProtectedMainLayout(CalendarSetupWizard, ['admin', 'site_admin', 'platform_admin'])} />,
     <Route key="/calendar/analytics" path="/calendar/analytics" element={withMainLayout(CalendarAnalyticsPage)} />,
     <Route key="/calendar/surveys" path="/calendar/surveys" element={withMainLayout(SurveyResultsPage)} />,
     <Route key="/calendar/buffer-settings" path="/calendar/buffer-settings" element={withMainLayout(BufferSettingsPage)} />,

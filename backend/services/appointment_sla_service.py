@@ -68,14 +68,21 @@ def get_sla_targets(
     db: Session,
     models: dict,
     organization_id: int,
+    appointment_type_id: Optional[int] = None,
 ) -> dict:
     """
-    Get SLA targets for an organization.
+    Get SLA targets for an organization, with optional per-appointment-type overrides.
+
+    Priority (highest to lowest):
+      1. Per-type overrides (AppointmentType.sla_targets) — only when appointment_type_id is given
+      2. Org-level overrides (SchedulerConfig.sla_targets for user_id IS NULL)
+      3. DEFAULT_SLA_TARGETS system defaults
 
     Checks SchedulerConfig for org-level overrides in the `sla_targets` JSON
     field.  Falls back to DEFAULT_SLA_TARGETS for any missing keys.
     """
     SchedulerConfig = models.get("SchedulerConfig")
+    AppointmentType = models.get("AppointmentType")
     custom_targets = {}
 
     if SchedulerConfig:
@@ -89,6 +96,16 @@ def get_sla_targets(
 
     # Merge: org overrides take precedence over defaults
     merged = {**DEFAULT_SLA_TARGETS, **custom_targets}
+
+    # Per-type overrides are the highest priority
+    if appointment_type_id and AppointmentType:
+        appt_type = db.query(AppointmentType).filter(
+            AppointmentType.id == appointment_type_id,
+            AppointmentType.organization_id == organization_id,
+        ).first()
+        if appt_type and hasattr(appt_type, "sla_targets") and appt_type.sla_targets:
+            merged.update(appt_type.sla_targets)
+
     return merged
 
 

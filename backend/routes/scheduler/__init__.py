@@ -54,6 +54,8 @@ URL Prefix Map (all under /api/v1/scheduler):
   /booking-links/analytics/summary  Org-wide booking link analytics (admin) (booking_links.py)
   /settings/all                 Get all scheduler settings                  (settings.py)
   /settings/{section}           Update settings by section (PUT, admin)     (settings.py)
+  /import/appointments/csv      Bulk import appointments from CSV (admin)   (import_routes.py)
+  /import/appointments/ics      Bulk import appointments from ICS (admin)   (import_routes.py)
 
 Active modules (23):
   appointments.py             Appointment CRUD, status transitions, timeline
@@ -78,6 +80,7 @@ Active modules (23):
   data_compliance.py          GDPR/CCPA data export, deletion, retention + TCPA/DNC/contact-hours compliance (admin)
   calendar_sync_inbound.py   Bidirectional calendar sync (Google/Outlook inbound webhooks)
   settings.py                 Scheduler config CRUD (availability, notifications, etc.)
+  import_routes.py            CSV and ICS bulk import (admin, max 500 rows / 5 MB)
   error_responses.py          Standardized error response helpers (not a router, re-exported)
 
 Internal helpers (not routers):
@@ -141,6 +144,7 @@ from .webhooks import router as webhooks_router
 from .calendar_sync_inbound import router as calendar_sync_inbound_router
 from .confirmation import router as confirmation_router
 from .settings import router as settings_router
+from .import_routes import router as import_router
 from .error_responses import (  # noqa: F401 — re-export for other modules
     scheduler_error, validation_error, not_found_error,
     conflict_error, rate_limit_error, internal_error,
@@ -295,4 +299,5 @@ scheduler_router.include_router(webhooks_router)
 scheduler_router.include_router(calendar_sync_inbound_router)
 scheduler_router.include_router(confirmation_router)
 scheduler_router.include_router(settings_router)
+scheduler_router.include_router(import_router)
 scheduler_router.include_router(_api_versions_router)
