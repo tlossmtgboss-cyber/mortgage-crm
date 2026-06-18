@@ -65,18 +65,63 @@ _WEBHOOK_DEDUP_WINDOW_SECONDS = int(
     os.getenv("CALENDAR_WEBHOOK_DEDUP_WINDOW", "5")
 )
 
-# In-memory dedup cache: notification_key -> timestamp of first seen.
+# In-memory dedup fallback: used when Redis is unavailable (fail-open).
 # Bounded to prevent unbounded memory growth.
 _dedup_cache: OrderedDict[str, float] = OrderedDict()
 _dedup_lock = asyncio.Lock()
 _MAX_DEDUP_ENTRIES = 5000
 
+# Async Redis client for cross-worker dedup (initialised lazily).
+_dedup_redis = None
+_dedup_redis_checked = False
+
+
+async def _get_dedup_redis():
+    """Lazily initialise an async Redis client for dedup.
+
+    Returns the client on success, None if Redis is not configured / reachable.
+    The result is cached for the lifetime of the process.
+    """
+    global _dedup_redis, _dedup_redis_checked
+    if _dedup_redis_checked:
+        return _dedup_redis
+    _dedup_redis_checked = True
+    try:
+        import redis.asyncio as aioredis
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        client = aioredis.from_url(
+            redis_url, decode_responses=True, socket_connect_timeout=2
+        )
+        await client.ping()
+        _dedup_redis = client
+    except Exception:
+        _dedup_redis = None
+    return _dedup_redis
+
 
 async def _check_webhook_dedup(notification_key: str) -> bool:
     """Check if a webhook notification was already seen within the dedup window.
 
+    Primary path: Redis SETNX — atomic cross-worker dedup.
+    Fallback: in-memory OrderedDict — fail-open (process the notification).
+
     Returns True if this is a duplicate (should be skipped), False if it is new.
     """
+    # --- Redis path (cross-worker dedup) ---
+    try:
+        redis = await _get_dedup_redis()
+        if redis is not None:
+            redis_key = f"cal_sync_dedup:{notification_key}"
+            # SETNX with TTL: returns True on first set (not a dup), False if key exists (dup)
+            is_new = await redis.set(
+                redis_key, "1", nx=True, ex=_WEBHOOK_DEDUP_WINDOW_SECONDS
+            )
+            return not is_new  # True = duplicate, False = new
+    except Exception:
+        # Redis error — fall through to in-memory fallback
+        pass
+
+    # --- In-memory fallback: fail-open (treat as new / not a duplicate) ---
     now = time.time()
     async with _dedup_lock:
         # Purge expired entries periodically (every call is cheap with OrderedDict)

@@ -1507,45 +1507,39 @@ class SchedulerService:
     def cleanup_slot_holds(self):
         """Expire stale active holds and delete old expired/released records.
 
-        Two-step process:
-        1. Transition active holds past their TTL to 'expired' status
-        2. Delete expired/released records older than 1 hour
+        Delegates to slot_hold_service.cleanup_expired_holds() which operates
+        on the live `slot_holds` table (status column), then performs its own
+        DELETE pass for records older than 1 hour.
         """
+        import asyncio
+        from database.models.scheduler import SlotHold, SlotHoldStatus
+        import services.slot_hold_service as shs
+
         session = get_db_session()
-
         try:
-            # Check if the slot holds table exists before running maintenance
-            table_exists = session.execute(text("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'scheduler_slot_holds'
-                )
-            """)).scalar()
+            models = {'SlotHold': SlotHold}
 
-            if not table_exists:
-                return
+            # Step 1: mark all expired-TTL holds as 'expired'
+            result = asyncio.run(shs.cleanup_expired_holds(session, models))
+            expired_count = result.get('expired_count', 0)
 
-            # Expire active holds past their TTL
-            # Note: scheduler_slot_holds uses is_active BOOLEAN (not a status column)
-            expired = session.execute(text("""
-                UPDATE scheduler_slot_holds
-                SET is_active = FALSE
-                WHERE is_active = TRUE AND expires_at < NOW()
-            """)).rowcount
-
-            # Delete old inactive records (>1 hour past expiry)
-            deleted = session.execute(text("""
-                DELETE FROM scheduler_slot_holds
-                WHERE is_active = FALSE
-                AND expires_at < NOW() - INTERVAL '1 hour'
-            """)).rowcount
+            # Step 2: delete expired/released records older than 1 hour
+            from datetime import datetime, timedelta, timezone
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+            deleted_count = session.query(SlotHold).filter(
+                SlotHold.status.in_([
+                    SlotHoldStatus.EXPIRED.value,
+                    SlotHoldStatus.RELEASED.value,
+                ]),
+                SlotHold.expires_at < cutoff,
+            ).delete(synchronize_session=False)
 
             session.commit()
 
-            if expired > 0 or deleted > 0:
+            if expired_count > 0 or deleted_count > 0:
                 logger.info(
                     "Slot hold maintenance: expired %d, deleted %d",
-                    expired, deleted,
+                    expired_count, deleted_count,
                 )
 
         except Exception as e:
