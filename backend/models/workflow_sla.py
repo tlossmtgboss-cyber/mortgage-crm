@@ -210,7 +210,7 @@ def create_workflow_sla_models(Base):
         loan = relationship("Loan", backref=backref("workflow_instances", lazy="dynamic"))
         cancelled_by = relationship("User", foreign_keys=[cancelled_by_id])
         superseded_by = relationship("WorkflowInstance", remote_side=[id], foreign_keys=[superseded_by_id])
-        task_instances = relationship("WorkflowTaskInstance", back_populates="workflow_instance",
+        task_instances = relationship("WorkflowTaskInstance",
                                      cascade="all, delete-orphan")
 
         def pause(self, reason: str = None):
