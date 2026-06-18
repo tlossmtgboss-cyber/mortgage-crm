@@ -188,12 +188,16 @@ async def confirm_booking(
     Candidate confirms a booking slot via the token link.
     Creates a scheduler_appointment + recruit_interview_details row.
     """
+    # SELECT FOR UPDATE serializes concurrent booking requests on the same link row.
+    # If two requests race, the second sees is_active=false (set by the first) and
+    # returns 404 rather than double-booking the same slot.
     link = db.execute(text("""
         SELECT bl.id, bl.organization_id, bl.context_id AS candidate_id,
                bl.assigned_user_id, bl.duration_minutes, bl.is_active,
                bl.expires_at, bl.link_metadata
         FROM scheduler_booking_links bl
         WHERE bl.slug = :token AND bl.context_type = 'recruiting' AND bl.is_active = true
+        FOR UPDATE
     """), {"token": token}).fetchone()
 
     if not link:
@@ -212,6 +216,19 @@ async def confirm_booking(
 
     interview_type = meta.get("interview_type", "interview")
     duration = int((data.slot_end - data.slot_start).total_seconds() / 60)
+
+    # Conflict check: raises HTTPException 409 if the interviewer already has an
+    # overlapping appointment.  The FOR UPDATE lock above serializes concurrent
+    # requests on the same booking link, but we still need this check for the
+    # case where the interviewer was booked through a different link/channel.
+    from routes.scheduler._conflicts import _check_appointment_conflict
+    await _check_appointment_conflict(
+        db,
+        link.assigned_user_id,
+        data.slot_start,
+        data.slot_end,
+        org_id=link.organization_id,
+    )
 
     appt = db.execute(text("""
         INSERT INTO scheduler_appointments (
